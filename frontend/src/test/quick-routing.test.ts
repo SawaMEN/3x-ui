@@ -28,7 +28,12 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
     const sorted = engine === 'xray' ? rule.rule.inboundTag : rule.rule.inbound;
     expect(sorted).toEqual(['in-a', 'in-b']);
     expect(engine === 'xray' ? rule.rule.outboundTag : rule.rule.outbound).toBe('proxy');
-    const repeat = compileQuickRoute(draft({ inboundTags: ['in-a', 'in-b'] }), engine, OUTBOUNDS, INBOUNDS);
+    const repeat = compileQuickRoute(
+      draft({ inboundTags: ['in-a', 'in-b'] }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
     expect(repeat.id).toBe(rule.id);
   });
 
@@ -40,19 +45,27 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
     expect(original.replaced).toBe(false);
     expect(modified.replaced).toBe(true);
     expect(modified.rules).toHaveLength(1);
-    expect(engine === 'xray' ? modified.rules[0].outboundTag : modified.rules[0].outbound).toBe('direct');
+    expect(engine === 'xray' ? modified.rules[0].outboundTag : modified.rules[0].outbound).toBe(
+      'direct',
+    );
     expect(original.rules[0]).toEqual(first.rule);
   });
 
   it('keeps service rules and catch-all in place while inserting an exception', () => {
-    const apiRule: RouteRecord = engine === 'xray'
-      ? { type: 'field', inboundTag: ['api'], outboundTag: 'api' }
-      : { inbound: ['api'], action: 'route', outbound: 'direct' };
-    const fallback: RouteRecord = engine === 'xray'
-      ? { type: 'field', outboundTag: 'direct' }
-      : { action: 'route', outbound: 'direct' };
+    const apiRule: RouteRecord =
+      engine === 'xray'
+        ? { type: 'field', inboundTag: ['api'], outboundTag: 'api' }
+        : { inbound: ['api'], action: 'route', outbound: 'direct' };
+    const fallback: RouteRecord =
+      engine === 'xray'
+        ? { type: 'field', outboundTag: 'direct' }
+        : { action: 'route', outbound: 'direct' };
     const original = [apiRule, fallback];
-    const result = putQuickRoute(original, compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS), engine);
+    const result = putQuickRoute(
+      original,
+      compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS),
+      engine,
+    );
     expect(result.rules).toHaveLength(3);
     expect(result.rules[0]).toEqual(apiRule);
     expect(result.rules[2]).toEqual(fallback);
@@ -62,22 +75,37 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
   it('compiles domain suffix, exact match and IP into native core syntax', () => {
     const suffix = compileQuickRoute(
       draft({ match: 'domain', values: '*.Example.com, example.org', inboundTags: [] }),
-      engine, OUTBOUNDS, INBOUNDS,
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
     );
-    if (engine === 'xray') expect(suffix.rule.domain).toEqual(['domain:example.com', 'domain:example.org']);
+    if (engine === 'xray')
+      expect(suffix.rule.domain).toEqual(['domain:example.com', 'domain:example.org']);
     else expect(suffix.rule.domain_suffix).toEqual(['example.com', 'example.org']);
     const exact = compileQuickRoute(
       draft({ match: 'domain', values: 'example.com', domainMode: 'exact' }),
-      engine, OUTBOUNDS, INBOUNDS,
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
     );
     if (engine === 'xray') expect(exact.rule.domain).toEqual(['full:example.com']);
     else expect(exact.rule.domain).toEqual(['example.com']);
-    const ip = compileQuickRoute(draft({ match: 'ip', values: '192.0.2.0/24' }), engine, OUTBOUNDS, INBOUNDS);
+    const ip = compileQuickRoute(
+      draft({ match: 'ip', values: '192.0.2.0/24' }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
     expect(ip.rule[engine === 'xray' ? 'ip' : 'ip_cidr']).toEqual(['192.0.2.0/24']);
   });
 
   it('compiles ports without losing ranges or generating invalid values', () => {
-    const entry = compileQuickRoute(draft({ match: 'port', values: '443, 1000-2000' }), engine, OUTBOUNDS, INBOUNDS);
+    const entry = compileQuickRoute(
+      draft({ match: 'port', values: '443, 1000-2000' }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
     if (engine === 'xray') expect(entry.rule.port).toBe('1000-2000,443');
     else {
       expect(entry.rule.port).toEqual([443]);
@@ -88,14 +116,25 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
   it('reassigns a managed outbound without changing matchers or priority', () => {
     const original = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
     const legacy = { comment: 'untouched', inboundTag: ['api'], outboundTag: 'api' };
-    const changed = setQuickRouteTarget([legacy, original.rule], original.id, 'direct', engine, OUTBOUNDS);
+    const changed = setQuickRouteTarget(
+      [legacy, original.rule],
+      original.id,
+      'direct',
+      engine,
+      OUTBOUNDS,
+    );
     expect(changed[0]).toEqual(legacy);
     expect(changed[1][engine === 'xray' ? 'outboundTag' : 'outbound']).toBe('direct');
     expect(setQuickRouteTarget(changed, original.id, 'missing', engine, OUTBOUNDS)).toBe(changed);
   });
 
   it('never deletes or toggles unmanaged rules', () => {
-    const special = { custom: { keep: true }, action: 'route', inbound: ['in-a'], outbound: 'direct' };
+    const special = {
+      custom: { keep: true },
+      action: 'route',
+      inbound: ['in-a'],
+      outbound: 'direct',
+    };
     const managed = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
     const mixed = [special, managed.rule];
     expect(removeQuickRoute(mixed, 'fake', engine)).toEqual(mixed);
@@ -106,24 +145,38 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
   });
 
   it('rejects invalid or missing route targets and matchers', () => {
-    expect(() => compileQuickRoute(draft({ target: 'missing' }), engine, OUTBOUNDS, INBOUNDS)).toThrow();
-    expect(() => compileQuickRoute(draft({ inboundTags: ['gone'] }), engine, OUTBOUNDS, INBOUNDS)).toThrow();
-    expect(() => compileQuickRoute(draft({ match: 'inbound', inboundTags: [] }), engine, OUTBOUNDS, INBOUNDS)).toThrow();
+    expect(() =>
+      compileQuickRoute(draft({ target: 'missing' }), engine, OUTBOUNDS, INBOUNDS),
+    ).toThrow();
+    expect(() =>
+      compileQuickRoute(draft({ inboundTags: ['gone'] }), engine, OUTBOUNDS, INBOUNDS),
+    ).toThrow();
+    expect(() =>
+      compileQuickRoute(draft({ match: 'inbound', inboundTags: [] }), engine, OUTBOUNDS, INBOUNDS),
+    ).toThrow();
     for (const values of ['foo..bar', 'example.com/hello', 'https://example.com']) {
-      expect(() => compileQuickRoute(draft({ match: 'domain', values }), engine, OUTBOUNDS, INBOUNDS)).toThrow();
+      expect(() =>
+        compileQuickRoute(draft({ match: 'domain', values }), engine, OUTBOUNDS, INBOUNDS),
+      ).toThrow();
     }
     for (const values of ['999.1.1.1', '1.1.1.1/33', '192.0.2.3/abc']) {
-      expect(() => compileQuickRoute(draft({ match: 'ip', values }), engine, OUTBOUNDS, INBOUNDS)).toThrow();
+      expect(() =>
+        compileQuickRoute(draft({ match: 'ip', values }), engine, OUTBOUNDS, INBOUNDS),
+      ).toThrow();
     }
     for (const values of ['0', '65536', '8000-7000', '22:23']) {
-      expect(() => compileQuickRoute(draft({ match: 'port', values }), engine, OUTBOUNDS, INBOUNDS)).toThrow();
+      expect(() =>
+        compileQuickRoute(draft({ match: 'port', values }), engine, OUTBOUNDS, INBOUNDS),
+      ).toThrow();
     }
   });
 
   it('detects missing outbound and unreachable quick rule after catch-all', () => {
     const managed = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
-    const catchAll: RouteRecord = engine === 'xray'
-      ? { type: 'field', outboundTag: 'direct' } : { action: 'route', outbound: 'direct' };
+    const catchAll: RouteRecord =
+      engine === 'xray'
+        ? { type: 'field', outboundTag: 'direct' }
+        : { action: 'route', outbound: 'direct' };
     const issues = diagnoseRouting([catchAll, managed.rule], engine, ['direct']);
     expect(issues.map((issue) => issue.code)).toContain('missing-target');
     expect(issues.map((issue) => issue.code)).toContain('catch-all');
@@ -134,7 +187,13 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
 describe('sing-box reject action', () => {
   it('supports toggling direct routes into rejects and back', () => {
     const compiled = compileQuickRoute(draft(), 'sing-box', OUTBOUNDS, INBOUNDS);
-    const rejected = setQuickRouteTarget([compiled.rule], compiled.id, '@reject', 'sing-box', OUTBOUNDS);
+    const rejected = setQuickRouteTarget(
+      [compiled.rule],
+      compiled.id,
+      '@reject',
+      'sing-box',
+      OUTBOUNDS,
+    );
     expect(rejected[0]).toMatchObject({ action: 'reject' });
     expect(rejected[0].outbound).toBeUndefined();
     const restored = setQuickRouteTarget(rejected, compiled.id, 'proxy', 'sing-box', OUTBOUNDS);
@@ -158,16 +217,24 @@ describe('sing-box reject action', () => {
   it('validates IPv6 addresses instead of accepting malformed literals', () => {
     const good = compileQuickRoute(
       draft({ match: 'ip', values: '2001:db8::/32' }),
-      'sing-box', OUTBOUNDS, INBOUNDS,
+      'sing-box',
+      OUTBOUNDS,
+      INBOUNDS,
     );
     expect(good.rule.ip_cidr).toEqual(['2001:db8::/32']);
-    expect(() => compileQuickRoute(
-      draft({ match: 'ip', values: '2001:::bad/32' }),
-      'sing-box', OUTBOUNDS, INBOUNDS,
-    )).toThrow();
+    expect(() =>
+      compileQuickRoute(
+        draft({ match: 'ip', values: '2001:::bad/32' }),
+        'sing-box',
+        OUTBOUNDS,
+        INBOUNDS,
+      ),
+    ).toThrow();
   });
 
   it('does not invent a synthetic rejection destination in Xray', () => {
-    expect(() => compileQuickRoute(draft({ target: '@reject' }), 'xray', OUTBOUNDS, INBOUNDS)).toThrow();
+    expect(() =>
+      compileQuickRoute(draft({ target: '@reject' }), 'xray', OUTBOUNDS, INBOUNDS),
+    ).toThrow();
   });
 });

@@ -57,7 +57,9 @@ export default function RoutingTab({
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const requestedTab = searchParams.get('routingTab');
-  const activeTab = ['quick', 'basic', 'rules', 'catalog', 'tester', 'adblock'].includes(requestedTab || '')
+  const activeTab = ['quick', 'basic', 'rules', 'catalog', 'tester', 'adblock'].includes(
+    requestedTab || '',
+  )
     ? requestedTab!
     : 'quick';
   const [modal, modalContextHolder] = Modal.useModal();

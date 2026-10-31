@@ -2156,15 +2156,23 @@ export default function SingBoxPage() {
             <QuickRoutingPanel
               engine="sing-box"
               rules={asObjectArray(asObject(config.route).rules)}
-              inboundTags={Array.from(new Set([
-                ...asObjectArray(config.inbounds).map((row) => asString(row.tag)),
-                ...(snapshot?.inboundTags || []),
-              ].filter(Boolean)))}
-              outboundTags={Array.from(new Set([
-                ...asObjectArray(config.outbounds).map((row) => asString(row.tag)),
-                ...asObjectArray(config.endpoints).map((row) => asString(row.tag)),
-                ...(snapshot?.subscriptionTags || []),
-              ].filter(Boolean)))}
+              inboundTags={Array.from(
+                new Set(
+                  [
+                    ...asObjectArray(config.inbounds).map((row) => asString(row.tag)),
+                    ...(snapshot?.inboundTags || []),
+                  ].filter(Boolean),
+                ),
+              )}
+              outboundTags={Array.from(
+                new Set(
+                  [
+                    ...asObjectArray(config.outbounds).map((row) => asString(row.tag)),
+                    ...asObjectArray(config.endpoints).map((row) => asString(row.tag)),
+                    ...(snapshot?.subscriptionTags || []),
+                  ].filter(Boolean),
+                ),
+              )}
               onChange={(nextRules) =>
                 setConfig((current) => ({
                   ...current,

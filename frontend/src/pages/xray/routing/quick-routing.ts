@@ -23,17 +23,60 @@ export interface CompiledQuickRoute {
 
 export const QUICK_PREFIX = 'panel-quick:';
 const ROUTE_MATCH_FIELDS = [
-  'domain', 'domain_suffix', 'domain_keyword', 'domain_regex', 'ip', 'ip_cidr',
-  'port', 'port_range', 'inbound', 'inboundTag', 'sourceIP', 'source_ip_cidr',
-  'sourcePort', 'source_port', 'user', 'auth_user', 'protocol', 'network',
-  'routingListId', 'routingListCategory', 'rule_set', 'attrs', 'process',
-  'process_name', 'process_path', 'localIP', 'localPort', 'localOS', 'vlessRoute',
-  'client', 'ip_version', 'invert', 'rules', 'mode', 'action',
-  'source_port_range', 'ip_is_private', 'source_ip_is_private', 'source_mac_address',
-  'process_path_regex', 'package_name', 'user_id', 'clash_mode',
-  'wifi_ssid', 'wifi_bssid', 'interface_address', 'default_interface_address',
-  'network_type', 'network_is_expensive', 'network_is_constrained', 'preferred_by',
-  'local_ip', 'source_ip_cidr', 'http_client',
+  'domain',
+  'domain_suffix',
+  'domain_keyword',
+  'domain_regex',
+  'ip',
+  'ip_cidr',
+  'port',
+  'port_range',
+  'inbound',
+  'inboundTag',
+  'sourceIP',
+  'source_ip_cidr',
+  'sourcePort',
+  'source_port',
+  'user',
+  'auth_user',
+  'protocol',
+  'network',
+  'routingListId',
+  'routingListCategory',
+  'rule_set',
+  'attrs',
+  'process',
+  'process_name',
+  'process_path',
+  'localIP',
+  'localPort',
+  'localOS',
+  'vlessRoute',
+  'client',
+  'ip_version',
+  'invert',
+  'rules',
+  'mode',
+  'action',
+  'source_port_range',
+  'ip_is_private',
+  'source_ip_is_private',
+  'source_mac_address',
+  'process_path_regex',
+  'package_name',
+  'user_id',
+  'clash_mode',
+  'wifi_ssid',
+  'wifi_bssid',
+  'interface_address',
+  'default_interface_address',
+  'network_type',
+  'network_is_expensive',
+  'network_is_constrained',
+  'preferred_by',
+  'local_ip',
+  'source_ip_cidr',
+  'http_client',
 ] as const;
 
 function uniqueSorted(values: string[]): string[] {
@@ -46,8 +89,12 @@ function splitValues(values: string): string[] {
 
 function validDomain(value: string): boolean {
   if (value.length > 253 || value.includes('..')) return false;
-  return value.split('.').every((part) =>
-    part.length > 0 && part.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(part));
+  return value
+    .split('.')
+    .every(
+      (part) =>
+        part.length > 0 && part.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(part),
+    );
 }
 
 function validIP(value: string): boolean {
@@ -61,12 +108,14 @@ function validIP(value: string): boolean {
     } catch {
       return false;
     }
-    return cidr === undefined || /^\d+$/.test(cidr) && +cidr <= 128;
+    return cidr === undefined || (/^\d+$/.test(cidr) && +cidr <= 128);
   }
   const parts = host.split('.');
-  return parts.length === 4 &&
+  return (
+    parts.length === 4 &&
     parts.every((part) => /^\d{1,3}$/.test(part) && +part <= 255) &&
-    (cidr === undefined || /^\d+$/.test(cidr) && +cidr <= 32);
+    (cidr === undefined || (/^\d+$/.test(cidr) && +cidr <= 32))
+  );
 }
 
 function validPort(value: string): boolean {
@@ -130,24 +179,34 @@ export function compileQuickRoute(
     }
   }
 
-  const normalized = draft.match === 'domain'
-    ? uniqueSorted(criteria.map((entry) => entry.replace(/^\*\./, '').toLowerCase()))
-    : criteria;
+  const normalized =
+    draft.match === 'domain'
+      ? uniqueSorted(criteria.map((entry) => entry.replace(/^\*\./, '').toLowerCase()))
+      : criteria;
   const identifier = JSON.stringify([draft.match, draft.domainMode, inboundTags, normalized]);
   const id = QUICK_PREFIX + draft.match + ':' + fingerprint(identifier);
-  const label = draft.match === 'inbound' ? 'Входящие' :
-    draft.match === 'domain' ? 'Домены' : draft.match === 'ip' ? 'IP / CIDR' : 'Порты';
+  const label =
+    draft.match === 'inbound'
+      ? 'Входящие'
+      : draft.match === 'domain'
+        ? 'Домены'
+        : draft.match === 'ip'
+          ? 'IP / CIDR'
+          : 'Порты';
 
-  const rule: RouteRecord = engine === 'xray'
-    ? { type: 'field', enabled: true, ruleTag: id, comment: label }
-    : { enabled: true, action: target === '@reject' ? 'reject' : 'route', comment: id };
+  const rule: RouteRecord =
+    engine === 'xray'
+      ? { type: 'field', enabled: true, ruleTag: id, comment: label }
+      : { enabled: true, action: target === '@reject' ? 'reject' : 'route', comment: id };
   if (inboundTags.length) {
     if (engine === 'xray') rule.inboundTag = inboundTags;
     else rule.inbound = inboundTags;
   }
   if (draft.match === 'domain') {
     if (engine === 'xray')
-      rule.domain = normalized.map((value) => (draft.domainMode === 'exact' ? 'full:' : 'domain:') + value);
+      rule.domain = normalized.map(
+        (value) => (draft.domainMode === 'exact' ? 'full:' : 'domain:') + value,
+      );
     else rule[draft.domainMode === 'exact' ? 'domain' : 'domain_suffix'] = normalized;
   } else if (draft.match === 'ip') {
     rule[engine === 'xray' ? 'ip' : 'ip_cidr'] = normalized;
@@ -155,7 +214,9 @@ export function compileQuickRoute(
     if (engine === 'xray') rule.port = normalized.join(',');
     else {
       const singles = normalized.filter((value) => !value.includes('-')).map(Number);
-      const ranges = normalized.filter((value) => value.includes('-')).map((value) => value.replace('-', ':'));
+      const ranges = normalized
+        .filter((value) => value.includes('-'))
+        .map((value) => value.replace('-', ':'));
       if (singles.length) rule.port = singles;
       if (ranges.length) rule.port_range = ranges;
     }
@@ -168,8 +229,7 @@ export function compileQuickRoute(
 function isUnconditional(rule: RouteRecord, engine: RoutingEngine): boolean {
   if (rule.enabled === false || rule.type === 'logical') return false;
   if (engine === 'xray' && rule.type && rule.type !== 'field') return false;
-  const fields = ROUTE_MATCH_FIELDS.filter((key) =>
-    key !== 'action' && key !== 'mode');
+  const fields = ROUTE_MATCH_FIELDS.filter((key) => key !== 'action' && key !== 'mode');
   return !fields.some((key) => {
     const value = rule[key];
     if (Array.isArray(value)) return value.length > 0;
@@ -182,8 +242,7 @@ export function putQuickRoute(
   next: CompiledQuickRoute,
   engine: RoutingEngine,
 ): { rules: RouteRecord[]; replaced: boolean; shadowed: boolean } {
-  const marker = (rule: RouteRecord) =>
-    engine === 'xray' ? rule.ruleTag : rule.comment;
+  const marker = (rule: RouteRecord) => (engine === 'xray' ? rule.ruleTag : rule.comment);
   const existing = rules.findIndex((rule) => marker(rule) === next.id);
   const updated = [...rules];
   if (existing !== -1) {
@@ -204,31 +263,51 @@ export function putQuickRoute(
   return {
     rules: updated,
     replaced: false,
-    shadowed: position > 0 && updated.slice(0, position).some((rule) =>
-      rule.enabled !== false && isUnconditional(rule, engine)),
+    shadowed:
+      position > 0 &&
+      updated
+        .slice(0, position)
+        .some((rule) => rule.enabled !== false && isUnconditional(rule, engine)),
   };
 }
 
-export function removeQuickRoute(rules: RouteRecord[], marker: string, engine: RoutingEngine): RouteRecord[] {
+export function removeQuickRoute(
+  rules: RouteRecord[],
+  marker: string,
+  engine: RoutingEngine,
+): RouteRecord[] {
   if (!marker.startsWith(QUICK_PREFIX)) return rules;
   return rules.filter((rule) => (engine === 'xray' ? rule.ruleTag : rule.comment) !== marker);
 }
 
-export function setQuickRouteEnabled(rules: RouteRecord[], marker: string, enabled: boolean, engine: RoutingEngine): RouteRecord[] {
+export function setQuickRouteEnabled(
+  rules: RouteRecord[],
+  marker: string,
+  enabled: boolean,
+  engine: RoutingEngine,
+): RouteRecord[] {
   if (!marker.startsWith(QUICK_PREFIX)) return rules;
-  return rules.map((rule) => (engine === 'xray' ? rule.ruleTag : rule.comment) === marker
-    ? { ...rule, enabled } : rule);
+  return rules.map((rule) =>
+    (engine === 'xray' ? rule.ruleTag : rule.comment) === marker ? { ...rule, enabled } : rule,
+  );
 }
 
 // Change the destination of an existing managed rule without rebuilding its
 // conditions, moving its priority, or modifying unrelated configuration.
 export function setQuickRouteTarget(
-  rules: RouteRecord[], marker: string, target: string,
-  engine: RoutingEngine, outbounds: string[],
+  rules: RouteRecord[],
+  marker: string,
+  target: string,
+  engine: RoutingEngine,
+  outbounds: string[],
 ): RouteRecord[] {
-  if (!marker.startsWith(QUICK_PREFIX) || !target ||
-      (target !== '@reject' && !outbounds.includes(target)) ||
-      (engine === 'xray' && target === '@reject')) return rules;
+  if (
+    !marker.startsWith(QUICK_PREFIX) ||
+    !target ||
+    (target !== '@reject' && !outbounds.includes(target)) ||
+    (engine === 'xray' && target === '@reject')
+  )
+    return rules;
   return rules.map((rule) => {
     const key = engine === 'xray' ? rule.ruleTag : rule.comment;
     if (key !== marker) return rule;
@@ -245,9 +324,16 @@ export function setQuickRouteTarget(
   });
 }
 
-export interface RoutingWarning { code: 'missing-target' | 'catch-all' | 'duplicate' | 'unconditional'; detail: string; }
+export interface RoutingWarning {
+  code: 'missing-target' | 'catch-all' | 'duplicate' | 'unconditional';
+  detail: string;
+}
 
-export function diagnoseRouting(rules: RouteRecord[], engine: RoutingEngine, outbounds: string[]): RoutingWarning[] {
+export function diagnoseRouting(
+  rules: RouteRecord[],
+  engine: RoutingEngine,
+  outbounds: string[],
+): RoutingWarning[] {
   const issues: RoutingWarning[] = [];
   const seen = new Set<string>();
   let unconditional = -1;
@@ -255,21 +341,36 @@ export function diagnoseRouting(rules: RouteRecord[], engine: RoutingEngine, out
     const rule = rules[index];
     if (rule.enabled === false) continue;
     const target = engine === 'xray' ? rule.outboundTag : rule.outbound;
-    if (typeof target === 'string' && target !== '' && target !== 'api' && !outbounds.includes(target)) {
+    if (
+      typeof target === 'string' &&
+      target !== '' &&
+      target !== 'api' &&
+      !outbounds.includes(target)
+    ) {
       // Subscription and dynamic outbounds are supplied by the panel as well.
-      issues.push({ code: 'missing-target', detail: `#${index + 1}: не найдено исходящее «${target}»` });
+      issues.push({
+        code: 'missing-target',
+        detail: `#${index + 1}: не найдено исходящее «${target}»`,
+      });
     }
     const mark = engine === 'xray' ? rule.ruleTag : rule.comment;
     if (typeof mark === 'string' && mark.startsWith(QUICK_PREFIX)) {
-      if (seen.has(mark)) issues.push({ code: 'duplicate', detail: `#${index + 1}: дублирующееся быстрое правило` });
+      if (seen.has(mark))
+        issues.push({ code: 'duplicate', detail: `#${index + 1}: дублирующееся быстрое правило` });
       seen.add(mark);
     }
     if (unconditional >= 0 && isQuickRule(rule, engine)) {
-      issues.push({ code: 'catch-all', detail: `#${index + 1}: правило перекрыто правилом без условий (#${unconditional + 1})` });
+      issues.push({
+        code: 'catch-all',
+        detail: `#${index + 1}: правило перекрыто правилом без условий (#${unconditional + 1})`,
+      });
     }
     if (unconditional < 0 && isUnconditional(rule, engine)) unconditional = index;
   }
   if (unconditional >= 0 && unconditional < rules.length - 1)
-    issues.push({ code: 'unconditional', detail: `#${unconditional + 1}: правило без условий может перекрывать последующие правила` });
+    issues.push({
+      code: 'unconditional',
+      detail: `#${unconditional + 1}: правило без условий может перекрывать последующие правила`,
+    });
   return issues;
 }

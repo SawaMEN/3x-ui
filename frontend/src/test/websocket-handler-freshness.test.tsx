@@ -25,10 +25,9 @@ describe('page websocket subscriptions', () => {
   it('uses the latest React callback after rerender without accumulating listeners', () => {
     const original = vi.fn();
     const current = vi.fn();
-    const { rerender, unmount } = renderHook(
-      ({ handler }) => useWebSocket({ traffic: handler }),
-      { initialProps: { handler: original } },
-    );
+    const { rerender, unmount } = renderHook(({ handler }) => useWebSocket({ traffic: handler }), {
+      initialProps: { handler: original },
+    });
 
     expect(events.get('traffic')?.size).toBe(1);
     act(() => {
