@@ -49,6 +49,13 @@ var diagnosticTimestamp = regexp.MustCompile(`\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\
 var diagnosticISOTime = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})`)
 
 func diagnosticLevel(line string) string {
+    // Raw runtime panics sometimes contain terms such as DEBUG or INFO in
+    // their payload. Their leading panic marker must take precedence over
+    // incidental severity words, otherwise ERROR-only filters hide crashes.
+    rawPrefix := strings.ToLower(strings.TrimSpace(line))
+    if strings.HasPrefix(rawPrefix, "panic:") || strings.HasPrefix(rawPrefix, "runtime: panic:") {
+        return "ERROR"
+    }
     // Restrict detection to the log prefix, not a URL or message discussing an error.
     prefix := line
     if len(prefix) > 115 { prefix = prefix[:115] }
