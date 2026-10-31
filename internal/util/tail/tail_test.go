@@ -101,3 +101,17 @@ func TestReadTailLinesLineLimitPreservesNewestRecords(t *testing.T) {
 		t.Fatalf("ReadTailLines maxLines=2 = %#v, want %#v", got, want)
 	}
 }
+
+func TestReadTailLinesNegativeLimitMeansUnlimited(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.log")
+	if err := os.WriteFile(path, []byte("one\ntwo\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadTailLines(path, -1, DefaultTailBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"two", "one"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("negative maxLines panicked or truncated logs: got %#v, want %#v", got, want)
+	}
+}
