@@ -314,13 +314,16 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
             output := tail.NewRecentOutputBuffer(int(tail.DefaultTailBytes))
             cmd.Stdout = output
             err := cmd.Run()
-            if err != nil {
+            if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
                 if errors.Is(ctx.Err(), context.DeadlineExceeded) {
                     warnings = append(warnings, "journal: превышено время ожидания journalctl")
                 } else {
                     warnings = append(warnings, "journal: journalctl недоступен или чтение запрещено")
                 }
             } else {
+                if errors.Is(err, exec.ErrWaitDelay) {
+                    warnings = append(warnings, "journal: ожидание завершения вывода прервано; показаны полученные строки")
+                }
                 if output.Truncated() {
                     warnings = append(warnings, "journal: вывод ограничен последними 8 МиБ")
                 }
