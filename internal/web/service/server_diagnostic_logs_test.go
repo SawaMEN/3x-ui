@@ -79,6 +79,8 @@ func TestDiagnosticSeverityWordsInUnstructuredBodiesAreNotHeaderLevels(t *testin
     }{
         {"uncategorized stack trace without a prefix", "UNKNOWN"},
         {"client requested debug traces", "UNKNOWN"},
+        {"2026/11/01 10:20:30 client requested debug traces", "UNKNOWN"},
+        {"2026-11-01T10:20:30+0200 host x-ui[42]: connection mentions trace", "UNKNOWN"},
         {"user copied a warning about an error", "UNKNOWN"},
         {"DEBUG - explicit log header", "DEBUG"},
         {"[ERROR] failed to connect", "ERROR"},
