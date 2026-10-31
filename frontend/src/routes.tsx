@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 import { Spin } from 'antd';
 
 import PanelLayout from '@/layouts/PanelLayout';
+import PanelRouteError from '@/pages/PanelRouteError';
 import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
 
 const IndexPage = lazy(() => importWithChunkRecovery(() => import('@/pages/index/IndexPage')));
@@ -55,6 +56,7 @@ const routes: RouteObject[] = [
   {
     path: '/',
     element: <PanelLayout />,
+    errorElement: <PanelRouteError />,
     children: [
       { index: true, element: withSuspense(<IndexPage />) },
       { path: 'inbounds', element: withSuspense(<InboundsPage />) },
