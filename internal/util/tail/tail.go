@@ -131,6 +131,7 @@ func NewRecentOutputBuffer(maxBytes int) *RecentOutputBuffer {
 
 func (b *RecentOutputBuffer) Write(p []byte) (int, error) {
     n := len(p)
+    if n == 0 { return 0, nil }
     if b.maxBytes == 0 {
         if n > 0 { b.truncated = true }
         return n, nil
