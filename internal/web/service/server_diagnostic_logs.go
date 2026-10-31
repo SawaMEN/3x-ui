@@ -35,12 +35,27 @@ type DashboardLogs struct {
     Warnings []string `json:"warnings"`
 }
 
+// Keep the parsed instant next to its display record so sorting a large
+// multi-source log result does not parse timestamps in every comparison.
+type sortableDashboardLog struct {
+    entry DashboardLog
+    stamp time.Time
+}
+
 const dashboardLogLimit = 2000
 
 var diagnosticSeverity = regexp.MustCompile(`(?i)\b(FATAL|CRITICAL|ERROR|ERR|WARNING|WARN|NOTICE|INFO|DEBUG|TRACE)\b`)
-var diagnosticTimestamp = regexp.MustCompile(`\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}`)
+var diagnosticTimestamp = regexp.MustCompile(`\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?`)
+var diagnosticISOTime = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})`)
 
 func diagnosticLevel(line string) string {
+    // Raw runtime panics sometimes contain terms such as DEBUG or INFO in
+    // their payload. Their leading panic marker must take precedence over
+    // incidental severity words, otherwise ERROR-only filters hide crashes.
+    rawPrefix := strings.ToLower(strings.TrimSpace(line))
+    if strings.HasPrefix(rawPrefix, "panic:") || strings.HasPrefix(rawPrefix, "runtime: panic:") {
+        return "ERROR"
+    }
     // Restrict detection to the log prefix, not a URL or message discussing an error.
     prefix := line
     if len(prefix) > 115 { prefix = prefix[:115] }
@@ -73,15 +88,25 @@ func diagnosticLevel(line string) string {
 }
 
 func diagnosticTime(line string) time.Time {
-    if len(line) >= 24 && strings.HasPrefix(line[4:], "-") {
-        // journalctl -o short-iso: 2026-11-01T12:34:56+0200
-        if t, err := time.Parse("2006-01-02T15:04:05-0700", line[:24]); err == nil {
-            return t
+    // Prefer the earliest timestamp in the record. An ordinary panel log
+    // may mention an RFC3339 date in its message; that later date must not
+    // replace the actual "YYYY/MM/DD HH:MM:SS" log prefix.
+    plain := diagnosticTimestamp.FindStringIndex(line)
+    zoned := diagnosticISOTime.FindStringIndex(line)
+    if zoned != nil && (plain == nil || zoned[0] <= plain[0]) {
+        match := line[zoned[0]:zoned[1]]
+        // Preserve explicit timezone offsets from journalctl/RFC3339 records.
+        for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999-0700"} {
+            if t, err := time.Parse(layout, match); err == nil { return t }
         }
     }
-    match := diagnosticTimestamp.FindString(line)
-    if match == "" { return time.Time{} }
-    for _, layout := range []string{"2006/01/02 15:04:05", "2006-01-02 15:04:05", "2006-01-02T15:04:05"} {
+    if plain == nil { return time.Time{} }
+    match := line[plain[0]:plain[1]]
+    for _, layout := range []string{
+        "2006/01/02 15:04:05.999999999",
+        "2006-01-02 15:04:05.999999999",
+        "2006-01-02T15:04:05.999999999",
+    } {
         if t, err := time.ParseInLocation(layout, match, time.Local); err == nil { return t }
     }
     return time.Time{}
@@ -141,7 +166,7 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
     // Fetch more than the final count for each source so filtering does not
     // hide an older matching error behind recent INFO events.
     scanLimit := dashboardLogLimit
-    entries := make([]DashboardLog, 0, limit)
+    entries := make([]sortableDashboardLog, 0, limit)
     warnings := make([]string, 0, 3)
     appendLines := func(kind string, lines []string) {
         for _, raw := range lines {
@@ -156,8 +181,8 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
             }
             stamp := diagnosticTime(raw)
             item := DashboardLog{Source: kind, Level: severity, Raw: raw}
-            if !stamp.IsZero() { item.Time = stamp.Format(time.RFC3339) }
-            entries = append(entries, item)
+            if !stamp.IsZero() { item.Time = stamp.Format(time.RFC3339Nano) }
+            entries = append(entries, sortableDashboardLog{entry: item, stamp: stamp})
         }
     }
     readFile := func(kind, path string) {
@@ -165,7 +190,25 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
             warnings = append(warnings, kind+": журнал отключён в конфигурации")
             return
         }
-        lines, err := tail.ReadTailLines(path, 0, tail.DefaultTailBytes)
+        // ReadTailLines intentionally returns no entries for non-regular
+        // files, but the diagnostic viewer must report broken log paths.
+        info, statErr := os.Stat(path)
+        if statErr != nil {
+            if errors.Is(statErr, os.ErrNotExist) {
+                warnings = append(warnings, kind+": файл журнала отсутствует (логирование может быть отключено)")
+            } else {
+                warnings = append(warnings, fmt.Sprintf("%s: не удалось проверить журнал: %v", kind, statErr))
+            }
+            return
+        }
+        if !info.Mode().IsRegular() {
+            warnings = append(warnings, kind+": журнал не является обычным файлом")
+            return
+        }
+        // Read only the newest scanLimit records. Previously this read up to
+        // 8 MiB of every source before discarding all but 2000 lines,
+        // multiplying memory and I/O when dozens of protocols are enabled.
+        lines, err := tail.ReadTailLines(path, scanLimit, tail.DefaultTailBytes)
         if err != nil {
             if errors.Is(err, os.ErrNotExist) {
                 warnings = append(warnings, kind+": файл журнала отсутствует (логирование может быть отключено)")
@@ -181,6 +224,16 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
     if source == "all" || source == "panel" {
         // Panel messages are not restricted to the in-memory buffer's 4096
         // entries and remain available across panel restarts.
+        logPath := filepath.Join(config.GetLogFolder(), logger.LogFileName)
+        if info, err := os.Stat(logPath); err != nil {
+            if errors.Is(err, os.ErrNotExist) {
+                warnings = append(warnings, "panel: файл журнала отсутствует (логирование может быть отключено)")
+            } else {
+                warnings = append(warnings, fmt.Sprintf("panel: не удалось проверить журнал: %v", err))
+            }
+        } else if !info.Mode().IsRegular() {
+            warnings = append(warnings, "panel: путь журнала не является обычным файлом")
+        }
         lines := logger.GetFileLogs(scanLimit, "debug")
         // The file backend can have a stricter threshold than the in-memory
         // ring (e.g. INFO on disk but DEBUG messages in memory). Merge both
@@ -232,12 +285,31 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
         root := filepath.Join(config.GetBinFolderPath(), "protocol-servers")
         dirs, err := os.ReadDir(root)
         if err == nil {
-            for idx, dir := range dirs {
-                if idx >= 64 { warnings = append(warnings, "protocol: показаны первые 64 каталога"); break }
+            seen := 0
+            for _, dir := range dirs {
                 if !dir.IsDir() { continue }
+                kind := "protocol/" + dir.Name()
                 path := filepath.Join(root, dir.Name(), "server.log")
+                info, err := os.Stat(path)
+                if errors.Is(err, os.ErrNotExist) { continue } // optional log
+                if err != nil {
+                    warnings = append(warnings, fmt.Sprintf("%s: не удалось проверить журнал: %v", kind, err))
+                    continue
+                }
+                if !info.Mode().IsRegular() {
+                    warnings = append(warnings, kind+": журнал не является обычным файлом")
+                    continue
+                }
+                // Empty or inactive protocol directories must not exhaust the
+                // journal cap and hide logs from active protocols sorted later.
+                if seen >= 64 { warnings = append(warnings, "protocol: показаны первые 64 журнала"); break }
+                seen++
                 lines, err := tail.ReadTailLines(path, scanLimit, tail.DefaultTailBytes)
-                if err == nil { appendLines("protocol/"+dir.Name(), lines) }
+                if err != nil {
+                    warnings = append(warnings, fmt.Sprintf("%s: не удалось прочитать журнал: %v", kind, err))
+                    continue
+                }
+                appendLines(kind, lines)
             }
         } else if !errors.Is(err, os.ErrNotExist) {
             warnings = append(warnings, "protocol: "+err.Error())
@@ -253,18 +325,31 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
                 "--lines="+strconv.Itoa(scanLimit), "-p", "debug",
                 "-u", "x-ui.service", "-u", "telemt.service", "-u", "x-ui-oxidns.service",
                 "-u", "x-ui-vk-turn-proxy.service")
-            output, err := cmd.Output()
-            if err != nil {
+            cmd.WaitDelay = syslogWaitDelay
+            output := tail.NewRecentOutputBuffer(int(tail.DefaultTailBytes))
+            cmd.Stdout = output
+            err := cmd.Run()
+            if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
                 if errors.Is(ctx.Err(), context.DeadlineExceeded) {
                     warnings = append(warnings, "journal: превышено время ожидания journalctl")
                 } else {
                     warnings = append(warnings, "journal: journalctl недоступен или чтение запрещено")
                 }
             } else {
+                if errors.Is(err, exec.ErrWaitDelay) {
+                    warnings = append(warnings, "journal: ожидание завершения вывода прервано; показаны полученные строки")
+                }
+                if output.Truncated() {
+                    warnings = append(warnings, "journal: вывод ограничен последними 8 МиБ")
+                }
                 // journalctl writes oldest first. The UI contract is newest first.
-                lines := strings.Split(strings.TrimRight(string(bytes.TrimSpace(output)), "\n"), "\n")
-                for i,j := 0,len(lines)-1; i<j; i,j=i+1,j-1 { lines[i],lines[j]=lines[j],lines[i] }
-                appendLines("journal", lines)
+                // Trim only trailing line terminators. TrimSpace would remove
+                // leading indentation from the oldest retained stack frame.
+                if raw := bytes.TrimRight(output.CompleteBytes(), "\r\n"); len(raw) > 0 {
+                    lines := strings.Split(string(raw), "\n")
+                    for i,j := 0,len(lines)-1; i<j; i,j=i+1,j-1 { lines[i],lines[j]=lines[j],lines[i] }
+                    appendLines("journal", lines)
+                }
             }
         }
     }
@@ -272,12 +357,13 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
     // Sources have independently timestamped records. Keep most recent
     // entries first while retaining relative order for equal/unknown stamps.
     sort.SliceStable(entries, func(i, j int) bool {
-        a, ea := time.Parse(time.RFC3339, entries[i].Time)
-        b, eb := time.Parse(time.RFC3339, entries[j].Time)
-        if ea != nil { return false }
-        if eb != nil { return true }
+        a, b := entries[i].stamp, entries[j].stamp
+        if a.IsZero() { return false }
+        if b.IsZero() { return true }
         return a.After(b)
     })
     if len(entries) > limit { entries = entries[:limit] }
-    return DashboardLogs{Entries: entries, Warnings: warnings}
+    result := make([]DashboardLog, len(entries))
+    for i := range entries { result[i] = entries[i].entry }
+    return DashboardLogs{Entries: result, Warnings: warnings}
 }

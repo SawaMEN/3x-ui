@@ -907,6 +907,10 @@ func (s *ServerService) RestartXrayService() error {
 // syslogTimeout keeps a stalled journalctl from hanging the Syslog request (#6629).
 var syslogTimeout = 15 * time.Second
 
+// Even after journalctl exits, a stray descendant may keep its stdout pipe
+// open. Limit that drain wait so a log request cannot hang indefinitely.
+var syslogWaitDelay = 2 * time.Second
+
 func (s *ServerService) GetLogs(count string, level string, syslog string) []string {
 	c, _ := strconv.Atoi(count)
 	var lines []string
@@ -942,16 +946,29 @@ func (s *ServerService) GetLogs(count string, level string, syslog string) []str
 		ctx, cancel := context.WithTimeout(context.Background(), syslogTimeout)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "journalctl", "-u", "x-ui", "--no-pager", "-n", strconv.Itoa(countInt), "-p", level)
-		var out bytes.Buffer
-		cmd.Stdout = &out
+		cmd.WaitDelay = syslogWaitDelay
+		out := tail.NewRecentOutputBuffer(int(tail.DefaultTailBytes))
+		cmd.Stdout = out
 		err = cmd.Run()
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return []string{"journalctl did not answer in time. Try a smaller line count or a less strict level."}
 		}
-		if err != nil {
+		if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
 			return []string{"Failed to run journalctl command! Make sure systemd is available and x-ui service is registered."}
 		}
-		lines = strings.Split(out.String(), "\n")
+		// If a descendant kept stdout open past WaitDelay, preserve the
+		// complete lines journalctl already emitted instead of returning a
+		// generic command error and hiding those diagnostics.
+		// journalctl emits oldest-first, while the panel's file and buffer
+		// viewers return newest-first. Do not expose a trailing empty line.
+		output := strings.TrimRight(string(out.CompleteBytes()), "\r\n")
+		if output == "" {
+			return []string{}
+		}
+		lines = strings.Split(output, "\n")
+		for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
+			lines[i], lines[j] = lines[j], lines[i]
+		}
 	} else {
 		lines = logger.GetFileLogs(c, level)
 		if len(lines) == 0 {

@@ -3,6 +3,7 @@ package logger
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -76,4 +77,62 @@ func TestInitLoggerConcurrentWithLogging(t *testing.T) {
 	}
 	close(stop)
 	logging.Wait()
+}
+
+func TestGetFileLogsRetainsShortUnstructuredDiagnostics(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_LOG_FOLDER", dir)
+	lines := []string{
+		"2026/11/01 12:00:00 DEBUG - discarded at error level",
+		"panic: SIGSEGV",
+		"goroutine",
+		"panic: goroutine DEBUG - fatal diagnostic line",
+		"2026/11/01 12:00:01 ERROR - retained structured entry",
+	}
+	if err := os.WriteFile(filepath.Join(dir, logFileName), []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := GetFileLogs(10, "error")
+	want := []string{lines[4], lines[3], lines[2], lines[1]}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("short raw crash lines were lost or severity filter regressed: got %#v, want %#v", got, want)
+	}
+}
+
+func TestInitLoggerReusesFileWriterAndClosesReplacedWriter(t *testing.T) {
+    firstDir := t.TempDir()
+    t.Setenv("XUI_LOG_FOLDER", firstDir)
+    InitLogger(golog.DEBUG)
+    t.Cleanup(CloseLogger)
+    Info("first-log-writer-marker")
+
+    fileRotateMu.Lock()
+    first := fileRotate
+    fileRotateMu.Unlock()
+    if first == nil { t.Fatal("file logger was not initialized") }
+
+    // Updating only the logging level must not create a second writer
+    // for the same log file (leaked descriptors and competing rotations).
+    InitLogger(golog.ERROR)
+    fileRotateMu.Lock()
+    same := fileRotate
+    fileRotateMu.Unlock()
+    if first != same {
+        t.Fatal("InitLogger replaced a writer for the same log path")
+    }
+
+    secondDir := t.TempDir()
+    t.Setenv("XUI_LOG_FOLDER", secondDir)
+    InitLogger(golog.ERROR)
+    fileRotateMu.Lock()
+    second := fileRotate
+    fileRotateMu.Unlock()
+    if second == nil || second == first || second.Filename != filepath.Join(secondDir, logFileName) {
+        t.Fatalf("log folder change reused a stale writer: first %p, second %p", first, second)
+    }
+    // lumberjack closes its *os.File when Close() is called. After a folder
+    // switch the old writer should no longer hold an open descriptor.
+    if err := os.Remove(filepath.Join(firstDir, logFileName)); err != nil {
+        t.Fatalf("old log file remained inaccessible after writer replacement: %v", err)
+    }
 }

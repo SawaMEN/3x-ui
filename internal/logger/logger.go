@@ -116,16 +116,25 @@ func initFileBackend() logging.Backend {
 	}
 
 	logPath := filepath.Join(logDir, logFileName)
-	rotate := &lumberjack.Logger{
-		Filename:   logPath,
-		MaxSize:    maxLogFileMB,
-		MaxBackups: maxLogBackups,
-		MaxAge:     maxLogAgeDays,
-		LocalTime:  true,
-		Compress:   compressRotated,
-	}
 	fileRotateMu.Lock()
-	fileRotate = rotate
+	rotate := fileRotate
+	if rotate == nil || rotate.Filename != logPath {
+		// InitLogger can run repeatedly, including when a logging level is
+		// changed. Reusing the existing writer avoids leaking an open
+		// file descriptor on every reconfiguration.
+		if rotate != nil {
+			_ = rotate.Close()
+		}
+		rotate = &lumberjack.Logger{
+			Filename:   logPath,
+			MaxSize:    maxLogFileMB,
+			MaxBackups: maxLogBackups,
+			MaxAge:     maxLogAgeDays,
+			LocalTime:  true,
+			Compress:   compressRotated,
+		}
+		fileRotate = rotate
+	}
 	fileRotateMu.Unlock()
 
 	backend := logging.NewLogBackend(rotate, "", 0)
@@ -282,13 +291,21 @@ func getFileLogs(c int, logLevel logging.Level) []string {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) >= 3 {
+		// Only panel-formatted records have "date time LEVEL - message".
+		// Unstructured crash output can mention DEBUG/INFO as its third word
+		// without being a log entry of that severity; never filter it as such.
+		if len(fields) >= 4 && len(fields[0]) == len("2006/01/02") &&
+			strings.Count(fields[0], "/") == 2 && strings.Count(fields[1], ":") == 2 &&
+			fields[3] == "-" {
 			entryLevel, err := logging.LogLevel(strings.ToLower(fields[2]))
 			if err == nil && entryLevel > logLevel {
 				continue
 			}
-			output = append(output, line)
 		}
+		// Raw panic output and imported third-party diagnostics may be only
+		// one or two words long. Do not silently discard them just because
+		// they lack our normal timestamp + severity prefix.
+		output = append(output, line)
 	}
 	return output
 }
