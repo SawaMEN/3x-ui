@@ -953,9 +953,12 @@ func (s *ServerService) GetLogs(count string, level string, syslog string) []str
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return []string{"journalctl did not answer in time. Try a smaller line count or a less strict level."}
 		}
-		if err != nil {
+		if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
 			return []string{"Failed to run journalctl command! Make sure systemd is available and x-ui service is registered."}
 		}
+		// If a descendant kept stdout open past WaitDelay, preserve the
+		// complete lines journalctl already emitted instead of returning a
+		// generic command error and hiding those diagnostics.
 		// journalctl emits oldest-first, while the panel's file and buffer
 		// viewers return newest-first. Do not expose a trailing empty line.
 		output := strings.TrimRight(string(out.CompleteBytes()), "\r\n")
