@@ -77,6 +77,8 @@ func TestDiagnosticClassifiesUnlabeledCoreFailures(t *testing.T) {
         "tls: bad certificate",
         "Failed to start x-ui.service",
         "panic: runtime error",
+        "panic: goroutine DEBUG - unexpected nil pointer",
+        "runtime: panic: INFO value during crash",
     } {
         if got := diagnosticLevel(line); got != "ERROR" {
             t.Errorf("missing severity for %q: got %q", line, got)
