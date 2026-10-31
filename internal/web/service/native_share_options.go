@@ -103,6 +103,21 @@ func applyNativeShareOptions(out map[string]any, query url.Values) error {
 			continue
 		}
 		var decoded any
+		// Share links commonly use ech=<base64 ECHConfigList>, not a JSON
+		// object. Preserve structured JSON when supplied, but expand scalar
+		// ECH configurations into the kernel's native TLS object.
+		if path == "tls.ech" || strings.HasSuffix(path, ".tls.ech") {
+			var object map[string]any
+			if json.Unmarshal([]byte(value), &object) == nil && object != nil {
+				decoded = object
+			} else if enabled, err := strconv.ParseBool(value); err == nil {
+				decoded = map[string]any{"enabled": enabled}
+			} else if strings.HasPrefix(value, "{") || strings.HasPrefix(value, "[") {
+				return fmt.Errorf("native option %s requires a valid ECH object", path)
+			} else {
+				decoded = map[string]any{"enabled": true, "config": []string{value}}
+			}
+		} else {
 		switch catalog[path] {
 		case "string":
 			decoded = value
@@ -137,6 +152,7 @@ func applyNativeShareOptions(out map[string]any, query url.Values) error {
 			if json.Unmarshal([]byte(value), &decoded) != nil {
 				return fmt.Errorf("native option %s requires JSON", path)
 			}
+		}
 		}
 		target := out
 		parts := strings.Split(path, ".")
