@@ -56,22 +56,27 @@ func diagnosticLevel(line string) string {
     if strings.HasPrefix(rawPrefix, "panic:") || strings.HasPrefix(rawPrefix, "runtime: panic:") {
         return "ERROR"
     }
-    // Only treat severity words as levels when they occur in a log header.
-    // Otherwise unstructured payloads such as "stack trace" become DEBUG,
-    // and ERROR-only filtering can accidentally include unrelated messages.
-    prefix := strings.TrimSpace(line)
-    if len(prefix) > 115 { prefix = prefix[:115] }
-    indices := diagnosticSeverity.FindStringSubmatchIndex(prefix)
-    if indices != nil && indices[0] > 0 {
-        before := strings.TrimSpace(prefix[:indices[0]])
-        timestampHead := strings.TrimLeft(before, "[(")
-        plain := diagnosticTimestamp.FindStringIndex(timestampHead)
-        iso := diagnosticISOTime.FindStringIndex(timestampHead)
-        timestamped := (plain != nil && plain[0] == 0) || (iso != nil && iso[0] == 0)
-        if before != "[" && !strings.HasSuffix(before, ":") && !timestamped {
-            indices = nil
+    // A severity word is meaningful only at the start of the record header,
+    // not in the message body (for example "stack trace" or "error count").
+    header := strings.TrimSpace(line)
+    if len(header) > 115 { header = header[:115] }
+    header = strings.TrimPrefix(header, "[")
+    if stamp := diagnosticISOTime.FindStringIndex(header); stamp != nil && stamp[0] == 0 {
+        header = header[stamp[1]:]
+    } else if stamp := diagnosticTimestamp.FindStringIndex(header); stamp != nil && stamp[0] == 0 {
+        header = header[stamp[1]:]
+    }
+    header = strings.TrimLeft(header, "] \t")
+    // journalctl can prepend "<host> <service>[pid]: " before the level.
+    candidate := strings.TrimLeft(header, "[ \t")
+    indices := diagnosticSeverity.FindStringSubmatchIndex(candidate)
+    if indices == nil || indices[0] != 0 {
+        if separator := strings.Index(header, ": "); separator >= 0 && separator <= 64 {
+            candidate = strings.TrimLeft(header[separator+2:], "[ \t")
+            indices = diagnosticSeverity.FindStringSubmatchIndex(candidate)
         }
     }
+    if indices != nil && indices[0] != 0 { indices = nil }
     if indices == nil {
         // Many third-party processes and systemd units omit an explicit
         // severity token. Recognize common failure messages so ERROR-only
@@ -89,7 +94,7 @@ func diagnosticLevel(line string) string {
         }
         return "UNKNOWN"
     }
-    switch strings.ToUpper(prefix[indices[2]:indices[3]]) {
+    switch strings.ToUpper(candidate[indices[2]:indices[3]] {
     case "FATAL", "CRITICAL": return "FATAL"
     case "ERR", "ERROR": return "ERROR"
     case "WARNING", "WARN": return "WARNING"
