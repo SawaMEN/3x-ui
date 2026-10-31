@@ -209,3 +209,24 @@ func TestDiagnosticProtocolLogsSortedAcrossTimezones(t *testing.T) {
 		t.Fatalf("logs sorted by wall clock instead of absolute timestamp: %+v", got)
 	}
 }
+
+func TestDiagnosticProtocolLogsKeepSubsecondOrdering(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	logDir := filepath.Join(dir, "protocol-servers", "test-precision")
+	if err := os.MkdirAll(logDir, 0o700); err != nil { t.Fatal(err) }
+	lines := []string{
+		"2026-11-01T12:00:00.900Z INFO - precision-newer",
+		"2026-11-01T12:00:00.100Z INFO - precision-older",
+	}
+	if err := os.WriteFile(filepath.Join(logDir, "server.log"), []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := (&ServerService{}).GetDashboardLogs("10", "debug", "protocol", "precision-")
+	if len(got.Entries) != 2 || got.Entries[0].Raw != lines[0] || got.Entries[1].Raw != lines[1] {
+		t.Fatalf("subsecond sorting lost chronological order: %+v", got)
+	}
+	if got.Entries[0].Time != "2026-11-01T12:00:00.9Z" || got.Entries[1].Time != "2026-11-01T12:00:00.1Z" {
+		t.Fatalf("subsecond timestamps were truncated: %+v", got.Entries)
+	}
+}
