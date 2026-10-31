@@ -179,3 +179,33 @@ func TestRecentOutputBufferPreservesCompleteUntruncatedOutput(t *testing.T) {
         t.Fatalf("normal journal capture changed: %q, truncated=%v", buf.CompleteBytes(), buf.Truncated())
     }
 }
+
+func TestRecentOutputBufferRingWrapAndEmptyWrites(t *testing.T) {
+    const capacity = 19
+    buf := NewRecentOutputBuffer(capacity)
+    var history string
+    for _, chunk := range []string{"alpha\n", "beta\n", "gamma\n", "delta\n", "epsilon\n", "zeta\n"} {
+        history += chunk
+        if n, err := buf.Write([]byte(chunk)); err != nil || n != len(chunk) {
+            t.Fatalf("write %q: %d, %v", chunk, n, err)
+        }
+        got := string(buf.CompleteBytes())
+        expected := history
+        if len(expected) > capacity {
+            expected = expected[len(expected)-capacity:]
+            if i := strings.IndexByte(expected, '\n'); i >= 0 { expected = expected[i+1:] } else { expected = "" }
+        }
+        if got != expected {
+            t.Fatalf("ring output after %q: got %q, want %q", chunk, got, expected)
+        }
+        if len(buf.data) > capacity {
+            t.Fatalf("buffer grew past limit: %d", len(buf.data))
+        }
+    }
+    before := string(buf.CompleteBytes())
+    wasTruncated := buf.Truncated()
+    if n, err := buf.Write(nil); n != 0 || err != nil { t.Fatalf("empty write: %d, %v", n, err) }
+    if string(buf.CompleteBytes()) != before || buf.Truncated() != wasTruncated {
+        t.Fatalf("empty write changed captured output")
+    }
+}
