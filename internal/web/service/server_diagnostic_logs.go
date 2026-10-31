@@ -97,7 +97,7 @@ func dashboardLogCount(raw string) int {
 func (s *ServerService) GetDashboardLogs(count, level, source, query string) DashboardLogs {
     limit := dashboardLogCount(count)
     source = strings.ToLower(strings.TrimSpace(source))
-    if source != "panel" && source != "core" && source != "access" && source != "journal" && source != "protocol" && source != "all" {
+    if source != "panel" && source != "core" && source != "access" && source != "journal" && source != "protocol" && source != "naive" && source != "update" && source != "ip-limit" && source != "all" {
         source = "all"
     }
     threshold := strings.ToLower(strings.TrimSpace(level))
@@ -183,6 +183,16 @@ func (s *ServerService) GetDashboardLogs(count, level, source, query string) Das
                 if err != nil { warnings = append(warnings, "access: "+err.Error()) } else { readFile("access", path) }
             }
         }
+    }
+    if source == "all" || source == "update" {
+        readFile("update", "/var/log/x-ui/update.log")
+    }
+    if source == "all" || source == "naive" {
+        readFile("naive", filepath.Join(config.GetBinFolderPath(), "caddy-naive.log"))
+    }
+    if source == "all" || source == "ip-limit" {
+        readFile("ip-limit", xray.GetIPLimitLogPath())
+        readFile("ip-ban", xray.GetIPLimitBannedLogPath())
     }
     if source == "all" || source == "protocol" {
         root := filepath.Join(config.GetBinFolderPath(), "protocol-servers")
