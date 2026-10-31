@@ -86,13 +86,14 @@ func TestGetFileLogsRetainsShortUnstructuredDiagnostics(t *testing.T) {
 		"2026/11/01 12:00:00 DEBUG - discarded at error level",
 		"panic: SIGSEGV",
 		"goroutine",
+		"panic: goroutine DEBUG - fatal diagnostic line",
 		"2026/11/01 12:00:01 ERROR - retained structured entry",
 	}
 	if err := os.WriteFile(filepath.Join(dir, logFileName), []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got := GetFileLogs(10, "error")
-	want := []string{lines[3], lines[2], lines[1]}
+	want := []string{lines[4], lines[3], lines[2], lines[1]}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("short raw crash lines were lost or severity filter regressed: got %#v, want %#v", got, want)
 	}
