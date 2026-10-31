@@ -686,9 +686,9 @@ class CoreVersionSelectionTests(unittest.TestCase):
                         current = folder == old
                         version = 'v2' if state == 'different' and not current else 'v1'
                         marker = 'new' if not current and state in ('same', 'different', 'broken') else 'old'
-                        code = '#!/bin/bash\\n'
-                        code += 'exit 1\\n' if state == 'broken' and current else (
-                            f'echo "hiddify-core version {version} (linux)"\\n# {marker}\\n'
+                        code = '#!/bin/bash\n'
+                        code += 'exit 1\n' if state == 'broken' and current else (
+                            f'echo "hiddify-core version {version} (linux)"\n# {marker}\n'
                         )
                         (folder / binary).write_text(code)
                         (folder / binary).chmod(0o755)
@@ -701,11 +701,11 @@ class CoreVersionSelectionTests(unittest.TestCase):
                             (folder / 'libcronet.so').write_text(lib + '-library')
                     panel = incoming.parent / 'x-ui'
                     panel.write_text(
-                        '#!/bin/bash\\n' +
-                        ('[[ "$XUI_BIN_FOLDER" == */stage/x-ui/bin ]]\\n' if state == 'incompatible' else 'exit 0\\n')
+                        '#!/bin/bash\n' +
+                        ('[[ "$XUI_BIN_FOLDER" == */stage/x-ui/bin ]]\n' if state == 'incompatible' else 'exit 0\n')
                     )
                     panel.chmod(0o755)
-                    self.run_script(base, 'CASE=' + state + '\\n' + r'''
+                    self.run_script(base, 'CASE=' + state + '\n' + r'''
 xui_folder="$TEST_ROOT/x-ui"
 cm_stage="$TEST_ROOT/stage"
 arch() { printf amd64; }
