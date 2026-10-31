@@ -190,6 +190,21 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
             warnings = append(warnings, kind+": журнал отключён в конфигурации")
             return
         }
+        // ReadTailLines intentionally returns no entries for non-regular
+        // files, but the diagnostic viewer must report broken log paths.
+        info, statErr := os.Stat(path)
+        if statErr != nil {
+            if errors.Is(statErr, os.ErrNotExist) {
+                warnings = append(warnings, kind+": файл журнала отсутствует (логирование может быть отключено)")
+            } else {
+                warnings = append(warnings, fmt.Sprintf("%s: не удалось проверить журнал: %v", kind, statErr))
+            }
+            return
+        }
+        if !info.Mode().IsRegular() {
+            warnings = append(warnings, kind+": журнал не является обычным файлом")
+            return
+        }
         // Read only the newest scanLimit records. Previously this read up to
         // 8 MiB of every source before discarding all but 2000 lines,
         // multiplying memory and I/O when dozens of protocols are enabled.
