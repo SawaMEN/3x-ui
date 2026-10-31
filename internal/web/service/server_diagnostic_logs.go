@@ -272,9 +272,24 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
                 if !dir.IsDir() { continue }
                 if seen >= 64 { warnings = append(warnings, "protocol: показаны первые 64 каталога"); break }
                 seen++
+                kind := "protocol/" + dir.Name()
                 path := filepath.Join(root, dir.Name(), "server.log")
+                info, err := os.Stat(path)
+                if errors.Is(err, os.ErrNotExist) { continue } // optional log
+                if err != nil {
+                    warnings = append(warnings, fmt.Sprintf("%s: не удалось проверить журнал: %v", kind, err))
+                    continue
+                }
+                if !info.Mode().IsRegular() {
+                    warnings = append(warnings, kind+": журнал не является обычным файлом")
+                    continue
+                }
                 lines, err := tail.ReadTailLines(path, scanLimit, tail.DefaultTailBytes)
-                if err == nil { appendLines("protocol/"+dir.Name(), lines) }
+                if err != nil {
+                    warnings = append(warnings, fmt.Sprintf("%s: не удалось прочитать журнал: %v", kind, err))
+                    continue
+                }
+                appendLines(kind, lines)
             }
         } else if !errors.Is(err, os.ErrNotExist) {
             warnings = append(warnings, "protocol: "+err.Error())
