@@ -136,6 +136,11 @@ func (h *Hub) Run() {
 		}
 	}
 	logger.Error("WebSocket hub stopped after exhausting restart attempts")
+	// Release read-pump waiters and their buffers if the hub can no longer
+	// consume lifecycle events. Leaving ctx open would strand connections in
+	// Register/Unregister after a terminal hub failure.
+	h.Stop()
+	h.shutdown()
 }
 
 // runOnce drives the event loop once and returns true if the hub stopped
