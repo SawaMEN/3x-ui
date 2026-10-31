@@ -306,3 +306,26 @@ func TestDiagnosticProtocolWarnsWhenJournalIsNotAFile(t *testing.T) {
         t.Fatalf("broken journal was silently ignored: %+v", out.Warnings)
     }
 }
+
+func TestDiagnosticProtocolDoesNotCountInactiveDirectories(t *testing.T) {
+    binDir := t.TempDir()
+    t.Setenv("XUI_BIN_FOLDER", binDir)
+    root := filepath.Join(binDir, "protocol-servers")
+    for i := 0; i < 64; i++ {
+        path := filepath.Join(root, fmt.Sprintf("a-inactive-%02d", i))
+        if err := os.MkdirAll(path, 0o700); err != nil { t.Fatal(err) }
+    }
+    liveDir := filepath.Join(root, "zz-active")
+    if err := os.MkdirAll(liveDir, 0o700); err != nil { t.Fatal(err) }
+    const raw = "2026/11/01 15:00:00 ERROR - inactive-directories-cannot-hide-this-journal"
+    if err := os.WriteFile(filepath.Join(liveDir, "server.log"), []byte(raw+"\n"), 0o600); err != nil {
+        t.Fatal(err)
+    }
+    out := (&ServerService{}).GetDashboardLogsFiltered("10", "debug", "protocol", "inactive-directories-cannot-hide", "ERROR")
+    if len(out.Entries) != 1 || out.Entries[0].Raw != raw || out.Entries[0].Source != "protocol/zz-active" {
+        t.Fatalf("inactive protocol directories hid a live journal: %+v", out)
+    }
+    if len(out.Warnings) != 0 {
+        t.Fatalf("one real journal must not hit the 64-journal cap: %+v", out.Warnings)
+    }
+}
