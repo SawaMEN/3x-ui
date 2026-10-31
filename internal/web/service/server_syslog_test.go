@@ -31,3 +31,28 @@ func TestGetLogsSyslogGivesUpOnAStalledJournalctl(t *testing.T) {
 		t.Fatalf("GetLogs waited %v for a stalled journalctl, want about %v", elapsed, syslogTimeout)
 	}
 }
+
+func TestGetLogsSyslogReturnsNewestFirstWithoutBlankLine(t *testing.T) {
+    dir := t.TempDir()
+    fake := "#!/bin/sh\nprintf 'old entry\\nnew entry\\n'\n"
+    if err := os.WriteFile(filepath.Join(dir, "journalctl"), []byte(fake), 0o755); err != nil {
+        t.Fatal(err)
+    }
+    t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+    got := (&ServerService{}).GetLogs("10", "debug", "true")
+    want := []string{"new entry", "old entry"}
+    if !slices.Equal(got, want) {
+        t.Fatalf("syslog order / trailing blank row: got %#v, want %#v", got, want)
+    }
+}
+
+func TestGetLogsSyslogHandlesEmptyOutput(t *testing.T) {
+    dir := t.TempDir()
+    if err := os.WriteFile(filepath.Join(dir, "journalctl"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+        t.Fatal(err)
+    }
+    t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+    if got := (&ServerService{}).GetLogs("10", "debug", "true"); len(got) != 0 {
+        t.Fatalf("empty syslog must not create a blank entry: %#v", got)
+    }
+}
