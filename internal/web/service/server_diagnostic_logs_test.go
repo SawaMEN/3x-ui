@@ -255,3 +255,29 @@ func TestDiagnosticTimeIgnoresTimestampInsideMessage(t *testing.T) {
 		t.Fatalf("message date replaced the log timestamp: got %v, want %v", got, want)
 	}
 }
+
+func TestDiagnosticXraySubsecondTimeAndOrdering(t *testing.T) {
+    binDir := t.TempDir()
+    t.Setenv("XUI_BIN_FOLDER", binDir)
+    logDir := filepath.Join(binDir, "protocol-servers", "xray-microseconds")
+    if err := os.MkdirAll(logDir, 0o700); err != nil { t.Fatal(err) }
+    // Newest appears first in this fixture even though it has the same
+    // whole-second timestamp as the older event. Sorting must retain that.
+    lines := []string{
+        "2026/11/01 10:00:00.987654 ERROR - xray-micro-order-newer",
+        "2026/11/01 10:00:00.123456 ERROR - xray-micro-order-older",
+    }
+    if err := os.WriteFile(filepath.Join(logDir, "server.log"), []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+        t.Fatal(err)
+    }
+    got := (&ServerService{}).GetDashboardLogsFiltered("10", "debug", "protocol", "xray-micro-order", "ERROR")
+    if len(got.Entries) != 2 || got.Entries[0].Raw != lines[0] || got.Entries[1].Raw != lines[1] {
+        t.Fatalf("Xray microsecond records misordered: %+v", got)
+    }
+    if !strings.HasSuffix(got.Entries[0].Time, ".987654") && !strings.Contains(got.Entries[0].Time, ".987654") {
+        t.Fatalf("Xray microsecond timestamp was truncated: %+v", got.Entries[0])
+    }
+    if !strings.Contains(got.Entries[1].Time, ".123456") {
+        t.Fatalf("older Xray microsecond timestamp was truncated: %+v", got.Entries[1])
+    }
+}
