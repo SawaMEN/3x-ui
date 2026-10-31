@@ -76,6 +76,9 @@ export default function LogModal({ open, onClose }: LogModalProps) {
     { value: 'access', label: ru ? 'Подключения Xray' : 'Xray access' },
     { value: 'journal', label: ru ? 'Службы systemd' : 'System services' },
     { value: 'protocol', label: ru ? 'Протокольные серверы' : 'Protocol servers' },
+    { value: 'naive', label: 'NaiveProxy' },
+    { value: 'ip-limit', label: ru ? 'Лимиты IP / блокировки' : 'IP limits / bans' },
+    { value: 'update', label: ru ? 'Обновления / установка' : 'Update / install' },
   ];
 
   function download() {
