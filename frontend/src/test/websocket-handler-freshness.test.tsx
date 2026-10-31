@@ -10,7 +10,8 @@ vi.mock('@/api/websocket', () => ({
       if (!events.has(event)) events.set(event, new Set());
       events.get(event)!.add(callback);
     },
-    off: (event: string, callback: (payload: unknown) => void) => events.get(event)?.delete(callback),
+    off: (event: string, callback: (payload: unknown) => void) =>
+      events.get(event)?.delete(callback),
     connect,
   }),
 }));
