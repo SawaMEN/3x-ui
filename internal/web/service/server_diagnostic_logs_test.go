@@ -281,3 +281,28 @@ func TestDiagnosticXraySubsecondTimeAndOrdering(t *testing.T) {
         t.Fatalf("older Xray microsecond timestamp was truncated: %+v", got.Entries[1])
     }
 }
+
+func TestDiagnosticProtocolWarnsWhenJournalIsNotAFile(t *testing.T) {
+    binDir := t.TempDir()
+    t.Setenv("XUI_BIN_FOLDER", binDir)
+    root := filepath.Join(binDir, "protocol-servers")
+    // A directory at the expected log path is a broken deployment, not
+    // a valid empty log. The healthy protocol should still be displayed.
+    if err := os.MkdirAll(filepath.Join(root, "broken", "server.log"), 0o700); err != nil {
+        t.Fatal(err)
+    }
+    if err := os.MkdirAll(filepath.Join(root, "healthy"), 0o700); err != nil {
+        t.Fatal(err)
+    }
+    const raw = "2026/11/01 14:00:00 ERROR - protocol-journal-healthy-marker"
+    if err := os.WriteFile(filepath.Join(root, "healthy", "server.log"), []byte(raw+"\n"), 0o600); err != nil {
+        t.Fatal(err)
+    }
+    out := (&ServerService{}).GetDashboardLogs("10", "debug", "protocol", "protocol-journal-healthy-marker")
+    if len(out.Entries) != 1 || out.Entries[0].Raw != raw {
+        t.Fatalf("healthy protocol log disappeared: %+v", out)
+    }
+    if len(out.Warnings) != 1 || !strings.Contains(out.Warnings[0], "protocol/broken: журнал не является обычным файлом") {
+        t.Fatalf("broken journal was silently ignored: %+v", out.Warnings)
+    }
+}
