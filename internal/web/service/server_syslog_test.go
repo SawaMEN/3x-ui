@@ -56,3 +56,48 @@ func TestGetLogsSyslogHandlesEmptyOutput(t *testing.T) {
         t.Fatalf("empty syslog must not create a blank entry: %#v", got)
     }
 }
+
+func TestGetLogsSyslogStopsWaitingForInheritedPipe(t *testing.T) {
+    dir := t.TempDir()
+    // The parent exits immediately, but its background child retains stdout.
+    // Without WaitDelay, Cmd.Run can wait for this child despite a short
+    // journalctl command and a bounded context timeout.
+    script := "#!/bin/sh\nsleep 5 &\nprintf 'recent entry\\n'\n"
+    if err := os.WriteFile(filepath.Join(dir, "journalctl"), []byte(script), 0o755); err != nil {
+        t.Fatal(err)
+    }
+    t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+    previous := syslogWaitDelay
+    syslogWaitDelay = 120 * time.Millisecond
+    t.Cleanup(func() { syslogWaitDelay = previous })
+
+    started := time.Now()
+    got := (&ServerService{}).GetLogs("10", "debug", "true")
+    if elapsed := time.Since(started); elapsed > 2*time.Second {
+        t.Fatalf("legacy syslog waited %s for an orphan stdout writer", elapsed)
+    }
+    if len(got) == 0 {
+        t.Fatal("legacy syslog did not respond")
+    }
+}
+
+func TestDiagnosticJournalStopsWaitingForInheritedPipe(t *testing.T) {
+    dir := t.TempDir()
+    script := "#!/bin/sh\nsleep 5 &\nprintf '2026-11-01T12:00:00Z ERROR - journal-orphan-marker\\n'\n"
+    if err := os.WriteFile(filepath.Join(dir, "journalctl"), []byte(script), 0o755); err != nil {
+        t.Fatal(err)
+    }
+    t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+    previous := syslogWaitDelay
+    syslogWaitDelay = 120 * time.Millisecond
+    t.Cleanup(func() { syslogWaitDelay = previous })
+
+    started := time.Now()
+    got := (&ServerService{}).GetDashboardLogsFiltered("10", "debug", "journal", "journal-orphan-marker", "ERROR")
+    if elapsed := time.Since(started); elapsed > 2*time.Second {
+        t.Fatalf("structured journal waited %s for an orphan stdout writer", elapsed)
+    }
+    if len(got.Warnings) == 0 && len(got.Entries) == 0 {
+        t.Fatalf("diagnostics silently lost orphaned journal status: %+v", got)
+    }
+}
