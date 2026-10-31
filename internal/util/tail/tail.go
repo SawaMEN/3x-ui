@@ -157,3 +157,6 @@ func (b *RecentOutputBuffer) CompleteBytes() []byte {
     }
     return nil
 }
+
+// Truncated reports whether earlier command output was discarded.
+func (b *RecentOutputBuffer) Truncated() bool { return b.truncated }
