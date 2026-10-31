@@ -209,12 +209,15 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
     if source == "all" || source == "panel" {
         // Panel messages are not restricted to the in-memory buffer's 4096
         // entries and remain available across panel restarts.
-        if _, err := os.Stat(filepath.Join(config.GetLogFolder(), logger.LogFileName)); err != nil {
+        logPath := filepath.Join(config.GetLogFolder(), logger.LogFileName)
+        if info, err := os.Stat(logPath); err != nil {
             if errors.Is(err, os.ErrNotExist) {
                 warnings = append(warnings, "panel: файл журнала отсутствует (логирование может быть отключено)")
             } else {
                 warnings = append(warnings, fmt.Sprintf("panel: не удалось проверить журнал: %v", err))
             }
+        } else if !info.Mode().IsRegular() {
+            warnings = append(warnings, "panel: путь журнала не является обычным файлом")
         }
         lines := logger.GetFileLogs(scanLimit, "debug")
         // The file backend can have a stricter threshold than the in-memory
