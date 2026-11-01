@@ -178,3 +178,41 @@ func TestVetroffSubscriptionExcludesDisabledAndExpiredClients(t *testing.T) {
 		})
 	}
 }
+
+func TestVetroffExplicitNativeFormatKeepsSeparateConnection(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "raw", true: "base64"}[encrypted], func(t *testing.T) {
+			ib, subID, _ := seedVetroffSubscription(t)
+			seedHost(t, &model.Host{InboundId: ib.Id, Remark: "Public", Address: "edge.example.com", Port: 9443, Security: "tls"})
+			router := gin.New()
+			NewSUBController(router.Group("/"), WithSUBPath("/sub/"), WithSUBEncryption(encrypted), WithSUBJsonEnabled(true), WithSUBJsonAutoDetect(true))
+			for _, format := range []string{"xray", "sing-box", "hiddify"} {
+				t.Run(format, func(t *testing.T) {
+					req := httptest.NewRequest(http.MethodGet, "/sub/"+subID+"?format="+format, nil)
+					req.Header.Set("User-Agent", "Hiddify/2.0")
+					rec := httptest.NewRecorder()
+					router.ServeHTTP(rec, req)
+					if rec.Code != http.StatusOK {
+						t.Fatalf("native format discarded VetroffProxy: status %d: %s", rec.Code, rec.Body.String())
+					}
+					body := rec.Body.String()
+					if encrypted {
+						raw, err := base64.StdEncoding.DecodeString(body)
+						if err != nil {
+							t.Fatal(err)
+						}
+						body = string(raw)
+					}
+					links := strings.Fields(body)
+					if len(links) != 1 {
+						t.Fatalf("expected one separate VetroffProxy link, got %d: %q", len(links), body)
+					}
+					profile := decodeVetroffProfile(t, links[0])
+					if profile["servers"].([]any)[0] != "https://edge.example.com:9443" {
+						t.Fatalf("fallback lost configured Host endpoint: %+v", profile["servers"])
+					}
+				})
+			}
+		})
+	}
+}
