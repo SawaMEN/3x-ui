@@ -2,6 +2,9 @@ name: Release 3X-UI
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -9,10 +12,9 @@ on:
     tags:
       - "v*.*.*"
 
-# Always build the newest main revision, including fixes to shell tests and
-# documentation that can otherwise supersede a release build while leaving
-# dev-latest permanently stale. Cancel only superseded main builds; explicit
-# version-tag builds and manually dispatched runs are never cancelled here.
+# Build release artifacts on main and PRs before the changes are merged,
+# so pinned-core config errors cannot pass CI and fail only after release.
+# Cancel only superseded main builds; version-tag and dispatched runs persist.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
