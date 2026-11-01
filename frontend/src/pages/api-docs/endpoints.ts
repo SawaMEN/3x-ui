@@ -1383,9 +1383,77 @@ export const sections: readonly Section[] = [
             optional: true,
             desc: 'Optional comma-separated tokens: domain[:port], IP[:port], or CIDR (e.g. 104.16.0.0/24). When omitted, the realityScanCandidates setting is probed (the built-in seed list if that setting is empty).',
           },
+          {
+            name: 'mode',
+            in: 'body (form)',
+            type: 'string',
+            optional: true,
+            desc: 'candidates (default) or nearby. Nearby scans up to 256 public IPs around targets (one server IP/domain[:port]), or the panel server public IP when targets is empty. Certificate names are verified with SNI against the discovered IP. Results are ranked by feasibility then TLS connection time from this server; IP proximity does not imply geographic proximity.',
+          },
         ],
         body: 'targets=104.16.0.0/24,www.apple.com:443',
         responseSchema: 'RealityScanResult',
+        responseSchemaArray: true,
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/sni/jobs',
+        summary:
+          'Start a queued SNI scan. JSON: mode=candidates|nearby|combined|recheck, targets, purpose=reality|tls|shadowtls|fakeTls, optional nodeId. Combined scans neighbors and the configured domain list. Recheck accepts up to 20 saved {ip,host,port} targets. The ten best candidates get five stability probes, median/spread, TCP/TLS timing, optional HTTP/2 HEAD and DNS diagnostics. Jobs are polled for incremental results and expire when polling stops for 30 seconds. Nodes must support this API; no fallback to scanning from the master.',
+        params: [
+          {
+            name: 'body',
+            in: 'body (json)',
+            type: 'object',
+            optional: false,
+            desc: 'Scan request; JSON is required for recheck arrays. Up to four queued/running jobs per panel, shared 32-connection and 16-probes/second limits.',
+          },
+        ],
+        body: '{"mode":"combined","purpose":"reality","targets":"","nodeId":0}',
+        responseSchema: 'SNIJobSnapshot',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/sni/jobs/:id',
+        summary:
+          'Poll incremental results and discovery/stability progress. Optional nodeId query must identify the same node used to start the job. Polling renews the 30-second client lease. Each execution is bounded to six minutes. Discovery reserves verification time: four minutes in a single mode, or two minutes per phase in combined mode. Phase timeouts return verified partial results with a warning; snapshot responses are not cacheable.',
+        params: [
+          { name: 'id', in: 'path', type: 'string', optional: false, desc: 'Opaque scan id.' },
+          {
+            name: 'nodeId',
+            in: 'query',
+            type: 'integer',
+            optional: true,
+            desc: 'Selected execution node; zero/omitted means local.',
+          },
+        ],
+        responseSchema: 'SNIJobSnapshot',
+      },
+      {
+        method: 'DELETE',
+        path: '/panel/api/server/sni/jobs/:id',
+        summary:
+          'Cancel queued or active scan work. Optional nodeId query targets the selected execution node.',
+        params: [
+          { name: 'id', in: 'path', type: 'string', optional: false, desc: 'Opaque scan id.' },
+        ],
+        responseSchema: 'SNIJobSnapshot',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/sni/history',
+        summary:
+          'Return the latest 20 completed scans stored in the executing panel database, with up to 20 certificate-verified targets per scan. Optional nodeId loads that node’s history. Saved timestamps and metrics are historical; recheck before applying.',
+        params: [
+          {
+            name: 'nodeId',
+            in: 'query',
+            type: 'integer',
+            optional: true,
+            desc: 'Selected execution node.',
+          },
+        ],
+        responseSchema: 'SNIJobSnapshot',
         responseSchemaArray: true,
       },
       {

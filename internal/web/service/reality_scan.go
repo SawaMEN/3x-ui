@@ -6,7 +6,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"golang.org/x/net/http2"
 	"net"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -869,6 +871,18 @@ func expandedRealityScanCandidates(csv string) string {
 }
 
 type RealityScanResult struct {
+	TCPMs          float64 `json:"tcpMs,omitempty"`
+	TLSMs          float64 `json:"tlsMs,omitempty"`
+	Attempts       int     `json:"attempts,omitempty"`
+	Successes      int     `json:"successes,omitempty"`
+	MedianMs       float64 `json:"medianMs,omitempty"`
+	JitterMs       float64 `json:"jitterMs,omitempty"`
+	HTTP2OK        *bool   `json:"http2OK,omitempty"`
+	DNSMatchesIP   *bool   `json:"dnsMatchesIP,omitempty"`
+	DNSLookupError string  `json:"dnsLookupError,omitempty"`
+	CheckedAt      string  `json:"checkedAt,omitempty"`
+	Source         string  `json:"source,omitempty"`
+
 	Target   string `json:"target" example:"www.cloudflare.com:443"`
 	Host     string `json:"host" example:"www.cloudflare.com"`
 	IP       string `json:"ip" example:"104.16.124.96"`
@@ -1016,6 +1030,10 @@ func enumerateCIDR(cidr string, max int) ([]string, error) {
 }
 
 func (s *ServerService) probeRealityAddr(dialHost string, port int, sni string, timeout time.Duration, xver int, allowPrivate bool) *RealityScanResult {
+	return s.probeRealityAddrContext(context.Background(), dialHost, port, sni, timeout, xver, allowPrivate)
+}
+
+func (s *ServerService) probeRealityAddrContext(parent context.Context, dialHost string, port int, sni string, timeout time.Duration, xver int, allowPrivate bool) *RealityScanResult {
 	addr := net.JoinHostPort(dialHost, strconv.Itoa(port))
 	res := &RealityScanResult{Port: port}
 	if net.ParseIP(dialHost) != nil {
@@ -1029,9 +1047,20 @@ func (s *ServerService) probeRealityAddr(dialHost string, port int, sni string, 
 		res.Host = sni
 	}
 
-	ctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(context.Background(), allowPrivate), timeout)
+	ctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(parent, allowPrivate), timeout)
 	defer cancel()
 
+	if err := sniProbeLimiter.Wait(ctx); err != nil {
+		res.Reason = err.Error()
+		return res
+	}
+	select {
+	case sniProbeSlots <- struct{}{}:
+	case <-ctx.Done():
+		res.Reason = ctx.Err().Error()
+		return res
+	}
+	defer func() { <-sniProbeSlots }()
 	start := time.Now()
 	conn, err := netsafe.SSRFGuardedDialContext(ctx, "tcp", addr)
 	if err != nil {
@@ -1040,7 +1069,9 @@ func (s *ServerService) probeRealityAddr(dialHost string, port int, sni string, 
 		return res
 	}
 	defer conn.Close()
+	res.TCPMs = float64(time.Since(start).Microseconds()) / 1000
 	if remote, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+		res.IP = remote.IP.String()
 		res.PrivateTarget = netsafe.IsBlockedIP(remote.IP)
 		// The opt-in bypasses the SSRF guard, so leave an audit trail of it.
 		if res.PrivateTarget && allowPrivate {
@@ -1067,12 +1098,14 @@ func (s *ServerService) probeRealityAddr(dialHost string, port int, sni string, 
 		CurvePreferences:   []tls.CurveID{tls.X25519, tls.X25519MLKEM768},
 		MinVersion:         tls.VersionTLS12,
 	}
+	tlsStart := time.Now()
 	tlsConn := tls.Client(conn, cfg)
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		res.Reason = "TLS handshake failed: " + err.Error()
 		return res
 	}
 	res.LatencyMs = int(time.Since(start).Milliseconds())
+	res.TLSMs = float64(time.Since(tlsStart).Microseconds()) / 1000
 
 	st := tlsConn.ConnectionState()
 	res.TLS13 = st.Version == tls.VersionTLS13
@@ -1141,6 +1174,22 @@ func (s *ServerService) probeRealityAddr(dialHost string, port int, sni string, 
 			res.Reason = "server did not use X25519 key exchange"
 		}
 	}
+	if check, _ := parent.Value(sniHTTPCheckKey{}).(bool); check && res.CertValid && res.H2 {
+		ok := false
+		transport := &http2.Transport{MaxHeaderListSize: 32768}
+		if client, err := transport.NewClientConn(tlsConn); err == nil {
+			req, err := http.NewRequestWithContext(ctx, http.MethodHead, "https://"+net.JoinHostPort(res.Host, strconv.Itoa(port))+"/", nil)
+			if err == nil {
+				if response, err := client.RoundTrip(req); err == nil {
+					ok = response.ProtoMajor == 2
+					response.Body.Close()
+				}
+			}
+			client.Close()
+		}
+		res.HTTP2OK = &ok
+	}
+
 	return res
 }
 
@@ -1183,6 +1232,13 @@ func (s *ServerService) realityScanCandidateTokens() []string {
 }
 
 func (s *ServerService) ScanRealityTargets(targetsCSV string) ([]*RealityScanResult, error) {
+	return s.ScanRealityTargetsContext(context.Background(), targetsCSV)
+}
+
+func (s *ServerService) ScanRealityTargetsContext(ctx context.Context, targetsCSV string) ([]*RealityScanResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	tokens := parseRealityScanCandidateCSV(targetsCSV)
 	if len(tokens) == 0 {
 		tokens = s.realityScanCandidateTokens()
@@ -1220,18 +1276,31 @@ func (s *ServerService) ScanRealityTargets(targetsCSV string) ([]*RealityScanRes
 		}
 	}
 
+	emitSNIProgress(ctx, len(tasks), 0, nil)
 	probed := make([]*RealityScanResult, len(tasks))
 	sem := make(chan struct{}, realityScanConcurrency)
 	var wg sync.WaitGroup
 	for i, task := range tasks {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			wg.Wait()
+			return nil, ctx.Err()
+		}
+		if err := ctx.Err(); err != nil {
+			<-sem
+			wg.Wait()
+			return nil, err
+		}
 		wg.Add(1)
-		sem <- struct{}{}
 		go func(idx int, tk realityProbeTask) {
 			defer wg.Done()
 			defer func() { <-sem }()
 			// The bulk/CIDR scanner never reaches private ranges: the opt-in
 			// there would turn it into an internal network scanner.
-			r := s.probeRealityAddr(tk.dialHost, tk.port, tk.sni, tk.timeout, 0, false)
+			r := s.probeRealityAddrContext(ctx, tk.dialHost, tk.port, tk.sni, tk.timeout, 0, false)
+			r.Source = "candidates"
+			emitSNIProgress(ctx, 0, 1, r)
 			if tk.bulk && r.TLSVersion == "" {
 				return
 			}
@@ -1240,6 +1309,9 @@ func (s *ServerService) ScanRealityTargets(targetsCSV string) ([]*RealityScanRes
 	}
 	wg.Wait()
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	results := dedupRealityResults(append(probed, invalid...))
 	sortRealityResults(results)
 	return results, nil

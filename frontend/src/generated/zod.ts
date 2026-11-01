@@ -15,6 +15,12 @@ export type VKTurnProxyForwardType = z.infer<typeof VKTurnProxyForwardTypeSchema
 export const clientResetPolicySchema = z.number().int();
 export type clientResetPolicy = z.infer<typeof clientResetPolicySchema>;
 
+export const nearbySNIProbeSchema = z.unknown();
+export type nearbySNIProbe = z.infer<typeof nearbySNIProbeSchema>;
+
+export const sniProgressSchema = z.unknown();
+export type sniProgress = z.infer<typeof sniProgressSchema>;
+
 export const staticEgressResolverSchema = z.string();
 export type staticEgressResolver = z.infer<typeof staticEgressResolverSchema>;
 
@@ -1106,24 +1112,35 @@ export type ProbeResultUI = z.infer<typeof ProbeResultUISchema>;
 
 export const RealityScanResultSchema = z.object({
   alpn: z.string(),
+  attempts: z.number().int().optional(),
   certChainBytes: z.number().int(),
   certChainValid: z.boolean(),
   certIssuer: z.string(),
   certSubject: z.string(),
   certValid: z.boolean(),
+  checkedAt: z.string().optional(),
   curveID: z.string(),
+  dnsLookupError: z.string().optional(),
+  dnsMatchesIP: z.boolean().nullable().optional(),
   feasible: z.boolean(),
   h2: z.boolean(),
   host: z.string(),
+  http2OK: z.boolean().nullable().optional(),
   ip: z.string(),
+  jitterMs: z.number().optional(),
   latencyMs: z.number().int(),
+  medianMs: z.number().optional(),
   notAfter: z.string(),
   port: z.number().int(),
   privateTarget: z.boolean(),
   reason: z.string(),
   serverNames: z.array(z.string()),
+  source: z.string().optional(),
+  successes: z.number().int().optional(),
   target: z.string(),
+  tcpMs: z.number().optional(),
   tls13: z.boolean(),
+  tlsMs: z.number().optional(),
   tlsVersion: z.string(),
   x25519: z.boolean(),
 });
@@ -1163,6 +1180,38 @@ export const RoutingPresetViewSchema = z.object({
   updatedAt: z.number().int(),
 });
 export type RoutingPresetView = z.infer<typeof RoutingPresetViewSchema>;
+
+export const SNIJobSnapshotSchema = z.object({
+  completed: z.number().int(),
+  createdAt: z.string(),
+  error: z.string().optional(),
+  finishedAt: z.string().optional(),
+  id: z.string(),
+  phase: z.string(),
+  results: z.array(z.lazy(() => RealityScanResultSchema).nullable()),
+  source: z.string(),
+  state: z.string(),
+  total: z.number().int(),
+  verified: z.number().int(),
+  verifyTotal: z.number().int(),
+});
+export type SNIJobSnapshot = z.infer<typeof SNIJobSnapshotSchema>;
+
+export const SNISavedTargetSchema = z.object({
+  host: z.string(),
+  ip: z.string(),
+  port: z.number().int(),
+});
+export type SNISavedTarget = z.infer<typeof SNISavedTargetSchema>;
+
+export const SNIScanRequestSchema = z.object({
+  mode: z.string().optional(),
+  nodeId: z.number().int().nullable().optional(),
+  purpose: z.string().optional(),
+  recheck: z.array(z.lazy(() => SNISavedTargetSchema).nullable()).optional(),
+  targets: z.string().optional(),
+});
+export type SNIScanRequest = z.infer<typeof SNIScanRequestSchema>;
 
 export const ServerSettingsSchema = z.object({
   contentPaddingAddition: z.string().optional(),

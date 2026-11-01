@@ -1,0 +1,113 @@
+diff --git a/common/tls/std_server.go b/common/tls/std_server.go
+--- a/common/tls/std_server.go
++++ b/common/tls/std_server.go
+@@ -383,16 +383,11 @@
+ 		tlsConfig.MaxVersion = maxVersion
+ 	}
+ 	if options.CipherSuites != nil {
+-	find:
+-		for _, cipherSuite := range options.CipherSuites {
+-			for _, tlsCipherSuite := range tls.CipherSuites() {
+-				if cipherSuite == tlsCipherSuite.Name {
+-					tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, tlsCipherSuite.ID)
+-					continue find
+-				}
+-			}
+-			return nil, E.New("unknown cipher_suite: ", cipherSuite)
+-		}
++		cipherSuites, err := xuiExplicitCipherSuites(options.CipherSuites)
++		if err != nil {
++			return nil, err
++		}
++		tlsConfig.CipherSuites = cipherSuites
+ 	}
+ 	for _, curveID := range options.CurvePreferences {
+ 		tlsConfig.CurvePreferences = append(tlsConfig.CurvePreferences, tls.CurveID(curveID))
+diff --git a/common/tls/std_client.go b/common/tls/std_client.go
+--- a/common/tls/std_client.go
++++ b/common/tls/std_client.go
+@@ -169,16 +169,11 @@
+ 		tlsConfig.MaxVersion = maxVersion
+ 	}
+ 	if options.CipherSuites != nil {
+-	find:
+-		for _, cipherSuite := range options.CipherSuites {
+-			for _, tlsCipherSuite := range tls.CipherSuites() {
+-				if cipherSuite == tlsCipherSuite.Name {
+-					tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, tlsCipherSuite.ID)
+-					continue find
+-				}
+-			}
+-			return nil, E.New("unknown cipher_suite: ", cipherSuite)
+-		}
++		cipherSuites, err := xuiExplicitCipherSuites(options.CipherSuites)
++		if err != nil {
++			return nil, err
++		}
++		tlsConfig.CipherSuites = cipherSuites
+ 	}
+ 	for _, curve := range options.CurvePreferences {
+ 		tlsConfig.CurvePreferences = append(tlsConfig.CurvePreferences, tls.CurveID(curve))
+diff --git a/common/tls/utls_client.go b/common/tls/utls_client.go
+--- a/common/tls/utls_client.go
++++ b/common/tls/utls_client.go
+@@ -236,16 +236,11 @@
+ 		tlsConfig.MaxVersion = maxVersion
+ 	}
+ 	if options.CipherSuites != nil {
+-	find:
+-		for _, cipherSuite := range options.CipherSuites {
+-			for _, tlsCipherSuite := range tls.CipherSuites() {
+-				if cipherSuite == tlsCipherSuite.Name {
+-					tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, tlsCipherSuite.ID)
+-					continue find
+-				}
+-			}
+-			return nil, E.New("unknown cipher_suite: ", cipherSuite)
+-		}
++		cipherSuites, err := xuiExplicitCipherSuites(options.CipherSuites)
++		if err != nil {
++			return nil, err
++		}
++		tlsConfig.CipherSuites = cipherSuites
+ 	}
+ 	var certificate []byte
+ 	if len(options.Certificate) > 0 {
+diff --git a/common/tls/xui_explicit_ciphers.go b/common/tls/xui_explicit_ciphers.go
+new file mode 100644
+--- /dev/null
++++ b/common/tls/xui_explicit_ciphers.go
+@@ -0,0 +1,33 @@
++package tls
++
++import (
++	"crypto/tls"
++	E "github.com/sagernet/sing/common/exceptions"
++)
++
++// This registry is consulted only for an explicitly configured cipher list.
++// Nil or empty options keep the TLS library's unchanged secure defaults.
++var xuiExplicitCipherIDs = func() map[string]uint16 {
++	ids := make(map[string]uint16)
++	for _, list := range [][]*tls.CipherSuite{tls.CipherSuites(), tls.InsecureCipherSuites()} {
++		for _, suite := range list {
++			ids[suite.Name] = suite.ID
++		}
++	}
++	return ids
++}()
++
++func xuiExplicitCipherSuites(names []string) ([]uint16, error) {
++	if len(names) == 0 {
++		return nil, nil
++	}
++	ids := make([]uint16, 0, len(names))
++	for _, name := range names {
++		id, ok := xuiExplicitCipherIDs[name]
++		if !ok {
++			return nil, E.New("unknown cipher_suite: ", name)
++		}
++		ids = append(ids, id)
++	}
++	return ids, nil
++}
