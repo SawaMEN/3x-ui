@@ -76,13 +76,24 @@ func TestXHTTPRuntimeTransfer(t *testing.T) {
 					if security == "tls" {
 						cert, key := testCertificate(t, dir)
 						serverStream["tlsSettings"] = map[string]any{"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}}
-						data, err := os.ReadFile(cert)
-						if err != nil {
-							t.Fatal(err)
+						if xray {
+							// Xray accepts full-certificate SHA-256 pinning.
+							data, err := os.ReadFile(cert)
+							if err != nil {
+								t.Fatal(err)
+							}
+							block, _ := pem.Decode(data)
+							hash := sha256.Sum256(block.Bytes)
+							stream["tlsSettings"] = map[string]any{"serverName": "localhost", "pinnedPeerCertSha256": hex.EncodeToString(hash[:]), "alpn": []any{"h2"}}
+						} else {
+							// Pinned sing-box does not implement Xray's full-certificate
+							// pin. Trust the fixture CA explicitly without disabling
+							// peer verification.
+							stream["tlsSettings"] = map[string]any{
+								"serverName": "localhost", "fingerprint": "unsafe", "alpn": []any{"h2"},
+								"certificates": []any{map[string]any{"usage": "verify", "certificateFile": cert}},
+							}
 						}
-						block, _ := pem.Decode(data)
-						hash := sha256.Sum256(block.Bytes)
-						stream["tlsSettings"] = map[string]any{"serverName": "localhost", "pinnedPeerCertSha256": hex.EncodeToString(hash[:]), "alpn": []any{"h2"}}
 					}
 					if security == "reality" {
 						target := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
