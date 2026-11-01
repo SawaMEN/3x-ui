@@ -290,9 +290,9 @@ func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 }
 
 // truncatePostgresTables empties every migrated table on dst in a single
-// statement, resetting identity sequences. CASCADE covers the inbound/client
-// foreign keys regardless of insertion order. Only the panel's own tables are
-// touched, never the rest of the schema.
+// statement, resetting identity sequences. All panel FK targets are included.
+// RESTRICT (the default) refuses external references instead of truncating
+// another application's tables through CASCADE.
 func truncatePostgresTables(dst *gorm.DB, models []any) error {
 	tables := make([]string, 0, len(models))
 	for _, m := range models {
@@ -306,7 +306,7 @@ func truncatePostgresTables(dst *gorm.DB, models []any) error {
 		return nil
 	}
 	log.Println("Clearing destination tables...")
-	return dst.Exec("TRUNCATE TABLE " + strings.Join(tables, ", ") + " RESTART IDENTITY CASCADE").Error
+	return dst.Exec("TRUNCATE TABLE " + strings.Join(tables, ", ") + " RESTART IDENTITY").Error
 }
 
 // resetPostgresSequences advances each migrated table's id sequence past MAX(id),

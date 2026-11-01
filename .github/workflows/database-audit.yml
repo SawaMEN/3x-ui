@@ -38,7 +38,7 @@ jobs:
         run: |
           set -o pipefail
           go test -race -p 2 -json ./internal/database ./internal/database/model -count=1 | tee database.jsonl
-          python3 tools/ci/require-go-tests.py database.jsonl TestStage3LegacyUpgrade TestStage3PostgresRoundTrip TestStage3PostgresCommitAndDisconnect TestStage3PostgresNativeBackup TestStage3ValidateRejectsIncompleteFiles TestStage3DumpReplacesInsecureDestination TestStage3DumpPreservesStorageClasses TestStage3RestoreRejectsUncommittedDump TestStage3ExportFailurePreservesDestination TestStage3CopyRollback TestStage3SQLiteWriteFailures TestStage3DumpConcurrentSnapshot TestMigrateData_CompositeKeyTableLargerThanBatch TestMigrateData_PreservesFalseDefaultedColumns TestMigrateData_FailedCopyLeavesDestinationUntouched
+          python3 tools/ci/require-go-tests.py database.jsonl TestStage3LegacyUpgrade TestStage3PostgresRoundTrip TestStage3PostgresMigrationPreservesExternalTables TestStage3PostgresCommitAndDisconnect TestStage3PostgresNativeBackup TestStage3ValidateRejectsIncompleteFiles TestStage3DumpReplacesInsecureDestination TestStage3DumpPreservesStorageClasses TestStage3RestoreRejectsUncommittedDump TestStage3ExportFailurePreservesDestination TestStage3CopyRollback TestStage3SQLiteWriteFailures TestStage3DumpConcurrentSnapshot TestMigrateData_CompositeKeyTableLargerThanBatch TestMigrateData_PreservesFalseDefaultedColumns TestMigrateData_FailedCopyLeavesDestinationUntouched
       - name: Replay legacy PostgreSQL-only schema tests without skips
         env:
           XUI_DB_TYPE: postgres

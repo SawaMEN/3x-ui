@@ -198,3 +198,25 @@ func TestStage3PostgresCommitAndDisconnect(t *testing.T) {
 		t.Fatal("disconnect changed committed data")
 	}
 }
+
+func TestStage3PostgresMigrationPreservesExternalTables(t *testing.T) {
+	pg, dsn := stage3Postgres(t)
+	path := stage3PopulatedLegacy(t)
+	if err := MigrateData(path, dsn); err != nil {
+		t.Fatal(err)
+	}
+	want := stage3Canonical(t, pg)
+	if err := pg.Exec("CREATE TABLE external_consumer(user_id bigint REFERENCES users(id), payload text); INSERT INTO external_consumer SELECT id,'external-data' FROM users LIMIT 1").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateData(path, dsn); err == nil {
+		t.Fatal("migration should refuse external foreign-key references")
+	}
+	var payload string
+	if err := pg.Raw("SELECT payload FROM external_consumer").Scan(&payload).Error; err != nil || payload != "external-data" {
+		t.Fatalf("migration destroyed external data: %v", err)
+	}
+	if stage3Canonical(t, pg) != want {
+		t.Fatal("refused migration changed panel tables")
+	}
+}
