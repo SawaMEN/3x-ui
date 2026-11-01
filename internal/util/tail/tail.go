@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"strings"
 )
 
 const (
@@ -46,7 +47,22 @@ func ReadTailLines(path string, maxLines int, maxBytes int64) ([]string, error) 
 		capacity = maxLines
 	}
 	lines := make([]string, 0, capacity)
-	var carry []byte
+	// Retain fragments newest first until a complete line is found. Joining
+	// the growing carry on every chunk makes a single long record quadratic.
+	var carry [][]byte
+	carryBytes := 0
+	lineText := func(prefix []byte) string {
+		if len(carry) == 0 {
+			return string(bytes.TrimSuffix(prefix, []byte{'\r'}))
+		}
+		var text strings.Builder
+		text.Grow(len(prefix) + carryBytes)
+		text.Write(prefix)
+		for i := len(carry) - 1; i >= 0; i-- {
+			text.Write(carry[i])
+		}
+		return strings.TrimSuffix(text.String(), "\r")
+	}
 	end := info.Size()
 
 	for end > 0 && remaining > 0 && (maxLines <= 0 || len(lines) < maxLines) {
@@ -64,24 +80,26 @@ func ReadTailLines(path string, maxLines int, maxBytes int64) ([]string, error) 
 			return nil, err
 		}
 
-		buf := make([]byte, len(chunk)+len(carry))
-		copy(buf, chunk)
-		copy(buf[len(chunk):], carry)
-
-		prefixEnd := len(buf)
+		prefixEnd := len(chunk)
 		for prefixEnd > 0 && (maxLines <= 0 || len(lines) < maxLines) {
-			newline := bytes.LastIndexByte(buf[:prefixEnd], '\n')
+			newline := bytes.LastIndexByte(chunk[:prefixEnd], '\n')
 			if newline < 0 {
 				break
 			}
-			line := bytes.TrimSuffix(buf[newline+1:prefixEnd], []byte{'\r'})
+			line := lineText(chunk[newline+1 : prefixEnd])
+			clear(carry)
+			carry = carry[:0]
+			carryBytes = 0
 			if len(line) > 0 {
-				lines = append(lines, string(line))
+				lines = append(lines, line)
 			}
 			prefixEnd = newline
 		}
 
-		carry = append(carry[:0], buf[:prefixEnd]...)
+		if prefixEnd > 0 {
+			carry = append(carry, chunk[:prefixEnd])
+			carryBytes += prefixEnd
+		}
 		end = start
 		remaining -= readSize
 	}
@@ -91,9 +109,8 @@ func ReadTailLines(path string, maxLines int, maxBytes int64) ([]string, error) 
 	// dashboard can present an incomplete error or panic as a real log entry.
 	// A line without a trailing newline is still valid when we reached the
 	// beginning of the file.
-	if end == 0 && len(carry) > 0 && (maxLines <= 0 || len(lines) < maxLines) {
-		line := bytes.TrimSuffix(carry, []byte{'\r'})
-		lines = append(lines, string(line))
+	if end == 0 && carryBytes > 0 && (maxLines <= 0 || len(lines) < maxLines) {
+		lines = append(lines, lineText(nil))
 	}
 
 	return lines, nil
@@ -136,9 +153,7 @@ func (b *RecentOutputBuffer) Write(p []byte) (int, error) {
 		return 0, nil
 	}
 	if b.maxBytes == 0 {
-		if n > 0 {
-			b.truncated = true
-		}
+		b.truncated = true
 		return n, nil
 	}
 	if n >= b.maxBytes {
