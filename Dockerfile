@@ -8,24 +8,30 @@ COPY frontend/ ./
 COPY internal/web/translation /src/internal/web/translation
 RUN npm run build
 
-FROM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS builder
+FROM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS native-build-base
 WORKDIR /app
-ARG TARGETARCH
-ARG BUILD_COMMIT=unknown
 RUN apk add --no-cache build-base lld binutils git python3 bash curl unzip
 COPY . .
-COPY --from=frontend /src/internal/web/dist ./internal/web/dist
 ENV CGO_ENABLED=1 CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
+# The kernel target is also used by release.yml. Run native musl tests in
+# Alpine, whose compiler/libc profile matches the packaged static Cronet.
+FROM native-build-base AS kernel
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh /kernel
+
+FROM native-build-base AS builder
+ARG TARGETARCH
+ARG BUILD_COMMIT=unknown
+COPY --from=frontend /src/internal/web/dist ./internal/web/dist
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -ldflags "-w -s -X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=$BUILD_COMMIT" -o build/x-ui .
 RUN ./DockerInit.sh "$TARGETARCH"
-# Build the same pinned overlays as Linux releases. Alpine requires the static
-# musl Cronet profile; the glibc libcronet.so release is not interchangeable.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh /app/build/bin \
-    && python3 tools/build-speed-components.py --component mieru --output /app/build/bin
+    python3 tools/build-speed-components.py --component mieru --output /app/build/bin
+COPY --from=kernel /kernel/ /app/build/bin/
 
 FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 ARG BUILD_COMMIT=unknown

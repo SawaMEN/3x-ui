@@ -159,7 +159,7 @@ jobs:
       - name: Install native musl compiler
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools lld
+          sudo apt-get install -y musl-tools
           musl-gcc --version
           dpkg-query --show musl musl-dev musl-tools
           echo "CC=musl-gcc" >> "$GITHUB_ENV"
@@ -248,7 +248,13 @@ jobs:
           GOARCH: ${{ matrix.platform }}
         run: |
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
-          SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
+          # Reuse the native Alpine profile already exercised by Docker checks.
+          docker build --target kernel --platform linux/${{ matrix.platform }} -t x-ui-kernel:${{ matrix.platform }} .
+          container=$(docker create --entrypoint /bin/true x-ui-kernel:${{ matrix.platform }})
+          trap 'docker rm -f "$container" >/dev/null' EXIT
+          docker cp "$container:/kernel/." "$PWD/x-ui/bin/"
+          docker rm "$container" >/dev/null
+          trap - EXIT
       - name: Check panel configuration with downloaded binary
         env:
           CC: gcc
