@@ -12,9 +12,10 @@ on:
     tags:
       - "v*.*.*"
 
-# Build release artifacts on main and PRs before the changes are merged,
-# so pinned-core config errors cannot pass CI and fail only after release.
-# Cancel only superseded main builds; version-tag and dispatched runs persist.
+# Always build the newest main revision, including fixes to shell tests and
+# documentation that can otherwise supersede a release build while leaving
+# dev-latest permanently stale. Cancel only superseded main builds; explicit
+# version-tag builds and manually dispatched runs are never cancelled here.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -367,8 +368,7 @@ jobs:
           # Retire patched protocol servers; components use official releases.
           for old_asset in panel-tunnel-linux-amd64.tar.gz panel-tunnel-linux-arm64.tar.gz telemt.version telemt-linux-amd64.tar.gz telemt-linux-amd64.tar.gz.sha256 telemt-linux-arm64.tar.gz telemt-linux-arm64.tar.gz.sha256; do
             gh release delete-asset dev-latest "$old_asset" --yes 2>/dev/null || true
-          done
- -count=1
+          done -count=1
 
       - name: Validate pinned-core transport and DNS routing matrix
         if: matrix.platform == 'amd64'
@@ -479,8 +479,7 @@ jobs:
           # Retire patched protocol servers; components use official releases.
           for old_asset in panel-tunnel-linux-amd64.tar.gz panel-tunnel-linux-arm64.tar.gz telemt.version telemt-linux-amd64.tar.gz telemt-linux-amd64.tar.gz.sha256 telemt-linux-arm64.tar.gz telemt-linux-arm64.tar.gz.sha256; do
             gh release delete-asset dev-latest "$old_asset" --yes 2>/dev/null || true
-          done
- -count=1 -timeout=8m
+          done -count=1 -timeout=8m
           go test ./internal/singbox -run '^TestGeoRoutingModifiedSingBoxCheck
         run: |
           for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku vetroff vetroff-bundle; do
@@ -583,8 +582,7 @@ jobs:
           # Retire patched protocol servers; components use official releases.
           for old_asset in panel-tunnel-linux-amd64.tar.gz panel-tunnel-linux-arm64.tar.gz telemt.version telemt-linux-amd64.tar.gz telemt-linux-amd64.tar.gz.sha256 telemt-linux-arm64.tar.gz telemt-linux-arm64.tar.gz.sha256; do
             gh release delete-asset dev-latest "$old_asset" --yes 2>/dev/null || true
-          done
- -count=1 -timeout=3m
+          done -count=1 -timeout=3m
 
       - name: Package
         run: |
