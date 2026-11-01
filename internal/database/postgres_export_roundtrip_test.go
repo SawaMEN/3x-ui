@@ -32,7 +32,8 @@ func TestPostgresSQLiteRoundTripAndBackupPreservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer adminSQL.Close()
+	// The schema cleanup must run before closing the connection pool.
+	t.Cleanup(func() { _ = adminSQL.Close() })
 
 	schema := fmt.Sprintf("xui_audit_%d", time.Now().UnixNano())
 	if err := admin.Exec("CREATE SCHEMA " + schema).Error; err != nil {
