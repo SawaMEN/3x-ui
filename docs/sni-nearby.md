@@ -88,12 +88,12 @@ presented as a successful save.
 
 Authenticated endpoints under `/panel/api/server`:
 
-| Method | Path | Behavior |
-|---|---|---|
-| POST | `/sni/jobs` | JSON `SNIScanRequest`: mode, targets, purpose, optional nodeId/recheck |
-| GET | `/sni/jobs/:id` | Incremental `SNIJobSnapshot`, renews browser lease |
-| DELETE | `/sni/jobs/:id` | Cancel work |
-| GET | `/sni/history` | Stored completed scans |
+| Method | Path            | Behavior                                                               |
+| ------ | --------------- | ---------------------------------------------------------------------- |
+| POST   | `/sni/jobs`     | JSON `SNIScanRequest`: mode, targets, purpose, optional nodeId/recheck |
+| GET    | `/sni/jobs/:id` | Incremental `SNIJobSnapshot`, renews browser lease                     |
+| DELETE | `/sni/jobs/:id` | Cancel work                                                            |
+| GET    | `/sni/history`  | Stored completed scans                                                 |
 
 For GET/DELETE, pass the same optional `nodeId` query used at creation. Zero or
 omitted means local. Node-sync credentials can operate only on their own local

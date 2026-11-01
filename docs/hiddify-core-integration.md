@@ -204,16 +204,18 @@ REALITY remain incompatible with TCP masks and fail validation. Protocol-native
 Hysteria UDP masks continue through the existing translator. Invalid mask
 settings are rejected by `HiddifyCli check` before opening listeners.
 
-TLS translation uses the cipher names accepted by Go's `tls.CipherSuites()`.
-Legacy panel presets containing a mixture of supported and insecure ciphers
-retain their supported subset. An unknown name or a list containing only
-insecure ciphers is rejected with instructions to replace the list or clear it
-explicitly. Saved Xray settings are preserved. The Firefox preset no longer
-adds obsolete RSA key-exchange ciphers.
+TLS translation accepts the modern cipher names in Go's
+`tls.CipherSuites()`. The pinned sing-box core rejects legacy RSA
+key-exchange suites even though Go still lists them for compatibility.
+An explicit list containing an unsupported or unknown suite now fails
+preflight with a diagnostic naming that suite; no cipher is removed
+silently. Replace the list with supported ECDHE/TLS 1.3 suites or clear
+it to use the core's defaults. Saved source settings are not rewritten.
 
 The build runs real VLESS client/server round trips for fragment, header-custom
 and sudoku masks, plus rejection tests. The panel's optional binary validation
-suite checks TCP FinalMask with TLS and Hysteria2 with an old mixed cipher list.
+suite checks TCP FinalMask and Hysteria2 with modern ECDHE suites,
+and separately asserts early failure for a legacy RSA key-exchange suite.
 
 TLS cipher compatibility is also checked during final `Config.MarshalJSON`
 serialization, after native inputs and template overlays have been merged.
