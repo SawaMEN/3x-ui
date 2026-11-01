@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"golang.org/x/net/http2"
 	"net"
 	"net/http"
 	"slices"
@@ -18,6 +17,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -1176,7 +1176,9 @@ func (s *ServerService) probeRealityAddrContext(parent context.Context, dialHost
 	}
 	if check, _ := parent.Value(sniHTTPCheckKey{}).(bool); check && res.CertValid && res.H2 {
 		ok := false
+		//nolint:staticcheck // We must use the already-negotiated TLS connection instead of redialing.
 		transport := &http2.Transport{MaxHeaderListSize: 32768}
+		//nolint:staticcheck // NewClientConn preserves the probed endpoint and negotiated ALPN.
 		if client, err := transport.NewClientConn(tlsConn); err == nil {
 			req, err := http.NewRequestWithContext(ctx, http.MethodHead, "https://"+net.JoinHostPort(res.Host, strconv.Itoa(port))+"/", nil)
 			if err == nil {
