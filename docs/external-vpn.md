@@ -49,6 +49,15 @@ Example saved outbound (replace the placeholder with a complete link):
 }
 ```
 
+**Subscription compatibility:** VetroffProxy is published as a separate
+`vetroff://` link in raw subscriptions (`?format=links`). Native Xray,
+sing-box and Clash JSON/YAML cannot model its external runtime. If a mixed
+subscription is requested in a native JSON format, the subscription endpoint
+falls back to the raw links format when link exports are allowed rather than
+dropping the VetroffProxy connection. Client applications must still support
+the `vetroff://` scheme and run the VetroffProxy client binary to use it;
+regular Xray, sing-box and Hiddify imports cannot execute the sidecar.
+
 The link contains credentials: do not log it or put it into a public repository.
 `udpStream` requires `enableUDP`. The client rejects UDP with Bond mode.
 Updating the component stops existing clients and the managed supervisor

@@ -8,11 +8,11 @@ import (
 
 func TestConfigMarshalNativeTLSCompatibility(t *testing.T) {
 	const safe = "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
-	const legacy = "TLS_RSA_WITH_AES_128_GCM_SHA256"
+	const alternate = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
 	cfg := &Config{
-		Inbounds:  []map[string]any{{"type": "hysteria2", "tag": "in-17956-udp", "tls": map[string]any{"enabled": true, "cipher_suites": []any{safe, legacy}}}},
-		Outbounds: []map[string]any{{"type": "vless", "tag": "proxy", "server": "example.com", "server_port": 443, "uuid": "11111111-1111-4111-8111-111111111111", "tls": map[string]any{"enabled": true, "cipher_suites": []string{safe, legacy}}, "transport": map[string]any{"type": "xhttp", "mode": "stream-up", "path": "/", "download": map[string]any{"server": "example.com", "server_port": 443, "tls": map[string]any{"enabled": true, "cipher_suites": []any{legacy, safe}}}}}},
-		DNS:       map[string]any{"servers": []map[string]any{{"type": "tls", "tag": "remote", "server": "1.1.1.1", "tls": map[string]any{"enabled": true, "cipher_suites": []string{safe, legacy}}}}},
+		Inbounds:  []map[string]any{{"type": "hysteria2", "tag": "in-17956-udp", "tls": map[string]any{"enabled": true, "cipher_suites": []any{safe, alternate}}}},
+		Outbounds: []map[string]any{{"type": "vless", "tag": "proxy", "server": "example.com", "server_port": 443, "uuid": "11111111-1111-4111-8111-111111111111", "tls": map[string]any{"enabled": true, "cipher_suites": []string{safe, alternate}}, "transport": map[string]any{"type": "xhttp", "mode": "stream-up", "path": "/", "download": map[string]any{"server": "example.com", "server_port": 443, "tls": map[string]any{"enabled": true, "cipher_suites": []any{alternate, safe}}}}}},
+		DNS:       map[string]any{"servers": []map[string]any{{"type": "tls", "tag": "remote", "server": "1.1.1.1", "tls": map[string]any{"enabled": true, "cipher_suites": []string{safe, alternate}}}}},
 	}
 	before, _ := json.Marshal(configJSON(*cfg))
 	for range 2 {
@@ -20,8 +20,8 @@ func TestConfigMarshalNativeTLSCompatibility(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Count(string(data), legacy) != 4 {
-			t.Fatalf("legacy cipher lost from nested TLS config: %s", data)
+		if strings.Count(string(data), alternate) != 4 {
+			t.Fatalf("alternate cipher lost from nested TLS config: %s", data)
 		}
 		if strings.Count(string(data), safe) != 4 {
 			t.Fatalf("lost supported cipher in nested TLS blocks: %s", data)
@@ -40,6 +40,7 @@ func TestConfigMarshalRejectsInvalidNativeTLSCipherSuites(t *testing.T) {
 		want  string
 	}{
 		{"unknown legacy name", []string{"TLS_RSA_WITH_FAKE_SUITE"}, "unknown TLS cipher suite"},
+		{"legacy RSA key exchange", []string{"TLS_RSA_WITH_AES_128_GCM_SHA256"}, "unsupported by the pinned sing-box core"},
 		{"unknown", []any{"TLS_TYPO"}, "unknown TLS cipher suite"},
 		{"malformed", []any{42}, "must be a string"},
 	} {

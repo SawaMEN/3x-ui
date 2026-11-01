@@ -163,10 +163,10 @@ jobs:
       - name: PostgreSQL schema and migration tests
         run: |
           set -o pipefail
-          go test -p 12 ./internal/database -run '^(TestHostAutoMigrateCreatesColumns_Postgres|TestMigrate_Postgres)$' -count=1 -v | tee /tmp/postgres-schema.log
+          go test -p 12 ./internal/database -run '^(TestHostAutoMigrateCreatesColumns_Postgres|TestMigrate_Postgres|TestPostgresSQLiteRoundTripAndBackupPreservation|TestMigrateLegacySQLiteKeepsOriginalSchema)$' -count=1 -v | tee /tmp/postgres-schema.log
           passed=$(grep -c -- '--- PASS' /tmp/postgres-schema.log || true)
-          if [ "$passed" -lt 2 ]; then
-            echo "expected 2 passing PostgreSQL schema tests, got $passed" >&2
+          if [ "$passed" -lt 4 ]; then
+            echo "expected 4 passing PostgreSQL schema tests, got $passed" >&2
             exit 1
           fi
 
@@ -222,6 +222,8 @@ jobs:
           go list ./internal/... . > /tmp/race-packages.txt
           mapfile -t packages < <(grep -Ev '^github.com/SawaMEN/3x-ui/v3/internal/(web/service|sub)$' /tmp/race-packages.txt)
           go test -race -p 12 -short -vet=off -timeout 20m "${packages[@]}"
+      - name: Repeat TUIC cross-transport UDP echo under race detector
+        run: go test -race ./internal/tuic -run '^TestAudit3FirstTransportReturnsPositiveEchoAfterOppositeModePacket$' -count=8 -timeout=4m
 
   race-service:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
@@ -410,6 +412,33 @@ jobs:
           mkdir -p internal/web/dist
           touch internal/web/dist/.gitkeep
           go test ./internal/mtproto ./internal/web/service -run '^Test(OfficialTelemtConfigAndReload|NativeTelemtWebCarrierConfig)$' -v -count=1
+
+  official-vetroff-native:
+    name: Official VetroffProxy 0.1.0 integration (amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download and verify pinned official VetroffProxy bundle
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/vetroff_0.1.0_linux_amd64.tar.gz"
+          curl -fL --retry 5 --retry-all-errors --connect-timeout 20 -o "$archive" "https://github.com/SawaMEN/VetroffProxy/releases/download/v0.1.0/vetroff_0.1.0_linux_amd64.tar.gz"
+          printf '%s  %s\n' '492d07be1b430d8fe8cfbe486dd4d3f006e4dcd04399ada2c7091f45380998d3' "$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/vetroff-bundle"
+          tar --no-same-owner --no-same-permissions -xzf "$archive" -C "$RUNNER_TEMP/vetroff-bundle"
+          test -x "$RUNNER_TEMP/vetroff-bundle/vetroff-necko/vetroff"
+          echo "VETROFF_TEST_ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "VETROFF_TEST_BINARY=$RUNNER_TEMP/vetroff-bundle/vetroff-necko/vetroff" >> "$GITHUB_ENV"
+      - name: Verify official binary, server lifecycle and subscription import
+        run: |
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
+          go test ./internal/externalvpn -run '^(TestOfficialVetroffBundle|TestVetroffConfigurationAndLink)$' -count=1 -timeout=5m -v
+          go test ./internal/sub -run '^TestVetroffHTTPSubscriptionAndNativeBinary$' -count=1 -timeout=5m -v
 
   telemt-web-frontends:
     runs-on: ubuntu-latest

@@ -756,7 +756,9 @@ func main() {
 			}
 			fmt.Printf("Restored %s -> %s\n", migrateRestore, migrateOut)
 		case migrateDsn != "":
-			if err := database.MigrateData(src, migrateDsn); err != nil {
+			// Migrate a private, schema-upgraded snapshot. A v3.9.8 database
+			// lacks newer panel tables and must not be modified in place.
+			if err := database.MigrateLegacyData(src, migrateDsn); err != nil {
 				fmt.Println("migration failed:", err)
 				os.Exit(1)
 			}
