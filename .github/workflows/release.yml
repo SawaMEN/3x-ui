@@ -159,7 +159,7 @@ jobs:
       - name: Install native musl compiler
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools
+          sudo apt-get install -y musl-tools lld
           musl-gcc --version
           dpkg-query --show musl musl-dev musl-tools
           echo "CC=musl-gcc" >> "$GITHUB_ENV"
@@ -248,7 +248,7 @@ jobs:
           GOARCH: ${{ matrix.platform }}
         run: |
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
-          bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
+          SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
       - name: Check panel configuration with downloaded binary
         env:
           CC: gcc

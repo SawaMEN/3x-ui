@@ -16,14 +16,14 @@ def check(root, arch, revision):
     core = f"bin/hiddify-core-linux-{arch}"
     binaries = ["x-ui", core, "bin/telemt", "bin/mita", "bin/tuic-server"]
     scripts = ["x-ui.sh", "x-ui-core.sh", "telemt-update.sh"]
-    required = binaries + scripts + ["core-migration.sh", "bin/target.json", "bin/libcronet.so", "bin/speed-components.json",
+    required = binaries + scripts + ["core-migration.sh", "bin/target.json", "bin/speed-components.json",
                                    "x-ui.service.debian", "x-ui.service.arch", "x-ui.service.rhel",
                                    "bin/geoip.dat", "bin/geosite.dat"]
     for name in required:
         path = root / name
         if not path.is_file() or path.stat().st_size == 0:
             raise ValueError("Missing/empty package member: " + name)
-    for name in binaries + ["bin/libcronet.so"]:
+    for name in binaries:
         with (root / name).open("rb") as source:
             header = source.read(20)
         if header[:6] != b"\x7fELF\x02\x01" or struct.unpack_from("<H", header, 18)[0] != machine:
@@ -44,9 +44,14 @@ def check(root, arch, revision):
         raise ValueError("Panel version does not advertise release revision")
     expected = json.loads(Path("docs/hiddify-core-target.json").read_text())
     actual = json.loads((root / "bin/target.json").read_text())
-    if actual["target"] != expected["target"] or actual["panel_build"]["tags"] != expected["panel_build"]["tags"]:
-        raise ValueError("Packaged core differs from pinned source/build tags")
-    for name in (core, "bin/libcronet.so"):
+    tags = ["with_musl" if tag == "with_purego" else tag for tag in expected["panel_build"]["tags"]]
+    if (actual["target"] != expected["target"] or actual["panel_build"]["tags"] != tags
+            or actual["panel_build"].get("cronet_linkage") != "musl"
+            or actual["panel_build"].get("runtime_dependencies") != []):
+        raise ValueError("Packaged core differs from pinned source/musl profile")
+    if (root / "bin/libcronet.so").exists():
+        raise ValueError("Static musl package must not contain stale glibc libcronet")
+    for name in (core,):
         fields = (root / (name + ".sha256")).read_text().split()
         actual_digest = hashlib.file_digest((root / name).open("rb"), "sha256").hexdigest()
         if len(fields) != 2 or fields[0] != actual_digest or fields[1].lstrip("*") != Path(name).name:
