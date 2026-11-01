@@ -9,13 +9,12 @@ on:
     tags:
       - "v*.*.*"
 
-# Always build the newest main revision, including fixes to shell tests and
-# documentation that can otherwise supersede a release build while leaving
-# dev-latest permanently stale. Cancel only superseded main builds; explicit
-# version-tag builds and manually dispatched runs are never cancelled here.
+# Keep only the newest pushed development-branch build. Obsolete update audit
+# builds must not block the next fixed revision. Explicit version tags and
+# manually dispatched runs are never cancelled here.
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/update') }}
 
 jobs:
   frontend:
