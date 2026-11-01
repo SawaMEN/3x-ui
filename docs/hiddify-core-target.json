@@ -14,7 +14,7 @@
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-b310097c8e7a-338f0c9457a4-mask1"
+    "version": "sawamen-b310097c8e7a-338f0c9457a4-mask1-ciphers1"
   },
   "runtime_contract": {
     "raw_config_command": ["srun", "-c"],
@@ -147,7 +147,9 @@
       "golang.org/x/net": "v0.60.0"
     },
     "speed_broker_overlay": "deploy/speed/masque.patch",
-    "speed_broker_sdk": "internal/clientlimit/brokerclient/client.go"
+    "speed_broker_sdk": "internal/clientlimit/brokerclient/client.go",
+    "explicit_cipher_overlay": "deploy/hiddify/explicit-cipher-suites.patch",
+    "explicit_cipher_test_overlay": "deploy/hiddify/explicit_cipher_suites_test.go.in"
   },
   "verification": {
     "report": "hiddify-core-stage-4-verification.md",
