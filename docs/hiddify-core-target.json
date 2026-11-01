@@ -14,7 +14,7 @@
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-b310097c8e7a-338f0c9457a4-mask1"
+    "version": "sawamen-b310097c8e7a-338f0c9457a4-mask1-ciphers1"
   },
   "runtime_contract": {
     "raw_config_command": ["srun", "-c"],
@@ -121,6 +121,8 @@
       "musl": "with_musl, CGO_ENABLED=1, statically linked Cronet; release and Docker"
     },
     "protection_options_overlay": "deploy/hiddify/protection-options.patch",
+    "explicit_cipher_overlay": "deploy/hiddify/explicit-cipher-suites.patch",
+    "explicit_cipher_test_overlay": "deploy/hiddify/explicit_cipher_suites_test.go.in",
     "utls_protection_overlay": "deploy/hiddify/utls-protection.patch",
     "vision_protection_overlay": "deploy/hiddify/sing-vmess-protection.patch",
     "reality_protection_test_overlay": "deploy/hiddify/reality_protection_test.go.in",
