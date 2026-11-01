@@ -17,7 +17,9 @@ describe('Telemt WEB request validation', () => {
     });
   });
   it('accepts only paths whose segments begin with letters or digits', () => {
-    expect(TelemtWebProxyRequestSchema.safeParse({ ...valid, basePath: 'good/path-2' }).success).toBe(true);
+    expect(
+      TelemtWebProxyRequestSchema.safeParse({ ...valid, basePath: 'good/path-2' }).success,
+    ).toBe(true);
   });
   it.each([
     { basePath: '-hidden/path' },
