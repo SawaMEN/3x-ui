@@ -4581,6 +4581,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "h2",
         "type": "string"
       },
+      "attempts": {
+        "type": "integer"
+      },
       "certChainBytes": {
         "description": "CertChainBytes is the sum of DER lengths of the presented peer chain.\nxray-core ML-DSA-65 REALITY needs \u003e= 3500 bytes (constant lives in xray-core).",
         "example": 3427,
@@ -4603,9 +4606,19 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": true,
         "type": "boolean"
       },
+      "checkedAt": {
+        "type": "string"
+      },
       "curveID": {
         "example": "X25519",
         "type": "string"
+      },
+      "dnsLookupError": {
+        "type": "string"
+      },
+      "dnsMatchesIP": {
+        "nullable": true,
+        "type": "boolean"
       },
       "feasible": {
         "example": true,
@@ -4619,13 +4632,23 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "www.cloudflare.com",
         "type": "string"
       },
+      "http2OK": {
+        "nullable": true,
+        "type": "boolean"
+      },
       "ip": {
         "example": "104.16.124.96",
         "type": "string"
       },
+      "jitterMs": {
+        "type": "number"
+      },
       "latencyMs": {
         "example": 180,
         "type": "integer"
+      },
+      "medianMs": {
+        "type": "number"
       },
       "notAfter": {
         "example": "2026-08-01T00:00:00Z",
@@ -4649,13 +4672,25 @@ export const SCHEMAS: Record<string, unknown> = {
         },
         "type": "array"
       },
+      "source": {
+        "type": "string"
+      },
+      "successes": {
+        "type": "integer"
+      },
       "target": {
         "example": "www.cloudflare.com:443",
         "type": "string"
       },
+      "tcpMs": {
+        "type": "number"
+      },
       "tls13": {
         "example": true,
         "type": "boolean"
+      },
+      "tlsMs": {
+        "type": "number"
       },
       "tlsVersion": {
         "example": "1.3",
@@ -4799,6 +4834,116 @@ export const SCHEMAS: Record<string, unknown> = {
       "ruleCount",
       "updatedAt"
     ],
+    "type": "object"
+  },
+  "SNIJobSnapshot": {
+    "properties": {
+      "completed": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "error": {
+        "type": "string"
+      },
+      "finishedAt": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "phase": {
+        "type": "string"
+      },
+      "results": {
+        "items": {
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/RealityScanResult"
+            }
+          ],
+          "nullable": true
+        },
+        "type": "array"
+      },
+      "source": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "total": {
+        "type": "integer"
+      },
+      "verified": {
+        "type": "integer"
+      },
+      "verifyTotal": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "completed",
+      "createdAt",
+      "id",
+      "phase",
+      "results",
+      "source",
+      "state",
+      "total",
+      "verified",
+      "verifyTotal"
+    ],
+    "type": "object"
+  },
+  "SNISavedTarget": {
+    "properties": {
+      "host": {
+        "type": "string"
+      },
+      "ip": {
+        "type": "string"
+      },
+      "port": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "host",
+      "ip",
+      "port"
+    ],
+    "type": "object"
+  },
+  "SNIScanRequest": {
+    "properties": {
+      "mode": {
+        "type": "string"
+      },
+      "nodeId": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "purpose": {
+        "type": "string"
+      },
+      "recheck": {
+        "description": "Recheck pins both IP and SNI from a saved result; never resolves it to\nanother destination. The ordinary SSRF guard still applies to every IP.",
+        "items": {
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/SNISavedTarget"
+            }
+          ],
+          "nullable": true
+        },
+        "type": "array"
+      },
+      "targets": {
+        "type": "string"
+      }
+    },
     "type": "object"
   },
   "ServerSettings": {

@@ -5,6 +5,8 @@ import type { MessageInstance } from 'antd/es/message/interface';
 import type { HookAPI as ModalHookAPI } from 'antd/es/modal/useModal';
 
 import { HttpUtil, RandomUtil } from '@/utils';
+import { runSNIScan } from './security/sni-scanner';
+import type { SNIScanCallback } from './security/sni-scanner';
 import { createTlsSettingsWithDefaultCert } from '@/lib/xray/inbound-tls-defaults';
 import { RealityStreamSettingsSchema } from '@/schemas/protocols/security/reality';
 import type { InboundFormValues } from '@/schemas/forms/inbound-form';
@@ -96,6 +98,8 @@ export function useSecurityActions({
      */
     if (replaceServerNames) {
       setValue('streamSettings.realitySettings.serverNames', r.serverNames ?? []);
+      // Bulk-discovered targets were checked without a PROXY header.
+      setValue('streamSettings.realitySettings.xver', 0);
     } else if ((r.certValid || r.certChainValid) && r.serverNames?.length) {
       setValue('streamSettings.realitySettings.serverNames', r.serverNames);
     }
@@ -160,17 +164,24 @@ export function useSecurityActions({
     }
   };
 
-  const scanRealityCandidates = async (targets?: string): Promise<RealityScanResult[]> => {
-    const msg = await HttpUtil.post<RealityScanResult[]>(
-      '/panel/api/server/scanRealityTargets',
-      targets ? { targets } : {},
-      { silent: true, timeout: 360_000 },
-    );
-    if (!msg?.success || !Array.isArray(msg.obj)) {
-      messageApi.error(msg?.msg || t('pages.inbounds.toasts.scanRealityTargetError'));
-      return [];
+  const scanRealityCandidates: SNIScanCallback = async (
+    targets,
+    mode,
+    signal,
+    progress,
+    recheck,
+  ) => {
+    try {
+      return await runSNIScan(nodeId, 'reality', targets, mode, signal, progress, recheck);
+    } catch (error) {
+      if (!signal?.aborted)
+        messageApi.error(
+          error instanceof Error
+            ? error.message
+            : t('pages.inbounds.toasts.scanRealityTargetError'),
+        );
+      throw error;
     }
-    return msg.obj;
   };
 
   const randomizeShortIds = () => {

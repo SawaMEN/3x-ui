@@ -4607,6 +4607,9 @@
             "example": "h2",
             "type": "string"
           },
+          "attempts": {
+            "type": "integer"
+          },
           "certChainBytes": {
             "description": "CertChainBytes is the sum of DER lengths of the presented peer chain.\nxray-core ML-DSA-65 REALITY needs >= 3500 bytes (constant lives in xray-core).",
             "example": 3427,
@@ -4629,9 +4632,19 @@
             "example": true,
             "type": "boolean"
           },
+          "checkedAt": {
+            "type": "string"
+          },
           "curveID": {
             "example": "X25519",
             "type": "string"
+          },
+          "dnsLookupError": {
+            "type": "string"
+          },
+          "dnsMatchesIP": {
+            "nullable": true,
+            "type": "boolean"
           },
           "feasible": {
             "example": true,
@@ -4645,13 +4658,23 @@
             "example": "www.cloudflare.com",
             "type": "string"
           },
+          "http2OK": {
+            "nullable": true,
+            "type": "boolean"
+          },
           "ip": {
             "example": "104.16.124.96",
             "type": "string"
           },
+          "jitterMs": {
+            "type": "number"
+          },
           "latencyMs": {
             "example": 180,
             "type": "integer"
+          },
+          "medianMs": {
+            "type": "number"
           },
           "notAfter": {
             "example": "2026-08-01T00:00:00Z",
@@ -4675,13 +4698,25 @@
             },
             "type": "array"
           },
+          "source": {
+            "type": "string"
+          },
+          "successes": {
+            "type": "integer"
+          },
           "target": {
             "example": "www.cloudflare.com:443",
             "type": "string"
           },
+          "tcpMs": {
+            "type": "number"
+          },
           "tls13": {
             "example": true,
             "type": "boolean"
+          },
+          "tlsMs": {
+            "type": "number"
           },
           "tlsVersion": {
             "example": "1.3",
@@ -4825,6 +4860,116 @@
           "ruleCount",
           "updatedAt"
         ],
+        "type": "object"
+      },
+      "SNIJobSnapshot": {
+        "properties": {
+          "completed": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/RealityScanResult"
+                }
+              ],
+              "nullable": true
+            },
+            "type": "array"
+          },
+          "source": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "verified": {
+            "type": "integer"
+          },
+          "verifyTotal": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "completed",
+          "createdAt",
+          "id",
+          "phase",
+          "results",
+          "source",
+          "state",
+          "total",
+          "verified",
+          "verifyTotal"
+        ],
+        "type": "object"
+      },
+      "SNISavedTarget": {
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "ip",
+          "port"
+        ],
+        "type": "object"
+      },
+      "SNIScanRequest": {
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "nodeId": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "recheck": {
+            "description": "Recheck pins both IP and SNI from a saved result; never resolves it to\nanother destination. The ordinary SSRF guard still applies to every IP.",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SNISavedTarget"
+                }
+              ],
+              "nullable": true
+            },
+            "type": "array"
+          },
+          "targets": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "ServerSettings": {
@@ -10464,17 +10609,24 @@
                   "success": true,
                   "obj": {
                     "alpn": "h2",
+                    "attempts": 0,
                     "certChainBytes": 3427,
                     "certChainValid": true,
                     "certIssuer": "Google Trust Services",
                     "certSubject": "cloudflare.com",
                     "certValid": true,
+                    "checkedAt": "",
                     "curveID": "X25519",
+                    "dnsLookupError": "",
+                    "dnsMatchesIP": null,
                     "feasible": true,
                     "h2": true,
                     "host": "www.cloudflare.com",
+                    "http2OK": null,
                     "ip": "104.16.124.96",
+                    "jitterMs": 0,
                     "latencyMs": 180,
+                    "medianMs": 0,
                     "notAfter": "2026-08-01T00:00:00Z",
                     "port": 443,
                     "privateTarget": false,
@@ -10482,8 +10634,12 @@
                     "serverNames": [
                       ""
                     ],
+                    "source": "",
+                    "successes": 0,
                     "target": "www.cloudflare.com:443",
+                    "tcpMs": 0,
                     "tls13": true,
+                    "tlsMs": 0,
                     "tlsVersion": "1.3",
                     "x25519": true
                   }
@@ -10511,6 +10667,10 @@
                   "targets": {
                     "type": "string",
                     "description": "Optional comma-separated tokens: domain[:port], IP[:port], or CIDR (e.g. 104.16.0.0/24). When omitted, the realityScanCandidates setting is probed (the built-in seed list if that setting is empty)."
+                  },
+                  "mode": {
+                    "type": "string",
+                    "description": "candidates (default) or nearby. Nearby scans up to 256 public IPs around targets (one server IP/domain[:port]), or the panel server public IP when targets is empty. Certificate names are verified with SNI against the discovered IP. Results are ranked by feasibility then TLS connection time from this server; IP proximity does not imply geographic proximity."
                   }
                 }
               }
@@ -10544,17 +10704,24 @@
                   "obj": [
                     {
                       "alpn": "h2",
+                      "attempts": 0,
                       "certChainBytes": 3427,
                       "certChainValid": true,
                       "certIssuer": "Google Trust Services",
                       "certSubject": "cloudflare.com",
                       "certValid": true,
+                      "checkedAt": "",
                       "curveID": "X25519",
+                      "dnsLookupError": "",
+                      "dnsMatchesIP": null,
                       "feasible": true,
                       "h2": true,
                       "host": "www.cloudflare.com",
+                      "http2OK": null,
                       "ip": "104.16.124.96",
+                      "jitterMs": 0,
                       "latencyMs": 180,
+                      "medianMs": 0,
                       "notAfter": "2026-08-01T00:00:00Z",
                       "port": 443,
                       "privateTarget": false,
@@ -10562,10 +10729,288 @@
                       "serverNames": [
                         ""
                       ],
+                      "source": "",
+                      "successes": 0,
                       "target": "www.cloudflare.com:443",
+                      "tcpMs": 0,
                       "tls13": true,
+                      "tlsMs": 0,
                       "tlsVersion": "1.3",
                       "x25519": true
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/sni/jobs": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Start a queued SNI scan. JSON: mode=candidates|nearby|combined|recheck, targets, purpose=reality|tls|shadowtls|fakeTls, optional nodeId. Combined scans neighbors and the configured domain list. Recheck accepts up to 20 saved {ip,host,port} targets. The ten best candidates get five stability probes, median/spread, TCP/TLS timing, optional HTTP/2 HEAD and DNS diagnostics. Jobs are polled for incremental results and expire when polling stops for 30 seconds. Nodes must support this API; no fallback to scanning from the master.",
+        "operationId": "post_panel_api_server_sni_jobs",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "object",
+                    "description": "Scan request; JSON is required for recheck arrays. Up to four queued/running jobs per panel, shared 32-connection and 16-probes/second limits."
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              },
+              "example": {
+                "mode": "combined",
+                "purpose": "reality",
+                "targets": "",
+                "nodeId": 0
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/SNIJobSnapshot"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "completed": 0,
+                    "createdAt": "",
+                    "error": "",
+                    "finishedAt": "",
+                    "id": "",
+                    "phase": "",
+                    "results": [
+                      null
+                    ],
+                    "source": "",
+                    "state": "",
+                    "total": 0,
+                    "verified": 0,
+                    "verifyTotal": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/sni/jobs/{id}": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Poll incremental results and discovery/stability progress. Optional nodeId query must identify the same node used to start the job. Polling renews the 30-second client lease. Each execution is bounded to six minutes. Discovery reserves verification time: four minutes in a single mode, or two minutes per phase in combined mode. Phase timeouts return verified partial results with a warning; snapshot responses are not cacheable.",
+        "operationId": "get_panel_api_server_sni_jobs_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque scan id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "nodeId",
+            "in": "query",
+            "required": false,
+            "description": "Selected execution node; zero/omitted means local.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/SNIJobSnapshot"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "completed": 0,
+                    "createdAt": "",
+                    "error": "",
+                    "finishedAt": "",
+                    "id": "",
+                    "phase": "",
+                    "results": [
+                      null
+                    ],
+                    "source": "",
+                    "state": "",
+                    "total": 0,
+                    "verified": 0,
+                    "verifyTotal": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Cancel queued or active scan work. Optional nodeId query targets the selected execution node.",
+        "operationId": "delete_panel_api_server_sni_jobs_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque scan id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/SNIJobSnapshot"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "completed": 0,
+                    "createdAt": "",
+                    "error": "",
+                    "finishedAt": "",
+                    "id": "",
+                    "phase": "",
+                    "results": [
+                      null
+                    ],
+                    "source": "",
+                    "state": "",
+                    "total": 0,
+                    "verified": 0,
+                    "verifyTotal": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/sni/history": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Return the latest 20 completed scans stored in the executing panel database, with up to 20 certificate-verified targets per scan. Optional nodeId loads that node’s history. Saved timestamps and metrics are historical; recheck before applying.",
+        "operationId": "get_panel_api_server_sni_history",
+        "parameters": [
+          {
+            "name": "nodeId",
+            "in": "query",
+            "required": false,
+            "description": "Selected execution node.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SNIJobSnapshot"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "completed": 0,
+                      "createdAt": "",
+                      "error": "",
+                      "finishedAt": "",
+                      "id": "",
+                      "phase": "",
+                      "results": [
+                        null
+                      ],
+                      "source": "",
+                      "state": "",
+                      "total": 0,
+                      "verified": 0,
+                      "verifyTotal": 0
                     }
                   ]
                 }

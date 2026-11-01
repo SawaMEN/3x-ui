@@ -4,6 +4,8 @@ export type ProcessState = string;
 export type Protocol = string;
 export type VKTurnProxyForwardType = string;
 export type clientResetPolicy = number;
+export type nearbySNIProbe = unknown;
+export type sniProgress = unknown;
 export type staticEgressResolver = string;
 export type trafficLocalApplyAction = number;
 export type transportBits = number;
@@ -1040,24 +1042,35 @@ export interface ProbeResultUI {
 
 export interface RealityScanResult {
   alpn: string;
+  attempts?: number;
   certChainBytes: number;
   certChainValid: boolean;
   certIssuer: string;
   certSubject: string;
   certValid: boolean;
+  checkedAt?: string;
   curveID: string;
+  dnsLookupError?: string;
+  dnsMatchesIP?: boolean | null;
   feasible: boolean;
   h2: boolean;
   host: string;
+  http2OK?: boolean | null;
   ip: string;
+  jitterMs?: number;
   latencyMs: number;
+  medianMs?: number;
   notAfter: string;
   port: number;
   privateTarget: boolean;
   reason: string;
   serverNames: string[];
+  source?: string;
+  successes?: number;
   target: string;
+  tcpMs?: number;
   tls13: boolean;
+  tlsMs?: number;
   tlsVersion: string;
   x25519: boolean;
 }
@@ -1091,6 +1104,35 @@ export interface RoutingPresetView {
   name: string;
   ruleCount: number;
   updatedAt: number;
+}
+
+export interface SNIJobSnapshot {
+  completed: number;
+  createdAt: string;
+  error?: string;
+  finishedAt?: string;
+  id: string;
+  phase: string;
+  results: (RealityScanResult | null)[];
+  source: string;
+  state: string;
+  total: number;
+  verified: number;
+  verifyTotal: number;
+}
+
+export interface SNISavedTarget {
+  host: string;
+  ip: string;
+  port: number;
+}
+
+export interface SNIScanRequest {
+  mode?: string;
+  nodeId?: number | null;
+  purpose?: string;
+  recheck?: (SNISavedTarget | null)[];
+  targets?: string;
 }
 
 export interface ServerSettings {
