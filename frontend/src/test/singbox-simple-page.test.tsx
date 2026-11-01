@@ -123,6 +123,7 @@ describe('simple sing-box page', () => {
       },
     });
     mount('/routing');
+    fireEvent.click(await screen.findByText('Расширенные правила и порядок выполнения'));
     const moveUp = await screen.findAllByTitle('Выше');
     fireEvent.click(moveUp[1]);
     const rows = screen.getAllByRole('row');
@@ -160,6 +161,7 @@ describe('simple sing-box page', () => {
       },
     });
     mount('/routing');
+    fireEvent.click(await screen.findByText('Расширенные правила и порядок выполнения'));
     const search = await screen.findByLabelText('Поиск правил маршрутизации');
     fireEvent.change(search, { target: { value: '443' } });
     fireEvent.click(screen.getByRole('switch', { name: 'Правило 2' }));
