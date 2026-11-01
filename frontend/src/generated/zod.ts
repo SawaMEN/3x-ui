@@ -18,6 +18,9 @@ export type clientResetPolicy = z.infer<typeof clientResetPolicySchema>;
 export const nearbySNIProbeSchema = z.unknown();
 export type nearbySNIProbe = z.infer<typeof nearbySNIProbeSchema>;
 
+export const sniScanFuncSchema = z.unknown();
+export type sniScanFunc = z.infer<typeof sniScanFuncSchema>;
+
 export const sniProgressSchema = z.unknown();
 export type sniProgress = z.infer<typeof sniProgressSchema>;
 
