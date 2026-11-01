@@ -533,8 +533,8 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 		host = "::1"
 	}
 	client := &http.Client{
-		Timeout: 2 * time.Second,
-		Transport: &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: state.Domain, MinVersion: tls.VersionTLS12}},
+		Timeout:       2 * time.Second,
+		Transport:     &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: state.Domain, MinVersion: tls.VersionTLS12}},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	defer client.CloseIdleConnections()

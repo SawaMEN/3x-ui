@@ -52,11 +52,11 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
 )
@@ -1198,17 +1198,25 @@ func (s *ServerService) GetXrayLogs(
 		}
 		entry := parseAccessLogFields(line)
 		if logEntryContains(line, freedoms) {
-			if showDirect == "false" { continue }
+			if showDirect == "false" {
+				continue
+			}
 			entry.Event = Direct
 		} else if logEntryContains(line, blackholes) {
-			if showBlocked == "false" { continue }
+			if showBlocked == "false" {
+				continue
+			}
 			entry.Event = Blocked
 		} else {
-			if showProxy == "false" { continue }
+			if showProxy == "false" {
+				continue
+			}
 			entry.Event = Proxied
 		}
 		entries = append(entries, entry)
-		if len(entries) >= countInt { break }
+		if len(entries) >= countInt {
+			break
+		}
 	}
 	// The access-log modal historically expects chronological order.
 	slices.Reverse(entries)

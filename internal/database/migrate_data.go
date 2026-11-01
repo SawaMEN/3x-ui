@@ -67,8 +67,6 @@ func migrationModels() []any {
 		&model.SubBalancer{},
 		&model.TuicTrafficReceipt{},
 		&model.CoreTrafficCheckpoint{},
-		&model.RoutingPreset{},
-		&model.UserSession{},
 	}
 }
 

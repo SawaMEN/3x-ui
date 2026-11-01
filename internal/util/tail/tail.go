@@ -113,71 +113,80 @@ func readTailChunk(reader io.ReaderAt, chunk []byte, offset int64) error {
 	return err
 }
 
-
 // RecentOutputBuffer retains only the last maxBytes of a command's stdout.
 // Unlike bytes.Buffer it cannot grow unbounded when a journal entry is huge.
 // It implements io.Writer so exec.Cmd can stream output directly into it.
 type RecentOutputBuffer struct {
-    data      []byte
-    maxBytes  int
-    head      int // Oldest byte when the fixed-size ring is full.
-    truncated bool
+	data      []byte
+	maxBytes  int
+	head      int // Oldest byte when the fixed-size ring is full.
+	truncated bool
 }
 
 func NewRecentOutputBuffer(maxBytes int) *RecentOutputBuffer {
-    if maxBytes < 0 { maxBytes = 0 }
-    return &RecentOutputBuffer{maxBytes: maxBytes}
+	if maxBytes < 0 {
+		maxBytes = 0
+	}
+	return &RecentOutputBuffer{maxBytes: maxBytes}
 }
 
 func (b *RecentOutputBuffer) Write(p []byte) (int, error) {
-    n := len(p)
-    if n == 0 { return 0, nil }
-    if b.maxBytes == 0 {
-        if n > 0 { b.truncated = true }
-        return n, nil
-    }
-    if n >= b.maxBytes {
-        if len(b.data) > 0 || n > b.maxBytes { b.truncated = true }
-        b.data = append(b.data[:0], p[n-b.maxBytes:]...)
-        b.head = 0
-        return n, nil
-    }
-    if len(b.data) < b.maxBytes {
-        space := b.maxBytes - len(b.data)
-        if n <= space {
-            b.data = append(b.data, p...)
-            return n, nil
-        }
-        b.data = append(b.data, p[:space]...)
-        p = p[space:]
-    }
-    // Overwrite the oldest bytes in-place instead of shifting the whole
-    // 8 MiB window on every small write. Total work stays O(input bytes).
-    b.truncated = true
-    first := min(len(p), b.maxBytes-b.head)
-    copy(b.data[b.head:], p[:first])
-    copy(b.data, p[first:])
-    b.head = (b.head + len(p)) % b.maxBytes
-    return n, nil
+	n := len(p)
+	if n == 0 {
+		return 0, nil
+	}
+	if b.maxBytes == 0 {
+		if n > 0 {
+			b.truncated = true
+		}
+		return n, nil
+	}
+	if n >= b.maxBytes {
+		if len(b.data) > 0 || n > b.maxBytes {
+			b.truncated = true
+		}
+		b.data = append(b.data[:0], p[n-b.maxBytes:]...)
+		b.head = 0
+		return n, nil
+	}
+	if len(b.data) < b.maxBytes {
+		space := b.maxBytes - len(b.data)
+		if n <= space {
+			b.data = append(b.data, p...)
+			return n, nil
+		}
+		b.data = append(b.data, p[:space]...)
+		p = p[space:]
+	}
+	// Overwrite the oldest bytes in-place instead of shifting the whole
+	// 8 MiB window on every small write. Total work stays O(input bytes).
+	b.truncated = true
+	first := min(len(p), b.maxBytes-b.head)
+	copy(b.data[b.head:], p[:first])
+	copy(b.data, p[first:])
+	b.head = (b.head + len(p)) % b.maxBytes
+	return n, nil
 }
 
 // CompleteBytes returns chronologically ordered output without a possibly
 // truncated oldest record. The circular buffer is linearized only once,
 // after the command has completed.
 func (b *RecentOutputBuffer) CompleteBytes() []byte {
-    var ordered []byte
-    if b.head == 0 {
-        ordered = b.data
-    } else {
-        ordered = make([]byte, len(b.data))
-        copied := copy(ordered, b.data[b.head:])
-        copy(ordered[copied:], b.data[:b.head])
-    }
-    if !b.truncated { return ordered }
-    if i := bytes.IndexByte(ordered, '\n'); i >= 0 {
-        return ordered[i+1:]
-    }
-    return nil
+	var ordered []byte
+	if b.head == 0 {
+		ordered = b.data
+	} else {
+		ordered = make([]byte, len(b.data))
+		copied := copy(ordered, b.data[b.head:])
+		copy(ordered[copied:], b.data[:b.head])
+	}
+	if !b.truncated {
+		return ordered
+	}
+	if i := bytes.IndexByte(ordered, '\n'); i >= 0 {
+		return ordered[i+1:]
+	}
+	return nil
 }
 
 // Truncated reports whether earlier command output was discarded.
