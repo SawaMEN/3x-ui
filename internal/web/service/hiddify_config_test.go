@@ -539,7 +539,7 @@ func TestHiddifyNativeTemplateTLSCipherCompatibility(t *testing.T) {
 	if !strings.Contains(string(data), "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256") {
 		t.Fatal("supported ECDHE RSA TLS suite was lost")
 	}
-	if !strings.Contains(string(data), "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256") {
+	if !strings.Contains(string(data), "TLS_RSA_WITH_AES_128_GCM_SHA256") {
 		t.Fatal("explicit legacy TLS suite was lost")
 	}
 	saved, err := singBoxSettingService.GetSingBoxConfigTemplate()

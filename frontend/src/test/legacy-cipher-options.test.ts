@@ -16,7 +16,9 @@ describe('explicit legacy TLS cipher options', () => {
       ...Object.values(TLS_LEGACY_CIPHER_OPTION),
     ]);
     const obsolete = new Set<string>(Object.values(TLS_LEGACY_CIPHER_OPTION));
-    expect(TLS_CIPHER_PRESETS['semi-python'].split(':').some((suite) => obsolete.has(suite))).toBe(true);
+    expect(TLS_CIPHER_PRESETS['semi-python'].split(':').some((suite) => obsolete.has(suite))).toBe(
+      true,
+    );
     for (const [name, preset] of Object.entries(TLS_CIPHER_PRESETS)) {
       for (const suite of preset.split(':')) {
         expect(supported.has(suite), `${name} offers unsupported ${suite}`).toBe(true);
