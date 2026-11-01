@@ -160,19 +160,14 @@ func MigrateData(srcPath, dstDSN string) error {
 	return nil
 }
 
-// ExportPostgresToSQLite copies every row from the PostgreSQL database described
-// by srcDSN into a fresh SQLite file at dstPath. It is the reverse of
-// MigrateData and is used to hand a PostgreSQL-backed panel a portable .db file.
-// dstPath is created/overwritten; the PostgreSQL source is left untouched.
+// ExportPostgresToSQLite copies every row from PostgreSQL into a portable
+// SQLite file. Publish the finished backup atomically: failure to reach the
+// source or copy a table must never destroy a previous valid export.
 func ExportPostgresToSQLite(srcDSN, dstPath string) error {
 	if srcDSN == "" {
 		return errors.New("source DSN is required")
 	}
 	if err := os.MkdirAll(path.Dir(dstPath), 0o755); err != nil {
-		return err
-	}
-	// Start from an empty file so AutoMigrate creates the canonical schema.
-	if err := os.Remove(dstPath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
@@ -186,8 +181,21 @@ func ExportPostgresToSQLite(srcDSN, dstPath string) error {
 	}
 	defer srcSQL.Close()
 
-	// No WAL: keep all data in the main file so it is complete once closed.
-	dst, err := gorm.Open(sqlite.Open(dstPath+"?_busy_timeout=10000"), &gorm.Config{Logger: logger.Discard})
+	// Keep the temporary file beside the requested destination so rename is
+	// atomic on the same filesystem. CreateTemp also protects its permissions.
+	tmp, err := os.CreateTemp(path.Dir(dstPath), ".x-ui-export-*.db")
+	if err != nil {
+		return fmt.Errorf("create sqlite export: %w", err)
+	}
+	tmpPath := tmp.Name()
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("close temporary sqlite export: %w", err)
+	}
+	defer os.Remove(tmpPath)
+
+	// No WAL: a closed and renamed main database file is self-contained.
+	dst, err := gorm.Open(sqlite.Open(tmpPath+"?_busy_timeout=10000"), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
 		return fmt.Errorf("open sqlite destination: %w", err)
 	}
@@ -197,7 +205,16 @@ func ExportPostgresToSQLite(srcDSN, dstPath string) error {
 	}
 	defer dstSQL.Close()
 
-	return copyAllModels(src, dst)
+	if err := copyAllModels(src, dst); err != nil {
+		return err
+	}
+	if err := dstSQL.Close(); err != nil {
+		return fmt.Errorf("close sqlite export: %w", err)
+	}
+	if err := os.Rename(tmpPath, dstPath); err != nil {
+		return fmt.Errorf("publish sqlite export: %w", err)
+	}
+	return nil
 }
 
 // copyAllModels (re)creates the schema on dst and copies every migrated table
