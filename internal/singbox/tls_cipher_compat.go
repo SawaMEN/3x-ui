@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-// Translate the operator's explicit cipher suites without silently changing
-// the TLS policy. Go's tls.CipherSuites excludes legacy RSA key-exchange,
-// CBC-SHA256, RC4 and 3DES suites from its safe defaults, but the modified
-// sing-box core accepts those entries when they are explicitly configured.
-// An unset list continues to use secure defaults.
+// Translate an explicit TLS policy into suites accepted by the pinned core.
+// crypto/tls.InsecureCipherSuites includes legacy RSA key-exchange suites that
+// the pinned sing-box constructor does not recognize. Reject those up front
+// instead of emitting a config that passes Go tests but cannot start.
+// An unset list continues to use the core's secure defaults.
 func translateTLSCipherSuites(out, in map[string]any, label string) error {
 	raw := strings.TrimSpace(rawString(in, "cipherSuites"))
 	if raw == "" {
@@ -30,8 +30,11 @@ func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
 	for _, suite := range tls.CipherSuites() {
 		known[suite.Name] = true
 	}
+	// The installed sing-box core rejects legacy RSA key-exchange suites even
+	// though Go still exposes them as insecure names for compatibility.
+	legacy := make(map[string]bool)
 	for _, suite := range tls.InsecureCipherSuites() {
-		known[suite.Name] = true
+		legacy[suite.Name] = true
 	}
 
 	values := make([]string, 0, len(names))
@@ -41,8 +44,11 @@ func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
 		if name == "" {
 			continue
 		}
+		if legacy[name] {
+			return nil, fmt.Errorf("%s: TLS cipher suite %q is unsupported by the pinned sing-box core; select an ECDHE or TLS 1.3 suite", label, name)
+		}
 		if !known[name] {
-			return nil, fmt.Errorf("%s: unknown TLS cipher suite %q; select a cipher supported by the Go TLS runtime", label, name)
+			return nil, fmt.Errorf("%s: unknown TLS cipher suite %q; select a cipher supported by the pinned sing-box core", label, name)
 		}
 		if !seen[name] {
 			values = append(values, name)
