@@ -519,7 +519,15 @@ func (a *SUBController) subs(c *gin.Context) {
 			return
 		}
 		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), format != "xray") {
-			writeSubError(c, nil)
+			// External sidecars such as VetroffProxy cannot be represented
+			// as native JSON outbounds. Keep their separate raw URI links.
+			if !a.formatAllowed(c, "links") {
+				writeSubError(c, nil)
+			} else {
+				logSubscriptionRoute(userAgent, "native-fallback-raw")
+				a.serveRawSubscription(c)
+			}
+			return
 		}
 		a.recordSubscriptionFetch(c)
 		logSubscriptionRoute(userAgent, format+"-json")
@@ -538,7 +546,13 @@ func (a *SUBController) subs(c *gin.Context) {
 	}
 	if format == "xray" || format == "sing-box" {
 		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), format == "sing-box") {
-			writeSubError(c, nil)
+			if !a.formatAllowed(c, "links") {
+				writeSubError(c, nil)
+			} else {
+				logSubscriptionRoute(userAgent, "native-fallback-raw")
+				a.serveRawSubscription(c)
+			}
+			return
 		}
 		a.recordSubscriptionFetch(c)
 		return
@@ -572,6 +586,14 @@ func (a *SUBController) subs(c *gin.Context) {
 		}
 	}
 	logSubscriptionRoute(userAgent, "raw")
+	a.serveRawSubscription(c)
+}
+
+// serveRawSubscription emits the lossless link format when a requested native
+// config cannot represent every protocol in a subscription. The caller already
+// checked the device limit and whether link output is permitted.
+func (a *SUBController) serveRawSubscription(c *gin.Context) {
+	userAgent := c.GetHeader("User-Agent")
 	subId := c.Param("subid")
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	subReq := a.subService.ForRequest(host)
