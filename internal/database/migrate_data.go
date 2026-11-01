@@ -176,7 +176,7 @@ func ExportPostgresToSQLite(srcDSN, dstPath string) error {
 
 	// Build beside the destination and publish only after a complete snapshot.
 	// A failed connection/copy must not destroy an existing backup.
-	file, err := os.CreateTemp(filefilepath.Dir(dstPath), ".x-ui-export-*.db")
+	file, err := os.CreateTemp(filepath.Dir(dstPath), ".x-ui-export-*.db")
 	if err != nil {
 		return err
 	}
