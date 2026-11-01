@@ -1179,8 +1179,8 @@ func (s *ServerService) probeRealityAddrContext(parent context.Context, dialHost
 		// checks the exact IP and SNI already probed, without a second dial.
 		transport := &http.Transport{
 			MaxResponseHeaderBytes: 32 << 10,
-			ForceAttemptHTTP2:     true,
-			DialTLSContext: func(context.Context, string, string) (net.Conn, error) {
+			ForceAttemptHTTP2:      true,
+			DialTLSContext:         func(context.Context, string, string) (net.Conn, error) {
 				return tlsConn, nil
 			},
 		}
