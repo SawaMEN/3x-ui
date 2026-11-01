@@ -589,8 +589,8 @@ func normalizeTelemtWebBasePath(value string) (string, error) {
 	if path == "" {
 		return "", nil
 	}
-	if len(path) < 6 || len(path) > 96 || !regexp.MustCompile(`^[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*$`).MatchString(path) {
-		return "", errors.New("WEB Proxy base path must contain 6-96 URL-safe characters (letters, digits, underscores, dashes or slashes)")
+	if len(path) < 6 || len(path) > 96 || !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*(?:/[A-Za-z0-9][A-Za-z0-9_-]*)*$`).MatchString(path) {
+		return "", errors.New("WEB Proxy base path must have 6-96 URL-safe characters; each segment must start with a letter or digit")
 	}
 	return path, nil
 }
