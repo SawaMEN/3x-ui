@@ -1,0 +1,392 @@
+name: Release 3X-UI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - update
+    tags:
+      - "v*.*.*"
+
+# Cancel superseded main builds and draft-PR verification runs; keep
+# explicit version-tag builds and manually dispatched releases intact.
+# This lets each PR verify only its newest candidate instead of queueing
+# obsolete, expensive native builds.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+
+jobs:
+  frontend:
+    name: Build frontend once
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Download Go dependencies
+        env:
+          GOPROXY: "https://proxy.golang.org|direct"
+        run: bash tools/ci/download-go-modules.sh
+
+      - name: Run Go tests
+        run: |
+          make test-go
+          go test ./internal/sudoku -count=1 -ldflags "-X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA}"
+
+      - name: Build frontend bundle
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+        working-directory: frontend
+
+      - name: Upload frontend bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: internal/web/dist
+          if-no-files-found: error
+          compression-level: 0
+
+  resolve-telemt:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve official stable Telemt release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(python3 tools/telemt/fetch.py --latest-tag)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  telemt:
+    name: Verify official Telemt (${{ matrix.platform }})
+    needs: [resolve-telemt]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: amd64
+            runner: ubuntu-latest
+          - platform: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download verified official Telemt binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TELEMT_TAG: ${{ needs.resolve-telemt.outputs.tag }}
+        run: python3 tools/telemt/fetch.py --arch "${{ matrix.platform }}" --tag "$TELEMT_TAG" --output "$RUNNER_TEMP/telemt-build"
+      - name: Verify panel API reload and WEB carriers against official Telemt
+        env:
+          TELEMT_TEST_BINARY: ${{ runner.temp }}/telemt-build/telemt
+        run: |
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
+          go test ./internal/mtproto ./internal/web/service -run '^Test(OfficialTelemtConfigAndReload|NativeTelemtWebCarrierConfig)$' -v -count=1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: telemt-linux-${{ matrix.platform }}
+          path: ${{ runner.temp }}/telemt-build/telemt
+          if-no-files-found: error
+
+  build:
+    needs: [frontend, telemt, resolve-telemt]
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [amd64, arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Restore Go compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-build-${{ matrix.platform }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-${{ matrix.platform }}-
+
+      - name: Download frontend bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: internal/web/dist
+
+      - name: Download tested official Telemt executable
+        uses: actions/download-artifact@v8
+        with:
+          name: telemt-linux-${{ matrix.platform }}
+          path: telemt-build
+
+      - name: Build Linux package
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURL_RETRY=(--retry 5 --retry-all-errors --retry-delay 3)
+          fetch() {
+            local output=""
+            local url=""
+            case "${1:-}" in
+              -O)
+                output="$2"
+                shift 2
+                url="$1"
+                ;;
+              -o)
+                output="$2"
+                shift 2
+                url="$1"
+                ;;
+              *)
+                url="$1"
+                output="${url%%\?*}"
+                output="${output##*/}"
+                ;;
+            esac
+            test -n "$url"
+            test -n "$output"
+            curl -fL --show-error --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 20 -o "$output" "$url"
+          }
+
+          export CGO_ENABLED=1
+          export GOOS=linux
+          export GOARCH=${{ matrix.platform }}
+
+          case "${{ matrix.platform }}" in
+            amd64) BOOTLIN_ARCH=x86-64 ;;
+            arm64) BOOTLIN_ARCH=aarch64 ;;
+            *) exit 1 ;;
+          esac
+
+          TARBALL_BASE="https://toolchains.bootlin.com/downloads/releases/toolchains/${BOOTLIN_ARCH}/tarballs/"
+          TARBALL_URL=$(curl -fsSL "${CURL_RETRY[@]}" "$TARBALL_BASE" | grep -oE "${BOOTLIN_ARCH}--musl--stable-[^\"]+\.tar\.xz" | sort -r | head -n1)
+          test -n "$TARBALL_URL"
+          cd /tmp
+          curl -fL -sS "${CURL_RETRY[@]}" -o "$(basename "$TARBALL_URL")" "$TARBALL_BASE/$TARBALL_URL"
+          tar -xf "$(basename "$TARBALL_URL")"
+          TOOLCHAIN_DIR=$(find . -maxdepth 1 -type d -name "${BOOTLIN_ARCH}--musl--stable-*" | head -n1)
+          test -n "$TOOLCHAIN_DIR"
+          export PATH="$(realpath "$TOOLCHAIN_DIR")/bin:$PATH"
+          export CC=$(realpath "$(find "$TOOLCHAIN_DIR/bin" -name '*-gcc.br_real' -type f -executable | head -n1)")
+          test -n "$CC"
+          echo "CC=$CC" >> "$GITHUB_ENV"
+          cd -
+
+          LDFLAGS="-w -s -linkmode external -extldflags '-static'"
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            LDFLAGS="$LDFLAGS -X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA::8} -X github.com/SawaMEN/3x-ui/v3/internal/config.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          fi
+          go build -p 12 -buildvcs=true -ldflags "$LDFLAGS" -o xui-release -v .
+
+          rm -rf x-ui
+          mkdir -p x-ui/bin
+          mv xui-release x-ui/x-ui
+          cp x-ui.service.debian x-ui/
+          cp x-ui.service.arch x-ui/
+          cp x-ui.service.rhel x-ui/
+          cp internal/Telemt/telemt.service x-ui/
+          cp internal/Telemt/telemt-update.service x-ui/
+          cp internal/Telemt/telemt-update.timer x-ui/
+          install -m 0755 internal/Telemt/telemt-update.sh x-ui/telemt-update.sh
+          cp internal/Telemt/telemt.toml.example x-ui/
+          cp internal/Telemt/telemt-meko-fix.sh x-ui/
+          cp internal/Telemt/telemt-meko-fix.service x-ui/
+          cp x-ui.sh x-ui/
+          cp x-ui-core.sh x-ui/
+          cp x-ui.rc x-ui/
+          cp core-migration.sh x-ui/
+          cd x-ui/bin
+
+          fetch https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
+          fetch https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
+          fetch -O geoip_IR.dat https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geoip.dat
+          fetch -O geosite_IR.dat https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geosite.dat
+          fetch -O geoip_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat
+          fetch -O geosite_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat
+
+          case "${{ matrix.platform }}" in
+            amd64) TELEMT_ARCH=x86_64 ; TUIC_ARCH=x86_64-unknown-linux-musl ;;
+            arm64) TELEMT_ARCH=aarch64 ; TUIC_ARCH=aarch64-unknown-linux-musl ;;
+          esac
+          cp "$GITHUB_WORKSPACE/telemt-build/telemt" telemt
+          chmod +x telemt
+
+          curl -sfLRo tuic-server "${CURL_RETRY[@]}" "https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0/tuic-server-1.0.0-${TUIC_ARCH}"
+          chmod 0755 tuic-server
+
+          cd ../..
+
+      - name: Build compatible shared-speed protocol servers and kernel
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.platform }}
+        run: |
+          python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
+          bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
+      - name: Check panel configuration with downloaded binary
+        if: matrix.platform == 'amd64'
+        env:
+          CC: gcc
+          CGO_ENABLED: "1"
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-amd64
+        run: go test ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1
+
+      - name: Validate pinned-core transport and DNS routing matrix
+        if: matrix.platform == 'amd64'
+        env:
+          CC: gcc
+          CGO_ENABLED: "1"
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-amd64
+        run: |
+          go test ./internal/hiddify -run '^TestPinnedProtocolTransportMatrix$' -count=1 -timeout=8m
+          go test ./internal/singbox -run '^TestGeoRoutingModifiedSingBoxCheck$' -count=1 -timeout=3m
+
+      - name: Verify live loopback traffic and core restart
+        if: matrix.platform == 'amd64'
+        env:
+          CC: gcc
+          CGO_ENABLED: "1"
+          HIDDIFY_RUNTIME_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-amd64
+        run: |
+          go test ./internal/hiddify -run '^(TestXHTTPRuntimeTransfer|TestPinnedBinaryRawRuntimeAndStatistics)$' -count=1 -timeout=10m
+
+      - name: Package
+        run: |
+          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku vetroff vetroff-bundle; do
+            test ! -e "x-ui/bin/$component"
+          done
+          for core in x-ui/bin/xray-* x-ui/bin/sing-box-upstream-*; do
+            test ! -e "$core" && test ! -L "$core"
+          done
+          tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui
+          sha256sum x-ui-linux-${{ matrix.platform }}.tar.gz > x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: x-ui-linux-${{ matrix.platform }}
+          path: |
+            x-ui-linux-${{ matrix.platform }}.tar.gz
+            x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
+
+      - name: Upload stable release assets
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          file: x-ui-linux-${{ matrix.platform }}.tar.gz*
+          file_glob: true
+          overwrite: true
+          prerelease: false
+
+
+  publish-dev:
+    name: Publish rolling dev release
+    needs: [build]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: dev-release
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Download Linux build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "x-ui-linux-*"
+          path: dev-artifacts
+          merge-multiple: true
+
+      - name: Verify complete rolling release
+        run: |
+          for arch in amd64 arm64; do
+            test -s "dev-artifacts/x-ui-linux-$arch.tar.gz"
+            test -s "dev-artifacts/x-ui-linux-$arch.tar.gz.sha256"
+          done
+
+      - name: Publish dev-latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          short="${COMMIT::8}"
+          # A slower build must not supersede newer application changes.
+          # The formatter workflow may add a bot-only formatting commit
+          # after the release build has started. Its GITHUB_TOKEN push does
+          # not trigger another release build, so allow that safe descendant.
+          git fetch --no-tags --depth=50 origin main:refs/remotes/origin/main
+          latest=$(git rev-parse origin/main)
+          if [[ "$latest" != "$COMMIT" ]]; then
+            if ! git merge-base --is-ancestor "$COMMIT" "$latest"; then
+              echo "main diverged from the build commit; rolling release unchanged."
+              exit 0
+            fi
+            while IFS= read -r revision; do
+              subject=$(git show -s --format=%s "$revision")
+              author=$(git show -s --format=%an "$revision")
+              if [[ "$subject" != "chore(format): apply oxfmt" || "$author" != "github-actions[bot]" ]]; then
+                echo "New application changes were committed; rolling release unchanged."
+                exit 0
+              fi
+              while IFS= read -r changed; do
+                if [[ "$changed" != frontend/src/* ]]; then
+                  echo "Formatter commit changed non-frontend files; rolling release unchanged."
+                  exit 0
+                fi
+              done < <(git diff-tree --no-commit-id --name-only -r "$revision")
+            done < <(git rev-list "$COMMIT..$latest")
+            echo "Only trusted formatter commits follow this build; publishing verified artifacts."
+          fi
+          git tag -f dev-latest "$COMMIT"
+          git push -f origin refs/tags/dev-latest
+          if ! gh release edit dev-latest --prerelease --latest=false --title "Dev build $short" --notes "Rolling development build from main. commit=$COMMIT"; then
+            gh release create dev-latest --prerelease --latest=false --target "$COMMIT" --title "Dev build $short" --notes "Rolling development build from main. commit=$COMMIT"
+          fi
+          gh release upload dev-latest dev-artifacts/*.tar.gz dev-artifacts/*.sha256 --clobber
+          # Retire patched protocol servers; components use official releases.
+          for old_asset in panel-tunnel-linux-amd64.tar.gz panel-tunnel-linux-arm64.tar.gz telemt.version telemt-linux-amd64.tar.gz telemt-linux-amd64.tar.gz.sha256 telemt-linux-arm64.tar.gz telemt-linux-arm64.tar.gz.sha256; do
+            gh release delete-asset dev-latest "$old_asset" --yes 2>/dev/null || true
+          done

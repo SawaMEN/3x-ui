@@ -1,0 +1,462 @@
+---
+title: Server
+description: System status, log retrieval, certificate generators, Xray binary
+  management, and backup/restore. All under /panel/api/server.
+full: true
+_openapi:
+  preload:
+    - ./public/openapi.json
+  toc:
+    - depth: 2
+      title: Serve this API description as an OpenAPI 3 document — the same file that
+        powers the API Docs page. Requires a session or Bearer token like the
+        rest of /panel/api. Useful for generating clients or importing into API
+        tooling.
+      url: '#serve-this-api-description-as-an-openapi-3-document--the-same-file-that-powers-the-api-docs-page-requires-a-session-or-bearer-token-like-the-rest-of-panelapi-useful-for-generating-clients-or-importing-into-api-tooling'
+    - depth: 2
+      title: 'Real-time machine snapshot: CPU, memory, swap, disk, network IO, load
+        averages, open connections, Xray state. Cached and refreshed every 2
+        seconds in the background.'
+      url: '#real-time-machine-snapshot-cpu-memory-swap-disk-network-io-load-averages-open-connections-xray-state-cached-and-refreshed-every-2-seconds-in-the-background'
+    - depth: 2
+      title: Reports whether per-client IP limits can be enforced on this host. The
+        panel uses it to gate the "IP Limit" field, since enforcement depends on
+        Fail2ban being installed.
+      url: '#reports-whether-per-client-ip-limits-can-be-enforced-on-this-host-the-panel-uses-it-to-gate-the-ip-limit-field-since-enforcement-depends-on-fail2ban-being-installed'
+    - depth: 2
+      title: 'Legacy: aggregated CPU history. Use /history/cpu/:bucket instead — same
+        data with a uniform {t, v} shape.'
+      url: '#legacy-aggregated-cpu-history-use-historycpubucket-instead--same-data-with-a-uniform-t-v-shape'
+    - depth: 2
+      title: Aggregated time-series for one metric. Returns an array of {t, v} samples
+        covering the last ~6 hours.
+      url: '#aggregated-time-series-for-one-metric-returns-an-array-of-t-v-samples-covering-the-last-6-hours'
+    - depth: 2
+      title: Xray runtime metrics state — whether the xray config has a `metrics`
+        block, which expvar keys are flowing, and the current snapshot values
+        for each. Returns an empty state when metrics are not configured.
+      url: '#xray-runtime-metrics-state--whether-the-xray-config-has-a-metrics-block-which-expvar-keys-are-flowing-and-the-current-snapshot-values-for-each-returns-an-empty-state-when-metrics-are-not-configured'
+    - depth: 2
+      title: Time-series history for one Xray runtime metric over the last ~6 hours.
+        Same {t, v} shape as /history/:metric/:bucket.
+      url: '#time-series-history-for-one-xray-runtime-metric-over-the-last-6-hours-same-t-v-shape-as-historymetricbucket'
+    - depth: 2
+      title: Latest snapshot from the Xray observatory — per-outbound latency, health
+        status, and last-probe time. Only populated when the Xray config has an
+        observatory configured.
+      url: '#latest-snapshot-from-the-xray-observatory--per-outbound-latency-health-status-and-last-probe-time-only-populated-when-the-xray-config-has-an-observatory-configured'
+    - depth: 2
+      title: Time-series of observatory probe results for one outbound tag. Same {t,
+        v} shape as the other history endpoints.
+      url: '#time-series-of-observatory-probe-results-for-one-outbound-tag-same-t-v-shape-as-the-other-history-endpoints'
+    - depth: 2
+      title: Return the selected core and its supported panel capabilities.
+      url: '#return-the-selected-core-and-its-supported-panel-capabilities'
+    - depth: 2
+      title: Read DNSTT service state and public key; the private Noise key is never
+        exposed.
+      url: '#read-dnstt-service-state-and-public-key-the-private-noise-key-is-never-exposed'
+    - depth: 2
+      title: Check public NS delegation and nameserver IPv4 without changing DNSTT
+        configuration.
+      url: '#check-public-ns-delegation-and-nameserver-ipv4-without-changing-dnstt-configuration'
+    - depth: 2
+      title: Download checksum-verified DNSTT server without enabling the tunnel.
+      url: '#download-checksum-verified-dnstt-server-without-enabling-the-tunnel'
+    - depth: 2
+      title: Validate the delegated DNS zone and local TCP destination, generate keys
+        and enable DNSTT.
+      url: '#validate-the-delegated-dns-zone-and-local-tcp-destination-generate-keys-and-enable-dnstt'
+    - depth: 2
+      title: Stop and disable DNSTT while preserving its keys and configuration.
+      url: '#stop-and-disable-dnstt-while-preserving-its-keys-and-configuration'
+    - depth: 2
+      title: Upgrade DNSTT with rollback if the service fails to restart.
+      url: '#upgrade-dnstt-with-rollback-if-the-service-fails-to-restart'
+    - depth: 2
+      title: Stop DNSTT, disable systemd and delete the binary, settings and keys.
+      url: '#stop-dnstt-disable-systemd-and-delete-the-binary-settings-and-keys'
+    - depth: 2
+      title: Read integrated OxiDNS service status and settings.
+      url: '#read-integrated-oxidns-service-status-and-settings'
+    - depth: 2
+      title: Read recent OxiDNS systemd service logs for diagnostics.
+      url: '#read-recent-oxidns-systemd-service-logs-for-diagnostics'
+    - depth: 2
+      title: Resolve a test domain through the managed OxiDNS listener.
+      url: '#resolve-a-test-domain-through-the-managed-oxidns-listener'
+    - depth: 2
+      title: Check a custom DNS subdomain, ports and selected TLS certificate without
+        changing the running service.
+      url: '#check-a-custom-dns-subdomain-ports-and-selected-tls-certificate-without-changing-the-running-service'
+    - depth: 2
+      title: Configure and start a previously installed OxiDNS service; validate
+        selected DNS TLS files and connect sing-box DNS.
+      url: '#configure-and-start-a-previously-installed-oxidns-service-validate-selected-dns-tls-files-and-connect-sing-box-dns'
+    - depth: 2
+      title: Disable OxiDNS and restore the configured sing-box DNS.
+      url: '#disable-oxidns-and-restore-the-configured-sing-box-dns'
+    - depth: 2
+      title: Install official OxiDNS from verified GitHub release without starting it.
+      url: '#install-official-oxidns-from-verified-github-release-without-starting-it'
+    - depth: 2
+      title: Update OxiDNS to the latest verified official release and roll back on
+        failure.
+      url: '#update-oxidns-to-the-latest-verified-official-release-and-roll-back-on-failure'
+    - depth: 2
+      title: Uninstall OxiDNS, disable the service and restore native sing-box DNS.
+      url: '#uninstall-oxidns-disable-the-service-and-restore-native-sing-box-dns'
+    - depth: 2
+      title: Measure the delay of a running sing-box outbound.
+      url: '#measure-the-delay-of-a-running-sing-box-outbound'
+    - depth: 2
+      title: Check whether a newer 3x-ui release is available on GitHub.
+      url: '#check-whether-a-newer-3x-ui-release-is-available-on-github'
+    - depth: 2
+      title: Report the outcome of the most recently launched panel self-update (see
+        POST updatePanel). Compare the returned runId against the one
+        updatePanel returned to tell this run apart from a stale result.
+      url: '#report-the-outcome-of-the-most-recently-launched-panel-self-update-see-post-updatepanel-compare-the-returned-runid-against-the-one-updatepanel-returned-to-tell-this-run-apart-from-a-stale-result'
+    - depth: 2
+      title: Return the assembled Xray config that’s currently running on this host.
+      url: '#return-the-assembled-xray-config-thats-currently-running-on-this-host'
+    - depth: 2
+      title: 'Stream a full database backup as an attachment: the SQLite .db file on
+        SQLite panels, or a pg_dump custom-format archive (.dump) on PostgreSQL
+        panels. Use as a manual backup.'
+      url: '#stream-a-full-database-backup-as-an-attachment-the-sqlite-db-file-on-sqlite-panels-or-a-pg_dump-custom-format-archive-dump-on-postgresql-panels-use-as-a-manual-backup'
+    - depth: 2
+      title: 'Stream a cross-engine migration file as an attachment: a .dump (SQL
+        text) on SQLite, or a .db SQLite database built from the live data on
+        PostgreSQL.'
+      url: '#stream-a-cross-engine-migration-file-as-an-attachment-a-dump-sql-text-on-sqlite-or-a-db-sqlite-database-built-from-the-live-data-on-postgresql'
+    - depth: 2
+      title: Generate a fresh UUID v4. Convenience helper for client IDs.
+      url: '#generate-a-fresh-uuid-v4-convenience-helper-for-client-ids'
+    - depth: 2
+      title: Return this panel's own web TLS certificate and key file paths. The
+        central panel calls it on a node (via the node API token) so "Set Cert
+        from Panel" fills a node-assigned inbound with paths that exist on the
+        node.
+      url: '#return-this-panels-own-web-tls-certificate-and-key-file-paths-the-central-panel-calls-it-on-a-node-via-the-node-api-token-so-set-cert-from-panel-fills-a-node-assigned-inbound-with-paths-that-exist-on-the-node'
+    - depth: 2
+      title: Read-only summaries (guid, parentGuid, name, address, status, versions)
+        of the nodes this panel manages. A parent panel calls it on a node (via
+        the node API token) to surface transitive sub-nodes in a chained
+        topology. Counts are computed by the parent, not returned here.
+      url: '#read-only-summaries-guid-parentguid-name-address-status-versions-of-the-nodes-this-panel-manages-a-parent-panel-calls-it-on-a-node-via-the-node-api-token-to-surface-transitive-sub-nodes-in-a-chained-topology-counts-are-computed-by-the-parent-not-returned-here'
+    - depth: 2
+      title: Generate a new X25519 keypair for Reality.
+      url: '#generate-a-new-x25519-keypair-for-reality'
+    - depth: 2
+      title: Generate a new ML-DSA-65 keypair. Returns {seed, verify}.
+      url: '#generate-a-new-ml-dsa-65-keypair-returns-seed-verify'
+    - depth: 2
+      title: Generate a new ML-KEM-768 keypair. Returns {seed, client}.
+      url: '#generate-a-new-ml-kem-768-keypair-returns-seed-client'
+    - depth: 2
+      title: Generate VLESS encryption auth options. Returns an auths array each with
+        id, label, encryption, and decryption fields.
+      url: '#generate-vless-encryption-auth-options-returns-an-auths-array-each-with-id-label-encryption-and-decryption-fields'
+    - depth: 2
+      title: Stop the Xray binary. All proxies go offline immediately.
+      url: '#stop-the-xray-binary-all-proxies-go-offline-immediately'
+    - depth: 2
+      title: Reload Xray with the current config. Typically required after structural
+        inbound or routing changes.
+      url: '#reload-xray-with-the-current-config-typically-required-after-structural-inbound-or-routing-changes'
+    - depth: 2
+      title: Self-update the panel to the latest version. The server restarts on
+        success. Bearer-token callers need admin or node-admin scope.
+      url: '#self-update-the-panel-to-the-latest-version-the-server-restarts-on-success-bearer-token-callers-need-admin-or-node-admin-scope'
+    - depth: 2
+      title: Toggle the panel update channel between stable and the rolling per-commit
+        dev release. Only effective on dev builds.
+      url: '#toggle-the-panel-update-channel-between-stable-and-the-rolling-per-commit-dev-release-only-effective-on-dev-builds'
+    - depth: 2
+      title: Refresh the default GeoIP / GeoSite data files. Use the /:fileName
+        variant to update one file.
+      url: '#refresh-the-default-geoip--geosite-data-files-use-the-filename-variant-to-update-one-file'
+    - depth: 2
+      title: Refresh a single Geo file by filename (e.g. geoip.dat, geosite.dat).
+      url: '#refresh-a-single-geo-file-by-filename-eg-geoipdat-geositedat'
+    - depth: 2
+      title: Return the last N lines of the panel’s own log.
+      url: '#return-the-last-n-lines-of-the-panels-own-log'
+    - depth: 2
+      title: Return the last N lines of the Xray process log.
+      url: '#return-the-last-n-lines-of-the-xray-process-log'
+    - depth: 2
+      title: Return live AmneziaWG peer activity (handshake, endpoint, transfer) plus
+        the panel’s own AmneziaWG event lines.
+      url: '#return-live-amneziawg-peer-activity-handshake-endpoint-transfer-plus-the-panels-own-amneziawg-event-lines'
+    - depth: 2
+      title: Prometheus metrics for local AmneziaWG inbounds. Accessible with monitor
+        or admin tokens and panel sessions.
+      url: '#prometheus-metrics-for-local-amneziawg-inbounds-accessible-with-monitor-or-admin-tokens-and-panel-sessions'
+    - depth: 2
+      title: Restore the panel DB from an uploaded backup (multipart form, field name
+        "db"). SQLite panels accept a SQLite database (.db) or a SQLite
+        migration dump (.dump); PostgreSQL panels accept a pg_dump archive
+        (.dump), a SQLite database (.db), or a SQLite migration dump. The panel
+        restarts after restore. Destructive.
+      url: '#restore-the-panel-db-from-an-uploaded-backup-multipart-form-field-name-db-sqlite-panels-accept-a-sqlite-database-db-or-a-sqlite-migration-dump-dump-postgresql-panels-accept-a-pg_dump-archive-dump-a-sqlite-database-db-or-a-sqlite-migration-dump-the-panel-restarts-after-restore-destructive'
+    - depth: 2
+      title: Preview the number of VPN users in a Hiddify Panel JSON backup.
+      url: '#preview-the-number-of-vpn-users-in-a-hiddify-panel-json-backup'
+    - depth: 2
+      title: Import VPN users from a Hiddify Panel JSON backup without inbound
+        connections.
+      url: '#import-vpn-users-from-a-hiddify-panel-json-backup-without-inbound-connections'
+    - depth: 2
+      title: Download panel clients as a Hiddify-compatible JSON backup.
+      url: '#download-panel-clients-as-a-hiddify-compatible-json-backup'
+    - depth: 2
+      title: Generate a new ECH (Encrypted Client Hello) keypair and config list for
+        the given SNI.
+      url: '#generate-a-new-ech-encrypted-client-hello-keypair-and-config-list-for-the-given-sni'
+    - depth: 2
+      title: Compute the hex SHA-256 of a certificate (DER) for pinning
+        (pinnedPeerCertSha256). Provide either a server file path or inline
+        PEM/DER content.
+      url: '#compute-the-hex-sha-256-of-a-certificate-der-for-pinning-pinnedpeercertsha256-provide-either-a-server-file-path-or-inline-pemder-content'
+    - depth: 2
+      title: Run `xray tls ping` against a remote server and return its live
+        leaf-certificate SHA-256 hash(es) for pinning (pinnedPeerCertSha256).
+      url: '#run-xray-tls-ping-against-a-remote-server-and-return-its-live-leaf-certificate-sha-256-hashes-for-pinning-pinnedpeercertsha256'
+    - depth: 2
+      title: Run a live TLS 1.3 probe against a candidate REALITY target and return a
+        feasibility verdict (TLS 1.3 + h2 + X25519 + trusted certificate) plus
+        the certificate SAN DNS names. A target on a private/loopback address is
+        reported with privateTarget=true and probed only when allowPrivate is
+        set.
+      url: '#run-a-live-tls-13-probe-against-a-candidate-reality-target-and-return-a-feasibility-verdict-tls-13--h2--x25519--trusted-certificate-plus-the-certificate-san-dns-names-a-target-on-a-privateloopback-address-is-reported-with-privatetargettrue-and-probed-only-when-allowprivate-is-set'
+    - depth: 2
+      title: Probe/discover REALITY targets and return each verdict ranked by
+        feasibility then latency. Each comma-separated token may be a domain
+        (validated with SNI), a bare IP, or a CIDR range (discovered without SNI
+        by reading the certificate domain). When empty, the
+        realityScanCandidates setting is probed (the built-in seed list if that
+        setting is empty).
+      url: '#probediscover-reality-targets-and-return-each-verdict-ranked-by-feasibility-then-latency-each-comma-separated-token-may-be-a-domain-validated-with-sni-a-bare-ip-or-a-cidr-range-discovered-without-sni-by-reading-the-certificate-domain-when-empty-the-realityscancandidates-setting-is-probed-the-built-in-seed-list-if-that-setting-is-empty'
+    - depth: 2
+      title: Fetch the fully aggregated inbound_client_ips database table. Used by
+        nodes to sync recently active IPs across the cluster.
+      url: '#fetch-the-fully-aggregated-inbound_client_ips-database-table-used-by-nodes-to-sync-recently-active-ips-across-the-cluster'
+    - depth: 2
+      title: Submit a list of recently active IP timestamps. The panel merges them
+        with the existing database to maintain a unified global IP-limit view.
+      url: '#submit-a-list-of-recently-active-ip-timestamps-the-panel-merges-them-with-the-existing-database-to-maintain-a-unified-global-ip-limit-view'
+  structuredData:
+    headings:
+      - content: Serve this API description as an OpenAPI 3 document — the same file
+          that powers the API Docs page. Requires a session or Bearer token like
+          the rest of /panel/api. Useful for generating clients or importing
+          into API tooling.
+        id: serve-this-api-description-as-an-openapi-3-document--the-same-file-that-powers-the-api-docs-page-requires-a-session-or-bearer-token-like-the-rest-of-panelapi-useful-for-generating-clients-or-importing-into-api-tooling
+      - content: 'Real-time machine snapshot: CPU, memory, swap, disk, network IO, load
+          averages, open connections, Xray state. Cached and refreshed every 2
+          seconds in the background.'
+        id: real-time-machine-snapshot-cpu-memory-swap-disk-network-io-load-averages-open-connections-xray-state-cached-and-refreshed-every-2-seconds-in-the-background
+      - content: Reports whether per-client IP limits can be enforced on this host. The
+          panel uses it to gate the "IP Limit" field, since enforcement depends
+          on Fail2ban being installed.
+        id: reports-whether-per-client-ip-limits-can-be-enforced-on-this-host-the-panel-uses-it-to-gate-the-ip-limit-field-since-enforcement-depends-on-fail2ban-being-installed
+      - content: 'Legacy: aggregated CPU history. Use /history/cpu/:bucket instead —
+          same data with a uniform {t, v} shape.'
+        id: legacy-aggregated-cpu-history-use-historycpubucket-instead--same-data-with-a-uniform-t-v-shape
+      - content: Aggregated time-series for one metric. Returns an array of {t, v}
+          samples covering the last ~6 hours.
+        id: aggregated-time-series-for-one-metric-returns-an-array-of-t-v-samples-covering-the-last-6-hours
+      - content: Xray runtime metrics state — whether the xray config has a `metrics`
+          block, which expvar keys are flowing, and the current snapshot values
+          for each. Returns an empty state when metrics are not configured.
+        id: xray-runtime-metrics-state--whether-the-xray-config-has-a-metrics-block-which-expvar-keys-are-flowing-and-the-current-snapshot-values-for-each-returns-an-empty-state-when-metrics-are-not-configured
+      - content: Time-series history for one Xray runtime metric over the last ~6 hours.
+          Same {t, v} shape as /history/:metric/:bucket.
+        id: time-series-history-for-one-xray-runtime-metric-over-the-last-6-hours-same-t-v-shape-as-historymetricbucket
+      - content: Latest snapshot from the Xray observatory — per-outbound latency,
+          health status, and last-probe time. Only populated when the Xray
+          config has an observatory configured.
+        id: latest-snapshot-from-the-xray-observatory--per-outbound-latency-health-status-and-last-probe-time-only-populated-when-the-xray-config-has-an-observatory-configured
+      - content: Time-series of observatory probe results for one outbound tag. Same {t,
+          v} shape as the other history endpoints.
+        id: time-series-of-observatory-probe-results-for-one-outbound-tag-same-t-v-shape-as-the-other-history-endpoints
+      - content: Return the selected core and its supported panel capabilities.
+        id: return-the-selected-core-and-its-supported-panel-capabilities
+      - content: Read DNSTT service state and public key; the private Noise key is never
+          exposed.
+        id: read-dnstt-service-state-and-public-key-the-private-noise-key-is-never-exposed
+      - content: Check public NS delegation and nameserver IPv4 without changing DNSTT
+          configuration.
+        id: check-public-ns-delegation-and-nameserver-ipv4-without-changing-dnstt-configuration
+      - content: Download checksum-verified DNSTT server without enabling the tunnel.
+        id: download-checksum-verified-dnstt-server-without-enabling-the-tunnel
+      - content: Validate the delegated DNS zone and local TCP destination, generate
+          keys and enable DNSTT.
+        id: validate-the-delegated-dns-zone-and-local-tcp-destination-generate-keys-and-enable-dnstt
+      - content: Stop and disable DNSTT while preserving its keys and configuration.
+        id: stop-and-disable-dnstt-while-preserving-its-keys-and-configuration
+      - content: Upgrade DNSTT with rollback if the service fails to restart.
+        id: upgrade-dnstt-with-rollback-if-the-service-fails-to-restart
+      - content: Stop DNSTT, disable systemd and delete the binary, settings and keys.
+        id: stop-dnstt-disable-systemd-and-delete-the-binary-settings-and-keys
+      - content: Read integrated OxiDNS service status and settings.
+        id: read-integrated-oxidns-service-status-and-settings
+      - content: Read recent OxiDNS systemd service logs for diagnostics.
+        id: read-recent-oxidns-systemd-service-logs-for-diagnostics
+      - content: Resolve a test domain through the managed OxiDNS listener.
+        id: resolve-a-test-domain-through-the-managed-oxidns-listener
+      - content: Check a custom DNS subdomain, ports and selected TLS certificate
+          without changing the running service.
+        id: check-a-custom-dns-subdomain-ports-and-selected-tls-certificate-without-changing-the-running-service
+      - content: Configure and start a previously installed OxiDNS service; validate
+          selected DNS TLS files and connect sing-box DNS.
+        id: configure-and-start-a-previously-installed-oxidns-service-validate-selected-dns-tls-files-and-connect-sing-box-dns
+      - content: Disable OxiDNS and restore the configured sing-box DNS.
+        id: disable-oxidns-and-restore-the-configured-sing-box-dns
+      - content: Install official OxiDNS from verified GitHub release without starting
+          it.
+        id: install-official-oxidns-from-verified-github-release-without-starting-it
+      - content: Update OxiDNS to the latest verified official release and roll back on
+          failure.
+        id: update-oxidns-to-the-latest-verified-official-release-and-roll-back-on-failure
+      - content: Uninstall OxiDNS, disable the service and restore native sing-box DNS.
+        id: uninstall-oxidns-disable-the-service-and-restore-native-sing-box-dns
+      - content: Measure the delay of a running sing-box outbound.
+        id: measure-the-delay-of-a-running-sing-box-outbound
+      - content: Check whether a newer 3x-ui release is available on GitHub.
+        id: check-whether-a-newer-3x-ui-release-is-available-on-github
+      - content: Report the outcome of the most recently launched panel self-update (see
+          POST updatePanel). Compare the returned runId against the one
+          updatePanel returned to tell this run apart from a stale result.
+        id: report-the-outcome-of-the-most-recently-launched-panel-self-update-see-post-updatepanel-compare-the-returned-runid-against-the-one-updatepanel-returned-to-tell-this-run-apart-from-a-stale-result
+      - content: Return the assembled Xray config that’s currently running on this host.
+        id: return-the-assembled-xray-config-thats-currently-running-on-this-host
+      - content: 'Stream a full database backup as an attachment: the SQLite .db file on
+          SQLite panels, or a pg_dump custom-format archive (.dump) on
+          PostgreSQL panels. Use as a manual backup.'
+        id: stream-a-full-database-backup-as-an-attachment-the-sqlite-db-file-on-sqlite-panels-or-a-pg_dump-custom-format-archive-dump-on-postgresql-panels-use-as-a-manual-backup
+      - content: 'Stream a cross-engine migration file as an attachment: a .dump (SQL
+          text) on SQLite, or a .db SQLite database built from the live data on
+          PostgreSQL.'
+        id: stream-a-cross-engine-migration-file-as-an-attachment-a-dump-sql-text-on-sqlite-or-a-db-sqlite-database-built-from-the-live-data-on-postgresql
+      - content: Generate a fresh UUID v4. Convenience helper for client IDs.
+        id: generate-a-fresh-uuid-v4-convenience-helper-for-client-ids
+      - content: Return this panel's own web TLS certificate and key file paths. The
+          central panel calls it on a node (via the node API token) so "Set Cert
+          from Panel" fills a node-assigned inbound with paths that exist on the
+          node.
+        id: return-this-panels-own-web-tls-certificate-and-key-file-paths-the-central-panel-calls-it-on-a-node-via-the-node-api-token-so-set-cert-from-panel-fills-a-node-assigned-inbound-with-paths-that-exist-on-the-node
+      - content: Read-only summaries (guid, parentGuid, name, address, status, versions)
+          of the nodes this panel manages. A parent panel calls it on a node
+          (via the node API token) to surface transitive sub-nodes in a chained
+          topology. Counts are computed by the parent, not returned here.
+        id: read-only-summaries-guid-parentguid-name-address-status-versions-of-the-nodes-this-panel-manages-a-parent-panel-calls-it-on-a-node-via-the-node-api-token-to-surface-transitive-sub-nodes-in-a-chained-topology-counts-are-computed-by-the-parent-not-returned-here
+      - content: Generate a new X25519 keypair for Reality.
+        id: generate-a-new-x25519-keypair-for-reality
+      - content: Generate a new ML-DSA-65 keypair. Returns {seed, verify}.
+        id: generate-a-new-ml-dsa-65-keypair-returns-seed-verify
+      - content: Generate a new ML-KEM-768 keypair. Returns {seed, client}.
+        id: generate-a-new-ml-kem-768-keypair-returns-seed-client
+      - content: Generate VLESS encryption auth options. Returns an auths array each
+          with id, label, encryption, and decryption fields.
+        id: generate-vless-encryption-auth-options-returns-an-auths-array-each-with-id-label-encryption-and-decryption-fields
+      - content: Stop the Xray binary. All proxies go offline immediately.
+        id: stop-the-xray-binary-all-proxies-go-offline-immediately
+      - content: Reload Xray with the current config. Typically required after
+          structural inbound or routing changes.
+        id: reload-xray-with-the-current-config-typically-required-after-structural-inbound-or-routing-changes
+      - content: Self-update the panel to the latest version. The server restarts on
+          success. Bearer-token callers need admin or node-admin scope.
+        id: self-update-the-panel-to-the-latest-version-the-server-restarts-on-success-bearer-token-callers-need-admin-or-node-admin-scope
+      - content: Toggle the panel update channel between stable and the rolling
+          per-commit dev release. Only effective on dev builds.
+        id: toggle-the-panel-update-channel-between-stable-and-the-rolling-per-commit-dev-release-only-effective-on-dev-builds
+      - content: Refresh the default GeoIP / GeoSite data files. Use the /:fileName
+          variant to update one file.
+        id: refresh-the-default-geoip--geosite-data-files-use-the-filename-variant-to-update-one-file
+      - content: Refresh a single Geo file by filename (e.g. geoip.dat, geosite.dat).
+        id: refresh-a-single-geo-file-by-filename-eg-geoipdat-geositedat
+      - content: Return the last N lines of the panel’s own log.
+        id: return-the-last-n-lines-of-the-panels-own-log
+      - content: Return the last N lines of the Xray process log.
+        id: return-the-last-n-lines-of-the-xray-process-log
+      - content: Return live AmneziaWG peer activity (handshake, endpoint, transfer)
+          plus the panel’s own AmneziaWG event lines.
+        id: return-live-amneziawg-peer-activity-handshake-endpoint-transfer-plus-the-panels-own-amneziawg-event-lines
+      - content: Prometheus metrics for local AmneziaWG inbounds. Accessible with
+          monitor or admin tokens and panel sessions.
+        id: prometheus-metrics-for-local-amneziawg-inbounds-accessible-with-monitor-or-admin-tokens-and-panel-sessions
+      - content: Restore the panel DB from an uploaded backup (multipart form, field
+          name "db"). SQLite panels accept a SQLite database (.db) or a SQLite
+          migration dump (.dump); PostgreSQL panels accept a pg_dump archive
+          (.dump), a SQLite database (.db), or a SQLite migration dump. The
+          panel restarts after restore. Destructive.
+        id: restore-the-panel-db-from-an-uploaded-backup-multipart-form-field-name-db-sqlite-panels-accept-a-sqlite-database-db-or-a-sqlite-migration-dump-dump-postgresql-panels-accept-a-pg_dump-archive-dump-a-sqlite-database-db-or-a-sqlite-migration-dump-the-panel-restarts-after-restore-destructive
+      - content: Preview the number of VPN users in a Hiddify Panel JSON backup.
+        id: preview-the-number-of-vpn-users-in-a-hiddify-panel-json-backup
+      - content: Import VPN users from a Hiddify Panel JSON backup without inbound
+          connections.
+        id: import-vpn-users-from-a-hiddify-panel-json-backup-without-inbound-connections
+      - content: Download panel clients as a Hiddify-compatible JSON backup.
+        id: download-panel-clients-as-a-hiddify-compatible-json-backup
+      - content: Generate a new ECH (Encrypted Client Hello) keypair and config list for
+          the given SNI.
+        id: generate-a-new-ech-encrypted-client-hello-keypair-and-config-list-for-the-given-sni
+      - content: Compute the hex SHA-256 of a certificate (DER) for pinning
+          (pinnedPeerCertSha256). Provide either a server file path or inline
+          PEM/DER content.
+        id: compute-the-hex-sha-256-of-a-certificate-der-for-pinning-pinnedpeercertsha256-provide-either-a-server-file-path-or-inline-pemder-content
+      - content: Run `xray tls ping` against a remote server and return its live
+          leaf-certificate SHA-256 hash(es) for pinning (pinnedPeerCertSha256).
+        id: run-xray-tls-ping-against-a-remote-server-and-return-its-live-leaf-certificate-sha-256-hashes-for-pinning-pinnedpeercertsha256
+      - content: Run a live TLS 1.3 probe against a candidate REALITY target and return
+          a feasibility verdict (TLS 1.3 + h2 + X25519 + trusted certificate)
+          plus the certificate SAN DNS names. A target on a private/loopback
+          address is reported with privateTarget=true and probed only when
+          allowPrivate is set.
+        id: run-a-live-tls-13-probe-against-a-candidate-reality-target-and-return-a-feasibility-verdict-tls-13--h2--x25519--trusted-certificate-plus-the-certificate-san-dns-names-a-target-on-a-privateloopback-address-is-reported-with-privatetargettrue-and-probed-only-when-allowprivate-is-set
+      - content: Probe/discover REALITY targets and return each verdict ranked by
+          feasibility then latency. Each comma-separated token may be a domain
+          (validated with SNI), a bare IP, or a CIDR range (discovered without
+          SNI by reading the certificate domain). When empty, the
+          realityScanCandidates setting is probed (the built-in seed list if
+          that setting is empty).
+        id: probediscover-reality-targets-and-return-each-verdict-ranked-by-feasibility-then-latency-each-comma-separated-token-may-be-a-domain-validated-with-sni-a-bare-ip-or-a-cidr-range-discovered-without-sni-by-reading-the-certificate-domain-when-empty-the-realityscancandidates-setting-is-probed-the-built-in-seed-list-if-that-setting-is-empty
+      - content: Fetch the fully aggregated inbound_client_ips database table. Used by
+          nodes to sync recently active IPs across the cluster.
+        id: fetch-the-fully-aggregated-inbound_client_ips-database-table-used-by-nodes-to-sync-recently-active-ips-across-the-cluster
+      - content: Submit a list of recently active IP timestamps. The panel merges them
+          with the existing database to maintain a unified global IP-limit view.
+        id: submit-a-list-of-recently-active-ip-timestamps-the-panel-merges-them-with-the-existing-database-to-maintain-a-unified-global-ip-limit-view
+    contents:
+      - content: Aggregate metrics without client emails, IP addresses or keys. RX/TX
+          are gauges since device start. Online means a handshake in the last
+          180 seconds. Rolling 24h/30d activity uses shared lastOnline of users
+          attached to AWG and may include their other protocols.
+        heading: prometheus-metrics-for-local-amneziawg-inbounds-accessible-with-monitor-or-admin-tokens-and-panel-sessions
+      - content: Available when sing-box is the saved core. The uploaded file is not
+          imported.
+        heading: preview-the-number-of-vpn-users-in-a-hiddify-panel-json-backup
+      - content: Preserves UUID subscription IDs, remaining traffic, expiration, and
+          WireGuard keys. Existing users are skipped.
+        heading: import-vpn-users-from-a-hiddify-panel-json-backup-without-inbound-connections
+      - content: Exports clients with UUID-compatible identities, traffic limits,
+          expiration, Telegram ID, WireGuard keys, and the saved legacy
+          proxy_path_client alias. Clients without a UUID-compatible identity
+          are skipped.
+        heading: download-panel-clients-as-a-hiddify-compatible-json-backup
+---
+
+{/* This file was generated by Fumadocs. Do not edit this file directly. Any changes should be made by running the generation command again. */}
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/openapi.json","method":"get"},{"path":"/panel/api/server/status","method":"get"},{"path":"/panel/api/server/fail2banStatus","method":"get"},{"path":"/panel/api/server/cpuHistory/{bucket}","method":"get"},{"path":"/panel/api/server/history/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayMetricsState","method":"get"},{"path":"/panel/api/server/xrayMetricsHistory/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayObservatory","method":"get"},{"path":"/panel/api/server/xrayObservatoryHistory/{tag}/{bucket}","method":"get"},{"path":"/panel/api/server/core/capabilities","method":"get"},{"path":"/panel/api/dnstt/status","method":"get"},{"path":"/panel/api/dnstt/check-delegation","method":"get"},{"path":"/panel/api/dnstt/install","method":"post"},{"path":"/panel/api/dnstt/setup","method":"post"},{"path":"/panel/api/dnstt/disable","method":"post"},{"path":"/panel/api/dnstt/update","method":"post"},{"path":"/panel/api/dnstt/remove","method":"post"},{"path":"/panel/api/oxidns/status","method":"get"},{"path":"/panel/api/oxidns/logs","method":"get"},{"path":"/panel/api/oxidns/check","method":"post"},{"path":"/panel/api/oxidns/validate","method":"post"},{"path":"/panel/api/oxidns/setup","method":"post"},{"path":"/panel/api/oxidns/disable","method":"post"},{"path":"/panel/api/oxidns/install","method":"post"},{"path":"/panel/api/oxidns/update","method":"post"},{"path":"/panel/api/oxidns/remove","method":"post"},{"path":"/panel/api/server/singbox/outbound/check","method":"post"},{"path":"/panel/api/server/getPanelUpdateInfo","method":"get"},{"path":"/panel/api/server/getUpdateStatus","method":"get"},{"path":"/panel/api/server/getConfigJson","method":"get"},{"path":"/panel/api/server/getDb","method":"get"},{"path":"/panel/api/server/getMigration","method":"get"},{"path":"/panel/api/server/getNewUUID","method":"get"},{"path":"/panel/api/server/getWebCertFiles","method":"get"},{"path":"/panel/api/server/descendants","method":"get"},{"path":"/panel/api/server/getNewX25519Cert","method":"get"},{"path":"/panel/api/server/getNewmldsa65","method":"get"},{"path":"/panel/api/server/getNewmlkem768","method":"get"},{"path":"/panel/api/server/getNewVlessEnc","method":"get"},{"path":"/panel/api/server/stopXrayService","method":"post"},{"path":"/panel/api/server/restartXrayService","method":"post"},{"path":"/panel/api/server/updatePanel","method":"post"},{"path":"/panel/api/server/setUpdateChannel","method":"post"},{"path":"/panel/api/server/updateGeofile","method":"post"},{"path":"/panel/api/server/updateGeofile/{fileName}","method":"post"},{"path":"/panel/api/server/logs/{count}","method":"post"},{"path":"/panel/api/server/xraylogs/{count}","method":"post"},{"path":"/panel/api/server/amneziawglogs/{count}","method":"post"},{"path":"/panel/api/server/amneziawgMetrics","method":"get"},{"path":"/panel/api/server/importDB","method":"post"},{"path":"/panel/api/server/hiddify/preview","method":"post"},{"path":"/panel/api/server/hiddify/import","method":"post"},{"path":"/panel/api/server/hiddify/export","method":"get"},{"path":"/panel/api/server/getNewEchCert","method":"post"},{"path":"/panel/api/server/getCertHash","method":"post"},{"path":"/panel/api/server/getRemoteCertHash","method":"post"},{"path":"/panel/api/server/scanRealityTarget","method":"post"},{"path":"/panel/api/server/scanRealityTargets","method":"post"},{"path":"/panel/api/server/clientIps","method":"get"},{"path":"/panel/api/server/clientIps","method":"post"}]} showTitle />
+    </>
+  );
+}

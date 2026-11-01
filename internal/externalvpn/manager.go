@@ -1,0 +1,570 @@
+package externalvpn
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/hex"
+	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"io"
+	"math/big"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
+)
+
+type running struct {
+	statsMu     sync.Mutex
+	stopping    atomic.Bool
+	protocol    model.Protocol
+	metricsAddr string
+	tag         string
+	instance    Instance
+	counters    map[string]trafficCounters
+	fingerprint string
+	cancel      context.CancelFunc
+	cmd         *exec.Cmd
+	done        chan struct{}
+}
+
+type Manager struct {
+	mu         sync.Mutex
+	procs      map[int]*running
+	lastErrors map[int]string
+}
+
+var global = &Manager{procs: map[int]*running{}, lastErrors: map[int]string{}}
+
+func GetManager() *Manager { return global }
+
+func directory() string {
+	path, err := filepath.Abs(filepath.Join(config.GetBinFolderPath(), "externalvpn"))
+	if err != nil {
+		return filepath.Join(config.GetBinFolderPath(), "externalvpn")
+	}
+	return path
+}
+
+func binary(protocol model.Protocol) string {
+	return findBinary(protocol, true)
+}
+
+func findBinary(protocol model.Protocol, managed bool) string {
+	var name string
+	switch protocol {
+	case model.Pingtunnel:
+		name = "pingtunnel"
+	case model.TrustTunnel:
+		name = "trusttunnel_endpoint"
+	case model.FPTN:
+		name = "fptn"
+	case model.VetroffProxy:
+		path, _ := filepath.Abs(filepath.Join(config.GetBinFolderPath(), "vetroff-bundle", "vetroff-necko", "vetroff"))
+		return path
+	case model.OpenFlux:
+		name = "openflux"
+	default:
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	target := filepath.Join(config.GetBinFolderPath(), name)
+	candidates := []string{"/usr/local/bin/" + name, "/usr/bin/" + name}
+	if path, err := exec.LookPath(name); err == nil {
+		candidates = append(candidates, path)
+	}
+	if managed {
+		candidates = append([]string{target}, candidates...)
+	}
+	targetAbs, _ := filepath.Abs(target)
+	for _, path := range candidates {
+		pathAbs, _ := filepath.Abs(path)
+		if !managed && pathAbs == targetAbs {
+			continue
+		}
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			return path
+		}
+	}
+	if managed {
+		return target
+	}
+	return ""
+}
+
+// Do not claim removal while a separately installed system binary remains usable.
+func CheckManagedRemoval(protocol model.Protocol) error {
+	if path := findBinary(protocol, false); path != "" {
+		return fmt.Errorf("%s is also installed outside the panel at %s; remove that installation manually first", protocol, path)
+	}
+	return nil
+}
+
+func writePrivate(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	temp, err := os.CreateTemp(filepath.Dir(path), ".config-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(temp.Name())
+	defer temp.Close()
+	if err := temp.Chmod(0o600); err != nil {
+		return err
+	}
+	if _, err := temp.Write(data); err != nil {
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temp.Name(), path)
+}
+
+func tomlString(s string) string { return strconv.Quote(s) }
+
+func certificate(inst Instance, folder string) (string, string, error) {
+	if inst.Settings.Certificate != "" {
+		pair, err := tls.LoadX509KeyPair(inst.Settings.Certificate, inst.Settings.PrivateKey)
+		if err != nil {
+			return "", "", err
+		}
+		leaf, err := x509.ParseCertificate(pair.Certificate[0])
+		if err != nil {
+			return "", "", err
+		}
+		if err := leaf.VerifyHostname(inst.Settings.Hostname); err != nil {
+			return "", "", err
+		}
+		return inst.Settings.Certificate, inst.Settings.PrivateKey, nil
+	}
+	certPath, keyPath := filepath.Join(folder, "cert.pem"), filepath.Join(folder, "key.pem")
+	if data, err := os.ReadFile(certPath); err == nil {
+		if block, _ := pem.Decode(data); block != nil {
+			if cert, err := x509.ParseCertificate(block.Bytes); err == nil && cert.VerifyHostname(inst.Settings.Hostname) == nil && time.Until(cert.NotAfter) > 30*24*time.Hour {
+				if _, err := tls.LoadX509KeyPair(certPath, keyPath); err == nil {
+					return certPath, keyPath, nil
+				}
+			}
+		}
+	}
+	key, err := rsa.GenerateKey(rand.Reader, 3072)
+	if err != nil {
+		return "", "", err
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return "", "", err
+	}
+	tmpl := &x509.Certificate{SerialNumber: serial, Subject: pkix.Name{CommonName: inst.Settings.Hostname}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().AddDate(1, 0, 0), KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, BasicConstraintsValid: true}
+	if ip := net.ParseIP(inst.Settings.Hostname); ip != nil {
+		tmpl.IPAddresses = append(tmpl.IPAddresses, ip)
+	} else {
+		tmpl.DNSNames = []string{inst.Settings.Hostname}
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		return "", "", err
+	}
+	if err := writePrivate(keyPath, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})); err != nil {
+		return "", "", err
+	}
+	if err := writePrivate(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})); err != nil {
+		return "", "", err
+	}
+	return certPath, keyPath, nil
+}
+
+func files(inst Instance, metricsAddr string) ([]string, error) {
+	if inst.Protocol == model.VetroffProxy {
+		return vetroffFiles(inst)
+	}
+	folder := filepath.Join(directory(), strconv.Itoa(inst.ID))
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		return nil, err
+	}
+	if inst.Protocol == model.Pingtunnel {
+		path := filepath.Join(folder, "server.json")
+		data, err := json.Marshal(map[string]any{"type": "server", "key": inst.Settings.Key, "encrypt": inst.Settings.Encrypt, "encrypt_key": inst.Settings.EncryptKey, "icmp_listen": defaultListen(inst.Listen), "maxconn": inst.Settings.MaxConn, "conntt": inst.Settings.ConnectTimeout, "forward": "socks5://" + sidecaregress.Address(inst.ID), "nolog": 1})
+		if err != nil {
+			return nil, err
+		}
+		if err := writePrivate(path, data); err != nil {
+			return nil, err
+		}
+		args := []string{"-c", path, "-forward", "socks5://" + sidecaregress.Address(inst.ID)}
+		if inst.Settings.Congestion == "none" {
+			// Pingtunnel's JSON loader ignores empty strings; disable via an explicit flag.
+			args = append(args, "-congestion", "")
+		}
+		return args, nil
+	}
+	cert, key, err := certificate(inst, folder)
+	if err != nil {
+		return nil, err
+	}
+	credentials := filepath.Join(folder, "credentials.toml")
+	var users strings.Builder
+	for _, c := range inst.Settings.Clients {
+		if c.Enable {
+			fmt.Fprintf(&users, "[[client]]\nusername = %s\npassword = %s\n", tomlString(c.Email), tomlString(c.Password))
+		}
+	}
+	if err := writePrivate(credentials, []byte(users.String())); err != nil {
+		return nil, err
+	}
+	vpn := filepath.Join(folder, "vpn.toml")
+	settings := fmt.Sprintf("listen_address = %s\ncredentials_file = %s\nallow_private_network_connections = false\n[listen_protocols.http1]\n[listen_protocols.http2]\n[listen_protocols.quic]\n[forward_protocol.socks5]\naddress = %s\nextended_auth = false\n[metrics]\naddress = %s\nper_client_metrics = true\n", tomlString(inst.Bind()), tomlString(credentials), tomlString(sidecaregress.Address(inst.ID)), tomlString(metricsAddr))
+	if err := writePrivate(vpn, []byte(settings)); err != nil {
+		return nil, err
+	}
+	hosts := filepath.Join(folder, "hosts.toml")
+	tls := fmt.Sprintf("[[main_hosts]]\nhostname = %s\ncert_chain_path = %s\nprivate_key_path = %s\n", tomlString(inst.Settings.Hostname), tomlString(cert), tomlString(key))
+	if err := writePrivate(hosts, []byte(tls)); err != nil {
+		return nil, err
+	}
+	return []string{vpn, hosts}, nil
+}
+
+func defaultListen(listen string) string {
+	if listen == "" {
+		return "0.0.0.0"
+	}
+	return listen
+}
+
+func fingerprint(inst Instance) string {
+	data, _ := json.Marshal(inst)
+	if inst.Protocol == model.VetroffProxy {
+		if pair, err := tls.LoadX509KeyPair(inst.Settings.Certificate, inst.Settings.PrivateKey); err == nil {
+			for _, cert := range pair.Certificate {
+				digest := sha256.Sum256(cert)
+				data = append(data, digest[:]...)
+			}
+		}
+	}
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
+}
+
+func certificateRenewalNeeded(inst Instance) bool {
+	if inst.Protocol != model.TrustTunnel || inst.Settings.Certificate != "" {
+		return false
+	}
+	path := filepath.Join(directory(), strconv.Itoa(inst.ID), "cert.pem")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return true
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return true
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	return err != nil || time.Until(cert.NotAfter) < 30*24*time.Hour
+}
+
+// Releases before 3.0 can forward TCP while sending UDP directly. Do not
+// accept them for a managed cascade, even if they recognize the forward flag.
+func requirePingtunnelForwardVersion(path string) error {
+	version, err := binaryVersion(context.Background(), path, []string{"-version"})
+	if err != nil {
+		return fmt.Errorf("Pingtunnel 3.0+ is required for TCP/UDP egress: %w", err)
+	}
+	major, err := strconv.Atoi(strings.Split(version, ".")[0])
+	if err != nil || major < 3 {
+		return fmt.Errorf("Pingtunnel 3.0+ is required for TCP/UDP egress; installed: %s", version)
+	}
+	return nil
+}
+
+func (m *Manager) Ensure(inst Instance) error {
+	if err := inst.Validate(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ensureLocked(inst)
+}
+
+func (m *Manager) ensureLocked(inst Instance) error {
+	fp := fingerprint(inst)
+	if old := m.procs[inst.ID]; old != nil {
+		select {
+		case <-old.done:
+			delete(m.procs, inst.ID)
+		default:
+			if old.fingerprint == fp && !certificateRenewalNeeded(inst) {
+				return nil
+			}
+			m.removeLocked(inst.ID)
+		}
+	}
+	if inst.Protocol == model.VetroffProxy || inst.Protocol == model.TrustTunnel || inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
+		active := false
+		for _, c := range inst.Settings.Clients {
+			active = active || c.Enable
+		}
+		if !active {
+			return nil
+		}
+	}
+	if inst.Protocol == model.Pingtunnel {
+		if err := requirePingtunnelForwardVersion(binary(inst.Protocol)); err != nil {
+			return err
+		}
+		for id, proc := range m.procs {
+			if id != inst.ID && proc.protocol == model.Pingtunnel {
+				return fmt.Errorf("only one Pingtunnel listener may run per server")
+			}
+		}
+	}
+	metricsAddr := ""
+	if inst.Protocol == model.TrustTunnel || inst.Protocol == model.FPTN {
+		listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+		if err != nil {
+			return err
+		}
+		metricsAddr = listener.Addr().String()
+		_ = listener.Close()
+	}
+	var cmd *exec.Cmd
+	var cancel context.CancelFunc
+	var ctx context.Context
+	if inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
+		var err error
+		cmd, cancel, err = m.additionalCommand(inst, metricsAddr)
+		if err != nil {
+			return err
+		}
+		ctx = context.Background()
+	} else {
+		args, err := files(inst, metricsAddr)
+		if err != nil {
+			return err
+		}
+		ctx, cancel = context.WithCancel(context.Background())
+		cmd = exec.CommandContext(ctx, binary(inst.Protocol), args...)
+	}
+	if inst.Protocol == model.VetroffProxy {
+		cmd.Dir = filepath.Dir(binary(inst.Protocol))
+		prepareVetroffCommand(cmd)
+	}
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return fmt.Errorf("%s: %w", inst.Protocol, err)
+	}
+	proc := &running{instance: inst, protocol: inst.Protocol, fingerprint: fp, cancel: cancel, cmd: cmd, done: make(chan struct{}), metricsAddr: metricsAddr, tag: inst.Tag, counters: map[string]trafficCounters{}}
+	m.procs[inst.ID] = proc
+	go func() {
+		err := cmd.Wait()
+		close(proc.done)
+		if ctx.Err() == nil && !proc.stopping.Load() {
+			logger.Warningf("%s inbound %d exited: %v", inst.Protocol, inst.ID, err)
+		}
+	}()
+	return nil
+}
+
+func (m *Manager) removeLocked(id int) {
+	if proc := m.procs[id]; proc != nil {
+		proc.stopping.Store(true)
+		cleanupAdditional(id, proc.protocol)
+		proc.cancel()
+		select {
+		case <-proc.done:
+		case <-time.After(2 * time.Second):
+			_ = proc.cmd.Process.Kill()
+			<-proc.done
+		}
+		delete(m.procs, id)
+	}
+}
+func (m *Manager) Remove(id int) { m.mu.Lock(); defer m.mu.Unlock(); m.removeLocked(id) }
+func (m *Manager) StopAll() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id := range m.procs {
+		m.removeLocked(id)
+	}
+}
+
+func (m *Manager) Reconcile(instances []Instance) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	sort.Slice(instances, func(i, j int) bool { return instances[i].ID < instances[j].ID })
+	desired := map[int]bool{}
+	for _, inst := range instances {
+		desired[inst.ID] = true
+	}
+	for id := range m.procs {
+		if !desired[id] {
+			m.removeLocked(id)
+		}
+	}
+	for _, inst := range instances {
+		if err := m.ensureLocked(inst); err != nil {
+			if m.lastErrors[inst.ID] != err.Error() {
+				logger.Warningf("%s inbound %d: %v", inst.Protocol, inst.ID, err)
+				m.lastErrors[inst.ID] = err.Error()
+			}
+		} else {
+			delete(m.lastErrors, inst.ID)
+		}
+	}
+}
+
+func ExportTrustTunnelLink(inst Instance, email, address string, port int) (string, error) {
+	if inst.Protocol != model.TrustTunnel {
+		return "", fmt.Errorf("not a TrustTunnel inbound")
+	}
+	address = strings.Trim(strings.TrimSpace(address), "[]")
+	if address == "" || net.ParseIP(address) != nil && net.ParseIP(address).IsUnspecified() {
+		return "", fmt.Errorf("a public address is required")
+	}
+	if port < 1 || port > 65535 {
+		return "", fmt.Errorf("a valid port is required")
+	}
+	found := false
+	for _, c := range inst.Settings.Clients {
+		if c.Email == email && c.Enable {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return "", fmt.Errorf("client is disabled or absent")
+	}
+	folder := filepath.Join(directory(), strconv.Itoa(inst.ID))
+	vpn, hosts := filepath.Join(folder, "vpn.toml"), filepath.Join(folder, "hosts.toml")
+	if _, err := os.Stat(vpn); err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	target := net.JoinHostPort(address, strconv.Itoa(port))
+	output, err := exec.CommandContext(ctx, binary(model.TrustTunnel), vpn, hosts, "-c", email, "-a", target, "--format", "deeplink").Output()
+	if err != nil {
+		return "", err
+	}
+	link := strings.TrimSpace(string(output))
+	if !strings.HasPrefix(link, "tt://?") {
+		return "", fmt.Errorf("TrustTunnel returned an invalid deep link")
+	}
+	return link, nil
+}
+
+type (
+	trafficCounters struct{ up, down uint64 }
+	TrafficDelta    struct {
+		Tag, Email string
+		Up, Down   int64
+		Active     bool
+	}
+)
+
+func (m *Manager) CollectTraffic() []TrafficDelta {
+	m.mu.Lock()
+	processes := make([]*running, 0, len(m.procs))
+	for _, proc := range m.procs {
+		processes = append(processes, proc)
+	}
+	m.mu.Unlock()
+	// Poll independent processes concurrently without blocking inbound CRUD on
+	// every socket/HTTP timeout. Each process serializes its counter baseline.
+	var resultMu sync.Mutex
+	var wg sync.WaitGroup
+	limit := make(chan struct{}, 8)
+	var deltas []TrafficDelta
+	for _, proc := range processes {
+		limit <- struct{}{}
+		wg.Add(1)
+		go func(proc *running) {
+			defer wg.Done()
+			defer func() { <-limit }()
+			proc.statsMu.Lock()
+			defer proc.statsMu.Unlock()
+			if proc.stopping.Load() {
+				return
+			}
+			rows := m.collectProcessTraffic(proc)
+			resultMu.Lock()
+			deltas = append(deltas, rows...)
+			resultMu.Unlock()
+		}(proc)
+	}
+	wg.Wait()
+	return deltas
+}
+
+func (m *Manager) collectProcessTraffic(proc *running) []TrafficDelta {
+	var deltas []TrafficDelta
+	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}}
+	if proc.protocol == model.FPTN || proc.protocol == model.OpenFlux {
+		return m.collectAdditionalTraffic(proc)
+	}
+	if proc.metricsAddr == "" {
+		return nil
+	}
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+proc.metricsAddr+"/clients", nil)
+	if err != nil {
+		return nil
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil
+	}
+	var clients []struct {
+		Username string `json:"username"`
+		Sessions int    `json:"sessions"`
+		Inbound  uint64 `json:"inbound"`
+		Outbound uint64 `json:"outbound"`
+	}
+	if response.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&clients) != nil {
+		response.Body.Close()
+		return nil
+	}
+	response.Body.Close()
+	for _, row := range clients {
+		if row.Username == "" {
+			continue
+		}
+		old := proc.counters[row.Username]
+		up, down := row.Inbound, row.Outbound
+		delta := TrafficDelta{
+			Tag:    proc.tag,
+			Email:  row.Username,
+			Up:     cumulativeTrafficDelta(up, old.up),
+			Down:   cumulativeTrafficDelta(down, old.down),
+			Active: row.Sessions > 0,
+		}
+		if delta.Up > 0 || delta.Down > 0 || delta.Active {
+			deltas = append(deltas, delta)
+		}
+		proc.counters[row.Username] = trafficCounters{up: up, down: down}
+	}
+	return deltas
+}

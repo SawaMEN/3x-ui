@@ -1,0 +1,4 @@
+/* Keep the standard-theme sidebar wordmark optically centered like Cyberpunk. */
+body:not(.theme-cyberpunk) .sider-brand .brand-text {
+  transform: translateY(2px);
+}

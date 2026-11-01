@@ -1,0 +1,173 @@
+package service
+
+import (
+	"math"
+	"sync"
+	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+)
+
+const (
+	// A traffic transaction can touch thousands of client rows. last_online is
+	// stamped before that transaction commits, so keep more than one poll interval
+	// of overlap to make a slow commit visible on the next sample. Re-reading rows
+	// is cheap and safe because the in-memory baseline turns repeats into zero
+	// deltas.
+	clientTrafficLiveScanOverlapMillis int64 = 15_000
+
+	// The Clients UI converts live byte deltas to bytes/second by dividing by its
+	// 5-second TRAFFIC_POLL_INTERVAL_S. The sampler itself can run late (slow DB,
+	// overloaded server, scheduler jitter), so normalize every real sample window
+	// back to five seconds before broadcasting it. This keeps the UI rate correct
+	// without making it infer server-side timing from WebSocket delivery latency.
+	// Keep this in sync with frontend/src/lib/traffic/poll-interval.ts.
+	clientTrafficLiveSpeedWindowMillis int64 = 5_000
+)
+
+// clientTrafficLiveSampler derives one live delta stream from the durable
+// client_traffics table. Every collector (Xray, sing-box and sidecars) already
+// commits attributable client bytes there, so sampling the shared table avoids
+// making the clients page depend on whichever core happened to produce the
+// latest websocket frame.
+var clientTrafficLiveSampler struct {
+	sync.Mutex
+	initialized bool
+	lastScan    int64
+	baseline    map[string]clientTrafficCounters
+}
+
+type clientTrafficCounters struct {
+	up   int64
+	down int64
+}
+
+// normalizeClientTrafficDelta converts a byte delta collected over elapsedMs
+// into the equivalent delta for the UI's fixed five-second display window.
+// Returning a normalized delta (rather than a rate) preserves the existing
+// websocket contract and keeps older frontends compatible.
+func normalizeClientTrafficDelta(delta, elapsedMs int64) int64 {
+	if delta <= 0 {
+		return 0
+	}
+	if elapsedMs <= 0 || elapsedMs == clientTrafficLiveSpeedWindowMillis {
+		return delta
+	}
+
+	// Use floating-point only for the scaling step. Live speed is a display
+	// metric, while the durable counters remain exact int64 values in the DB.
+	// Clamp before conversion so a very short interval cannot overflow int64.
+	normalized := float64(delta) * float64(clientTrafficLiveSpeedWindowMillis) / float64(elapsedMs)
+	if normalized >= float64(math.MaxInt64) {
+		return math.MaxInt64
+	}
+	if normalized < 1 {
+		return 0
+	}
+	return int64(normalized)
+}
+
+// ResetClientTrafficLiveSampler drops the live-only baseline. Call this while
+// no websocket client is connected so the first viewer establishes a fresh
+// baseline instead of receiving an artificial speed spike accumulated while
+// the page was closed.
+func ResetClientTrafficLiveSampler() {
+	clientTrafficLiveSampler.Lock()
+	clientTrafficLiveSampler.initialized = false
+	clientTrafficLiveSampler.lastScan = 0
+	clientTrafficLiveSampler.baseline = nil
+	clientTrafficLiveSampler.Unlock()
+}
+
+// SampleClientTrafficDeltas returns per-client deltas normalized to the UI's
+// fixed five-second speed window, plus the matching absolute rows since the
+// previous sample. The database is the aggregation boundary: any current or
+// future traffic collector that updates client_traffics automatically becomes
+// visible on the clients page.
+func (s *InboundService) SampleClientTrafficDeltas() ([]*coremodel.ClientTraffic, []*coremodel.ClientTraffic, error) {
+	clientTrafficLiveSampler.Lock()
+	defer clientTrafficLiveSampler.Unlock()
+
+	if !clientTrafficLiveSampler.initialized {
+		// Capture the boundary before reading. A write committed while the full
+		// baseline is being loaded is then eligible for the first delta scan even
+		// if its row was read just before that commit became visible.
+		scanAt := time.Now().UnixMilli()
+		rows, err := s.GetAllClientTraffics()
+		if err != nil {
+			return nil, nil, err
+		}
+		baseline := make(map[string]clientTrafficCounters, len(rows))
+		for _, row := range rows {
+			if row == nil || row.Email == "" {
+				continue
+			}
+			baseline[row.Email] = clientTrafficCounters{up: row.Up, down: row.Down}
+		}
+		clientTrafficLiveSampler.baseline = baseline
+		clientTrafficLiveSampler.lastScan = scanAt
+		clientTrafficLiveSampler.initialized = true
+		return []*coremodel.ClientTraffic{}, []*coremodel.ClientTraffic{}, nil
+	}
+
+	// Keep an overlap around the boundary. Rows seen repeatedly are harmless:
+	// the baseline turns later observations into zero deltas, while the overlap
+	// prevents a transaction that started before a scan but committed after it
+	// from being skipped.
+	cutoff := clientTrafficLiveSampler.lastScan - clientTrafficLiveScanOverlapMillis
+	if cutoff < 0 {
+		cutoff = 0
+	}
+	scanAt := time.Now().UnixMilli()
+	elapsedMs := scanAt - clientTrafficLiveSampler.lastScan
+
+	var rows []*coremodel.ClientTraffic
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).
+		Where("last_online >= ?", cutoff).
+		Find(&rows).Error; err != nil {
+		return nil, nil, err
+	}
+
+	deltas := make([]*coremodel.ClientTraffic, 0, len(rows))
+	changed := make([]*coremodel.ClientTraffic, 0, len(rows))
+	for _, row := range rows {
+		if row == nil || row.Email == "" {
+			continue
+		}
+		previous, exists := clientTrafficLiveSampler.baseline[row.Email]
+		clientTrafficLiveSampler.baseline[row.Email] = clientTrafficCounters{up: row.Up, down: row.Down}
+
+		var up, down int64
+		if !exists {
+			// A row created after the initial snapshot contains only traffic that
+			// happened after that snapshot, so its current counters are the delta.
+			up, down = row.Up, row.Down
+		} else {
+			if row.Up >= previous.up {
+				up = row.Up - previous.up
+			} else {
+				// Counter reset/renewal happened between samples. The current value
+				// is traffic accumulated after the reset.
+				up = row.Up
+			}
+			if row.Down >= previous.down {
+				down = row.Down - previous.down
+			} else {
+				down = row.Down
+			}
+		}
+		if up <= 0 && down <= 0 {
+			continue
+		}
+
+		up = normalizeClientTrafficDelta(up, elapsedMs)
+		down = normalizeClientTrafficDelta(down, elapsedMs)
+		if up > 0 || down > 0 {
+			deltas = append(deltas, &coremodel.ClientTraffic{Email: row.Email, Up: up, Down: down})
+		}
+		changed = append(changed, row)
+	}
+	clientTrafficLiveSampler.lastScan = scanAt
+	return deltas, changed, nil
+}

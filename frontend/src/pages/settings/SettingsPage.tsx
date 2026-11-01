@@ -1,0 +1,497 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Navigate, useLocation } from 'react-router';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  ConfigProvider,
+  FloatButton,
+  Layout,
+  Modal,
+  Row,
+  Space,
+  Spin,
+  message,
+} from 'antd';
+import {
+  CheckOutlined,
+  MoonOutlined,
+  SunOutlined,
+  BgColorsOutlined,
+  CloudOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
+
+import { HttpUtil } from '@/utils';
+import { setMessageInstance } from '@/utils/messageBus';
+import { useTheme } from '@/hooks/useTheme';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useAllSettings } from '@/api/queries/useAllSettings';
+import { AllSettingSchema } from '@/schemas/setting';
+import AppSidebar from '@/layouts/AppSidebar';
+import GeneralTab from './GeneralTab';
+import { panelUrlAfterRestart, waitForPanelRestart } from './panel-url';
+import SecurityTab from './SecurityTab';
+import TelegramTab from './TelegramTab';
+import EmailTab from './EmailTab';
+import SubscriptionGeneralTab from './SubscriptionGeneralTab';
+import SubscriptionFormatsTab from './SubscriptionFormatsTab';
+import SubscriptionBalancersTab from './SubscriptionBalancersTab';
+import AdditionalSettingsTab from './AdditionalSettingsTab';
+import GatewayModeControl from './GatewayModeControl';
+import './SettingsPage.css';
+import { getAdditionalSettingsTab } from './additional-settings';
+
+interface ApiMsg {
+  success?: boolean;
+}
+
+const tabSlugs = [
+  'general',
+  'security',
+  'telegram',
+  'email',
+  'subscription',
+  'subscription-formats',
+  'subscription-balancers',
+  'gateway',
+  'advanced',
+];
+
+function scrollTarget() {
+  return document.getElementById('content-layout') as HTMLElement;
+}
+
+export default function SettingsPage() {
+  const { t } = useTranslation();
+  const { isDark, isUltra, mode, setThemeMode, lowPower, toggleLowPower, antdThemeConfig } =
+    useTheme();
+  const { isMobile } = useMediaQuery();
+  const [modal, modalContextHolder] = Modal.useModal();
+  const [messageApi, messageContextHolder] = message.useMessage();
+
+  useEffect(() => {
+    setMessageInstance(messageApi);
+  }, [messageApi]);
+
+  const {
+    allSetting,
+    updateSetting,
+    fetched,
+    spinning,
+    setSpinning,
+    saveDisabled,
+    saveAll,
+    savePayload,
+  } = useAllSettings();
+
+  useEffect(() => {
+    const onSelected = (event: Event) => {
+      const coreType = (event as CustomEvent<'xray' | 'sing-box' | 'sing-box-upstream'>).detail;
+      updateSetting({ coreType });
+    };
+    window.addEventListener('xui-core-selected', onSelected);
+    return () => window.removeEventListener('xui-core-selected', onSelected);
+  }, [updateSetting]);
+
+  const initialAddress = useRef<Parameters<typeof panelUrlAfterRestart>[1] | null>(null);
+  useEffect(() => {
+    if (!fetched || initialAddress.current) return;
+    const port = Number(
+      document.querySelector<HTMLMetaElement>('meta[name="panel-port"]')?.content,
+    );
+    const tls = document.querySelector<HTMLMetaElement>('meta[name="panel-tls"]')?.content;
+    initialAddress.current = {
+      ...allSetting,
+      ...(port > 0 ? { webPort: port } : {}),
+      ...(tls != null
+        ? {
+            webCertFile: tls === 'true' ? 'configured' : '',
+            webKeyFile: tls === 'true' ? 'configured' : '',
+          }
+        : {}),
+    };
+  }, [fetched, allSetting]);
+
+  const [alertVisible, setAlertVisible] = useState(true);
+  const location = useLocation();
+  const slug = location.hash.replace(/^#/, '');
+  const activeSlug = getAdditionalSettingsTab(location.hash)
+    ? 'advanced'
+    : tabSlugs.includes(slug)
+      ? slug
+      : 'general';
+
+  const activeThemeMode = lowPower ? 'dark' : mode;
+
+  const themeOptions = [
+    {
+      mode: 'cyberpunk' as const,
+      label: 'Cyberpunk',
+      icon: <ThunderboltOutlined />,
+      description: 'Неон и технологичный контраст',
+    },
+    {
+      mode: 'light' as const,
+      label: 'Светлая',
+      icon: <SunOutlined />,
+      description: 'Чистая и светлая',
+    },
+    {
+      mode: 'dark' as const,
+      label: 'Тёмная',
+      icon: <MoonOutlined />,
+      description: 'Спокойная и контрастная',
+    },
+    {
+      mode: 'blue-gray' as const,
+      label: 'Blue Gray',
+      icon: <CloudOutlined />,
+      description: 'Холодная тёмная',
+    },
+    {
+      mode: 'colorful' as const,
+      label: 'Colorful',
+      icon: <BgColorsOutlined />,
+      description: 'Более выразительная',
+    },
+    {
+      mode: 'ultra-dark' as const,
+      label: 'Ultra Dark',
+      icon: <MoonOutlined />,
+      description: 'Максимально тёмная',
+    },
+  ];
+
+  async function onSave() {
+    const result = AllSettingSchema.safeParse(allSetting);
+    if (!result.success) {
+      const issue = result.error.issues[0];
+      const fieldPath = issue?.path.join('.') ?? 'value';
+      const msgKey = issue?.message ?? 'somethingWentWrong';
+      messageApi.error(`${fieldPath}: ${t(msgKey, { defaultValue: msgKey })}`);
+      return;
+    }
+    const saveResult = await saveAll();
+    if (saveResult?.success) {
+      window.dispatchEvent(new Event('xui-core-settings-saved'));
+      return true;
+    }
+  }
+
+  function restartPanel() {
+    modal.confirm({
+      title: t('pages.settings.restartPanel'),
+      content: t('pages.settings.restartPanelDesc'),
+      okText: t('pages.settings.restartPanel'),
+      okButtonProps: { danger: true },
+      cancelText: t('cancel'),
+      onOk: async () => {
+        setSpinning(true);
+        try {
+          if (!saveDisabled && !(await onSave())) return;
+          const target = panelUrlAfterRestart(
+            window.location.href,
+            initialAddress.current ?? allSetting,
+            allSetting,
+            Number(
+              document.querySelector<HTMLMetaElement>('meta[name="panel-port-override"]')?.content,
+            ) || 0,
+          );
+          let instance =
+            document.querySelector<HTMLMetaElement>('meta[name="panel-instance"]')?.content || '';
+          try {
+            const response = await fetch(window.location.href, {
+              cache: 'no-store',
+              signal: AbortSignal.timeout(2000),
+            });
+            instance = response.headers.get('X-Panel-Instance') || instance;
+          } catch {
+            /* The restart API still reports a failed connection. */
+          }
+          const msg = (await HttpUtil.post('/panel/api/setting/restartPanel')) as ApiMsg;
+          if (!msg?.success) return;
+          if (await waitForPanelRestart(target, window.location.href, instance)) {
+            window.location.replace(target);
+          } else {
+            modal.info({
+              title: t('pages.settings.restartPanel'),
+              content: (
+                <a href={target} rel="noreferrer">
+                  {target}
+                </a>
+              ),
+            });
+          }
+        } finally {
+          setSpinning(false);
+        }
+      },
+    });
+  }
+
+  const confAlerts = useMemo<string[]>(() => {
+    const out: string[] = [];
+    if (window.location.protocol !== 'https:') {
+      out.push(t('pages.settings.warnHttp'));
+    }
+    if (allSetting.webPort === 2053) {
+      out.push(t('pages.settings.warnDefaultPort'));
+    }
+    const segs = window.location.pathname.split('/').length < 4;
+    if (segs && allSetting.webBasePath === '/') {
+      out.push(t('pages.settings.warnDefaultBasePath'));
+    }
+    if (allSetting.subEnable) {
+      let subPath = allSetting.subPath;
+      if (allSetting.subURI) {
+        try {
+          subPath = new URL(allSetting.subURI).pathname;
+        } catch {
+          /* noop */
+        }
+      }
+      if (subPath === '/sub/') {
+        out.push(t('pages.settings.warnDefaultSubPath'));
+      }
+    }
+    if (allSetting.subJsonEnable) {
+      let p = allSetting.subJsonPath;
+      if (allSetting.subJsonURI) {
+        try {
+          p = new URL(allSetting.subJsonURI).pathname;
+        } catch {
+          /* noop */
+        }
+      }
+      if (p === '/json/') {
+        out.push(t('pages.settings.warnDefaultJsonPath'));
+      }
+    }
+    return out;
+  }, [allSetting, t]);
+
+  const pageClass = useMemo(() => {
+    const classes = ['settings-page'];
+    if (isDark) classes.push('is-dark');
+    if (isUltra) classes.push('is-ultra');
+    return classes.join(' ');
+  }, [isDark, isUltra]);
+
+  const categoryBody = (() => {
+    switch (activeSlug) {
+      case 'security':
+        return (
+          <SecurityTab
+            allSetting={allSetting}
+            updateSetting={updateSetting}
+            saveSetting={savePayload}
+          />
+        );
+      case 'telegram':
+        return <TelegramTab allSetting={allSetting} updateSetting={updateSetting} />;
+      case 'email':
+        return <EmailTab allSetting={allSetting} updateSetting={updateSetting} />;
+      case 'subscription':
+        return <SubscriptionGeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
+      case 'subscription-formats':
+        return <SubscriptionFormatsTab allSetting={allSetting} updateSetting={updateSetting} />;
+      case 'subscription-balancers':
+        return <SubscriptionBalancersTab allSetting={allSetting} updateSetting={updateSetting} />;
+      case 'advanced':
+        return (
+          <AdditionalSettingsTab
+            allSetting={allSetting}
+            updateSetting={updateSetting}
+            saveSettings={onSave}
+            settingsDirty={!saveDisabled}
+          />
+        );
+      case 'gateway':
+        return <GatewayModeControl />;
+      default:
+        return <GeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
+    }
+  })();
+
+  if (slug === 'olcrtc') return <Navigate to="/olcrtc" replace />;
+
+  if (slug === 'adblock') {
+    if (!fetched) return <Spin />;
+    return (
+      <Navigate
+        replace
+        to={
+          allSetting.coreType !== 'xray'
+            ? '/singbox?routingTab=adblock#routing'
+            : '/routing?routingTab=adblock'
+        }
+      />
+    );
+  }
+
+  return (
+    <ConfigProvider theme={antdThemeConfig}>
+      {messageContextHolder}
+      {modalContextHolder}
+      <Layout className={pageClass}>
+        <AppSidebar />
+
+        <Layout className="content-shell">
+          <Layout.Content id="content-layout" className="content-area">
+            <Spin
+              spinning={spinning || !fetched}
+              delay={200}
+              description={t('loading')}
+              size="large"
+            >
+              {!fetched ? (
+                <div className="loading-spacer" />
+              ) : (
+                <>
+                  {confAlerts.length > 0 && alertVisible && (
+                    <Alert
+                      type="error"
+                      showIcon
+                      closable={{ onClose: () => setAlertVisible(false) }}
+                      className="conf-alert"
+                      title={t('pages.settings.securityWarnings')}
+                      description={
+                        <>
+                          <b>{t('pages.settings.panelExposed')}</b>
+                          <ul>
+                            {confAlerts.map((msg, i) => (
+                              <li key={i}>{msg}</li>
+                            ))}
+                          </ul>
+                        </>
+                      }
+                    />
+                  )}
+
+                  <Row gutter={[isMobile ? 8 : 16, isMobile ? 0 : 12]}>
+                    {activeSlug !== 'gateway' && activeSlug !== 'advanced' && (
+                      <Col span={24}>
+                        <Card hoverable>
+                          <Row className="header-row">
+                            <Col xs={24} sm={10} className="header-actions">
+                              <Space wrap>
+                                <Button type="primary" disabled={saveDisabled} onClick={onSave}>
+                                  {t('pages.settings.save')}
+                                </Button>
+                                <Button
+                                  type="primary"
+                                  danger
+                                  disabled={!saveDisabled}
+                                  onClick={restartPanel}
+                                >
+                                  {t('pages.settings.restartPanel')}
+                                </Button>
+                              </Space>
+                            </Col>
+                            <Col xs={24} sm={14} className="header-info">
+                              <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
+                              <Alert type="warning" showIcon title={t('pages.settings.infoDesc')} />
+                            </Col>
+                          </Row>
+                        </Card>
+                      </Col>
+                    )}
+
+                    <Col span={24}>
+                      {activeSlug === 'gateway' ? (
+                        categoryBody
+                      ) : (
+                        <Card hoverable>{categoryBody}</Card>
+                      )}
+                    </Col>
+
+                    {activeSlug === 'general' && (slug === '' || slug === 'general') && (
+                      <Col span={24}>
+                        <Card className="theme-picker-card">
+                          <div className="theme-picker-header">
+                            <div>
+                              <div className="theme-picker-title">Оформление</div>
+                              <div className="theme-picker-subtitle">
+                                Выберите внешний вид панели
+                              </div>
+                            </div>
+                          </div>
+                          <div
+                            className="theme-picker-grid"
+                            role="radiogroup"
+                            aria-label="Тема панели"
+                          >
+                            {themeOptions.map((option) => {
+                              const selected = activeThemeMode === option.mode;
+                              const unavailable = lowPower && option.mode === 'cyberpunk';
+                              return (
+                                <button
+                                  key={option.mode}
+                                  type="button"
+                                  className={`theme-picker-option theme-${option.mode} ${selected ? 'is-selected' : ''} ${unavailable ? 'is-unavailable' : ''}`}
+                                  aria-checked={selected}
+                                  role="radio"
+                                  aria-disabled={unavailable}
+                                  disabled={unavailable}
+                                  onClick={() => setThemeMode(option.mode)}
+                                >
+                                  <span className="theme-picker-preview" aria-hidden="true">
+                                    <span className="theme-preview-sidebar" />
+                                    <span className="theme-preview-content">
+                                      <span />
+                                      <span />
+                                      <span />
+                                    </span>
+                                  </span>
+                                  <span className="theme-picker-meta">
+                                    <span className="theme-picker-name">
+                                      {option.icon} {option.label}
+                                    </span>
+                                    <span className="theme-picker-description">
+                                      {option.description}
+                                    </span>
+                                  </span>
+                                  <span className="theme-picker-check">
+                                    {selected && <CheckOutlined />}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="theme-picker-footer">
+                            <Button
+                              className={`low-power-toggle ${lowPower ? 'is-active' : ''}`}
+                              onClick={toggleLowPower}
+                              aria-pressed={lowPower}
+                            >
+                              <span className="low-power-toggle-icon" aria-hidden="true">
+                                <ThunderboltOutlined />
+                              </span>
+                              <span className="low-power-toggle-copy">
+                                <span className="low-power-toggle-title">
+                                  {lowPower ? 'Режим слабого ПК включён' : 'Режим слабого ПК'}
+                                </span>
+                                <span className="low-power-toggle-description">
+                                  {lowPower
+                                    ? 'Cyberpunk временно отключён'
+                                    : 'Отключает тяжёлые эффекты'}
+                                </span>
+                              </span>
+                            </Button>
+                          </div>
+                        </Card>
+                      </Col>
+                    )}
+                  </Row>
+                </>
+              )}
+            </Spin>
+          </Layout.Content>
+        </Layout>
+      </Layout>
+    </ConfigProvider>
+  );
+}

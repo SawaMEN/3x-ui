@@ -1,0 +1,1185 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Collapse,
+  Descriptions,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Switch,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
+import {
+  ApiOutlined,
+  CheckCircleOutlined,
+  CopyOutlined,
+  DeleteOutlined,
+  LinkOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  SettingOutlined,
+  StopOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
+import { HttpUtil, RandomUtil } from '@/utils';
+import { FormProvider } from 'react-hook-form';
+import { FormField, useZodForm } from '@/components/form/rhf';
+import {
+  TelemtFrontendSchema,
+  TelemtCarrierSchema,
+  TelemtCarriersSchema,
+  TelemtWebProxyRequestSchema,
+} from '@/schemas/telemt-web';
+import TelemtSubscriptionToggle from './TelemtSubscriptionToggle';
+import RemoteTelegramProxies from './RemoteTelegramProxies';
+import TelemtWebSiteFields from './TelemtWebSiteFields';
+import { TelemtWebSiteSchema, type TelemtWebSite } from '@/schemas/telemt-web';
+import TelemtWebGuide, { telemtWebFieldHelp } from './TelemtWebGuide';
+import './TelemtPage.css';
+
+type WebProxyStatus = {
+  site?: TelemtWebSite;
+  frontend: string;
+  frontendActive: boolean;
+  carrier: string;
+  carriers: string[] | null;
+  carrierNegotiationSupported: boolean;
+  enabled: boolean;
+  supported: boolean;
+  domain: string;
+  basePath: string;
+  aliases: string[];
+  defaultDomain: string;
+  link: string;
+  links?: string[];
+  nginxInstalled: boolean;
+  nginxActive: boolean;
+  certificateReady: boolean;
+  certificateFile: string;
+  listenPort: number;
+  port443Available: boolean;
+  port443Owner: string;
+  error: string;
+};
+
+type WebDiagnostics = {
+  available: boolean;
+  lifecycle: string;
+  activeSessions?: number;
+  listeners: string[];
+  capacity?: Record<string, unknown>;
+  carrierNegotiation?: Record<string, unknown>;
+  checkedAt: string;
+};
+
+type WebPreflight = {
+  requestKey?: string;
+  ready: boolean;
+  domain: string;
+  frontend: string;
+  checks: { id: string; ok: boolean; message: string }[];
+  warnings: string[];
+};
+
+type Status = {
+  installed: boolean;
+  active: boolean;
+  enabled: boolean;
+  configured: boolean;
+  version: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  mekoEnabled: boolean;
+  webProxy: WebProxyStatus;
+};
+
+type Config = {
+  enabled: boolean;
+  port: number;
+  secret: string;
+  ipv4: boolean;
+  ipv6: boolean;
+  fastMode: boolean;
+  classic: boolean;
+  secure: boolean;
+  tls: boolean;
+  sni: string;
+  upstreamType: string;
+};
+
+type Proxy = {
+  name: string;
+  secret: string;
+  host: string;
+  port: number;
+  tls: boolean;
+  link: string;
+};
+
+const defaults: Config = {
+  enabled: false,
+  port: 8443,
+  secret: '',
+  ipv4: true,
+  ipv6: true,
+  fastMode: true,
+  classic: false,
+  secure: false,
+  tls: true,
+  sni: 'petrovich.ru',
+  upstreamType: 'direct',
+};
+
+const jsonOptions = { headers: { 'Content-Type': 'application/json' }, silent: true };
+
+type ServiceAction = 'start' | 'stop' | 'restart' | 'enable' | 'disable';
+
+export default function TelemtPage() {
+  const lifetime = useRef<AbortController | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    lifetime.current = controller;
+    return () => controller.abort();
+  }, []);
+  const [messageApi, messageHolder] = message.useMessage();
+  const [form] = Form.useForm<Config>();
+  const configuredPort = Form.useWatch('port', form);
+  const [status, setStatus] = useState<Status>({
+    installed: false,
+    active: false,
+    enabled: false,
+    configured: false,
+    version: '',
+    latestVersion: '',
+    updateAvailable: false,
+    mekoEnabled: false,
+    webProxy: {
+      frontend: 'nginx',
+      frontendActive: false,
+      carrier: 'https',
+      carriers: [],
+      carrierNegotiationSupported: false,
+      enabled: false,
+      supported: false,
+      domain: '',
+      basePath: '',
+      aliases: [],
+      defaultDomain: '',
+      link: '',
+      links: [],
+      nginxInstalled: false,
+      nginxActive: false,
+      certificateReady: false,
+      certificateFile: '',
+      listenPort: 15080,
+      port443Available: true,
+      port443Owner: '',
+      error: '',
+    },
+  });
+  const [proxies, setProxies] = useState<Proxy[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [serviceAction, setServiceAction] = useState<ServiceAction | null>(null);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [proxyDeleting, setProxyDeleting] = useState<string | null>(null);
+  const [webProxyLoading, setWebProxyLoading] = useState(false);
+  const [webDiagnostics, setWebDiagnostics] = useState<WebDiagnostics | null>(null);
+  const [webDiagnosticsError, setWebDiagnosticsError] = useState('');
+  const [webDiagnosticsLoading, setWebDiagnosticsLoading] = useState(false);
+  const [webProxyOpen, setWebProxyOpen] = useState(false);
+  const [webPreflight, setWebPreflight] = useState<WebPreflight | null>(null);
+  const [webPreflightRefresh, setWebPreflightRefresh] = useState(0);
+  const webForm = useZodForm(TelemtWebProxyRequestSchema, {
+    defaultValues: {
+      domain: '',
+      aliases: [],
+      basePath: '',
+      frontend: 'nginx',
+      carrier: 'https',
+      carriers: [],
+    },
+  });
+  const webProxyDomain = webForm.watch('domain');
+  const webBasePath = webForm.watch('basePath');
+  const webAliases = webForm.watch('aliases');
+  const webFrontend = webForm.watch('frontend');
+  const webCarrier = webForm.watch('carrier');
+  const webCarriers = webForm.watch('carriers');
+  const webSite = webForm.watch('site');
+  const webSiteKey = JSON.stringify(webSite);
+  const webAliasesKey = (webAliases || []).join('|');
+  const webCarriersKey = (webCarriers || []).join('|');
+  const webPreflightKey = JSON.stringify([
+    webProxyDomain,
+    webAliasesKey,
+    webBasePath,
+    webFrontend,
+    webCarrier,
+    webCarriersKey,
+    webSiteKey,
+    webPreflightRefresh,
+  ]);
+  const webPreflightCurrent = webPreflight?.requestKey === webPreflightKey ? webPreflight : null;
+  const webPreflightChecking = webProxyOpen && webPreflightCurrent === null;
+
+  // Validate the proposed domain/frontend, not the last saved configuration.
+  // Ignore out-of-order responses when the form is edited during a DNS probe.
+  useEffect(() => {
+    if (!webProxyOpen) return;
+    let active = true;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await HttpUtil.post<WebPreflight>(
+          '/panel/api/telemt/webproxy/preflight',
+          {
+            domain: webProxyDomain || '',
+            basePath: webBasePath || '',
+            aliases: webAliasesKey ? webAliasesKey.split('|') : [],
+            frontend: webFrontend || 'nginx',
+            carrier: webCarrier || 'https',
+            carriers: webCarriersKey ? webCarriersKey.split('|') : [],
+            site: webSiteKey ? (JSON.parse(webSiteKey) as TelemtWebSite) : undefined,
+          },
+          { ...jsonOptions, silent: true, signal: controller.signal },
+        );
+        if (!active) return;
+        if (response?.success && response.obj) {
+          setWebPreflight({ ...response.obj, requestKey: webPreflightKey });
+        } else {
+          setWebPreflight({
+            ready: false,
+            requestKey: webPreflightKey,
+            domain: webProxyDomain || '',
+            frontend: webFrontend || 'nginx',
+            checks: [
+              { id: 'request', ok: false, message: response?.msg || 'Ошибка проверки WEB Proxy' },
+            ],
+            warnings: [],
+          });
+        }
+      } catch {
+        if (active)
+          setWebPreflight({
+            ready: false,
+            requestKey: webPreflightKey,
+            domain: webProxyDomain || '',
+            frontend: webFrontend || 'nginx',
+            checks: [
+              {
+                id: 'network',
+                ok: false,
+                message: 'Не удалось связаться с сервером для проверки WEB Proxy.',
+              },
+            ],
+            warnings: [],
+          });
+      }
+    }, 400);
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [
+    webProxyOpen,
+    webProxyDomain,
+    webBasePath,
+    webAliasesKey,
+    webFrontend,
+    webCarrier,
+    webCarriersKey,
+    webSiteKey,
+    webPreflightKey,
+  ]);
+
+  const loadStatus = useCallback(async () => {
+    const signal = lifetime.current?.signal;
+    if (signal?.aborted) return;
+    const r = await HttpUtil.get<Status>('/panel/api/telemt/status', undefined, { signal });
+    if (signal?.aborted) return;
+    if (r?.success && r.obj) {
+      setStatus(r.obj);
+      return r.obj;
+    }
+  }, []);
+
+  const loadConfig = useCallback(async () => {
+    const signal = lifetime.current?.signal;
+    if (signal?.aborted) return;
+    const r = await HttpUtil.get<Config>('/panel/api/telemt/config', undefined, { signal });
+    if (signal?.aborted) return;
+    if (r?.success && r.obj) form.setFieldsValue({ ...defaults, ...r.obj });
+  }, [form]);
+
+  const loadProxies = useCallback(async () => {
+    const signal = lifetime.current?.signal;
+    if (signal?.aborted) return;
+    const r = await HttpUtil.get<Proxy[]>('/panel/api/telemt/proxy', undefined, { signal });
+    if (signal?.aborted) return;
+    if (!r?.success || !Array.isArray(r.obj)) return;
+
+    const unique = new Map<string, Proxy>();
+    for (const item of r.obj) {
+      const key = item.link || item.name;
+      if (!unique.has(key)) unique.set(key, item);
+    }
+    setProxies(Array.from(unique.values()));
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    const signal = lifetime.current?.signal;
+    if (signal?.aborted) return;
+    setRefreshing(true);
+    try {
+      const current = await loadStatus();
+      if (signal?.aborted) return;
+      if (current?.installed) await Promise.all([loadConfig(), loadProxies()]);
+      else setProxies([]);
+    } finally {
+      if (!signal?.aborted) setRefreshing(false);
+    }
+  }, [loadConfig, loadProxies, loadStatus]);
+
+  useEffect(() => {
+    const initialRefresh = window.setTimeout(() => void refreshAll(), 0);
+    const timer = window.setInterval(() => void loadStatus(), 15000);
+    return () => {
+      window.clearTimeout(initialRefresh);
+      window.clearInterval(timer);
+    };
+  }, [loadStatus, refreshAll]);
+
+  const runAction = async (actionName: ServiceAction, successText: string) => {
+    const signal = lifetime.current?.signal;
+    setServiceAction(actionName);
+    try {
+      const r = await HttpUtil.post(
+        '/panel/api/telemt/action',
+        { action: actionName },
+        jsonOptions,
+      );
+      if (signal?.aborted) return;
+      if (r?.success) {
+        messageApi.success(successText);
+        await loadStatus();
+      } else {
+        messageApi.error(r?.msg || 'Команда не выполнена');
+      }
+    } finally {
+      if (!signal?.aborted) setServiceAction(null);
+    }
+  };
+
+  const save = async (values: Config) => {
+    const signal = lifetime.current?.signal;
+    setConfigSaving(true);
+    try {
+      const r = await HttpUtil.post('/panel/api/telemt/config', values, jsonOptions);
+      if (signal?.aborted) return;
+      if (r?.success) {
+        messageApi.success(
+          status.active
+            ? 'Настройки сохранены, Telemt перезапущен автоматически'
+            : 'Настройки сохранены',
+        );
+        await refreshAll();
+      } else {
+        messageApi.error(r?.msg || 'Не удалось сохранить конфигурацию');
+      }
+    } finally {
+      if (!signal?.aborted) setConfigSaving(false);
+    }
+  };
+
+  const deleteProxy = async (name: string) => {
+    const signal = lifetime.current?.signal;
+    setProxyDeleting(name);
+    try {
+      const r = await HttpUtil.delete('/panel/api/telemt/proxy/' + encodeURIComponent(name), {
+        silent: true,
+      });
+      if (signal?.aborted) return;
+      if (r?.success) {
+        messageApi.success('Прокси удалён');
+        await Promise.all([loadStatus(), loadProxies()]);
+      } else {
+        messageApi.error(r?.msg || 'Не удалось удалить прокси');
+      }
+    } finally {
+      if (!signal?.aborted) setProxyDeleting(null);
+    }
+  };
+
+  const openWebProxy = () => {
+    webForm.reset({
+      site: TelemtWebSiteSchema.optional().catch(undefined).parse(status.webProxy.site),
+      domain: status.webProxy.domain || status.webProxy.defaultDomain || '',
+      basePath: status.webProxy.basePath || '',
+      aliases: status.webProxy.aliases || [],
+      frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
+      carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
+      carriers: TelemtCarriersSchema.catch([]).parse(
+        status.webProxy.carriers ||
+          (!status.webProxy.enabled && status.webProxy.carrierNegotiationSupported
+            ? ['websocket-lanes', 'websocket', 'https']
+            : []),
+      ),
+    });
+    setWebPreflight(null);
+    setWebProxyOpen(true);
+  };
+
+  const enableWebProxy = () =>
+    webForm.handleSubmit(async (payload) => {
+      const signal = lifetime.current?.signal;
+      setWebProxyLoading(true);
+      try {
+        const r = await HttpUtil.post('/panel/api/telemt/webproxy/enable', payload, jsonOptions);
+        if (signal?.aborted) return;
+        if (r?.success) {
+          messageApi.success(
+            status.webProxy.enabled ? 'WEB Proxy перенастроен' : 'WEB Proxy поднят',
+          );
+          setWebProxyOpen(false);
+          await loadStatus();
+        } else {
+          messageApi.error(r?.msg || 'Не удалось поднять WEB Proxy');
+          await loadStatus();
+        }
+      } finally {
+        if (!signal?.aborted) setWebProxyLoading(false);
+      }
+    })();
+
+  const disableWebProxy = async () => {
+    const signal = lifetime.current?.signal;
+    setWebProxyLoading(true);
+    try {
+      const r = await HttpUtil.post('/panel/api/telemt/webproxy/disable', {}, jsonOptions);
+      if (signal?.aborted) return;
+      if (r?.success) {
+        messageApi.success('WEB Proxy отключён');
+        setWebProxyOpen(false);
+        await loadStatus();
+      } else {
+        messageApi.error(r?.msg || 'Не удалось отключить WEB Proxy');
+        await loadStatus();
+      }
+    } finally {
+      if (!signal?.aborted) setWebProxyLoading(false);
+    }
+  };
+
+  const generateSecret = () => {
+    form.setFieldValue('secret', RandomUtil.randomSeq(32, { type: 'hex' }));
+    messageApi.success('Новый секрет сгенерирован');
+  };
+
+  const statusText = !status.installed
+    ? 'Не установлен'
+    : status.active
+      ? 'Работает'
+      : 'Остановлен';
+
+  return (
+    <>
+      {messageHolder}
+      <div className="telemt-shell telemt-integrated">
+        <div className="telemt-header">
+          <div className="telemt-header-main">
+            <Space size={10} wrap>
+              <Typography.Title level={2} className="telemt-title">
+                Telemt — движок MTProto
+              </Typography.Title>
+              <Tag
+                color={status.active ? 'green' : status.installed ? 'default' : 'red'}
+                icon={status.active ? <CheckCircleOutlined /> : undefined}
+              >
+                {statusText}
+              </Tag>
+              {status.webProxy.enabled && (
+                <Tag color="blue">WEB Proxy · {status.webProxy.domain}</Tag>
+              )}
+            </Space>
+            <Typography.Text type="secondary">
+              Новые MTProto-подключения, клиенты и подписки создаются в общем списке «Входящие».
+              Здесь доступны дополнительные возможности движка и настройки ранее созданных прокси.
+            </Typography.Text>
+          </div>
+          <Space wrap>
+            <TelemtSubscriptionToggle />
+            <Button
+              htmlType="button"
+              icon={<ReloadOutlined />}
+              loading={refreshing}
+              onClick={() => void refreshAll()}
+            >
+              Обновить
+            </Button>
+          </Space>
+        </div>
+
+        <RemoteTelegramProxies />
+
+        {!status.installed && (
+          <Alert
+            className="telemt-card"
+            type="warning"
+            showIcon
+            title="Telemt не установлен"
+            description="Установите актуальную сборку 3X-UI. После установки эта страница сама подхватит бинарник и службу."
+          />
+        )}
+
+        <Alert
+          type="info"
+          showIcon
+          title="MTProto работает через Telemt автоматически"
+          description="Для обычных входящих MTProto не нужно включать отдельную службу. Создавайте входящие и управляйте клиентами через основной список. Установка, обновление и удаление движка выполняются только в системных компонентах."
+        />
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={16}>
+            <Card
+              className="telemt-card telemt-service-card"
+              title={
+                <Space>
+                  <ApiOutlined />
+                  Служба Telemt для WEB Proxy и прежних подключений
+                </Space>
+              }
+              extra={
+                <Space size={8}>
+                  <Typography.Text type="secondary">Автозапуск</Typography.Text>
+                  <Switch
+                    size="small"
+                    checked={status.enabled}
+                    disabled={!status.installed || serviceAction !== null}
+                    loading={serviceAction === 'enable' || serviceAction === 'disable'}
+                    onChange={(checked) =>
+                      void runAction(
+                        checked ? 'enable' : 'disable',
+                        checked ? 'Автозапуск включён' : 'Автозапуск выключен',
+                      )
+                    }
+                  />
+                </Space>
+              }
+            >
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={8}>
+                  <div className="telemt-metric">
+                    <Typography.Text type="secondary">Версия</Typography.Text>
+                    <Typography.Title level={4}>{status.version || '—'}</Typography.Title>
+                    {status.updateAvailable && (
+                      <Typography.Text type="warning">
+                        Доступно {status.latestVersion}
+                      </Typography.Text>
+                    )}
+                  </div>
+                </Col>
+                <Col xs={24} md={8}>
+                  <div className="telemt-metric">
+                    <Typography.Text type="secondary">Конфигурация</Typography.Text>
+                    <Typography.Title level={4}>
+                      <Tag color={status.configured ? 'green' : 'default'}>
+                        {status.configured ? 'Готова' : 'Не создана'}
+                      </Tag>
+                    </Typography.Title>
+                    <Typography.Text type="secondary">
+                      Порт {configuredPort || defaults.port}
+                    </Typography.Text>
+                  </div>
+                </Col>
+              </Row>
+
+              <Space wrap className="telemt-service-actions">
+                {status.active ? (
+                  <Popconfirm
+                    title="Остановить Telemt?"
+                    description="Обычный и WEB Proxy трафик перестанут обслуживаться до запуска."
+                    okText="Остановить"
+                    cancelText="Отмена"
+                    onConfirm={() => void runAction('stop', 'Telemt остановлен')}
+                  >
+                    <Button
+                      danger
+                      icon={<StopOutlined />}
+                      loading={serviceAction === 'stop'}
+                      disabled={serviceAction !== null}
+                    >
+                      Остановить
+                    </Button>
+                  </Popconfirm>
+                ) : (
+                  <Button
+                    type="primary"
+                    icon={<CheckCircleOutlined />}
+                    loading={serviceAction === 'start'}
+                    disabled={!status.installed || serviceAction !== null}
+                    onClick={() => void runAction('start', 'Telemt запущен')}
+                  >
+                    Запустить
+                  </Button>
+                )}
+                <Button
+                  icon={<SyncOutlined />}
+                  loading={serviceAction === 'restart'}
+                  disabled={!status.installed || serviceAction !== null}
+                  onClick={() => void runAction('restart', 'Telemt перезапущен')}
+                >
+                  Перезапустить
+                </Button>
+              </Space>
+            </Card>
+          </Col>
+
+          <Col xs={24} lg={8}>
+            <Card
+              className="telemt-card telemt-web-card"
+              title={
+                <Space>
+                  <LinkOutlined />
+                  Web Proxy
+                </Space>
+              }
+              extra={
+                status.webProxy.enabled ? <Tag color="green">Активен</Tag> : <Tag>Не настроен</Tag>
+              }
+            >
+              {status.webProxy.enabled ? (
+                <>
+                  <Typography.Text strong>{status.webProxy.domain}</Typography.Text>
+                  <Typography.Paragraph type="secondary" style={{ margin: '6px 0 12px' }}>
+                    HTTPS :443 → Telemt :{status.webProxy.listenPort}
+                  </Typography.Paragraph>
+                  <div className="telemt-link-box">
+                    <Typography.Text code ellipsis>
+                      {status.webProxy.link}
+                    </Typography.Text>
+                    <Button
+                      type="text"
+                      icon={<CopyOutlined />}
+                      aria-label="Копировать ссылку WEB Proxy"
+                      onClick={() => void navigator.clipboard.writeText(status.webProxy.link)}
+                    />
+                  </div>
+                  <Space wrap className="telemt-web-meta">
+                    <Tag color={status.webProxy.certificateReady ? 'green' : 'warning'}>
+                      TLS {status.webProxy.certificateReady ? 'готов' : 'требуется'}
+                    </Tag>
+                    <Tag color={status.webProxy.frontendActive ? 'green' : 'warning'}>
+                      {status.webProxy.frontend || 'nginx'}{' '}
+                      {status.webProxy.frontendActive ? 'работает' : 'остановлен'}
+                    </Tag>
+                  </Space>
+                </>
+              ) : (
+                <Typography.Paragraph type="secondary">
+                  Домен → HTTPS :443 → выбранный frontend → WEB transport Telemt. Заглушка и TLS
+                  настраиваются автоматически.
+                </Typography.Paragraph>
+              )}
+              {!webProxyOpen && status.webProxy.error && (
+                <Alert
+                  className="telemt-alert-compact"
+                  type={status.webProxy.enabled ? 'warning' : 'info'}
+                  showIcon
+                  title={status.webProxy.error}
+                />
+              )}
+              <Button
+                block
+                type="primary"
+                ghost={status.webProxy.enabled}
+                icon={<LinkOutlined />}
+                disabled={!status.installed || !status.webProxy.supported}
+                loading={webProxyLoading}
+                onClick={openWebProxy}
+              >
+                {status.webProxy.enabled ? 'Настроить Web Proxy' : 'Поднять Web Proxy'}
+              </Button>
+            </Card>
+          </Col>
+        </Row>
+
+        {proxies.length > 0 && (
+          <Card
+            className="telemt-card"
+            title={
+              <Space>
+                <LinkOutlined />
+                Существующие подключения прежнего Telemt
+                <Tag>{proxies.length}</Tag>
+              </Space>
+            }
+          >
+            <Typography.Paragraph type="secondary" className="telemt-card-hint">
+              Подключения, созданные прежней отдельной службой Telemt, сохранены для совместимости.
+              Новые MTProto-подключения создаются только через «Входящие → Создать подключение →
+              MTProto».
+            </Typography.Paragraph>
+            {proxies.length === 0 ? (
+              <div className="telemt-empty-state">
+                <Typography.Text type="secondary">Прокси пока не созданы.</Typography.Text>
+              </div>
+            ) : (
+              <div className="telemt-proxy-list">
+                {proxies.map((item) => (
+                  <div className="telemt-proxy-item" key={item.name}>
+                    <div className="telemt-proxy-main">
+                      <Space size={8} wrap>
+                        <Typography.Text strong>{item.name}</Typography.Text>
+                        <Tag>
+                          {item.host}:{item.port}
+                        </Tag>
+                        {item.tls && <Tag color="blue">Fake-TLS</Tag>}
+                      </Space>
+                      <Typography.Paragraph
+                        copyable={{ text: item.link, tooltips: ['Копировать', 'Скопировано'] }}
+                        ellipsis={{ rows: 1 }}
+                        code
+                        style={{ margin: '5px 0 0' }}
+                      >
+                        {item.link}
+                      </Typography.Paragraph>
+                    </div>
+                    <Popconfirm
+                      title="Удалить прокси?"
+                      okText="Удалить"
+                      cancelText="Отмена"
+                      onConfirm={() => void deleteProxy(item.name)}
+                    >
+                      <Button
+                        danger
+                        type="text"
+                        icon={<DeleteOutlined />}
+                        aria-label={'Удалить прокси ' + item.name}
+                        loading={proxyDeleting === item.name}
+                      />
+                    </Popconfirm>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
+
+        <Collapse
+          className="telemt-card telemt-advanced"
+          items={[
+            {
+              key: 'settings',
+              label: (
+                <Space>
+                  <SettingOutlined />
+                  Дополнительные настройки
+                </Space>
+              ),
+              children: (
+                <Form form={form} layout="vertical" onFinish={save}>
+                  <Row gutter={16}>
+                    <Col xs={24} md={8}>
+                      <Form.Item
+                        name="port"
+                        label="Порт Telemt"
+                        rules={[{ required: true }, { type: 'number', min: 1, max: 65535 }]}
+                      >
+                        <InputNumber style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} md={16}>
+                      <Form.Item label="Основной секрет" required>
+                        <Space.Compact block>
+                          <Form.Item
+                            name="secret"
+                            noStyle
+                            rules={[
+                              { required: true },
+                              {
+                                pattern: /^[0-9a-fA-F]{32}$/,
+                                message: 'Нужно ровно 32 hex-символа',
+                              },
+                            ]}
+                          >
+                            <Input placeholder="32 hex-символа" autoComplete="off" />
+                          </Form.Item>
+                          <Button
+                            htmlType="button"
+                            icon={<SafetyCertificateOutlined />}
+                            onClick={generateSecret}
+                            disabled={configSaving}
+                          >
+                            Сгенерировать
+                          </Button>
+                        </Space.Compact>
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Row gutter={16}>
+                    <Col xs={24} md={12}>
+                      <Form.Item name="sni" label="SNI / домен маскировки">
+                        <Input placeholder="petrovich.ru" />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} sm={8} md={4}>
+                      <Form.Item name="tls" label="Fake-TLS" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} sm={8} md={4}>
+                      <Form.Item name="fastMode" label="Fast mode" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} sm={8} md={4}>
+                      <Form.Item name="ipv4" label="IPv4" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Row gutter={16}>
+                    <Col xs={12} md={6}>
+                      <Form.Item name="ipv6" label="IPv6" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <Form.Item name="classic" label="Classic" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <Form.Item name="secure" label="Secure" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Space wrap>
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      loading={configSaving}
+                      disabled={!status.installed}
+                    >
+                      Сохранить и применить
+                    </Button>
+                    <Typography.Text type="secondary">
+                      При работающем сервисе перезапуск выполняется автоматически.
+                    </Typography.Text>
+                  </Space>
+                </Form>
+              ),
+            },
+          ]}
+        />
+
+        <Typography.Paragraph type="secondary" className="telemt-footnote">
+          Web Proxy передаёт трафик локальному Telemt на порту {status.webProxy.listenPort || 15080}
+          ; наружу публикуется только HTTPS :443.
+        </Typography.Paragraph>
+      </div>
+      <Modal
+        open={webProxyOpen}
+        title={status.webProxy.enabled ? 'Настройка Web Proxy' : 'Поднять Web Proxy'}
+        onCancel={() => {
+          if (!webProxyLoading) setWebProxyOpen(false);
+        }}
+        footer={[
+          <Button key="close" onClick={() => setWebProxyOpen(false)} disabled={webProxyLoading}>
+            Закрыть
+          </Button>,
+          ...(status.webProxy.enabled
+            ? [
+                <Popconfirm
+                  key="disable"
+                  title="Отключить Web Proxy?"
+                  description="Настройки HTTPS-сервера WEB Proxy будут убраны, обычный Telemt останется работать."
+                  okText="Отключить"
+                  cancelText="Отмена"
+                  onConfirm={() => void disableWebProxy()}
+                >
+                  <Button danger loading={webProxyLoading}>
+                    Отключить
+                  </Button>
+                </Popconfirm>,
+              ]
+            : []),
+          <Button
+            key="save"
+            type="primary"
+            onClick={() => void enableWebProxy()}
+            loading={webProxyLoading}
+            disabled={
+              !status.installed ||
+              !status.webProxy.supported ||
+              webPreflightChecking ||
+              !webPreflightCurrent?.ready
+            }
+          >
+            {status.webProxy.enabled ? 'Применить' : 'Поднять'}
+          </Button>,
+        ]}
+      >
+        <Space orientation="vertical" size={14} style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            title="Панель всё сделает сама"
+            description="Панель установит выбранный HTTPS-сервер, получит сертификат и настроит локальный Telemt автоматически. Для Caddy и HAProxy используется отдельная служба панели. При переключении возможен короткий перерыв соединений."
+          />
+
+          <TelemtWebGuide domain={webForm.watch('domain')} />
+
+          <FormProvider {...webForm}>
+            <Form layout="vertical">
+              <TelemtWebSiteFields disabled={webProxyLoading} />
+              <FormField
+                name="domain"
+                label="Домен"
+                extra={'По умолчанию: ' + (status.webProxy.defaultDomain || 'не определён')}
+              >
+                <Input placeholder="web.example.com" disabled={webProxyLoading} suffix=":443" />
+              </FormField>
+              <FormField
+                name="aliases"
+                label="Дополнительные WEB-домены"
+                extra="До 7 доменов. Необходим существующий сертификат SAN/wildcard на все имена."
+              >
+                <Select
+                  mode="tags"
+                  tokenSeparators={[',', ' ']}
+                  placeholder="web2.example.com"
+                  disabled={webProxyLoading}
+                />
+              </FormField>
+              <FormField
+                name="basePath"
+                label="Скрытый URL-путь (необязательно)"
+                extra="Например app/sync. Без пути старые tg://webproxy ссылки остаются прежними."
+              >
+                <Input placeholder="app/sync" disabled={webProxyLoading} />
+              </FormField>
+              <FormField
+                name="frontend"
+                label="Сервер HTTPS (frontend)"
+                extra={telemtWebFieldHelp.ru.frontend}
+              >
+                <Select
+                  disabled={webProxyLoading}
+                  options={TelemtFrontendSchema.options.map((value) => ({ value, label: value }))}
+                />
+              </FormField>
+              <FormField
+                name="carrier"
+                label="Основной транспорт (WEB carrier)"
+                extra={telemtWebFieldHelp.ru.carrier}
+              >
+                <Select
+                  disabled={webProxyLoading || !status.webProxy.carrierNegotiationSupported}
+                  options={TelemtCarrierSchema.options.map((value) => ({ value, label: value }))}
+                />
+              </FormField>
+              <FormField
+                name="carriers"
+                label="Перебор транспортов"
+                extra={telemtWebFieldHelp.ru.carriers}
+              >
+                <Select
+                  mode="multiple"
+                  disabled={webProxyLoading || !status.webProxy.carrierNegotiationSupported}
+                  options={TelemtCarrierSchema.options.map((value) => ({ value, label: value }))}
+                />
+              </FormField>
+              {webCarriers.map((carrier, index) => (
+                <Space key={carrier} style={{ display: 'flex', marginTop: 4 }}>
+                  <Typography.Text>
+                    {index + 1}. {carrier}
+                  </Typography.Text>
+                  <Button
+                    size="small"
+                    aria-label={'Выше: ' + carrier}
+                    disabled={webProxyLoading || index === 0}
+                    onClick={() => {
+                      const next = [...webCarriers];
+                      [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
+                      webForm.setValue('carriers', next);
+                    }}
+                  >
+                    ↑
+                  </Button>
+                  <Button
+                    size="small"
+                    aria-label={'Ниже: ' + carrier}
+                    disabled={webProxyLoading || index === webCarriers.length - 1}
+                    onClick={() => {
+                      const next = [...webCarriers];
+                      [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
+                      webForm.setValue('carriers', next);
+                    }}
+                  >
+                    ↓
+                  </Button>
+                </Space>
+              ))}
+              {!status.webProxy.carrierNegotiationSupported && (
+                <Typography.Text type="secondary">
+                  Выбор транспортов требует Telemt 3.5.4 или новее.
+                </Typography.Text>
+              )}
+            </Form>
+          </FormProvider>
+
+          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+            <Typography.Text strong>Проверка возможности запуска</Typography.Text>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              loading={webPreflightChecking}
+              onClick={() => setWebPreflightRefresh((value) => value + 1)}
+            >
+              Проверить заново
+            </Button>
+          </Space>
+          {webPreflightChecking && (
+            <Alert type="info" showIcon title="Проверяются DNS, порты, Telemt, frontend и TLS…" />
+          )}
+          {!webPreflightChecking && webPreflightCurrent && (
+            <>
+              <Alert
+                type={webPreflightCurrent.ready ? 'success' : 'error'}
+                showIcon
+                title={
+                  webPreflightCurrent.ready
+                    ? 'Предварительные проверки пройдены'
+                    : 'Запуск заблокирован до устранения ошибок'
+                }
+                description={
+                  webPreflightCurrent.ready
+                    ? 'Компоненты и сертификат будут настроены автоматически. Проверьте замечания о внешней сети ниже.'
+                    : 'Исправьте условия с отметкой «Ошибка». До этого конфигурация не изменяется.'
+                }
+              />
+              <Descriptions size="small" column={1} bordered>
+                {webPreflightCurrent.checks.map((check) => (
+                  <Descriptions.Item
+                    key={check.id}
+                    label={
+                      <Tag color={check.ok ? 'success' : 'error'}>{check.ok ? 'OK' : 'Ошибка'}</Tag>
+                    }
+                  >
+                    {check.message}
+                  </Descriptions.Item>
+                ))}
+              </Descriptions>
+              {webPreflightCurrent.warnings.map((warning) => (
+                <Alert key={warning} type="warning" showIcon title={warning} />
+              ))}
+            </>
+          )}
+
+          <Descriptions size="small" column={1} bordered>
+            <Descriptions.Item label="Telemt WEB">
+              127.0.0.1:{status.webProxy.listenPort || 15080}
+            </Descriptions.Item>
+            <Descriptions.Item label={webFrontend}>
+              {status.webProxy.frontendActive ? 'запущен' : 'будет запущен автоматически'}
+            </Descriptions.Item>
+            <Descriptions.Item label="TLS">
+              {status.webProxy.certificateReady
+                ? 'существующий сертификат готов (проверьте выбранный домен выше)'
+                : 'автоматический выпуск при успешной проверке выше'}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Button
+            disabled={!status.webProxy.enabled}
+            loading={webDiagnosticsLoading}
+            onClick={() => {
+              setWebDiagnosticsLoading(true);
+              setWebDiagnosticsError('');
+              void HttpUtil.get<WebDiagnostics>(
+                '/panel/api/telemt/webproxy/diagnostics',
+                undefined,
+                { silent: true },
+              )
+                .then((response) => {
+                  if (response?.success && response.obj) {
+                    setWebDiagnostics(response.obj);
+                  } else {
+                    setWebDiagnostics(null);
+                    setWebDiagnosticsError(response?.msg || 'Не удалось прочитать WEB runtime');
+                  }
+                })
+                .catch((cause: unknown) => {
+                  setWebDiagnostics(null);
+                  setWebDiagnosticsError(cause instanceof Error ? cause.message : String(cause));
+                })
+                .finally(() => setWebDiagnosticsLoading(false));
+            }}
+          >
+            Диагностика WEB Proxy
+          </Button>
+          {webDiagnosticsError && <Alert type="warning" showIcon title={webDiagnosticsError} />}
+          {webDiagnostics && (
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="Runtime">
+                {webDiagnostics.available ? 'доступен' : 'недоступен'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Состояние">{webDiagnostics.lifecycle}</Descriptions.Item>
+              <Descriptions.Item label="Активные WEB-сессии">
+                {webDiagnostics.activeSessions ?? 'нет данных'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Слушатели">
+                {webDiagnostics.listeners?.join(', ') || '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Ёмкость">
+                <Typography.Text code>
+                  {JSON.stringify(webDiagnostics.capacity ?? {})}
+                </Typography.Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Согласование транспорта">
+                <Typography.Text code>
+                  {JSON.stringify(webDiagnostics.carrierNegotiation ?? {})}
+                </Typography.Text>
+              </Descriptions.Item>
+            </Descriptions>
+          )}
+
+          {status.webProxy.enabled && status.webProxy.link && (
+            <div>
+              <Typography.Text strong>Ссылки для Telegram</Typography.Text>
+              {(status.webProxy.links?.length ? status.webProxy.links : [status.webProxy.link]).map(
+                (link) => (
+                  <div className="telemt-link-box telemt-link-box-large" key={link}>
+                    <Typography.Text code>{link}</Typography.Text>
+                    <Button
+                      type="text"
+                      icon={<CopyOutlined />}
+                      onClick={() => void navigator.clipboard.writeText(link)}
+                    >
+                      Копировать
+                    </Button>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+        </Space>
+      </Modal>
+    </>
+  );
+}

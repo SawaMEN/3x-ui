@@ -1,0 +1,202 @@
+import { z } from 'zod';
+
+const port = z.number().int().min(1).max(65535);
+const nonNegativeInt = z.number().int().min(0);
+const absolutePath = z
+  .string()
+  .regex(/^\//, 'pages.settings.validation.pathLeadingSlash')
+  .refine(
+    (value) => !value.split('/').some((part) => part === '.' || part === '..'),
+    'URI path cannot contain . or .. segments',
+  );
+
+export const SubscriptionThemeSchema = z.enum([
+  'classic',
+  'luna',
+  'underground',
+  'light',
+  'dark',
+  'ultra-dark',
+  'colorful',
+  'blue-gray',
+  'cyberpunk',
+]);
+export type SubscriptionTheme = z.infer<typeof SubscriptionThemeSchema>;
+
+export const SubProfileModeSchema = z.enum(['none', 'builtin', 'custom']);
+export type SubProfileMode = z.infer<typeof SubProfileModeSchema>;
+
+export const SubHostSortModeSchema = z.enum(['inbound-first', 'hosts-first']);
+export type SubHostSortMode = z.infer<typeof SubHostSortModeSchema>;
+
+export const AllSettingSchema = z
+  .object({
+    coreType: z.enum(['xray', 'sing-box', 'sing-box-upstream']).optional(),
+    webListen: z.string().optional(),
+    webDomain: z.string().optional(),
+    webPort: port.optional(),
+    webCertFile: z.string().optional(),
+    webKeyFile: z.string().optional(),
+    rootRedirectEnable: z.boolean().optional(),
+    rootRedirectURL: z.string().optional(),
+    subTelegramLocalEnable: z.boolean().optional(),
+    subTelegramRemoteEnable: z.boolean().optional(),
+    subTelegramWebEnable: z.boolean().optional(),
+    subAppearanceTheme: z
+      .preprocess((value) => (value === 'whitemax' ? 'luna' : value), SubscriptionThemeSchema)
+      .optional(),
+    subAppearanceEnable: z.boolean().optional(),
+    subAppearanceTitle: z.string().optional(),
+    subAppearanceDescription: z.string().optional(),
+    subAppearanceLogoURL: z.string().optional(),
+    subAppearanceAccent: z.string().optional(),
+    subPublicURL: z.string().optional(),
+    subAllowedDomains: z.string().optional(),
+    subRestrictDomains: z.boolean().optional(),
+    subCDNEnable: z.boolean().optional(),
+    webBasePath: absolutePath.optional(),
+    sessionMaxAge: z.number().int().min(1).max(525600).optional(),
+    trustedProxyCIDRs: z.string().optional(),
+    realityScanCandidates: z.string().optional(),
+    ipLimitAllowlist: z.string().optional(),
+    panelOutbound: z.string().optional(),
+    pageSize: z.number().int().min(0).max(1000).optional(),
+    expireDiff: nonNegativeInt.optional(),
+    trafficDiff: nonNegativeInt.max(100).optional(),
+    remarkTemplate: z.string().optional(),
+    subShowIdentityOnAllLinks: z.boolean().optional(),
+    subInfoNodeEnable: z.boolean().optional(),
+    subHostSortMode: SubHostSortModeSchema.optional(),
+    subCalendarExpireInclusive: z.boolean().optional(),
+    subExpiredTemplate: z.string().optional(),
+    subTrafficDepletedTemplate: z.string().optional(),
+    datepicker: z.enum(['gregorian', 'jalalian']).optional(),
+    tgBotEnable: z.boolean().optional(),
+    tgBotToken: z.string().optional(),
+    tgBotProxy: z.string().optional(),
+    tgBotAPIServer: z.string().optional(),
+    tgBotChatId: z.string().optional(),
+    tgRunTime: z.string().optional(),
+    tgBotBackup: z.boolean().optional(),
+    tgCpu: z.number().int().min(0).max(100).optional(),
+    outboundDownThreshold: z.number().int().min(1).max(100).optional(),
+    nodeDownThreshold: z.number().int().min(1).max(100).optional(),
+    tgLang: z.string().optional(),
+    twoFactorEnable: z.boolean().optional(),
+    twoFactorToken: z.string().optional(),
+    xrayTemplateConfig: z.string().optional(),
+    happLinkEnable: z.boolean().optional(),
+    subEnable: z.boolean().optional(),
+    subFormatMode: z.enum(['both', 'xray', 'sing-box']).optional(),
+    subDefaultFormat: z.enum(['auto', 'links', 'xray', 'sing-box']).optional(),
+    subJsonEnable: z.boolean().optional(),
+    subJsonAutoDetect: z.boolean().optional(),
+    subJsonAlwaysArray: z.boolean().optional(),
+    subJsonUserAgentRegex: z.string().max(2048).optional(),
+    subClashAutoDetect: z.boolean().optional(),
+    subClashUserAgentRegex: z.string().max(2048).optional(),
+    subTitle: z.string().optional(),
+    subSupportUrl: z.string().optional(),
+    subProfileMode: SubProfileModeSchema.optional(),
+    subProfileUrl: z.string().optional(),
+    subAnnounce: z.string().optional(),
+    subEnableRouting: z.boolean().optional(),
+    subRoutingRules: z.string().optional(),
+    subIncyEnableRouting: z.boolean().optional(),
+    subIncyRoutingRules: z.string().optional(),
+    subListen: z.string().optional(),
+    subPort: port.optional(),
+    subPath: absolutePath.optional(),
+    subJsonPath: absolutePath.optional(),
+    subClashEnable: z.boolean().optional(),
+    subClashPath: absolutePath.optional(),
+    subDomain: z.string().optional(),
+    externalTrafficInformEnable: z.boolean().optional(),
+    externalTrafficInformURI: z.string().optional(),
+    restartXrayOnClientDisable: z.boolean().optional(),
+    subCertFile: z.string().optional(),
+    subKeyFile: z.string().optional(),
+    subUpdates: z.number().int().min(0).max(525600).optional(),
+    subEncrypt: z.boolean().optional(),
+    subURI: z.string().optional(),
+    subJsonURI: z.string().optional(),
+    subClashURI: z.string().optional(),
+    subClashEnableRouting: z.boolean().optional(),
+    subClashRules: z.string().optional(),
+    subClashRemoteDNS: z.boolean().optional(),
+    subJsonMux: z.string().optional(),
+    subJsonRules: z.string().optional(),
+    subJsonRoutingRules: z.string().optional(),
+    subJsonDns: z.string().optional(),
+    subJsonFinalMask: z.string().optional(),
+    subJsonObservatory: z.string().optional(),
+    subHideSettings: z.boolean().optional(),
+    subHappAutoDetect: z.boolean().optional(),
+    subHappProviderId: z.string().optional(),
+    subHappNewUrl: z.string().optional(),
+    subHappFallbackUrl: z.string().optional(),
+    subHappSubInfoColor: z.string().optional(),
+    subHappSubInfoText: z.string().optional(),
+    subHappSubInfoButtonText: z.string().optional(),
+    subHappSubInfoButtonLink: z.string().optional(),
+    subHappSubExpire: z.boolean().optional(),
+    subHappSubExpireButtonLink: z.string().optional(),
+    subHappNotificationExpire: z.boolean().optional(),
+    subHappNoLimit: z.boolean().optional(),
+    subHappAlwaysHwid: z.boolean().optional(),
+    subHappTunMode: z.string().optional(),
+    subHappTunType: z.string().optional(),
+    subHappExcludeRoutes: z.string().optional(),
+    subHappExcludeApns: z.boolean().optional(),
+    subHappColorProfile: z.string().optional(),
+    subHappPingType: z.string().optional(),
+    subHappAutoConnect: z.boolean().optional(),
+    subHappAutoConnectType: z.string().optional(),
+    subHappPerAppMode: z.string().optional(),
+    subHappPerAppList: z.string().optional(),
+    timeLocation: z.string().optional(),
+    ldapEnable: z.boolean().optional(),
+    ldapHost: z.string().optional(),
+    ldapPort: port.optional(),
+    ldapUseTLS: z.boolean().optional(),
+    ldapInsecureSkipVerify: z.boolean().optional(),
+    ldapBindDN: z.string().optional(),
+    ldapPassword: z.string().optional(),
+    ldapBaseDN: z.string().optional(),
+    ldapUserFilter: z.string().optional(),
+    ldapUserAttr: z.string().optional(),
+    ldapVlessField: z.string().optional(),
+    ldapSyncCron: z.string().optional(),
+    ldapFlagField: z.string().optional(),
+    ldapTruthyValues: z.string().optional(),
+    ldapInvertFlag: z.boolean().optional(),
+    ldapInboundTags: z.string().optional(),
+    ldapAutoCreate: z.boolean().optional(),
+    ldapAutoDelete: z.boolean().optional(),
+    ldapDefaultTotalGB: nonNegativeInt.optional(),
+    ldapDefaultExpiryDays: nonNegativeInt.optional(),
+    ldapDefaultLimitIP: nonNegativeInt.optional(),
+    hasTgBotToken: z.boolean().optional(),
+    hasTwoFactorToken: z.boolean().optional(),
+    hasLdapPassword: z.boolean().optional(),
+    hasApiToken: z.boolean().optional(),
+    hasWarpSecret: z.boolean().optional(),
+    hasNordSecret: z.boolean().optional(),
+    hasSmtpPassword: z.boolean().optional(),
+  })
+  .loose();
+
+export type AllSettingInput = z.infer<typeof AllSettingSchema>;
+
+// Existing installations can contain regex values saved before the backend
+// enforced its 2,048-character limit. Accept those values when reading so the
+// settings page can display and let users correct them, while keeping the
+// stricter schema above for outgoing updates.
+export const AllSettingResponseSchema = AllSettingSchema.extend({
+  subJsonUserAgentRegex: z.string().optional(),
+  subClashUserAgentRegex: z.string().optional(),
+});
+
+export const FactoryDefaultsSchema = z.record(z.string(), z.string());
+
+export type FactoryDefaults = z.infer<typeof FactoryDefaultsSchema>;

@@ -1,0 +1,5 @@
+.select-all-clear-button.ant-btn:disabled,
+.select-all-clear-button.ant-btn:disabled:hover,
+.select-all-clear-button.ant-btn:disabled:focus {
+  color: var(--ant-color-text-secondary) !important;
+}

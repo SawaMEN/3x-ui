@@ -1,0 +1,14 @@
+*.sh text eol=lf
+frontend/src/generated/** text eol=lf
+frontend/public/openapi.json text eol=lf
+frontend/src/test/__snapshots__/** text eol=lf
+*.go text eol=lf
+deploy/**/*.yaml text eol=lf
+# Unified diff context has a leading space before Go's tab indentation.
+deploy/hiddify/*.patch whitespace=-space-before-tab
+
+# Empty unified-diff context lines contain the required space prefix.
+tools/telemt/*.patch whitespace=-blank-at-eol
+
+# Go patch context uses a space prefix before tabs and empty lines.
+internal/olcrtc/patches/*.patch whitespace=-space-before-tab,-blank-at-eol
