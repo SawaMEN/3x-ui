@@ -4,10 +4,23 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import stat
 import struct
 import subprocess
+
+
+def validate_version(version, revision, ref):
+    version = version.strip()
+    if ref.startswith("refs/tags/"):
+        tag = ref.removeprefix("refs/tags/")
+        if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag):
+            raise ValueError("Stable publication requires a numeric stable version tag")
+        if version != tag[1:]:
+            raise ValueError("Panel version differs from the stable release tag")
+    elif version != "dev+" + revision[:8]:
+        raise ValueError("Panel version does not advertise the exact development revision")
 
 
 def check(root, arch, revision):
@@ -40,8 +53,7 @@ def check(root, arch, revision):
         if "INTERP" in programs or "NEEDED" in dynamic:
             raise ValueError("Expected static ELF: " + name)
     panel_version = subprocess.check_output([str(root / "x-ui"), "-v"], text=True, timeout=30)
-    if not os.environ.get("GITHUB_REF", "").startswith("refs/tags/") and revision[:8] not in panel_version:
-        raise ValueError("Panel version does not advertise release revision")
+    validate_version(panel_version, revision, os.environ.get("GITHUB_REF", ""))
     expected = json.loads(Path("docs/hiddify-core-target.json").read_text())
     actual = json.loads((root / "bin/target.json").read_text())
     tags = ["with_musl" if tag == "with_purego" else tag for tag in expected["panel_build"]["tags"]]
