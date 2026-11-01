@@ -13,10 +13,10 @@ func TestTLSCipherCompatibility(t *testing.T) {
 			name, suites, wantErr string
 			want                  []string
 		}{
-			{name: "old Firefox preset", suites: safe + ":TLS_RSA_WITH_AES_128_GCM_SHA256:TLS_RSA_WITH_AES_256_GCM_SHA384:TLS_RSA_WITH_AES_128_CBC_SHA:TLS_RSA_WITH_AES_256_CBC_SHA", want: []string{safe, "TLS_RSA_WITH_AES_128_GCM_SHA256", "TLS_RSA_WITH_AES_256_GCM_SHA384", "TLS_RSA_WITH_AES_128_CBC_SHA", "TLS_RSA_WITH_AES_256_CBC_SHA"}},
+			{name: "old Firefox preset", suites: safe + ":TLS_RSA_WITH_AES_128_GCM_SHA256:TLS_RSA_WITH_AES_256_GCM_SHA384:TLS_RSA_WITH_AES_128_CBC_SHA:TLS_RSA_WITH_AES_256_CBC_SHA", wantErr: "unsupported by the pinned sing-box core"},
 			{name: "normalize", suites: " " + safe + ", " + safe + " : TLS_AES_128_GCM_SHA256 ", want: []string{safe, "TLS_AES_128_GCM_SHA256"}},
 			{name: "unknown", suites: safe + ":TLS_TYPO", wantErr: "unknown TLS cipher suite"},
-			{name: "legacy only", suites: "TLS_RSA_WITH_AES_128_GCM_SHA256", want: []string{"TLS_RSA_WITH_AES_128_GCM_SHA256"}},
+			{name: "legacy only", suites: "TLS_RSA_WITH_AES_128_GCM_SHA256", wantErr: "unsupported by the pinned sing-box core"},
 			{name: "empty", suites: " "},
 		} {
 			t.Run(tc.name+map[bool]string{true: " inbound", false: " outbound"}[inbound], func(t *testing.T) {
