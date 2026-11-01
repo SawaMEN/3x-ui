@@ -185,24 +185,38 @@ func TestPinnedBinaryChecksGeneratedConfigurations(t *testing.T) {
 		}
 		checked(t, wire)
 	})
-	t.Run("legacy RSA cipher is rejected before starting core", func(t *testing.T) {
+	t.Run("explicit legacy cipher accepted by patched core", func(t *testing.T) {
+		const legacy = "TLS_RSA_WITH_AES_128_GCM_SHA256"
 		raw := vlessInbound()
 		stream := object(raw, "streamSettings")
 		stream["network"], stream["security"] = "tcp", "tls"
+		delete(stream, "xhttpSettings")
 		stream["tlsSettings"] = map[string]any{
-			"cipherSuites": "TLS_RSA_WITH_AES_128_GCM_SHA256",
+			"cipherSuites": legacy,
+			"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}},
 		}
-		if _, err := TranslateInbound(raw); err == nil || !strings.Contains(err.Error(), "unsupported by the pinned sing-box core") {
-			t.Fatalf("expected actionable legacy TLS suite error, got %v", err)
+		inbound, err := TranslateInbound(raw)
+		if err != nil {
+			t.Fatal(err)
 		}
+		checked(t, map[string]any{"inbounds": []any{inbound}})
 		cfg := &singbox.Config{Inbounds: []map[string]any{{
-			"type": "hysteria2", "tag": "legacy", "tls": map[string]any{
-				"enabled": true, "cipher_suites": []any{"TLS_RSA_WITH_AES_128_GCM_SHA256"},
+			"type": "hysteria2", "tag": "legacy", "listen": "127.0.0.1", "listen_port": 17957,
+			"users": []any{map[string]any{"name": "alice", "password": "test-password"}},
+			"tls": map[string]any{
+				"enabled": true, "certificate_path": cert, "key_path": key,
+				"cipher_suites": []any{legacy},
 			},
 		}}}
-		if _, err := cfg.Marshal(); err == nil || !strings.Contains(err.Error(), "unsupported by the pinned sing-box core") {
-			t.Fatalf("native legacy TLS suite was not rejected: %v", err)
+		data, err := cfg.Marshal()
+		if err != nil {
+			t.Fatal(err)
 		}
+		var wire map[string]any
+		if err := json.Unmarshal(data, &wire); err != nil {
+			t.Fatal(err)
+		}
+		checked(t, wire)
 	})
 	t.Run("explicit config required", func(t *testing.T) {
 		out, err := run("check")
