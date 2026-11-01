@@ -141,6 +141,15 @@ func TestVetroffMixedNativeSubscriptionCannotSilentlyLoseProtocol(t *testing.T) 
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "vetroff://") || !strings.Contains(rec.Body.String(), "anytls://") {
 		t.Fatalf("auto-detection dropped a mixed connection: %d %s", rec.Code, rec.Body.String())
 	}
+	for _, format := range []string{"xray", "sing-box", "hiddify"} {
+		req := httptest.NewRequest(http.MethodGet, "/sub/"+subID+"?format="+format, nil)
+		req.Header.Set("User-Agent", "Hiddify/2.0")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "vetroff://") || !strings.Contains(rec.Body.String(), "anytls://") {
+			t.Fatalf("explicit %s format dropped a mixed connection: %d %s", format, rec.Code, rec.Body.String())
+		}
+	}
 }
 
 func TestVetroffSubscriptionExcludesDisabledAndExpiredClients(t *testing.T) {
