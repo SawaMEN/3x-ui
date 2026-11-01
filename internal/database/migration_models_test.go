@@ -27,3 +27,14 @@ func TestMigrationModelsMatchPanelModels(t *testing.T) {
 		}
 	}
 }
+
+func TestMigrationModelsHaveNoDuplicates(t *testing.T) {
+	seen := make(map[string]struct{}, len(migrationModels()))
+	for _, entry := range migrationModels() {
+		name := reflect.TypeOf(entry).Elem().Name()
+		if _, found := seen[name]; found {
+			t.Fatalf("migrationModels includes %s more than once: migration copies each row twice", name)
+		}
+		seen[name] = struct{}{}
+	}
+}
