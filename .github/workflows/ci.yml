@@ -411,6 +411,33 @@ jobs:
           touch internal/web/dist/.gitkeep
           go test ./internal/mtproto ./internal/web/service -run '^Test(OfficialTelemtConfigAndReload|NativeTelemtWebCarrierConfig)$' -v -count=1
 
+  official-vetroff-native:
+    name: Official VetroffProxy 0.1.0 integration (amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download and verify pinned official VetroffProxy bundle
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/vetroff_0.1.0_linux_amd64.tar.gz"
+          curl -fL --retry 5 --retry-all-errors --connect-timeout 20 -o "$archive" "https://github.com/SawaMEN/VetroffProxy/releases/download/v0.1.0/vetroff_0.1.0_linux_amd64.tar.gz"
+          printf '%s  %s\n' '492d07be1b430d8fe8cfbe486dd4d3f006e4dcd04399ada2c7091f45380998d3' "$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/vetroff-bundle"
+          tar --no-same-owner --no-same-permissions -xzf "$archive" -C "$RUNNER_TEMP/vetroff-bundle"
+          test -x "$RUNNER_TEMP/vetroff-bundle/vetroff-necko/vetroff"
+          echo "VETROFF_TEST_ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "VETROFF_TEST_BINARY=$RUNNER_TEMP/vetroff-bundle/vetroff-necko/vetroff" >> "$GITHUB_ENV"
+      - name: Verify official binary, server lifecycle and subscription import
+        run: |
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
+          go test ./internal/externalvpn -run '^(TestOfficialVetroffBundle|TestVetroffConfigurationAndLink)$' -count=1 -timeout=5m -v
+          go test ./internal/sub -run '^TestVetroffHTTPSubscriptionAndNativeBinary$' -count=1 -timeout=5m -v
+
   telemt-web-frontends:
     runs-on: ubuntu-latest
     steps:
