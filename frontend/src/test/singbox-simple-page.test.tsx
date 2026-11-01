@@ -48,10 +48,13 @@ async function openImporter() {
 }
 
 function mount(path = '/singbox') {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <MemoryRouter initialEntries={[path]}>
-      <SingBoxPage />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <SingBoxPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
