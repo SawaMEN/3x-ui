@@ -16,9 +16,6 @@ type ConfigBatchRuntime interface {
 var errNativeApplyNotConfigured = errors.New("native core configuration apply is not configured")
 
 func (l *Local) BeginConfigBatch() func() error {
-	if !l.isNative() {
-		return func() error { return nil }
-	}
 	l.batchMu.Lock()
 	l.batches++
 	l.batchVersion++
@@ -59,7 +56,7 @@ func (l *Local) requestNativeApply(ctx context.Context) error {
 	return errNativeApplyNotConfigured
 }
 
-func (l *Local) UsesNativeConfig() bool { return l.isNative() }
+func (l *Local) UsesNativeConfig() bool { return true }
 
 // ConfigBatchVersion changes even when a scope opens and closes during validation.
 func (l *Local) ConfigBatchVersion() uint64 {
