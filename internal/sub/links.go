@@ -162,8 +162,7 @@ func splitLinkLines(raw string) []string {
 			hasNativeMieru = true
 		}
 	}
-	preferNativeMieru :=
-		hasSimpleMieru && hasNativeMieru && mieruShareLinkFormat(simpleMieru) == "native"
+	preferNativeMieru := hasSimpleMieru && hasNativeMieru && mieruShareLinkFormat(simpleMieru) == "native"
 
 	out := make([]string, 0, len(parts))
 	seen := make(map[string]struct{}, len(parts))

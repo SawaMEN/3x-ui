@@ -246,7 +246,6 @@ func TestHub_ConcurrentRegisterUnregister(t *testing.T) {
 	waitClientCount(t, h, 0)
 }
 
-
 func TestHub_UnregisterWaitsForFullQueueWithoutLeaking(t *testing.T) {
 	h := NewHub()
 	defer h.Stop()

@@ -29,7 +29,7 @@ const (
 	enqueueTimeout       = 100 * time.Millisecond
 	clientSendQueue      = 16 // Slow browsers must not retain dozens of multi-MiB snapshots.
 	hubBroadcastQueue    = 32 // Prevent burst fanout from retaining hundreds of MiB.
-	hubOpsQueue          = 32  // Small lifecycle backlog is enough for page/disconnect bursts.
+	hubOpsQueue          = 32 // Small lifecycle backlog is enough for page/disconnect bursts.
 	minBroadcastInterval = 250 * time.Millisecond
 	hubRestartAttempts   = 3
 )
