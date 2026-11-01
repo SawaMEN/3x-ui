@@ -94,7 +94,7 @@ func diagnosticLevel(line string) string {
         }
         return "UNKNOWN"
     }
-    switch strings.ToUpper(candidate[indices[2]:indices[3]] {
+    switch strings.ToUpper(candidate[indices[2]:indices[3]]) {
     case "FATAL", "CRITICAL": return "FATAL"
     case "ERR", "ERROR": return "ERROR"
     case "WARNING", "WARN": return "WARNING"
