@@ -237,6 +237,11 @@ func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 	order := strings.Join(stmt.Schema.PrimaryFieldDBNames, ", ")
 	table := stmt.Schema.Table
 	columns := stmt.Schema.DBNames
+	variableBudget := 999 // Portable SQLite floor, including lowered connection limits.
+	if dst.Name() == DialectPostgres {
+		variableBudget = 65535
+	}
+	insertBatchSize := min(batchSize, max(1, variableBudget/len(columns)))
 
 	total := 0
 	var cursor []any
@@ -266,7 +271,7 @@ func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 			break
 		}
 
-		if err := dst.Table(table).CreateInBatches(rows, max(1, 999/len(columns))).Error; err != nil {
+		if err := dst.Table(table).CreateInBatches(rows, insertBatchSize).Error; err != nil {
 			return total, err
 		}
 		total += n
