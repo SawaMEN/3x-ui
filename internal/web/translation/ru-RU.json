@@ -672,7 +672,6 @@
         "addCustomOption": "Добавить опцию",
         "serverNameIndication": "SNI",
         "cipherSuites": "Наборы шифров",
-        "legacyCipherSuites": "Устаревшие шифры (пониженная безопасность; только явный выбор)",
         "autoOption": "Авто",
         "minMaxVersion": "Мин/Макс версия",
         "rejectUnknownSni": "Отклонить неизвестный SNI",
