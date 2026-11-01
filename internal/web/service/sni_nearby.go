@@ -46,6 +46,9 @@ func nearbySNIAddresses(origin netip.Addr, limit int) []string {
 // name against the same IP with SNI. Keep the IP target to avoid DNS moving the
 // selected REALITY destination away from the verified neighboring endpoint.
 func (s *ServerService) ScanNearbySNIs(ctx context.Context, reference string) ([]*RealityScanResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	reference = strings.TrimSpace(reference)
 	if reference == "" {
 		if done := s.resolvePublicIPsInBackground(); done != nil {
@@ -85,7 +88,9 @@ func (s *ServerService) ScanNearbySNIs(ctx context.Context, reference string) ([
 	if len(addresses) == 0 {
 		return nil, fmt.Errorf("no public server address available")
 	}
-	return scanNearbySNIAddresses(ctx, addresses, port, s.probeRealityAddr)
+	return scanNearbySNIAddresses(ctx, addresses, port, func(ip string, port int, sni string, timeout time.Duration, xver int, private bool) *RealityScanResult {
+		return s.probeRealityAddrContext(ctx, ip, port, sni, timeout, xver, private)
+	})
 }
 
 type nearbySNIProbe func(string, int, string, time.Duration, int, bool) *RealityScanResult
@@ -104,26 +109,47 @@ func scanNearbySNIAddresses(ctx context.Context, addresses []string, port int, p
 			wg.Wait()
 			return nil, ctx.Err()
 		}
+		if err := ctx.Err(); err != nil {
+			<-sem
+			wg.Wait()
+			return nil, err
+		}
 		wg.Add(1)
 		go func(index int, address string) {
 			defer wg.Done()
 			defer func() { <-sem }()
 			discovered := probe(address, port, "", realityDiscoverTimeout, 0, false)
-			if discovered == nil || !discovered.CertChainValid || discovered.Host == address || ctx.Err() != nil {
+			if discovered == nil || !discovered.CertChainValid || ctx.Err() != nil {
 				return
 			}
-			name := discovered.Host
-			if name == "" || net.ParseIP(name) != nil || strings.Contains(name, "*") {
-				return
-			}
-			verified := probe(address, port, name, realityDiscoverTimeout, 0, false)
-			if verified != nil && verified.CertValid && verified.Host == name {
+			// A default certificate can have a stale Common Name but usable SANs.
+			// Try at most eight distinct names to bound virtual-host retries.
+			names := append([]string{discovered.Host}, discovered.ServerNames...)
+			seen := make(map[string]bool)
+			for _, name := range names {
+				name = strings.TrimSpace(name)
+				if name == "" || net.ParseIP(name) != nil || strings.Contains(name, "*") || seen[name] {
+					continue
+				}
+				if len(seen) >= 8 || ctx.Err() != nil {
+					return
+				}
+				seen[name] = true
+				verified := probe(address, port, name, realityDiscoverTimeout, 0, false)
+				if verified == nil || !verified.CertValid || verified.Host != name {
+					continue
+				}
 				verified.Target = net.JoinHostPort(address, strconv.Itoa(port))
 				verified.IP = address
-				// Only this hostname was tested with SNI, including wildcard-covered names.
 				verified.ServerNames = []string{name}
-				results[index] = verified
+				if results[index] == nil || betterRealityResult(verified, results[index]) {
+					results[index] = verified
+				}
+				if verified.Feasible {
+					return
+				}
 			}
+
 		}(i, ip)
 	}
 	wg.Wait()

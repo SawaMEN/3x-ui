@@ -96,6 +96,8 @@ export function useSecurityActions({
      */
     if (replaceServerNames) {
       setValue('streamSettings.realitySettings.serverNames', r.serverNames ?? []);
+      // Bulk-discovered targets were checked without a PROXY header.
+      setValue('streamSettings.realitySettings.xver', 0);
     } else if ((r.certValid || r.certChainValid) && r.serverNames?.length) {
       setValue('streamSettings.realitySettings.serverNames', r.serverNames);
     }
@@ -163,15 +165,17 @@ export function useSecurityActions({
   const scanRealityCandidates = async (
     targets?: string,
     mode?: string,
+    signal?: AbortSignal,
   ): Promise<RealityScanResult[]> => {
     const msg = await HttpUtil.post<RealityScanResult[]>(
       '/panel/api/server/scanRealityTargets',
       mode === 'nearby' ? { targets: targets ?? '', mode } : targets ? { targets } : {},
-      { silent: true, timeout: 360_000 },
+      { silent: true, timeout: 360_000, signal },
     );
+    if (signal?.aborted) return [];
     if (!msg?.success || !Array.isArray(msg.obj)) {
       messageApi.error(msg?.msg || t('pages.inbounds.toasts.scanRealityTargetError'));
-      return [];
+      throw new Error('SNI scan failed');
     }
     return msg.obj;
   };

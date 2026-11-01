@@ -2,8 +2,18 @@ package service
 
 import (
 	"context"
+	"encoding/pem"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/netip"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -83,5 +93,141 @@ func TestNearbySNIRejectsPrivateReference(t *testing.T) {
 		if _, err := (&ServerService{}).ScanNearbySNIs(context.Background(), ref); err == nil {
 			t.Errorf("accepted %s", ref)
 		}
+	}
+}
+
+func TestNearbySNIFallsBackToSANAndPrefersFeasible(t *testing.T) {
+	var names []string
+	got, err := scanNearbySNIAddresses(context.Background(), []string{"8.8.8.7"}, 443,
+		func(ip string, port int, sni string, timeout time.Duration, xver int, private bool) *RealityScanResult {
+			if sni == "" {
+				return &RealityScanResult{Host: "old.example", CertChainValid: true, ServerNames: []string{"old.example", "tls.example", "reality.example"}}
+			}
+			names = append(names, sni)
+			return &RealityScanResult{Host: sni, CertValid: sni != "old.example", Feasible: sni == "reality.example"}
+		})
+	if err != nil || len(got) != 1 || got[0].Host != "reality.example" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if !reflect.DeepEqual(names, []string{"old.example", "tls.example", "reality.example"}) {
+		t.Fatal(names)
+	}
+}
+
+func TestNearbySNIRetryBoundAndConcurrency(t *testing.T) {
+	var active, peak, calls atomic.Int32
+	addresses := make([]string, realityScanConcurrency*2)
+	for i := range addresses {
+		addresses[i] = "8.8.8.7"
+	}
+	_, err := scanNearbySNIAddresses(context.Background(), addresses, 443,
+		func(ip string, port int, sni string, timeout time.Duration, xver int, private bool) *RealityScanResult {
+			n := active.Add(1)
+			defer active.Add(-1)
+			for {
+				prev := peak.Load()
+				if n <= prev || peak.CompareAndSwap(prev, n) {
+					break
+				}
+			}
+			time.Sleep(time.Millisecond)
+			if sni == "" {
+				return &RealityScanResult{Host: "first.example", CertChainValid: true, ServerNames: []string{"a.example", "b.example", "c.example", "d.example", "e.example", "f.example", "g.example", "h.example", "i.example"}}
+			}
+			calls.Add(1)
+			return &RealityScanResult{Host: sni}
+		})
+	if err != nil || peak.Load() > realityScanConcurrency || calls.Load() != int32(len(addresses)*8) {
+		t.Fatalf("err=%v peak=%d calls=%d", err, peak.Load(), calls.Load())
+	}
+}
+
+func TestRealityProbeCancellationStopsActiveHandshake(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	ready := make(chan struct{})
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		b := make([]byte, 4096)
+		if _, err := conn.Read(b); err == nil {
+			close(ready)
+		}
+		_, _ = conn.Read(b)
+	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan *RealityScanResult, 1)
+	port := listener.Addr().(*net.TCPAddr).Port
+	go func() {
+		result <- (&ServerService{}).probeRealityAddrContext(ctx, "127.0.0.1", port, "example.com", 10*time.Second, 0, true)
+	}()
+	select {
+	case <-ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("probe did not start TLS")
+	}
+	cancel()
+	select {
+	case r := <-result:
+		if r.Feasible || !strings.Contains(r.Reason, "canceled") {
+			t.Fatalf("%+v", r)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancellation left TLS probe running")
+	}
+}
+
+func TestNearbyTLSProbeEndToEnd(t *testing.T) {
+	if address := os.Getenv("SNI_TEST_TLS_ADDRESS"); address != "" {
+		host, portString, err := net.SplitHostPort(address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		port, _ := strconv.Atoi(portString)
+		var sentNames []string
+		got, err := scanNearbySNIAddresses(context.Background(), []string{host}, port,
+			func(ip string, port int, sni string, timeout time.Duration, xver int, private bool) *RealityScanResult {
+				sentNames = append(sentNames, sni)
+				// Loopback is permitted only for this local TLS fixture.
+				return (&ServerService{}).probeRealityAddrContext(context.Background(), ip, port, sni, timeout, xver, true)
+			})
+		if err != nil || len(got) != 1 {
+			t.Fatalf("real TLS discovery failed: %+v %v", got, err)
+		}
+		r := got[0]
+		if !r.Feasible || !r.CertValid || r.Target != address || r.IP != host || !reflect.DeepEqual(r.ServerNames, []string{r.Host}) {
+			t.Fatalf("unexpected result: %+v", r)
+		}
+		if !reflect.DeepEqual(sentNames, []string{"", r.Host}) {
+			t.Fatalf("TLS SNI sequence: %v", sentNames)
+		}
+		return
+	}
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	defer server.Close()
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "root.pem")
+	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	child := exec.CommandContext(ctx, binary, "-test.run=^TestNearbyTLSProbeEndToEnd$", "-test.count=1")
+	child.Env = append(os.Environ(), "SNI_TEST_TLS_ADDRESS="+server.Listener.Addr().String(), "SSL_CERT_FILE="+certPath, "SSL_CERT_DIR="+dir)
+	if output, err := child.CombinedOutput(); err != nil {
+		t.Fatalf("TLS fixture: %v\n%s", err, output)
 	}
 }

@@ -33,15 +33,20 @@ export default function SniSearchInput({
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
-  const scan = async (targets?: string, mode?: string): Promise<RealityScanResult[]> => {
+  const scan = async (
+    targets?: string,
+    mode?: string,
+    signal?: AbortSignal,
+  ): Promise<RealityScanResult[]> => {
     const response = await HttpUtil.post<RealityScanResult[]>(
       '/panel/api/server/scanRealityTargets',
       mode === 'nearby' ? { targets: targets ?? '', mode } : targets ? { targets } : {},
-      { silent: true, timeout: 360_000 },
+      { silent: true, timeout: 360_000, signal },
     );
+    if (signal?.aborted) return [];
     if (!response?.success || !Array.isArray(response.obj)) {
       messageApi.error(response?.msg || t('pages.inbounds.toasts.scanRealityTargetError'));
-      return [];
+      throw new Error('SNI scan failed');
     }
     return response.obj;
   };

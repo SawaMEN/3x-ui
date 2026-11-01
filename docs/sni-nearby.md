@@ -14,7 +14,8 @@ There is no infinite scan and no additional binary or GeoIP database to install.
 For each IP:
 
 1. Connect without SNI and extract a usable domain from the leaf certificate.
-2. Check the certificate chain and repeat the handshake with the discovered SNI
+2. Check the certificate chain and repeat the handshake with discovered names
+   (up to eight distinct non-wildcard names from Common Name and SANs), using SNI
    against that same IP, validating the hostname and trust chain.
 3. Return only SNI-verified results. Preserve the scanned IP as the REALITY
    target and the verified hostname as SNI; include TLS, ALPN, key exchange,
@@ -43,9 +44,14 @@ it does not calculate geographic distance or automatically find the closest SNI.
 
 This integration implements that search approach using the panel's existing
 TLS probe rather than copying the standalone program. It adds finite bounds,
-request cancellation between probes, private-network protection, certificate
-trust checks, an actual SNI verification handshake, and UI selection. Active
-probes finish within their existing timeout after request cancellation.
+request cancellation through DNS, dialing and active TLS handshakes,
+private-network protection, certificate trust checks, an actual SNI verification
+handshake, and UI selection. Changing the search mode, restarting a scan, closing
+or unmounting the scanner
+aborts the HTTP request and cancels its backend work. The selected REALITY
+target resets `xver` to zero because these public endpoints were tested without
+a PROXY header. Incompatible REALITY targets and insufficient ML-DSA-65 chains
+cannot be selected. The verified SNI is shown separately from the IP target.
 
 ## API
 

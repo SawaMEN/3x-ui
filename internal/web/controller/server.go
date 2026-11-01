@@ -734,7 +734,7 @@ func (a *ServerController) scanRealityTargets(c *gin.Context) {
 	var err error
 	switch mode {
 	case "", "candidates":
-		res, err = a.serverService.ScanRealityTargets(c.PostForm("targets"))
+		res, err = a.serverService.ScanRealityTargetsContext(c.Request.Context(), c.PostForm("targets"))
 	case "nearby":
 		res, err = a.serverService.ScanNearbySNIs(c.Request.Context(), c.PostForm("targets"))
 	default:

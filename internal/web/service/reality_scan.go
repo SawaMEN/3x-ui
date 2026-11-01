@@ -1016,6 +1016,10 @@ func enumerateCIDR(cidr string, max int) ([]string, error) {
 }
 
 func (s *ServerService) probeRealityAddr(dialHost string, port int, sni string, timeout time.Duration, xver int, allowPrivate bool) *RealityScanResult {
+	return s.probeRealityAddrContext(context.Background(), dialHost, port, sni, timeout, xver, allowPrivate)
+}
+
+func (s *ServerService) probeRealityAddrContext(parent context.Context, dialHost string, port int, sni string, timeout time.Duration, xver int, allowPrivate bool) *RealityScanResult {
 	addr := net.JoinHostPort(dialHost, strconv.Itoa(port))
 	res := &RealityScanResult{Port: port}
 	if net.ParseIP(dialHost) != nil {
@@ -1029,7 +1033,7 @@ func (s *ServerService) probeRealityAddr(dialHost string, port int, sni string, 
 		res.Host = sni
 	}
 
-	ctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(context.Background(), allowPrivate), timeout)
+	ctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(parent, allowPrivate), timeout)
 	defer cancel()
 
 	start := time.Now()
@@ -1183,6 +1187,13 @@ func (s *ServerService) realityScanCandidateTokens() []string {
 }
 
 func (s *ServerService) ScanRealityTargets(targetsCSV string) ([]*RealityScanResult, error) {
+	return s.ScanRealityTargetsContext(context.Background(), targetsCSV)
+}
+
+func (s *ServerService) ScanRealityTargetsContext(ctx context.Context, targetsCSV string) ([]*RealityScanResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	tokens := parseRealityScanCandidateCSV(targetsCSV)
 	if len(tokens) == 0 {
 		tokens = s.realityScanCandidateTokens()
@@ -1224,14 +1235,24 @@ func (s *ServerService) ScanRealityTargets(targetsCSV string) ([]*RealityScanRes
 	sem := make(chan struct{}, realityScanConcurrency)
 	var wg sync.WaitGroup
 	for i, task := range tasks {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			wg.Wait()
+			return nil, ctx.Err()
+		}
+		if err := ctx.Err(); err != nil {
+			<-sem
+			wg.Wait()
+			return nil, err
+		}
 		wg.Add(1)
-		sem <- struct{}{}
 		go func(idx int, tk realityProbeTask) {
 			defer wg.Done()
 			defer func() { <-sem }()
 			// The bulk/CIDR scanner never reaches private ranges: the opt-in
 			// there would turn it into an internal network scanner.
-			r := s.probeRealityAddr(tk.dialHost, tk.port, tk.sni, tk.timeout, 0, false)
+			r := s.probeRealityAddrContext(ctx, tk.dialHost, tk.port, tk.sni, tk.timeout, 0, false)
 			if tk.bulk && r.TLSVersion == "" {
 				return
 			}
@@ -1240,6 +1261,9 @@ func (s *ServerService) ScanRealityTargets(targetsCSV string) ([]*RealityScanRes
 	}
 	wg.Wait()
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	results := dedupRealityResults(append(probed, invalid...))
 	sortRealityResults(results)
 	return results, nil

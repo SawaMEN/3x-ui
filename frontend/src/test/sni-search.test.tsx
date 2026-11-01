@@ -5,6 +5,8 @@ import { Form } from 'antd';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 
 import { HttpUtil, Msg } from '@/utils';
+import { useSecurityActions } from '@/pages/inbounds/form/useSecurityActions';
+import type { InboundFormValues } from '@/schemas/forms/inbound-form';
 import type { RealityScanResult } from '@/generated/types';
 import { TlsForm } from '@/pages/inbounds/form/security';
 import AnyTlsFields from '@/pages/inbounds/form/protocols/anytls';
@@ -120,7 +122,7 @@ describe('SNI search in protocol forms', () => {
       expect(post).toHaveBeenCalledWith(
         '/panel/api/server/scanRealityTargets',
         {},
-        { silent: true, timeout: 360_000 },
+        { silent: true, timeout: 360_000, signal: expect.any(AbortSignal) },
       );
       const saved = values();
       expect(path.split('.').reduce((value, key) => value[key], saved)).toBe('edge.example');
@@ -172,7 +174,7 @@ describe('SNI search in protocol forms', () => {
       expect(post).toHaveBeenLastCalledWith(
         '/panel/api/server/scanRealityTargets',
         { targets: 'example.org, 203.0.113.0/30' },
-        { silent: true, timeout: 360_000 },
+        { silent: true, timeout: 360_000, signal: expect.any(AbortSignal) },
       ),
     );
   });
@@ -281,10 +283,13 @@ it('switches to nearby mode, passes a server reference and ignores stale results
   await waitFor(() => expect(scan).toHaveBeenCalledTimes(1));
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Search mode' }));
   fireEvent.click(await screen.findByText('Find SNI near the server'));
+  expect(scan.mock.calls[0][2].aborted).toBe(true);
   const input = screen.getByPlaceholderText('Server IP/domain (optional)');
   fireEvent.change(input, { target: { value: '8.8.8.8' } });
   fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
-  await waitFor(() => expect(scan).toHaveBeenLastCalledWith('8.8.8.8', 'nearby'));
+  await waitFor(() =>
+    expect(scan).toHaveBeenLastCalledWith('8.8.8.8', 'nearby', expect.any(AbortSignal)),
+  );
   await act(async () => finishInitial([candidate]));
   expect(screen.queryByText('edge.example:8443')).toBeNull();
 });
@@ -302,7 +307,112 @@ it('sends nearby mode through the shared SNI API with automatic server discovery
     expect(post).toHaveBeenLastCalledWith(
       '/panel/api/server/scanRealityTargets',
       { targets: '', mode: 'nearby' },
-      { silent: true, timeout: 360_000 },
+      { silent: true, timeout: 360_000, signal: expect.any(AbortSignal) },
     ),
   );
+});
+
+it('aborts an active scan when the scanner closes', async () => {
+  const scan = vi.fn().mockResolvedValue([]);
+  const modal = (open: boolean) => (
+    <RealityTargetScannerModal
+      open={open}
+      onClose={noop}
+      onPick={noop}
+      scanRealityCandidates={scan}
+    />
+  );
+  const { rerender } = renderWithProviders(modal(true));
+  await waitFor(() => expect(scan).toHaveBeenCalledTimes(1));
+  const signal = scan.mock.calls[0][2] as AbortSignal;
+  expect(signal.aborted).toBe(false);
+  rerender(modal(false));
+  expect(signal.aborted).toBe(true);
+});
+
+it.each([
+  ['incompatible REALITY endpoint', { ...candidate, feasible: false }, false],
+  ['insufficient ML-DSA-65 chain', { ...candidate, feasible: true, certChainBytes: 3000 }, true],
+])('prevents selecting an %s', async (_, row, mldsa65Enabled) => {
+  const pick = vi.fn();
+  renderWithProviders(
+    <RealityTargetScannerModal
+      open
+      onClose={noop}
+      onPick={pick}
+      scanRealityCandidates={async () => [row]}
+      mldsa65Enabled={mldsa65Enabled}
+    />,
+  );
+  const button = await screen.findByRole('button', { name: 'Use' });
+  expect((button as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(button);
+  expect(pick).not.toHaveBeenCalled();
+});
+
+function RealitySelectionHarness() {
+  const methods = useForm<InboundFormValues>({
+    defaultValues: {
+      streamSettings: {
+        security: 'reality',
+        realitySettings: { target: 'old.example:443', serverNames: ['old.example'], xver: 2 },
+      },
+    } as never,
+  });
+  const actions = useSecurityActions({
+    methods,
+    setSaving: noop,
+    setScanResult: noop,
+    setScanning: noop,
+    messageApi: {} as never,
+    modal: {} as never,
+    nodeId: null,
+  });
+  const current = useWatch({ control: methods.control });
+  return (
+    <>
+      <button
+        onClick={() =>
+          actions.applyRealityScanResult(
+            { ...candidate, target: '8.8.8.7:8443', serverNames: ['edge.example'] },
+            true,
+          )
+        }
+      >
+        Select nearby target
+      </button>
+      <output data-testid="reality-values">{JSON.stringify(current)}</output>
+    </>
+  );
+}
+
+it('applies the scanned REALITY IP and verified SNI without an old PROXY protocol setting', () => {
+  renderWithProviders(<RealitySelectionHarness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Select nearby target' }));
+  const current = JSON.parse(screen.getByTestId('reality-values').textContent || '{}');
+  expect(current.streamSettings.realitySettings).toMatchObject({
+    target: '8.8.8.7:8443',
+    serverNames: ['edge.example'],
+    xver: 0,
+  });
+});
+
+it('shows an API scan error instead of treating it as an empty successful scan', async () => {
+  vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(false, 'Scanner unavailable'));
+  renderWithProviders(<Harness>{tls}</Harness>);
+  fireEvent.click(screen.getByRole('button', { name: 'Find SNI' }));
+  const dialog = await screen.findByRole('dialog');
+  await waitFor(() => expect(dialog.querySelector('.ant-alert-error')).toBeTruthy());
+});
+
+it('displays a successful sub-millisecond TLS connection as 0 ms', async () => {
+  renderWithProviders(
+    <RealityTargetScannerModal
+      open
+      onClose={noop}
+      onPick={noop}
+      scanRealityCandidates={async () => [{ ...candidate, latencyMs: 0 }]}
+    />,
+  );
+  expect(await screen.findByText('0 ms')).toBeTruthy();
 });

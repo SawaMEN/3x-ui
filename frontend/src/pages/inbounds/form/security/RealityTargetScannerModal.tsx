@@ -20,14 +20,18 @@ export function scannedServerName(result: RealityScanResult): string {
 }
 
 export function canUseScannedTarget(result: RealityScanResult, purpose: SniScanPurpose): boolean {
-  if (purpose === 'reality') return true;
+  if (purpose === 'reality') return result.feasible;
   return result.certValid && !!scannedServerName(result) && (purpose === 'tls' || result.tls13);
 }
 
 interface RealityTargetScannerModalProps {
   open: boolean;
   onClose: () => void;
-  scanRealityCandidates: (targets?: string, mode?: string) => Promise<RealityScanResult[]>;
+  scanRealityCandidates: (
+    targets?: string,
+    mode?: string,
+    signal?: AbortSignal,
+  ) => Promise<RealityScanResult[]>;
   onPick: (result: RealityScanResult) => void;
   mldsa65Enabled?: boolean;
   purpose?: SniScanPurpose;
@@ -49,14 +53,18 @@ export default function RealityTargetScannerModal({
   const [results, setResults] = useState<RealityScanResult[]>([]);
   const scanRef = useRef(scanRealityCandidates);
   const requestId = useRef(0);
+  const activeScan = useRef<AbortController | null>(null);
   useEffect(() => {
     scanRef.current = scanRealityCandidates;
   });
 
   const applyScan = useCallback(async (targets?: string, scanMode?: string) => {
+    activeScan.current?.abort();
+    const controller = new AbortController();
+    activeScan.current = controller;
     const id = ++requestId.current;
     try {
-      const rows = await scanRef.current(targets, scanMode);
+      const rows = await scanRef.current(targets, scanMode, controller.signal);
       if (id === requestId.current) setResults(rows);
     } catch {
       if (id === requestId.current) setError(true);
@@ -91,6 +99,7 @@ export default function RealityTargetScannerModal({
 
   const invalidateScan = useCallback(() => {
     requestId.current++;
+    activeScan.current?.abort();
   }, []);
   useEffect(() => {
     if (open) void applyScan();
@@ -114,6 +123,7 @@ export default function RealityTargetScannerModal({
         </Tooltip>
       ),
     },
+    { title: 'SNI', dataIndex: 'host', key: 'host', width: 180, ellipsis: true },
     {
       title: t('pages.inbounds.form.scanStatus'),
       dataIndex: 'feasible',
@@ -193,7 +203,7 @@ export default function RealityTargetScannerModal({
       dataIndex: 'latencyMs',
       key: 'latencyMs',
       width: 85,
-      render: (v: number) => (v > 0 ? `${v} ms` : '—'),
+      render: (v: number, row) => (row.tlsVersion ? `${v} ms` : '—'),
     },
     {
       title: '',
@@ -204,7 +214,12 @@ export default function RealityTargetScannerModal({
         <Button
           type="link"
           size="small"
-          disabled={!canUseScannedTarget(row, purpose)}
+          disabled={
+            !canUseScannedTarget(row, purpose) ||
+            (purpose === 'reality' &&
+              mldsa65Enabled &&
+              row.certChainBytes < MLDSA65_MIN_CERT_CHAIN_BYTES)
+          }
           onClick={() => {
             onPick(row);
             onClose();
