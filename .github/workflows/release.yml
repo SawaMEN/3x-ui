@@ -278,6 +278,15 @@ jobs:
           go test ./internal/hiddify -run '^TestPinnedProtocolTransportMatrix$' -count=1 -timeout=8m
           go test ./internal/singbox -run '^TestGeoRoutingModifiedSingBoxCheck$' -count=1 -timeout=3m
 
+      - name: Verify live loopback traffic and core restart
+        if: matrix.platform == 'amd64'
+        env:
+          CC: gcc
+          CGO_ENABLED: "1"
+          HIDDIFY_RUNTIME_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-amd64
+        run: |
+          go test ./internal/hiddify -run '^(TestXHTTPRuntimeTransfer|TestPinnedBinaryRawRuntimeAndStatistics)$' -count=1 -timeout=10m
+
       - name: Package
         run: |
           for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku vetroff vetroff-bundle; do
