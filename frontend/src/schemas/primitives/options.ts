@@ -82,9 +82,9 @@ export const TLS_CIPHER_OPTION = Object.freeze({
   ECDHE_RSA_CHACHA20_POLY1305: 'TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256',
 });
 
-// Go's crypto/tls offers these legacy suites only when explicitly configured.
-// They are not part of the secure default set; retain them for interoperability
-// with legacy clients without silently enabling them.
+// Historical names are retained for decoding existing saved settings only.
+// The pinned core rejects these obsolete TLS suites; do not offer them as new
+// choices or include them in selectable presets.
 export const TLS_LEGACY_CIPHER_OPTION = Object.freeze({
   RSA_RC4_128: 'TLS_RSA_WITH_RC4_128_SHA',
   RSA_3DES: 'TLS_RSA_WITH_3DES_EDE_CBC_SHA',
@@ -112,8 +112,6 @@ export const TLS_CIPHER_PRESETS = Object.freeze({
     'TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256',
     'TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA',
     'TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA',
-    'TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256',
-    'TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256',
   ].join(':'),
   'real-firefox': [
     'TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256',
