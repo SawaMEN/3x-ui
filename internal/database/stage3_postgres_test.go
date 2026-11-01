@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -68,6 +69,13 @@ func stage3Canonical(t *testing.T, g *gorm.DB) string {
 			row := map[string]any{}
 			for _, name := range s.Schema.DBNames {
 				v, _ := s.Schema.FieldsByDBName[name].ValueOf(context.Background(), reflect.Indirect(slice.Elem().Index(i)))
+				if value, ok := v.(driver.Valuer); ok {
+					var err error
+					v, err = value.Value()
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
 				row[name] = v
 			}
 			rows = append(rows, row)
@@ -110,6 +118,7 @@ func stage3PopulatedLegacy(t *testing.T) string {
 			if f.AutoIncrement {
 				value = 900001
 			}
+
 			row[name] = value
 		}
 		if err := g.Table(s.Table).Create(row).Error; err != nil {

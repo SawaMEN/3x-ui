@@ -146,17 +146,11 @@ func MigrateData(srcPath, dstDSN string) error {
 				totalRows += n
 				log.Printf("  %-32s %d rows", reflect.TypeOf(m).Elem().Name(), n)
 			}
-			return nil
+			return resetPostgresSequences(tx)
 		})
 	}, &sql.TxOptions{ReadOnly: true})
 	if txErr != nil {
 		return txErr
-	}
-
-	// setval is never rolled back by PostgreSQL, so sequences are resynced only
-	// after the transaction has committed.
-	if err := resetPostgresSequences(dst); err != nil {
-		return fmt.Errorf("data copied but postgres sequence reset failed: %w", err)
 	}
 
 	log.Printf("Migration complete: %d rows across %d tables.", totalRows, len(migrationModels()))
@@ -334,7 +328,24 @@ func truncatePostgresTables(dst *gorm.DB, models []any) error {
 // resetPostgresSequences advances each migrated table's id sequence past MAX(id),
 // otherwise the next INSERT-without-id would clash with copied rows.
 func resetPostgresSequences(dst *gorm.DB) error {
-	return resyncPostgresSequences(dst, migrationModels())
+	// ALTER SEQUENCE RESTART is transactional; setval is not. Keep copied rows
+	// and their next IDs behind the same commit (and table/sequence locks).
+	for _, m := range migrationModels() {
+		table, ok := tableWithIdColumn(dst, m)
+		if !ok {
+			continue
+		}
+		var command string
+		if err := dst.Raw(`SELECT CASE WHEN pg_get_serial_sequence(?, 'id') IS NULL THEN '' ELSE format('ALTER SEQUENCE %s RESTART WITH %s', pg_get_serial_sequence(?, 'id'), COALESCE(MAX(id),0)+1) END FROM "`+table+`"`, table, table).Scan(&command).Error; err != nil {
+			return err
+		}
+		if command != "" {
+			if err := dst.Exec(command).Error; err != nil {
+				return fmt.Errorf("reset sequence %s: %w", table, err)
+			}
+		}
+	}
+	return nil
 }
 
 // resyncPostgresSequences sets each model's id sequence to MAX(id); idempotent. Id-less
@@ -359,13 +370,17 @@ func resyncPostgresSequences(db *gorm.DB, models []any) error {
 }
 
 // tableWithIdColumn resolves a model's table name and reports whether its GORM
-// schema maps an "id" database column.
+// schema maps an automatically generated numeric "id" database column.
 func tableWithIdColumn(db *gorm.DB, m any) (string, bool) {
 	stmt := &gorm.Statement{DB: db}
 	if err := stmt.Parse(m); err != nil {
 		return "", false
 	}
-	if stmt.Schema == nil || stmt.Schema.LookUpField("id") == nil {
+	if stmt.Schema == nil {
+		return "", false
+	}
+	field := stmt.Schema.LookUpField("id")
+	if field == nil || !field.AutoIncrement {
 		return "", false
 	}
 	return stmt.Table, true

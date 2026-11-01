@@ -94,3 +94,15 @@ func BenchmarkDumpTableData(b *testing.B) {
 		}
 	}
 }
+
+func TestStage3ValidateRejectsIncompleteFiles(t *testing.T) {
+	for _, data := range [][]byte{nil, []byte("SQLite format 3\x00"), []byte("not a database")} {
+		p := filepath.Join(t.TempDir(), "bad.db")
+		if err := os.WriteFile(p, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := ValidateSQLiteDB(p); err == nil {
+			t.Fatal("incomplete/corrupt database accepted")
+		}
+	}
+}

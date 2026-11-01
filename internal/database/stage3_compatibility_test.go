@@ -213,6 +213,9 @@ func TestStage3DumpConcurrentSnapshot(t *testing.T) {
 	if _, err := raw.Exec("CREATE TABLE a(v INTEGER);CREATE TABLE b(v INTEGER);INSERT INTO a VALUES(0);INSERT INTO b VALUES(0); CREATE TABLE payload(v BLOB); INSERT INTO payload VALUES(zeroblob(4194304))"); err != nil {
 		t.Fatal(err)
 	}
+	oldDB := db
+	db = stage3SQLite(t, path)
+	defer func() { db = oldDB }()
 	stop := make(chan struct{})
 	done := make(chan error, 1)
 	started := make(chan struct{})
@@ -244,11 +247,17 @@ func TestStage3DumpConcurrentSnapshot(t *testing.T) {
 	for i := range 3 {
 		dump := filepath.Join(dir, fmt.Sprintf("%d.sql", i))
 		dst := filepath.Join(dir, fmt.Sprintf("%d.db", i))
-		if err := DumpSQLite(path, dump); err != nil {
-			t.Fatal(err)
-		}
-		if err := RestoreSQLite(dump, dst); err != nil {
-			t.Fatal(err)
+		if i%2 == 0 {
+			if err := DumpSQLite(path, dump); err != nil {
+				t.Fatal(err)
+			}
+			if err := RestoreSQLite(dump, dst); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			if err := BackupSQLite(dst); err != nil {
+				t.Fatal(err)
+			}
 		}
 		g := stage3SQLite(t, dst)
 		var a, b int

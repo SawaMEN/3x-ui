@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -26,7 +27,19 @@ func DumpSQLite(srcPath, outPath string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(outPath, data, 0o600)
+	file, err := os.CreateTemp(filepath.Dir(outPath), ".x-ui-dump-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), outPath)
 }
 
 // DumpSQLiteToBytes builds the same `sqlite3 .dump`-style SQL text as DumpSQLite
@@ -183,13 +196,31 @@ func replayDump(sqlDB *sql.DB, script string) error {
 	if err != nil {
 		return err
 	}
-	return conn.Raw(func(driverConn any) error {
+	err = conn.Raw(func(driverConn any) error {
 		sc := driverConn.(*sqlite3.SQLiteConn)
 		if !sc.AutoCommit() {
 			return fmt.Errorf("incomplete dump: transaction was not committed")
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	var tables int
+	if err := conn.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&tables); err != nil {
+		return err
+	}
+	if tables == 0 {
+		return fmt.Errorf("incomplete dump: no tables restored")
+	}
+	var integrity string
+	if err := conn.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrity); err != nil {
+		return err
+	}
+	if integrity != "ok" {
+		return fmt.Errorf("restored database failed integrity check: %s", integrity)
+	}
+	return nil
 }
 
 // dumpTableData appends one INSERT statement per row of table to b.

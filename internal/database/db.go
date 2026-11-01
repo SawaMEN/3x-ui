@@ -3117,6 +3117,19 @@ func ValidateSQLiteDB(dbPath string) error {
 	if _, err := os.Stat(dbPath); err != nil {
 		return err
 	}
+	file, err := os.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	valid, err := IsSQLiteDB(file)
+	_ = file.Close()
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return errors.New("not a SQLite database")
+	}
+
 	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
 		return err
