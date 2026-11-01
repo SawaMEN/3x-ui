@@ -11,8 +11,8 @@ describe('explicit legacy TLS cipher options', () => {
   });
 
   it('never offers a preset that the pinned TLS core rejects', () => {
-    const supported = new Set(Object.values(TLS_CIPHER_OPTION));
-    const obsolete = new Set(Object.values(TLS_LEGACY_CIPHER_OPTION));
+    const supported = new Set<string>(Object.values(TLS_CIPHER_OPTION));
+    const obsolete = new Set<string>(Object.values(TLS_LEGACY_CIPHER_OPTION));
     for (const [name, preset] of Object.entries(TLS_CIPHER_PRESETS)) {
       for (const suite of preset.split(':')) {
         expect(supported.has(suite), `${name} offers unsupported ${suite}`).toBe(true);
