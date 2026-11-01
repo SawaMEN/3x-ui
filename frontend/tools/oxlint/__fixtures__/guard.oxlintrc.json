@@ -1,6 +1,0 @@
-{
-  "plugins": [],
-  "categories": {},
-  "jsPlugins": ["../input-number-guard.mjs"],
-  "rules": { "input-number/no-synthetic-clear": "error" }
-}

@@ -16,14 +16,19 @@ func init() {
 	nodeSyncScopeAllow["/server/sni/jobs/:id"] = map[string]struct{}{http.MethodGet: {}, http.MethodDelete: {}}
 	nodeSyncScopeAllow["/server/sni/history"] = map[string]struct{}{http.MethodGet: {}}
 }
+
 func (a *ServerController) initSNIJobRouter(g *gin.RouterGroup) {
 	scanner := g.Group("/sni")
-	scanner.Use(func(c *gin.Context) { c.Header("Cache-Control", "no-store"); c.Next() })
+	scanner.Use(func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		c.Next()
+	})
 	scanner.POST("/jobs", a.startSNIScan)
 	scanner.GET("/jobs/:id", a.sniScanStatus)
 	scanner.DELETE("/jobs/:id", a.sniScanStatus)
 	scanner.GET("/history", a.sniScanHistory)
 }
+
 func normalizeSNINodeTarget(c *gin.Context, id *int) (*int, error) {
 	if id == nil || *id == 0 {
 		return nil, nil
@@ -36,6 +41,7 @@ func normalizeSNINodeTarget(c *gin.Context, id *int) (*int, error) {
 	}
 	return id, nil
 }
+
 func sniNodeQuery(c *gin.Context) (*int, error) {
 	raw := c.Query("nodeId")
 	if raw == "" {
@@ -47,6 +53,7 @@ func sniNodeQuery(c *gin.Context) (*int, error) {
 	}
 	return normalizeSNINodeTarget(c, &id)
 }
+
 func forwardSNIJob(c *gin.Context, id *int, resource string, body any) bool {
 	if id == nil {
 		return false
@@ -70,6 +77,7 @@ func forwardSNIJob(c *gin.Context, id *int, resource string, body any) bool {
 	jsonObj(c, result, err)
 	return true
 }
+
 func (a *ServerController) startSNIScan(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 128<<10)
 	var request service.SNIScanRequest
@@ -89,6 +97,7 @@ func (a *ServerController) startSNIScan(c *gin.Context) {
 	result, err := service.StartSNIScan(request)
 	jsonObj(c, result, err)
 }
+
 func (a *ServerController) sniScanStatus(c *gin.Context) {
 	id, err := sniNodeQuery(c)
 	if err != nil {
@@ -101,6 +110,7 @@ func (a *ServerController) sniScanStatus(c *gin.Context) {
 	result, err := service.SNIScanStatus(c.Param("id"), c.Request.Method == http.MethodDelete)
 	jsonObj(c, result, err)
 }
+
 func (a *ServerController) sniScanHistory(c *gin.Context) {
 	id, err := sniNodeQuery(c)
 	if err != nil {

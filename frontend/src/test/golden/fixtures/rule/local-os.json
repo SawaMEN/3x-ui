@@ -1,5 +1,0 @@
-{
-  "type": "field",
-  "localOS": ["linux", "darwin"],
-  "outboundTag": "direct"
-}

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/pem"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -83,7 +84,7 @@ func TestNearbySNISkipsUnusableDiscoveryAndHonorsCancellation(t *testing.T) {
 		t.Error("probe after cancellation")
 		return nil
 	})
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 }

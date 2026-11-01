@@ -143,6 +143,13 @@ func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, c
 
 	excludedEmails := map[string]bool{}
 	if compatible {
+		// An explicit native format must never silently discard a VetroffProxy
+		// connection. Let the HTTP controller deliver the lossless raw links.
+		for _, inbound := range inbounds {
+			if inbound.Protocol == model.VetroffProxy {
+				return "", "", errSubscriptionFormatUnsupported
+			}
+		}
 		inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
 			if !containsUnsupportedJSONProtocol([]*model.Inbound{inbound}) && !containsShadowTLSTransport([]*model.Inbound{inbound}) {
 				return false
@@ -438,6 +445,13 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		return !active
 	})
 	if compatible {
+		// VetroffProxy has no native sing-box outbound; retaining only the
+		// other entries would silently break a mixed subscription.
+		for _, inbound := range inbounds {
+			if inbound.Protocol == model.VetroffProxy {
+				return "", "", errSubscriptionFormatUnsupported
+			}
+		}
 		before := len(inbounds)
 		inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
 			return inbound.Protocol == model.VetroffProxy || singBoxUnsupportedProtocol(inbound.Protocol) && (!hiddify || !hiddifyExtendedProtocol(inbound.Protocol))

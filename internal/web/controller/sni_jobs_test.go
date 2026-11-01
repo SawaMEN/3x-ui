@@ -24,6 +24,7 @@ type sniRemoteStub struct {
 }
 
 func (s *sniRemoteStub) Name() string { return "test-node" }
+
 func (s *sniRemoteStub) RequestSNIScan(ctx context.Context, method, resource string, body any) (json.RawMessage, error) {
 	s.calls++
 	if req, ok := body.(service.SNIScanRequest); ok {
@@ -31,6 +32,7 @@ func (s *sniRemoteStub) RequestSNIScan(ctx context.Context, method, resource str
 	}
 	return json.RawMessage(`{"id":"remote-job","state":"queued","results":[]}`), nil
 }
+
 func TestSNIJobRoutingKeepsNodeExecutionAndScope(t *testing.T) {
 	logger.InitLogger(logging.ERROR)
 	gin.SetMode(gin.TestMode)

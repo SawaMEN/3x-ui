@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"golang.org/x/net/http2"
 	"net"
 	"net/http"
 	"slices"
@@ -1176,17 +1175,23 @@ func (s *ServerService) probeRealityAddrContext(parent context.Context, dialHost
 	}
 	if check, _ := parent.Value(sniHTTPCheckKey{}).(bool); check && res.CertValid && res.H2 {
 		ok := false
-		transport := &http2.Transport{MaxHeaderListSize: 32768}
-		if client, err := transport.NewClientConn(tlsConn); err == nil {
-			req, err := http.NewRequestWithContext(ctx, http.MethodHead, "https://"+net.JoinHostPort(res.Host, strconv.Itoa(port))+"/", nil)
-			if err == nil {
-				if response, err := client.RoundTrip(req); err == nil {
-					ok = response.ProtoMajor == 2
-					response.Body.Close()
-				}
-			}
-			client.Close()
+		// Reuse the authenticated TLS connection so the HTTP/2 verification
+		// checks the exact IP and SNI already probed, without a second dial.
+		transport := &http.Transport{
+			MaxResponseHeaderBytes: 32 << 10,
+			ForceAttemptHTTP2:     true,
+			DialTLSContext: func(context.Context, string, string) (net.Conn, error) {
+				return tlsConn, nil
+			},
 		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodHead, "https://"+net.JoinHostPort(res.Host, strconv.Itoa(port))+"/", nil)
+		if err == nil {
+			if response, err := transport.RoundTrip(req); err == nil {
+				ok = response.ProtoMajor == 2
+				_ = response.Body.Close()
+			}
+		}
+		transport.CloseIdleConnections()
 		res.HTTP2OK = &ok
 	}
 

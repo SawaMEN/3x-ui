@@ -21,6 +21,9 @@ export type nearbySNIProbe = z.infer<typeof nearbySNIProbeSchema>;
 export const sniProgressSchema = z.unknown();
 export type sniProgress = z.infer<typeof sniProgressSchema>;
 
+export const sniScanFuncSchema = z.unknown();
+export type sniScanFunc = z.infer<typeof sniScanFuncSchema>;
+
 export const staticEgressResolverSchema = z.string();
 export type staticEgressResolver = z.infer<typeof staticEgressResolverSchema>;
 
