@@ -10,7 +10,9 @@ export const TelemtWebBasePathSchema = z
     const path = value.replace(/^\/+|\/+$/g, '');
     return (
       path === '' ||
-      (path.length >= 6 && path.length <= 96 && /^[A-Za-z0-9][A-Za-z0-9_-]*(?:\/[A-Za-z0-9][A-Za-z0-9_-]*)*$/.test(path))
+      (path.length >= 6 &&
+        path.length <= 96 &&
+        /^[A-Za-z0-9][A-Za-z0-9_-]*(?:\/[A-Za-z0-9][A-Za-z0-9_-]*)*$/.test(path))
     );
   }, 'Путь 6–96 символов; каждый сегмент должен начинаться с буквы или цифры');
 
