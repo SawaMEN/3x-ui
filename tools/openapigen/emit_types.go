@@ -58,7 +58,11 @@ func tsTypeExpr(t TypeRef) string {
 	case KindAny, KindUnknown, KindRaw:
 		return "unknown"
 	case KindArray:
-		return tsTypeExpr(*t.Element) + "[]"
+		inner := tsTypeExpr(*t.Element)
+		if strings.Contains(inner, " | ") {
+			inner = "(" + inner + ")"
+		}
+		return inner + "[]"
 	case KindMap:
 		return "Record<" + tsTypeExpr(*t.Key) + ", " + tsTypeExpr(*t.Value) + ">"
 	case KindUnion:

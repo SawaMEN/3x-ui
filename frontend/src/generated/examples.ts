@@ -1201,17 +1201,24 @@ export const EXAMPLES: Record<string, unknown> = {
   },
   "RealityScanResult": {
     "alpn": "h2",
+    "attempts": 0,
     "certChainBytes": 3427,
     "certChainValid": true,
     "certIssuer": "Google Trust Services",
     "certSubject": "cloudflare.com",
     "certValid": true,
+    "checkedAt": "",
     "curveID": "X25519",
+    "dnsLookupError": "",
+    "dnsMatchesIP": null,
     "feasible": true,
     "h2": true,
     "host": "www.cloudflare.com",
+    "http2OK": null,
     "ip": "104.16.124.96",
+    "jitterMs": 0,
     "latencyMs": 180,
+    "medianMs": 0,
     "notAfter": "2026-08-01T00:00:00Z",
     "port": 443,
     "privateTarget": false,
@@ -1219,8 +1226,12 @@ export const EXAMPLES: Record<string, unknown> = {
     "serverNames": [
       ""
     ],
+    "source": "",
+    "successes": 0,
     "target": "www.cloudflare.com:443",
+    "tcpMs": 0,
     "tls13": true,
+    "tlsMs": 0,
     "tlsVersion": "1.3",
     "x25519": true
   },
@@ -1260,6 +1271,36 @@ export const EXAMPLES: Record<string, unknown> = {
     "name": "",
     "ruleCount": 0,
     "updatedAt": 0
+  },
+  "SNIJobSnapshot": {
+    "completed": 0,
+    "createdAt": "",
+    "error": "",
+    "finishedAt": "",
+    "id": "",
+    "phase": "",
+    "results": [
+      null
+    ],
+    "source": "",
+    "state": "",
+    "total": 0,
+    "verified": 0,
+    "verifyTotal": 0
+  },
+  "SNISavedTarget": {
+    "host": "",
+    "ip": "",
+    "port": 0
+  },
+  "SNIScanRequest": {
+    "mode": "",
+    "nodeId": null,
+    "purpose": "",
+    "recheck": [
+      null
+    ],
+    "targets": ""
   },
   "ServerSettings": {
     "contentPaddingAddition": "",

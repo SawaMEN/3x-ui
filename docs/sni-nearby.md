@@ -1,65 +1,116 @@
-# Nearby SNI discovery
+# SNI discovery, stability and saved measurements
 
-In an inbound's SNI/REALITY scanner, choose **Find SNI near the server** and
-press **Scan**. Leave the reference empty to use the panel server's public IP,
-or enter the intended VPN server IP/domain (optionally with a port). The latter
-is useful when the panel and VPN endpoint run on different machines. A domain
-with multiple public addresses uses the first IPv4, falling back to IPv6.
+Open the SNI/REALITY scanner in an inbound form. It supports:
 
-The search checks up to 256 public IPs, alternating below and above the reference
-address, with 32 concurrent probes. It excludes the reference itself and blocks
-private/loopback/link-local destinations using the panel's existing SSRF guard.
-There is no infinite scan and no additional binary or GeoIP database to install.
+- **Candidate list / custom targets**: the configured domain list (800 built-in
+  seeds by default) or supplied domains, IPs and CIDRs.
+- **Find SNI near the server**: up to 256 neighboring public IPs, alternating
+  below/above a reference. Leave it empty for the execution server's public IP,
+  or supply one server IP/domain[:port]. A domain uses its first public IPv4,
+  falling back to IPv6. The origin itself is excluded.
+- **Neighbors + configured domain candidates**: discover around the reference,
+  then check the execution server’s configured domain list and rank the combined results.
+- **Saved results**: select a previous scan and recheck its saved IP/SNI pairs.
 
-For each IP:
+For node-assigned inbounds, jobs, public-IP detection, measurements, history and
+cancellation execute on that selected node through the existing authenticated
+node transport (including its mTLS/egress configuration). The execution location
+is shown in the scanner. Upgrade both the master and node to this version.
+Unsupported nodes report an error; they never silently scan from the master.
+Changing the inbound's node cancels the previous scan and clears its results.
 
-1. Connect without SNI and extract a usable domain from the leaf certificate.
-2. Check the certificate chain and repeat the handshake with discovered names
-   (up to eight distinct non-wildcard names from Common Name and SANs), using SNI
-   against that same IP, validating the hostname and trust chain.
-3. Return only SNI-verified results. Preserve the scanned IP as the REALITY
-   target and the verified hostname as SNI; include TLS, ALPN, key exchange,
-   certificate and connection-time details from the final probe.
+## Discovery and ranking
 
-REALITY results rank compatible TLS 1.3 / h2 / X25519 endpoints first, then by
-measured connection time from the panel server. Other protocol forms retain
-their existing compatibility checks. The measurement includes TCP and TLS setup;
-it is not ICMP ping, a geographic distance, or a client-network reachability test.
-Neighboring IPs may belong to different networks/locations. Only 256 neighbors
-are examined, so an empty result is possible. Scan activity may be flagged by
-the hosting provider.
+IP discovery extracts leaf certificate names without SNI. A trusted chain is
+required before up to eight distinct non-wildcard Common Name/SAN candidates
+are tried with SNI against the same IP. Only actually verified names are offered.
+The combined/candidate scan also pins successful results to the verified IP,
+while retaining their SNI. Multiple verified names on the same IP stay distinct.
 
-For ordinary TLS inbounds, selecting a third-party SNI does not install a
-certificate: the operator still needs a certificate and DNS for their own server.
+Results appear incrementally, with discovery and stability progress. **Stop scan**
+keeps already displayed results while canceling queued/active work. Closing the
+modal, changing mode, restarting a search or changing nodes cancels old work.
 
-## RealiTLScanner analysis
+The ten best compatible candidates each receive five further TCP/TLS connections.
+Ranking prefers compatible, stable results (at least 4/5 successful connections),
+then success count, median connection time and spread. Spread means max minus min
+of successful measurements. Even-sized samples use the average of the middle
+pair. Unstable measured candidates cannot be selected. Rows that have not had the
+five-probe check are explicitly marked **Preliminary** and are not recommended.
 
-Reference: https://github.com/XTLS/RealiTLScanner at
-`e5e114747aa8c6dfa4b394a0782f241bf72bdce6` (`utils.go`, `scanner.go`, `geo.go`).
+The table separates SNI/IP, TCP/TLS timing, success count, measurement date and
+candidate source. A tooltip explains successful attempts, median and spread.
+The final stability probe also sends a bounded HTTP/2 HEAD request over the same
+already-verified TLS connection (no redirects, no additional DNS dial). Any valid
+HTTP/2 response counts as protocol support; a particular HTTP status is not
+required. This is an extra diagnostic, not a blanket requirement for every
+protocol. DNS diagnostics report whether the hostname currently includes the
+verified IP, differs, or could not be resolved.
 
-RealiTLScanner alternates neighboring addresses indefinitely when given a single
-IP/domain, probes TLS without SNI for IPs, extracts certificate information, and
-reports TLS 1.3 / h2 candidates. Its optional GeoIP database reports country;
-it does not calculate geographic distance or automatically find the closest SNI.
+The selected REALITY target uses the verified IP and exactly the tested SNI, and
+resets `xver` to zero because the scanner did not send a PROXY header. Incompatible
+REALITY endpoints and insufficient ML-DSA-65 certificate chains cannot be selected.
+For domain-based protocols, DNS can route a name to a different endpoint: the
+DNS diagnostic makes that distinction visible. Ordinary TLS inbounds still need
+their own certificate and DNS; choosing a third-party SNI does not install one.
 
-This integration implements that search approach using the panel's existing
-TLS probe rather than copying the standalone program. It adds finite bounds,
-request cancellation through DNS, dialing and active TLS handshakes,
-private-network protection, certificate trust checks, an actual SNI verification
-handshake, and UI selection. Changing the search mode, restarting a scan, closing
-or unmounting the scanner
-aborts the HTTP request and cancels its backend work. The selected REALITY
-target resets `xver` to zero because these public endpoints were tested without
-a PROXY header. Incompatible REALITY targets and insufficient ML-DSA-65 chains
-cannot be selected. The verified SNI is shown separately from the IP target.
+## Resource bounds and persistence
+
+One job executes per panel, with at most four accepted running/queued jobs.
+Every scan (including the legacy synchronous API) shares at most 32 active probes
+and a 16-probes/second limiter with an eight-probe burst. Discovery, name retries,
+finalist count, request size and saved-target count are bounded. SSRF protection
+blocks private, loopback and link-local probe destinations, including rechecks.
+
+Executing jobs have a six-minute deadline. Polling renews a 30-second browser
+lease, checked every five seconds; lost browsers cannot leave indefinite scans.
+Completed snapshots expire after 15 minutes without access, with an overall
+64-snapshot bound. Active TCP/TLS probes honor cancellation contexts.
+
+The execution panel's database stores the latest 20 completed searches, up to
+20 certificate-verified IP/SNI targets each. History is independent of the
+browser and survives a panel restart. Job state is not persisted across restarts.
+Saved results show their original date and should be rechecked before applying.
+A history write failure is reported in the final snapshot; it is never silently
+presented as a successful save.
 
 ## API
 
-`POST /panel/api/server/scanRealityTargets` (existing authenticated endpoint):
+Authenticated endpoints under `/panel/api/server`:
 
-- `mode=candidates` (or omitted): existing list/domain/IP/CIDR scan.
-- `mode=nearby`: neighbor discovery; `targets` is one server IP/domain[:port],
-  or empty for automatic public-IP discovery. Invalid modes and private
-  references are rejected. Returns the existing `RealityScanResult[]` format.
+| Method | Path | Behavior |
+|---|---|---|
+| POST | `/sni/jobs` | JSON `SNIScanRequest`: mode, targets, purpose, optional nodeId/recheck |
+| GET | `/sni/jobs/:id` | Incremental `SNIJobSnapshot`, renews browser lease |
+| DELETE | `/sni/jobs/:id` | Cancel work |
+| GET | `/sni/history` | Stored completed scans |
 
-The default candidate list and existing scan behavior are preserved.
+For GET/DELETE, pass the same optional `nodeId` query used at creation. Zero or
+omitted means local. Node-sync credentials can operate only on their own local
+scanner; they cannot relay requests through another node. Creation accepts up to
+128 KiB. `recheck` accepts at most 20 entries with IP, hostname and valid port.
+The API documentation UI and generated TypeScript/Zod/JSON schemas cover these
+contracts and the optional diagnostic fields on `RealityScanResult`.
+
+The original `POST /scanRealityTargets` API remains compatible:
+`mode=candidates` (or omitted) scans its supplied/configured targets;
+`mode=nearby` scans around one reference. It returns `RealityScanResult[]` and
+uses the same shared connection/rate limits. New UI workflows use queued jobs.
+
+## RealiTLScanner reference and practical limits
+
+Reference: https://github.com/XTLS/RealiTLScanner at
+`e5e114747aa8c6dfa4b394a0782f241bf72bdce6` (`utils.go`, `scanner.go`, `geo.go`).
+The upstream alternates neighboring addresses indefinitely for a single IP/domain,
+extracts TLS certificate names and reports TLS 1.3/h2 candidates. Its optional
+GeoIP database reports country, not geographic distance. This integration uses
+that approach with the panel's existing TLS probe, finite bounds, certificate
+verification, cancellation, ranking, persistence and node dispatch; no extra
+scanner binary or GeoIP database is required.
+
+IP proximity does not guarantee geographic proximity. Measurements are TCP/TLS
+setup times from the execution server, not ICMP ping or proof of reachability
+from client networks. Only bounded candidates are examined, and default
+certificates containing only wildcard patterns may reveal no usable hostname.
+Scanning may be flagged by the hosting provider; the shared limits constrain
+traffic without guaranteeing provider acceptance.

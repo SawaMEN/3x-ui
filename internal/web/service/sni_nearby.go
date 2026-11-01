@@ -51,14 +51,16 @@ func (s *ServerService) ScanNearbySNIs(ctx context.Context, reference string) ([
 	}
 	reference = strings.TrimSpace(reference)
 	if reference == "" {
-		if done := s.resolvePublicIPsInBackground(); done != nil {
+		ipv4, ipv6 := s.publicIPs()
+		// Keep a warm public-IP cache usable while a bounded refresh runs.
+		if done := s.resolvePublicIPsInBackground(); done != nil && net.ParseIP(ipv4) == nil && net.ParseIP(ipv6) == nil {
 			select {
 			case <-done:
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
 		}
-		ipv4, ipv6 := s.publicIPs()
+		ipv4, ipv6 = s.publicIPs()
 		reference = ipv4
 		if _, err := netip.ParseAddr(reference); err != nil {
 			reference = ipv6
@@ -96,6 +98,7 @@ func (s *ServerService) ScanNearbySNIs(ctx context.Context, reference string) ([
 type nearbySNIProbe func(string, int, string, time.Duration, int, bool) *RealityScanResult
 
 func scanNearbySNIAddresses(ctx context.Context, addresses []string, port int, probe nearbySNIProbe) ([]*RealityScanResult, error) {
+	emitSNIProgress(ctx, len(addresses), 0, nil)
 	results := make([]*RealityScanResult, len(addresses))
 	sem := make(chan struct{}, realityScanConcurrency)
 	var wg sync.WaitGroup
@@ -117,7 +120,7 @@ func scanNearbySNIAddresses(ctx context.Context, addresses []string, port int, p
 		wg.Add(1)
 		go func(index int, address string) {
 			defer wg.Done()
-			defer func() { <-sem }()
+			defer func() { <-sem; emitSNIProgress(ctx, 0, 1, results[index]) }()
 			discovered := probe(address, port, "", realityDiscoverTimeout, 0, false)
 			if discovered == nil || !discovered.CertChainValid || ctx.Err() != nil {
 				return
@@ -141,6 +144,7 @@ func scanNearbySNIAddresses(ctx context.Context, addresses []string, port int, p
 				}
 				verified.Target = net.JoinHostPort(address, strconv.Itoa(port))
 				verified.IP = address
+				verified.Source = "neighbors"
 				verified.ServerNames = []string{name}
 				if results[index] == nil || betterRealityResult(verified, results[index]) {
 					results[index] = verified

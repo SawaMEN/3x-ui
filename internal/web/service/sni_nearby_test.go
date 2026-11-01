@@ -196,12 +196,19 @@ func TestNearbyTLSProbeEndToEnd(t *testing.T) {
 			func(ip string, port int, sni string, timeout time.Duration, xver int, private bool) *RealityScanResult {
 				sentNames = append(sentNames, sni)
 				// Loopback is permitted only for this local TLS fixture.
-				return (&ServerService{}).probeRealityAddrContext(context.Background(), ip, port, sni, timeout, xver, true)
+				probeCtx := context.Background()
+				if sni != "" {
+					probeCtx = context.WithValue(probeCtx, sniHTTPCheckKey{}, true)
+				}
+				return (&ServerService{}).probeRealityAddrContext(probeCtx, ip, port, sni, timeout, xver, true)
 			})
 		if err != nil || len(got) != 1 {
 			t.Fatalf("real TLS discovery failed: %+v %v", got, err)
 		}
 		r := got[0]
+		if r.HTTP2OK == nil || !*r.HTTP2OK || r.TLSMs <= 0 {
+			t.Fatalf("missing detailed TLS/HTTP2 diagnostics: %+v", r)
+		}
 		if !r.Feasible || !r.CertValid || r.Target != address || r.IP != host || !reflect.DeepEqual(r.ServerNames, []string{r.Host}) {
 			t.Fatalf("unexpected result: %+v", r)
 		}

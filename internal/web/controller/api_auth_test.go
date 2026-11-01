@@ -187,6 +187,9 @@ func TestCheckAPIAuth_AcceptsVerifiedClientCert(t *testing.T) {
 
 func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 	expected := map[string]map[string]struct{}{
+		"/server/sni/jobs":                            {http.MethodPost: {}},
+		"/server/sni/jobs/:id":                        {http.MethodGet: {}, http.MethodDelete: {}},
+		"/server/sni/history":                         {http.MethodGet: {}},
 		"/server/status":                              {http.MethodGet: {}},
 		"/inbounds/list":                              {http.MethodGet: {}},
 		"/inbounds/add":                               {http.MethodPost: {}},

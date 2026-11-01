@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Form } from 'antd';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
@@ -7,7 +7,7 @@ import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { HttpUtil, Msg } from '@/utils';
 import { useSecurityActions } from '@/pages/inbounds/form/useSecurityActions';
 import type { InboundFormValues } from '@/schemas/forms/inbound-form';
-import type { RealityScanResult } from '@/generated/types';
+import type { RealityScanResult, SNIJobSnapshot } from '@/generated/types';
 import { TlsForm } from '@/pages/inbounds/form/security';
 import AnyTlsFields from '@/pages/inbounds/form/protocols/anytls';
 import NaiveFields from '@/pages/inbounds/form/protocols/naive';
@@ -41,6 +41,23 @@ const candidate: RealityScanResult = {
   privateTarget: false,
   reason: 'server does not negotiate HTTP/2 (h2)',
 };
+function doneScan(rows: RealityScanResult[]): SNIJobSnapshot {
+  return {
+    id: 'test-scan',
+    state: 'done',
+    phase: 'done',
+    source: 'local',
+    createdAt: '',
+    total: rows.length,
+    completed: rows.length,
+    verified: 0,
+    verifyTotal: 0,
+    results: rows,
+  };
+}
+beforeEach(() => {
+  vi.spyOn(HttpUtil, 'get').mockResolvedValue(new Msg(true, '', []));
+});
 const noop = () => {};
 const tls = (
   <TlsForm
@@ -54,9 +71,10 @@ const tls = (
   />
 );
 
-function Harness({ children }: { children: ReactNode }) {
+function Harness({ children, nodeId }: { children: ReactNode; nodeId?: number }) {
   const methods = useForm({
     defaultValues: {
+      nodeId,
       settings: {
         tls: { serverName: 'old.example', certificatePath: '/custom/cert', keyPath: '/custom/key' },
         server: { sni: 'old.example', certificate: '/custom/cert', private_key: '/custom/key' },
@@ -111,18 +129,32 @@ describe('SNI search in protocol forms', () => {
   ])(
     'applies a picked domain to %s without changing custom certificates',
     async (_, fields, path) => {
-      const post = vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(true, '', [candidate]));
+      const post = vi
+        .spyOn(HttpUtil, 'post')
+        .mockResolvedValue(new Msg(true, '', doneScan([candidate])));
       // Mtproto's outbound selector is unrelated to the scanner.
       vi.spyOn(HttpUtil, 'get').mockResolvedValue(new Msg(true, '', []));
       renderWithProviders(<Harness>{fields}</Harness>);
-      expect(post.mock.calls.some(([url]) => url === '/panel/api/server/scanRealityTargets')).toBe(
-        false,
-      );
+      expect(post.mock.calls.some(([url]) => url === '/panel/api/server/sni/jobs')).toBe(false);
       await pick();
       expect(post).toHaveBeenCalledWith(
-        '/panel/api/server/scanRealityTargets',
-        {},
-        { silent: true, timeout: 360_000, signal: expect.any(AbortSignal) },
+        '/panel/api/server/sni/jobs',
+        {
+          mode: 'candidates',
+          targets: '',
+          purpose: path.includes('handshake')
+            ? 'shadowtls'
+            : path.includes('fakeTls')
+              ? 'fakeTls'
+              : 'tls',
+          nodeId: 0,
+        },
+        {
+          silent: true,
+          timeout: 15_000,
+          signal: expect.any(AbortSignal),
+          headers: { 'Content-Type': 'application/json' },
+        },
       );
       const saved = values();
       expect(path.split('.').reduce((value, key) => value[key], saved)).toBe('edge.example');
@@ -143,7 +175,7 @@ describe('SNI search in protocol forms', () => {
 
   it('uses the verified hostname when its certificate contains only wildcard SANs', async () => {
     vi.spyOn(HttpUtil, 'post').mockResolvedValue(
-      new Msg(true, '', [{ ...candidate, serverNames: [] }]),
+      new Msg(true, '', doneScan([{ ...candidate, serverNames: [] }])),
     );
     renderWithProviders(
       <Harness>
@@ -155,7 +187,9 @@ describe('SNI search in protocol forms', () => {
   });
 
   it('keeps manual typing and forwards custom domain/IP/CIDR searches', async () => {
-    const post = vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(true, '', [candidate]));
+    const post = vi
+      .spyOn(HttpUtil, 'post')
+      .mockResolvedValue(new Msg(true, '', doneScan([candidate])));
     renderWithProviders(
       <Harness>
         <NaiveFields key="NaiveFields" />
@@ -172,9 +206,14 @@ describe('SNI search in protocol forms', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /\bScan$/ }));
     await waitFor(() =>
       expect(post).toHaveBeenLastCalledWith(
-        '/panel/api/server/scanRealityTargets',
-        { targets: 'example.org, 203.0.113.0/30' },
-        { silent: true, timeout: 360_000, signal: expect.any(AbortSignal) },
+        '/panel/api/server/sni/jobs',
+        { mode: 'candidates', targets: 'example.org, 203.0.113.0/30', purpose: 'tls', nodeId: 0 },
+        {
+          silent: true,
+          timeout: 15_000,
+          signal: expect.any(AbortSignal),
+          headers: { 'Content-Type': 'application/json' },
+        },
       ),
     );
   });
@@ -218,7 +257,7 @@ describe('SNI search in protocol forms', () => {
   it('shows a failed request and allows a retry', async () => {
     vi.spyOn(HttpUtil, 'post')
       .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce(new Msg(true, '', [candidate]));
+      .mockResolvedValueOnce(new Msg(true, '', doneScan([candidate])));
     renderWithProviders(
       <Harness>
         <NaiveFields key="NaiveFields" />
@@ -288,14 +327,20 @@ it('switches to nearby mode, passes a server reference and ignores stale results
   fireEvent.change(input, { target: { value: '8.8.8.8' } });
   fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
   await waitFor(() =>
-    expect(scan).toHaveBeenLastCalledWith('8.8.8.8', 'nearby', expect.any(AbortSignal)),
+    expect(scan).toHaveBeenLastCalledWith(
+      '8.8.8.8',
+      'nearby',
+      expect.any(AbortSignal),
+      expect.any(Function),
+      undefined,
+    ),
   );
   await act(async () => finishInitial([candidate]));
   expect(screen.queryByText('edge.example:8443')).toBeNull();
 });
 
 it('sends nearby mode through the shared SNI API with automatic server discovery', async () => {
-  const post = vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(true, '', []));
+  const post = vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(true, '', doneScan([])));
   renderWithProviders(<Harness>{tls}</Harness>);
   fireEvent.click(screen.getByRole('button', { name: 'Find SNI' }));
   const dialog = await screen.findByRole('dialog');
@@ -305,9 +350,14 @@ it('sends nearby mode through the shared SNI API with automatic server discovery
   fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
   await waitFor(() =>
     expect(post).toHaveBeenLastCalledWith(
-      '/panel/api/server/scanRealityTargets',
-      { targets: '', mode: 'nearby' },
-      { silent: true, timeout: 360_000, signal: expect.any(AbortSignal) },
+      '/panel/api/server/sni/jobs',
+      { targets: '', mode: 'nearby', purpose: 'tls', nodeId: 0 },
+      {
+        silent: true,
+        timeout: 15_000,
+        signal: expect.any(AbortSignal),
+        headers: { 'Content-Type': 'application/json' },
+      },
     ),
   );
 });
@@ -415,4 +465,187 @@ it('displays a successful sub-millisecond TLS connection as 0 ms', async () => {
     />,
   );
   expect(await screen.findByText('0 ms')).toBeTruthy();
+});
+
+it('shows intermediate scan results and lets the user stop active work', async () => {
+  const scan = vi.fn((_targets, _mode, _signal, progress) => {
+    progress({
+      ...doneScan([candidate]),
+      state: 'running',
+      phase: 'discovering',
+      total: 256,
+      completed: 1,
+    });
+    return new Promise<RealityScanResult[]>(() => {});
+  });
+  renderWithProviders(
+    <RealityTargetScannerModal
+      open
+      purpose="tls"
+      onClose={noop}
+      onPick={noop}
+      scanRealityCandidates={scan}
+    />,
+  );
+  expect(await screen.findByText('edge.example:8443')).toBeTruthy();
+  expect(screen.getByText(/1\/256/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Stop scan' }));
+  expect(scan.mock.calls[0][2].aborted).toBe(true);
+  expect(screen.getByText(/Stopped/)).toBeTruthy();
+  expect(screen.getByText('edge.example:8443')).toBeTruthy();
+});
+
+it('recommends a stable result ahead of a faster unreliable endpoint', async () => {
+  const unstable = {
+    ...candidate,
+    target: 'unstable.example:443',
+    host: 'unstable.example',
+    feasible: true,
+    latencyMs: 1,
+    attempts: 5,
+    successes: 3,
+    medianMs: 1,
+  };
+  const stable = {
+    ...candidate,
+    feasible: true,
+    latencyMs: 10,
+    attempts: 5,
+    successes: 5,
+    medianMs: 10,
+    jitterMs: 1,
+    http2OK: true,
+    dnsMatchesIP: false,
+  };
+  renderWithProviders(
+    <RealityTargetScannerModal
+      open
+      onClose={noop}
+      onPick={noop}
+      scanRealityCandidates={async () => [unstable, stable]}
+    />,
+  );
+  expect(await screen.findByText('Recommended')).toBeTruthy();
+  const buttons = screen.getAllByRole('button', { name: 'Use' }) as HTMLButtonElement[];
+  expect(buttons.map((button) => button.disabled)).toEqual([false, true]);
+  expect(screen.getByText('HTTP/2 OK')).toBeTruthy();
+});
+
+it('loads saved measurements and rechecks the saved IP/SNI pair', async () => {
+  const stored = {
+    ...doneScan([candidate]),
+    createdAt: '2026-11-01T10:00:00Z',
+    finishedAt: '2026-11-01T10:01:00Z',
+  };
+  vi.spyOn(HttpUtil, 'get').mockResolvedValue(new Msg(true, '', [stored]));
+  const scan = vi.fn().mockResolvedValue([]);
+  renderWithProviders(
+    <RealityTargetScannerModal
+      open
+      enableHistory
+      nodeId={7}
+      purpose="tls"
+      onClose={noop}
+      onPick={noop}
+      scanRealityCandidates={scan}
+    />,
+  );
+  fireEvent.click(screen.getByText('Saved results'));
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('combobox', { name: 'Saved results' }) as HTMLInputElement).disabled,
+    ).toBe(false),
+  );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Saved results' }));
+  fireEvent.click(await screen.findByText(/1 SNI/));
+  expect(screen.getByText('edge.example:8443')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Recheck saved targets' }));
+  await waitFor(() =>
+    expect(scan).toHaveBeenLastCalledWith(
+      undefined,
+      'recheck',
+      expect.any(AbortSignal),
+      expect.any(Function),
+      [candidate],
+    ),
+  );
+  expect(HttpUtil.get).toHaveBeenCalledWith(
+    '/panel/api/server/sni/history?nodeId=7',
+    undefined,
+    expect.anything(),
+  );
+});
+
+it('cancels the old scan when the execution node changes', async () => {
+  const scan = vi.fn().mockResolvedValue([]);
+  const modal = (nodeId: number) => (
+    <RealityTargetScannerModal
+      open
+      nodeId={nodeId}
+      onClose={noop}
+      onPick={noop}
+      scanRealityCandidates={scan}
+    />
+  );
+  const { rerender } = renderWithProviders(modal(7));
+  await waitFor(() => expect(scan).toHaveBeenCalledTimes(1));
+  const signal = scan.mock.calls[0][2] as AbortSignal;
+  rerender(modal(8));
+  await waitFor(() => expect(scan).toHaveBeenCalledTimes(2));
+  expect(signal.aborted).toBe(true);
+  expect(screen.getByText('Scanning from selected node #8')).toBeTruthy();
+});
+
+it('uses the inbound’s selected node for protocol-form SNI searches', async () => {
+  const post = vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(true, '', doneScan([])));
+  renderWithProviders(
+    <Harness nodeId={7}>
+      <NaiveFields />
+    </Harness>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Find SNI' }));
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/panel/api/server/sni/jobs',
+      expect.objectContaining({ nodeId: 7, purpose: 'tls' }),
+      expect.anything(),
+    ),
+  );
+  expect(screen.getByText('Scanning from selected node #7')).toBeTruthy();
+});
+
+it('ranks an ML-DSA-65-compatible target ahead of a faster undersized certificate', async () => {
+  const small = {
+    ...candidate,
+    target: 'small.example:443',
+    host: 'small.example',
+    feasible: true,
+    certChainBytes: 3000,
+    attempts: 5,
+    successes: 5,
+    medianMs: 1,
+  };
+  const compatible = {
+    ...candidate,
+    feasible: true,
+    certChainBytes: 4000,
+    attempts: 5,
+    successes: 5,
+    medianMs: 10,
+  };
+  renderWithProviders(
+    <RealityTargetScannerModal
+      open
+      mldsa65Enabled
+      onClose={noop}
+      onPick={noop}
+      scanRealityCandidates={async () => [small, compatible]}
+    />,
+  );
+  expect(await screen.findByText('Recommended')).toBeTruthy();
+  expect(
+    (screen.getAllByRole('button', { name: 'Use' }) as HTMLButtonElement[]).map(
+      (button) => button.disabled,
+    ),
+  ).toEqual([false, true]);
 });

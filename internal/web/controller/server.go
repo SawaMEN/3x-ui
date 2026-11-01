@@ -96,6 +96,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/clientIps", a.setClientIps)
 
 	a.initVKTurnProxyRouter(g)
+	a.initSNIJobRouter(g)
 }
 
 func (a *ServerController) readHiddify(c *gin.Context) (*service.HiddifyBackup, service.HiddifyPreview, error) {
