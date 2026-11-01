@@ -3036,6 +3036,14 @@ func BackupSQLite(dstPath string) (err error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	file, err := os.OpenFile(dstPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(dstPath)
+		return err
+	}
 	defer func() {
 		if err != nil {
 			_ = os.Remove(dstPath)

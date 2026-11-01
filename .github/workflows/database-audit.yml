@@ -1,0 +1,53 @@
+name: Database compatibility audit
+on:
+  push:
+    branches: [update]
+    paths: ['internal/database/**', 'internal/web/service/**', '.github/workflows/database-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: database-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: xui_audit
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres -d xui_audit" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      XUI_TEST_PG_DSN: host=127.0.0.1 port=5432 user=postgres password=postgres dbname=xui_audit sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Prepare embedded assets and dependencies
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep && bash tools/ci/download-go-modules.sh
+      - name: SQLite upgrades, snapshots and failures plus actual PostgreSQL roundtrip
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/database ./internal/database/model -count=1 | tee database.jsonl
+          python3 tools/ci/require-go-tests.py database.jsonl TestStage3LegacyUpgrade TestStage3PostgresRoundTrip TestStage3PostgresCommitAndDisconnect TestStage3DumpPreservesStorageClasses TestStage3RestoreRejectsUncommittedDump TestStage3ExportFailurePreservesDestination TestStage3CopyRollback TestStage3SQLiteWriteFailures TestStage3DumpConcurrentSnapshot TestMigrateData_CompositeKeyTableLargerThanBatch TestMigrateData_PreservesFalseDefaultedColumns TestMigrateData_FailedCopyLeavesDestinationUntouched
+      - name: Durable runtime and PostgreSQL traffic/link integrity
+        env:
+          XUI_DB_TYPE: postgres
+          XUI_DB_DSN: ${{ env.XUI_TEST_PG_DSN }}
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/web/service -run 'PostgresCommitFailure' -count=1 | tee runtime-commit.jsonl
+          python3 tools/ci/require-go-tests.py runtime-commit.jsonl TestAddInbound_PostgresCommitFailureMakesNoRuntimeCall TestUpdateInbound_PostgresCommitFailureMakesNoRuntimeCall
+      - name: Preserve machine-readable results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: database-audit-evidence
+          path: '*.jsonl'
