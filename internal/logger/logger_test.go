@@ -139,7 +139,8 @@ func TestGetLogs_ReturnsAtMostC(t *testing.T) {
 		{0, 0},
 		{2, 2},
 		{5, 5},
-		{10, 5}, // capped at what's available
+		{10, 5},                 // capped at what's available
+		{int(^uint(0) >> 1), 5}, // untrusted count cannot grow the allocation beyond buffered records
 	}
 	for _, tc := range cases {
 		if got := GetLogs(tc.c, "debug"); len(got) != tc.want {
