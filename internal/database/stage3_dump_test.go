@@ -106,3 +106,27 @@ func TestStage3ValidateRejectsIncompleteFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestStage3DumpReplacesInsecureDestination(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src.db")
+	out := filepath.Join(dir, "backup.sql")
+	raw, err := sql.Open("sqlite3", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	if _, err := raw.Exec("CREATE TABLE t(value TEXT); INSERT INTO t VALUES('synthetic-secret')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(out, []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := DumpSQLite(src, out); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(out)
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("dump readable by other users: %v %v", info, err)
+	}
+}

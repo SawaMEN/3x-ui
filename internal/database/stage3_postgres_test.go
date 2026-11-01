@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -60,26 +59,11 @@ func stage3Canonical(t *testing.T, g *gorm.DB) string {
 		if err := s.Parse(m); err != nil {
 			t.Fatal(err)
 		}
-		slice := reflect.New(reflect.SliceOf(reflect.TypeOf(m)))
-		if err := g.Order("1").Find(slice.Interface()).Error; err != nil {
+		var rows []map[string]any
+		if err := g.Model(m).Select(s.Schema.DBNames).Order("1").Find(&rows).Error; err != nil {
 			t.Fatal(err)
 		}
-		rows := make([]map[string]any, 0, slice.Elem().Len())
-		for i := 0; i < slice.Elem().Len(); i++ {
-			row := map[string]any{}
-			for _, name := range s.Schema.DBNames {
-				v, _ := s.Schema.FieldsByDBName[name].ValueOf(context.Background(), reflect.Indirect(slice.Elem().Index(i)))
-				if value, ok := v.(driver.Valuer); ok {
-					var err error
-					v, err = value.Value()
-					if err != nil {
-						t.Fatal(err)
-					}
-				}
-				row[name] = v
-			}
-			rows = append(rows, row)
-		}
+
 		result[s.Table] = rows
 	}
 	b, err := json.Marshal(result)
@@ -125,6 +109,10 @@ func stage3PopulatedLegacy(t *testing.T) string {
 			t.Fatalf("populate %s: %v", s.Table, err)
 		}
 	}
+	if err := g.Exec("INSERT INTO settings (key,value) VALUES ('stage3-null',NULL)").Error; err != nil {
+		t.Fatal(err)
+	}
+
 	if err := CloseDB(); err != nil {
 		t.Fatal(err)
 	}

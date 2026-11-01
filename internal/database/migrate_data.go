@@ -1,13 +1,11 @@
 package database
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -83,10 +81,6 @@ func MigrateData(srcPath, dstDSN string) error {
 	}
 	if dstDSN == "" {
 		return errors.New("destination DSN is required")
-	}
-
-	if err := os.MkdirAll(path.Dir(srcPath), 0o755); err != nil {
-		return err
 	}
 
 	srcDSN := srcPath + "?_journal_mode=WAL&_busy_timeout=10000"
@@ -166,7 +160,7 @@ func ExportPostgresToSQLite(srcDSN, dstPath string) error {
 	if srcDSN == "" {
 		return errors.New("source DSN is required")
 	}
-	if err := os.MkdirAll(path.Dir(dstPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
 		return err
 	}
 
@@ -182,7 +176,7 @@ func ExportPostgresToSQLite(srcDSN, dstPath string) error {
 
 	// Build beside the destination and publish only after a complete snapshot.
 	// A failed connection/copy must not destroy an existing backup.
-	file, err := os.CreateTemp(filepath.Dir(dstPath), ".x-ui-export-*.db")
+	file, err := os.CreateTemp(filefilepath.Dir(dstPath), ".x-ui-export-*.db")
 	if err != nil {
 		return err
 	}
@@ -236,8 +230,6 @@ func copyAllModels(src, dst *gorm.DB) error {
 func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 	const batchSize = 500
 
-	sliceType := reflect.SliceOf(reflect.PointerTo(reflect.TypeOf(mdl).Elem()))
-
 	stmt := &gorm.Statement{DB: src}
 	if err := stmt.Parse(mdl); err != nil {
 		return 0, err
@@ -246,7 +238,6 @@ func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 	table := stmt.Schema.Table
 	columns := stmt.Schema.DBNames
 
-	ctx := context.Background()
 	total := 0
 	var cursor []any
 	primary := stmt.Schema.PrimaryFields
@@ -257,8 +248,8 @@ func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 		placeholders[i] = "?"
 	}
 	for offset := 0; ; offset += batchSize {
-		batchPtr := reflect.New(sliceType)
-		q := src.Model(mdl).Limit(batchSize)
+		var rows []map[string]any
+		q := src.Model(mdl).Select(columns).Limit(batchSize)
 		if len(primary) == 0 {
 			q = q.Offset(offset)
 		} else if len(cursor) > 0 {
@@ -267,24 +258,12 @@ func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 		if order != "" {
 			q = q.Order(order)
 		}
-		if err := q.Find(batchPtr.Interface()).Error; err != nil {
+		if err := q.Find(&rows).Error; err != nil {
 			return total, err
 		}
-		slice := batchPtr.Elem()
-		n := slice.Len()
+		n := len(rows)
 		if n == 0 {
 			break
-		}
-
-		rows := make([]map[string]any, n)
-		for i := range n {
-			rv := reflect.Indirect(slice.Index(i))
-			row := make(map[string]any, len(columns))
-			for _, name := range columns {
-				value, _ := stmt.Schema.FieldsByDBName[name].ValueOf(ctx, rv)
-				row[name] = value
-			}
-			rows[i] = row
 		}
 
 		if err := dst.Table(table).CreateInBatches(rows, max(1, 999/len(columns))).Error; err != nil {
@@ -293,9 +272,9 @@ func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 		total += n
 		if len(primary) > 0 {
 			cursor = make([]any, len(primary))
-			last := reflect.Indirect(slice.Index(n - 1))
+			last := rows[n-1]
 			for i, f := range primary {
-				cursor[i], _ = f.ValueOf(ctx, last)
+				cursor[i] = last[f.DBName]
 			}
 		}
 		if n < batchSize {
