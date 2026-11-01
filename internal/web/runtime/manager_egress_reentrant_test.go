@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -37,4 +38,34 @@ func TestManagerEgressResolverMayReenterManager(t *testing.T) {
 	if got := manager.NodeEgressProxyURL(7); got != "" {
 		t.Fatalf("stale resolver used after clearing: %q", got)
 	}
+}
+
+type constantNodeEgressResolver string
+
+func (r constantNodeEgressResolver) NodeEgressProxyURL(int) string {
+	return string(r)
+}
+
+func TestManagerEgressResolverConcurrentReplacement(t *testing.T) {
+	manager := NewManager(LocalDeps{})
+	var wg sync.WaitGroup
+	for worker := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for iteration := range 500 {
+				if (worker+iteration)%2 == 0 {
+					manager.SetNodeEgressResolver(constantNodeEgressResolver("http://127.0.0.1:1080"))
+				} else {
+					manager.SetNodeEgressResolver(nil)
+				}
+				got := manager.NodeEgressProxyURL(7)
+				if got != "" && got != "http://127.0.0.1:1080" {
+					t.Errorf("unexpected egress URL %q", got)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
