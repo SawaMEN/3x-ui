@@ -222,6 +222,8 @@ jobs:
           go list ./internal/... . > /tmp/race-packages.txt
           mapfile -t packages < <(grep -Ev '^github.com/SawaMEN/3x-ui/v3/internal/(web/service|sub)$' /tmp/race-packages.txt)
           go test -race -p 12 -short -vet=off -timeout 20m "${packages[@]}"
+      - name: Repeat TUIC cross-transport UDP echo under race detector
+        run: go test -race ./internal/tuic -run '^TestAudit3FirstTransportReturnsPositiveEchoAfterOppositeModePacket$' -count=8 -timeout=4m
 
   race-service:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
