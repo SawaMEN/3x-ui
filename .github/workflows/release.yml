@@ -123,7 +123,7 @@ jobs:
       matrix:
         include:
           - platform: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - platform: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
@@ -155,6 +155,14 @@ jobs:
         with:
           name: telemt-linux-${{ matrix.platform }}
           path: ${{ runner.temp }}/telemt-package
+
+      - name: Install native musl compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          musl-gcc --version
+          dpkg-query --show musl musl-dev musl-tools
+          echo "CC=musl-gcc" >> "$GITHUB_ENV"
 
       - name: Build Linux package
         shell: bash
@@ -189,26 +197,6 @@ jobs:
           export CGO_ENABLED=1
           export GOOS=linux
           export GOARCH=${{ matrix.platform }}
-
-          case "${{ matrix.platform }}" in
-            amd64) BOOTLIN_ARCH=x86-64 ;;
-            arm64) BOOTLIN_ARCH=aarch64 ;;
-            *) exit 1 ;;
-          esac
-
-          TARBALL_BASE="https://toolchains.bootlin.com/downloads/releases/toolchains/${BOOTLIN_ARCH}/tarballs/"
-          TARBALL_URL=$(curl -fsSL "${CURL_RETRY[@]}" "$TARBALL_BASE" | grep -oE "${BOOTLIN_ARCH}--musl--stable-[^\"]+\.tar\.xz" | sort -r | head -n1)
-          test -n "$TARBALL_URL"
-          cd /tmp
-          curl -fL -sS "${CURL_RETRY[@]}" -o "$(basename "$TARBALL_URL")" "$TARBALL_BASE/$TARBALL_URL"
-          tar -xf "$(basename "$TARBALL_URL")"
-          TOOLCHAIN_DIR=$(find . -maxdepth 1 -type d -name "${BOOTLIN_ARCH}--musl--stable-*" | head -n1)
-          test -n "$TOOLCHAIN_DIR"
-          export PATH="$(realpath "$TOOLCHAIN_DIR")/bin:$PATH"
-          export CC=$(realpath "$(find "$TOOLCHAIN_DIR/bin" -name '*-gcc.br_real' -type f -executable | head -n1)")
-          test -n "$CC"
-          echo "CC=$CC" >> "$GITHUB_ENV"
-          cd -
 
           LDFLAGS="-w -s -linkmode external -extldflags '-static'"
           if [[ "$GITHUB_REF" != refs/tags/* ]]; then
@@ -317,6 +305,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install pinned formatter without lifecycle scripts
+        working-directory: frontend
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Download Linux build artifacts
         uses: actions/download-artifact@v8
         with:
@@ -364,7 +362,11 @@ jobs:
                 fi
               done < <(git diff-tree --no-commit-id --name-only -r "$revision")
             done < <(git rev-list "$COMMIT..$latest")
-            echo "Only trusted formatter commits follow this build; publishing verified artifacts."
+            if ! python3 tools/ci/verify-format-descendant.py "$COMMIT" "$latest"; then
+              echo "Descendant changes are not equivalent under the pinned formatter; rolling release unchanged."
+              exit 0
+            fi
+            echo "Verified formatter-only descendants; publishing tested artifacts."
           fi
           git tag -f dev-latest "$COMMIT"
           git push -f origin refs/tags/dev-latest

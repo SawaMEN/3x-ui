@@ -25,11 +25,11 @@ docker run --rm --entrypoint /bin/sh "$image" -ec '
 # Inspect and execute the exact musl kernel from the image on the native runner.
 task_tmp=$(mktemp -d)
 probe=$(docker create "$image")
-docker cp "$probe:$core" "$task_tmp/core"
+docker cp "$probe:$core" "$task_tmp/hiddify-core-linux-$arch"
 docker cp "$probe:/app/bin/target.json" "$task_tmp/target.json"
 docker rm "$probe" >/dev/null
-readelf -h "$task_tmp/core"
-if readelf -l "$task_tmp/core" | grep -q INTERP || readelf -d "$task_tmp/core" | grep -q NEEDED; then
+readelf -h "$task_tmp/hiddify-core-linux-$arch"
+if readelf -l "$task_tmp/hiddify-core-linux-$arch" | grep -q INTERP || readelf -d "$task_tmp/hiddify-core-linux-$arch" | grep -q NEEDED; then
   echo 'Packaged musl kernel unexpectedly needs a dynamic loader/library' >&2
   exit 1
 fi
@@ -44,7 +44,7 @@ assert 'with_purego' not in actual['panel_build']['tags']
 PYLOCK
 mkdir -p internal/web/dist
 touch internal/web/dist/.gitkeep
-HIDDIFY_CONFIG_CHECK_BINARY="$task_tmp/core" go test -json ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1 | tee "$task_tmp/config-check.jsonl"
+HIDDIFY_CONFIG_CHECK_BINARY="$task_tmp/hiddify-core-linux-$arch" go test -json ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1 | tee "$task_tmp/config-check.jsonl"
 python3 tools/ci/require-go-tests.py "$task_tmp/config-check.jsonl" TestPinnedBinaryChecksGeneratedConfigurations
 rm -rf -- "$task_tmp"
 container=$(docker run -d -e XUI_ENABLE_FAIL2BAN=false -p 127.0.0.1::2053 "$image")
