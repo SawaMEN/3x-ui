@@ -16,9 +16,13 @@ func init() {
 	nodeSyncScopeAllow["/server/sni/jobs/:id"] = map[string]struct{}{http.MethodGet: {}, http.MethodDelete: {}}
 	nodeSyncScopeAllow["/server/sni/history"] = map[string]struct{}{http.MethodGet: {}}
 }
+
 func (a *ServerController) initSNIJobRouter(g *gin.RouterGroup) {
 	scanner := g.Group("/sni")
-	scanner.Use(func(c *gin.Context) { c.Header("Cache-Control", "no-store"); c.Next() })
+	scanner.Use(func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		c.Next()
+	})
 	scanner.POST("/jobs", a.startSNIScan)
 	scanner.GET("/jobs/:id", a.sniScanStatus)
 	scanner.DELETE("/jobs/:id", a.sniScanStatus)
