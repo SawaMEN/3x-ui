@@ -14,7 +14,7 @@
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-b310097c8e7a-338f0c9457a4-mask1-ciphers1-net62"
+    "version": "sawamen-b310097c8e7a-338f0c9457a4-mask1-ciphers1-net62-sec1"
   },
   "runtime_contract": {
     "raw_config_command": ["srun", "-c"],
@@ -108,7 +108,7 @@
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
     "runtime_dependencies": ["matching libcronet for Naive outbound"],
     "activation_ready": false,
-    "toolchain": "go1.26.9",
+    "toolchain": "go1.26.10",
     "validation_cli_available": true,
     "user_stats_api_available": true,
     "clash_user_overlay": "deploy/hiddify/clash-user.patch",
@@ -144,7 +144,9 @@
     "reverse_vision_test_overlay": "deploy/hiddify/reverse_vision_test.go.in",
     "runtime_dependencies_overlay": "deploy/hiddify/runtime-dependencies.patch",
     "security_dependencies": {
-      "golang.org/x/net": "v0.62.0"
+      "golang.org/x/net": "v0.62.0",
+      "github.com/go-chi/chi/v5": "v5.3.0",
+      "github.com/google/cel-go": "v0.30.0"
     },
     "speed_broker_overlay": "deploy/speed/masque.patch",
     "speed_broker_sdk": "internal/clientlimit/brokerclient/client.go",

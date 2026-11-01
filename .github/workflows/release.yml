@@ -248,7 +248,7 @@ jobs:
         run: |
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
           # Reuse the native Alpine profile already exercised by Docker checks.
-          docker build --target kernel --platform linux/${{ matrix.platform }} -t x-ui-kernel:${{ matrix.platform }} .
+          docker build --target kernel --build-arg HIDDIFY_VULNCHECK=1 --platform linux/${{ matrix.platform }} -t x-ui-kernel:${{ matrix.platform }} .
           container=$(docker create --entrypoint /bin/true x-ui-kernel:${{ matrix.platform }})
           trap 'docker rm -f "$container" >/dev/null' EXIT
           docker cp "$container:/kernel/." "$PWD/x-ui/bin/"

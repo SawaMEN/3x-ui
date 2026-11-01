@@ -40,7 +40,7 @@ jobs:
           cache: true
       - uses: docker/setup-buildx-action@v4
       - name: Build the production image natively
-        run: docker buildx build --load --platform linux/${{ matrix.arch }} --build-arg BUILD_COMMIT=${{ github.sha }} -t x-ui-audit:${{ matrix.arch }} .
+        run: docker buildx build --load --build-arg HIDDIFY_VULNCHECK=1 --platform linux/${{ matrix.arch }} --build-arg BUILD_COMMIT=${{ github.sha }} -t x-ui-audit:${{ matrix.arch }} .
       - name: Verify packaged core, musl linkage and panel startup
         run: bash tools/ci/check-container.sh x-ui-audit:${{ matrix.arch }} ${{ matrix.arch }}
 

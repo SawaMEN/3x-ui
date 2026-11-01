@@ -16,9 +16,10 @@ ENV CGO_ENABLED=1 CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 # The kernel target is also used by release.yml. Run native musl tests in
 # Alpine, whose compiler/libc profile matches the packaged static Cronet.
 FROM native-build-base AS kernel
+ARG HIDDIFY_VULNCHECK=0
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh /kernel
+    HIDDIFY_VULNCHECK="$HIDDIFY_VULNCHECK" SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh /kernel
 
 FROM native-build-base AS builder
 ARG TARGETARCH
