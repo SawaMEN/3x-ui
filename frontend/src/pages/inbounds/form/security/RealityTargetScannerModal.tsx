@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Input, Modal, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import type { RealityScanResult } from '@/generated/types';
@@ -27,7 +27,7 @@ export function canUseScannedTarget(result: RealityScanResult, purpose: SniScanP
 interface RealityTargetScannerModalProps {
   open: boolean;
   onClose: () => void;
-  scanRealityCandidates: (targets?: string) => Promise<RealityScanResult[]>;
+  scanRealityCandidates: (targets?: string, mode?: string) => Promise<RealityScanResult[]>;
   onPick: (result: RealityScanResult) => void;
   mldsa65Enabled?: boolean;
   purpose?: SniScanPurpose;
@@ -45,6 +45,7 @@ export default function RealityTargetScannerModal({
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
+  const [mode, setMode] = useState('candidates');
   const [results, setResults] = useState<RealityScanResult[]>([]);
   const scanRef = useRef(scanRealityCandidates);
   const requestId = useRef(0);
@@ -52,10 +53,10 @@ export default function RealityTargetScannerModal({
     scanRef.current = scanRealityCandidates;
   });
 
-  const applyScan = useCallback(async (targets?: string) => {
+  const applyScan = useCallback(async (targets?: string, scanMode?: string) => {
     const id = ++requestId.current;
     try {
-      const rows = await scanRef.current(targets);
+      const rows = await scanRef.current(targets, scanMode);
       if (id === requestId.current) setResults(rows);
     } catch {
       if (id === requestId.current) setError(true);
@@ -69,9 +70,9 @@ export default function RealityTargetScannerModal({
       setLoading(true);
       setError(false);
       setResults([]);
-      void applyScan(targets);
+      void applyScan(targets, mode);
     },
-    [applyScan],
+    [applyScan, mode],
   );
 
   // Clearing the previous results is done during render so the auto-scan effect
@@ -80,6 +81,8 @@ export default function RealityTargetScannerModal({
   if (open !== scannedOpen) {
     setScannedOpen(open);
     if (open) {
+      setMode('candidates');
+      setQuery('');
       setError(false);
       setResults([]);
       setLoading(true);
@@ -234,6 +237,26 @@ export default function RealityTargetScannerModal({
             `pages.inbounds.form.${purpose === 'reality' ? 'scanModalDesc' : purpose === 'tls' ? 'sniScanTlsDesc' : 'sniScanTargetDesc'}`,
           )}
         </Typography.Paragraph>
+        <Select
+          aria-label={t('pages.inbounds.form.scanMode')}
+          value={mode}
+          style={{ width: '100%' }}
+          options={[
+            { value: 'candidates', label: t('pages.inbounds.form.scanModeCandidates') },
+            { value: 'nearby', label: t('pages.inbounds.form.scanModeNearby') },
+          ]}
+          onChange={(value) => {
+            invalidateScan();
+            setLoading(false);
+            setMode(value);
+            setQuery('');
+            setResults([]);
+            setError(false);
+          }}
+        />
+        {mode === 'nearby' && (
+          <Alert type="info" showIcon title={t('pages.inbounds.form.scanNearbyDesc')} />
+        )}
         <Input.Search
           aria-label={t('pages.inbounds.form.scanDiscoverPlaceholder')}
           allowClear
@@ -242,7 +265,9 @@ export default function RealityTargetScannerModal({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onSearch={() => runScan(query.trim() || undefined)}
-          placeholder={t('pages.inbounds.form.scanDiscoverPlaceholder')}
+          placeholder={t(
+            `pages.inbounds.form.${mode === 'nearby' ? 'scanNearbyPlaceholder' : 'scanDiscoverPlaceholder'}`,
+          )}
         />
         {error && (
           <Alert type="error" showIcon title={t('pages.inbounds.toasts.scanRealityTargetError')} />

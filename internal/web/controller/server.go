@@ -729,7 +729,17 @@ func (a *ServerController) scanRealityTarget(c *gin.Context) {
 // scanRealityTargets probes the supplied comma-separated targets, or the
 // realityScanCandidates setting when empty, ranked by feasibility then latency.
 func (a *ServerController) scanRealityTargets(c *gin.Context) {
-	res, err := a.serverService.ScanRealityTargets(c.PostForm("targets"))
+	mode := c.PostForm("mode")
+	var res []*service.RealityScanResult
+	var err error
+	switch mode {
+	case "", "candidates":
+		res, err = a.serverService.ScanRealityTargets(c.PostForm("targets"))
+	case "nearby":
+		res, err = a.serverService.ScanNearbySNIs(c.Request.Context(), c.PostForm("targets"))
+	default:
+		err = fmt.Errorf("unknown SNI scan mode: %s", mode)
+	}
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.scanRealityTargetError"), err)
 		return

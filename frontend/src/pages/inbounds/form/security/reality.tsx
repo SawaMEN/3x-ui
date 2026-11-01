@@ -34,7 +34,7 @@ interface RealityFormProps {
   scanning: boolean;
   scanResult: RealityScanResult | null;
   scanRealityTarget: (allowPrivate?: boolean) => void;
-  scanRealityCandidates: (targets?: string) => Promise<RealityScanResult[]>;
+  scanRealityCandidates: (targets?: string, mode?: string) => Promise<RealityScanResult[]>;
   applyRealityScanResult: (result: RealityScanResult, replaceServerNames?: boolean) => void;
   randomizeShortIds: () => void;
   randomizeSpiderX: () => void;

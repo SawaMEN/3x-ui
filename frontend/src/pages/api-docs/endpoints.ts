@@ -1383,6 +1383,13 @@ export const sections: readonly Section[] = [
             optional: true,
             desc: 'Optional comma-separated tokens: domain[:port], IP[:port], or CIDR (e.g. 104.16.0.0/24). When omitted, the realityScanCandidates setting is probed (the built-in seed list if that setting is empty).',
           },
+          {
+            name: 'mode',
+            in: 'body (form)',
+            type: 'string',
+            optional: true,
+            desc: 'candidates (default) or nearby. Nearby scans up to 256 public IPs around targets (one server IP/domain[:port]), or the panel server public IP when targets is empty. Certificate names are verified with SNI against the discovered IP. Results are ranked by feasibility then TLS connection time from this server; IP proximity does not imply geographic proximity.',
+          },
         ],
         body: 'targets=104.16.0.0/24,www.apple.com:443',
         responseSchema: 'RealityScanResult',

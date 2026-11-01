@@ -160,10 +160,13 @@ export function useSecurityActions({
     }
   };
 
-  const scanRealityCandidates = async (targets?: string): Promise<RealityScanResult[]> => {
+  const scanRealityCandidates = async (
+    targets?: string,
+    mode?: string,
+  ): Promise<RealityScanResult[]> => {
     const msg = await HttpUtil.post<RealityScanResult[]>(
       '/panel/api/server/scanRealityTargets',
-      targets ? { targets } : {},
+      mode === 'nearby' ? { targets: targets ?? '', mode } : targets ? { targets } : {},
       { silent: true, timeout: 360_000 },
     );
     if (!msg?.success || !Array.isArray(msg.obj)) {

@@ -1,0 +1,87 @@
+package service
+
+import (
+	"context"
+	"net/netip"
+	"reflect"
+	"testing"
+	"time"
+)
+
+func TestNearbySNIAddresses(t *testing.T) {
+	for _, tc := range []struct {
+		origin string
+		limit  int
+		want   []string
+	}{
+		{"8.8.8.8", 4, []string{"8.8.8.7", "8.8.8.9", "8.8.8.6", "8.8.8.10"}},
+		{"::ffff:8.8.8.8", 3, []string{"8.8.8.7", "8.8.8.9", "8.8.8.6"}},
+		{"2606:4700:4700::1111", 2, []string{"2606:4700:4700::1110", "2606:4700:4700::1112"}},
+		{"127.0.0.1", 4, nil}, {"10.0.0.1", 4, nil}, {"::1", 4, nil},
+		{"8.8.8.8", 0, nil}, {"224.0.0.1", 4, nil}, {"ff02::1", 4, nil},
+	} {
+		if got := nearbySNIAddresses(netip.MustParseAddr(tc.origin), tc.limit); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: got %v want %v", tc.origin, got, tc.want)
+		}
+	}
+	if got := nearbySNIAddresses(netip.Addr{}, 5); len(got) != 0 {
+		t.Fatal(got)
+	}
+	if got := nearbySNIAddresses(netip.MustParseAddr("8.8.8.8"), 256); len(got) != 256 {
+		t.Fatal(len(got))
+	}
+}
+
+func TestNearbySNIVerifiesDiscoveredNameAndPreservesIP(t *testing.T) {
+	probe := func(ip string, port int, sni string, timeout time.Duration, xver int, private bool) *RealityScanResult {
+		if private || xver != 0 || port != 8443 {
+			t.Error("unexpected probe options")
+		}
+		if sni == "" {
+			return &RealityScanResult{Host: "edge.example", CertChainValid: true}
+		}
+		if sni != "edge.example" {
+			t.Errorf("unexpected SNI %q", sni)
+		}
+		return &RealityScanResult{Target: "edge.example:8443", Host: sni, CertValid: ip != "8.8.8.9", Feasible: true, LatencyMs: 5}
+	}
+	got, err := scanNearbySNIAddresses(context.Background(), []string{"8.8.8.7", "8.8.8.9"}, 8443, probe)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("%v %v", got, err)
+	}
+	if !reflect.DeepEqual(got[0].ServerNames, []string{"edge.example"}) {
+		t.Fatalf("unverified server names: %v", got[0].ServerNames)
+	}
+	if got[0].Target != "8.8.8.7:8443" || got[0].IP != "8.8.8.7" || got[0].Host != "edge.example" {
+		t.Fatalf("%+v", got[0])
+	}
+}
+
+func TestNearbySNISkipsUnusableDiscoveryAndHonorsCancellation(t *testing.T) {
+	for _, discovery := range []*RealityScanResult{
+		nil, {Host: "untrusted.example"}, {Host: "*.example", CertChainValid: true}, {Host: "8.8.8.7", CertChainValid: true},
+	} {
+		calls := 0
+		got, err := scanNearbySNIAddresses(context.Background(), []string{"8.8.8.7"}, 443, func(string, int, string, time.Duration, int, bool) *RealityScanResult { calls++; return discovery })
+		if err != nil || len(got) != 0 || calls != 1 {
+			t.Fatalf("%v %v calls=%d", got, err, calls)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := scanNearbySNIAddresses(ctx, []string{"8.8.8.7"}, 443, func(string, int, string, time.Duration, int, bool) *RealityScanResult {
+		t.Error("probe after cancellation")
+		return nil
+	})
+	if err != context.Canceled {
+		t.Fatal(err)
+	}
+}
+
+func TestNearbySNIRejectsPrivateReference(t *testing.T) {
+	for _, ref := range []string{"127.0.0.1", "10.0.0.1", "[::1]:443", "8.8.8.0/24", "a,b"} {
+		if _, err := (&ServerService{}).ScanNearbySNIs(context.Background(), ref); err == nil {
+			t.Errorf("accepted %s", ref)
+		}
+	}
+}

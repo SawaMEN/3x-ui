@@ -263,3 +263,46 @@ describe('SNI search in protocol forms', () => {
     expect(screen.getByText('edge.example:8443')).toBeTruthy();
   });
 });
+
+it('switches to nearby mode, passes a server reference and ignores stale results', async () => {
+  let finishInitial!: (rows: RealityScanResult[]) => void;
+  const scan = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise<RealityScanResult[]>((resolve) => {
+          finishInitial = resolve;
+        }),
+    )
+    .mockResolvedValue([]);
+  renderWithProviders(
+    <RealityTargetScannerModal open onClose={noop} onPick={noop} scanRealityCandidates={scan} />,
+  );
+  await waitFor(() => expect(scan).toHaveBeenCalledTimes(1));
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Search mode' }));
+  fireEvent.click(await screen.findByText('Find SNI near the server'));
+  const input = screen.getByPlaceholderText('Server IP/domain (optional)');
+  fireEvent.change(input, { target: { value: '8.8.8.8' } });
+  fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
+  await waitFor(() => expect(scan).toHaveBeenLastCalledWith('8.8.8.8', 'nearby'));
+  await act(async () => finishInitial([candidate]));
+  expect(screen.queryByText('edge.example:8443')).toBeNull();
+});
+
+it('sends nearby mode through the shared SNI API with automatic server discovery', async () => {
+  const post = vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(true, '', []));
+  renderWithProviders(<Harness>{tls}</Harness>);
+  fireEvent.click(screen.getByRole('button', { name: 'Find SNI' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Search mode' }));
+  fireEvent.click(await screen.findByText('Find SNI near the server'));
+  const input = within(dialog).getByPlaceholderText('Server IP/domain (optional)');
+  fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
+  await waitFor(() =>
+    expect(post).toHaveBeenLastCalledWith(
+      '/panel/api/server/scanRealityTargets',
+      { targets: '', mode: 'nearby' },
+      { silent: true, timeout: 360_000 },
+    ),
+  );
+});
