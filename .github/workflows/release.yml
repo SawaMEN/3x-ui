@@ -259,6 +259,27 @@ jobs:
           go test -json ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1 | tee native-config-check.jsonl
           python3 tools/ci/require-go-tests.py native-config-check.jsonl TestPinnedBinaryChecksGeneratedConfigurations
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Verify imported HY2 links with the packaged native kernel
+        working-directory: frontend
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+        run: |
+          npm ci --no-audit --no-fund
+          npx vitest run src/test/singbox-share-links.test.ts --project unit --reporter=json --outputFile="$RUNNER_TEMP/native-share-links.json"
+          python3 - "$RUNNER_TEMP/native-share-links.json" <<'PYTEST'
+          import json, sys
+          result=json.load(open(sys.argv[1]))
+          assert result['numPendingTests']==0 and result['numFailedTests']==0
+          checks=[a for suite in result['testResults'] for a in suite['assertionResults'] if a['title']=='checks actual imported HY2 JSON with the pinned owner core']
+          assert len(checks)==1 and checks[0]['status']=='passed', 'mandatory native HY2 import test did not pass'
+          print('Native share-link suite passed without skips:', result['numPassedTests'])
+          PYTEST
+
       - name: Package
         run: |
           for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku vetroff vetroff-bundle; do
