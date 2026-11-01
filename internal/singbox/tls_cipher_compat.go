@@ -6,11 +6,9 @@ import (
 	"strings"
 )
 
-// Translate an explicit TLS policy into suites accepted by the pinned core.
-// crypto/tls.InsecureCipherSuites includes legacy RSA key-exchange suites that
-// the pinned sing-box constructor does not recognize. Reject those up front
-// instead of emitting a config that passes Go tests but cannot start.
-// An unset list continues to use the core's secure defaults.
+// The patched panel core accepts modern and explicitly configured legacy
+// suites. Insecure suites are never enabled by default; this capability
+// requires the explicit-cipher-suites patch in the pinned core build.
 func translateTLSCipherSuites(out, in map[string]any, label string) error {
 	raw := strings.TrimSpace(rawString(in, "cipherSuites"))
 	if raw == "" {
@@ -27,14 +25,10 @@ func translateTLSCipherSuites(out, in map[string]any, label string) error {
 
 func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
 	known := make(map[string]bool)
-	for _, suite := range tls.CipherSuites() {
-		known[suite.Name] = true
-	}
-	// The installed sing-box core rejects legacy RSA key-exchange suites even
-	// though Go still exposes them as insecure names for compatibility.
-	legacy := make(map[string]bool)
-	for _, suite := range tls.InsecureCipherSuites() {
-		legacy[suite.Name] = true
+	for _, list := range [][]*tls.CipherSuite{tls.CipherSuites(), tls.InsecureCipherSuites()} {
+		for _, suite := range list {
+			known[suite.Name] = true
+		}
 	}
 
 	values := make([]string, 0, len(names))
@@ -44,11 +38,8 @@ func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
 		if name == "" {
 			continue
 		}
-		if legacy[name] {
-			return nil, fmt.Errorf("%s: TLS cipher suite %q is unsupported by the pinned sing-box core; select an ECDHE or TLS 1.3 suite", label, name)
-		}
 		if !known[name] {
-			return nil, fmt.Errorf("%s: unknown TLS cipher suite %q; select a cipher supported by the pinned sing-box core", label, name)
+			return nil, fmt.Errorf("%s: unknown TLS cipher suite %q; select a cipher supported by the patched panel core", label, name)
 		}
 		if !seen[name] {
 			values = append(values, name)
