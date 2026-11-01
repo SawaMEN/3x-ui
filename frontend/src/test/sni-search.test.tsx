@@ -649,3 +649,25 @@ it('ranks an ML-DSA-65-compatible target ahead of a faster undersized certificat
     ),
   ).toEqual([false, true]);
 });
+
+it('does not show failed stability checks as a zero-millisecond successful result', async () => {
+  const failed = {
+    ...candidate,
+    feasible: true,
+    latencyMs: 0,
+    attempts: 5,
+    successes: 0,
+    reason: 'only 0/5 stability probes succeeded',
+  };
+  renderWithProviders(
+    <RealityTargetScannerModal
+      open
+      onClose={noop}
+      onPick={noop}
+      scanRealityCandidates={async () => [failed]}
+    />,
+  );
+  const button = await screen.findByRole('button', { name: 'Use' });
+  expect((button as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByText('0 ms')).toBeNull();
+});

@@ -38,6 +38,12 @@ func TestRemoteSNIJobsUseAuthenticatedBoundedNodeTransport(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for _, resource := range []string{"jobs/..", "jobs/.", "jobs/"} {
+		if _, err := remote.RequestSNIScan(context.Background(), http.MethodGet, resource, nil); err == nil {
+			t.Fatalf("accepted invalid resource %q", resource)
+		}
+	}
+
 	if len(paths) != 4 {
 		t.Fatal(paths)
 	}

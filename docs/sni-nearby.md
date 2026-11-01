@@ -35,7 +35,9 @@ The ten best compatible candidates each receive five further TCP/TLS connections
 Ranking prefers compatible, stable results (at least 4/5 successful connections),
 then success count, median connection time and spread. Spread means max minus min
 of successful measurements. Even-sized samples use the average of the middle
-pair. Unstable measured candidates cannot be selected. Rows that have not had the
+pair. Certificate metadata is refreshed from successful verification probes;
+ML-DSA-65 eligibility uses the smallest certificate chain observed in those
+probes. Failed checks do not reuse old timing or HTTP/2/DNS diagnostics. Unstable measured candidates cannot be selected. Rows that have not had the
 five-probe check are explicitly marked **Preliminary** and are not recommended.
 
 The table separates SNI/IP, TCP/TLS timing, success count, measurement date and
@@ -57,15 +59,23 @@ their own certificate and DNS; choosing a third-party SNI does not install one.
 ## Resource bounds and persistence
 
 One job executes per panel, with at most four accepted running/queued jobs.
+Canceling a queued job immediately removes it and frees its admission slot.
 Every scan (including the legacy synchronous API) shares at most 32 active probes
 and a 16-probes/second limiter with an eight-probe burst. Discovery, name retries,
 finalist count, request size and saved-target count are bounded. SSRF protection
 blocks private, loopback and link-local probe destinations, including rechecks.
 
-Executing jobs have a six-minute deadline. Polling renews a 30-second browser
+Executing jobs have a six-minute deadline. Discovery reserves time for the
+five-probe checks: up to four minutes for a single discovery mode, or two
+minutes each for neighbor and candidate discovery in combined mode. A phase
+timeout preserves verified partial results and adds a warning; it does not
+prevent the remaining discovery phase or stability verification. Explicit user
+cancellation still aborts the job. Polling renews a 30-second browser
 lease, checked every five seconds; lost browsers cannot leave indefinite scans.
 Completed snapshots expire after 15 minutes without access, with an overall
-64-snapshot bound. Active TCP/TLS probes honor cancellation contexts.
+64-snapshot bound. When that bound is reached, the oldest completed snapshot
+is evicted so history retention cannot block new scans. Active TCP/TLS probes
+honor cancellation contexts. Snapshot/history responses are marked `no-store`.
 
 The execution panel's database stores the latest 20 completed searches, up to
 20 certificate-verified IP/SNI targets each. History is independent of the

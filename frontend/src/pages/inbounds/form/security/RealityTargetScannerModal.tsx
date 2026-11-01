@@ -177,7 +177,8 @@ export default function RealityTargetScannerModal({
         Number(canUseScannedTarget(a, purpose, mldsa65Enabled)) ||
       Number((b.attempts ?? 0) > 0 && (b.successes ?? 0) >= 4) -
         Number((a.attempts ?? 0) > 0 && (a.successes ?? 0) >= 4) ||
-      (b.attempts && a.attempts ? (b.successes ?? 0) - (a.successes ?? 0) : 0) ||
+      (b.attempts ? (b.successes ?? 0) / b.attempts : -1) -
+        (a.attempts ? (a.successes ?? 0) / a.attempts : -1) ||
       (a.medianMs ?? a.latencyMs) - (b.medianMs ?? b.latencyMs) ||
       (a.jitterMs ?? 0) - (b.jitterMs ?? 0),
   );
@@ -281,7 +282,7 @@ export default function RealityTargetScannerModal({
       key: 'latencyMs',
       width: 85,
       render: (v: number, row) =>
-        row.tlsVersion ? (
+        row.tlsVersion && !(row.attempts && !row.successes) ? (
           <Tooltip
             title={`TCP: ${row.tcpMs?.toFixed(2) ?? '—'} ms / TLS: ${row.tlsMs?.toFixed(2) ?? '—'} ms`}
           >
@@ -301,8 +302,8 @@ export default function RealityTargetScannerModal({
             title={t('pages.inbounds.form.sniStabilityDetails', {
               successes: row.successes ?? 0,
               attempts: row.attempts,
-              median: (row.medianMs ?? 0).toFixed(1),
-              jitter: (row.jitterMs ?? 0).toFixed(1),
+              median: row.successes ? (row.medianMs ?? 0).toFixed(1) : '—',
+              jitter: row.successes ? (row.jitterMs ?? 0).toFixed(1) : '—',
             })}
           >
             <span>

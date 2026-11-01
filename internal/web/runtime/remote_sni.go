@@ -18,7 +18,8 @@ type SNIJobRuntime interface {
 func (r *Remote) RequestSNIScan(ctx context.Context, method, resource string, body any) (json.RawMessage, error) {
 	valid := resource == "jobs" && method == http.MethodPost || resource == "history" && method == http.MethodGet
 	if strings.HasPrefix(resource, "jobs/") && !strings.Contains(strings.TrimPrefix(resource, "jobs/"), "/") && (method == http.MethodGet || method == http.MethodDelete) {
-		valid = true
+		id := strings.TrimPrefix(resource, "jobs/")
+		valid = id != "" && id != "." && id != ".."
 	}
 	if !valid {
 		return nil, errors.New("unsupported SNI job operation")

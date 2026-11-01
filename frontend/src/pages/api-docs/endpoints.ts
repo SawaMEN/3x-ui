@@ -1416,7 +1416,7 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/server/sni/jobs/:id',
         summary:
-          'Poll incremental results and discovery/stability progress. Optional nodeId query must identify the same node used to start the job. Polling renews the 30-second client lease. Each execution is bounded to six minutes.',
+          'Poll incremental results and discovery/stability progress. Optional nodeId query must identify the same node used to start the job. Polling renews the 30-second client lease. Each execution is bounded to six minutes. Discovery reserves verification time: four minutes in a single mode, or two minutes per phase in combined mode. Phase timeouts return verified partial results with a warning; snapshot responses are not cacheable.',
         params: [
           { name: 'id', in: 'path', type: 'string', optional: false, desc: 'Opaque scan id.' },
           {

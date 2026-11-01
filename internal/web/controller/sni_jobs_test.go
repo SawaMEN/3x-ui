@@ -104,3 +104,15 @@ func TestSNIJobLocalHTTPProgressAndFailure(t *testing.T) {
 		t.Fatal(envelope.Msg)
 	}
 }
+
+func TestSNIJobSnapshotsAreNotCacheable(t *testing.T) {
+	logger.InitLogger(logging.ERROR)
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	(&ServerController{}).initSNIJobRouter(engine.Group("/panel/api/server"))
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/panel/api/server/sni/jobs/not-found", nil))
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("poll snapshots may be cached")
+	}
+}

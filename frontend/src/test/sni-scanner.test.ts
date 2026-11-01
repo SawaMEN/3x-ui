@@ -82,3 +82,32 @@ describe('SNI jobs transport', () => {
     await expect(runSNIScan(null, 'tls')).rejects.toThrow('could not be started');
   });
 });
+
+it('reports cancellation during a poll as AbortError and cancels remote work once', async () => {
+  const controller = new AbortController();
+  vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(true, '', snapshot));
+  vi.spyOn(HttpUtil, 'get').mockImplementation(async () => {
+    controller.abort();
+    return new Msg(false, '');
+  });
+  const remove = vi.spyOn(HttpUtil, 'delete').mockResolvedValue(new Msg(true));
+  await expect(runSNIScan(7, 'tls', '', 'nearby', controller.signal)).rejects.toMatchObject({
+    name: 'AbortError',
+  });
+  expect(remove).toHaveBeenCalledTimes(1);
+});
+
+it('keeps completed partial results and their warning available to the UI', async () => {
+  const partial = {
+    ...snapshot,
+    state: 'done',
+    phase: 'done',
+    error: 'discovery reached its time budget; results are partial',
+  };
+  vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(true, '', partial));
+  const progress = vi.fn();
+  expect(await runSNIScan(null, 'reality', '', 'combined', undefined, progress)).toEqual([row]);
+  expect(progress).toHaveBeenCalledWith(
+    expect.objectContaining({ error: partial.error, completed: 1, total: 2 }),
+  );
+});

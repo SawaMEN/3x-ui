@@ -98,14 +98,17 @@ type sniJobManager struct {
 	jobs map[string]*sniJob
 	// One executing scan and at most four accepted jobs. FIFO admission is
 	// provided by the queue; no unbounded goroutine or network fan-out.
-	queue chan *sniJob
-	count int
-	run   func(context.Context, *sniJob) error
-	save  func(SNIJobSnapshot) error
+	queue  []*sniJob
+	wake   *sync.Cond
+	closed bool
+	count  int
+	run    func(context.Context, *sniJob) error
+	save   func(SNIJobSnapshot) error
 }
 
 func newSNIJobManager(run func(context.Context, *sniJob) error, save func(SNIJobSnapshot) error) *sniJobManager {
-	m := &sniJobManager{jobs: make(map[string]*sniJob), queue: make(chan *sniJob, 4), run: run, save: save}
+	m := &sniJobManager{jobs: make(map[string]*sniJob), run: run, save: save}
+	m.wake = sync.NewCond(&m.mu)
 	go m.worker()
 	return m
 }
@@ -140,6 +143,9 @@ func (m *sniJobManager) start(request SNIScanRequest) (SNIJobSnapshot, error) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.closed {
+		return SNIJobSnapshot{}, errors.New("SNI scanner is closed")
+	}
 	if m.count >= 4 {
 		return SNIJobSnapshot{}, errors.New("SNI scan queue is full; try again later")
 	}
@@ -152,7 +158,23 @@ func (m *sniJobManager) start(request SNIScanRequest) (SNIJobSnapshot, error) {
 		}
 	}
 	if len(m.jobs) >= 64 {
-		return SNIJobSnapshot{}, errors.New("too many retained SNI jobs; try again later")
+		var oldestID string
+		var oldestTime time.Time
+		for id, job := range m.jobs {
+			job.mu.Lock()
+			finished := job.view.FinishedAt != ""
+			seen := job.lastSeen
+			job.mu.Unlock()
+			if finished && (oldestID == "" || seen.Before(oldestTime)) {
+				oldestID = id
+				oldestTime = seen
+			}
+		}
+		if oldestID != "" {
+			delete(m.jobs, oldestID)
+		} else {
+			return SNIJobSnapshot{}, errors.New("too many active SNI jobs")
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	now := time.Now()
@@ -172,24 +194,35 @@ func (m *sniJobManager) start(request SNIScanRequest) (SNIJobSnapshot, error) {
 				idle := time.Since(j.lastSeen) > 30*time.Second
 				j.mu.Unlock()
 				if idle {
-					cancel()
+					m.cancelJob(j)
 					return
 				}
 			}
 		}
 	}()
-	m.queue <- j
+	m.queue = append(m.queue, j)
+	m.wake.Signal()
 	return j.snapshot(), nil
 }
 
 func (m *sniJobManager) worker() {
-	for j := range m.queue {
-		ctx := j.ctx
-		ctx, cancel := context.WithTimeout(ctx, 6*time.Minute)
+	for {
+		m.mu.Lock()
+		for len(m.queue) == 0 && !m.closed {
+			m.wake.Wait()
+		}
+		if len(m.queue) == 0 {
+			m.mu.Unlock()
+			return
+		}
+		j := m.queue[0]
+		m.queue = slices.Delete(m.queue, 0, 1)
 		j.mu.Lock()
 		j.view.State = "running"
 		j.view.Phase = "discovering"
 		j.mu.Unlock()
+		m.mu.Unlock()
+		ctx, cancel := context.WithTimeout(j.ctx, 6*time.Minute)
 		err := ctx.Err()
 		if err == nil {
 			err = m.run(ctx, j)
@@ -215,16 +248,14 @@ func (m *sniJobManager) worker() {
 				view.Error = "history save failed: " + err.Error()
 			}
 		}
+		m.mu.Lock()
 		j.mu.Lock()
 		j.view = view
+		m.count--
 		j.mu.Unlock()
-
+		m.mu.Unlock()
 		cancel()
 		j.cancel()
-
-		m.mu.Lock()
-		m.count--
-		m.mu.Unlock()
 	}
 }
 func (m *sniJobManager) get(id string, cancel bool) (SNIJobSnapshot, error) {
@@ -235,9 +266,38 @@ func (m *sniJobManager) get(id string, cancel bool) (SNIJobSnapshot, error) {
 		return SNIJobSnapshot{}, errors.New("SNI scan not found or expired")
 	}
 	if cancel {
-		j.cancel()
+		m.cancelJob(j)
 	}
 	return j.snapshot(), nil
+}
+
+// Queued cancellation removes the entry immediately, freeing capacity without
+// waiting for the currently executing job. All scheduler locks use m -> job.
+func (m *sniJobManager) cancelJob(j *sniJob) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	j.cancel()
+	for i, pending := range m.queue {
+		if pending == j {
+			m.queue = slices.Delete(m.queue, i, i+1)
+			m.count--
+			j.mu.Lock()
+			j.view.State = "canceled"
+			j.view.Phase = "canceled"
+			j.view.FinishedAt = time.Now().UTC().Format(time.RFC3339)
+			j.mu.Unlock()
+			break
+		}
+	}
+}
+func (m *sniJobManager) close() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.closed = true
+	for _, j := range m.jobs {
+		j.cancel()
+	}
+	m.wake.Broadcast()
 }
 
 func pinSNIJobResult(row *RealityScanResult) *RealityScanResult {
@@ -287,8 +347,18 @@ func rankSNIResults(rows []*RealityScanResult, purpose string) {
 			}
 			return 1
 		}
-		if a.Attempts > 0 && b.Attempts > 0 && a.Successes != b.Successes {
-			return b.Successes - a.Successes
+		ar, br := -1.0, -1.0
+		if a.Attempts > 0 {
+			ar = float64(a.Successes) / float64(a.Attempts)
+		}
+		if b.Attempts > 0 {
+			br = float64(b.Successes) / float64(b.Attempts)
+		}
+		if ar > br {
+			return -1
+		}
+		if ar < br {
+			return 1
 		}
 		av, bv := a.MedianMs, b.MedianMs
 		if a.Attempts == 0 {
@@ -323,26 +393,12 @@ func runSNIJob(ctx context.Context, j *sniJob) error {
 	req := j.request
 	switch req.Mode {
 	case "nearby":
-		rows, err = svc.ScanNearbySNIs(ctx, req.Targets)
+		rows, err = scanSNIStage(ctx, j, svc.ScanNearbySNIs, req.Targets, "neighbor discovery", 4*time.Minute)
 	case "candidates":
-		rows, err = svc.ScanRealityTargetsContext(ctx, req.Targets)
+		rows, err = scanSNIStage(ctx, j, svc.ScanRealityTargetsContext, req.Targets, "candidate discovery", 4*time.Minute)
 	case "combined":
-		rows, err = svc.ScanNearbySNIs(ctx, req.Targets)
-		// Lack of a public-IP answer must not prevent configured candidates.
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		candidates, candidateErr := svc.ScanRealityTargetsContext(ctx, "")
-		if candidateErr != nil {
-			return candidateErr
-		}
-		if err != nil {
-			j.mu.Lock()
-			j.view.Error = "neighbor discovery: " + err.Error()
-			j.mu.Unlock()
-		}
-		rows = dedupRealityResults(append(rows, candidates...))
-		err = nil
+		rows, err = scanSNICombined(ctx, j, svc.ScanNearbySNIs, svc.ScanRealityTargetsContext, 2*time.Minute)
+
 	case "recheck":
 		emitSNIProgress(ctx, len(req.Recheck), 0, nil)
 		for _, saved := range req.Recheck {
@@ -413,6 +469,52 @@ func runSNIJob(ctx context.Context, j *sniJob) error {
 	wg.Wait()
 	return ctx.Err()
 }
+
+type sniScanFunc func(context.Context, string) ([]*RealityScanResult, error)
+
+func (j *sniJob) warn(message string) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.view.Error != "" {
+		j.view.Error += "; "
+	}
+	j.view.Error += message
+}
+
+// Reserve time for stability verification. Completed certificate-verified
+// discoveries survive a phase deadline; explicit user cancellation never does.
+func scanSNIStage(ctx context.Context, j *sniJob, scan sniScanFunc, targets, label string, budget time.Duration) ([]*RealityScanResult, error) {
+	stage, cancel := context.WithTimeout(ctx, budget)
+	rows, err := scan(stage, targets)
+	timedOut := errors.Is(stage.Err(), context.DeadlineExceeded)
+	cancel()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if timedOut {
+		j.warn(label + " reached its time budget; results are partial")
+		j.mu.Lock()
+		rows = append(rows, j.view.Results...)
+		j.mu.Unlock()
+		return dedupSNIJobResults(rows), nil
+	}
+	return rows, err
+}
+func scanSNICombined(ctx context.Context, j *sniJob, nearby, candidates sniScanFunc, budget time.Duration) ([]*RealityScanResult, error) {
+	rows, nearErr := scanSNIStage(ctx, j, nearby, j.request.Targets, "neighbor discovery", budget)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if nearErr != nil {
+		j.warn("neighbor discovery: " + nearErr.Error())
+	}
+	extra, err := scanSNIStage(ctx, j, candidates, "", "candidate discovery", budget)
+	if err != nil {
+		return nil, err
+	}
+	return append(rows, extra...), nil
+}
+
 func verifySNICandidate(ctx context.Context, svc *ServerService, row *RealityScanResult, purpose string) *RealityScanResult {
 	return measureSNICandidate(ctx, row, purpose, func(probeCtx context.Context, ip string, port int, sni string) *RealityScanResult {
 		return svc.probeRealityAddrContext(probeCtx, ip, port, sni, realityDiscoverTimeout, 0, false)
@@ -421,9 +523,18 @@ func verifySNICandidate(ctx context.Context, svc *ServerService, row *RealitySca
 
 func measureSNICandidate(ctx context.Context, row *RealityScanResult, purpose string, probe func(context.Context, string, int, string) *RealityScanResult, lookup func(context.Context, string) ([]net.IPAddr, error)) *RealityScanResult {
 	out := *row
-	var samples []float64
 	out.Attempts = 5
 	out.Successes = 0
+	out.TCPMs = 0
+	out.TLSMs = 0
+	out.HTTP2OK = nil
+	out.DNSMatchesIP = nil
+	out.DNSLookupError = ""
+	var samples []float64
+	var latest *RealityScanResult
+	var observed *RealityScanResult
+	var minChain int
+	var failure string
 	for i := 0; i < 5; i++ {
 		if ctx.Err() != nil {
 			break
@@ -433,16 +544,52 @@ func measureSNICandidate(ctx context.Context, row *RealityScanResult, purpose st
 			probeCtx = context.WithValue(ctx, sniHTTPCheckKey{}, true)
 		}
 		r := probe(probeCtx, row.IP, row.Port, row.Host)
+		if r != nil {
+			observed = r
+		}
 		if sniUsable(r, purpose) {
 			out.Successes++
 			samples = append(samples, r.TCPMs+r.TLSMs)
-			out.TCPMs = r.TCPMs
-			out.TLSMs = r.TLSMs
-			if r.HTTP2OK != nil {
-				out.HTTP2OK = r.HTTP2OK
+			if latest == nil || r.CertChainBytes < minChain {
+				minChain = r.CertChainBytes
 			}
+			latest = r
+		} else if r != nil && r.Reason != "" {
+			failure = r.Reason
 		}
 	}
+	successes := out.Successes
+	if latest != nil {
+		out = *latest
+		out.CertChainBytes = minChain
+	} else if observed != nil {
+		out = *observed
+		out.TCPMs = 0
+		out.TLSMs = 0
+	} else {
+		out.CertValid = false
+		out.CertChainValid = false
+		out.Feasible = false
+		out.CertChainBytes = 0
+	}
+	out.Attempts = 5
+	out.Successes = successes
+	out.Target = row.Target
+	out.IP = row.IP
+	out.Host = row.Host
+	out.Port = row.Port
+	out.Source = row.Source
+	out.ServerNames = []string{row.Host}
+	out.DNSMatchesIP = nil
+	out.DNSLookupError = ""
+
+	if out.Successes < 4 {
+		out.Reason = fmt.Sprintf("only %d/5 stability probes succeeded", out.Successes)
+		if failure != "" {
+			out.Reason += ": " + failure
+		}
+	}
+
 	slices.Sort(samples)
 	if len(samples) > 0 {
 		out.MedianMs = samples[len(samples)/2]

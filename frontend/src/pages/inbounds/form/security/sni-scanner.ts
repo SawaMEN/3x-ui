@@ -90,6 +90,7 @@ export async function runSNIScan(
         timeout: 15_000,
         signal,
       });
+      if (signal?.aborted) throw new DOMException('Scan canceled', 'AbortError');
       if (!snapshot.success || !snapshot.obj || !Array.isArray(snapshot.obj.results))
         throw new Error(snapshot.msg || 'SNI scan progress unavailable');
       current = normalize(snapshot.obj);
