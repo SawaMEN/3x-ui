@@ -23,7 +23,7 @@ command-output buffer branch; empty writes return earlier.
   include multi-chunk records, CRLF, blank lines and an unterminated last line.
 - `go test -race ./internal/util/tail ./internal/logger -count=1` passes.
 - `go vet ./internal/util/tail ./internal/logger` passes.
-- Diagnostic and legacy log API regression selection passes: 31 test and
+- Diagnostic and legacy log API regression selection passes: 34 test and
   subtest pass events, no skips or failures, using
   `go test -json ./internal/web/service -run '^Test(Diagnostic|GetLogsSyslog|XrayAccessLog)' -count=1`.
 - Modified Go files were formatted with gofumpt v0.12.0; `git diff --check`
