@@ -82,9 +82,8 @@ export const TLS_CIPHER_OPTION = Object.freeze({
   ECDHE_RSA_CHACHA20_POLY1305: 'TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256',
 });
 
-// Historical names are retained for decoding existing saved settings only.
-// The pinned core rejects these obsolete TLS suites; do not offer them as new
-// choices or include them in selectable presets.
+// The patched panel core supports these names only when explicitly selected.
+// RSA/RC4/3DES can weaken TLS security and are not included in secure defaults.
 export const TLS_LEGACY_CIPHER_OPTION = Object.freeze({
   RSA_RC4_128: 'TLS_RSA_WITH_RC4_128_SHA',
   RSA_3DES: 'TLS_RSA_WITH_3DES_EDE_CBC_SHA',
@@ -112,6 +111,8 @@ export const TLS_CIPHER_PRESETS = Object.freeze({
     'TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256',
     'TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA',
     'TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA',
+    'TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256',
+    'TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256',
   ].join(':'),
   'real-firefox': [
     'TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256',
