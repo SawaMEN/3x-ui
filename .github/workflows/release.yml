@@ -121,8 +121,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [amd64, arm64]
-    runs-on: ubuntu-latest
+        include:
+          - platform: amd64
+            runner: ubuntu-latest
+          - platform: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -150,7 +154,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: telemt-linux-${{ matrix.platform }}
-          path: telemt-build
+          path: ${{ runner.temp }}/telemt-package
 
       - name: Build Linux package
         shell: bash
@@ -242,7 +246,7 @@ jobs:
             amd64) TELEMT_ARCH=x86_64 ; TUIC_ARCH=x86_64-unknown-linux-musl ;;
             arm64) TELEMT_ARCH=aarch64 ; TUIC_ARCH=aarch64-unknown-linux-musl ;;
           esac
-          cp "$GITHUB_WORKSPACE/telemt-build/telemt" telemt
+          cp "$RUNNER_TEMP/telemt-package/telemt" telemt
           chmod +x telemt
 
           curl -sfLRo tuic-server "${CURL_RETRY[@]}" "https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0/tuic-server-1.0.0-${TUIC_ARCH}"
@@ -258,12 +262,14 @@ jobs:
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
           bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
       - name: Check panel configuration with downloaded binary
-        if: matrix.platform == 'amd64'
         env:
           CC: gcc
           CGO_ENABLED: "1"
-          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-amd64
-        run: go test ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          go test -json ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1 | tee native-config-check.jsonl
+          python3 tools/ci/require-go-tests.py native-config-check.jsonl TestPinnedBinaryChecksGeneratedConfigurations
 
       - name: Package
         run: |
@@ -273,6 +279,7 @@ jobs:
           for core in x-ui/bin/xray-* x-ui/bin/sing-box-upstream-*; do
             test ! -e "$core" && test ! -L "$core"
           done
+          python3 tools/ci/check-release.py x-ui "${{ matrix.platform }}" "$GITHUB_SHA"
           tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui
           sha256sum x-ui-linux-${{ matrix.platform }}.tar.gz > x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
 
@@ -322,6 +329,7 @@ jobs:
           for arch in amd64 arm64; do
             test -s "dev-artifacts/x-ui-linux-$arch.tar.gz"
             test -s "dev-artifacts/x-ui-linux-$arch.tar.gz.sha256"
+            (cd dev-artifacts && sha256sum -c "x-ui-linux-$arch.tar.gz.sha256")
           done
 
       - name: Publish dev-latest

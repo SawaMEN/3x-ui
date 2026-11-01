@@ -44,8 +44,8 @@ cp "$task_root/internal/clientlimit/brokerclient/client.go" "$task_source/core/h
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/runtime-dependencies.patch"
 (
   cd -- "$task_source/core"
-  GOTOOLCHAIN="${target[5]}" go mod edit -go="${target[5]#go}" -require=golang.org/x/net@v0.60.0
-  GOTOOLCHAIN="${target[5]}" go mod download golang.org/x/net@v0.60.0
+  GOTOOLCHAIN="${target[5]}" go mod edit -go="${target[5]#go}" -require=golang.org/x/net@v0.62.0
+  GOTOOLCHAIN="${target[5]}" go mod download golang.org/x/net@v0.62.0
 )
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/clash-user.patch"
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/sniff-override.patch"

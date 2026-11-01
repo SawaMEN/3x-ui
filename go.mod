@@ -33,7 +33,7 @@ require (
 	github.com/xtls/xray-core v1.260327.1-0.20260908222543-52a412d9e2f5
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.58.0
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.43.0
 	golang.org/x/time v0.16.0

@@ -124,7 +124,7 @@ def audit_build(source):
     require(not lock["runtime_contract"]["automatic_migration_ready"], "Runtime profile cannot enable automatic migration before integration gates")
     require(build["toolchain"] == "go1.26.9", "Runtime must use the pinned security-patched toolchain")
     require(tuple(map(int, build["toolchain"].removeprefix("go").split("."))) >= tuple(map(int, fork["required_go_directive"].split("."))), "Runtime toolchain is older than the audited source requirement")
-    require(build["security_dependencies"] == {"golang.org/x/net": "v0.60.0"}, "Runtime security dependency lock differs from the build script")
+    require(build["security_dependencies"] == {"golang.org/x/net": "v0.62.0"}, "Runtime security dependency lock differs from the build script")
     require({"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_masque", "with_clash_api"}.issubset(build["tags"]), "Runtime build lacks required tags")
     process = (ROOT / "internal/hiddify/process.go").read_text()
     tag_block = re.search(r"var requiredBuildTags = \[\]string\{([^}]+)\}", process)
