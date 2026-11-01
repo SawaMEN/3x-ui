@@ -2,6 +2,7 @@ package tail
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -9,6 +10,60 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestReadTailLinesAcrossChunkBoundaries(t *testing.T) {
+	content := "first\r\n" + strings.Repeat("a", int(TailChunkSize)*2+7) + "\r\n" +
+		strings.Repeat("b", int(TailChunkSize)+3) + "\n\nlast"
+	path := filepath.Join(t.TempDir(), "boundaries.log")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, budget := range []int64{1, 5, TailChunkSize - 1, TailChunkSize, TailChunkSize + 1, int64(len(content)) - 1, int64(len(content)), DefaultTailBytes} {
+		for _, limit := range []int{-1, 0, 1, 2, 10} {
+			t.Run(fmt.Sprintf("bytes=%d/lines=%d", budget, limit), func(t *testing.T) {
+				// Independent whole-string oracle: discard the cut oldest record,
+				// then retain nonempty complete lines newest first.
+				start := max(0, len(content)-int(budget))
+				parts := strings.Split(content[start:], "\n")
+				if start > 0 {
+					parts = parts[1:]
+				}
+				want := []string{}
+				for i := len(parts) - 1; i >= 0 && (limit <= 0 || len(want) < limit); i-- {
+					if line := strings.TrimSuffix(parts[i], "\r"); line != "" {
+						want = append(want, line)
+					}
+				}
+				got, err := ReadTailLines(path, limit, budget)
+				if err != nil || !reflect.DeepEqual(got, want) {
+					t.Fatalf("tail differs from reference: error=%v, got %d lines, want %d", err, len(got), len(want))
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkReadTailLines(b *testing.B) {
+	for _, tc := range []struct{ name, content string }{
+		{"short-records", strings.Repeat("2026/11/01 10:00:00 INFO example message\n", 4096)},
+		{"long-record", strings.Repeat("x", 2<<20) + "\nlast\n"},
+		{"cut-long-record", "prefix\n" + strings.Repeat("x", 3<<20)},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			path := filepath.Join(b.TempDir(), "bench.log")
+			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				if _, err := ReadTailLines(path, 2000, 2<<20); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
 
 func TestReadTailLinesNewestFirst(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.log")

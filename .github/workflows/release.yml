@@ -9,13 +9,12 @@ on:
     tags:
       - "v*.*.*"
 
-# Always build the newest main revision, including fixes to shell tests and
-# documentation that can otherwise supersede a release build while leaving
-# dev-latest permanently stale. Cancel only superseded main builds; explicit
-# version-tag builds and manually dispatched runs are never cancelled here.
+# Keep only the newest pushed development-branch build. Obsolete update audit
+# builds must not block the next fixed revision. Explicit version tags and
+# manually dispatched runs are never cancelled here.
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/update') }}
 
 jobs:
   frontend:
@@ -121,8 +120,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [amd64, arm64]
-    runs-on: ubuntu-latest
+        include:
+          - platform: amd64
+            runner: ubuntu-24.04
+          - platform: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -150,7 +153,15 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: telemt-linux-${{ matrix.platform }}
-          path: telemt-build
+          path: ${{ runner.temp }}/telemt-package
+
+      - name: Install native musl compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          musl-gcc --version
+          dpkg-query --show musl musl-dev musl-tools
+          echo "CC=musl-gcc" >> "$GITHUB_ENV"
 
       - name: Build Linux package
         shell: bash
@@ -185,26 +196,6 @@ jobs:
           export CGO_ENABLED=1
           export GOOS=linux
           export GOARCH=${{ matrix.platform }}
-
-          case "${{ matrix.platform }}" in
-            amd64) BOOTLIN_ARCH=x86-64 ;;
-            arm64) BOOTLIN_ARCH=aarch64 ;;
-            *) exit 1 ;;
-          esac
-
-          TARBALL_BASE="https://toolchains.bootlin.com/downloads/releases/toolchains/${BOOTLIN_ARCH}/tarballs/"
-          TARBALL_URL=$(curl -fsSL "${CURL_RETRY[@]}" "$TARBALL_BASE" | grep -oE "${BOOTLIN_ARCH}--musl--stable-[^\"]+\.tar\.xz" | sort -r | head -n1)
-          test -n "$TARBALL_URL"
-          cd /tmp
-          curl -fL -sS "${CURL_RETRY[@]}" -o "$(basename "$TARBALL_URL")" "$TARBALL_BASE/$TARBALL_URL"
-          tar -xf "$(basename "$TARBALL_URL")"
-          TOOLCHAIN_DIR=$(find . -maxdepth 1 -type d -name "${BOOTLIN_ARCH}--musl--stable-*" | head -n1)
-          test -n "$TOOLCHAIN_DIR"
-          export PATH="$(realpath "$TOOLCHAIN_DIR")/bin:$PATH"
-          export CC=$(realpath "$(find "$TOOLCHAIN_DIR/bin" -name '*-gcc.br_real' -type f -executable | head -n1)")
-          test -n "$CC"
-          echo "CC=$CC" >> "$GITHUB_ENV"
-          cd -
 
           LDFLAGS="-w -s -linkmode external -extldflags '-static'"
           if [[ "$GITHUB_REF" != refs/tags/* ]]; then
@@ -242,7 +233,7 @@ jobs:
             amd64) TELEMT_ARCH=x86_64 ; TUIC_ARCH=x86_64-unknown-linux-musl ;;
             arm64) TELEMT_ARCH=aarch64 ; TUIC_ARCH=aarch64-unknown-linux-musl ;;
           esac
-          cp "$GITHUB_WORKSPACE/telemt-build/telemt" telemt
+          cp "$RUNNER_TEMP/telemt-package/telemt" telemt
           chmod +x telemt
 
           curl -sfLRo tuic-server "${CURL_RETRY[@]}" "https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0/tuic-server-1.0.0-${TUIC_ARCH}"
@@ -256,14 +247,43 @@ jobs:
           GOARCH: ${{ matrix.platform }}
         run: |
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
-          bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
+          # Reuse the native Alpine profile already exercised by Docker checks.
+          docker build --target kernel --build-arg HIDDIFY_VULNCHECK=1 --platform linux/${{ matrix.platform }} -t x-ui-kernel:${{ matrix.platform }} .
+          container=$(docker create --entrypoint /bin/true x-ui-kernel:${{ matrix.platform }})
+          trap 'docker rm -f "$container" >/dev/null' EXIT
+          docker cp "$container:/kernel/." "$PWD/x-ui/bin/"
+          docker rm "$container" >/dev/null
+          trap - EXIT
       - name: Check panel configuration with downloaded binary
-        if: matrix.platform == 'amd64'
         env:
           CC: gcc
           CGO_ENABLED: "1"
-          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-amd64
-        run: go test ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          go test -json ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1 | tee native-config-check.jsonl
+          python3 tools/ci/require-go-tests.py native-config-check.jsonl TestPinnedBinaryChecksGeneratedConfigurations
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Verify imported HY2 links with the packaged native kernel
+        working-directory: frontend
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+        run: |
+          npm ci --no-audit --no-fund
+          npx vitest run src/test/singbox-share-links.test.ts --project unit --reporter=json --outputFile="$RUNNER_TEMP/native-share-links.json"
+          python3 - "$RUNNER_TEMP/native-share-links.json" <<'PYTEST'
+          import json, sys
+          result=json.load(open(sys.argv[1]))
+          assert result['numPendingTests']==0 and result['numFailedTests']==0
+          checks=[a for suite in result['testResults'] for a in suite['assertionResults'] if a['title']=='checks actual imported HY2 JSON with the pinned owner core']
+          assert len(checks)==1 and checks[0]['status']=='passed', 'mandatory native HY2 import test did not pass'
+          print('Native share-link suite passed without skips:', result['numPassedTests'])
+          PYTEST
 
       - name: Package
         run: |
@@ -273,6 +293,7 @@ jobs:
           for core in x-ui/bin/xray-* x-ui/bin/sing-box-upstream-*; do
             test ! -e "$core" && test ! -L "$core"
           done
+          python3 tools/ci/check-release.py x-ui "${{ matrix.platform }}" "$GITHUB_SHA"
           tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui
           sha256sum x-ui-linux-${{ matrix.platform }}.tar.gz > x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
 
@@ -310,6 +331,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install pinned formatter without lifecycle scripts
+        working-directory: frontend
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Download Linux build artifacts
         uses: actions/download-artifact@v8
         with:
@@ -322,6 +353,7 @@ jobs:
           for arch in amd64 arm64; do
             test -s "dev-artifacts/x-ui-linux-$arch.tar.gz"
             test -s "dev-artifacts/x-ui-linux-$arch.tar.gz.sha256"
+            (cd dev-artifacts && sha256sum -c "x-ui-linux-$arch.tar.gz.sha256")
           done
 
       - name: Publish dev-latest
@@ -356,7 +388,11 @@ jobs:
                 fi
               done < <(git diff-tree --no-commit-id --name-only -r "$revision")
             done < <(git rev-list "$COMMIT..$latest")
-            echo "Only trusted formatter commits follow this build; publishing verified artifacts."
+            if ! python3 tools/ci/verify-format-descendant.py "$COMMIT" "$latest"; then
+              echo "Descendant changes are not equivalent under the pinned formatter; rolling release unchanged."
+              exit 0
+            fi
+            echo "Verified formatter-only descendants; publishing tested artifacts."
           fi
           git tag -f dev-latest "$COMMIT"
           git push -f origin refs/tags/dev-latest

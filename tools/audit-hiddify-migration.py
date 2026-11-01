@@ -122,9 +122,9 @@ def audit_build(source):
     require(target["repository"] == fork["target"]["repository"], "Runtime must use the audited owner repository")
     # The fork audit is historical; the actively built kernel lock advances independently.
     require(not lock["runtime_contract"]["automatic_migration_ready"], "Runtime profile cannot enable automatic migration before integration gates")
-    require(build["toolchain"] == "go1.26.9", "Runtime must use the pinned security-patched toolchain")
+    require(build["toolchain"] == "go1.26.10", "Runtime must use the pinned security-patched toolchain")
     require(tuple(map(int, build["toolchain"].removeprefix("go").split("."))) >= tuple(map(int, fork["required_go_directive"].split("."))), "Runtime toolchain is older than the audited source requirement")
-    require(build["security_dependencies"] == {"golang.org/x/net": "v0.60.0"}, "Runtime security dependency lock differs from the build script")
+    require(build["security_dependencies"] == {"golang.org/x/net": "v0.62.0", "github.com/go-chi/chi/v5": "v5.3.0", "github.com/google/cel-go": "v0.30.0"}, "Runtime security dependency lock differs from the build script")
     require({"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_masque", "with_clash_api"}.issubset(build["tags"]), "Runtime build lacks required tags")
     process = (ROOT / "internal/hiddify/process.go").read_text()
     tag_block = re.search(r"var requiredBuildTags = \[\]string\{([^}]+)\}", process)
@@ -136,7 +136,7 @@ def audit_build(source):
     require(lock["runtime_contract"]["stats_grpc_method"] == fork["stats_contract"]["method"], "Wrong runtime statistics method")
     require(lock["runtime_contract"]["stats_grpc_method"] in profile, "Runtime statistics client differs from lock")
     require(build["protection_dependency_versions"] == {"github.com/metacubex/utls": "v1.8.8", "github.com/starifly/sing-vmess": "v0.2.7-mod.9", "github.com/xtls/xray-core": "v1.260327.1-0.20260728075948-5ca6f4b7d4dc"}, "Protection dependency versions differ from the audited build script")
-    for key in ("check_command_overlay", "clash_user_overlay", "sniff_override_overlay", "sniff_override_test_overlay", "http1_options_overlay", "http1_options_test_overlay", "protection_options_overlay", "utls_protection_overlay", "vision_protection_overlay", "reality_protection_test_overlay", "vision_preconnect_test_overlay", "vision_padding_test_overlay", "transport_balancer_overlay", "xray_runtime_compat_overlay", "kcp_transport_test_overlay", "xhttp_extension_test_overlay", "balancer_strategy_test_overlay", "reverse_overlay", "reverse_protocol_overlay", "reverse_runtime_test_overlay", "reverse_vision_test_overlay", "runtime_dependencies_overlay", "vless_handshake_overlay", "vless_handshake_test_overlay"):
+    for key in ("check_command_overlay", "clash_user_overlay", "sniff_override_overlay", "sniff_override_test_overlay", "http1_options_overlay", "http1_options_test_overlay", "protection_options_overlay", "utls_protection_overlay", "vision_protection_overlay", "reality_protection_test_overlay", "vision_preconnect_test_overlay", "vision_padding_test_overlay", "transport_balancer_overlay", "xray_runtime_compat_overlay", "kcp_transport_test_overlay", "xhttp_extension_test_overlay", "balancer_strategy_test_overlay", "reverse_overlay", "reverse_protocol_overlay", "reverse_runtime_test_overlay", "reverse_vision_test_overlay", "runtime_dependencies_overlay", "vless_handshake_overlay", "vless_handshake_test_overlay", "explicit_cipher_overlay", "explicit_cipher_test_overlay"):
         require((ROOT / build[key]).is_file(), "Missing runtime overlay: " + key)
     print(f"OK: stage-{lock['stage']} build/runtime identity, owner revisions, toolchain, tags and statistics profile")
     if source is None:

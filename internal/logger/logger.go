@@ -32,6 +32,12 @@ const (
 	compressRotated = true
 )
 
+type bufferedLog struct {
+	time  string
+	level logging.Level
+	log   string
+}
+
 var (
 	// InitLogger swaps the handle while other goroutines are logging, so it is
 	// published atomically — a plain assignment is an unsafe publication.
@@ -43,12 +49,9 @@ var (
 
 	// logBuffer maintains recent log entries in memory for web UI retrieval;
 	// logBufferMu guards it — written from many goroutines, read by the web UI.
-	logBufferMu sync.Mutex
-	logBuffer   []struct {
-		time  string
-		level logging.Level
-		log   string
-	}
+	logBufferMu   sync.Mutex
+	logBuffer     []bufferedLog
+	logBufferHead int // Oldest record once the buffer is full.
 )
 
 // A usable default so logging never nil-derefs before InitLogger runs — the
@@ -223,23 +226,20 @@ func Errorf(format string, args ...any) {
 
 // addToBuffer adds a log entry to the in-memory ring buffer for web UI retrieval.
 func addToBuffer(level string, newLog string) {
-	t := time.Now()
+	logLevel, _ := logging.LogLevel(level)
+	entry := bufferedLog{time: time.Now().Format(timeFormat), level: logLevel, log: newLog}
 	logBufferMu.Lock()
 	defer logBufferMu.Unlock()
-	if len(logBuffer) >= maxLogBufferSize {
-		logBuffer = logBuffer[1:]
+	if len(logBuffer) < maxLogBufferSize {
+		logBuffer = append(logBuffer, entry)
+		logBufferHead = 0
+		return
 	}
-
-	logLevel, _ := logging.LogLevel(level)
-	logBuffer = append(logBuffer, struct {
-		time  string
-		level logging.Level
-		log   string
-	}{
-		time:  t.Format(timeFormat),
-		level: logLevel,
-		log:   newLog,
-	})
+	logBuffer[logBufferHead] = entry
+	logBufferHead++
+	if logBufferHead == maxLogBufferSize {
+		logBufferHead = 0
+	}
 }
 
 // GetLogs retrieves up to c log entries from the in-memory buffer.
@@ -250,19 +250,20 @@ func GetLogs(c int, level string) []string {
 	logLevel, _ := logging.LogLevel(level)
 
 	logBufferMu.Lock()
-	snapshot := make([]struct {
-		time  string
-		level logging.Level
-		log   string
-	}, len(logBuffer))
-	copy(snapshot, logBuffer)
+	// Snapshot only the requested matching records. Formatting stays outside
+	// the lock, without copying all 4096 entries for a one-record query.
+	snapshot := make([]bufferedLog, 0, min(c, len(logBuffer)))
+	for i := len(logBuffer) - 1; i >= 0 && len(snapshot) < c; i-- {
+		entry := logBuffer[(logBufferHead+i)%len(logBuffer)]
+		if entry.level <= logLevel {
+			snapshot = append(snapshot, entry)
+		}
+	}
 	logBufferMu.Unlock()
 
-	output := make([]string, 0, min(c, len(snapshot)))
-	for i := len(snapshot) - 1; i >= 0 && len(output) < c; i-- {
-		if snapshot[i].level <= logLevel {
-			output = append(output, fmt.Sprintf("%s %s - %s", snapshot[i].time, snapshot[i].level, snapshot[i].log))
-		}
+	output := make([]string, len(snapshot))
+	for i, entry := range snapshot {
+		output[i] = entry.time + " " + entry.level.String() + " - " + entry.log
 	}
 	return output
 }

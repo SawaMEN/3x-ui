@@ -44,8 +44,17 @@ cp "$task_root/internal/clientlimit/brokerclient/client.go" "$task_source/core/h
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/runtime-dependencies.patch"
 (
   cd -- "$task_source/core"
-  GOTOOLCHAIN="${target[5]}" go mod edit -go="${target[5]#go}" -require=golang.org/x/net@v0.60.0
-  GOTOOLCHAIN="${target[5]}" go mod download golang.org/x/net@v0.60.0
+  readarray -t security_dependencies < <(python3 - "$task_root/docs/hiddify-core-target.json" <<'PYDEPS'
+import json, sys
+for module, version in sorted(json.load(open(sys.argv[1]))['panel_build']['security_dependencies'].items()):
+    print(module + '@' + version)
+PYDEPS
+  )
+  ((${#security_dependencies[@]} > 0)) || { echo 'Missing security dependency pins' >&2; exit 1; }
+  security_flags=()
+  for dependency in "${security_dependencies[@]}"; do security_flags+=("-require=$dependency"); done
+  GOTOOLCHAIN="${target[5]}" go mod edit -go="${target[5]#go}" "${security_flags[@]}"
+  GOTOOLCHAIN="${target[5]}" go mod download "${security_dependencies[@]}"
 )
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/clash-user.patch"
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/sniff-override.patch"
@@ -72,6 +81,8 @@ chmod -R u+w "$task_source/core/xui-dependencies"
 git -C "$task_source/core" apply --directory=xui-dependencies/utls "$task_root/deploy/hiddify/utls-protection.patch"
 git -C "$task_source/core" apply --directory=xui-dependencies/sing-vmess "$task_root/deploy/hiddify/sing-vmess-protection.patch"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/protection-options.patch"
+git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/explicit-cipher-suites.patch"
+cp "$task_root/deploy/hiddify/explicit_cipher_suites_test.go.in" "$task_source/core/hiddify-sing-box/common/tls/xui_explicit_ciphers_test.go"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/transport-balancer.patch"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/vless-reverse.patch"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/vless-handshake.patch"
@@ -121,7 +132,7 @@ if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOST
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/protocol/snell -run '^TestSnellV[56]' -count=1 -timeout=60s
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/option -run '^TestXUIPanelHTTP1RoundTrip$' -count=1
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/route/rule -run '^TestXUIPanelSniffOverrideAction$' -count=1
-    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/common/tls github.com/sagernet/sing-box/protocol/vless github.com/sagernet/sing-vmess/vless -run '^TestXUIPanel(Reality|Preconnect|Vision|Reverse|Encryption)' -count=1 -timeout=60s
+    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/common/tls github.com/sagernet/sing-box/protocol/vless github.com/sagernet/sing-vmess/vless -run '^TestXUIPanel(Reality|Preconnect|Vision|Reverse|Encryption|ExplicitCipher)' -count=1 -timeout=60s
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/transport/v2raykcp github.com/sagernet/sing-box/transport/v2rayxhttp github.com/sagernet/sing-box/protocol/group -run '^TestXUIPanel' -count=1 -timeout=90s
   )
 fi
@@ -184,4 +195,20 @@ fi
 if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOSTARCH)" ]]; then
   printf '%s\n' '{"outbounds":[{"type":"naive","tag":"cronet-check","server":"127.0.0.1","server_port":443,"username":"build-check","password":"build-check","tls":{"enabled":true}}]}' > "$task_source/naive-check.json"
   "$task_output/$task_binary" check -c "$task_source/naive-check.json"
+fi
+
+# CI audits the exact prepared source graph. Binary-only scans can conservatively
+# report wildcard packages that are not linked, so keep source reachability too.
+if [[ ${HIDDIFY_VULNCHECK:-0} == 1 ]]; then
+  (
+    cd -- "$task_source/core"
+    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go list -deps -tags "${target[3]}" ./cmd/main > "$task_source/packages.txt"
+    if grep -Eq '^golang.org/x/crypto/openpgp(/|$)' "$task_source/packages.txt"; then
+      echo 'Unmaintained OpenPGP package unexpectedly entered the kernel dependency graph' >&2
+      exit 1
+    fi
+    echo 'Verified: deprecated OpenPGP packages are absent from the kernel import graph'
+    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" GOMAXPROCS=4 GOMEMLIMIT=4GiB \
+      go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -show verbose -tags "${target[3]}" ./cmd/main
+  )
 fi

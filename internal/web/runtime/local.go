@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -39,25 +38,15 @@ type Local struct {
 func NewLocal(deps LocalDeps) *Local { return &Local{deps: deps} }
 func (l *Local) Name() string        { return "local" }
 
-func (l *Local) isNative() bool {
-	return true
-}
-
 func (l *Local) applyCoreChange(ctx context.Context) error {
-	if l.isNative() {
-		l.batchMu.Lock()
-		if l.batches > 0 {
-			l.batchDirty = true
-			l.batchMu.Unlock()
-			return nil
-		}
+	l.batchMu.Lock()
+	if l.batches > 0 {
+		l.batchDirty = true
 		l.batchMu.Unlock()
-		return l.requestNativeApply(ctx)
+		return nil
 	}
-	if l.deps.SetNeedRestart != nil {
-		l.deps.SetNeedRestart()
-	}
-	return nil
+	l.batchMu.Unlock()
+	return l.requestNativeApply(ctx)
 }
 
 func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
@@ -105,23 +94,6 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 		}
 		return err
 	}
-	if ib.Protocol == model.TUIC {
-		if l.isNative() {
-			return l.applyCoreChange(ctx)
-		}
-		inst, ok := tuic.InstanceFromInbound(ib)
-		if !ok {
-			return nil
-		}
-		err := tuic.GetManager().Ensure(inst)
-		if l.deps.SetNeedRestart != nil {
-			l.deps.SetNeedRestart()
-		}
-		return err
-	}
-	if l.isNative() {
-		return l.applyCoreChange(ctx)
-	}
 	return l.applyCoreChange(ctx)
 }
 
@@ -159,13 +131,6 @@ func (l *Local) DelInbound(ctx context.Context, ib *model.Inbound) error {
 	}
 	if ib.Protocol == model.TUIC {
 		tuic.GetManager().Remove(ib.Id)
-		if l.isNative() {
-			return l.applyCoreChange(ctx)
-		}
-		return nil
-	}
-	if l.isNative() {
-		return l.applyCoreChange(ctx)
 	}
 	return l.applyCoreChange(ctx)
 }
@@ -175,7 +140,7 @@ func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) 
 	defer func() {
 		// Sidecar transitions can add/remove an egress bridge even when the new
 		// listener is disabled. The full native configuration must follow the DB.
-		if l.isNative() && (oldIb.Protocol != newIb.Protocol || (err == nil && (l.nativeSidecarSpeed(oldIb) || l.nativeSidecarSpeed(newIb)))) {
+		if oldIb.Protocol != newIb.Protocol || (err == nil && (l.nativeSidecarSpeed(oldIb) || l.nativeSidecarSpeed(newIb))) {
 			err = errors.Join(err, l.applyCoreChange(ctx))
 		}
 		err = errors.Join(err, finish())
@@ -192,7 +157,7 @@ func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) 
 		}
 		return nil
 	}
-	if l.isNative() && oldIb.Protocol != model.MTProto && oldIb.Protocol != model.AmneziaWG && oldIb.Protocol != model.Mieru && oldIb.Protocol != model.Sudoku && newIb.Protocol != model.MTProto && newIb.Protocol != model.AmneziaWG && newIb.Protocol != model.Mieru && newIb.Protocol != model.Sudoku {
+	if oldIb.Protocol != model.MTProto && oldIb.Protocol != model.AmneziaWG && oldIb.Protocol != model.Mieru && oldIb.Protocol != model.Sudoku && newIb.Protocol != model.MTProto && newIb.Protocol != model.AmneziaWG && newIb.Protocol != model.Mieru && newIb.Protocol != model.Sudoku {
 		if oldIb.Protocol == model.TUIC {
 			tuic.GetManager().Remove(oldIb.Id)
 		}
@@ -333,7 +298,7 @@ func (l *Local) updateMieruInbound(ctx context.Context, oldIb, newIb *model.Inbo
 	return mieru.GetManager().Ensure(inst)
 }
 
-func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, userMap map[string]any) error {
+func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, _ map[string]any) error {
 	if l.nativeSidecarSpeed(ib) {
 		return l.applyCoreChange(ctx)
 	}
@@ -369,7 +334,7 @@ func (l *Local) AddClient(ctx context.Context, ib *model.Inbound, client model.C
 		}
 		return l.applyCoreChange(ctx)
 	}
-	return l.AddUser(ctx, ib, map[string]any{"email": client.Email, "id": client.ID, "security": client.Security, "flow": client.Flow, "auth": client.Auth, "password": client.Password, "publicKey": client.PublicKey, "allowedIPs": client.AllowedIPs, "preSharedKey": client.PreSharedKey, "keepAlive": wgKeepAlive(client.KeepAliveSeconds())})
+	return l.AddUser(ctx, ib, nil)
 }
 
 func (l *Local) DeleteUser(ctx context.Context, ib *model.Inbound, email string) error {
@@ -385,7 +350,7 @@ func (l *Local) DeleteUser(ctx context.Context, ib *model.Inbound, email string)
 	return nil
 }
 func (l *Local) DeleteClient(context.Context, string) error { return nil }
-func (l *Local) UpdateUser(ctx context.Context, ib *model.Inbound, oldEmail string, payload model.Client) error {
+func (l *Local) UpdateUser(ctx context.Context, ib *model.Inbound, _ string, payload model.Client) error {
 	if l.nativeSidecarSpeed(ib) || ((ib.Protocol == model.Mieru || ib.Protocol == model.Sudoku) && payload.Enable && payload.SpeedLimit != nil && payload.SpeedLimit.Enabled) {
 		if err := pauseSpeedSidecar(ib); err != nil {
 			return err
@@ -395,27 +360,9 @@ func (l *Local) UpdateUser(ctx context.Context, ib *model.Inbound, oldEmail stri
 	if ib.Protocol == model.Mieru || ib.Protocol == model.Sudoku || externalvpn.IsManaged(ib.Protocol) {
 		return nil // Full state is reapplied by the protocol-specific reconciler.
 	}
-	if l.isNative() {
-		// sing-box reads the client list from the database when regenerating
-		// its config. Avoid the remove+add double restart used by Xray's API.
-		return l.applyCoreChange(ctx)
-	}
-	if oldEmail != "" {
-		if err := l.RemoveUser(ctx, ib, oldEmail); err != nil && !strings.Contains(err.Error(), "not found") {
-			return err
-		}
-	}
-	if !payload.Enable {
-		return nil
-	}
-	return l.AddUser(ctx, ib, map[string]any{"email": payload.Email, "id": payload.ID, "security": payload.Security, "flow": payload.Flow, "auth": payload.Auth, "password": payload.Password, "publicKey": payload.PublicKey, "allowedIPs": payload.AllowedIPs, "preSharedKey": payload.PreSharedKey, "keepAlive": wgKeepAlive(payload.KeepAliveSeconds())})
-}
-
-func wgKeepAlive(seconds int) string {
-	if seconds <= 0 {
-		return ""
-	}
-	return strconv.Itoa(seconds)
+	// The configured core reads committed clients when regenerating its
+	// configuration, including disabled or renamed users.
+	return l.applyCoreChange(ctx)
 }
 
 func (l *Local) RestartXray(ctx context.Context) error {

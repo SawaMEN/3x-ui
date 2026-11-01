@@ -75,6 +75,7 @@ jobs:
         run: |
           python3 tools/test-core-migration-shell.py
           python3 tools/test-management-shell.py
+          python3 -m unittest discover -s tools/ci -p 'test_*.py'
 
   meko-firewall:
     runs-on: ubuntu-latest

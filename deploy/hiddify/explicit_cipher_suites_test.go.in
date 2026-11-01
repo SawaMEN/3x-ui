@@ -1,0 +1,69 @@
+//go:build with_utls
+
+package tls
+
+import (
+	"context"
+	"crypto/tls"
+	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing/common/logger"
+	"reflect"
+	"testing"
+)
+
+func TestXUIPanelExplicitCipherSuites(t *testing.T) {
+	modern := "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+	legacy := "TLS_RSA_WITH_AES_128_GCM_SHA256"
+	for _, tc := range []struct {
+		name  string
+		names []string
+		want  []uint16
+		bad   bool
+	}{
+		{name: "default"}, {name: "empty", names: []string{}},
+		{name: "modern", names: []string{modern}, want: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}},
+		{name: "explicit legacy", names: []string{legacy}, want: []uint16{tls.TLS_RSA_WITH_AES_128_GCM_SHA256}},
+		{name: "mixed order", names: []string{legacy, modern, legacy}, want: []uint16{tls.TLS_RSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, tls.TLS_RSA_WITH_AES_128_GCM_SHA256}},
+		{name: "unknown after valid", names: []string{modern, "TLS_AUDIT_UNKNOWN"}, bad: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := xuiExplicitCipherSuites(tc.names)
+			if (err != nil) != tc.bad || !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("cipher lookup = %v, %v; want %v, bad=%v", got, err, tc.want, tc.bad)
+			}
+		})
+	}
+	for _, list := range [][]*tls.CipherSuite{tls.CipherSuites(), tls.InsecureCipherSuites()} {
+		for _, suite := range list {
+			got, err := xuiExplicitCipherSuites([]string{suite.Name})
+			if err != nil || len(got) != 1 || got[0] != suite.ID {
+				t.Fatalf("Go TLS suite %s lost: %v %v", suite.Name, got, err)
+			}
+		}
+	}
+}
+
+func TestXUIPanelExplicitCipherClientConstructors(t *testing.T) {
+	for _, names := range [][]string{nil, {}, {"TLS_RSA_WITH_AES_128_GCM_SHA256"}, {"TLS_AUDIT_UNKNOWN"}} {
+		options := option.OutboundTLSOptions{Enabled: true, ServerName: "example.invalid", CipherSuites: names}
+		standard, err := NewSTDClient(context.Background(), logger.NOP(), "example.invalid", options)
+		want, lookupErr := xuiExplicitCipherSuites(names)
+		if (err != nil) != (lookupErr != nil) {
+			t.Fatalf("STD client cipher acceptance differs: %v", err)
+		}
+		if err == nil {
+			cfg, cfgErr := standard.STDConfig()
+			if cfgErr != nil || !reflect.DeepEqual(cfg.CipherSuites, want) {
+				t.Fatalf("STD client lost explicit policy: %v %v", cfg, cfgErr)
+			}
+		}
+		options.UTLS = &option.OutboundUTLSOptions{Enabled: true, Fingerprint: "chrome"}
+		fingerprinted, err := NewUTLSClient(context.Background(), logger.NOP(), "example.invalid", options)
+		if (err != nil) != (lookupErr != nil) {
+			t.Fatalf("uTLS client cipher acceptance differs: %v", err)
+		}
+		if err == nil && !reflect.DeepEqual(fingerprinted.(*UTLSClientConfig).config.CipherSuites, want) {
+			t.Fatal("uTLS client lost explicit policy")
+		}
+	}
+}

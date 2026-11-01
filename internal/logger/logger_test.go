@@ -12,6 +12,102 @@ import (
 	golog "github.com/op/go-logging"
 )
 
+func TestGetLogsRetainsNewestRecordsAfterSeveralWraps(t *testing.T) {
+	logBufferMu.Lock()
+	logBuffer = nil
+	logBufferMu.Unlock()
+	const total = maxLogBufferSize*3 + 17
+	for i := range total {
+		level := "INFO"
+		if i%3 == 0 {
+			level = "ERROR"
+		}
+		addToBuffer(level, fmt.Sprintf("ring-record-%d", i))
+	}
+	for _, tc := range []struct {
+		level string
+		count int
+	}{
+		{"debug", 1},
+		{"debug", 100},
+		{"debug", maxLogBufferSize + 10},
+		{"error", 1},
+		{"error", 100},
+		{"error", maxLogBufferSize + 10},
+	} {
+		got := GetLogs(tc.count, tc.level)
+		want := []string{}
+		for i := total - 1; i >= total-maxLogBufferSize && len(want) < tc.count; i-- {
+			if tc.level != "error" || i%3 == 0 {
+				want = append(want, fmt.Sprintf("ring-record-%d", i))
+			}
+		}
+		if len(got) != len(want) {
+			t.Fatalf("level=%s, count=%d: got %d records, want %d", tc.level, tc.count, len(got), len(want))
+		}
+		for i := range want {
+			if !strings.HasSuffix(got[i], " - "+want[i]) {
+				t.Fatalf("record %d = %q, want suffix %q", i, got[i], want[i])
+			}
+		}
+	}
+}
+
+func TestGetLogsConcurrentWithBufferWrites(t *testing.T) {
+	var workers sync.WaitGroup
+	for writer := range 4 {
+		workers.Go(func() {
+			for i := range 1000 {
+				addToBuffer("ERROR", fmt.Sprintf("concurrent-buffer-%d-%d", writer, i))
+				if got := GetLogs(3, "debug"); len(got) > 3 {
+					t.Errorf("snapshot exceeded limit: %d", len(got))
+				}
+			}
+		})
+	}
+	workers.Wait()
+}
+
+func TestGetLogsEmptyAndNoMatchingRecords(t *testing.T) {
+	logBufferMu.Lock()
+	logBuffer = nil
+	logBufferMu.Unlock()
+	if got := GetLogs(10, "debug"); len(got) != 0 {
+		t.Fatalf("empty buffer returned %d records", len(got))
+	}
+	for range maxLogBufferSize + 1 {
+		addToBuffer("INFO", "filtered record")
+	}
+	if got := GetLogs(10, "error"); len(got) != 0 {
+		t.Fatalf("error-only query returned %d INFO records", len(got))
+	}
+}
+
+func BenchmarkLogBuffer(b *testing.B) {
+	for _, mode := range []string{"write-full", "read-one", "read-100"} {
+		b.Run(mode, func(b *testing.B) {
+			logBufferMu.Lock()
+			logBuffer = nil
+			logBufferMu.Unlock()
+			for range maxLogBufferSize {
+				addToBuffer("INFO", "benchmark-log-record")
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				switch mode {
+				case "write-full":
+					addToBuffer("INFO", "benchmark-log-record")
+				case "read-one":
+					GetLogs(1, "debug")
+				default:
+					GetLogs(100, "debug")
+				}
+			}
+		})
+	}
+}
+
 func TestFileLoggerRespectsConfiguredLevel(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XUI_LOG_FOLDER", dir)
@@ -43,7 +139,8 @@ func TestGetLogs_ReturnsAtMostC(t *testing.T) {
 		{0, 0},
 		{2, 2},
 		{5, 5},
-		{10, 5}, // capped at what's available
+		{10, 5},                 // capped at what's available
+		{int(^uint(0) >> 1), 5}, // untrusted count cannot grow the allocation beyond buffered records
 	}
 	for _, tc := range cases {
 		if got := GetLogs(tc.c, "debug"); len(got) != tc.want {
