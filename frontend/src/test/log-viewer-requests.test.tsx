@@ -40,9 +40,9 @@ it('does not let a slow previous response replace a manually refreshed log', asy
   await waitFor(() => expect(complete).toHaveLength(1));
   fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
   await waitFor(() => expect(complete).toHaveLength(2));
-  await act(async () => complete[1](new Msg(true, '', ['latest record'])));
+  await act(async () => complete[1](new Msg(true, '', { entries: [{ source: 'panel', level: 'INFO', raw: 'latest record' }], warnings: [] })));
   expect(await screen.findByText('latest record')).toBeTruthy();
-  await act(async () => complete[0](new Msg(true, '', ['stale record'])));
+  await act(async () => complete[0](new Msg(true, '', { entries: [{ source: 'panel', level: 'INFO', raw: 'stale record' }], warnings: [] })));
   expect(screen.queryByText('stale record')).toBeNull();
   expect(screen.getByText('latest record')).toBeTruthy();
 });
