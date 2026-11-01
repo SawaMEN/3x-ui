@@ -115,3 +115,83 @@ func TestPostgresSQLiteRoundTripAndBackupPreservation(t *testing.T) {
 		}
 	}
 }
+
+func TestMigrateLegacySQLiteKeepsOriginalSchema(t *testing.T) {
+	if os.Getenv("XUI_DB_TYPE") != "postgres" || strings.TrimSpace(os.Getenv("XUI_DB_DSN")) == "" {
+		t.Skip("PostgreSQL CI database is required")
+	}
+	baseDSN := os.Getenv("XUI_DB_DSN")
+	admin, err := gorm.Open(postgres.Open(baseDSN), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminSQL, err := admin.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = adminSQL.Close() })
+	schema := fmt.Sprintf("xui_legacy_%d", time.Now().UnixNano())
+	if err := admin.Exec("CREATE SCHEMA " + schema).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = admin.Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE").Error })
+	dsn := baseDSN + " search_path=" + schema
+
+	original := filepath.Join(t.TempDir(), "v398.db")
+	src, err := gorm.Open(sqlite.Open(original), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{
+		"CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, password TEXT)",
+		"CREATE TABLE settings (id INTEGER PRIMARY KEY, key TEXT, value TEXT)",
+		"CREATE TABLE inbounds (id INTEGER PRIMARY KEY, user_id INTEGER, tag TEXT)",
+		"INSERT INTO users (id, username, password) VALUES (1, 'legacy-admin', 'legacy-hash')",
+		"INSERT INTO settings (id, key, value) VALUES (1, 'webPort', '2053')",
+	} {
+		if err := src.Exec(query).Error; err != nil {
+			t.Fatalf("seed old schema: %v", err)
+		}
+	}
+	if src.Migrator().HasTable(&model.ClientRecord{}) || src.Migrator().HasColumn(&model.User{}, "login_epoch") {
+		t.Fatal("legacy fixture unexpectedly contains new schema")
+	}
+	sourceSQL, err := src.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sourceSQL.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := MigrateLegacyData(original, dsn); err != nil {
+		t.Fatalf("migrate legacy schema without touching source: %v", err)
+	}
+
+	pg, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pgSQL, err := pg.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pgSQL.Close()
+	var user model.User
+	if err := pg.First(&user, 1).Error; err != nil || user.Username != "legacy-admin" {
+		t.Fatalf("legacy panel user was lost: %+v, %v", user, err)
+	}
+	var setting model.Setting
+	if err := pg.Where("key = ?", "webPort").First(&setting).Error; err != nil || setting.Value != "2053" {
+		t.Fatalf("legacy settings were lost: %+v, %v", setting, err)
+	}
+
+	reopened, err := gorm.Open(sqlite.Open(original), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeGorm(reopened)
+	if reopened.Migrator().HasTable(&model.ClientRecord{}) || reopened.Migrator().HasColumn(&model.User{}, "login_epoch") {
+		t.Fatal("migrating an old backup mutated its source schema")
+	}
+}
