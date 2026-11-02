@@ -11,10 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 // Shared by every synchronous and asynchronous scanner on this panel.

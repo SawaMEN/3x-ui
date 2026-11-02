@@ -298,3 +298,25 @@ func TestManagerRuntimeFailureKeepsOldGeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestManagerNativeSNIUsesOwnerDomainsAndKeepsCertificate(t *testing.T) {
+	s, _, _ := managerFixture(t)
+	if err := s.ImportDomains(1, "native.example.com", false); err != nil {
+		t.Fatal(err)
+	}
+	ib := &model.Inbound{Protocol: model.AnyTLS, Settings: `{"tls":{"enabled":true,"serverName":"old.example.com","certificatePath":"/cert.pem","keyPath":"/key.pem"},"clients":[]}`, StreamSettings: ``}
+	if err := s.applySNI(1, ib, "random"); err != nil {
+		t.Fatal(err)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil {
+		t.Fatal(err)
+	}
+	tls := settings["tls"].(map[string]any)
+	if tls["serverName"] != "native.example.com" || tls["certificatePath"] != "/cert.pem" || tls["keyPath"] != "/key.pem" {
+		t.Fatalf("native TLS settings: %+v", tls)
+	}
+	if err := s.applySNI(2, ib, "random"); err == nil {
+		t.Fatal("SNI list leaked across owners")
+	}
+}

@@ -357,9 +357,11 @@ func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) erro
 		}
 		sni = names[n.Int64()]
 	}
-	var stream map[string]any
-	if err := json.Unmarshal([]byte(ib.StreamSettings), &stream); err != nil {
-		return err
+	stream := map[string]any{}
+	if strings.TrimSpace(ib.StreamSettings) != "" {
+		if err := json.Unmarshal([]byte(ib.StreamSettings), &stream); err != nil {
+			return err
+		}
 	}
 	nativeUpdated := false
 	var nativeSettings map[string]any

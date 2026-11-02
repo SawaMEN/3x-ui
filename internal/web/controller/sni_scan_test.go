@@ -8,9 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/op/go-logging"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 func TestSNIScanControllerModes(t *testing.T) {

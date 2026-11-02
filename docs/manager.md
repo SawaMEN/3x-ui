@@ -36,3 +36,10 @@ Forwarding uses separate owned DNAT/SNAT/filter chains and only the actual ports
 ## Validation boundaries
 
 Automated tests cover rotation and stable identity, failure-before-publication, runtime rejection, ownership boundaries, queue deduplication and recovery, domain/profile validation, native protocol bundle rendering, quota/expiry checks, SSH secret redaction, generated relay scripts and editor save behavior. Live SSH forwarding, actual remote VPN handshakes and PostgreSQL require their respective infrastructure; unit success alone does not establish those paths.
+
+## Validation for this branch
+
+- TypeScript typecheck, frontend lint, production Vite build and Go lint passed (`golangci-lint`: 0 issues).
+- Manager regression tests and migration/route contracts passed in `internal/web/service`, `internal/sub`, `internal/database` and `internal/web`. Telegram integration, controllers and runtime suites also passed after removing the test-only subscription/controller import cycle.
+- The broad frontend run exercised 2324 tests: 2304 passed, 19 hit the default five-second timeout under concurrent load, and one was skipped. Every affected file passed when rerun with a 30-second timeout (79 tests); the manager editor's three cases and both locale-contract tests passed as well.
+- A Chromium launch was attempted but the execution environment rejected its native socket operation. Browser screenshots/visual QA, Storybook browser tests, live SSH forwarding, real-node VPN handshakes and PostgreSQL integration are not claimed as verified.
