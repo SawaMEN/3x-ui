@@ -45,7 +45,7 @@ func TestUpdateInbound_NodeMtprotoShareAddrIsEditable(t *testing.T) {
 
 // Unknown protocol values are not assignable to nodes. Keep this guard generic
 // so removed protocols do not survive as compatibility constants or test fixtures.
-func TestUpdateInbound_RejectsProtocolChangeToNodeIneligible(t *testing.T) {
+func TestUpdateInbound_RejectsUnknownProtocolOnNode(t *testing.T) {
 	setupConflictDB(t)
 	nodeID := 6
 	seedNodeRow(t, database.GetDB(), &model.Node{Id: nodeID, Name: "n6", Address: "127.0.0.1", Port: 2096, ApiToken: "tok", Enable: true, PanelVersion: "v3.4.1"})
@@ -62,7 +62,14 @@ func TestUpdateInbound_RejectsProtocolChangeToNodeIneligible(t *testing.T) {
 	update.Protocol = model.Protocol("unknown")
 	update.Settings = `{}`
 	if _, _, err := (&InboundService{}).UpdateInbound(&update); err == nil ||
-		!strings.Contains(err.Error(), "cannot be assigned to a node") {
-		t.Fatalf("err = %v, want a node-eligibility refusal", err)
+		!strings.Contains(err.Error(), "unknown is not supported by xray on the selected node") {
+		t.Fatalf("err = %v, want an unknown-protocol refusal on the stored node", err)
+	}
+	var stored model.Inbound
+	if err := database.GetDB().First(&stored, existing.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Protocol != existing.Protocol || stored.Settings != existing.Settings || stored.NodeID == nil || *stored.NodeID != nodeID {
+		t.Fatal("rejected protocol update changed stored configuration")
 	}
 }

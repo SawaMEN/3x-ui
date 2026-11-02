@@ -137,9 +137,22 @@ func newScreenTgbot(t *testing.T, failEdit bool) (*Tgbot, func() []apiCall) {
 	t.Helper()
 	srv, calls := recordingServer(t, failEdit)
 	swapTestBot(t, srv.URL)
-	t.Cleanup(srv.Close)
+	t.Cleanup(func() { waitScreenArtProbe(t); srv.Close() })
 	resetScreenArt()
 	return &Tgbot{}, calls
+}
+
+// A render may start a background avatar request. Drain it before replacing
+// the process-wide bot or closing its test server, including under -shuffle.
+func waitScreenArtProbe(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(16 * time.Second) // resolveScreenArt bounds requests to 15s.
+	for artProbeRunning.Load() {
+		if time.Now().After(deadline) {
+			t.Fatal("screen art probe did not finish")
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func methods(calls []apiCall) []string {
@@ -493,6 +506,7 @@ func TestScreenArtReprobeWindow(t *testing.T) {
 	if countMethod(calls(), "getUserProfilePhotos") == 0 {
 		t.Error("a stale missing avatar was not re-probed")
 	}
+	waitScreenArtProbe(t)
 
 	// A known avatar is inside its long window: no probe.
 	screenArtMu.Lock()

@@ -50,9 +50,11 @@ func setTestBot(b *telego.Bot) {
 
 func swapTestBot(t *testing.T, url string) {
 	t.Helper()
+	waitScreenArtProbe(t)
 	origBot := liveBot()
 	origPool := messageWorkerPool
 	t.Cleanup(func() {
+		waitScreenArtProbe(t)
 		setTestBot(origBot)
 		messageWorkerPool = origPool
 	})
