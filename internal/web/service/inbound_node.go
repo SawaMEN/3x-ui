@@ -904,7 +904,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 			updates["traffic_reset_day"] = normalizeTrafficResetDay(snapIb.TrafficResetDay)
 			updates["last_traffic_reset_time"] = snapIb.LastTrafficResetTime
 		}
-		if !inGrace || (snapIb.Up+snapIb.Down) <= (c.Up+c.Down) {
+		if !inGrace || common.CompareTrafficUsage(snapIb.Up, snapIb.Down, c.Up, c.Down) <= 0 {
 			updates["up"] = snapIb.Up
 			updates["down"] = snapIb.Down
 		}
@@ -1811,7 +1811,7 @@ func (s *InboundService) FilterAndSortClientEmails(emails []string) ([]string, [
 
 	// Step 2: Sort clients by (Up + Down) descending
 	sort.Slice(clients, func(i, j int) bool {
-		return (clients[i].Up + clients[i].Down) > (clients[j].Up + clients[j].Down)
+		return common.CompareTrafficUsage(clients[i].Up, clients[i].Down, clients[j].Up, clients[j].Down) > 0
 	})
 
 	// Step 3: Extract sorted valid emails and track found ones

@@ -42,9 +42,8 @@ func TestStage6NativeAccountingAndRevocation(t *testing.T) {
 	if err := settings.SetSingBoxConfigTemplate(`{"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"}],"route":{"final":"direct","rules":[]}}`); err != nil {
 		t.Fatal(err)
 	}
-	mgr := webRuntime.GetManager()
+	mgr := useTestRuntimeManager(t)
 	mgr.SetLocalRuntimeOverride(webRuntime.NewLocal(webRuntime.LocalDeps{CoreType: func() string { return CoreTypeSingBox }, RequestConfigApply: svc.Restart}))
-	t.Cleanup(func() { mgr.SetLocalRuntimeOverride(nil) })
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

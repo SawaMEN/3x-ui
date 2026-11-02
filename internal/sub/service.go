@@ -528,9 +528,9 @@ func (s *SubService) resolveInfoNodeRemark(subId string, uniqueEmails []string, 
 	if !s.subInfoNodeEnable || !s.subscriptionBody {
 		return infoNodeNone, ""
 	}
-	nowSec := time.Now().Unix()
-	isExpired := traffic.ExpiryTime > 0 && traffic.ExpiryTime/1000 <= nowSec
-	isDepleted := traffic.Total > 0 && (traffic.Up+traffic.Down) >= traffic.Total
+	nowMillis := time.Now().UnixMilli()
+	isExpired := common.Expired(traffic.ExpiryTime, nowMillis)
+	isDepleted := traffic.Total > 0 && (common.TrafficUsage(traffic.Up, traffic.Down)) >= traffic.Total
 
 	primaryEmail := ""
 	if len(uniqueEmails) > 0 {
@@ -4095,11 +4095,11 @@ func (s *SubService) BuildPageData(subId string, hostHeader string, traffic core
 	download := common.FormatTraffic(traffic.Down)
 	upload := common.FormatTraffic(traffic.Up)
 	total := "∞"
-	used := common.FormatTraffic(traffic.Up + traffic.Down)
+	used := common.FormatTraffic(common.TrafficUsage(traffic.Up, traffic.Down))
 	remained := ""
 	if traffic.Total > 0 {
 		total = common.FormatTraffic(traffic.Total)
-		left := max(traffic.Total-(traffic.Up+traffic.Down), 0)
+		left := max(traffic.Total-(common.TrafficUsage(traffic.Up, traffic.Down)), 0)
 		remained = common.FormatTraffic(left)
 	}
 

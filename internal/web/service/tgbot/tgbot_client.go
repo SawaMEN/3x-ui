@@ -344,7 +344,7 @@ func (t *Tgbot) clientInfoMsg(
 	if printTraffic {
 		output += t.I18nBot("tgbot.messages.upload", "Upload=="+common.FormatTraffic(traffic.Up))
 		output += t.I18nBot("tgbot.messages.download", "Download=="+common.FormatTraffic(traffic.Down))
-		output += t.I18nBot("tgbot.messages.total", "UpDown=="+common.FormatTraffic((traffic.Up+traffic.Down)), "Total=="+total)
+		output += t.I18nBot("tgbot.messages.total", "UpDown=="+common.FormatTraffic((common.TrafficUsage(traffic.Up, traffic.Down))), "Total=="+total)
 	}
 	if printRefreshed {
 		output += t.I18nBot("tgbot.messages.refreshedOn", "Time=="+time.Now().Format("2006-01-02 15:04:05"))

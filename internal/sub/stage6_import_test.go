@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
@@ -117,10 +118,26 @@ func TestStage6SubscriptionImports(t *testing.T) {
 			if e := os.WriteFile(input, []byte(p.body), 0600); e != nil {
 				t.Fatal(e)
 			}
-			cmd := exec.Command(binary, "parse", "-o", parsed, input)
-			cmd.Dir = filepath.Dir(binary)
-			if out, e := cmd.CombinedOutput(); e != nil {
-				t.Fatalf("real client import: %v %s", e, out)
+			xray := p.name == "xray-json"
+			if xray {
+				// Xray JSON is imported by Xray; the Hiddify parser accepts native
+				// sing-box JSON and share links, not arbitrary Xray full configs.
+				core := filepath.Join(os.Getenv("XUI_STAGE4_CORE_DIR"), "xray", "xray")
+				cmd := exec.Command(core, "run", "-test", "-c", input)
+				cmd.Dir = filepath.Dir(core)
+				cmd.Env = append(os.Environ(), "XRAY_LOCATION_ASSET="+filepath.Dir(core))
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("Xray client import: %v %s", err, out)
+				}
+				if err := os.WriteFile(parsed, []byte(p.body), 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				cmd := exec.Command(binary, "parse", "-o", parsed, input)
+				cmd.Dir = filepath.Dir(binary)
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("real client import: %v %s", err, out)
+				}
 			}
 			data, e := os.ReadFile(parsed)
 			if e != nil {
@@ -134,19 +151,55 @@ func TestStage6SubscriptionImports(t *testing.T) {
 			}
 			var ob map[string]any
 			for _, v := range cfg.Outbounds {
-				if v["type"] == "vmess" {
+				kind := v["type"]
+				if xray {
+					kind = v["protocol"]
+				}
+				if kind == "vmess" {
 					if ob != nil {
 						t.Fatal("duplicated proxy")
 					}
 					ob = v
 				}
 			}
-			if ob == nil || ob["uuid"] != uuid || ob["server"] != "127.0.0.1" || ob["server_port"] != float64(port) {
-				t.Fatalf("import lost identity or endpoint: %v", ob)
+			if ob == nil {
+				t.Fatal("missing imported proxy")
+			}
+			if !xray {
+				if ob["uuid"] != uuid || (ob["server"] != "127.0.0.1" && ob["server"] != "localhost") || ob["server_port"] != float64(port) || !strings.Contains(ob["tag"].(string), ib.Remark) {
+					t.Fatalf("import lost identity, endpoint or name: %v", ob)
+				}
 			}
 			ob["tag"] = "proxy"
 			relay := anyTLSFreePort(t)
-			clientLog := runAnyTLSCore(t, binary, map[string]any{"inbounds": []any{map[string]any{"type": "direct", "listen": "127.0.0.1", "listen_port": relay, "override_address": "127.0.0.1", "override_port": targetPort}}, "outbounds": []any{ob}})
+			var clientLog string
+			if xray {
+				core := filepath.Join(os.Getenv("XUI_STAGE4_CORE_DIR"), "xray", "xray")
+				client := map[string]any{"inbounds": []any{map[string]any{"protocol": "dokodemo-door", "listen": "127.0.0.1", "port": relay, "settings": map[string]any{"network": "tcp,udp", "address": "127.0.0.1", "port": targetPort}}}, "outbounds": []any{ob}, "dns": map[string]any{"servers": []string{"localhost"}, "queryStrategy": "UseIPv4"}}
+				path := filepath.Join(dir, "xray-client.json")
+				data, err := json.Marshal(client)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, data, 0600); err != nil {
+					t.Fatal(err)
+				}
+				clientLog = filepath.Join(dir, "xray-client.log")
+				log, err := os.Create(clientLog)
+				if err != nil {
+					t.Fatal(err)
+				}
+				cmd := exec.Command(core, "run", "-c", path)
+				cmd.Dir = filepath.Dir(core)
+				cmd.Env = append(os.Environ(), "XRAY_LOCATION_ASSET="+filepath.Dir(core))
+				cmd.Stdout, cmd.Stderr = log, log
+				if err := cmd.Start(); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait(); _ = log.Close() })
+			} else {
+				clientLog = runAnyTLSCore(t, binary, map[string]any{"inbounds": []any{map[string]any{"type": "direct", "listen": "127.0.0.1", "listen_port": relay, "override_address": "127.0.0.1", "override_port": targetPort}}, "outbounds": []any{ob}, "dns": map[string]any{"servers": []any{map[string]any{"type": "local", "tag": "local"}}, "strategy": "prefer_ipv4"}, "route": map[string]any{"default_domain_resolver": "local"}})
+			}
 			for _, network := range []string{"tcp", "udp"} {
 				t.Run(network, func(t *testing.T) {
 					var last error
@@ -185,5 +238,12 @@ func TestStage6SubscriptionImports(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestStage6SubscriptionDepletionCannotWrap(t *testing.T) {
+	stats := coremodel.ClientTraffic{Enable: true, Up: database.TrafficMax, Down: database.TrafficMax, Total: database.TrafficMax}
+	if got := clientStatus(stats); got != "depleted" {
+		t.Fatal("subscription status ignored exhausted quota", got)
 	}
 }

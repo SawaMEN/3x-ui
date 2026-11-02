@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"net/http"
 	"strconv"
 	"strings"
@@ -134,7 +135,7 @@ func (a *ClientController) buildClientPayload(rec *model.ClientRecord) (gin.H, e
 	rec.Flow = flow
 	var usedTraffic int64
 	if t, tErr := a.inboundService.GetClientTrafficByEmail(rec.Email); tErr == nil && t != nil {
-		usedTraffic = t.Up + t.Down
+		usedTraffic = common.TrafficUsage(t.Up, t.Down)
 	}
 	tunnelAllowedIPs, err := a.clientService.TunnelAllowedIPsByInbound(&a.inboundService, rec.Email, inboundIds)
 	if err != nil {

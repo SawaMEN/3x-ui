@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -100,11 +99,6 @@ func effectiveHwidLimitForSubID(tx *gorm.DB, subID string) (int, error) {
 	return limit, err
 }
 
-// Bounded stripes serialize same-subscription SQLite writers without retaining
-// one mutex forever for every subscription ever requested. PostgreSQL also
-// locks the parent rows so different panel processes obey the same slot cap.
-var hwidGateLocks [64]sync.Mutex
-
 func (s *ClientService) EnforceHwidForSubID(subID string, req HwidRequest) (HwidGateResult, error) {
 	var res HwidGateResult
 	subID = strings.TrimSpace(subID)
@@ -133,14 +127,11 @@ func (s *ClientService) EnforceHwidForSubID(subID string, req HwidRequest) (Hwid
 		res.NotSupported = true
 		return res, nil
 	}
-	key := sha256.Sum256([]byte(subID))
-	gate := &hwidGateLocks[int(key[0])%len(hwidGateLocks)]
-	gate.Lock()
-	defer gate.Unlock()
-
 	hwidHash := hashHwid(req.Hwid)
 
 	err = db.Transaction(func(tx *gorm.DB) error {
+		// SQLite uses BEGIN IMMEDIATE (InitDB), so writers are serialized before
+		// any count is read. PostgreSQL needs explicit parent locks instead.
 		if tx.Dialector.Name() == "postgres" {
 			var owners []model.ClientRecord
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("sub_id = ?", subID).Order("id").Find(&owners).Error; err != nil {

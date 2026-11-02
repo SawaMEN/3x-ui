@@ -31,3 +31,20 @@ func TestStage6TrafficArithmetic(t *testing.T) {
 		}
 	}
 }
+
+func TestStage6TrafficOrderingAndExpiryBoundary(t *testing.T) {
+	if CompareTrafficUsage(math.MaxInt64, 1, math.MaxInt64, 2) >= 0 {
+		t.Fatal("saturated display totals lost their exact order")
+	}
+	if CompareTrafficUsage(math.MaxInt64, math.MaxInt64, 1, 2) <= 0 {
+		t.Fatal("large usage sorted below small usage")
+	}
+	for _, tc := range []struct {
+		deadline int64
+		want     bool
+	}{{0, false}, {-1, false}, {999, true}, {1000, true}, {1001, false}} {
+		if got := Expired(tc.deadline, 1000); got != tc.want {
+			t.Fatalf("deadline %d: %v", tc.deadline, got)
+		}
+	}
+}

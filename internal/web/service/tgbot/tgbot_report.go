@@ -279,7 +279,7 @@ func (t *Tgbot) notifyExhausted() {
 									for _, traffic := range traffics {
 										if traffic.Enable {
 											if (traffic.ExpiryTime > 0 && (traffic.ExpiryTime-now < exDiff)) ||
-												(traffic.Total > 0 && (traffic.Total-(traffic.Up+traffic.Down) < trDiff)) {
+												(traffic.Total > 0 && (traffic.Total-(common.TrafficUsage(traffic.Up, traffic.Down)) < trDiff)) {
 												exhaustedClients = append(exhaustedClients, *traffic)
 											}
 										} else {

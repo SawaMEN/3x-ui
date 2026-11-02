@@ -295,7 +295,7 @@ func (t *Tgbot) inboundResults(search, action string) []telego.InlineQueryResult
 			status = "✅"
 		}
 		description := fmt.Sprintf("#%d · %s · %s · 🚦 %s\n👥 %d", ib.Id, ib.Protocol, status,
-			common.FormatTraffic(ib.Up+ib.Down), len(ib.ClientStats))
+			common.FormatTraffic(common.TrafficUsage(ib.Up, ib.Down)), len(ib.ClientStats))
 		if needle != "" && !strings.Contains(strings.ToLower(remark+" "+string(ib.Protocol)+" "+strconv.Itoa(ib.Port)), needle) {
 			continue
 		}
@@ -362,7 +362,7 @@ func (t *Tgbot) clientResults(search string, isAdmin bool, inboundID string) []t
 			seen[client.Email] = true
 			used := int64(0)
 			if traffic, err := t.inboundService.GetClientTrafficByEmail(client.Email); err == nil && traffic != nil {
-				used = traffic.Up + traffic.Down
+				used = common.TrafficUsage(traffic.Up, traffic.Down)
 			}
 			add(client.Email, ib.Remark, used, client.TotalGB, client.ExpiryTime, client.Enable, false)
 		}
@@ -556,7 +556,7 @@ func (t *Tgbot) inboundSummaryText(inbound *model.Inbound) string {
 	body := t.I18nBot("tgbot.messages.inbound", "Remark=="+inbound.Remark)
 	body += t.I18nBot("tgbot.messages.port", "Port=="+strconv.Itoa(inbound.Port))
 	body += t.I18nBot("tgbot.messages.traffic",
-		"Total=="+common.FormatTraffic(inbound.Up+inbound.Down),
+		"Total=="+common.FormatTraffic(common.TrafficUsage(inbound.Up, inbound.Down)),
 		"Upload=="+common.FormatTraffic(inbound.Up),
 		"Download=="+common.FormatTraffic(inbound.Down))
 	if inbound.ExpiryTime == 0 {

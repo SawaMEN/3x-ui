@@ -13,7 +13,7 @@ concurrency:
 jobs:
   contracts:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:16
@@ -34,7 +34,7 @@ jobs:
       - name: SQLite lifecycle accounting subscriptions and broker contracts
         run: |
           set -o pipefail
-          go test -race -p 2 -json ./internal/clientlimit/... ./internal/util/common ./internal/database/model ./internal/web/service ./internal/web/job ./internal/sub ./internal/mieru ./internal/sudoku -count=1 | tee contracts.jsonl
+          go test -race -timeout 30m -p 2 -json ./internal/clientlimit/... ./internal/util/common ./internal/database/model ./internal/web/service ./internal/web/job ./internal/web/controller ./internal/web/service/tgbot ./internal/sub ./internal/mieru ./internal/sudoku -count=1 | tee contracts.jsonl
           python3 tools/ci/require-go-tests.py contracts.jsonl TestStage6QuotaDoesNotWrapOnNodeMerge TestStage6GroupUsageHandlesBothSaturatedCounters TestStage6HwidDeviceCap TestStage6QuotaSQL TestStage6ConflictingRatesCannotSplitSharedBudget TestSharedBudgetAcrossConnectionsAndRoutes TestUDPAssociateLimitedBothWays TestNativeBrokerRevocationAndRollback
       - name: PostgreSQL before-fix reproduction and protected current behavior
         if: ${{ !cancelled() }}
