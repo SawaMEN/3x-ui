@@ -1,19 +1,23 @@
-# Этап 5: протоколы, транспорты и TLS — промежуточный отчёт
+# Этап 5: протоколы, транспорты и TLS
 
 Дата: 2026-11-02. Ветка: `update`, draft PR [#279](https://github.com/SawaMEN/3x-ui/pull/279).
-Диапазон исходного аудита: v3.9.8 `416a66a3` → main `4aa74411`.
-Начало этапа: `4689f169`. Main и опубликованные релизы этим этапом не изменяются.
+Исходный диапазон: v3.9.8 `416a66a3` → main `4aa74411`.
+Проверяемый SHA кода и тестов: `9b365d1b2ab098aab1743e3682dde88e497021a2`.
 
-**Закрыт пункт 5.4, всего 1/5 пунктов этапа 5. Общий прогресс: 4/14 полностью
-завершённых этапов, 21/70 групп. Этап 5 целиком не завершён.**
+**Этап 5 завершён: 5/5 пунктов. Общий прогресс: 5/14 этапов, 25/70 групп.**
 
-| Пункт плана                           | Состояние | Остаток                                                                                                                                |
-| ------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 5.1 Capability matrix                 | Частично  | Полная сверка форм, обоих направлений и всех неподдерживаемых transport/core пар до записи в БД                                        |
-| 5.2 Классические протоколы/транспорты | Частично  | Полная проверка переключений формы, XDrive/QUIC, всех Shadowsocks вариантов и цепочек                                                  |
-| 5.3 Расширенные протоколы             | Частично  | Дополнить реальные клиентские соединения Hysteria/TUIC/WireGuard/Naive/Snell; внешние процессы также относятся к этапу 8               |
-| 5.4 TLS и защитные параметры          | Закрыт    | Проверены перевод/сохранение/отказ, native constructors, TLS/SNI, legacy TLS 1.2 и Xray Reality; полная сетевая матрица остаётся в 5.5 |
-| 5.5 Полная клиентская матрица TCP/UDP | Частично  | Не каждый протокол/транспорт/направление и вид клиента прошёл реальную передачу данных                                                 |
+| Пункт | Результат проверки |
+| --- | --- |
+| 5.1 | Реестр моделей/форм/переводчиков, 78 core-policy rows и binary constructors; ранние отказы до сохранения |
+| 5.2 | 68 classic protocol/transport pairs, SS/SOCKS/HTTP, form-switch contracts, XDrive/QUIC и конкретная outbound chain |
+| 5.3 | Перечисленные ниже native расширенные протоколы и WG/AWG; внешние режимы отдельно от native, по исходной границе этапа 8 |
+| 5.4 | TLS/SNI/ALPN, legacy cipher, Reality, сохранение/отказ ECH/FinalMask; актуальный XDNS формат |
+| 5.5 | Нативная клиентская матрица обеих архитектур, source evidence и фиксированные версии; ограничения и сторонний дефект не замаскированы под data-pass |
+
+Завершение этапа означает выполнение указанной матрицы аудита. Это не утверждение
+об отсутствии ошибок в сторонних бинарниках или успехе всех возможных сочетаний
+протоколов, клиентов и защитных расширений. Непроверенные сочетания не объявлены
+совместимыми по одному лишь успешному constructor check.
 
 ## Исправления и удаление лишней работы
 
@@ -45,6 +49,27 @@
    Go TLS cipher suites строится один раз. Проверены вложенные TLS, общие ссылки,
    повторная сериализация и неизменность исходных объектов при ошибке.
 
+7. **Неподдерживаемый transport сохранялся до отказа runtime.** Введён ранний
+   guard для protocol/core/transport; panel QUIC не подменяется TCP. Update
+   проверяет новый streamSettings с сохранённым NodeID, Enable учитывает приоритет
+   `method` над `network` в импортированных строках. Проверена неизменность БД.
+8. **QUIC получал несовместимый TLS-профиль.** Native QUIC требует включённый
+   Go TLS 1.3; uTLS/Reality и TLS 1.2-only отвергаются до запуска. Проверены
+   реальные QUIC TCP/UDP соединения и неправильное SNI.
+9. **Встроенный Xray validator отставал от выбранного бинарника.** Обновлён до
+   того же release commit `1b1647cd9ddf`; проверены настоящие XDrive keys и MUX
+   constraints. `go mod tidy` удалил невостребованные зависимости старой версии.
+10. **Форма XDNS генерировала удалённый формат списков строк.** Форма и golden
+    fixture используют object domains/resolvers. Старый формат явно отвергается
+    перед Add/Update/Enable; сохранённые строки и RR types не удаляются и не
+    преобразуются молча. Старые resolver strings связывают domain с resolver,
+    новый формат разделяет их; переход требует явной настройки обоих peers.
+11. **Форма оставляла параметры неактивного транспорта.** При сохранении
+    удаляются только известные неактивные transport subtrees; выбранный транспорт,
+    TCP/raw aliases и неизвестные будущие поля сохраняются. Проверена неизменность
+    исходного объекта. Каталог транспорта вынесен из каждого вызова; удалены
+    повторяющиеся пункты Sudoku и лишние проверки совместимости.
+
 Патч ядра включён в обычный build script вместе с четырьмя regression tests.
 Версия owner: `sawamen-b310097c8e7a-338f0c9457a4-mask1-ciphers1-net62-sec1-stream1`.
 Исходные parent/fork/ray2sing commits сохранены; изменены явно учтённые overlays.
@@ -67,12 +92,7 @@ Owner собран нативно на amd64/arm64 из закреплённых
 [прогоне 41421583366](https://github.com/SawaMEN/3x-ui/actions/runs/41421583366), SHA панели
 `2498633e456fcc2b7af371eb5e41ea4373cc6ca3`. Там же выполнены source regressions
 Trojan/HTTPUpgrade и binary-backed проверки: **1019 PASS events на архитектуру,
-0 FAIL, 0 обязательных skip**. Тринадцать opt-in skip относятся к первому запуску
-unit-suite без binary env; десять из них затем реально выполняются в обязательных
-binary-backed шагах. `TestMASQUESpeedLimits`, `TestGeoRoutingModifiedSingBoxCheck`,
-`TestSelectorLiveSwitch_E2E` остаются вне этого этапа (6–7).
-
-Аудит повторно использует точные owner artifacts и проверяет SHA-256, а не
+0 FAIL, 0 обязательных skip**. Аудит повторно использует точные owner artifacts и проверяет SHA-256, а не
 пересобирает ядро на каждую правку панели. `libcronet.so` также закреплена по
 commit и SHA-256: этот audit-профиль — purego. Статический musl release-профиль
 отдельный; его свойства не выводятся из purego-проверок.
@@ -84,82 +104,91 @@ commit и SHA-256: этот audit-профиль — purego. Статическ�
 | Upstream sing-box v1.14.4                         | `1264361b5f8868c8768f7555d3e77e20118bf503c41ac08bb290a0d99056aa3a` | `d953af885f11d6b547c21a3c0ffe70796963afc802fab959d548311002b4908a` |
 | Cronet `0d28acc44093df24b2526dea3d6ffefd6b0a54f0` | `23109c55b08829bb1a68682a61a64852b1bbf243753b153cbd8f6e4ea2c05294` | `3c1fcfcb56261a4b318ffb6d2227b9726782edb5a894e74db2b534406db62498` |
 
-Финальная проверка SHA `e42281766c63db3b351b0013d38db9eec56b7b2e`:
-[Protocol/TLS audit 41424859086](https://github.com/SawaMEN/3x-ui/actions/runs/41424859086).
-Оба задания успешны: по 1650 PASS test/subtest events с учётом повторов, 0 FAIL,
-13 opt-in skip в начальном unit-шаге и 0 обязательных skip. Проверены matching
-Cronet, три shuffled запуска Telegram package на архитектуру и неизменность БД
-при отказе unknown protocol. Общий Go-прогон и frontend build в release workflow
-`41424858993` также прошли; упаковка release binaries на момент отчёта ещё выполняется.
+## Матрица и реальные клиенты
 
-## Фактическое покрытие: schema отдельно от данных
+`protocol-inventory.json`: 26 inbound models, 26 соответствующих frontend forms,
+78 model/core policy rows, 13 outbound forms, 21 native outbound constructor.
+Policy, schema и constructor не означают успешной передачи данных.
+`protocol-matrix.csv` строится из завершённых Go JSONL events; пропуск, отсутствие
+обязательного subtest или FAIL останавливают генерацию. У каждой строки указаны
+protocol, direction/endpoint role, core, transport, client, payload, result,
+source file/test, commit и architecture. Клиенты — закреплённые core binaries;
+для WireGuard/AWG peer — Go amneziawg/v3 `v3.1.20260828`, для фрагментированного
+Trojan — Go 1.27.3 crypto/tls и ручной Trojan frame.
 
-Каждая строка ниже выполняется на обеих архитектурах. Клиентские версии — те же
-закреплённые core binaries, если явно не указан другой клиент. Между разными
-ядрами взаимная совместимость автоматически не предполагается.
+| Область | Проверенные сценарии | Точная граница |
+| --- | --- | --- |
+| Owner VLESS/VMess/Trojan | 28 protocol/transport pairs: TCP, raw, WS, gRPC, HTTP, HTTPUpgrade, XHTTP, KCP, native QUIC; XDrive только VLESS | Native QUIC отделён от неподдерживаемого panel `network=quic` |
+| Upstream VLESS/VMess/Trojan | 18 pairs: TCP/raw/WS/gRPC/HTTP/HTTPUpgrade | Нет заявленного успеха XHTTP/KCP/XDrive в upstream |
+| Xray VLESS/VMess/Trojan | 22 pairs: TCP/raw/WS/gRPC/HTTPUpgrade/XHTTP/KCP; XDrive только VLESS с MUX | Удалённые HTTP/QUIC и MASQUE с чужим protocol отвергаются |
+| TCP/UDP для этих 68 pairs | Оба payload, два разрешённых пользователя, disabled/unknown, reconnect | TCP: IPv4/IPv6 destination и localhost DNS; UDP: IPv4 destination. Outer UDP KCP/QUIC не подменяет proxied UDP |
+| Расширенные owner protocols | SOCKS, HTTP, SS AES-128-GCM, SS2022 AES-128-GCM, Hysteria1/2, TUIC, AnyTLS, Naive, Snell5/6 | TCP IPv4/IPv6/DNS, reconnect, неверный пароль; UDP IPv4 у поддерживающих его protocols. HTTP/Naive — TCP-only. SS profiles — single PSK |
+| WireGuard | Native initiator и responder: IPv4/IPv6 TCP/UDP, peer revocation | Это роли endpoint/handshake; не проверка всех gateway/TUN routing modes |
+| AWG | Native outbound initiator: IPv4/IPv6 TCP/UDP, peer revocation, header protection и padding | Фиксированный listening port в native mode **unsupported**, явно отвергается. Внешний server mode — этап 8 |
+| AnyTLS → ShadowTLS | TCP/UDP через реально сгенерированную subscription chain; неверный пароль каждого слоя отдельно | IPv4; не все сочетания wrapper/inner |
+| MASQUE | HTTP 1/2/3 без version fallback, TCP/UDP, неверный пароль | IPv4; без утверждения об IPv6 CONNECT-IP |
+| XHTTP | Owner: 11 modes none/TLS; Xray: 18 none/TLS/Reality; split download и большие HTTP bodies | Только явно перечисленные security/mode pairs |
+| TLS | Trusted local cert, SNI/ALPN, legacy TLS 1.2 с явным RSA cipher, Xray Reality; ECH/FinalMask translation, preservation/rejection и constructors | ECH и каждый отдельный mask не объявляются полным data cross-product |
 
-| Проверка                                                              | Что реально сделано                                                                                                                                                              | Ограничение                                                                                                   |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Owner VLESS/VMess/Trojan × TCP/raw/WS/gRPC/HTTP/HTTPUpgrade/XHTTP/KCP | 24 пары с переводом panel settings в обоих направлениях; два разрешённых пользователя, disabled/unknown, reconnect, IPv4/IPv6 назначения и localhost DNS; Trojan также wrong SNI | TCP; KCP является UDP-транспортом для этой TCP-нагрузки, это не тест произвольного proxied UDP                |
-| Upstream VLESS/VMess/Trojan × TCP/raw/WS/gRPC/HTTP/HTTPUpgrade        | 18 пар с теми же TCP/address/auth проверками                                                                                                                                     | XHTTP/KCP не заявлены для upstream                                                                            |
-| Owner XHTTP                                                           | 11 режимов none/TLS и split download, три двусторонние HTTP-передачи больших тел                                                                                                 | Reality в этом тесте для owner не заявляется                                                                  |
-| Xray XHTTP                                                            | 18 режимов none/TLS/Reality и split download, реальные HTTP-передачи                                                                                                             | Не вся матрица Xray transport/protocol                                                                        |
-| Legacy TLS                                                            | Настоящий VLESS round trip, TLS 1.2, RSA-сертификат и единственный явно заданный `TLS_RSA_WITH_AES_128_GCM_SHA256`                                                               | Не утверждает, что все legacy suites проверены handshake-ами                                                  |
-| AnyTLS/ShadowTLS                                                      | Реальный subscription → core → layered server → TCP/UDP echo                                                                                                                     | Конкретная цепочка из существующего e2e, не все варианты wrapper/inner                                        |
-| MASQUE                                                                | HTTP 1/2/3 без fallback, реальные TCP и UDP echo                                                                                                                                 | Один локальный IPv4 сценарий на версию                                                                        |
-| AWG                                                                   | Native owner endpoint → настоящий AWG v3 Go server → TCP/UDP echo с защитными параметрами                                                                                        | Не полная матрица обычного WireGuard и inbound ролей                                                          |
-| Database protocol configs                                             | 14 профилей: VLESS, VMess, Trojan, SS2022, HTTP, Mixed, Hysteria1/2, TUIC, Naive, AnyTLS, ShadowTLS, Snell6, MASQUE; реальные native checks                                      | Constructor/schema check не считается передачей данных                                                        |
-| Transport constructor matrix                                          | 60 проверок: 3 протокола × 10 явно названных transport inputs × 2 направления                                                                                                    | `native-raw`/`native-quic` отделены от panel `raw` alias; нет подмены panel QUIC на TCP под прежним названием |
-| Native outbounds                                                      | 21 тип: direct, block, bridge, socks, http, shadowsocks, vmess, vless, trojan, hysteria, hysteria2, tuic, shadowtls, anytls, snell, ssh, tor, mieru, naive, selector, urltest    | Проверяется собственный schema/constructor owner-ядра                                                         |
-| TLS/Reality/ECH/FinalMask                                             | Unit translation/rejection, вложенные native TLS и binary-backed constructors; source tests крипто/transport overlays в сборке                                                   | Не все сочетания защитных расширений прошли end-to-end передачу                                               |
+IPv6 в этом стенде означает loopback destination или адрес внутри WG tunnel;
+DNS — `localhost`. Это не проверка публичного IPv6-интернета или DNS leak.
+Фоновый owner outbound monitoring может обращаться к public IP-info endpoints;
+локальные echo targets не доказывают полной сетевой изоляции процесса.
 
-## Начальная матрица inbound policy
+## Открытый дефект стороннего бинарника
 
-Это политика панели для 26 model protocols, **не утверждение о native listener
-каждого бинарника**. Доступность внешнего сервера и полноценные outbound/input
-формы ещё требуют завершения 5.1/5.3/8.
+Официальный upstream sing-box 1.14.4 отвергает фрагментированный Trojan auth key.
+Тест сначала подтверждает обычную передачу, затем TLS-record fragmentation и
+конкретную ошибку `bad request size`. В CSV это `KNOWN_UPSTREAM_DEFECT`,
+**не** успешный fragmented transfer. Owner stream1 проходит оба сценария.
+Официальный upstream binary не переписывался под прежней версией/контрольной суммой.
 
-| Model protocols                                                                                  | Xray                                           | Owner                                                     | Upstream                                       |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------- |
-| VMess, VLESS, Trojan, Shadowsocks, HTTP, Mixed, Hysteria, WireGuard, Tun, TUIC                   | Разрешено через соответствующий adapter/server | Разрешено через соответствующий adapter/server            | Разрешено через соответствующий adapter/server |
-| Tunnel                                                                                           | Разрешено                                      | Отказ                                                     | Отказ                                          |
-| Snell                                                                                            | Отказ                                          | Разрешено                                                 | Отказ                                          |
-| MASQUE                                                                                           | Отказ                                          | Только при подтверждённой возможности установленного core | Отказ                                          |
-| Naive, AnyTLS, ShadowTLS                                                                         | Отказ                                          | Разрешено                                                 | Разрешено                                      |
-| MTProto, AmneziaWG, Mieru, Pingtunnel, TrustTunnel, FPTN, Vetroff, OpenFlux, VKTurnProxy, Sudoku | Отдельные серверы/адаптеры                     | Отдельные серверы/адаптеры                                | Отдельные серверы/адаптеры                     |
-| Неизвестное значение                                                                             | Отказ                                          | Отказ                                                     | Отказ                                          |
+## Разделение с последующими этапами
 
-## Сбои, найденные общим прогоном
+- Учёт, speed/device/quota limits, все URI/JSON/YAML/Clash/Hiddify import/export
+  combinations и смена состояния активных сессий — этап 6.
+- DNS leak, TUN/TPROXY, selector/urltest/failover, routing loops и многозвенные
+  routing chains — этап 7. Их constructor rows не являются data-pass.
+- Внешние MTProto/Vetroff/Mieru/Sudoku/TUIC/TrustTunnel/FPTN/OpenFlux/VKTurnProxy/
+  Pingtunnel/Naive/AWG processes и server lifecycle — этап 8, как в исходном плане.
+  Native checks этого этапа не закрывают внешний режим того же названия.
+- Браузерная проверка всех форм и UI взаимодействий — этап 10. Здесь выполнены
+  schema/form-switch contracts, typecheck и production build.
 
-- Старый node-протокольный тест ожидал позднюю ошибку node eligibility. После
-  раннего отказа unknown protocol он проверяет новый точный отказ и дополнительно
-  неизменность protocol/settings/NodeID в БД.
-- Telegram fixture меняла process-wide bot и закрывала mock server при активном
-  фоне avatar probe. Тестовая очистка теперь дожидается завершения probe; локально
-  весь пакет прошёл `-race -shuffle=on -count=5`. Production Telegram logic этим
-  исправлением не меняется.
-- При переходе от source build к binary artifact Naive constructor обнаружил
-  отсутствие `libcronet.so`. Audit bootstrap теперь получает matching dependency
-  из закреплённого Git commit и проверяет её SHA-256. Эта проверка остаётся
-  обязательной; исключение Naive или превращение сбоя в skip не применялось.
+## Подтверждения
 
-## Что необходимо сделать дальше
+Итоговый native run: [41474843098](https://github.com/SawaMEN/3x-ui/actions/runs/41474843098).
+Оба задания завершены PASS на SHA выше. На каждую архитектуру:
 
-1. Довести 5.1 до полной матрицы моделей/форм/native inputs/outbounds и проверить
-   ранний отказ всех неподдерживаемых protocol/transport/core сочетаний.
-2. Довести XDrive/QUIC и Shadowsocks варианты до клиентской передачи; проверить
-   UI-переключения и outbound chains. Не переносить успех native QUIC constructor
-   на неподдерживаемый panel `network=quic`.
-3. Дополнить Hysteria1/2, TUIC, plain WireGuard, Naive, Snell и остальные
-   заявленные пары реальными клиентами; закрыть отсутствующие направления UDP,
-   IPv6 и auth/disabled сценарии расширенных протоколов.
-4. Отдельно проверить фрагментированный Trojan в официальном upstream binary:
-   в исходнике v1.14.4 остаётся однократное чтение ключа. В этом этапе исправляется
-   owner fork; официальный upstream binary не модифицируется.
-5. Включить остальные клиенты/импорты и сочетания защиты в 5.5. Фоновый outbound
-   monitoring owner-ядра может обращаться к public URL/IP-info: сами echo targets
-   локальны, но полной сетевой изоляции процесса эти тесты не доказывают.
+- 422 строки CSV: **399 data-pass**, 21 constructor-only, один unsupported AWG
+  fixed-listen mode и один KNOWN_UPSTREAM_DEFECT. Последние 23 строки не
+  засчитаны как успешная передача.
+- 1897 PASS test/subtest events с учётом повторов, 14 package PASS, **0 FAIL**.
+- 15 opt-in SKIP в начальном unit-шаге без binary-specific env; 12 затем реально
+  выполнены в обязательных шагах. Три оставшихся — MASQUE speed limits, geo routing
+  и live selector, относящиеся к этапам 6–7. **Обязательных SKIP — 0**.
+- MASQUE HTTP1/2/3 TCP/UDP и неверные credentials: три завершённых повторения.
+- Матрица повторно построена из скачанных JSONL; совпали все поля
+  строк CSV. ZIP evidence каждого job проверен по GitHub artifact SHA-256.
 
-Ни успешный constructor, ни source unit test не отмечены как успешная передача
-конкретной клиентской пары. Массовая статистика/лимиты — этап 6, routing/failover —
-этап 7, внешние процессы — этап 8; эти области не объявляются закрытыми.
+Общий Go suite и production frontend build:
+[41474843105](https://github.com/SawaMEN/3x-ui/actions/runs/41474843105), job `125377864581` — PASS.
+[Protocol integration build](https://github.com/SawaMEN/3x-ui/actions/runs/41474843054),
+[runtime lifecycle](https://github.com/SawaMEN/3x-ui/actions/runs/41474842984) и
+[database compatibility](https://github.com/SawaMEN/3x-ui/actions/runs/41472714384) — PASS.
+БД-проверка выполнена на `ba519756`; последующий `9b365d1b` меняет только
+MASQUE test, повторяемость CI и metadata поля клиента в CSV, без изменения
+production кода или моделей БД.
+
+Предыдущий run `41439907544` выявил ошибку AWG fixture: тест принудительно включал
+запрещённый native fixed-listen режим. Это не засчитано как исправленный баг
+приложения или успешный AWG responder. Общий Go run `41439907562` выявил устаревшую
+XDNS fixture и форму. Отдельный локальный `-race` подтвердил новые XDNS save guards.
+Местный Vitest не запускается из-за `uv_interface_addresses: EPERM`; результат
+frontend tests берётся из native CI, а не заменяется локальным typecheck.
+
+В run `41472714293` AMD64 завершил весь gate; ARM64 обнаружил ошибку отрицательного
+MASQUE fixture: немедленный ECONNRESET после неверного пароля считался падением
+теста. Теперь именно ECONNRESET допускается как отказ, а FATAL/panic и потеря
+listener отдельно запрещены. Отказы другого вида не превращены в PASS.
+Итоговый gate повторяет MASQUE три раза на архитектуру.
