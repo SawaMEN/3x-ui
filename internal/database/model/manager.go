@@ -1,0 +1,73 @@
+package model
+
+type ManagerEntry struct {
+	TemplateID      int    `json:"templateId"`
+	Mode            string `json:"mode"`
+	NodeID          *int   `json:"nodeId,omitempty"`
+	Port            string `json:"port"`
+	SNI             string `json:"sni"`
+	Label           string `json:"label"`
+	Flag            string `json:"flag"`
+	RelayID         int    `json:"relayId"`
+	CustomLink      string `json:"customLink"`
+	ActiveInboundID int    `json:"activeInboundId"`
+}
+
+type ManagerSubscription struct {
+	ID              int            `json:"id" gorm:"primaryKey"`
+	UserID          int            `json:"-" gorm:"index;not null"`
+	Token           string         `json:"token" gorm:"uniqueIndex;not null"`
+	Name            string         `json:"name"`
+	Note            string         `json:"note"`
+	SupportURL      string         `json:"supportUrl"`
+	WebsiteURL      string         `json:"websiteUrl"`
+	ClientID        int            `json:"clientId"`
+	OwnClient       bool           `json:"ownClient"`
+	Enabled         bool           `json:"enabled"`
+	AutoRotate      bool           `json:"autoRotate"`
+	IntervalMinutes int            `json:"intervalMinutes"`
+	NextRotation    int64          `json:"nextRotation" gorm:"index"`
+	LastRotation    int64          `json:"lastRotation"`
+	Happ            string         `json:"happ"`
+	Incy            string         `json:"incy"`
+	Entries         []ManagerEntry `json:"entries" gorm:"serializer:json;type:text"`
+	Published       []ManagerEntry `json:"published" gorm:"serializer:json;type:text"`
+	CreatedAt       int64          `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt       int64          `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+}
+
+type ManagerOperation struct {
+	ID             int     `json:"id" gorm:"primaryKey"`
+	UserID         int     `json:"-" gorm:"index"`
+	SubscriptionID int     `json:"subscriptionId" gorm:"index"`
+	RelayID        int     `json:"relayId"`
+	Kind           string  `json:"kind"`
+	State          string  `json:"state" gorm:"index"`
+	ActiveKey      *string `json:"-" gorm:"uniqueIndex"`
+	Completed      int     `json:"completed"`
+	Total          int     `json:"total"`
+	Attempts       int     `json:"attempts"`
+	Message        string  `json:"message"`
+	CreatedAt      int64   `json:"createdAt" gorm:"autoCreateTime:milli;index"`
+	FinishedAt     int64   `json:"finishedAt"`
+}
+
+type ManagerRelay struct {
+	ID         int    `json:"id" gorm:"primaryKey"`
+	UserID     int    `json:"-" gorm:"index"`
+	Name       string `json:"name"`
+	Address    string `json:"address"`
+	SSHPort    int    `json:"sshPort"`
+	Username   string `json:"username"`
+	HostKey    string `json:"hostKey"`
+	Credential string `json:"-"`
+	KeyAuth    bool   `json:"keyAuth"`
+	NodeID     int    `json:"nodeId"`
+	Installed  bool   `json:"installed"`
+}
+
+type ManagerDomain struct {
+	ID     int    `json:"id" gorm:"primaryKey"`
+	UserID int    `json:"-" gorm:"uniqueIndex:idx_manager_domain,priority:1"`
+	Name   string `json:"name" gorm:"uniqueIndex:idx_manager_domain,priority:2"`
+}

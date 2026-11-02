@@ -92,6 +92,7 @@ func allModels() []any {
 		&model.SubBalancer{},
 		&model.TuicTrafficReceipt{},
 		&model.CoreTrafficCheckpoint{},
+		&model.ManagerSubscription{}, &model.ManagerOperation{}, &model.ManagerRelay{}, &model.ManagerDomain{},
 	}
 }
 

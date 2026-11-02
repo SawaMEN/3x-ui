@@ -257,6 +257,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 
 	// Subscription balancers — client-side balancers for the JSON sub output
 	NewSubBalancerController(api)
+	NewManagerController(api)
 
 	// Extra routes
 	api.POST("/backuptotgbot", a.BackuptoTgbot)
@@ -274,6 +275,7 @@ func (a *APIController) StartBackground(ctx context.Context) {
 			func() { a.firewallController.firewallService.RunAutoSync(ctx) },
 			func() { a.adBlockController.runAdBlockScheduler(ctx) },
 			func() { service.RunTelemtConnectionMonitor(ctx) },
+			func() { (&service.ManagerService{}).Run(ctx) },
 		}
 		for _, worker := range workers {
 			a.backgroundWG.Add(1)

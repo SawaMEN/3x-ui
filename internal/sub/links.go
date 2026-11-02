@@ -187,3 +187,21 @@ func splitLinkLines(raw string) []string {
 	}
 	return out
 }
+
+// ManagerLinksForClient applies per-entry names and relay endpoints through the native renderer.
+func (p *LinkProvider) ManagerLinksForClient(host string, ib *model.Inbound, email, label string, relay bool) []string {
+	var links []string
+	if relay {
+		svc := p.build(host)
+		copyInbound := *ib
+		svc.projectThroughFallbackMaster(&copyInbound)
+		copyInbound.ShareAddrStrategy, copyInbound.ShareAddr = "custom", ib.ShareAddr
+		links = splitLinkLines(svc.GetLink(&copyInbound, email))
+	} else {
+		links = p.LinksForClient(host, ib, email)
+	}
+	for i, raw := range links {
+		links[i] = applyRemarkToLink(raw, label)
+	}
+	return links
+}
