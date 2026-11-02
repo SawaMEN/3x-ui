@@ -34,10 +34,52 @@ export const UdpMaskTypeSchema = z.enum([
 ]);
 export type UdpMaskType = z.infer<typeof UdpMaskTypeSchema>;
 
-export const UdpMaskSchema = z.object({
-  type: UdpMaskTypeSchema,
-  settings: z.record(z.string(), z.unknown()).optional(),
-});
+// Preserve future fields while rejecting the removed string-list format.
+export const XdnsSettingsSchema = z
+  .object({
+    domain: z.never().optional(),
+    domains: z
+      .array(
+        z
+          .object({
+            names: z.array(z.string().min(1)).min(1),
+            types: z.array(z.number().int().min(0).max(65535)).optional(),
+            lenLimit: z.number().int().min(0).optional(),
+            labelLimit: z.number().int().min(0).optional(),
+            edns0: z.number().int().min(0).optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+    resolvers: z
+      .array(
+        z
+          .object({
+            addrs: z.array(z.string().min(1)).min(1),
+            worker: z.number().int().min(0).optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+    extraPoll: z.number().int().optional(),
+  })
+  .passthrough();
+
+export const UdpMaskSchema = z
+  .object({
+    type: UdpMaskTypeSchema,
+    settings: z.record(z.string(), z.unknown()).optional(),
+  })
+  .superRefine((mask, ctx) => {
+    if (mask.type === 'xdns' && !XdnsSettingsSchema.safeParse(mask.settings ?? {}).success) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['settings'],
+        message:
+          'xDNS requires object domains ({names, types}) and resolvers ({addrs, worker}); convert both peers explicitly.',
+      });
+    }
+  });
 export type UdpMask = z.infer<typeof UdpMaskSchema>;
 
 export const QuicCongestionSchema = z.enum(['reno', 'bbr', 'brutal', 'force-brutal']);

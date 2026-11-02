@@ -424,6 +424,8 @@ func validateSingBoxEndpoint(endpoint map[string]any) error {
 		return fmt.Errorf("sing-box endpoint %q has an empty type", tag)
 	case protocol == "wireguard":
 		return validateWireGuardEndpoint(endpoint, tag)
+	case protocol == "awg" && rawInt(endpoint, "listen_port") != 0:
+		return fmt.Errorf("native AWG endpoint %q requires automatic listen port (0); use the external server for a fixed listening port", tag)
 	case isKnownSingBoxEndpoint(protocol):
 		return nil
 	case isKnownSingBoxOutbound(protocol):

@@ -31,7 +31,7 @@ def build(directory):
     rows = []
     def add(protocol, direction, core, transport, payload, status, source, test):
         rows.append(dict(protocol=protocol, direction=direction, core=core,
-                         transport=transport, payload=payload, result=status,
+                         transport=transport, client=(core if payload != 'none' else 'none'), payload=payload, result=status,
                          evidence_file=source, evidence_test=test,
                          commit=os.environ.get('GITHUB_SHA', ''),
                          arch=os.environ.get('RUNNER_ARCH', '')))
@@ -76,6 +76,14 @@ def build(directory):
     items = events(directory / filename)
     for protocol, test in (('wireguard', 'TestNativeWireGuardConnections'), ('awg', 'TestNativeAWGConnections')):
         for flag, direction in (('false', 'endpoint-initiator'), ('true', 'endpoint-responder')):
+            if protocol == 'awg' and flag == 'true':
+                root = f'{test}/responder=true'
+                passed(items, root)
+                if not any('UNSUPPORTED_NATIVE_AWG_RESPONDER:' in e.get('Output', '') for e in items):
+                    raise ValueError('missing explicit native AWG listener rejection')
+                add(protocol, direction, 'owner', 'fixed listen port', 'none',
+                    'unsupported; rejected before serialization; external server is stage 8', filename, root)
+                continue
             for family in ('IPv4', 'IPv6'):
                 for payload in ('tcp', 'udp'):
                     root = f'{test}/responder={flag}/{family}/{payload}'

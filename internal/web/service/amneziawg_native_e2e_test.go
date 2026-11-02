@@ -201,6 +201,16 @@ func testNativeWireGuardProtocol(t *testing.T, obfuscated, responder bool) {
 		delete(peer, "address")
 		delete(peer, "port")
 	}
+	if obfuscated && responder {
+		// The panel's native outbound contract already forbids a fixed port.
+		// Do not bypass that guard and claim an unsupported listener as data.
+		_, err := (&singbox.Config{Endpoints: []map[string]any{endpoint}}).Marshal()
+		if err == nil || !strings.Contains(err.Error(), "automatic listen port") {
+			t.Fatalf("fixed native AWG listener must be rejected: %v", err)
+		}
+		t.Log("UNSUPPORTED_NATIVE_AWG_RESPONDER: fixed listening port rejected before serialization")
+		return
+	}
 	config := map[string]any{"log": map[string]any{"level": "warn"}, "endpoints": []any{endpoint}, "inbounds": []any{map[string]any{"type": "direct", "tag": "relay", "listen": "127.0.0.1", "listen_port": relayPort, "override_address": "10.8.1.1", "override_port": 8080}, map[string]any{"type": "direct", "tag": "relay6", "listen": "127.0.0.1", "listen_port": relayIPv6, "override_address": "fd42:5100::1", "override_port": 8080}}, "route": map[string]any{"final": "native-awg"}}
 	data, _ := json.Marshal(config)
 	path := filepath.Join(t.TempDir(), "client.json")

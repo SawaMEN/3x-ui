@@ -7,6 +7,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/xtls/xray-core/infra/conf"
 )
 
 // validateInboundRuntimeTarget validates the protocol against the core that
@@ -26,6 +27,11 @@ func validateInboundRuntimeTarget(inbound *model.Inbound) error {
 			return common.NewErrorf("%s is not supported by %s on the selected node", inbound.Protocol, core)
 		}
 		return common.NewErrorf("%s is not supported by %s as the selected core", inbound.Protocol, core)
+	}
+	if core == CoreTypeXray {
+		if err := validateXDNSMaskShape(inbound.StreamSettings); err != nil {
+			return err
+		}
 	}
 	if err := validateInboundTransport(core, inbound); err != nil {
 		return err
@@ -194,4 +200,40 @@ func isXrayManagedProtocol(protocol model.Protocol) bool {
 
 func isVKTurnProxyProtocol(protocol model.Protocol) bool {
 	return protocol == model.VKTurnProxy
+}
+
+// XDNS changed its wire format in the selected Xray release. Legacy resolver
+// strings couple domains to addresses; the new format decouples them. Reject
+// rather than silently changing that pairing or dropping explicit RR types.
+func validateXDNSMaskShape(streamSettings string) error {
+	if strings.TrimSpace(streamSettings) == "" {
+		return nil
+	}
+	var stream struct {
+		FinalMask struct {
+			UDP []struct {
+				Type     string          `json:"type"`
+				Settings json.RawMessage `json:"settings"`
+			} `json:"udp"`
+		} `json:"finalmask"`
+	}
+	if err := json.Unmarshal([]byte(streamSettings), &stream); err != nil {
+		return common.NewErrorf("invalid streamSettings: %v", err)
+	}
+	for _, mask := range stream.FinalMask.UDP {
+		if mask.Type != "xdns" {
+			continue
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(mask.Settings, &fields); err == nil {
+			if _, exists := fields["domain"]; exists {
+				return common.NewError("xDNS legacy domain field is removed; convert both peers to domains [{names, types}] and resolvers [{addrs, worker}]")
+			}
+		}
+		var settings conf.XDNS
+		if err := json.Unmarshal(mask.Settings, &settings); err != nil {
+			return common.NewErrorf("xDNS requires the current Xray object format: domains [{names, types}] and resolvers [{addrs, worker}]; convert both peers explicitly: %v", err)
+		}
+	}
+	return nil
 }

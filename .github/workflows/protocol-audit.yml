@@ -2,7 +2,7 @@ name: Protocol and TLS audit
 on:
   push:
     branches: [update]
-    paths: ['deploy/hiddify/**', 'docs/hiddify-core-target.json', 'tools/build-hiddify-core.sh', 'internal/hiddify/**', 'internal/sub/**', '.github/workflows/protocol-audit.yml', 'internal/singbox/**', 'internal/web/service/**', 'internal/web/runtime/**', '.github/workflows/runtime-audit.yml', 'tools/ci/download-audit-cores.sh']
+    paths: ['deploy/hiddify/**', 'docs/hiddify-core-target.json', 'tools/build-hiddify-core.sh', 'internal/hiddify/**', 'internal/sub/**', '.github/workflows/protocol-audit.yml', 'internal/singbox/**', 'internal/web/service/**', 'internal/web/runtime/**', '.github/workflows/runtime-audit.yml', 'tools/ci/download-audit-cores.sh', 'tools/ci/protocol-matrix.py', 'frontend/src/lib/xray/**', 'frontend/src/schemas/protocols/**', 'frontend/src/test/**', 'go.mod', 'go.sum']
   workflow_dispatch:
 permissions:
   contents: read
@@ -44,7 +44,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm run typecheck
-          npm test -- src/test/stage5-transport-switch.test.ts src/test/stream-wire-normalize.test.ts src/test/stream.test.ts src/test/protocol-capabilities.test.ts
+          npm test -- src/test/finalmask.test.ts src/test/stage5-transport-switch.test.ts src/test/stream-wire-normalize.test.ts src/test/stream.test.ts src/test/protocol-capabilities.test.ts
       - name: TLS normalization and core compatibility regressions
         env:
           STAGE5_CAPABILITY_OUTPUT: ${{ github.workspace }}/capability-inbounds.json
@@ -53,7 +53,7 @@ jobs:
           go test -race -p 2 -json ./internal/singbox ./internal/hiddify -count=1 | tee translation.jsonl
           python3 tools/ci/require-go-tests.py translation.jsonl TestConfigMarshalNativeTLSCompatibility TestConfigMarshalRejectsInvalidNativeTLSCipherSuites TestConfigMarshalAcceptsNativeCipherDefaultsAndScalar TestStage5TLSNormalizationPreservesSharedSubtrees TestStage5TranslatorOmitsExplicitlyDisabledClients TestStage5DisabledProxyClientsCannotBecomeAnonymous TestStage5ReverseMappingSkipsDisabledUsers TestStage5ProxyTranslationPreservesClientBackingArray
           go test -race -p 2 -json ./internal/web/service -run '^(TestStage5|TestSyncClientCoreCompatibility|TestUpdateInbound_(RejectsUnknownProtocolOnNode|NodeMtprotoShareAddrIsEditable))' -count=1 | tee compatibility.jsonl
-          python3 tools/ci/require-go-tests.py compatibility.jsonl TestStage5LocalProtocolCompatibility TestStage5IncompatibleProtocolNeverPersists TestStage5ProtocolUsesStoredNodeCore TestStage5UnknownProtocolRejected TestUpdateInbound_RejectsUnknownProtocolOnNode TestUpdateInbound_NodeMtprotoShareAddrIsEditable
+          python3 tools/ci/require-go-tests.py compatibility.jsonl TestStage5LocalProtocolCompatibility TestStage5IncompatibleProtocolNeverPersists TestStage5ProtocolUsesStoredNodeCore TestStage5UnknownProtocolRejected TestStage5XDNSFormatNeverSilentlyChanges TestUpdateInbound_RejectsUnknownProtocolOnNode TestUpdateInbound_NodeMtprotoShareAddrIsEditable
       - name: Shuffled Telegram fixture isolation
         run: |
           set -o pipefail
