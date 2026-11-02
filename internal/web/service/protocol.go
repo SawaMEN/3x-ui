@@ -54,6 +54,7 @@ func validateInboundTransport(core string, inbound *model.Inbound) error {
 	}
 	var stream struct {
 		Network  string `json:"network"`
+		Method   string `json:"method"`
 		Security string `json:"security"`
 	}
 	if strings.TrimSpace(inbound.StreamSettings) != "" {
@@ -61,13 +62,17 @@ func validateInboundTransport(core string, inbound *model.Inbound) error {
 			return common.NewErrorf("invalid streamSettings: %v", err)
 		}
 	}
-	network := strings.ToLower(strings.TrimSpace(stream.Network))
+	networkName := stream.Network
+	if stream.Method != "" {
+		networkName = stream.Method
+	}
+	network := strings.ToLower(strings.TrimSpace(networkName))
 	if network == "" {
 		network = "tcp"
 	}
 	if core == CoreTypeXray {
 		switch network {
-		case "tcp", "raw", "ws", "grpc", "httpupgrade", "xhttp", "kcp", "hysteria", "masque":
+		case "tcp", "raw", "ws", "grpc", "httpupgrade", "xhttp", "kcp", "hysteria":
 			return nil
 		case "xdrive":
 			if inbound.Protocol == model.VLESS {

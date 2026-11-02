@@ -55,7 +55,8 @@ def build(directory):
                 for direction in ('inbound', 'outbound'):
                     for payload in ('TCP', 'UDP'):
                         add(protocol, direction, core, network, payload,
-                            'data-pass; IPv4/IPv6/DNS; reconnect; auth', filename, root)
+                            ('data-pass; IPv4/IPv6/DNS; reconnect; auth' if payload == 'TCP' else
+                             'data-pass; IPv4; auth'), filename, root)
 
     filename = 'owner-transfer.jsonl'
     items = events(directory / filename)
@@ -68,7 +69,8 @@ def build(directory):
         for direction in ('inbound', 'outbound'):
             for payload in ('TCP',) if protocol in ('http', 'naive') else ('TCP', 'UDP'):
                 add(protocol, direction, 'owner', 'native-default', payload,
-                    'data-pass; IPv4/IPv6/DNS; reconnect; auth', filename, root)
+                    ('data-pass; IPv4/IPv6/DNS; reconnect; auth' if payload == 'TCP' else
+                             'data-pass; IPv4; auth'), filename, root)
 
     filename = 'database-protocols.jsonl'
     items = events(directory / filename)

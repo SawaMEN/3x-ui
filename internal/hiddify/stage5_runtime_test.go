@@ -205,9 +205,13 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 								payload := bytes.Repeat([]byte("stage5-roundtrip"), 64)
 								_, err = conn.Write(payload)
 								if err == nil {
-									got := make([]byte, len(payload))
+									size := len(payload)
+									if user >= 3 {
+										size = 1
+									} // Any returned byte is an authentication bypass.
+									got := make([]byte, size)
 									_, err = io.ReadFull(conn, got)
-									if err == nil && !bytes.Equal(got, payload) {
+									if user <= 2 && err == nil && !bytes.Equal(got, payload) {
 										err = fmt.Errorf("payload corrupted")
 									}
 								}

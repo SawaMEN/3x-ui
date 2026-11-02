@@ -17,6 +17,7 @@ func TestStage5TransportRefusedBeforePersistence(t *testing.T) {
 	}{
 		{CoreTypeXray, model.VLESS, "http", "tls"},
 		{CoreTypeXray, model.VLESS, "quic", "tls"},
+		{CoreTypeXray, model.VLESS, "masque", "none"},
 		{CoreTypeSingBoxUpstream, model.VLESS, "kcp", "none"},
 		{CoreTypeSingBoxUpstream, model.VLESS, "xhttp", "none"},
 		{CoreTypeSingBoxUpstream, model.VLESS, "xdrive", "none"},
@@ -51,6 +52,19 @@ func TestStage5TransportRefusedBeforePersistence(t *testing.T) {
 			got, err := svc.GetInbound(stored.Id)
 			if err != nil || got.StreamSettings != stored.StreamSettings {
 				t.Fatal("update modified DB", err)
+			}
+			// Imported rows may still use the method alias. Enable must apply
+			// the same precedence as Add/Update without rewriting stored JSON.
+			alias := fmt.Sprintf(`{"network":"tcp","method":%q,"security":%q}`, tc.network, tc.security)
+			if err := database.GetDB().Model(stored).Updates(map[string]any{"stream_settings": alias, "enable": false}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.SetInboundEnable(stored.Id, true); err == nil {
+				t.Fatal("unsupported method alias enabled")
+			}
+			got, err = svc.GetInbound(stored.Id)
+			if err != nil || got.Enable || got.StreamSettings != alias {
+				t.Fatal("enable modified DB", err)
 			}
 			if err := database.GetDB().Delete(stored).Error; err != nil {
 				t.Fatal(err)
