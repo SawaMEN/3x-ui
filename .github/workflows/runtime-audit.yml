@@ -81,8 +81,8 @@ jobs:
       - name: Verify registered core management API operations
         run: |
           set -o pipefail
-          go test -race -p 2 -json ./internal/web/controller -run '^TestCoreManagementRoutes$' -count=1 | tee api.jsonl
-          python3 tools/ci/require-go-tests.py api.jsonl TestCoreManagementRoutes
+          go test -race -p 2 -json ./internal/web/controller -run '^(TestCoreManagementRoutes|TestStage4NativeCoreSwitchAPI)$' -count=1 | tee api.jsonl
+          python3 tools/ci/require-go-tests.py api.jsonl TestCoreManagementRoutes TestStage4NativeCoreSwitchAPI
       - name: Vet changed packages
         run: go vet ./internal/singbox ./internal/web/runtime ./internal/web/service
       - uses: actions/upload-artifact@v7
