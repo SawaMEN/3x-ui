@@ -184,6 +184,6 @@ func (j *PeriodicTrafficResetJob) resetClientsOnTheirOwnCycle() {
 // inboundQuotaDisabled mirrors disableInvalidInbounds: a local inbound its own
 // traffic cap switched off, not one that expired or was switched off by hand.
 func inboundQuotaDisabled(ib *model.Inbound, nowMs int64) bool {
-	return !ib.Enable && ib.NodeID == nil && ib.Total > 0 && ib.Up+ib.Down >= ib.Total &&
+	return !ib.Enable && ib.NodeID == nil && common.TrafficQuotaReached(ib.Total, ib.Up, ib.Down) &&
 		(ib.ExpiryTime <= 0 || ib.ExpiryTime > nowMs)
 }

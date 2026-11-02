@@ -1,0 +1,146 @@
+name: Clients traffic and subscription audit
+on:
+  push:
+    branches: [update]
+    paths: ['internal/clientlimit/**', 'internal/sub/**', 'internal/web/service/**', 'internal/web/job/**', 'internal/util/common/traffic*', 'internal/database/traffic*', '.github/workflows/client-audit.yml', 'deploy/speed/**', 'tools/build-speed-components.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: client-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: xui_clients
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres -d xui_clients" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Prepare dependencies
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep && bash tools/ci/download-go-modules.sh
+      - name: SQLite lifecycle accounting subscriptions and broker contracts
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/clientlimit/... ./internal/util/common ./internal/database/model ./internal/web/service ./internal/web/job ./internal/sub ./internal/mieru ./internal/sudoku -count=1 | tee contracts.jsonl
+          python3 tools/ci/require-go-tests.py contracts.jsonl TestStage6QuotaDoesNotWrapOnNodeMerge TestStage6GroupUsageHandlesBothSaturatedCounters TestStage6HwidDeviceCap TestStage6QuotaSQL TestStage6ConflictingRatesCannotSplitSharedBudget TestSharedBudgetAcrossConnectionsAndRoutes TestUDPAssociateLimitedBothWays TestNativeBrokerRevocationAndRollback
+      - name: PostgreSQL before-fix reproduction and protected current behavior
+        if: ${{ !cancelled() }}
+        env:
+          XUI_DB_TYPE: postgres
+          XUI_DB_DSN: host=127.0.0.1 port=5432 user=postgres password=postgres dbname=xui_clients sslmode=disable
+        run: |
+          set -o pipefail
+          git fetch --depth=1 origin 2d7f5f065adc5b62185a4eb2363b624831d380b6
+          cp internal/web/service/client_hwid.go "$RUNNER_TEMP/hwid-current.go"
+          cp internal/web/service/inbound_disable.go "$RUNNER_TEMP/disable-current.go"
+          git show 2d7f5f065adc5b62185a4eb2363b624831d380b6:internal/web/service/client_hwid.go > internal/web/service/client_hwid.go
+          git show 2d7f5f065adc5b62185a4eb2363b624831d380b6:internal/web/service/inbound_disable.go > internal/web/service/inbound_disable.go
+          set +e
+          go test -p 2 -json ./internal/web/service -run '^(TestStage6HwidGateParentLock|TestStage6QuotaSQL)$' -count=1 > before-pg.jsonl
+          before_status=$?
+          set -e
+          cp "$RUNNER_TEMP/hwid-current.go" internal/web/service/client_hwid.go
+          cp "$RUNNER_TEMP/disable-current.go" internal/web/service/inbound_disable.go
+          test "$before_status" -ne 0
+          python3 - <<'PY'
+          import json
+          events=[json.loads(line) for line in open('before-pg.jsonl') if line.strip()]
+          failed={e.get('Test') for e in events if e.get('Action')=='fail'}
+          assert {'TestStage6HwidGateParentLock','TestStage6QuotaSQL'} <= failed, failed
+          PY
+          go test -race -p 2 -json ./internal/web/service -run '^(TestStage6HwidGateParentLock|TestStage6HwidDeviceCap|TestStage6QuotaSQL|TestStage6GroupTotalsKeepIndividualCounters|TestGlobalTrafficHeartbeatPostgres)$' -count=1 | tee postgres.jsonl
+          python3 tools/ci/require-go-tests.py postgres.jsonl TestStage6HwidGateParentLock TestStage6HwidDeviceCap TestStage6QuotaSQL TestStage6GroupTotalsKeepIndividualCounters TestGlobalTrafficHeartbeatPostgres
+      - uses: actions/setup-node@v7
+        if: ${{ !cancelled() }}
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Client UI and subscription contracts
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm test -- src/test/client*.test.* src/test/attach-clients-modal.test.tsx src/test/detach-clients-modal.test.tsx src/test/subscription*.test.* src/test/websocket-shared-client.test.tsx src/test/speed-tag-stable.test.tsx src/test/inbound-client-actions.test.tsx
+      - name: Vet changed packages
+        run: go vet ./internal/clientlimit/... ./internal/web/service ./internal/web/job ./internal/sub ./internal/util/common
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: client-contract-evidence
+          path: '*.jsonl'
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Prepare dependencies
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep && bash tools/ci/download-go-modules.sh
+      - name: Download pinned native cores
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/download-audit-cores.sh ${{ matrix.arch }}
+      - name: Build pinned speed-enabled Mieru and Sudoku
+        run: python3 tools/build-speed-components.py --output "$RUNNER_TEMP/speed-components"
+      - name: Core TCP UDP shared shaping and lifecycle
+        if: ${{ !cancelled() }}
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/web/service -run '^(TestClientSpeedLimitLiveCore|TestStage6NativeAccountingAndRevocation)$' -count=1 | tee core-traffic.jsonl
+          python3 tools/ci/require-go-tests.py core-traffic.jsonl TestClientSpeedLimitLiveCore TestStage6NativeAccountingAndRevocation
+      - name: Native protocol broker clients
+        if: ${{ !cancelled() }}
+        env:
+          SINGBOX_TEST_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
+        run: |
+          set -o pipefail
+          MIERU_TEST_BINARY="$RUNNER_TEMP/speed-components/mita" go test -race -p 2 -json ./internal/mieru -run '^TestMieruSpeedLimitLiveServer$' -count=1 | tee mieru-speed.jsonl
+          python3 tools/ci/require-go-tests.py mieru-speed.jsonl TestMieruSpeedLimitLiveServer
+          SUDOKU_SPEED_TEST_BINARY="$RUNNER_TEMP/speed-components/sudoku-tunnel" go test -race -p 2 -json ./internal/sudoku -run '^TestSudokuSpeedLimits$' -count=1 | tee sudoku-speed.jsonl
+          python3 tools/ci/require-go-tests.py sudoku-speed.jsonl TestSudokuSpeedLimits
+          go test -race -p 2 -json ./internal/singbox -run '^TestMASQUESpeedLimits$' -count=1 | tee masque-speed.jsonl
+          python3 tools/ci/require-go-tests.py masque-speed.jsonl TestMASQUESpeedLimits
+      - name: Subscription real client imports and data
+        if: ${{ !cancelled() }}
+        env:
+          HIDDIFY_TEST_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/sub -run '^(TestStage6SubscriptionImports|TestAnyTLSShadowTLSSubscriptionConnections)$' -count=1 | tee imports.jsonl
+          python3 tools/ci/require-go-tests.py imports.jsonl TestStage6SubscriptionImports TestAnyTLSShadowTLSSubscriptionConnections
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: client-native-evidence-${{ matrix.arch }}
+          path: |
+            *.jsonl
+            native-binaries.sha256
+            ${{ runner.temp }}/speed-components/speed-components.json

@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -83,6 +84,22 @@ func limiter(mbps int) *rate.Limiter {
 func (s *Runtime) Apply(plan Plan) (finish func(bool), err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	rates := make(map[string][2]int, len(plan.Routes))
+	ids := make(map[string]struct{}, len(plan.Routes))
+	for _, r := range plan.Routes {
+		if strings.TrimSpace(r.ID) == "" || strings.TrimSpace(r.Email) == "" || r.UploadMbps < 0 || r.DownloadMbps < 0 {
+			return nil, fmt.Errorf("client speed limiter: invalid route %q", r.ID)
+		}
+		if _, exists := ids[r.ID]; exists {
+			return nil, fmt.Errorf("client speed limiter: duplicate route %q", r.ID)
+		}
+		ids[r.ID] = struct{}{}
+		rate := [2]int{r.UploadMbps, r.DownloadMbps}
+		if previous, exists := rates[r.Email]; exists && previous != rate {
+			return nil, fmt.Errorf("client speed limiter: conflicting rates for %q would split its shared budget", r.Email)
+		}
+		rates[r.Email] = rate
+	}
 	opened := false
 	if len(plan.Routes) > 0 && s.ln == nil {
 		ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", s.listen)

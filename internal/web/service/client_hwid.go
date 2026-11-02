@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -99,6 +100,11 @@ func effectiveHwidLimitForSubID(tx *gorm.DB, subID string) (int, error) {
 	return limit, err
 }
 
+// Bounded stripes serialize same-subscription SQLite writers without retaining
+// one mutex forever for every subscription ever requested. PostgreSQL also
+// locks the parent rows so different panel processes obey the same slot cap.
+var hwidGateLocks [64]sync.Mutex
+
 func (s *ClientService) EnforceHwidForSubID(subID string, req HwidRequest) (HwidGateResult, error) {
 	var res HwidGateResult
 	subID = strings.TrimSpace(subID)
@@ -127,9 +133,20 @@ func (s *ClientService) EnforceHwidForSubID(subID string, req HwidRequest) (Hwid
 		res.NotSupported = true
 		return res, nil
 	}
+	key := sha256.Sum256([]byte(subID))
+	gate := &hwidGateLocks[int(key[0])%len(hwidGateLocks)]
+	gate.Lock()
+	defer gate.Unlock()
+
 	hwidHash := hashHwid(req.Hwid)
 
 	err = db.Transaction(func(tx *gorm.DB) error {
+		if tx.Dialector.Name() == "postgres" {
+			var owners []model.ClientRecord
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("sub_id = ?", subID).Order("id").Find(&owners).Error; err != nil {
+				return err
+			}
+		}
 		limit, err := effectiveHwidLimitForSubID(tx, subID)
 		if err != nil {
 			return err
@@ -204,20 +221,18 @@ func (s *ClientService) HwidSlotStatusForSubID(subID string) (status HwidSlotSta
 	}
 
 	db := database.GetDB()
-	var enabled int64
-	if err := db.Model(&model.ClientRecord{}).
-		Where("sub_id = ? AND enable = ?", subID, true).
-		Count(&enabled).Error; err != nil {
+	var state struct {
+		Enabled  int64
+		MaxLimit int
+	}
+	if err := db.Model(&model.ClientRecord{}).Where("sub_id = ? AND enable = ?", subID, true).
+		Select("COUNT(*) AS enabled, COALESCE(MAX(limit_hwid), 0) AS max_limit").Scan(&state).Error; err != nil {
 		return status, false, err
 	}
-	if enabled == 0 {
+	if state.Enabled == 0 {
 		return status, false, nil
 	}
-
-	limit, err := effectiveHwidLimitForSubID(db, subID)
-	if err != nil {
-		return status, false, err
-	}
+	limit := state.MaxLimit
 	if limit <= 0 {
 		return status, true, nil
 	}

@@ -8,13 +8,14 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func (s *InboundService) disableInvalidInbounds(tx *gorm.DB, mutationBatch *trafficMutationBatch) (bool, int64, error) {
 	now := time.Now().Unix() * 1000
 	var inbounds []model.Inbound
-	if err := tx.Where("((total > 0 and up + down >= total) or (expiry_time > 0 and expiry_time <= ?)) and enable = ? and node_id IS NULL", now, true).
+	if err := tx.Where("("+database.TrafficQuotaExpr("up", "down", "total")+" or (expiry_time > 0 and expiry_time <= ?)) and enable = ? and node_id IS NULL", now, true).
 		Find(&inbounds).Error; err != nil {
 		return false, 0, err
 	}
@@ -25,7 +26,7 @@ func (s *InboundService) disableInvalidInbounds(tx *gorm.DB, mutationBatch *traf
 	}
 
 	result := tx.Model(model.Inbound{}).
-		Where("((total > 0 and up + down >= total) or (expiry_time > 0 and expiry_time <= ?)) and enable = ? and node_id IS NULL", now, true).
+		Where("("+database.TrafficQuotaExpr("up", "down", "total")+" or (expiry_time > 0 and expiry_time <= ?)) and enable = ? and node_id IS NULL", now, true).
 		Update("enable", false)
 	err := result.Error
 	count := result.RowsAffected
@@ -43,13 +44,13 @@ func globalTrafficFreshSince(now time.Time) int64 {
 // pushed into client_global_traffics — that's what lets a node cut a client
 // whose combined usage exceeds the quota even though the local share doesn't.
 // Only rows a master refreshed recently count (placeholders: now, freshSince).
-const depletedClientsCond = `((total > 0 AND up + down >= total)
+var depletedClientsCond = `(` + database.TrafficQuotaExpr("up", "down", "total") + `
 	OR (expiry_time > 0 AND expiry_time <= ?)
 	OR (total > 0 AND EXISTS (
 		SELECT 1 FROM client_global_traffics g
 		WHERE g.email = client_traffics.email
 			AND g.updated_at >= ?
-			AND g.up + g.down >= client_traffics.total
+			AND ` + database.TrafficQuotaExpr("g.up", "g.down", "client_traffics.total") + `
 	)))`
 
 // depletedClientsCondLocal is depletedClientsCond without the cross-panel
@@ -57,7 +58,7 @@ const depletedClientsCond = `((total > 0 AND up + down >= total)
 // turns every traffic poll into a full client_traffics scan; on a panel no
 // master pushes to (the common case) client_global_traffics is empty, so the
 // branch can never match and is pure CPU cost (#5392). Placeholders: now.
-const depletedClientsCondLocal = `((total > 0 AND up + down >= total)
+var depletedClientsCondLocal = `(` + database.TrafficQuotaExpr("up", "down", "total") + `
 	OR (expiry_time > 0 AND expiry_time <= ?))`
 
 // depletedCond includes cross-panel quota usage only while a master's row is fresh.

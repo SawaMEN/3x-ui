@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -14,7 +15,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 )
 
 type GroupSummary struct {
@@ -29,13 +29,8 @@ func (s *ClientService) ListGroups() ([]GroupSummary, error) {
 	db := database.GetDB()
 	// email is unique in both clients and client_traffics, so the LEFT JOIN
 	// never double-counts a client's traffic.
-	var derived []GroupSummary
-	if err := db.Table("clients AS c").
-		Select("c.group_name AS name, COUNT(*) AS client_count, COALESCE(SUM(ct.up + ct.down), 0) AS traffic_used, COALESCE(SUM(ct.up), 0) AS up, COALESCE(SUM(ct.down), 0) AS down").
-		Joins("LEFT JOIN client_traffics ct ON ct.email = c.email").
-		Where("c.group_name <> ''").
-		Group("c.group_name").
-		Scan(&derived).Error; err != nil {
+	derived, err := groupTrafficTotals(db, "c.group_name <> ''")
+	if err != nil {
 		return nil, err
 	}
 	var stored []model.ClientGroup
@@ -60,9 +55,9 @@ func (s *ClientService) ListGroups() ([]GroupSummary, error) {
 	}
 	out := make([]GroupSummary, 0, len(merged))
 	for name, agg := range merged {
-		up := max(agg.up-baseUp[name], 0)
-		down := max(agg.down-baseDown[name], 0)
-		out = append(out, GroupSummary{Name: name, ClientCount: agg.count, TrafficUsed: up + down, Up: up, Down: down})
+		up := groupUsageSince(agg.up, baseUp[name])
+		down := groupUsageSince(agg.down, baseDown[name])
+		out = append(out, GroupSummary{Name: name, ClientCount: agg.count, TrafficUsed: common.TrafficUsage(up, down), Up: up, Down: down})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
@@ -83,21 +78,16 @@ func adjustGroupBaselinesForRemovedTraffic(tx *gorm.DB, emails []string) error {
 	}
 	totals := make(map[string]*groupDelta)
 	for _, batch := range chunkStrings(emails, sqlInChunk) {
-		var part []groupDelta
-		if err := tx.Table("clients AS c").
-			Select("c.group_name AS name, COALESCE(SUM(ct.up), 0) AS up, COALESCE(SUM(ct.down), 0) AS down").
-			Joins("JOIN client_traffics ct ON ct.email = c.email").
-			Where("c.group_name <> '' AND c.email IN ?", batch).
-			Group("c.group_name").
-			Scan(&part).Error; err != nil {
+		part, err := groupTrafficTotals(tx, "c.group_name <> '' AND c.email IN ?", batch)
+		if err != nil {
 			return err
 		}
 		for i := range part {
 			if agg, ok := totals[part[i].Name]; ok {
-				agg.Up += part[i].Up
-				agg.Down += part[i].Down
+				agg.Up = common.TrafficUsage(agg.Up, part[i].Up)
+				agg.Down = common.TrafficUsage(agg.Down, part[i].Down)
 			} else {
-				totals[part[i].Name] = &part[i]
+				totals[part[i].Name] = &groupDelta{Name: part[i].Name, Up: part[i].Up, Down: part[i].Down}
 			}
 		}
 	}
@@ -106,8 +96,8 @@ func adjustGroupBaselinesForRemovedTraffic(tx *gorm.DB, emails []string) error {
 			continue
 		}
 		res := tx.Model(&model.ClientGroup{}).Where("name = ?", name).Updates(map[string]any{
-			"reset_up":   gorm.Expr("reset_up - ?", d.Up),
-			"reset_down": gorm.Expr("reset_down - ?", d.Down),
+			"reset_up":   shiftGroupCounter("reset_up", d.Up, true),
+			"reset_down": shiftGroupCounter("reset_down", d.Down, true),
 		})
 		if res.Error != nil {
 			return res.Error
@@ -146,12 +136,13 @@ func (s *ClientService) ResetGroupTraffic(name string) error {
 		return common.NewError("group name is required")
 	}
 	return runSerializedTx(func(tx *gorm.DB) error {
-		var agg struct{ Up, Down int64 }
-		if err := tx.Table("clients AS c").
-			Select("COALESCE(SUM(ct.up), 0) AS up, COALESCE(SUM(ct.down), 0) AS down").
-			Joins("LEFT JOIN client_traffics ct ON ct.email = c.email").
-			Where("c.group_name = ?", name).Scan(&agg).Error; err != nil {
+		totals, err := groupTrafficTotals(tx, "c.group_name = ?", name)
+		if err != nil {
 			return err
+		}
+		var agg GroupSummary
+		if len(totals) > 0 {
+			agg = totals[0]
 		}
 		return tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "name"}},
@@ -249,13 +240,14 @@ func (s *ClientService) AddToGroup(emails []string, group string) (int, error) {
 		if group != "" {
 			var up, down int64
 			for _, batch := range chunkStrings(changed, sqlInChunk) {
-				var totals struct{ Up, Down int64 }
-				if err := tx.Model(&coremodel.ClientTraffic{}).
-					Select("COALESCE(SUM(up), 0) AS up, COALESCE(SUM(down), 0) AS down").
-					Where("email IN ?", batch).Scan(&totals).Error; err != nil {
+				totals, err := groupTrafficTotals(tx, "c.email IN ?", batch)
+				if err != nil {
 					return err
 				}
-				up, down = up+totals.Up, down+totals.Down
+				for _, row := range totals {
+					up = common.TrafficUsage(up, row.Up)
+					down = common.TrafficUsage(down, row.Down)
+				}
 			}
 			if err := shiftGroupBaseline(tx, group, up, down); err != nil {
 				return err
@@ -277,8 +269,8 @@ func shiftGroupBaseline(tx *gorm.DB, name string, up, down int64) error {
 	return tx.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "name"}},
 		DoUpdates: clause.Assignments(map[string]any{
-			"reset_up":   gorm.Expr("client_groups.reset_up + ?", up),
-			"reset_down": gorm.Expr("client_groups.reset_down + ?", down),
+			"reset_up":   shiftGroupCounter("client_groups.reset_up", up, false),
+			"reset_down": shiftGroupCounter("client_groups.reset_down", down, false),
 		}),
 	}).Create(&model.ClientGroup{Name: name, ResetUp: up, ResetDown: down}).Error
 }
@@ -407,4 +399,70 @@ func (s *ClientService) replaceGroupValue(oldName, newName string) (int, error) 
 		return 0, err
 	}
 	return affected, nil
+}
+
+// Negative baselines retain usage of removed/reset clients. Their difference
+// can exceed int64 even though both stored columns are individually valid.
+func groupUsageSince(counter, baseline int64) int64 {
+	counter = max(counter, 0)
+	if baseline < 0 && counter > math.MaxInt64+baseline {
+		return math.MaxInt64
+	}
+	return max(counter-baseline, 0)
+}
+
+// Keep the normal path in SQL. PostgreSQL SUM(bigint) is exact NUMERIC; clamp
+// only the display aggregate. SQLite SUM may overflow even with valid rows,
+// so its exceptional path streams exact integers, retaining O(groups) memory.
+func groupTrafficTotals(tx *gorm.DB, condition string, args ...any) ([]GroupSummary, error) {
+	query := tx.Table("clients AS c").Joins("LEFT JOIN client_traffics ct ON ct.email = c.email").Where(condition, args...)
+	up, down := "COALESCE(SUM(ct.up), 0)", "COALESCE(SUM(ct.down), 0)"
+	if tx.Dialector.Name() == "postgres" {
+		up = fmt.Sprintf("LEAST(%s, %d)", up, int64(math.MaxInt64))
+		down = fmt.Sprintf("LEAST(%s, %d)", down, int64(math.MaxInt64))
+	}
+	var totals []GroupSummary
+	err := query.Session(&gorm.Session{}).Select("COALESCE(c.group_name, '') AS name, COUNT(*) AS client_count, " + up + " AS up, " + down + " AS down").Group("c.group_name").Scan(&totals).Error
+	if err == nil {
+		return totals, nil
+	}
+	if tx.Dialector.Name() != "sqlite" || !strings.Contains(err.Error(), "integer overflow") {
+		return nil, err
+	}
+	rows, err := query.Session(&gorm.Session{}).Select("COALESCE(c.group_name, ''), COALESCE(ct.up, 0), COALESCE(ct.down, 0)").Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	grouped := map[string]*GroupSummary{}
+	for rows.Next() {
+		var name string
+		var up, down int64
+		if err := rows.Scan(&name, &up, &down); err != nil {
+			return nil, err
+		}
+		row := grouped[name]
+		if row == nil {
+			row = &GroupSummary{Name: name}
+			grouped[name] = row
+		}
+		row.ClientCount++
+		row.Up = common.TrafficUsage(row.Up, up)
+		row.Down = common.TrafficUsage(row.Down, down)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	totals = make([]GroupSummary, 0, len(grouped))
+	for _, row := range grouped {
+		totals = append(totals, *row)
+	}
+	return totals, nil
+}
+
+func shiftGroupCounter(column string, amount int64, subtract bool) clause.Expr {
+	if subtract {
+		return gorm.Expr("CASE WHEN "+column+" < ? THEN ? ELSE "+column+" - ? END", int64(math.MinInt64)+amount, int64(math.MinInt64), amount)
+	}
+	return gorm.Expr("CASE WHEN "+column+" > ? THEN ? ELSE "+column+" + ? END", int64(math.MaxInt64)-amount, int64(math.MaxInt64), amount)
 }

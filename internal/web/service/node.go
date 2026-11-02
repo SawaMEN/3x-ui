@@ -298,7 +298,7 @@ func (s *NodeService) nodeClientStatuses() ([]nodeClientStatus, error) {
 	for _, r := range rows {
 		st := nodeClientStatus{InboundID: r.InboundID, NodeID: r.NodeID, ClientID: r.ClientID}
 		expired := r.ExpiryTime > 0 && r.ExpiryTime <= now
-		exhausted := r.Total > 0 && r.Up+r.Down >= r.Total
+		exhausted := common.TrafficQuotaReached(r.Total, r.Up, r.Down)
 		switch {
 		case expired || exhausted:
 			st.Depleted = true

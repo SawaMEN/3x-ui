@@ -24,7 +24,7 @@ import (
 
 // A client with a renewal day set auto-renews too, so it must not read as
 // depleted — otherwise the operator's purge deletes it between cycles (#6239).
-const depletedClientsClause = "reset = 0 and reset_day = 0 and ((total > 0 and up + down >= total) or (expiry_time > 0 and expiry_time <= ?))"
+var depletedClientsClause = "reset = 0 and reset_day = 0 and (" + database.TrafficQuotaExpr("up", "down", "total") + " or (expiry_time > 0 and expiry_time <= ?))"
 
 func (s *InboundService) AddTraffic(inboundTraffics []*coremodel.Traffic, clientTraffics []*coremodel.ClientTraffic) (needRestart bool, clientsDisabled bool, err error) {
 	var disabledNodeIDs []int

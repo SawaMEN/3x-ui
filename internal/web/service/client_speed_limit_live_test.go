@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -145,6 +146,27 @@ func TestClientSpeedLimitLiveCore(t *testing.T) {
 			t.Fatal("unlimited client throttled")
 		}
 	}
+	// Restart only the core; the panel-owned budget and its broker survive.
+	if err := cmd.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_ = cmd.Wait()
+	cmd = exec.CommandContext(ctx, binary, "srun", "-c", path)
+	cmd.Stdout, cmd.Stderr = log, log
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	for until := time.Now().Add(5 * time.Second); ; {
+		probe, e := net.DialTimeout("tcp", address, 100*time.Millisecond)
+		if e == nil {
+			_ = probe.Close()
+			break
+		}
+		if time.Now().After(until) {
+			t.Fatal("core did not restart", e)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	c, err := net.Dial("tcp", address)
 	if err != nil {
 		t.Fatal(err)
@@ -173,7 +195,31 @@ func TestClientSpeedLimitLiveCore(t *testing.T) {
 	_ = u.SetDeadline(time.Now().Add(10 * time.Second))
 	targetPort := udp.LocalAddr().(*net.UDPAddr).Port
 	packet := append([]byte{0, 0, 0, 1, 127, 0, 0, 1, byte(targetPort >> 8), byte(targetPort)}, bytes.Repeat([]byte{'u'}, 4096)...)
+	dial, err := proxy.SOCKS5("tcp", address, &proxy.Auth{User: "alice", Password: "pass"}, proxy.Direct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parallel, err := dial.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer parallel.Close()
+	_ = parallel.SetDeadline(time.Now().Add(10 * time.Second))
+	finished := make(chan error, 1)
 	started := time.Now()
+	go func() {
+		written := make(chan error, 1)
+		go func() { _, e := parallel.Write(data); written <- e }()
+		got := make([]byte, len(data))
+		_, e := io.ReadFull(parallel, got)
+		if e == nil {
+			e = <-written
+		}
+		if e == nil && !bytes.Equal(got, data) {
+			e = fmt.Errorf("concurrent TCP payload mismatch")
+		}
+		finished <- e
+	}()
 	buf := make([]byte, 65536)
 	for range 64 {
 		if _, err = u.Write(packet); err != nil {
@@ -188,9 +234,12 @@ func TestClientSpeedLimitLiveCore(t *testing.T) {
 			t.Fatalf("live UDP mismatch: source=%v:%d expected=127.0.0.1:%d payload=%d expected=%d header=%x", source, sourcePort, targetPort, len(payload), len(packet)-10, buf[:min(n, 24)])
 		}
 	}
-	t.Logf("alice: 256 KiB UDP round trip in %v", time.Since(started))
-	if time.Since(started) < 1400*time.Millisecond {
-		t.Fatal("real UDP associations bypassed cap")
+	if err := <-finished; err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("alice after core restart: shared 256 KiB TCP + 256 KiB UDP in %v", time.Since(started))
+	if time.Since(started) < 3*time.Second {
+		t.Fatal("concurrent real TCP/UDP bypassed the shared 1 Mbps cap")
 	}
 }
 

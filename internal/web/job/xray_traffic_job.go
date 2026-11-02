@@ -42,7 +42,7 @@ func splitMovedClientTraffics(clientTraffics []*coremodel.ClientTraffic) ([]*cor
 	emails := make([]string, 0, len(clientTraffics))
 	active := make(map[string]bool, len(clientTraffics))
 	for _, ct := range clientTraffics {
-		if ct == nil || ct.Up+ct.Down <= 0 {
+		if ct == nil || (ct.Up <= 0 && ct.Down <= 0) {
 			continue
 		}
 		moved = append(moved, ct)

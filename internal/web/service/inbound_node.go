@@ -313,7 +313,7 @@ func masterLimitsAllowClient(master *coremodel.ClientTraffic, now, deltaUp, delt
 	if master.ExpiryTime > 0 && master.ExpiryTime <= now {
 		return false
 	}
-	if master.Total > 0 && master.Up+deltaUp+master.Down+deltaDown >= master.Total {
+	if common.TrafficQuotaReached(master.Total, master.Up, deltaUp, master.Down, deltaDown) {
 		return false
 	}
 	return true
