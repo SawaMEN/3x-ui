@@ -12,7 +12,23 @@ concurrency:
   cancel-in-progress: true
 jobs:
   lifecycle:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            xray_asset: Xray-linux-64.zip
+            owner_digest: a0a1ded3f54ac6cf9ce305c49836b00194e7d73449ad8a96d68fdf82a24a0a94
+            xray_digest: 0eec3ed4163c273d8c8bf821f7d219e257921cf584aa3fb970715e458e631978
+            upstream_digest: 699a1b510aa4396b2176d32d1181920399ebf1e267835da6f3b598d0f7c24968
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            xray_asset: Xray-linux-arm64-v8a.zip
+            owner_digest: e58e2fc844eac4b3ab87a875faebc5bdfa6bef848d183415449959f3dc3896b4
+            xray_digest: d1304946c486d98e6b886e9b931eaaaebb23835b30e217638037b7f2721d4e9c
+            upstream_digest: 436441f76ee2f7fe21b5b2d426d3cb261a480455a704865789ad533e4273ec26
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -25,13 +41,13 @@ jobs:
       - name: Process ownership, profiles, runtime concurrency and version regressions
         run: |
           set -o pipefail
-          go test -race -p 2 -json ./internal/singbox ./internal/web/runtime -count=1 | tee process.jsonl
-          python3 tools/ci/require-go-tests.py process.jsonl TestStage4VersionProbeOncePerValidationAndStart TestIsolatedProcessNeverAdoptsManagedProcess TestProcessMatchesBinaryRejectsWrongPIDOwner TestProcessClearsReusedExternalPID TestProcessProfileRejectsMisleadingIdentity TestProcessProfileXrayChecksWithRunTest
+          go test -race -p 2 -json ./internal/core ./internal/singbox ./internal/web/runtime -count=1 | tee process.jsonl
+          python3 tools/ci/require-go-tests.py process.jsonl TestStage4RejectsBrokenCoreExecutables TestCapabilitiesFor TestStage4VersionProbeOncePerValidationAndStart TestIsolatedProcessNeverAdoptsManagedProcess TestProcessMatchesBinaryRejectsWrongPIDOwner TestProcessClearsReusedExternalPID TestProcessProfileRejectsMisleadingIdentity TestProcessProfileXrayChecksWithRunTest
       - name: Apply rollback, sidecars, gateway and standalone recovery
         run: |
           set -o pipefail
-          go test -race -p 2 -json ./internal/web/service -run '^(TestStage4(Gateway|Candidate|Xray|Stopped)|TestHiddify(PendingApplyBatchNoopAndRollback|BatchChangesDuringCandidateValidation|CoreFailureRollsBackExternalOutbound|Gateway.*)|TestStandalone(CoreAdapters|Update.*))' -count=1 | tee apply.jsonl
-          python3 tools/ci/require-go-tests.py apply.jsonl TestStage4GatewayPauseFailureRestoresPublishedConfig TestStage4CandidatePublicationRollback TestStage4XrayStartUsesNativeXrayConfiguration TestStage4StoppedXrayFailedRestartDoesNotLaunchOldCore TestHiddifyPendingApplyBatchNoopAndRollback TestHiddifyBatchChangesDuringCandidateValidation TestHiddifyCoreFailureRollsBackExternalOutbound TestStandaloneCoreAdapters
+          go test -race -p 2 -json ./internal/web/service -run '^(TestStage4(Gateway|Candidate|Xray|Stopped)|TestHiddify(PendingApplyBatchNoopAndRollback|BatchChangesDuringCandidateValidation|CoreFailureRollsBackExternalOutbound|Gateway.*)|TestStandalone(CoreAdapters|Update.*)|TestOwnerSingBoxCanonicalIdentity|TestSyncClientCoreCompatibilitySwitchesAutomaticClientState)' -count=1 | tee apply.jsonl
+          python3 tools/ci/require-go-tests.py apply.jsonl TestStage4GatewayPauseFailureRestoresPublishedConfig TestStage4CandidatePublicationRollback TestStage4XrayStartUsesNativeXrayConfiguration TestStage4StoppedXrayFailedRestartDoesNotLaunchOldCore TestHiddifyPendingApplyBatchNoopAndRollback TestHiddifyBatchChangesDuringCandidateValidation TestHiddifyCoreFailureRollsBackExternalOutbound TestStandaloneCoreAdapters TestOwnerSingBoxCanonicalIdentity TestSyncClientCoreCompatibilitySwitchesAutomaticClientState
       - name: Download pinned and checksum-verified native engines
         env:
           GH_TOKEN: ${{ github.token }}
@@ -39,28 +55,40 @@ jobs:
           set -euo pipefail
           root="$RUNNER_TEMP/runtime-cores"
           mkdir -p "$root/owner" "$root/xray" "$root/upstream" "$root/archives"
-          gh run download 41326858660 --repo SawaMEN/3x-ui --name x-ui-linux-amd64 --dir "$root/archives"
-          echo "a0a1ded3f54ac6cf9ce305c49836b00194e7d73449ad8a96d68fdf82a24a0a94 $root/archives/x-ui-linux-amd64.tar.gz" | sha256sum -c -
-          tar -xzf "$root/archives/x-ui-linux-amd64.tar.gz" -C "$root/owner" x-ui/bin/hiddify-core-linux-amd64
-          gh release download v26.10.21 --repo XTLS/Xray-core --pattern Xray-linux-64.zip --dir "$root/archives"
-          echo "0eec3ed4163c273d8c8bf821f7d219e257921cf584aa3fb970715e458e631978 $root/archives/Xray-linux-64.zip" | sha256sum -c -
-          unzip -q "$root/archives/Xray-linux-64.zip" -d "$root/xray"
-          gh release download v1.14.4 --repo SagerNet/sing-box --pattern sing-box-1.14.4-linux-amd64.tar.gz --dir "$root/archives"
-          echo "699a1b510aa4396b2176d32d1181920399ebf1e267835da6f3b598d0f7c24968 $root/archives/sing-box-1.14.4-linux-amd64.tar.gz" | sha256sum -c -
-          tar -xzf "$root/archives/sing-box-1.14.4-linux-amd64.tar.gz" --strip-components=1 -C "$root/upstream"
+          gh run download 41326858660 --repo SawaMEN/3x-ui --name x-ui-linux-${{ matrix.arch }} --dir "$root/archives"
+          echo "${{ matrix.owner_digest }} $root/archives/x-ui-linux-${{ matrix.arch }}.tar.gz" | sha256sum -c -
+          tar -xzf "$root/archives/x-ui-linux-${{ matrix.arch }}.tar.gz" -C "$root/owner" x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
+          gh release download v26.10.21 --repo XTLS/Xray-core --pattern ${{ matrix.xray_asset }} --dir "$root/archives"
+          echo "${{ matrix.xray_digest }} $root/archives/${{ matrix.xray_asset }}" | sha256sum -c -
+          unzip -q "$root/archives/${{ matrix.xray_asset }}" -d "$root/xray"
+          gh release download v1.14.4 --repo SagerNet/sing-box --pattern sing-box-1.14.4-linux-${{ matrix.arch }}.tar.gz --dir "$root/archives"
+          echo "${{ matrix.upstream_digest }} $root/archives/sing-box-1.14.4-linux-${{ matrix.arch }}.tar.gz" | sha256sum -c -
+          tar -xzf "$root/archives/sing-box-1.14.4-linux-${{ matrix.arch }}.tar.gz" --strip-components=1 -C "$root/upstream"
           echo "XUI_STAGE4_CORE_DIR=$root" >> "$GITHUB_ENV"
-          sha256sum "$root/owner/x-ui/bin/hiddify-core-linux-amd64" "$root/xray/xray" "$root/upstream/sing-box" | tee native-binaries.sha256
+          sha256sum "$root/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}" "$root/xray/xray" "$root/upstream/sing-box" | tee native-binaries.sha256
       - name: Real database-to-config-to-process TCP lifecycle for all three engines
         run: |
           set -o pipefail
           go test -race -p 2 -json ./internal/web/service -run '^TestStage4NativeEngineLifecycle$' -count=1 | tee native.jsonl
           python3 tools/ci/require-go-tests.py native.jsonl TestStage4NativeEngineLifecycle
+      - name: Isolated probe must preserve the live production core
+        env:
+          HIDDIFY_RUNTIME_TEST_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/web/service/outbound -run '^(TestSingBoxProbeWithRunningProductionProcess|TestSingBoxBatchUsesSelectedCore|TestSingBoxProbeConfiguration)$' -count=1 | tee probe.jsonl
+          python3 tools/ci/require-go-tests.py probe.jsonl TestSingBoxProbeWithRunningProductionProcess TestSingBoxBatchUsesSelectedCore TestSingBoxProbeConfiguration
+      - name: Verify registered core management API operations
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/web/controller -run '^TestCoreManagementRoutes$' -count=1 | tee api.jsonl
+          python3 tools/ci/require-go-tests.py api.jsonl TestCoreManagementRoutes
       - name: Vet changed packages
         run: go vet ./internal/singbox ./internal/web/runtime ./internal/web/service
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: runtime-audit-evidence
+          name: runtime-audit-evidence-${{ matrix.arch }}
           path: |
             *.jsonl
             native-binaries.sha256

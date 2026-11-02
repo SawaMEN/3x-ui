@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -85,7 +86,7 @@ func TestStage4NativeEngineLifecycle(t *testing.T) {
 				_ = svc.process().Stop()
 				hiddifyRuntime, hiddifyProcess, upstreamProcess, standaloneXrayProcess = oldRuntime, oldOwner, oldUpstream, oldXray
 			})
-			source := filepath.Join(root, "owner", "x-ui", "bin", "hiddify-core-linux-amd64")
+			source := filepath.Join(root, "owner", "x-ui", "bin", "hiddify-core-linux-"+runtime.GOARCH)
 			if engine == CoreTypeXray {
 				source = filepath.Join(root, "xray", "xray")
 			}
@@ -105,6 +106,20 @@ func TestStage4NativeEngineLifecycle(t *testing.T) {
 			if got, err := settings.GetCoreType(); err != nil || got != engine {
 				t.Fatal("core selection not persisted", got, err)
 			}
+			var databases []struct{ File string }
+			if err := database.GetDB().Raw("PRAGMA database_list").Scan(&databases).Error; err != nil || len(databases) == 0 {
+				t.Fatal("find fixture database", err)
+			}
+			if err := database.CloseDB(); err != nil {
+				t.Fatal(err)
+			}
+			if err := database.InitDB(databases[0].File); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := settings.GetCoreType(); err != nil || got != engine || SelectedNativeCore().CoreType() != engine {
+				t.Fatal("core selection lost after database reopen", got, err)
+			}
+
 			if err := settings.SetXrayConfigTemplate(`{"log":{"loglevel":"warning"},"inbounds":[],"outbounds":[{"protocol":"freedom","tag":"direct","settings":{}}],"routing":{"rules":[]}}`); err != nil {
 				t.Fatal(err)
 			}
