@@ -46,6 +46,8 @@ jobs:
           npm run typecheck
           npm test -- src/test/stage5-transport-switch.test.ts src/test/stream-wire-normalize.test.ts src/test/stream.test.ts src/test/protocol-capabilities.test.ts
       - name: TLS normalization and core compatibility regressions
+        env:
+          STAGE5_CAPABILITY_OUTPUT: ${{ github.workspace }}/capability-inbounds.json
         run: |
           set -o pipefail
           go test -race -p 2 -json ./internal/singbox ./internal/hiddify -count=1 | tee translation.jsonl
@@ -64,8 +66,8 @@ jobs:
           SINGBOX_TEST_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
         run: |
           set -o pipefail
-          go test -race -p 2 -json ./internal/hiddify -run '^(TestPinnedBinaryChecksGeneratedConfigurations|TestPinnedProtocolTransportMatrix)$' -count=1 | tee owner-schema.jsonl
-          python3 tools/ci/require-go-tests.py owner-schema.jsonl TestPinnedBinaryChecksGeneratedConfigurations TestPinnedProtocolTransportMatrix
+          go test -race -p 2 -json ./internal/hiddify -run '^(TestStage5XDriveXrayValidator|TestPinnedBinaryChecksGeneratedConfigurations|TestPinnedProtocolTransportMatrix)$' -count=1 | tee owner-schema.jsonl
+          python3 tools/ci/require-go-tests.py owner-schema.jsonl TestStage5XDriveXrayValidator TestPinnedBinaryChecksGeneratedConfigurations TestPinnedProtocolTransportMatrix
           go test -race -p 2 -json ./internal/singbox -run '^(TestNativeOutboundBinaryMatrix|TestMASQUEBinaryConfig|TestWARPMASQUEBinaryConfig)$' -count=1 | tee native-schema.jsonl
           python3 tools/ci/require-go-tests.py native-schema.jsonl TestNativeOutboundBinaryMatrix TestMASQUEBinaryConfig TestWARPMASQUEBinaryConfig
       - name: Owner real traffic and XHTTP modes
@@ -127,14 +129,26 @@ jobs:
           set -o pipefail
           go test -race -p 2 -json ./internal/singbox -run '^TestMASQUEConnections$' -count=1 | tee masque-transfer.jsonl
           python3 tools/ci/require-go-tests.py masque-transfer.jsonl TestMASQUEConnections
+      - name: Fragmented Trojan control and upstream defect classification
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/hiddify -run '^TestStage5FragmentedTrojanContract$' -count=1 | tee fragmentation-contract.jsonl
+          python3 tools/ci/require-go-tests.py fragmentation-contract.jsonl TestStage5FragmentedTrojanContract
       - name: TLS normalization allocation benchmark
         if: ${{ !cancelled() }}
         run: go test ./internal/singbox -run '^$' -bench '^BenchmarkStage5TLSNormalization$' -benchmem -count=3 | tee tls-benchmark.txt
+      - name: Build observed protocol matrix
+        if: ${{ !cancelled() }}
+        run: python3 tools/ci/protocol-matrix.py --output protocol-matrix.csv
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: protocol-audit-evidence-${{ matrix.arch }}
           path: |
             *.jsonl
+            protocol-matrix.csv
+            protocol-inventory.json
+            capability-inbounds.json
             native-binaries.sha256
             tls-benchmark.txt

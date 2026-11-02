@@ -351,7 +351,7 @@ export function normalizeStreamSettingsForWire(
 
   // The form retains old transport subforms when switching tabs. Only the
   // selected transport belongs on the wire; preserve unknown future settings.
-  const network = String(out.method ?? out.network ?? 'tcp')
+  const network = String(out.method ?? out.network ?? '')
     .trim()
     .toLowerCase();
   const active = STREAM_TRANSPORT_SETTINGS[network];

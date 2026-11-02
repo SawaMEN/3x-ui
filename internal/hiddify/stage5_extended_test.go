@@ -154,6 +154,9 @@ func TestStage5ExtendedProtocolTraffic(t *testing.T) {
 			echo := stage5Echo(t, "127.0.0.1:0")
 			host, p, _ := net.SplitHostPort(echo)
 			echoPort, _ := strconv.Atoi(p)
+			v6Echo := stage5Echo(t, "[::1]:0")
+			v6Host, v6PortText, _ := net.SplitHostPort(v6Echo)
+			v6Port, _ := strconv.Atoi(v6PortText)
 			udpHost, udpPort := stage5UDPEcho(t)
 			for _, valid := range []bool{true, false} {
 				t.Run(fmt.Sprint("authorized=", valid), func(t *testing.T) {
@@ -179,10 +182,18 @@ func TestStage5ExtendedProtocolTraffic(t *testing.T) {
 					if !tcpOnly {
 						ins = append(ins, map[string]any{"type": "direct", "listen": "127.0.0.1", "listen_port": udpRelay, "network": "udp", "override_address": udpHost, "override_port": udpPort})
 					}
+					ipv6Relay, dnsRelay := stage5Port(t), stage5Port(t)
+					if valid {
+						ins = append(ins,
+							map[string]any{"type": "direct", "listen": "127.0.0.1", "listen_port": ipv6Relay, "network": "tcp", "override_address": v6Host, "override_port": v6Port},
+							map[string]any{"type": "direct", "listen": "127.0.0.1", "listen_port": dnsRelay, "network": "tcp", "override_address": "localhost", "override_port": echoPort})
+					}
 					stage5Start(t, binary, dir, fmt.Sprint("client", valid), map[string]any{"inbounds": ins, "outbounds": []any{translated}}, tcpPort, true)
 					stage5Data(t, "tcp", fmt.Sprintf("127.0.0.1:%d", tcpPort), valid)
 					if valid {
 						stage5Data(t, "tcp", fmt.Sprintf("127.0.0.1:%d", tcpPort), true)
+						stage5Data(t, "tcp", fmt.Sprintf("127.0.0.1:%d", ipv6Relay), true)
+						stage5Data(t, "tcp", fmt.Sprintf("127.0.0.1:%d", dnsRelay), true)
 					}
 					if !tcpOnly {
 						stage5Data(t, "udp", fmt.Sprintf("127.0.0.1:%d", udpRelay), valid)

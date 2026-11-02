@@ -67,6 +67,9 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 				}
 				out["settings"] = map[string]any{"vnext": []any{map[string]any{"address": settings["address"], "port": settings["port"], "users": []any{user}}}}
 			}
+			if stream, ok := raw["streamSettings"].(map[string]any); ok && stream["network"] == "xdrive" {
+				out["mux"] = map[string]any{"enabled": true, "concurrency": 8, "xudpConcurrency": 8, "xudpProxyUDP443": "reject"}
+			}
 			return out, nil
 		}
 	}
