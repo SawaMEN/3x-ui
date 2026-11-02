@@ -842,6 +842,102 @@ export interface MLKEM768Response {
   seed: string;
 }
 
+export interface ManagerClientInfo {
+  down: number;
+  email: string;
+  enabled: boolean;
+  expiryTime: number;
+  total: number;
+  up: number;
+}
+
+export interface ManagerDomain {
+  id: number;
+  name: string;
+}
+
+export interface ManagerEntry {
+  activeInboundId: number;
+  customLink: string;
+  flag: string;
+  label: string;
+  mode: string;
+  nodeId?: number | null;
+  port: string;
+  relayId: number;
+  sni: string;
+  templateId: number;
+}
+
+export interface ManagerOperation {
+  attempts: number;
+  completed: number;
+  createdAt: number;
+  finishedAt: number;
+  id: number;
+  kind: string;
+  message: string;
+  relayId: number;
+  state: string;
+  subscriptionId: number;
+  total: number;
+}
+
+export interface ManagerRelay {
+  address: string;
+  hostKey: string;
+  id: number;
+  installed: boolean;
+  keyAuth: boolean;
+  name: string;
+  nodeId: number;
+  sshPort: number;
+  username: string;
+}
+
+export interface ManagerRelayInput {
+  address: string;
+  credential: string;
+  hostKey: string;
+  id: number;
+  keyAuth: boolean;
+  name: string;
+  nodeId: number;
+  sshPort: number;
+  username: string;
+}
+
+export interface ManagerSnapshot {
+  clients: Record<string, ManagerClientInfo>;
+  domains: ManagerDomain[];
+  operationTotal: number;
+  operations: ManagerOperation[];
+  relays: ManagerRelay[];
+  subscriptions: ManagerSubscription[];
+}
+
+export interface ManagerSubscription {
+  autoRotate: boolean;
+  clientId: number;
+  createdAt: number;
+  enabled: boolean;
+  entries: ManagerEntry[];
+  happ: string;
+  id: number;
+  incy: string;
+  intervalMinutes: number;
+  lastRotation: number;
+  name: string;
+  nextRotation: number;
+  note: string;
+  ownClient: boolean;
+  published: ManagerEntry[];
+  supportUrl: string;
+  token: string;
+  updatedAt: number;
+  websiteUrl: string;
+}
+
 export interface Msg {
   msg: string;
   obj: unknown;

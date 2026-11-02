@@ -905,6 +905,110 @@ export const MLKEM768ResponseSchema = z.object({
 });
 export type MLKEM768Response = z.infer<typeof MLKEM768ResponseSchema>;
 
+export const ManagerClientInfoSchema = z.object({
+  down: z.number().int(),
+  email: z.string(),
+  enabled: z.boolean(),
+  expiryTime: z.number().int(),
+  total: z.number().int(),
+  up: z.number().int(),
+});
+export type ManagerClientInfo = z.infer<typeof ManagerClientInfoSchema>;
+
+export const ManagerDomainSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+});
+export type ManagerDomain = z.infer<typeof ManagerDomainSchema>;
+
+export const ManagerEntrySchema = z.object({
+  activeInboundId: z.number().int(),
+  customLink: z.string(),
+  flag: z.string(),
+  label: z.string(),
+  mode: z.string(),
+  nodeId: z.number().int().nullable().optional(),
+  port: z.string(),
+  relayId: z.number().int(),
+  sni: z.string(),
+  templateId: z.number().int(),
+});
+export type ManagerEntry = z.infer<typeof ManagerEntrySchema>;
+
+export const ManagerOperationSchema = z.object({
+  attempts: z.number().int(),
+  completed: z.number().int(),
+  createdAt: z.number().int(),
+  finishedAt: z.number().int(),
+  id: z.number().int(),
+  kind: z.string(),
+  message: z.string(),
+  relayId: z.number().int(),
+  state: z.string(),
+  subscriptionId: z.number().int(),
+  total: z.number().int(),
+});
+export type ManagerOperation = z.infer<typeof ManagerOperationSchema>;
+
+export const ManagerRelaySchema = z.object({
+  address: z.string(),
+  hostKey: z.string(),
+  id: z.number().int(),
+  installed: z.boolean(),
+  keyAuth: z.boolean(),
+  name: z.string(),
+  nodeId: z.number().int(),
+  sshPort: z.number().int(),
+  username: z.string(),
+});
+export type ManagerRelay = z.infer<typeof ManagerRelaySchema>;
+
+export const ManagerRelayInputSchema = z.object({
+  address: z.string(),
+  credential: z.string(),
+  hostKey: z.string(),
+  id: z.number().int(),
+  keyAuth: z.boolean(),
+  name: z.string(),
+  nodeId: z.number().int(),
+  sshPort: z.number().int(),
+  username: z.string(),
+});
+export type ManagerRelayInput = z.infer<typeof ManagerRelayInputSchema>;
+
+export const ManagerSnapshotSchema = z.object({
+  clients: z.record(z.string(), z.lazy(() => ManagerClientInfoSchema)),
+  domains: z.array(z.lazy(() => ManagerDomainSchema)),
+  operationTotal: z.number().int(),
+  operations: z.array(z.lazy(() => ManagerOperationSchema)),
+  relays: z.array(z.lazy(() => ManagerRelaySchema)),
+  subscriptions: z.array(z.lazy(() => ManagerSubscriptionSchema)),
+});
+export type ManagerSnapshot = z.infer<typeof ManagerSnapshotSchema>;
+
+export const ManagerSubscriptionSchema = z.object({
+  autoRotate: z.boolean(),
+  clientId: z.number().int(),
+  createdAt: z.number().int(),
+  enabled: z.boolean(),
+  entries: z.array(z.lazy(() => ManagerEntrySchema)),
+  happ: z.string(),
+  id: z.number().int(),
+  incy: z.string(),
+  intervalMinutes: z.number().int(),
+  lastRotation: z.number().int(),
+  name: z.string(),
+  nextRotation: z.number().int(),
+  note: z.string(),
+  ownClient: z.boolean(),
+  published: z.array(z.lazy(() => ManagerEntrySchema)),
+  supportUrl: z.string(),
+  token: z.string(),
+  updatedAt: z.number().int(),
+  websiteUrl: z.string(),
+});
+export type ManagerSubscription = z.infer<typeof ManagerSubscriptionSchema>;
+
 export const MsgSchema = z.object({
   msg: z.string(),
   obj: z.unknown(),

@@ -19,7 +19,6 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/web/controller"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
@@ -63,7 +62,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	engine.Use(s.subscriptionDomainValidator(subDomain))
-	engine.GET("/bus/:token", controller.ServeManagerSubscription)
+	engine.GET("/bus/:token", func(c *gin.Context) { service.ServeManagerSubscription(c.Writer, c.Request, c.Param("token")) })
 	engine.Use(func(c *gin.Context) {
 		if enabled, _ := s.settingService.GetSubCDNEnable(); enabled && !strings.Contains(c.Request.URL.Path, "/assets/") {
 			c.Header("Cache-Control", "private, no-store, max-age=0")

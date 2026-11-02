@@ -997,6 +997,199 @@ export const EXAMPLES: Record<string, unknown> = {
     "client": "mlkem768-client",
     "seed": "mlkem768-seed"
   },
+  "ManagerClientInfo": {
+    "down": 0,
+    "email": "",
+    "enabled": false,
+    "expiryTime": 0,
+    "total": 0,
+    "up": 0
+  },
+  "ManagerDomain": {
+    "id": 0,
+    "name": ""
+  },
+  "ManagerEntry": {
+    "activeInboundId": 0,
+    "customLink": "",
+    "flag": "",
+    "label": "",
+    "mode": "",
+    "nodeId": null,
+    "port": "",
+    "relayId": 0,
+    "sni": "",
+    "templateId": 0
+  },
+  "ManagerOperation": {
+    "attempts": 0,
+    "completed": 0,
+    "createdAt": 0,
+    "finishedAt": 0,
+    "id": 0,
+    "kind": "",
+    "message": "",
+    "relayId": 0,
+    "state": "",
+    "subscriptionId": 0,
+    "total": 0
+  },
+  "ManagerRelay": {
+    "address": "",
+    "hostKey": "",
+    "id": 0,
+    "installed": false,
+    "keyAuth": false,
+    "name": "",
+    "nodeId": 0,
+    "sshPort": 0,
+    "username": ""
+  },
+  "ManagerRelayInput": {
+    "address": "",
+    "credential": "",
+    "hostKey": "",
+    "id": 0,
+    "keyAuth": false,
+    "name": "",
+    "nodeId": 0,
+    "sshPort": 0,
+    "username": ""
+  },
+  "ManagerSnapshot": {
+    "clients": {},
+    "domains": [
+      {
+        "id": 0,
+        "name": ""
+      }
+    ],
+    "operationTotal": 0,
+    "operations": [
+      {
+        "attempts": 0,
+        "completed": 0,
+        "createdAt": 0,
+        "finishedAt": 0,
+        "id": 0,
+        "kind": "",
+        "message": "",
+        "relayId": 0,
+        "state": "",
+        "subscriptionId": 0,
+        "total": 0
+      }
+    ],
+    "relays": [
+      {
+        "address": "",
+        "hostKey": "",
+        "id": 0,
+        "installed": false,
+        "keyAuth": false,
+        "name": "",
+        "nodeId": 0,
+        "sshPort": 0,
+        "username": ""
+      }
+    ],
+    "subscriptions": [
+      {
+        "autoRotate": false,
+        "clientId": 0,
+        "createdAt": 0,
+        "enabled": false,
+        "entries": [
+          {
+            "activeInboundId": 0,
+            "customLink": "",
+            "flag": "",
+            "label": "",
+            "mode": "",
+            "nodeId": null,
+            "port": "",
+            "relayId": 0,
+            "sni": "",
+            "templateId": 0
+          }
+        ],
+        "happ": "",
+        "id": 0,
+        "incy": "",
+        "intervalMinutes": 0,
+        "lastRotation": 0,
+        "name": "",
+        "nextRotation": 0,
+        "note": "",
+        "ownClient": false,
+        "published": [
+          {
+            "activeInboundId": 0,
+            "customLink": "",
+            "flag": "",
+            "label": "",
+            "mode": "",
+            "nodeId": null,
+            "port": "",
+            "relayId": 0,
+            "sni": "",
+            "templateId": 0
+          }
+        ],
+        "supportUrl": "",
+        "token": "",
+        "updatedAt": 0,
+        "websiteUrl": ""
+      }
+    ]
+  },
+  "ManagerSubscription": {
+    "autoRotate": false,
+    "clientId": 0,
+    "createdAt": 0,
+    "enabled": false,
+    "entries": [
+      {
+        "activeInboundId": 0,
+        "customLink": "",
+        "flag": "",
+        "label": "",
+        "mode": "",
+        "nodeId": null,
+        "port": "",
+        "relayId": 0,
+        "sni": "",
+        "templateId": 0
+      }
+    ],
+    "happ": "",
+    "id": 0,
+    "incy": "",
+    "intervalMinutes": 0,
+    "lastRotation": 0,
+    "name": "",
+    "nextRotation": 0,
+    "note": "",
+    "ownClient": false,
+    "published": [
+      {
+        "activeInboundId": 0,
+        "customLink": "",
+        "flag": "",
+        "label": "",
+        "mode": "",
+        "nodeId": null,
+        "port": "",
+        "relayId": 0,
+        "sni": "",
+        "templateId": 0
+      }
+    ],
+    "supportUrl": "",
+    "token": "",
+    "updatedAt": 0,
+    "websiteUrl": ""
+  },
   "Msg": {
     "msg": "",
     "obj": null,

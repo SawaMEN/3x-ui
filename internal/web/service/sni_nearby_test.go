@@ -28,8 +28,12 @@ func TestNearbySNIAddresses(t *testing.T) {
 		{"8.8.8.8", 4, []string{"8.8.8.7", "8.8.8.9", "8.8.8.6", "8.8.8.10"}},
 		{"::ffff:8.8.8.8", 3, []string{"8.8.8.7", "8.8.8.9", "8.8.8.6"}},
 		{"2606:4700:4700::1111", 2, []string{"2606:4700:4700::1110", "2606:4700:4700::1112"}},
-		{"127.0.0.1", 4, nil}, {"10.0.0.1", 4, nil}, {"::1", 4, nil},
-		{"8.8.8.8", 0, nil}, {"224.0.0.1", 4, nil}, {"ff02::1", 4, nil},
+		{"127.0.0.1", 4, nil},
+		{"10.0.0.1", 4, nil},
+		{"::1", 4, nil},
+		{"8.8.8.8", 0, nil},
+		{"224.0.0.1", 4, nil},
+		{"ff02::1", 4, nil},
 	} {
 		if got := nearbySNIAddresses(netip.MustParseAddr(tc.origin), tc.limit); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: got %v want %v", tc.origin, got, tc.want)
@@ -224,7 +228,7 @@ func TestNearbyTLSProbeEndToEnd(t *testing.T) {
 	defer server.Close()
 	dir := t.TempDir()
 	certPath := filepath.Join(dir, "root.pem")
-	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0600); err != nil {
+	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	binary, err := os.Executable()

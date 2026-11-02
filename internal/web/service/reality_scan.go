@@ -1180,7 +1180,7 @@ func (s *ServerService) probeRealityAddrContext(parent context.Context, dialHost
 		transport := &http.Transport{
 			MaxResponseHeaderBytes: 32 << 10,
 			ForceAttemptHTTP2:      true,
-			DialTLSContext:         func(context.Context, string, string) (net.Conn, error) {
+			DialTLSContext: func(context.Context, string, string) (net.Conn, error) {
 				return tlsConn, nil
 			},
 		}

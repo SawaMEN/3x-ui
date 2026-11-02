@@ -100,6 +100,7 @@ func (s *ManagerService) SaveRelay(owner int, in ManagerRelayInput) (*model.Mana
 	}
 	return &r, err
 }
+
 func (s *ManagerService) EnqueueRelay(owner, id int, kind string) (*model.ManagerOperation, error) {
 	managerMu.Lock()
 	defer managerMu.Unlock()
@@ -121,6 +122,7 @@ func (s *ManagerService) EnqueueRelay(owner, id int, kind string) (*model.Manage
 	op := &model.ManagerOperation{UserID: owner, RelayID: id, Kind: kind, State: "queued", ActiveKey: &key, Total: 1}
 	return op, db.Create(op).Error
 }
+
 func (s *ManagerService) executeRelay(ctx context.Context, op *model.ManagerOperation) error {
 	db := database.GetDB()
 	var r model.ManagerRelay
@@ -142,9 +144,15 @@ func (s *ManagerService) executeRelay(ctx context.Context, op *model.ManagerOper
 		}
 	}
 	if op.Kind == "relay-delete" && !r.Installed {
-		return db.Delete(&r).Error
+		var n int64
+		if err := db.Model(&model.ManagerOperation{}).Where("relay_id = ? AND kind = ? AND state IN ?", r.ID, "relay-install", []string{"failed", "interrupted"}).Count(&n).Error; err != nil {
+			return err
+		}
+		if n == 0 {
+			return db.Delete(&r).Error
+		}
 	}
-	if err := s.applyRelay(ctx, r, install, nil); err != nil {
+	if err := managerRetry(ctx, op, func() error { return s.applyRelay(ctx, r, install, nil) }); err != nil {
 		return err
 	}
 	r.Installed = install
@@ -157,6 +165,7 @@ func (s *ManagerService) executeRelay(ctx context.Context, op *model.ManagerOper
 	}
 	return nil
 }
+
 func (s *ManagerService) updateRelayPorts(ctx context.Context, entries []model.ManagerEntry) error {
 	ids := map[int]bool{}
 	for _, e := range entries {
@@ -178,7 +187,8 @@ func (s *ManagerService) updateRelayPorts(ctx context.Context, entries []model.M
 	}
 	return nil
 }
-func (s *ManagerService) applyRelay(ctx context.Context, r model.ManagerRelay, install bool, staging []model.ManagerEntry) error {
+
+func (s *ManagerService) applyRelay(ctx context.Context, r model.ManagerRelay, install bool, staging []model.ManagerEntry, excluded ...int) error {
 	db := database.GetDB()
 	var node model.Node
 	if err := db.First(&node, r.NodeID).Error; err != nil {
@@ -201,6 +211,9 @@ func (s *ManagerService) applyRelay(ctx context.Context, r model.ManagerRelay, i
 		return err
 	}
 	for _, sub := range subs {
+		if slices.Contains(excluded, sub.ID) {
+			continue
+		}
 		entries = append(entries, sub.Published...)
 	}
 	ports := []int{}
@@ -221,6 +234,7 @@ func (s *ManagerService) applyRelay(ctx context.Context, r model.ManagerRelay, i
 	}
 	return managerSSH(ctx, r, script)
 }
+
 func managerRelayScript(id int, ip netip.Addr, ports []int, install bool) (string, error) {
 	if id < 1 || !ip.IsValid() {
 		return "", fmt.Errorf("invalid relay destination")
@@ -266,6 +280,7 @@ func managerRelayScript(id int, ip netip.Addr, ports []int, install bool) (strin
 	fmt.Fprintf(&b, "cat > /etc/systemd/system/%s <<'XUI_UNIT'\n[Unit]\nDescription=3x-ui manager relay %d\nAfter=network-online.target\n[Service]\nType=oneshot\nExecStart=%s\nRemainAfterExit=yes\n[Install]\nWantedBy=multi-user.target\nXUI_UNIT\nsystemctl daemon-reload\nsystemctl enable %s\nsystemctl restart %s\n", unit, id, path, unit, unit)
 	return b.String(), nil
 }
+
 func managerSSH(parent context.Context, r model.ManagerRelay, script string) error {
 	ctx, cancel := context.WithTimeout(parent, 45*time.Second)
 	defer cancel()

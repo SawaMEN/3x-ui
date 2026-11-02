@@ -3,13 +3,14 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"net"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 )
 
 func waitSNIJob(t *testing.T, m *sniJobManager, id string) SNIJobSnapshot {
@@ -28,6 +29,7 @@ func waitSNIJob(t *testing.T, m *sniJobManager, id string) SNIJobSnapshot {
 	t.Fatal("job did not finish")
 	return SNIJobSnapshot{}
 }
+
 func TestSNIJobsQueueAndCancellation(t *testing.T) {
 	m := newSNIJobManager(func(ctx context.Context, j *sniJob) error { <-ctx.Done(); return ctx.Err() }, nil)
 	var ids []string
@@ -51,6 +53,7 @@ func TestSNIJobsQueueAndCancellation(t *testing.T) {
 	}
 	m.close()
 }
+
 func TestSNIJobsPublishAndPersistBeforeDone(t *testing.T) {
 	saved := make(chan SNIJobSnapshot, 1)
 	m := newSNIJobManager(func(ctx context.Context, j *sniJob) error {
@@ -75,6 +78,7 @@ func TestSNIJobsPublishAndPersistBeforeDone(t *testing.T) {
 	}
 	m.close()
 }
+
 func TestSNIJobsReportSaveFailureAndRejectInvalidRequests(t *testing.T) {
 	m := newSNIJobManager(func(context.Context, *sniJob) error { return nil }, func(SNIJobSnapshot) error { return errors.New("disk full") })
 	for _, req := range []SNIScanRequest{{Mode: "bad"}, {Mode: "recheck"}, {Purpose: "bad"}, {Mode: "recheck", Recheck: []*SNISavedTarget{nil}}, {Mode: "recheck", Recheck: []*SNISavedTarget{{IP: "domain.example", Host: "example", Port: 443}}}} {
@@ -92,6 +96,7 @@ func TestSNIJobsReportSaveFailureAndRejectInvalidRequests(t *testing.T) {
 	}
 	m.close()
 }
+
 func TestSNIStabilityMeasurementsAndDNS(t *testing.T) {
 	row := &RealityScanResult{IP: "8.8.8.8", Target: "8.8.8.8:443", Host: "edge.example", Port: 443, CertValid: true, Feasible: true}
 	index := 0
@@ -127,6 +132,7 @@ func TestSNIStabilityMeasurementsAndDNS(t *testing.T) {
 		t.Fatal("unstable target ranked first")
 	}
 }
+
 func TestSNIHistoryPersistsAndIsBounded(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "sni-history.db")
 	if err := database.InitDB(dbPath); err != nil {
@@ -210,6 +216,7 @@ func TestSNIQueuedCancellationFreesCapacityImmediately(t *testing.T) {
 		}
 	}
 }
+
 func TestSNIRetainedSnapshotsDoNotBlockFutureScans(t *testing.T) {
 	m := newSNIJobManager(func(context.Context, *sniJob) error { return nil }, nil)
 	t.Cleanup(m.close)
@@ -234,6 +241,7 @@ func TestSNIRetainedSnapshotsDoNotBlockFutureScans(t *testing.T) {
 		t.Fatal("oldest completed snapshot was not evicted")
 	}
 }
+
 func TestSNIPhaseTimeoutRetainsPartialResultsAndContinuesCombinedScan(t *testing.T) {
 	j := &sniJob{request: SNIScanRequest{Mode: "combined", Purpose: "reality"}}
 	ctx := context.WithValue(context.Background(), sniProgressKey{}, sniProgress(j.publish))
@@ -255,6 +263,7 @@ func TestSNIPhaseTimeoutRetainsPartialResultsAndContinuesCombinedScan(t *testing
 		t.Fatalf("rows=%d called=%v err=%v warning=%s", len(rows), candidatesCalled, err, j.snapshot().Error)
 	}
 }
+
 func TestSNICombinedRespectsExplicitCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -267,6 +276,7 @@ func TestSNICombinedRespectsExplicitCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
 func TestSNIStabilityRefreshesCertificateAndDiagnostics(t *testing.T) {
 	old := true
 	row := &RealityScanResult{IP: "8.8.8.8", Host: "edge.example", Port: 443, Target: "8.8.8.8:443", CertValid: true, Feasible: true, CertChainBytes: 5000, CertIssuer: "old issuer", HTTP2OK: &old, DNSLookupError: "old lookup error", TCPMs: 10, TLSMs: 20}
@@ -296,6 +306,7 @@ func TestSNIStabilityRefreshesCertificateAndDiagnostics(t *testing.T) {
 		t.Fatalf("stale successful measurements: %+v", failed)
 	}
 }
+
 func TestSNIRankingHasConsistentOrderForUnusableResults(t *testing.T) {
 	a := &RealityScanResult{Target: "a", Attempts: 5, Successes: 3, MedianMs: 100}
 	b := &RealityScanResult{Target: "b", LatencyMs: 50}

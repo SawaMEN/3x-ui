@@ -3645,6 +3645,382 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
+  "ManagerClientInfo": {
+    "properties": {
+      "down": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "email": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "expiryTime": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "total": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "up": {
+        "format": "int64",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "down",
+      "email",
+      "enabled",
+      "expiryTime",
+      "total",
+      "up"
+    ],
+    "type": "object"
+  },
+  "ManagerDomain": {
+    "properties": {
+      "id": {
+        "type": "integer"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name"
+    ],
+    "type": "object"
+  },
+  "ManagerEntry": {
+    "properties": {
+      "activeInboundId": {
+        "type": "integer"
+      },
+      "customLink": {
+        "type": "string"
+      },
+      "flag": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string"
+      },
+      "nodeId": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "port": {
+        "type": "string"
+      },
+      "relayId": {
+        "type": "integer"
+      },
+      "sni": {
+        "type": "string"
+      },
+      "templateId": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "activeInboundId",
+      "customLink",
+      "flag",
+      "label",
+      "mode",
+      "port",
+      "relayId",
+      "sni",
+      "templateId"
+    ],
+    "type": "object"
+  },
+  "ManagerOperation": {
+    "properties": {
+      "attempts": {
+        "type": "integer"
+      },
+      "completed": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "finishedAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "kind": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      },
+      "relayId": {
+        "type": "integer"
+      },
+      "state": {
+        "type": "string"
+      },
+      "subscriptionId": {
+        "type": "integer"
+      },
+      "total": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "attempts",
+      "completed",
+      "createdAt",
+      "finishedAt",
+      "id",
+      "kind",
+      "message",
+      "relayId",
+      "state",
+      "subscriptionId",
+      "total"
+    ],
+    "type": "object"
+  },
+  "ManagerRelay": {
+    "properties": {
+      "address": {
+        "type": "string"
+      },
+      "hostKey": {
+        "type": "string"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "installed": {
+        "type": "boolean"
+      },
+      "keyAuth": {
+        "type": "boolean"
+      },
+      "name": {
+        "type": "string"
+      },
+      "nodeId": {
+        "type": "integer"
+      },
+      "sshPort": {
+        "type": "integer"
+      },
+      "username": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "address",
+      "hostKey",
+      "id",
+      "installed",
+      "keyAuth",
+      "name",
+      "nodeId",
+      "sshPort",
+      "username"
+    ],
+    "type": "object"
+  },
+  "ManagerRelayInput": {
+    "properties": {
+      "address": {
+        "type": "string"
+      },
+      "credential": {
+        "type": "string"
+      },
+      "hostKey": {
+        "type": "string"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "keyAuth": {
+        "type": "boolean"
+      },
+      "name": {
+        "type": "string"
+      },
+      "nodeId": {
+        "type": "integer"
+      },
+      "sshPort": {
+        "type": "integer"
+      },
+      "username": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "address",
+      "credential",
+      "hostKey",
+      "id",
+      "keyAuth",
+      "name",
+      "nodeId",
+      "sshPort",
+      "username"
+    ],
+    "type": "object"
+  },
+  "ManagerSnapshot": {
+    "properties": {
+      "clients": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ManagerClientInfo"
+        },
+        "type": "object"
+      },
+      "domains": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerDomain"
+        },
+        "type": "array"
+      },
+      "operationTotal": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "operations": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerOperation"
+        },
+        "type": "array"
+      },
+      "relays": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerRelay"
+        },
+        "type": "array"
+      },
+      "subscriptions": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerSubscription"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "clients",
+      "domains",
+      "operationTotal",
+      "operations",
+      "relays",
+      "subscriptions"
+    ],
+    "type": "object"
+  },
+  "ManagerSubscription": {
+    "properties": {
+      "autoRotate": {
+        "type": "boolean"
+      },
+      "clientId": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "entries": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerEntry"
+        },
+        "type": "array"
+      },
+      "happ": {
+        "type": "string"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "incy": {
+        "type": "string"
+      },
+      "intervalMinutes": {
+        "type": "integer"
+      },
+      "lastRotation": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "name": {
+        "type": "string"
+      },
+      "nextRotation": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "note": {
+        "type": "string"
+      },
+      "ownClient": {
+        "type": "boolean"
+      },
+      "published": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerEntry"
+        },
+        "type": "array"
+      },
+      "supportUrl": {
+        "type": "string"
+      },
+      "token": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "websiteUrl": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "autoRotate",
+      "clientId",
+      "createdAt",
+      "enabled",
+      "entries",
+      "happ",
+      "id",
+      "incy",
+      "intervalMinutes",
+      "lastRotation",
+      "name",
+      "nextRotation",
+      "note",
+      "ownClient",
+      "published",
+      "supportUrl",
+      "token",
+      "updatedAt",
+      "websiteUrl"
+    ],
+    "type": "object"
+  },
   "Msg": {
     "properties": {
       "msg": {

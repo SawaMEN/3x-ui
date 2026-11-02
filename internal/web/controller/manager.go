@@ -29,11 +29,13 @@ func NewManagerController(g *gin.RouterGroup) *ManagerController {
 	g.POST("/relays/:id/delete", a.deleteRelay)
 	return a
 }
+
 func (a *ManagerController) state(c *gin.Context) {
 	page, _ := strconv.Atoi(c.Query("page"))
 	v, err := a.service.Snapshot(session.GetLoginUser(c).Id, page, c.Query("state"), c.Query("kind"))
 	jsonObj(c, v, err)
 }
+
 func managerBind(c *gin.Context, v any) bool {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
 	if err := c.ShouldBindJSON(v); err != nil {
@@ -42,6 +44,7 @@ func managerBind(c *gin.Context, v any) bool {
 	}
 	return true
 }
+
 func managerID(c *gin.Context) (int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
@@ -50,6 +53,7 @@ func managerID(c *gin.Context) (int, bool) {
 	}
 	return id, true
 }
+
 func (a *ManagerController) save(c *gin.Context) {
 	var in model.ManagerSubscription
 	if !managerBind(c, &in) {
@@ -58,6 +62,7 @@ func (a *ManagerController) save(c *gin.Context) {
 	v, err := a.service.Save(session.GetLoginUser(c).Id, in)
 	jsonObj(c, v, err)
 }
+
 func (a *ManagerController) queue(c *gin.Context, kind string) {
 	id, ok := managerID(c)
 	if !ok {
@@ -71,6 +76,7 @@ func (a *ManagerController) remove(c *gin.Context) { a.queue(c, "delete") }
 func (a *ManagerController) rotateAll(c *gin.Context) {
 	jsonObj(c, nil, a.service.EnqueueAll(session.GetLoginUser(c).Id))
 }
+
 func (a *ManagerController) retry(c *gin.Context) {
 	id, ok := managerID(c)
 	if !ok {
@@ -79,6 +85,7 @@ func (a *ManagerController) retry(c *gin.Context) {
 	v, err := a.service.Retry(session.GetLoginUser(c).Id, id)
 	jsonObj(c, v, err)
 }
+
 func (a *ManagerController) domains(c *gin.Context) {
 	var in struct {
 		Domains string `json:"domains"`
@@ -89,6 +96,7 @@ func (a *ManagerController) domains(c *gin.Context) {
 	}
 	jsonObj(c, nil, a.service.ImportDomains(session.GetLoginUser(c).Id, in.Domains, in.Replace))
 }
+
 func (a *ManagerController) relay(c *gin.Context) {
 	var in service.ManagerRelayInput
 	if !managerBind(c, &in) {
@@ -97,6 +105,7 @@ func (a *ManagerController) relay(c *gin.Context) {
 	v, err := a.service.SaveRelay(session.GetLoginUser(c).Id, in)
 	jsonObj(c, v, err)
 }
+
 func (a *ManagerController) relayQueue(c *gin.Context, kind string) {
 	id, ok := managerID(c)
 	if !ok {

@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -51,6 +52,7 @@ func (s *ManagerService) Run(ctx context.Context) {
 		}
 	}
 }
+
 func (s *ManagerService) schedule() {
 	managerMu.Lock()
 	defer managerMu.Unlock()
@@ -79,6 +81,7 @@ func (s *ManagerService) schedule() {
 		}
 	}
 }
+
 func (s *ManagerService) execute(ctx context.Context, op *model.ManagerOperation) {
 	managerMu.Lock()
 	defer managerMu.Unlock()
@@ -123,6 +126,7 @@ func (s *ManagerService) execute(ctx context.Context, op *model.ManagerOperation
 	}
 	workErr = s.rotate(ctx, op, &sub)
 }
+
 func managerMarkRestart(needed bool) {
 	if !needed {
 		return
@@ -134,6 +138,7 @@ func managerMarkRestart(needed bool) {
 		(&CoreService{}).SetToNeedRestart()
 	}
 }
+
 func managerRetry(ctx context.Context, op *model.ManagerOperation, fn func() error) error {
 	var err error
 	for i := 1; i <= 3; i++ {
@@ -161,6 +166,7 @@ func managerRetry(ctx context.Context, op *model.ManagerOperation, fn func() err
 	}
 	return err
 }
+
 func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription) error {
 	finish := beginLocalConfigBatch()
 	defer finish()
@@ -267,6 +273,7 @@ func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation,
 	op.Completed = op.Total
 	return nil
 }
+
 func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription, e model.ManagerEntry, index int) (*model.Inbound, error) {
 	db := database.GetDB()
 	svc := &InboundService{}
@@ -331,6 +338,7 @@ func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, 
 	}
 	return ib, err
 }
+
 func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) error {
 	if sni == "" {
 		return nil
@@ -353,6 +361,19 @@ func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) erro
 	if err := json.Unmarshal([]byte(ib.StreamSettings), &stream); err != nil {
 		return err
 	}
+	nativeUpdated := false
+	var nativeSettings map[string]any
+	if json.Unmarshal([]byte(ib.Settings), &nativeSettings) == nil {
+		if tls, ok := nativeSettings["tls"].(map[string]any); ok {
+			tls["serverName"] = sni
+			raw, err := json.Marshal(nativeSettings)
+			if err != nil {
+				return err
+			}
+			ib.Settings = string(raw)
+			nativeUpdated = true
+		}
+	}
 	switch stream["security"] {
 	case "reality":
 		r, ok := stream["realitySettings"].(map[string]any)
@@ -367,7 +388,9 @@ func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) erro
 		}
 		r["serverName"] = sni
 	default:
-		return fmt.Errorf("SNI requires TLS or Reality")
+		if !nativeUpdated {
+			return fmt.Errorf("SNI requires TLS or Reality")
+		}
 	}
 	raw, err := json.Marshal(stream)
 	if err == nil {
@@ -375,6 +398,7 @@ func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) erro
 	}
 	return err
 }
+
 func (s *ManagerService) pushGenerated(ctx context.Context, ib *model.Inbound) error {
 	svc := &InboundService{}
 	rt, err := svc.runtimeFor(ib)
@@ -389,6 +413,7 @@ func (s *ManagerService) pushGenerated(ctx context.Context, ib *model.Inbound) e
 	defer cancel()
 	return rt.UpdateInbound(c, payload, payload)
 }
+
 func (s *ManagerService) applyGeneration(ctx context.Context, entries []model.ManagerEntry) error {
 	local := false
 	for _, e := range entries {
@@ -419,12 +444,17 @@ func (s *ManagerService) applyGeneration(ctx context.Context, entries []model.Ma
 	}
 	return rt.RestartXray(c)
 }
+
 func (s *ManagerService) cleanup(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription, keep map[int]bool) error {
 	var owned []model.Inbound
-	if err := database.GetDB().Where("user_id = ? AND tag LIKE ?", sub.UserID, "manager-"+sub.Token+"-%").Find(&owned).Error; err != nil {
+	if err := database.GetDB().Where("user_id = ? AND tag LIKE ?", sub.UserID, "%manager-"+sub.Token+"-%").Find(&owned).Error; err != nil {
 		return err
 	}
 	for _, ib := range owned {
+		prefix := "manager-" + sub.Token + "-"
+		if !strings.HasPrefix(ib.Tag, prefix) && !strings.HasPrefix(ib.Tag, nodeTagPrefix(ib.NodeID)+prefix) {
+			continue
+		}
 		if keep[ib.Id] {
 			continue
 		}
@@ -445,6 +475,7 @@ func (s *ManagerService) cleanup(ctx context.Context, op *model.ManagerOperation
 	}
 	return nil
 }
+
 func (s *ManagerService) deleteSubscription(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription) error {
 	db := database.GetDB()
 	if err := db.Model(sub).Update("enabled", false).Error; err != nil {
@@ -458,6 +489,23 @@ func (s *ManagerService) deleteSubscription(ctx context.Context, op *model.Manag
 		managerMarkRestart(needed)
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
+		}
+	}
+	relays := map[int]bool{}
+	for _, e := range append(slices.Clone(sub.Entries), sub.Published...) {
+		if e.RelayID > 0 {
+			relays[e.RelayID] = true
+		}
+	}
+	for id := range relays {
+		var relay model.ManagerRelay
+		if err := db.First(&relay, id).Error; err != nil {
+			return err
+		}
+		if relay.Installed {
+			if err := s.applyRelay(ctx, relay, true, nil, sub.ID); err != nil {
+				return err
+			}
 		}
 	}
 	return db.Delete(sub).Error

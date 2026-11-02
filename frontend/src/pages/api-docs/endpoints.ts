@@ -198,6 +198,91 @@ const hwidStatusErrorResponses = {
 
 export const sections: readonly Section[] = [
   {
+    id: 'manager',
+    title: 'Subscription manager',
+    description:
+      'Native subscription orchestration with a persistent asynchronous operation queue. Administrator access required.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/manager/state',
+        summary: 'List subscriptions and paginated operations',
+        responseSchema: 'ManagerSnapshot',
+        params: [
+          { name: 'page', in: 'query', type: 'integer', optional: true },
+          { name: 'state', in: 'query', type: 'string', optional: true },
+          { name: 'kind', in: 'query', type: 'string', optional: true },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/subscriptions',
+        summary: 'Create or update a subscription',
+        requestSchema: { $ref: '#/components/schemas/ManagerSubscription' },
+        responseSchema: 'ManagerSubscription',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/subscriptions/:id/rotate',
+        summary: 'Queue generation',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/subscriptions/:id/delete',
+        summary: 'Queue deletion',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/rotate',
+        summary: 'Queue automatic subscriptions',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/operations/:id/retry',
+        summary: 'Retry a failed operation',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/domains',
+        summary: 'Import or replace SNI domains',
+        requestSchema: {
+          type: 'object',
+          required: ['domains'],
+          properties: { domains: { type: 'string' }, replace: { type: 'boolean' } },
+        },
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/relays',
+        summary: 'Save relay',
+        requestSchema: { $ref: '#/components/schemas/ManagerRelayInput' },
+        responseSchema: 'ManagerRelay',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/relays/:id/install',
+        summary: 'Install forwarding',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/relays/:id/uninstall',
+        summary: 'Remove forwarding',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/relays/:id/delete',
+        summary: 'Delete relay',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+    ],
+  },
+
+  {
     id: 'olcrtc',
     title: 'OlcRTC',
     description:

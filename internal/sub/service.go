@@ -136,6 +136,9 @@ func markSalamanderWarningSeen(key string) bool {
 
 // SubService provides business logic for generating subscription links and managing subscription data.
 type SubService struct {
+	managerInbounds []*model.Inbound
+	managerExternal []externalLinkEntry
+
 	address        string
 	remarkTemplate string
 	datepicker     string
@@ -4197,6 +4200,14 @@ func (s *SubService) enableSettingsCache() (release func()) {
 }
 
 func (s *SubService) loadInboundsBySubId(subId string) ([]*model.Inbound, error) {
+	if s.managerInbounds != nil {
+		out := make([]*model.Inbound, 0, len(s.managerInbounds))
+		for _, ib := range s.managerInbounds {
+			copyInbound := *ib
+			out = append(out, &copyInbound)
+		}
+		return out, nil
+	}
 	db := database.GetDB()
 	cached := s.settingsCache != nil && s.subscriptionBody
 	query := db.Model(model.Inbound{}).Where(`id in (

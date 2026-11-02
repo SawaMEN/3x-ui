@@ -267,6 +267,7 @@ function AppSidebar() {
         : []),
       { key: '/groups', icon: 'groups' as IconName, title: t('menu.groups') },
       { key: '/nodes', icon: 'cluster' as IconName, title: t('menu.nodes') },
+      { key: '/manager', icon: 'tool' as IconName, title: t('menu.manager') },
       { key: '/hosts', icon: 'hosts' as IconName, title: t('menu.hosts') },
       { key: '/outbound', icon: 'outbound' as IconName, title: t('menu.outbounds') },
       { key: '/routing', icon: 'routing' as IconName, title: t('menu.routing') },

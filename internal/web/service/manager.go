@@ -25,15 +25,18 @@ import (
 
 var managerMu sync.Mutex
 
-type ManagerService struct{}
-type ManagerClientInfo struct {
-	Email      string `json:"email"`
-	Up         int64  `json:"up"`
-	Down       int64  `json:"down"`
-	Total      int64  `json:"total"`
-	ExpiryTime int64  `json:"expiryTime"`
-	Enabled    bool   `json:"enabled"`
-}
+type (
+	ManagerService    struct{}
+	ManagerClientInfo struct {
+		Email      string `json:"email"`
+		Up         int64  `json:"up"`
+		Down       int64  `json:"down"`
+		Total      int64  `json:"total"`
+		ExpiryTime int64  `json:"expiryTime"`
+		Enabled    bool   `json:"enabled"`
+	}
+)
+
 type ManagerSnapshot struct {
 	Subscriptions  []model.ManagerSubscription  `json:"subscriptions"`
 	Relays         []model.ManagerRelay         `json:"relays"`
@@ -294,13 +297,16 @@ func managerDomain(raw string) (string, error) {
 			return "", fmt.Errorf("invalid domain")
 		}
 		for _, r := range p {
-			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+			letter := r >= 'a' && r <= 'z'
+			digit := r >= '0' && r <= '9'
+			if !letter && !digit && r != '-' {
 				return "", fmt.Errorf("invalid domain")
 			}
 		}
 	}
 	return host, nil
 }
+
 func (s *ManagerService) ImportDomains(owner int, raw string, replace bool) error {
 	if len(raw) > 1<<20 {
 		return fmt.Errorf("import exceeds 1 MiB")
@@ -331,11 +337,13 @@ func (s *ManagerService) ImportDomains(owner int, raw string, replace bool) erro
 		return tx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(rows, 100).Error
 	})
 }
+
 func (s *ManagerService) Enqueue(owner, id int, kind string) (*model.ManagerOperation, error) {
 	managerMu.Lock()
 	defer managerMu.Unlock()
 	return s.enqueue(owner, id, kind)
 }
+
 func (s *ManagerService) enqueue(owner, id int, kind string) (*model.ManagerOperation, error) {
 	if kind != "rotate" && kind != "delete" {
 		return nil, fmt.Errorf("invalid operation")
@@ -358,6 +366,7 @@ func (s *ManagerService) enqueue(owner, id int, kind string) (*model.ManagerOper
 	op := &model.ManagerOperation{UserID: owner, SubscriptionID: id, Kind: kind, State: "queued", ActiveKey: &key, Total: len(sub.Entries)}
 	return op, db.Create(op).Error
 }
+
 func (s *ManagerService) EnqueueAll(owner int) error {
 	managerMu.Lock()
 	defer managerMu.Unlock()
@@ -372,6 +381,7 @@ func (s *ManagerService) EnqueueAll(owner int) error {
 	}
 	return nil
 }
+
 func (s *ManagerService) Retry(owner, id int) (*model.ManagerOperation, error) {
 	var op model.ManagerOperation
 	if err := database.GetDB().Where("id = ? AND user_id = ?", id, owner).First(&op).Error; err != nil {
@@ -407,7 +417,7 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 		var err error
 		traffic, err = (&InboundService{}).GetClientTrafficByEmail(client.Email)
 		if err != nil {
-			http.Error(w, "traffic unavailable", 503)
+			http.Error(w, "traffic unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		if traffic != nil && client.TotalGB > 0 && (traffic.Up >= client.TotalGB || traffic.Down >= client.TotalGB-traffic.Up) {
@@ -417,7 +427,13 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 	}
 	provider := subLinkProvider()
 	if provider == nil {
-		http.Error(w, "renderer unavailable", 503)
+		http.Error(w, "renderer unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	format := r.URL.Query().Get("format")
+	config := format == "singbox" || format == "hiddify" || format == "xray"
+	if format != "" && format != "raw" && format != "base64" && !config {
+		http.Error(w, "unknown format", http.StatusBadRequest)
 		return
 	}
 	host := r.Host
@@ -425,7 +441,27 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 		host = h
 	}
 	out := []string{}
+	var configBody, configType string
+	if config {
+		renderer, ok := provider.(interface {
+			ManagerFormat(string, model.ManagerSubscription, model.ClientRecord, string) (string, string, error)
+		})
+		if !ok {
+			http.Error(w, "format unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var err error
+		configBody, configType, err = renderer.ManagerFormat(host, sub, client, format)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotAcceptable)
+			return
+		}
+	}
+
 	for _, e := range sub.Published {
+		if config {
+			break
+		}
 		if e.CustomLink != "" {
 			out = append(out, e.CustomLink)
 			continue
@@ -455,7 +491,12 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 		if p, ok := provider.(interface {
 			ManagerLinksForClient(string, *model.Inbound, string, string, bool) []string
 		}); ok {
-			out = append(out, p.ManagerLinksForClient(host, &ib, client.Email, ib.Remark, e.RelayID > 0)...)
+			links := p.ManagerLinksForClient(host, &ib, client.Email, ib.Remark, e.RelayID > 0)
+			if len(links) == 0 {
+				http.Error(w, "A selected protocol requires JSON. Use ?format=singbox or ?format=hiddify", http.StatusNotAcceptable)
+				return
+			}
+			out = append(out, links...)
 		} else {
 			out = append(out, provider.LinksForClient(host, &ib, client.Email)...)
 		}
@@ -465,8 +506,8 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 			out = append(out, p)
 		}
 	}
-	if len(out) == 0 {
-		http.Error(w, "subscription is not generated", 503)
+	if len(out) == 0 && configBody == "" {
+		http.Error(w, "subscription is not generated", http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -489,6 +530,10 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 	body := strings.Join(out, "\n")
 	if r.URL.Query().Get("format") != "raw" {
 		body = base64.StdEncoding.EncodeToString([]byte(body))
+	}
+	if config {
+		body = configBody
+		w.Header().Set("Content-Type", configType)
 	}
 	_, _ = w.Write([]byte(body))
 }

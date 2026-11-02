@@ -685,7 +685,7 @@ func saveSNIHistory(view SNIJobSnapshot) error {
 	return (&SettingService{}).saveSetting(sniHistoryKey, string(data))
 }
 
-func StartSNIScan(request SNIScanRequest) (SNIJobSnapshot, error)  { return sniJobs().start(request) }
+func StartSNIScan(request SNIScanRequest) (SNIJobSnapshot, error) { return sniJobs().start(request) }
 
 func SNIScanStatus(id string, cancel bool) (SNIJobSnapshot, error) { return sniJobs().get(id, cancel) }
 
