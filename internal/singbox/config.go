@@ -869,6 +869,9 @@ func TranslateShadowTLSInnerInbound(raw map[string]any) (map[string]any, error) 
 		if !ok {
 			continue
 		}
+		if enabled, explicit := client["enable"].(bool); explicit && !enabled {
+			continue
+		}
 		name := rawString(client, "email")
 		password := rawString(client, "password")
 		if name == "" || password == "" {
@@ -897,13 +900,18 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 		clients = append(clients, accounts...)
 	}
 	users := make([]map[string]any, 0, len(clients))
+	disabled := false
 	for _, item := range clients {
 		client, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
+		if enabled, explicit := client["enable"].(bool); explicit && !enabled {
+			disabled = true
+			continue
+		}
 		user := map[string]any{}
-		if protocol != "naive" {
+		if protocol != "naive" && protocol != "http" && protocol != "socks" && protocol != "mixed" {
 			if email, ok := client["email"].(string); ok && email != "" {
 				user["name"] = email
 			}
@@ -936,7 +944,7 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 			if password, ok := client["password"].(string); ok && password != "" {
 				user["password"] = password
 			}
-		case "naive":
+		case "naive", "http", "socks", "mixed":
 			if email := rawString(client, "email"); email != "" {
 				user["username"] = email
 			}
@@ -954,7 +962,12 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 				user["password"] = password
 			}
 		}
-		users = append(users, user)
+		if len(user) > 0 {
+			users = append(users, user)
+		}
+	}
+	if disabled && len(users) == 0 {
+		return fmt.Errorf("inbound %q has no enabled users", rawString(out, "tag"))
 	}
 	switch protocol {
 	case "vless", "vmess", "trojan", "naive", "hysteria", "hysteria2", "anytls", "shadowtls", "tuic", "http", "socks", "mixed":
@@ -971,27 +984,6 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 		}
 		if password := rawString(settings, "password"); password != "" {
 			out["password"] = password
-		}
-	case "http", "socks", "mixed":
-		mapped := make([]map[string]any, 0, len(clients))
-		for _, item := range clients {
-			client, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			user := map[string]any{}
-			if username := rawString(client, "email"); username != "" {
-				user["username"] = username
-			}
-			if password := rawString(client, "password"); password != "" {
-				user["password"] = password
-			}
-			if len(user) > 0 {
-				mapped = append(mapped, user)
-			}
-		}
-		if len(mapped) > 0 {
-			out["users"] = mapped
 		}
 	}
 	return nil

@@ -11,8 +11,8 @@ import (
 
 // validateInboundRuntimeTarget validates the protocol against the core that
 // will actually host the inbound. Node inbounds are checked against the node's
-// persisted core so an Xray master can manage a
-// sing-box node (and vice versa) without validating against the wrong engine.
+// persisted core so an Xray master can manage a sing-box node (and vice versa)
+// without validating against the wrong engine.
 func validateInboundRuntimeTarget(inbound *model.Inbound) error {
 	if inbound == nil {
 		return nil
@@ -41,8 +41,8 @@ func validateInboundRuntimeTarget(inbound *model.Inbound) error {
 }
 
 func validateInboundRuntimeProtocol(protocol model.Protocol, existing *model.Inbound) error {
-	// AddInbound validates through validateShadowTLSTransport while it still has
-	// the complete incoming row, including NodeID. On update, NodeID in the wire
+	// AddInbound validates the complete incoming row, including NodeID.
+	// On update, NodeID in the wire
 	// payload is intentionally not trusted; validate against the stored host row.
 	if existing == nil {
 		return nil
@@ -72,14 +72,6 @@ func validateShadowTLSTransport(inbound *model.Inbound) error {
 	if inbound == nil {
 		return nil
 	}
-	// AddInbound resets Id to zero before this call, so this is the one early
-	// validation point that still has the requested node assignment. UpdateInbound
-	// validates ordinary protocol compatibility later against the stored row.
-	if inbound.Id == 0 {
-		if err := validateInboundRuntimeTarget(inbound); err != nil {
-			return err
-		}
-	}
 	if model.ShadowTLSTransport(inbound.Settings) == nil {
 		return nil
 	}
@@ -90,9 +82,6 @@ func validateShadowTLSTransport(inbound *model.Inbound) error {
 	// generated runtime config can never represent.
 	target, err := shadowTLSTarget(inbound)
 	if err != nil {
-		return err
-	}
-	if err := validateInboundRuntimeTarget(target); err != nil {
 		return err
 	}
 	core, err := (&InboundService{}).coreTypeForInbound(target)

@@ -1172,6 +1172,11 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	inbound.TrafficResetDay = normalizeTrafficResetDay(inbound.TrafficResetDay)
 	// Normalize streamSettings based on protocol
 	s.normalizeStreamSettings(inbound)
+	// Check the requested host before generating credentials or saving anything.
+	// NodeID selects the node's core; a local row uses this panel's selection.
+	if err := validateInboundRuntimeTarget(inbound); err != nil {
+		return inbound, false, err
+	}
 	if err := validateShadowTLSTransport(inbound); err != nil {
 		return inbound, false, err
 	}
@@ -1179,13 +1184,6 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	inbound.Settings, shadowTLSErr = model.EnsureShadowTLSTransportPassword(inbound.Settings, "")
 	if shadowTLSErr != nil {
 		return inbound, false, shadowTLSErr
-	}
-	// Validate against the actual destination. For a centrally managed node
-	// inbound, NodeID selects that node's configured/running core; for a local
-	// inbound (including a payload received through node sync, where NodeID is
-	// stripped on the wire) this resolves to the local selected core.
-	if err := validateInboundRuntimeProtocol(inbound.Protocol, inbound); err != nil {
-		return inbound, false, err
 	}
 	if err := ValidateMtprotoWebInbound(inbound); err != nil {
 		return inbound, false, err

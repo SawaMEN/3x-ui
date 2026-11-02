@@ -73,3 +73,33 @@ func TestStage5IncompatibleProtocolNeverPersists(t *testing.T) {
 		t.Fatalf("enable changed storage: %+v %v", stored, err)
 	}
 }
+
+func TestStage5ProtocolUsesStoredNodeCore(t *testing.T) {
+	setupBulkDB(t)
+	s := &SettingService{}
+	for _, tc := range []struct {
+		master, node, running string
+		protocol              model.Protocol
+		allowed               bool
+	}{
+		{CoreTypeXray, CoreTypeSingBox, "", model.AnyTLS, true},
+		{CoreTypeSingBox, CoreTypeXray, "", model.AnyTLS, false},
+		{CoreTypeSingBox, CoreTypeSingBoxUpstream, "", model.Snell, false},
+		{CoreTypeXray, "", CoreTypeSingBox, model.AnyTLS, true},
+		{CoreTypeSingBox, "", "", model.AnyTLS, false},
+	} {
+		t.Run(tc.master+"/"+tc.node+"/"+tc.running, func(t *testing.T) {
+			if err := s.setString("coreType", tc.master); err != nil {
+				t.Fatal(err)
+			}
+			node := model.Node{Name: t.Name(), CoreType: tc.node, RunningCore: tc.running}
+			if err := database.GetDB().Create(&node).Error; err != nil {
+				t.Fatal(err)
+			}
+			ib := &model.Inbound{Protocol: tc.protocol, NodeID: &node.Id}
+			if err := validateInboundRuntimeTarget(ib); (err == nil) != tc.allowed {
+				t.Fatalf("allowed=%v: %v", tc.allowed, err)
+			}
+		})
+	}
+}

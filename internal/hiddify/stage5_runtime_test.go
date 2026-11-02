@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"os"
 	"os/exec"
@@ -62,20 +63,12 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 					t.Fatal(err)
 				}
 				stage5Start(t, binary, dir, "server", map[string]any{"inbounds": []any{inbound}, "outbounds": []any{map[string]any{"type": "direct"}}}, port, network != "kcp")
-				echo, err := net.Listen("tcp", "127.0.0.1:0")
+				echoAddress := stage5Echo(t, "127.0.0.1:0")
+				v6 := stage5Echo(t, "[::1]:0")
+				_, echoPort, err := net.SplitHostPort(echoAddress)
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer echo.Close()
-				go func() {
-					for {
-						c, e := echo.Accept()
-						if e != nil {
-							return
-						}
-						go func() { defer c.Close(); _, _ = io.Copy(c, c) }()
-					}
-				}()
 				for _, user := range []int{1, 2, 3, 4} {
 					t.Run(fmt.Sprintf("user%d", user), func(t *testing.T) {
 						socksPort := stage5Port(t)
@@ -89,9 +82,16 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
-						for range 2 {
+						for attempt := range 2 {
 							ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-							conn, err := dialer.(proxy.ContextDialer).DialContext(ctx, "tcp", echo.Addr().String())
+							target := echoAddress
+							if attempt == 1 && user == 1 {
+								target = v6
+							}
+							if attempt == 1 && user == 2 {
+								target = net.JoinHostPort("localhost", echoPort)
+							}
+							conn, err := dialer.(proxy.ContextDialer).DialContext(ctx, "tcp", target)
 							if err == nil {
 								_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
 								payload := bytes.Repeat([]byte("stage5-roundtrip"), 64)
@@ -118,9 +118,61 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 						}
 					})
 				}
+				if protocol == "trojan" {
+					t.Run("wrong-SNI", func(t *testing.T) {
+						badStream := maps.Clone(clientStream)
+						tls := maps.Clone(clientStream["tlsSettings"].(map[string]any))
+						tls["serverName"] = "wrong.invalid"
+						badStream["tlsSettings"] = tls
+						outbound, err := TranslateOutbound(map[string]any{"protocol": protocol, "tag": "proxy", "settings": map[string]any{"address": "127.0.0.1", "port": port, "password": "password1"}, "streamSettings": badStream})
+						if err != nil {
+							t.Fatal(err)
+						}
+						socksPort := stage5Port(t)
+						stage5Start(t, binary, dir, "bad-sni", map[string]any{"inbounds": []any{map[string]any{"type": "socks", "listen": "127.0.0.1", "listen_port": socksPort}}, "outbounds": []any{outbound}}, socksPort, true)
+						dialer, err := proxy.SOCKS5("tcp", fmt.Sprintf("127.0.0.1:%d", socksPort), nil, proxy.Direct)
+						if err != nil {
+							t.Fatal(err)
+						}
+						ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+						defer cancel()
+						conn, err := dialer.(proxy.ContextDialer).DialContext(ctx, "tcp", echoAddress)
+						if err == nil {
+							defer conn.Close()
+							_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+							_, err = conn.Write([]byte("X"))
+							if err == nil {
+								var got [1]byte
+								_, err = io.ReadFull(conn, got[:])
+							}
+						}
+						if err == nil {
+							t.Fatal("wrong certificate name allowed traffic")
+						}
+					})
+				}
 			})
 		}
 	}
+}
+
+func stage5Echo(t *testing.T, address string) string {
+	t.Helper()
+	l, err := net.Listen("tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	go func() {
+		for {
+			c, e := l.Accept()
+			if e != nil {
+				return
+			}
+			go func() { defer c.Close(); _, _ = io.Copy(c, c) }()
+		}
+	}()
+	return l.Addr().String()
 }
 
 func stage5Port(t *testing.T) int {
