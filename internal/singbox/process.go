@@ -286,7 +286,9 @@ func (p *Process) GetUptime() uint64 {
 
 func (p *Process) ConfigPath() string { return p.config }
 
-func (p *Process) Validate(ctx context.Context) error {
+func (p *Process) Validate(ctx context.Context) error { return p.validate(ctx, false) }
+
+func (p *Process) validate(ctx context.Context, versionChecked bool) error {
 	binary := resolvePath(p.binaryPath())
 	cfg := resolvePath(p.config)
 	if _, err := os.Stat(binary); err != nil {
@@ -299,19 +301,20 @@ func (p *Process) Validate(ctx context.Context) error {
 		p.setErr(err)
 		return err
 	}
-	if data, err := os.ReadFile(cfg); err == nil && (configUsesProtocol(data, "masque-server") || configUsesProtocol(data, "masque-client")) {
+	data, err := os.ReadFile(cfg)
+	needsMASQUE := err == nil && (configUsesProtocol(data, "masque-server") || configUsesProtocol(data, "masque-client"))
+	if !versionChecked && (p.profile != nil || needsMASQUE) {
 		if _, err := p.Version(ctx); err != nil {
-			return err
-		}
-		if !p.SupportsMASQUE() {
-			return fmt.Errorf("MASQUE is unavailable in the configured Sing-box profile; installed: %s", p.GetVersion())
-		}
-	}
-	if p.profile != nil {
-		if _, err := p.Version(ctx); err != nil {
+			p.setErr(err)
 			return err
 		}
 	}
+	if needsMASQUE && !p.SupportsMASQUE() {
+		err := fmt.Errorf("MASQUE is unavailable in the configured Sing-box profile; installed: %s", p.GetVersion())
+		p.setErr(err)
+		return err
+	}
+
 	cmdCtx, cancel := context.WithTimeout(ctx, defaultCommandTimeout)
 	defer cancel()
 	args := []string{"check", "-c", cfg}
@@ -425,7 +428,7 @@ func (p *Process) startLocked(ctx context.Context) error {
 		p.rememberAppliedConfig()
 		return nil
 	}
-	if err := p.Validate(ctx); err != nil {
+	if err := p.validate(ctx, p.profile != nil); err != nil {
 		return err
 	}
 	binary, cfg := resolvePath(p.binaryPath()), resolvePath(p.config)

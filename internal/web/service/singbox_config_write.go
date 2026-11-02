@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,6 +25,7 @@ type nativeConfigCandidate struct {
 	managedOutbounds []map[string]any
 	protocolServers  []protocolserver.Plan
 	nativeAWGTags    []string
+	published        bool
 }
 
 func (c *nativeConfigCandidate) close() { _ = os.Remove(c.path) }
@@ -35,7 +37,12 @@ func (c *nativeConfigCandidate) publish(ctx context.Context) error {
 	if err := os.Rename(c.path, c.target); err != nil {
 		return err
 	}
-	dir, err := os.Open(filepath.Dir(c.target))
+	c.published = true
+	return syncNativeConfigDir(c.target)
+}
+
+func syncNativeConfigDir(path string) error {
+	dir, err := os.Open(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
@@ -49,7 +56,59 @@ func (s *SingBoxService) writeConfigCandidate(ctx context.Context) error {
 		return err
 	}
 	defer candidate.close()
-	return candidate.publish(ctx)
+	finish, err := candidate.stage(ctx, nil)
+	if err != nil {
+		return err
+	}
+	return finish(true)
+}
+
+// Capture disk state once. Applied bytes take precedence over an edited file
+// when restoring a process that was already running.
+type nativeConfigFileSnapshot struct {
+	path   string
+	data   []byte
+	exists bool
+}
+
+func snapshotNativeConfig(path string, applied []byte) (*nativeConfigFileSnapshot, error) {
+	snapshot := &nativeConfigFileSnapshot{path: path, data: applied, exists: applied != nil}
+	if applied == nil {
+		data, err := os.ReadFile(path)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		snapshot.data = data
+		snapshot.exists = err == nil
+	}
+	return snapshot, nil
+}
+func (s *nativeConfigFileSnapshot) restore() error {
+	if s.exists {
+		return writeNativeConfigBytes(s.path, s.data)
+	}
+	if err := os.Remove(s.path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return syncNativeConfigDir(s.path)
+}
+
+// Publication is provisional until the core and its sidecars have started.
+func (c *nativeConfigCandidate) stage(ctx context.Context, applied []byte) (func(bool) error, error) {
+	snapshot, err := snapshotNativeConfig(c.target, applied)
+	if err != nil {
+		return nil, err
+	}
+	finish := func(commit bool) error {
+		if commit || !c.published {
+			return nil
+		}
+		return snapshot.restore()
+	}
+	if err := c.publish(ctx); err != nil {
+		return nil, errors.Join(err, finish(false))
+	}
+	return finish, nil
 }
 
 // Preparation is read/check only: do not publish or consume traffic until both
@@ -148,10 +207,5 @@ func writeNativeConfigBytes(path string, data []byte) error {
 	if err := os.Rename(name, path); err != nil {
 		return err
 	}
-	dir, err := os.Open(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	return dir.Sync()
+	return syncNativeConfigDir(path)
 }

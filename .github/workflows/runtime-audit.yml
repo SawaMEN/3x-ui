@@ -1,0 +1,66 @@
+name: Runtime lifecycle audit
+on:
+  push:
+    branches: [update]
+    paths: ['internal/singbox/**', 'internal/web/service/**', 'internal/web/runtime/**', '.github/workflows/runtime-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: runtime-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  lifecycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Prepare assets and dependencies
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep && bash tools/ci/download-go-modules.sh
+      - name: Process ownership, profiles, runtime concurrency and version regressions
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/singbox ./internal/web/runtime -count=1 | tee process.jsonl
+          python3 tools/ci/require-go-tests.py process.jsonl TestStage4VersionProbeOncePerValidationAndStart TestIsolatedProcessNeverAdoptsManagedProcess TestProcessMatchesBinaryRejectsWrongPIDOwner TestProcessClearsReusedExternalPID TestProcessProfileRejectsMisleadingIdentity TestProcessProfileXrayChecksWithRunTest
+      - name: Apply rollback, sidecars, gateway and standalone recovery
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/web/service -run '^(TestStage4(Gateway|Candidate|Xray|Stopped)|TestHiddify(PendingApplyBatchNoopAndRollback|BatchChangesDuringCandidateValidation|CoreFailureRollsBackExternalOutbound|Gateway.*)|TestStandalone(CoreAdapters|Update.*))' -count=1 | tee apply.jsonl
+          python3 tools/ci/require-go-tests.py apply.jsonl TestStage4GatewayPauseFailureRestoresPublishedConfig TestStage4CandidatePublicationRollback TestStage4XrayStartUsesNativeXrayConfiguration TestStage4StoppedXrayFailedRestartDoesNotLaunchOldCore TestHiddifyPendingApplyBatchNoopAndRollback TestHiddifyBatchChangesDuringCandidateValidation TestHiddifyCoreFailureRollsBackExternalOutbound TestStandaloneCoreAdapters
+      - name: Download pinned and checksum-verified native engines
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/runtime-cores"
+          mkdir -p "$root/owner" "$root/xray" "$root/upstream" "$root/archives"
+          gh run download 41326858660 --repo SawaMEN/3x-ui --name x-ui-linux-amd64 --dir "$root/archives"
+          echo "a0a1ded3f54ac6cf9ce305c49836b00194e7d73449ad8a96d68fdf82a24a0a94 $root/archives/x-ui-linux-amd64.tar.gz" | sha256sum -c -
+          tar -xzf "$root/archives/x-ui-linux-amd64.tar.gz" -C "$root/owner" x-ui/bin/hiddify-core-linux-amd64
+          gh release download v26.10.21 --repo XTLS/Xray-core --pattern Xray-linux-64.zip --dir "$root/archives"
+          echo "0eec3ed4163c273d8c8bf821f7d219e257921cf584aa3fb970715e458e631978 $root/archives/Xray-linux-64.zip" | sha256sum -c -
+          unzip -q "$root/archives/Xray-linux-64.zip" -d "$root/xray"
+          gh release download v1.14.4 --repo SagerNet/sing-box --pattern sing-box-1.14.4-linux-amd64.tar.gz --dir "$root/archives"
+          echo "699a1b510aa4396b2176d32d1181920399ebf1e267835da6f3b598d0f7c24968 $root/archives/sing-box-1.14.4-linux-amd64.tar.gz" | sha256sum -c -
+          tar -xzf "$root/archives/sing-box-1.14.4-linux-amd64.tar.gz" --strip-components=1 -C "$root/upstream"
+          echo "XUI_STAGE4_CORE_DIR=$root" >> "$GITHUB_ENV"
+          sha256sum "$root/owner/x-ui/bin/hiddify-core-linux-amd64" "$root/xray/xray" "$root/upstream/sing-box" | tee native-binaries.sha256
+      - name: Real database-to-config-to-process TCP lifecycle for all three engines
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/web/service -run '^TestStage4NativeEngineLifecycle$' -count=1 | tee native.jsonl
+          python3 tools/ci/require-go-tests.py native.jsonl TestStage4NativeEngineLifecycle
+      - name: Vet changed packages
+        run: go vet ./internal/singbox ./internal/web/runtime ./internal/web/service
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: runtime-audit-evidence
+          path: |
+            *.jsonl
+            native-binaries.sha256

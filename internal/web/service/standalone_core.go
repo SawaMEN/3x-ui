@@ -133,7 +133,15 @@ func (s *SingBoxService) restartStandaloneXray(ctx context.Context) error {
 }
 
 func (s *SingBoxService) restartStandaloneXrayLocked(ctx context.Context) error {
-	old := s.process().AppliedConfig()
+	wasRunning := s.IsRunning()
+	var applied []byte
+	if wasRunning {
+		applied = s.process().AppliedConfig()
+	}
+	snapshot, err := snapshotNativeConfig(s.ProcessConfigPath(), applied)
+	if err != nil {
+		return err
+	}
 	if err := s.writeStandaloneXrayConfig(ctx); err != nil {
 		s.process().SetError(err)
 		return err
@@ -142,15 +150,15 @@ func (s *SingBoxService) restartStandaloneXrayLocked(ctx context.Context) error 
 		_ = s.pollStandaloneTraffic(ctx)
 	}
 	if err := s.process().Restart(ctx); err != nil {
-		if len(old) > 0 {
-			restoreErr := writeNativeConfigBytes(s.ProcessConfigPath(), old)
-			if restoreErr == nil {
-				restoreErr = s.process().Start(context.Background())
-			}
-			return errors.Join(err, restoreErr)
+		restoreErr := snapshot.restore()
+		if restoreErr == nil && wasRunning && !s.IsRunning() {
+			recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			restoreErr = s.process().Start(recovery)
 		}
-		return err
+		return errors.Join(err, restoreErr)
 	}
+
 	s.stoppedFlag().Store(false)
 	return nil
 }

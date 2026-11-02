@@ -671,10 +671,12 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 		return err
 	}
 	defer func() { finishLimits(applied) }()
-	if err := candidate.publish(ctx); err != nil {
+	finishConfig, err := candidate.stage(ctx, previous)
+	if err != nil {
 		s.process().SetError(err)
 		return err
 	}
+	defer func() { result = errors.Join(result, finishConfig(applied)) }()
 	finishGateway, err := s.pauseGateway(ctx)
 	if err != nil {
 		return err
@@ -709,6 +711,15 @@ func (s *SingBoxService) Start(ctx context.Context) error {
 }
 
 func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if s.coreType() == CoreTypeXray {
+		if s.IsRunning() {
+			return nil
+		}
+		return s.restartStandaloneXrayLocked(ctx)
+	}
 	defer func() {
 		if result == nil {
 			if err := RefreshDomainFrontRoutes(); err != nil {
@@ -761,10 +772,12 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 		return err
 	}
 	defer func() { finishLimits(applied) }()
-	if err := candidate.publish(ctx); err != nil {
+	finishConfig, err := candidate.stage(ctx, nil)
+	if err != nil {
 		s.process().SetError(err)
 		return err
 	}
+	defer func() { result = errors.Join(result, finishConfig(applied)) }()
 
 	tuic.GetManager().StopAll()
 	finishGateway, err := s.pauseGateway(ctx)
