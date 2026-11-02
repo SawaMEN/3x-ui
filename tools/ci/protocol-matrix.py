@@ -92,6 +92,46 @@ def build(directory):
             add(root[len(prefix):], 'outbound', 'owner', 'native-options', 'none',
                 'constructor-pass; not a data claim', filename, root)
 
+    filename = 'masque-transfer.jsonl'
+    items = events(directory / filename)
+    passed(items, 'TestMASQUEConnections')
+    for version in (1, 2, 3):
+        root = f'TestMASQUEConnections/HTTP{version}'
+        passed(items, root)
+        for payload in ('tcp', 'udp'):
+            passed(items, f'{root}/invalid-credentials/{payload}')
+            for direction in ('endpoint-client', 'endpoint-server'):
+                add('masque', direction, 'owner', f'HTTP{version}; no fallback', payload.upper(),
+                    'data-pass; IPv4; auth', filename, root)
+
+    filename = 'subscription-transfer.jsonl'
+    items = events(directory / filename)
+    root = 'TestAnyTLSShadowTLSSubscriptionConnections'
+    passed(items, root)
+    for payload in ('tcp', 'udp'):
+        passed(items, f'{root}/{payload}')
+        for layer in ('anytls', 'shadowtls'):
+            passed(items, f'{root}/wrong-{layer}/{payload}')
+        for direction in ('inbound', 'outbound'):
+            add('anytls over shadowtls', direction, 'owner', 'generated subscription chain', payload.upper(),
+                'data-pass; IPv4; both authentication layers', filename, root)
+
+    for core, filename in (('owner', 'owner-transfer.jsonl'), ('xray-26.10.21', 'xray-transfer.jsonl')):
+        items = events(directory / filename)
+        passed(items, 'TestXHTTPRuntimeTransfer')
+        for security in ('none', 'tls', 'reality') if core.startswith('xray') else ('none', 'tls'):
+            for mode in ('auto', 'packet-up', 'stream-up', 'stream-one'):
+                if security == 'none' and mode not in ('auto', 'packet-up'):
+                    continue
+                for split in (False, True):
+                    if split and mode == 'stream-one':
+                        continue
+                    root = f'TestXHTTPRuntimeTransfer/{security}/{mode}' + ('/split-download' if split else '')
+                    passed(items, root)
+                    for direction in ('inbound', 'outbound'):
+                        add('vless', direction, core, f'xhttp/{security}/{mode}' + ('/split-download' if split else ''),
+                            'TCP', 'data-pass; large HTTP body; sequential requests', filename, root)
+
     filename = 'fragmentation-contract.jsonl'
     items = events(directory / filename)
     passed(items, 'TestStage5FragmentedTrojanContract')

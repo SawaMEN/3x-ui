@@ -145,6 +145,46 @@ func testMASQUEConnections(t *testing.T, limited bool) {
 			if err := masqueEcho(address, "udp"); err != nil {
 				t.Fatalf("UDP through MASQUE: %v", err)
 			}
+			if !limited {
+				t.Run("invalid-credentials", func(t *testing.T) {
+					badPort := masqueFreePort(t)
+					badLog := startMASQUETestProcess(t, binary, "unauthorized", map[string]any{
+						"endpoints": []any{map[string]any{"type": "masque-client", "tag": "proxy", "server": "127.0.0.1", "server_port": port, "path": path, "version": version, "disable_version_fallback": true, "username": "alice", "password": "wrong-secret", "tls": map[string]any{"enabled": true, "server_name": "localhost", "certificate_path": certPath}}},
+						"inbounds":  []any{map[string]any{"type": "direct", "tag": "relay", "listen": "127.0.0.1", "listen_port": badPort, "override_address": "172.31.255.1", "override_port": targetPort}},
+						"route":     map[string]any{"final": "proxy"},
+					})
+					badAddress := fmt.Sprintf("127.0.0.1:%d", badPort)
+					ready := false
+					for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+						c, e := net.DialTimeout("tcp", badAddress, 100*time.Millisecond)
+						if e == nil {
+							_ = c.Close()
+							ready = true
+							break
+						}
+						time.Sleep(20 * time.Millisecond)
+					}
+					log, _ := os.ReadFile(badLog)
+					if !ready || strings.Contains(string(log), "FATAL") {
+						t.Fatalf("unauthorized fixture did not start: %s", log)
+					}
+					for _, network := range []string{"tcp", "udp"} {
+						t.Run(network, func(t *testing.T) {
+							c, e := net.DialTimeout(network, badAddress, time.Second)
+							if e != nil {
+								t.Fatal(e)
+							}
+							defer c.Close()
+							_ = c.SetDeadline(time.Now().Add(time.Second))
+							_, _ = io.WriteString(c, "unauthorized-data")
+							var b [1]byte
+							if n, _ := c.Read(b[:]); n != 0 {
+								t.Fatal("invalid MASQUE credentials forwarded data")
+							}
+						})
+					}
+				})
+			}
 		})
 	}
 }

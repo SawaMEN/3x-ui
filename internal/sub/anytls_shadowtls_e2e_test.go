@@ -226,6 +226,63 @@ func TestAnyTLSShadowTLSSubscriptionConnections(t *testing.T) {
 			t.Fatalf("%s roundtrip failed: %v\nserver: %s\nclient: %s", network, last, server, client)
 		})
 	}
+	// Check each authentication layer independently on the generated chain.
+	for _, kind := range []string{"anytls", "shadowtls"} {
+		t.Run("wrong-"+kind, func(t *testing.T) {
+			data, err := json.Marshal(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var bad map[string]any
+			if err := json.Unmarshal(data, &bad); err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, item := range bad["outbounds"].([]any) {
+				out := item.(map[string]any)
+				if out["type"] == kind {
+					out["password"] = "wrong-password"
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("missing %s outbound", kind)
+			}
+			badPort := anyTLSFreePort(t)
+			bad["inbounds"].([]any)[0].(map[string]any)["listen_port"] = badPort
+			badLog := runAnyTLSCore(t, binary, bad)
+			address := fmt.Sprintf("127.0.0.1:%d", badPort)
+			ready := false
+			for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+				c, e := net.DialTimeout("tcp", address, 100*time.Millisecond)
+				if e == nil {
+					_ = c.Close()
+					ready = true
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			log, _ := os.ReadFile(badLog)
+			if !ready || strings.Contains(string(log), "FATAL") {
+				t.Fatalf("negative fixture did not start: %s", log)
+			}
+			for _, network := range []string{"tcp", "udp"} {
+				t.Run(network, func(t *testing.T) {
+					c, err := net.DialTimeout(network, address, time.Second)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer c.Close()
+					_ = c.SetDeadline(time.Now().Add(time.Second))
+					_, _ = io.WriteString(c, "unauthorized-data")
+					var b [1]byte
+					if n, _ := c.Read(b[:]); n != 0 {
+						t.Fatal("invalid chain credentials forwarded data")
+					}
+				})
+			}
+		})
+	}
 	if strings.Contains(sub, "PRIVATE KEY") {
 		t.Fatal("subscription leaked private certificate key")
 	}
