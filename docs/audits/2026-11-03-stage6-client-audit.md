@@ -4,7 +4,7 @@
 Исходный диапазон: v3.9.8 `416a66a3` → зафиксированный main `4aa74411`.
 Проверяемый SHA: `c4246dee5723e794ad0aa3b7d2dbc7b6a43f5a96`.
 
-Матрица native-проверок завершена на обеих архитектурах. Повтор полного Go race suite на последнем SHA ещё выполняется; итог этапа будет зафиксирован после завершения.
+**Этап 6 завершён: 5/5 пунктов. Общий прогресс: 6/14 этапов, 30/70 групп исходного плана.**
 
 | Пункт | Выполненная матрица |
 | --- | --- |
@@ -35,7 +35,7 @@ Workflow: `.github/workflows/client-audit.yml`. Проверки обязате�
 - Live speed: 256 KiB при 1 Mbps против unlimited клиента; после остановки/старта только core параллельные 256 KiB TCP + 256 KiB UDP одного email не получают два бюджета. Отдельные broker clients Mieru/Sudoku/MASQUE запускаются настоящими pinned binaries.
 - Семь форматов экспортируются настоящими service methods. Proxy из parser используется с исходными credentials/transport; меняется только tag для тестового relay. В имени `:/#?&+` и кириллица. Xray JSON импортируется Xray, остальные шесть форматов — owner parser. Каждый формат передаёт TCP и UDP. Также повторяется настоящая subscription chain AnyTLS → ShadowTLS.
 
-До последней правки только test fixture IDs успешно прошёл [contracts job 125515103627](https://github.com/SawaMEN/3x-ui/actions/runs/41514588700/job/125515103627) на `16d0c6b5`: 4545 Go PASS test/subtest events, 0 FAIL; 74 явных SKIP для environment-dependent tests. Обязательные roots прошли без SKIP. PostgreSQL: 13 PASS, 0 FAIL/SKIP. Frontend: 27 файлов, 150 тестов PASS; typecheck и vet PASS. Native проверки вынесены в отдельные обязательные jobs обеих архитектур, их успех не выводится из этих skips.
+Финальный [contracts job 125549350652](https://github.com/SawaMEN/3x-ui/actions/runs/41524484044/job/125549350652) на `c4246dee`: 4545 Go PASS test/subtest events, 0 FAIL; 74 явных SKIP для environment-dependent tests. Обязательные roots прошли без SKIP. PostgreSQL: 13 PASS, 0 FAIL/SKIP. Frontend: 27 файлов, 150 тестов PASS; typecheck и vet PASS. Native-проверки вынесены в отдельные обязательные jobs обеих архитектур, их успех не выводится из этих skips.
 
 Native [41524484044](https://github.com/SawaMEN/3x-ui/actions/runs/41524484044), SHA `c4246dee`: обе архитектуры PASS. По 45 PASS test/subtest events, 0 FAIL/SKIP. Core accounting/lifecycle: 5; imports: 31; Mieru: 1; Sudoku: 4; MASQUE: 4.
 
@@ -48,7 +48,7 @@ Native [41524484044](https://github.com/SawaMEN/3x-ui/actions/runs/41524484044),
 
 Дополнительно на этом SHA прошли [database audit](https://github.com/SawaMEN/3x-ui/actions/runs/41524483696), [runtime AMD64/ARM64](https://github.com/SawaMEN/3x-ui/actions/runs/41524483490), [protocol build](https://github.com/SawaMEN/3x-ui/actions/runs/41524483777) и [общий Go suite/frontend build](https://github.com/SawaMEN/3x-ui/actions/runs/41524483957/job/125548806448).
 
-Повтор полного race/contracts набора на `c4246dee`: ожидается завершение job `125549350652`.
+Повторная [protocol/TLS matrix](https://github.com/SawaMEN/3x-ui/actions/runs/41524483681) также прошла на AMD64 и ARM64. После проверенного SHA изменения касаются только этого отчёта; исходный код и тесты не менялись.
 
 ## Версии и границы результата
 
