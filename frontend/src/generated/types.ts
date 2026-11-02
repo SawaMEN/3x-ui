@@ -858,15 +858,29 @@ export interface ManagerDomain {
 
 export interface ManagerEntry {
   activeInboundId: number;
+  config?: ManagerInboundConfig | null;
   customLink: string;
   flag: string;
   label: string;
   mode: string;
   nodeId?: number | null;
   port: string;
+  preset?: string;
   relayId: number;
   sni: string;
   templateId: number;
+}
+
+export interface ManagerInboundConfig {
+  disableFlow: boolean;
+  listen: string;
+  protocol: Protocol;
+  settings: string;
+  shareAddr: string;
+  shareAddrStrategy: string;
+  sniffing: string;
+  streamSettings: string;
+  subSortIndex: number;
 }
 
 export interface ManagerOperation {

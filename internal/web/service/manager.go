@@ -142,6 +142,9 @@ func (s *ManagerService) Save(owner int, in model.ManagerSubscription) (*model.M
 }
 
 func (s *ManagerService) validate(in *model.ManagerSubscription) error {
+	if in.ID < 0 || in.ClientID < 0 {
+		return fmt.Errorf("invalid subscription or client ID")
+	}
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" || len(in.Name) > 256 || len(in.Note) > 4096 || len(in.Entries) < 1 || len(in.Entries) > 20 {
 		return fmt.Errorf("provide a name and 1–20 connections")
@@ -183,15 +186,12 @@ func (s *ManagerService) validate(in *model.ManagerSubscription) error {
 			e.RelayID = 0
 			continue
 		}
-		if e.Mode != "existing" && e.Mode != "rotate" {
-			return fmt.Errorf("select an existing or rotating connection")
+		if e.Mode != "existing" && e.Mode != "rotate" && e.Mode != "generate" {
+			return fmt.Errorf("select automatic generation, template rotation, or an existing connection")
 		}
-		var ib model.Inbound
-		if err := database.GetDB().Where("id = ? AND user_id = ?", e.TemplateID, in.UserID).First(&ib).Error; err != nil {
+		ib, err := managerEntrySource(*e, in.UserID)
+		if err != nil {
 			return fmt.Errorf("entry %d: %w", i+1, err)
-		}
-		if strings.Contains(ib.Tag, "manager-") {
-			return fmt.Errorf("generated inbounds cannot be templates")
 		}
 		if e.Mode == "existing" {
 			if e.NodeID != nil || e.SNI != "" || (e.Port != "" && e.Port != strconv.Itoa(ib.Port)) {
@@ -217,7 +217,7 @@ func (s *ManagerService) validate(in *model.ManagerSubscription) error {
 					ib.NodeID = nil
 				}
 			}
-			if err := validateInboundRuntimeProtocol(ib.Protocol, &ib); err != nil {
+			if err := validateInboundRuntimeProtocol(ib.Protocol, ib); err != nil {
 				return err
 			}
 			if e.SNI != "" && e.SNI != "random" {

@@ -92,6 +92,7 @@ func allModels() []any {
 		&model.SubBalancer{},
 		&model.TuicTrafficReceipt{},
 		&model.CoreTrafficCheckpoint{},
+		// Manager entry recipes stay in the existing JSON columns; legacy templates need no rewrite.
 		&model.ManagerSubscription{}, &model.ManagerOperation{}, &model.ManagerRelay{}, &model.ManagerDomain{},
 	}
 }

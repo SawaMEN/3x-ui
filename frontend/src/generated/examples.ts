@@ -1011,15 +1011,28 @@ export const EXAMPLES: Record<string, unknown> = {
   },
   "ManagerEntry": {
     "activeInboundId": 0,
+    "config": null,
     "customLink": "",
     "flag": "",
     "label": "",
     "mode": "",
     "nodeId": null,
     "port": "",
+    "preset": "",
     "relayId": 0,
     "sni": "",
     "templateId": 0
+  },
+  "ManagerInboundConfig": {
+    "disableFlow": false,
+    "listen": "",
+    "protocol": "",
+    "settings": "",
+    "shareAddr": "",
+    "shareAddrStrategy": "",
+    "sniffing": "",
+    "streamSettings": "",
+    "subSortIndex": 0
   },
   "ManagerOperation": {
     "attempts": 0,
@@ -1102,12 +1115,14 @@ export const EXAMPLES: Record<string, unknown> = {
         "entries": [
           {
             "activeInboundId": 0,
+            "config": null,
             "customLink": "",
             "flag": "",
             "label": "",
             "mode": "",
             "nodeId": null,
             "port": "",
+            "preset": "",
             "relayId": 0,
             "sni": "",
             "templateId": 0
@@ -1125,12 +1140,14 @@ export const EXAMPLES: Record<string, unknown> = {
         "published": [
           {
             "activeInboundId": 0,
+            "config": null,
             "customLink": "",
             "flag": "",
             "label": "",
             "mode": "",
             "nodeId": null,
             "port": "",
+            "preset": "",
             "relayId": 0,
             "sni": "",
             "templateId": 0
@@ -1151,12 +1168,14 @@ export const EXAMPLES: Record<string, unknown> = {
     "entries": [
       {
         "activeInboundId": 0,
+        "config": null,
         "customLink": "",
         "flag": "",
         "label": "",
         "mode": "",
         "nodeId": null,
         "port": "",
+        "preset": "",
         "relayId": 0,
         "sni": "",
         "templateId": 0
@@ -1174,12 +1193,14 @@ export const EXAMPLES: Record<string, unknown> = {
     "published": [
       {
         "activeInboundId": 0,
+        "config": null,
         "customLink": "",
         "flag": "",
         "label": "",
         "mode": "",
         "nodeId": null,
         "port": "",
+        "preset": "",
         "relayId": 0,
         "sni": "",
         "templateId": 0

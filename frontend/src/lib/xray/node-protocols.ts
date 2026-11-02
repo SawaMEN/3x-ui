@@ -24,6 +24,7 @@ export const NODE_ELIGIBLE_PROTOCOLS: Readonly<Record<string, true>> = {
   [Protocols.PINGTUNNEL]: true,
   [Protocols.TRUSTTUNNEL]: true,
   [Protocols.FPTN]: true,
+  [Protocols.VETROFF]: true,
   [Protocols.OPENFLUX]: true,
   [Protocols.NAIVE]: true,
   [Protocols.MASQUE]: true,

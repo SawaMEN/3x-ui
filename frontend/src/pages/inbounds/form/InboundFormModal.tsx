@@ -168,6 +168,7 @@ function tabForValidationPath(path: PropertyKey[]): string {
 }
 
 interface InboundFormModalProps {
+  onDraft?: (payload: ReturnType<typeof formValuesToWirePayload>) => void;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -227,6 +228,7 @@ export default function InboundFormModal({
   open,
   onClose,
   onSaved,
+  onDraft,
   mode,
   dbInbound,
   dbInbounds,
@@ -569,7 +571,9 @@ export default function InboundFormModal({
   useEffect(() => {
     if (!open) return;
     const initial =
-      mode === 'edit' && dbInbound ? rawInboundToFormValues(dbInbound) : buildAddModeValues();
+      (mode === 'edit' || onDraft) && dbInbound
+        ? rawInboundToFormValues(dbInbound)
+        : buildAddModeValues();
     methods.reset(initial);
     setScanResult(null);
     setActiveTab('basic');
@@ -728,6 +732,11 @@ export default function InboundFormModal({
     setSaving(true);
     try {
       const payload = formValuesToWirePayload(parsed.data);
+      if (onDraft) {
+        onDraft(payload);
+        onClose();
+        return;
+      }
       const url =
         mode === 'edit' && dbInbound
           ? `/panel/api/inbounds/update/${dbInbound.id}`
@@ -766,7 +775,7 @@ export default function InboundFormModal({
   const basicTab = (
     <>
       <FormField name="enable" label={t('enable')} valueProp="checked">
-        <Switch />
+        <Switch disabled={!!onDraft} />
       </FormField>
 
       <FormField name="remark" label={t('pages.inbounds.remark')}>
@@ -874,6 +883,7 @@ export default function InboundFormModal({
       >
         <InputNumber
           disabled={
+            !!onDraft ||
             isMtprotoWeb ||
             protocol === Protocols.PINGTUNNEL ||
             protocol === Protocols.TUN ||
@@ -897,6 +907,7 @@ export default function InboundFormModal({
       >
         <InputNumber
           id={`${uid}-totalFlow`}
+          disabled={!!onDraft}
           aria-describedby={`${uid}-totalFlow-hint`}
           value={wTotal ? Math.round((wTotal / SizeFormatter.ONE_GB) * 100) / 100 : 0}
           min={0}
@@ -913,6 +924,7 @@ export default function InboundFormModal({
 
       <FormField name="trafficReset" label={t('pages.inbounds.periodicTrafficResetTitle')}>
         <Select
+          disabled={!!onDraft}
           options={TRAFFIC_RESETS.map((r) => ({
             value: r,
             label: t(`pages.inbounds.periodicTrafficReset.${r}`),
@@ -937,6 +949,7 @@ export default function InboundFormModal({
       >
         <DateTimePicker
           id={`${uid}-expiryTime`}
+          disabled={!!onDraft}
           aria-describedby={`${uid}-expiryTime-hint`}
           value={wExpiry > 0 ? dayjs(wExpiry) : null}
           onChange={(d) => setV('expiryTime', d ? d.valueOf() : 0)}
@@ -1021,7 +1034,7 @@ export default function InboundFormModal({
         />
       )}
 
-      {isFallbackHost && fallbacksCard}
+      {isFallbackHost && !onDraft && fallbacksCard}
       {(protocol === Protocols.VLESS || protocol === Protocols.TROJAN) &&
         network === 'tcp' &&
         !isFallbackHost && (

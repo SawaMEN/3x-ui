@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { FormProvider, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +27,9 @@ import { isClientAttachableProtocol } from '@/lib/inbounds/client-attachable';
 import { HttpUtil } from '@/utils';
 import { ClientOptionsSchema, newEntry, SubscriptionSchema } from './schema';
 import type { Relay, Subscription } from './schema';
+import { MANAGER_PRESETS, createManagerPreset } from './presets';
+import { DBInbound } from '@/models/dbinbound';
+const ConfigurationEditor = lazy(() => import('@/pages/inbounds/form/InboundFormModal'));
 
 export default function SubscriptionEditor({
   value,
@@ -47,6 +50,7 @@ export default function SubscriptionEditor({
   const m = (k: string) => t('pages.manager.' + k);
   const form = useForm<Subscription>({ defaultValues: value });
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'entries' });
+  const [editingConfig, setEditingConfig] = useState<number | null>(null);
   const entries = useWatch({ control: form.control, name: 'entries' });
   const { data: templates = [] } = useInboundOptions();
   const { nodes } = useNodesQuery();
@@ -70,6 +74,26 @@ export default function SubscriptionEditor({
       return ClientOptionsSchema.parse(r.obj).items;
     },
   });
+  const configDraft = useMemo(() => {
+    if (editingConfig === null) return null;
+    const entry = form.getValues(`entries.${editingConfig}`);
+    const config = entry.config;
+    return new DBInbound({
+      protocol: config?.protocol ?? 'vless',
+      settings: config?.settings ?? '{}',
+      streamSettings: config?.streamSettings ?? '{}',
+      sniffing: config?.sniffing ?? '{}',
+      listen: config?.listen ?? '',
+      shareAddrStrategy: config?.shareAddrStrategy ?? 'node',
+      shareAddr: config?.shareAddr ?? '',
+      subSortIndex: config?.subSortIndex ?? 1,
+      port: entry.port === 'random' ? 10000 : Number(entry.port) || 10000,
+      nodeId: entry.nodeId || null,
+      remark: entry.label,
+      disableFlow: config?.disableFlow ?? false,
+      enable: true,
+    });
+  }, [editingConfig, form]);
   const submit = async (generate: boolean) => {
     const parsed = SubscriptionSchema.safeParse(form.getValues());
     if (!parsed.success) {
@@ -204,8 +228,24 @@ export default function SubscriptionEditor({
                                   name={`entries.${i}.mode`}
                                   label={m('mode')}
                                   onAfterChange={(mode) => {
-                                    form.setValue(`entries.${i}.nodeId`, undefined);
-                                    form.setValue(`entries.${i}.sni`, '');
+                                    if (mode === 'generate' && !e?.config) {
+                                      const preset = e?.preset ?? 'vless-tcp-reality';
+                                      form.setValue(`entries.${i}.preset`, preset);
+                                      form.setValue(
+                                        `entries.${i}.config`,
+                                        createManagerPreset(preset),
+                                      );
+                                    }
+                                    form.setValue(
+                                      `entries.${i}.nodeId`,
+                                      mode === 'generate' ? 0 : undefined,
+                                    );
+                                    form.setValue(
+                                      `entries.${i}.sni`,
+                                      mode === 'generate' && e?.preset?.endsWith('-reality')
+                                        ? 'random'
+                                        : '',
+                                    );
                                     form.setValue(
                                       `entries.${i}.port`,
                                       mode === 'existing' ? '' : 'random',
@@ -214,15 +254,46 @@ export default function SubscriptionEditor({
                                   }}
                                 >
                                   <Select
-                                    options={['rotate', 'existing', 'custom'].map((v) => ({
-                                      value: v,
-                                      label: m(v),
-                                    }))}
+                                    options={['generate', 'rotate', 'existing', 'custom'].map(
+                                      (v) => ({
+                                        value: v,
+                                        label: m(v),
+                                      }),
+                                    )}
                                   />
                                 </FormField>
                               </Col>
                               <Col xs={24} sm={16}>
-                                {e?.mode === 'custom' ? (
+                                {e?.mode === 'generate' ? (
+                                  <FormField
+                                    name={`entries.${i}.preset`}
+                                    label={m('preset')}
+                                    onAfterChange={(v) => {
+                                      const kind = String(v);
+                                      form.setValue(
+                                        `entries.${i}.config`,
+                                        createManagerPreset(kind),
+                                      );
+                                      form.setValue(
+                                        `entries.${i}.sni`,
+                                        kind.endsWith('-reality') ? 'random' : '',
+                                      );
+                                    }}
+                                  >
+                                    <Select
+                                      showSearch
+                                      options={[
+                                        ...MANAGER_PRESETS.map((value) => ({
+                                          value,
+                                          label: value,
+                                        })),
+                                        ...(e?.preset === 'custom-config'
+                                          ? [{ value: 'custom-config', label: m('customConfig') }]
+                                          : []),
+                                      ]}
+                                    />
+                                  </FormField>
+                                ) : e?.mode === 'custom' ? (
                                   <FormField
                                     name={`entries.${i}.customLink`}
                                     label={m('shareLink')}
@@ -261,9 +332,21 @@ export default function SubscriptionEditor({
                                 </FormField>
                               </Col>
                             </Row>
+                            {e?.mode === 'generate' && (
+                              <>
+                                <Button onClick={() => setEditingConfig(i)}>
+                                  {m('configureGeneration')}
+                                </Button>
+                                <Alert
+                                  type="info"
+                                  title={m('recipeHint')}
+                                  style={{ marginBlock: 12 }}
+                                />
+                              </>
+                            )}
                             {e?.mode !== 'custom' && (
                               <Row gutter={12}>
-                                {e?.mode === 'rotate' && (
+                                {(e?.mode === 'rotate' || e?.mode === 'generate') && (
                                   <>
                                     <Col xs={24} sm={12}>
                                       <FormField name={`entries.${i}.nodeId`} label={m('node')}>
@@ -275,8 +358,13 @@ export default function SubscriptionEditor({
                                             ...nodes
                                               .filter(
                                                 (n) =>
-                                                  !template ||
-                                                  nodeSupportsProtocol(n, template.protocol ?? ''),
+                                                  n.enable &&
+                                                  nodeSupportsProtocol(
+                                                    n,
+                                                    e?.mode === 'generate'
+                                                      ? (e.config?.protocol ?? 'vless')
+                                                      : (template?.protocol ?? 'vless'),
+                                                  ),
                                               )
                                               .map((n) => ({ value: n.id, label: n.name })),
                                           ]}
@@ -355,6 +443,48 @@ export default function SubscriptionEditor({
           />
         </Form>
       </FormProvider>
+      <Suspense fallback={null}>
+        {editingConfig !== null && configDraft && (
+          <ConfigurationEditor
+            open
+            mode="add"
+            dbInbound={configDraft}
+            dbInbounds={[]}
+            availableNodes={nodes}
+            availableNodesFetched
+            onSaved={() => {}}
+            onClose={() => setEditingConfig(null)}
+            onDraft={(payload) => {
+              const index = editingConfig;
+              form.setValue(`entries.${index}.preset`, 'custom-config');
+              form.setValue(`entries.${index}.label`, payload.remark);
+              form.setValue(`entries.${index}.config`, {
+                protocol: payload.protocol,
+                shareAddrStrategy: payload.shareAddrStrategy,
+                shareAddr: payload.shareAddr,
+                subSortIndex: payload.subSortIndex,
+                settings:
+                  typeof payload.settings === 'string'
+                    ? payload.settings
+                    : JSON.stringify(payload.settings),
+                streamSettings:
+                  typeof payload.streamSettings === 'string'
+                    ? payload.streamSettings
+                    : JSON.stringify(payload.streamSettings ?? {}),
+                sniffing:
+                  typeof payload.sniffing === 'string'
+                    ? payload.sniffing
+                    : JSON.stringify(payload.sniffing ?? {}),
+                listen: payload.listen ?? '',
+                disableFlow: payload.disableFlow ?? false,
+              });
+              form.setValue(`entries.${index}.nodeId`, payload.nodeId ?? 0);
+              if (JSON.parse(payload.streamSettings || '{}').security !== 'reality')
+                form.setValue(`entries.${index}.sni`, '');
+            }}
+          />
+        )}
+      </Suspense>
     </Modal>
   );
 }

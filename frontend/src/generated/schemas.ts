@@ -3700,6 +3700,14 @@ export const SCHEMAS: Record<string, unknown> = {
       "activeInboundId": {
         "type": "integer"
       },
+      "config": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ManagerInboundConfig"
+          }
+        ],
+        "nullable": true
+      },
       "customLink": {
         "type": "string"
       },
@@ -3717,6 +3725,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "integer"
       },
       "port": {
+        "type": "string"
+      },
+      "preset": {
         "type": "string"
       },
       "relayId": {
@@ -3739,6 +3750,49 @@ export const SCHEMAS: Record<string, unknown> = {
       "relayId",
       "sni",
       "templateId"
+    ],
+    "type": "object"
+  },
+  "ManagerInboundConfig": {
+    "properties": {
+      "disableFlow": {
+        "type": "boolean"
+      },
+      "listen": {
+        "type": "string"
+      },
+      "protocol": {
+        "type": "string"
+      },
+      "settings": {
+        "type": "string"
+      },
+      "shareAddr": {
+        "type": "string"
+      },
+      "shareAddrStrategy": {
+        "type": "string"
+      },
+      "sniffing": {
+        "type": "string"
+      },
+      "streamSettings": {
+        "type": "string"
+      },
+      "subSortIndex": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "disableFlow",
+      "listen",
+      "protocol",
+      "settings",
+      "shareAddr",
+      "shareAddrStrategy",
+      "sniffing",
+      "streamSettings",
+      "subSortIndex"
     ],
     "type": "object"
   },

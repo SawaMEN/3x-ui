@@ -87,3 +87,33 @@ describe('manager editor', () => {
     expect(close).not.toHaveBeenCalled();
   });
 });
+
+it('submits an automatic protocol recipe without a saved inbound', async () => {
+  const onSave = vi.fn().mockResolvedValue(true);
+  render(
+    <SubscriptionEditor
+      value={{ ...newSubscription(), name: 'Automatic' }}
+      relays={[]}
+      domains={['www.example.com']}
+      onSave={onSave}
+      onClose={vi.fn()}
+      onTemplate={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Save and generate' }));
+  await waitFor(() =>
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entries: [
+          expect.objectContaining({
+            mode: 'generate',
+            templateId: 0,
+            nodeId: 0,
+            config: expect.objectContaining({ protocol: 'vless' }),
+          }),
+        ],
+      }),
+      true,
+    ),
+  );
+});

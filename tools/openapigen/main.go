@@ -48,7 +48,7 @@ func run(root, outDir string) error {
 				"InboundFallback",
 				"Host",
 				"SubBalancer",
-				"ManagerEntry", "ManagerSubscription", "ManagerOperation", "ManagerRelay", "ManagerDomain",
+				"ManagerEntry", "ManagerInboundConfig", "ManagerSubscription", "ManagerOperation", "ManagerRelay", "ManagerDomain",
 			),
 			AliasAllow: setOf("Protocol"),
 			Overrides: map[string][]walkOverride{

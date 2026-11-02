@@ -923,17 +923,32 @@ export type ManagerDomain = z.infer<typeof ManagerDomainSchema>;
 
 export const ManagerEntrySchema = z.object({
   activeInboundId: z.number().int(),
+  config: z.lazy(() => ManagerInboundConfigSchema).nullable().optional(),
   customLink: z.string(),
   flag: z.string(),
   label: z.string(),
   mode: z.string(),
   nodeId: z.number().int().nullable().optional(),
   port: z.string(),
+  preset: z.string().optional(),
   relayId: z.number().int(),
   sni: z.string(),
   templateId: z.number().int(),
 });
 export type ManagerEntry = z.infer<typeof ManagerEntrySchema>;
+
+export const ManagerInboundConfigSchema = z.object({
+  disableFlow: z.boolean(),
+  listen: z.string(),
+  protocol: z.lazy(() => ProtocolSchema),
+  settings: z.string(),
+  shareAddr: z.string(),
+  shareAddrStrategy: z.string(),
+  sniffing: z.string(),
+  streamSettings: z.string(),
+  subSortIndex: z.number().int(),
+});
+export type ManagerInboundConfig = z.infer<typeof ManagerInboundConfigSchema>;
 
 export const ManagerOperationSchema = z.object({
   attempts: z.number().int(),

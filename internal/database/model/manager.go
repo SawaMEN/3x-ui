@@ -1,16 +1,30 @@
 package model
 
+type ManagerInboundConfig struct {
+	ShareAddrStrategy string   `json:"shareAddrStrategy"`
+	ShareAddr         string   `json:"shareAddr"`
+	SubSortIndex      int      `json:"subSortIndex"`
+	Protocol          Protocol `json:"protocol"`
+	Settings          string   `json:"settings"`
+	StreamSettings    string   `json:"streamSettings"`
+	Sniffing          string   `json:"sniffing"`
+	Listen            string   `json:"listen"`
+	DisableFlow       bool     `json:"disableFlow"`
+}
+
 type ManagerEntry struct {
-	TemplateID      int    `json:"templateId"`
-	Mode            string `json:"mode"`
-	NodeID          *int   `json:"nodeId,omitempty"`
-	Port            string `json:"port"`
-	SNI             string `json:"sni"`
-	Label           string `json:"label"`
-	Flag            string `json:"flag"`
-	RelayID         int    `json:"relayId"`
-	CustomLink      string `json:"customLink"`
-	ActiveInboundID int    `json:"activeInboundId"`
+	Preset          string                `json:"preset,omitempty"`
+	Config          *ManagerInboundConfig `json:"config,omitempty"`
+	TemplateID      int                   `json:"templateId"`
+	Mode            string                `json:"mode"`
+	NodeID          *int                  `json:"nodeId,omitempty"`
+	Port            string                `json:"port"`
+	SNI             string                `json:"sni"`
+	Label           string                `json:"label"`
+	Flag            string                `json:"flag"`
+	RelayID         int                   `json:"relayId"`
+	CustomLink      string                `json:"customLink"`
+	ActiveInboundID int                   `json:"activeInboundId"`
 }
 
 type ManagerSubscription struct {

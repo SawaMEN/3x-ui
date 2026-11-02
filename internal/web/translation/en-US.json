@@ -3181,7 +3181,7 @@
       "traffic": "Traffic",
       "expiry": "Expires",
       "manageClient": "Client limits and expiration",
-      "generate": "Generate",
+      "generate": "Automatic generation",
       "nodesHint": "Uses the panel node registry and core compatibility checks.",
       "manageNodes": "Manage nodes",
       "addNode": "Add node",
@@ -3218,7 +3218,11 @@
       "created": "Created",
       "retry": "Retry",
       "subscriptionUrl": "Subscription URL",
-      "format": "Subscription format"
+      "format": "Subscription format",
+      "preset": "Protocol and connection type",
+      "configureGeneration": "Connection settings",
+      "recipeHint": "A new inbound is generated from this recipe on the selected server. No existing inbound is required. For TLS, open settings and select a certificate available on that server.",
+      "customConfig": "Individual configuration"
     }
   },
   "tgbot": {

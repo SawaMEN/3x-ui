@@ -347,3 +347,42 @@ describe('InboundFormModal', () => {
     });
   });
 });
+
+it('saves manager recipe settings without creating an inbound', async () => {
+  const onDraft = vi.fn();
+  const value = new DBInbound({
+    port: 41414,
+    remark: 'Recipe only',
+    protocol: 'vless',
+    enable: true,
+    settings: { clients: [], decryption: 'none', encryption: 'none', fallbacks: [] },
+    streamSettings: { network: 'tcp', security: 'none', tcpSettings: { header: { type: 'none' } } },
+    sniffing: { enabled: false },
+  });
+  const before = vi
+    .mocked(HttpUtil.post)
+    .mock.calls.filter(([path]) => String(path).includes('/inbounds/add')).length;
+  renderWithProviders(
+    <InboundFormModal
+      open
+      mode="add"
+      dbInbound={value}
+      dbInbounds={[]}
+      availableNodes={[]}
+      onClose={() => {}}
+      onSaved={() => {}}
+      onDraft={onDraft}
+    />,
+  );
+  await act(async () => {
+    fireEvent.click(primaryButton());
+  });
+  await waitFor(() =>
+    expect(onDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ protocol: 'vless', port: 41414, remark: 'Recipe only' }),
+    ),
+  );
+  expect(
+    vi.mocked(HttpUtil.post).mock.calls.filter(([path]) => String(path).includes('/inbounds/add')),
+  ).toHaveLength(before);
+});

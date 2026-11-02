@@ -3726,6 +3726,14 @@
           "activeInboundId": {
             "type": "integer"
           },
+          "config": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ManagerInboundConfig"
+              }
+            ],
+            "nullable": true
+          },
           "customLink": {
             "type": "string"
           },
@@ -3743,6 +3751,9 @@
             "type": "integer"
           },
           "port": {
+            "type": "string"
+          },
+          "preset": {
             "type": "string"
           },
           "relayId": {
@@ -3765,6 +3776,49 @@
           "relayId",
           "sni",
           "templateId"
+        ],
+        "type": "object"
+      },
+      "ManagerInboundConfig": {
+        "properties": {
+          "disableFlow": {
+            "type": "boolean"
+          },
+          "listen": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "settings": {
+            "type": "string"
+          },
+          "shareAddr": {
+            "type": "string"
+          },
+          "shareAddrStrategy": {
+            "type": "string"
+          },
+          "sniffing": {
+            "type": "string"
+          },
+          "streamSettings": {
+            "type": "string"
+          },
+          "subSortIndex": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "disableFlow",
+          "listen",
+          "protocol",
+          "settings",
+          "shareAddr",
+          "shareAddrStrategy",
+          "sniffing",
+          "streamSettings",
+          "subSortIndex"
         ],
         "type": "object"
       },
@@ -6115,12 +6169,14 @@
                         "entries": [
                           {
                             "activeInboundId": 0,
+                            "config": null,
                             "customLink": "",
                             "flag": "",
                             "label": "",
                             "mode": "",
                             "nodeId": null,
                             "port": "",
+                            "preset": "",
                             "relayId": 0,
                             "sni": "",
                             "templateId": 0
@@ -6138,12 +6194,14 @@
                         "published": [
                           {
                             "activeInboundId": 0,
+                            "config": null,
                             "customLink": "",
                             "flag": "",
                             "label": "",
                             "mode": "",
                             "nodeId": null,
                             "port": "",
+                            "preset": "",
                             "relayId": 0,
                             "sni": "",
                             "templateId": 0
@@ -6209,12 +6267,14 @@
                     "entries": [
                       {
                         "activeInboundId": 0,
+                        "config": null,
                         "customLink": "",
                         "flag": "",
                         "label": "",
                         "mode": "",
                         "nodeId": null,
                         "port": "",
+                        "preset": "",
                         "relayId": 0,
                         "sni": "",
                         "templateId": 0
@@ -6232,12 +6292,14 @@
                     "published": [
                       {
                         "activeInboundId": 0,
+                        "config": null,
                         "customLink": "",
                         "flag": "",
                         "label": "",
                         "mode": "",
                         "nodeId": null,
                         "port": "",
+                        "preset": "",
                         "relayId": 0,
                         "sni": "",
                         "templateId": 0

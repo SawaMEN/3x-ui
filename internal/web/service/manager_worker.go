@@ -277,15 +277,24 @@ func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation,
 func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription, e model.ManagerEntry, index int) (*model.Inbound, error) {
 	db := database.GetDB()
 	svc := &InboundService{}
-	var src model.Inbound
-	if err := db.Where("id = ? AND user_id = ?", e.TemplateID, sub.UserID).First(&src).Error; err != nil {
+	src, err := managerEntrySource(e, sub.UserID)
+	if err != nil {
 		return nil, err
 	}
-	ib := &model.Inbound{UserId: sub.UserID, Enable: true, Protocol: src.Protocol, Settings: src.Settings, StreamSettings: src.StreamSettings, Sniffing: src.Sniffing, NodeID: src.NodeID, ShareAddrStrategy: src.ShareAddrStrategy, ShareAddr: src.ShareAddr, DisableFlow: src.DisableFlow, TrafficReset: "never", TrafficResetDay: 1, Remark: e.Flag + " " + e.Label, Tag: fmt.Sprintf("manager-%s-%d-%d", sub.Token, op.ID, index)}
+	ib := &model.Inbound{UserId: sub.UserID, Enable: true, Protocol: src.Protocol, Settings: src.Settings, StreamSettings: src.StreamSettings, Sniffing: src.Sniffing, Listen: src.Listen, SubSortIndex: src.SubSortIndex, NodeID: src.NodeID, ShareAddrStrategy: src.ShareAddrStrategy, ShareAddr: src.ShareAddr, DisableFlow: src.DisableFlow, TrafficReset: "never", TrafficResetDay: 1, Remark: e.Flag + " " + e.Label, Tag: fmt.Sprintf("manager-%s-%d-%d", sub.Token, op.ID, index)}
 	if e.NodeID != nil {
 		ib.NodeID = e.NodeID
 		if *e.NodeID == 0 {
 			ib.NodeID = nil
+		}
+	}
+	if ib.NodeID != nil {
+		var node model.Node
+		if err := db.First(&node, *ib.NodeID).Error; err != nil {
+			return nil, err
+		}
+		if !node.Enable {
+			return nil, fmt.Errorf("selected node is disabled")
 		}
 	}
 	var settings map[string]any
@@ -302,6 +311,9 @@ func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, 
 		return nil, err
 	}
 	ib.Settings = string(raw)
+	if err := managerFreshServerKeys(ib); err != nil {
+		return nil, err
+	}
 	if err := s.applySNI(sub.UserID, ib, e.SNI); err != nil {
 		return nil, err
 	}
@@ -418,6 +430,7 @@ func (s *ManagerService) pushGenerated(ctx context.Context, ib *model.Inbound) e
 
 func (s *ManagerService) applyGeneration(ctx context.Context, entries []model.ManagerEntry) error {
 	local := false
+	nodes := map[int]*model.Inbound{}
 	for _, e := range entries {
 		if e.ActiveInboundID < 1 {
 			continue
@@ -428,8 +441,23 @@ func (s *ManagerService) applyGeneration(ctx context.Context, entries []model.Ma
 		}
 		if ib.NodeID == nil {
 			local = true
-		} else if err := s.pushGenerated(ctx, ib); err != nil {
+		} else {
+			if err := s.pushGenerated(ctx, ib); err != nil {
+				return err
+			}
+			nodes[*ib.NodeID] = ib
+		}
+	}
+	for _, ib := range nodes {
+		rt, err := (&InboundService{}).runtimeFor(ib)
+		if err != nil {
 			return err
+		}
+		c, cancel := context.WithTimeout(ctx, time.Minute)
+		err = rt.RestartXray(c)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("node %d core apply: %w", *ib.NodeID, err)
 		}
 	}
 	if !local {

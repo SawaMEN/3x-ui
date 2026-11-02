@@ -1,7 +1,22 @@
 import { z } from 'zod';
+import { createManagerPreset } from './presets';
+export const ManagerConfigSchema = z.object({
+  shareAddrStrategy: z.string().default('node'),
+  shareAddr: z.string().default(''),
+  subSortIndex: z.number().default(1),
+  protocol: z.string(),
+  settings: z.string(),
+  streamSettings: z.string(),
+  sniffing: z.string(),
+  listen: z.string().default(''),
+  disableFlow: z.boolean().default(false),
+});
+export type ManagerConfig = z.infer<typeof ManagerConfigSchema>;
 export const EntrySchema = z.object({
   templateId: z.number().default(0),
-  mode: z.enum(['rotate', 'existing', 'custom']).default('rotate'),
+  preset: z.string().optional(),
+  config: ManagerConfigSchema.optional(),
+  mode: z.enum(['generate', 'rotate', 'existing', 'custom']).default('rotate'),
   nodeId: z.number().optional(),
   port: z.string().default('random'),
   sni: z.string().default(''),
@@ -79,7 +94,14 @@ export const ClientOptionsSchema = z.object({
 });
 export type Subscription = z.infer<typeof SubscriptionSchema>;
 export type Relay = z.infer<typeof RelaySchema>;
-export const newEntry = () => EntrySchema.parse({});
+export const newEntry = () =>
+  EntrySchema.parse({
+    mode: 'generate',
+    preset: 'vless-tcp-reality',
+    nodeId: 0,
+    sni: 'random',
+    config: createManagerPreset('vless-tcp-reality'),
+  });
 export const newSubscription = (): Subscription => ({
   ...SubscriptionSchema.parse({ name: 'New', entries: [newEntry()] }),
   name: '',
