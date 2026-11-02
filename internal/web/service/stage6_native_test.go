@@ -48,7 +48,12 @@ func TestStage6NativeAccountingAndRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	mgr := useTestRuntimeManager(t)
-	mgr.SetLocalRuntimeOverride(webRuntime.NewLocal(webRuntime.LocalDeps{CoreType: func() string { return CoreTypeSingBox }, RequestConfigApply: svc.Restart}))
+	mgr.SetLocalRuntimeOverride(webRuntime.NewLocal(webRuntime.LocalDeps{CoreType: func() string { return CoreTypeSingBox }, RequestConfigApply: func(context.Context) error {
+		// Match the production queue: a mutation must not restart recursively
+		// while a restart is polling and enforcing traffic limits.
+		svc.SetToNeedRestart()
+		return nil
+	}}))
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -196,6 +201,7 @@ func TestStage6NativeAccountingAndRevocation(t *testing.T) {
 			if _, e := inboundSvc.clientService.Update(inboundSvc, rec.Id, enabled, 0); e != nil {
 				t.Fatal(e)
 			}
+			svc.ApplyPendingRestart(ctx)
 			active, e := dial("stage6-alice")
 			if e != nil {
 				t.Fatal(e)
@@ -232,6 +238,7 @@ func TestStage6NativeAccountingAndRevocation(t *testing.T) {
 			if n > 0 || e == nil || (errors.As(e, &timeout) && timeout.Timeout()) {
 				t.Fatalf("active session not revoked: bytes=%d error=%v", n, e)
 			}
+			svc.ApplyPendingRestart(ctx)
 			c, e := dial("stage6-alice")
 			if c != nil {
 				_ = c.Close()
