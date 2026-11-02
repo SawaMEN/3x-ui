@@ -305,7 +305,18 @@ func validateSingBoxOutbound(outbound map[string]any) error {
 		return fmt.Errorf("sing-box outbound %q protocol %s does not support V2Ray transport", tag, protocol)
 	}
 	switch strings.ToLower(strings.TrimSpace(rawString(transport, "type"))) {
-	case "http", "ws", "quic", "grpc", "httpupgrade", "xhttp", "raw", "kcp":
+	case "quic":
+		if !rawBool(tls, "enabled") {
+			return fmt.Errorf("sing-box outbound %q QUIC transport requires TLS", tag)
+		}
+		if rawBool(rawObject(tls, "utls"), "enabled") || rawBool(rawObject(tls, "reality"), "enabled") {
+			return fmt.Errorf("sing-box outbound %q QUIC transport requires native Go TLS; uTLS and REALITY cannot provide a QUIC TLS configuration", tag)
+		}
+		if maximum := rawString(tls, "max_version"); maximum != "" && maximum != "1.3" {
+			return fmt.Errorf("sing-box outbound %q QUIC transport requires TLS 1.3", tag)
+		}
+		return nil
+	case "http", "ws", "grpc", "httpupgrade", "xhttp", "raw", "kcp":
 		return nil
 	default:
 		return fmt.Errorf("sing-box outbound %q uses unsupported V2Ray transport %q", tag, rawString(transport, "type"))

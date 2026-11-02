@@ -39,6 +39,37 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 		translateIn, translateOut = singbox.TranslateXrayInbound, singbox.TranslateXrayOutbound
 		networks = networks[:6] // upstream has neither XHTTP nor mKCP
 	}
+	xray := os.Getenv("STAGE5_NATIVE_PROFILE") == "xray"
+	if xray {
+		networks = []string{"tcp", "raw", "ws", "grpc", "httpupgrade", "xhttp", "kcp", "xdrive"}
+		translateIn = func(raw map[string]any) (map[string]any, error) {
+			out := maps.Clone(raw)
+			settings := maps.Clone(raw["settings"].(map[string]any))
+			var active []any
+			for _, u := range settings["clients"].([]any) {
+				if u.(map[string]any)["enable"] != false {
+					active = append(active, u)
+				}
+			}
+			settings["clients"] = active
+			out["settings"] = settings
+			return out, nil
+		}
+		translateOut = func(raw map[string]any) (map[string]any, error) {
+			out := maps.Clone(raw)
+			settings := raw["settings"].(map[string]any)
+			if raw["protocol"] == "trojan" {
+				out["settings"] = map[string]any{"servers": []any{map[string]any{"address": settings["address"], "port": settings["port"], "password": settings["password"]}}}
+			} else {
+				user := map[string]any{"id": settings["id"], "encryption": "none", "security": "auto"}
+				if e := settings["encryption"]; e != nil {
+					user["encryption"] = e
+				}
+				out["settings"] = map[string]any{"vnext": []any{map[string]any{"address": settings["address"], "port": settings["port"], "users": []any{user}}}}
+			}
+			return out, nil
+		}
+	}
 	for _, protocol := range []string{"vless", "vmess", "trojan"} {
 		for _, network := range networks {
 			if network == "xdrive" && protocol != "vless" {
@@ -72,6 +103,9 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 					serverStream["security"], clientStream["security"] = "tls", "tls"
 					serverStream["tlsSettings"] = map[string]any{"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}}
 					clientStream["tlsSettings"] = map[string]any{"serverName": "localhost", "certificates": []any{map[string]any{"usage": "verify", "certificateFile": cert}}}
+					if network == "native-quic" {
+						clientStream["tlsSettings"].(map[string]any)["fingerprint"] = "unsafe"
+					}
 				}
 				var pair struct {
 					Encryption string `json:"encryption"`
@@ -81,7 +115,14 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 					if protocol != "vless" {
 						t.Fatal("XDrive matrix must only include VLESS")
 					}
-					data, err := exec.Command(binary, "vlessenc", "--json").CombinedOutput()
+					encryptionBinary := binary
+					if xray {
+						encryptionBinary = os.Getenv("STAGE5_ENCRYPTION_BINARY")
+						if encryptionBinary == "" {
+							t.Fatal("Xray XDrive needs the pinned compatible key generator")
+						}
+					}
+					data, err := exec.Command(encryptionBinary, "vlessenc", "--json").CombinedOutput()
 					if err != nil {
 						t.Fatalf("vlessenc: %v %s", err, data)
 					}
@@ -107,7 +148,11 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 				if network == "native-quic" {
 					inbound["transport"] = map[string]any{"type": "quic"}
 				}
-				stage5Start(t, binary, dir, "server", map[string]any{"inbounds": []any{inbound}, "outbounds": []any{map[string]any{"type": "direct"}}}, port, network != "kcp" && network != "xdrive" && network != "native-quic")
+				serverConfig := map[string]any{"inbounds": []any{inbound}, "outbounds": []any{map[string]any{"type": "direct"}}}
+				if xray {
+					serverConfig["outbounds"] = []any{map[string]any{"protocol": "freedom", "settings": map[string]any{"finalRules": []any{map[string]any{"action": "allow", "ip": []string{"127.0.0.0/8", "::1/128"}}}}}}
+				}
+				stage5Start(t, binary, dir, "server", serverConfig, port, network != "kcp" && network != "xdrive" && network != "native-quic")
 				echoAddress := stage5Echo(t, "127.0.0.1:0")
 				v6 := stage5Echo(t, "[::1]:0")
 				_, echoPort, err := net.SplitHostPort(echoAddress)
@@ -131,7 +176,11 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 						relayPort := stage5Port(t)
 						udpTarget, udpPort := stage5UDPEcho(t)
 						relay := map[string]any{"type": "direct", "listen": "127.0.0.1", "listen_port": relayPort, "network": "udp", "override_address": udpTarget, "override_port": udpPort}
-						stage5Start(t, binary, dir, fmt.Sprint("client", user), map[string]any{"inbounds": []any{map[string]any{"type": "socks", "listen": "127.0.0.1", "listen_port": socksPort}, relay}, "outbounds": []any{outbound}}, socksPort, true)
+						clientInbounds := []any{map[string]any{"type": "socks", "listen": "127.0.0.1", "listen_port": socksPort}, relay}
+						if xray {
+							clientInbounds = []any{map[string]any{"protocol": "socks", "listen": "127.0.0.1", "port": socksPort, "settings": map[string]any{"auth": "noauth", "udp": true}}, map[string]any{"protocol": "dokodemo-door", "listen": "127.0.0.1", "port": relayPort, "settings": map[string]any{"network": "udp", "address": udpTarget, "port": udpPort}}}
+						}
+						stage5Start(t, binary, dir, fmt.Sprint("client", user), map[string]any{"inbounds": clientInbounds, "outbounds": []any{outbound}}, socksPort, true)
 						dialer, err := proxy.SOCKS5("tcp", fmt.Sprintf("127.0.0.1:%d", socksPort), nil, proxy.Direct)
 						if err != nil {
 							t.Fatal(err)
@@ -174,7 +223,7 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 						}
 					})
 				}
-				if protocol == "trojan" {
+				if protocol == "trojan" && !xray {
 					t.Run("wrong-SNI", func(t *testing.T) {
 						badStream := maps.Clone(clientStream)
 						tls := maps.Clone(clientStream["tlsSettings"].(map[string]any))
@@ -183,6 +232,9 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 						outbound, err := translateOut(map[string]any{"protocol": protocol, "tag": "proxy", "settings": map[string]any{"address": "127.0.0.1", "port": port, "password": "password1"}, "streamSettings": badStream})
 						if err != nil {
 							t.Fatal(err)
+						}
+						if network == "native-quic" {
+							outbound["transport"] = map[string]any{"type": "quic"}
 						}
 						socksPort := stage5Port(t)
 						stage5Start(t, binary, dir, "bad-sni", map[string]any{"inbounds": []any{map[string]any{"type": "socks", "listen": "127.0.0.1", "listen_port": socksPort}}, "outbounds": []any{outbound}}, socksPort, true)
@@ -257,7 +309,7 @@ func stage5Start(t *testing.T, binary, dir, name string, cfg map[string]any, por
 		t.Fatal(err)
 	}
 	command := "srun"
-	if os.Getenv("STAGE5_NATIVE_PROFILE") == "upstream" {
+	if os.Getenv("STAGE5_NATIVE_PROFILE") == "upstream" || os.Getenv("STAGE5_NATIVE_PROFILE") == "xray" {
 		command = "run"
 	}
 	cmd := exec.Command(binary, command, "-c", path)

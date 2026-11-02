@@ -325,11 +325,39 @@ export function normalizeSockoptForWire(
   return out;
 }
 
+const STREAM_TRANSPORT_KEYS = [
+  'tcpSettings',
+  'rawSettings',
+  'wsSettings',
+  'httpSettings',
+  'grpcSettings',
+  'httpupgradeSettings',
+  'xhttpSettings',
+  'xdriveSettings',
+  'kcpSettings',
+  'quicSettings',
+  'hysteriaSettings',
+];
+const STREAM_TRANSPORT_SETTINGS: Record<string, readonly string[]> = Object.fromEntries(
+  STREAM_TRANSPORT_KEYS.map((key) => [key.slice(0, -8), [key]]),
+);
+STREAM_TRANSPORT_SETTINGS.tcp = STREAM_TRANSPORT_SETTINGS.raw = ['tcpSettings', 'rawSettings'];
+
 export function normalizeStreamSettingsForWire(
   stream: Record<string, unknown>,
   opts: { side: StreamWireSide },
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...stream };
+
+  // The form retains old transport subforms when switching tabs. Only the
+  // selected transport belongs on the wire; preserve unknown future settings.
+  const network = String(out.method ?? out.network ?? 'tcp')
+    .trim()
+    .toLowerCase();
+  const active = STREAM_TRANSPORT_SETTINGS[network];
+  if (active) {
+    for (const key of STREAM_TRANSPORT_KEYS) if (!active.includes(key)) delete out[key];
+  }
 
   const xhttp = out.xhttpSettings;
   if (isRecord(xhttp)) {

@@ -49,6 +49,9 @@ func TestPinnedProtocolTransportMatrix(t *testing.T) {
 						streamNetwork = "tcp"
 					}
 					stream := map[string]any{"network": streamNetwork, "security": "tls", "tlsSettings": map[string]any{"serverName": "localhost"}}
+					if network == "native-quic" {
+						stream["tlsSettings"].(map[string]any)["fingerprint"] = "unsafe"
+					}
 					if inbound {
 						stream["tlsSettings"] = map[string]any{"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}}
 					}

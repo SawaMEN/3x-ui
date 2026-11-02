@@ -692,17 +692,9 @@ func (s *InboundService) emailSubIDsForClients(clients []model.Client) (map[stri
 // "network" — are canonicalized to "network", which every panel reader (link
 // generation, port-conflict detection, flow eligibility) keys on.
 func (s *InboundService) normalizeStreamSettings(inbound *model.Inbound) {
-	protocolsWithStream := map[model.Protocol]bool{
-		model.VMESS:       true,
-		model.VLESS:       true,
-		model.Trojan:      true,
-		model.Shadowsocks: true,
-		model.Hysteria:    true,
-		model.WireGuard:   true,
-		model.Tunnel:      true,
-	}
-
-	if !protocolsWithStream[inbound.Protocol] {
+	switch inbound.Protocol {
+	case model.VMESS, model.VLESS, model.Trojan, model.Shadowsocks, model.Hysteria, model.WireGuard, model.Tunnel:
+	default:
 		inbound.StreamSettings = ""
 		return
 	}
@@ -1781,7 +1773,7 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 	// Refuse to mark one enabled centrally when its actual runtime cannot run
 	// the protocol; disabling must always remain possible for recovery.
 	if enable {
-		if err := validateInboundRuntimeProtocol(inbound.Protocol, inbound); err != nil {
+		if err := validateInboundRuntimeTarget(inbound); err != nil {
 			return false, err
 		}
 		candidate := *inbound
@@ -1923,7 +1915,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 			return inbound, false, err
 		}
 	}
-	if err := validateInboundRuntimeProtocol(inbound.Protocol, oldInbound); err != nil {
+	if err := validateInboundRuntimeTarget(inbound); err != nil {
 		return inbound, false, err
 	}
 	if err := s.normalizeAmneziaWGSettings(inbound, oldInbound.Settings); err != nil {

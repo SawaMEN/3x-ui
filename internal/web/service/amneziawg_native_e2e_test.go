@@ -26,7 +26,10 @@ import (
 
 // Native outbound -> real release core -> AWG v3 server -> TCP/UDP echo.
 // No root privileges, public network or system TUN are needed.
-func TestNativeAWGConnections(t *testing.T) {
+func TestNativeAWGConnections(t *testing.T)       { testNativeWireGuardProtocol(t, true) }
+func TestNativeWireGuardConnections(t *testing.T) { testNativeWireGuardProtocol(t, false) }
+
+func testNativeWireGuardProtocol(t *testing.T, obfuscated bool) {
 	binary := os.Getenv("HIDDIFY_CONFIG_CHECK_BINARY")
 	if binary == "" {
 		t.Skip("set HIDDIFY_CONFIG_CHECK_BINARY for native AWG TCP/UDP checks")
@@ -53,6 +56,9 @@ func TestNativeAWGConnections(t *testing.T) {
 	server := device.NewDevice(tun, nativeAWGTestBind{conn.NewDefaultBind()}, device.NewLogger(device.LogLevelSilent, ""))
 	t.Cleanup(server.Close)
 	ipc := fmt.Sprintf("private_key=%s\nlisten_port=0\ns1=20\ns2=30\ns3=12\ns4=12\nh1=101\nh2=102\nh3=103\nh4=104\nheader_protection_key=%s\ncontent_padding_addition=8-16\npublic_key=%s\nallowed_ip=10.8.1.2/32\n", serverHex, protectionHex, clientHex)
+	if !obfuscated {
+		ipc = fmt.Sprintf("private_key=%s\nlisten_port=0\npublic_key=%s\nallowed_ip=10.8.1.2/32\n", serverHex, clientHex)
+	}
 	if err := server.IpcSet(ipc); err != nil {
 		t.Fatal(err)
 	}
@@ -119,6 +125,12 @@ func TestNativeAWGConnections(t *testing.T) {
 	endpoint, _, err := singbox.TranslatePanelEndpoint(native)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !obfuscated {
+		endpoint, err = singbox.TranslateXrayWireGuardEndpoint(map[string]any{"protocol": "wireguard", "tag": "native-awg", "settings": map[string]any{"secretKey": clientPrivate, "address": []string{"10.8.1.2/32"}, "peers": []any{map[string]any{"publicKey": serverPublic, "endpoint": "127.0.0.1:" + port, "allowedIPs": []string{"0.0.0.0/0"}}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	config := map[string]any{"log": map[string]any{"level": "warn"}, "endpoints": []any{endpoint}, "inbounds": []any{map[string]any{"type": "direct", "tag": "relay", "listen": "127.0.0.1", "listen_port": relayPort, "override_address": "10.8.1.1", "override_port": 8080}}, "route": map[string]any{"final": "native-awg"}}
 	data, _ := json.Marshal(config)

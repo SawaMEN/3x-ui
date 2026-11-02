@@ -21,7 +21,7 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -34,6 +34,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash tools/ci/download-audit-cores.sh ${{ matrix.arch }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend transport-switch contracts
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm test -- src/test/stage5-transport-switch.test.ts src/test/stream-wire-normalize.test.ts src/test/stream.test.ts src/test/protocol-capabilities.test.ts
       - name: TLS normalization and core compatibility regressions
         run: |
           set -o pipefail
@@ -80,8 +91,18 @@ jobs:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
         run: |
           set -o pipefail
-          go test -race -p 2 -json ./internal/web/service -run '^(TestHiddifyFullDatabaseProtocolConfigurations|TestNativeAWGConnections)$' -count=1 | tee database-protocols.jsonl
-          python3 tools/ci/require-go-tests.py database-protocols.jsonl TestHiddifyFullDatabaseProtocolConfigurations TestNativeAWGConnections
+          go test -race -p 2 -json ./internal/web/service -run '^(TestHiddifyFullDatabaseProtocolConfigurations|TestNativeAWGConnections|TestNativeWireGuardConnections)$' -count=1 | tee database-protocols.jsonl
+          python3 tools/ci/require-go-tests.py database-protocols.jsonl TestHiddifyFullDatabaseProtocolConfigurations TestNativeAWGConnections TestNativeWireGuardConnections
+      - name: Xray classic transport TCP UDP and XDrive traffic
+        if: ${{ !cancelled() }}
+        env:
+          STAGE5_RUNTIME_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/xray/xray
+          STAGE5_ENCRYPTION_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
+          STAGE5_NATIVE_PROFILE: xray
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/hiddify -run '^TestStage5ProtocolTraffic$' -count=1 | tee xray-classic-transfer.jsonl
+          python3 tools/ci/require-go-tests.py xray-classic-transfer.jsonl TestStage5ProtocolTraffic
       - name: Xray real XHTTP TLS and Reality transfers
         if: ${{ !cancelled() }}
         env:

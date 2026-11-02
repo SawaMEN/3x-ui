@@ -27,6 +27,9 @@ func validateInboundRuntimeTarget(inbound *model.Inbound) error {
 		}
 		return common.NewErrorf("%s is not supported by %s as the selected core", inbound.Protocol, core)
 	}
+	if err := validateInboundTransport(core, inbound); err != nil {
+		return err
+	}
 	// Node binaries are checked by the node. Only the local host can inspect
 	// the installed engine's version and optional features.
 	if inbound.NodeID == nil && inbound.Protocol == model.MASQUE {
@@ -40,16 +43,58 @@ func validateInboundRuntimeTarget(inbound *model.Inbound) error {
 	return nil
 }
 
-func validateInboundRuntimeProtocol(protocol model.Protocol, existing *model.Inbound) error {
-	// AddInbound validates the complete incoming row, including NodeID.
-	// On update, NodeID in the wire
-	// payload is intentionally not trusted; validate against the stored host row.
-	if existing == nil {
+// Check the panel transport contract before persisting the row. Native JSON
+// templates have a separate binary preflight; "quic" there is not an Xray
+// panel streamSettings transport and must not silently become plain TCP here.
+func validateInboundTransport(core string, inbound *model.Inbound) error {
+	switch inbound.Protocol {
+	case model.VLESS, model.VMESS, model.Trojan, model.Shadowsocks:
+	default:
 		return nil
 	}
-	candidate := *existing
-	candidate.Protocol = protocol
-	return validateInboundRuntimeTarget(&candidate)
+	var stream struct {
+		Network  string `json:"network"`
+		Security string `json:"security"`
+	}
+	if strings.TrimSpace(inbound.StreamSettings) != "" {
+		if err := json.Unmarshal([]byte(inbound.StreamSettings), &stream); err != nil {
+			return common.NewErrorf("invalid streamSettings: %v", err)
+		}
+	}
+	network := strings.ToLower(strings.TrimSpace(stream.Network))
+	if network == "" {
+		network = "tcp"
+	}
+	if core == CoreTypeXray {
+		switch network {
+		case "tcp", "raw", "ws", "grpc", "httpupgrade", "xhttp", "kcp", "hysteria", "masque":
+			return nil
+		case "xdrive":
+			if inbound.Protocol == model.VLESS {
+				return nil
+			}
+		}
+		return common.NewErrorf("Xray transport %q is removed or unsupported for %s; select a supported transport", network, inbound.Protocol)
+	}
+	if inbound.Protocol == model.Shadowsocks {
+		if (network == "tcp" || network == "raw") && (stream.Security == "" || strings.EqualFold(stream.Security, "none")) {
+			return nil
+		}
+		return common.NewErrorf("%s Shadowsocks requires plain TCP/raw; use a supported explicit wrapper for TLS or another transport", core)
+	}
+	switch network {
+	case "tcp", "raw", "ws", "grpc", "http", "httpupgrade":
+		return nil
+	case "kcp", "xhttp":
+		if core == CoreTypeSingBox {
+			return nil
+		}
+	case "xdrive":
+		if core == CoreTypeSingBox && inbound.Protocol == model.VLESS {
+			return nil
+		}
+	}
+	return common.NewErrorf("%s transport %q is not supported by %s for panel inbounds", inbound.Protocol, network, core)
 }
 
 // shadowTLSTarget resolves the runtime that will host an inbound carrying a

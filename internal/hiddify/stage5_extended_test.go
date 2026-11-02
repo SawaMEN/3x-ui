@@ -41,7 +41,11 @@ func stage5Data(t *testing.T, network, address string, allowed bool) {
 		t.Fatal(err)
 	}
 	defer c.Close()
-	_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+	timeout := 5 * time.Second
+	if !allowed {
+		timeout = time.Second
+	}
+	_ = c.SetDeadline(time.Now().Add(timeout))
 	payload := []byte("stage5-protocol-echo")
 	if !allowed {
 		payload = []byte("X")
@@ -141,7 +145,7 @@ func TestStage5ExtendedProtocolTraffic(t *testing.T) {
 					delete(user, "name")
 					user["username"] = "alice"
 					client["username"] = "alice"
-					tlsServer["alpn"], tlsClient["alpn"] = []string{"h2"}, []string{"h2"}
+					tlsServer["alpn"] = []string{"h2"}
 				}
 				server["users"] = []any{user}
 			}
