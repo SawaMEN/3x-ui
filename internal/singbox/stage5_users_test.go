@@ -49,3 +49,19 @@ func TestStage5DisabledProxyClientsCannotBecomeAnonymous(t *testing.T) {
 		}
 	}
 }
+
+func TestStage5ProxyTranslationPreservesClientBackingArray(t *testing.T) {
+	sentinel := map[string]any{"email": "unrelated"}
+	backing := []any{map[string]any{"email": "alice", "password": "secret"}, sentinel}
+	settings := map[string]any{"clients": backing[:1], "accounts": []any{map[string]any{"user": "bob", "pass": "secret"}}}
+	out := map[string]any{}
+	if err := translateUsers(out, "http", settings); err != nil {
+		t.Fatal(err)
+	}
+	if backing[1].(map[string]any)["email"] != "unrelated" {
+		t.Fatal("translation overwrote shared client backing storage")
+	}
+	if len(out["users"].([]map[string]any)) != 2 {
+		t.Fatal("proxy account was lost")
+	}
+}

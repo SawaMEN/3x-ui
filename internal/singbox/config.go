@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -897,7 +898,9 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 		if err != nil {
 			return err
 		}
-		clients = append(clients, accounts...)
+		if len(accounts) > 0 {
+			clients = slices.Concat(clients, accounts)
+		}
 	}
 	users := make([]map[string]any, 0, len(clients))
 	disabled := false
