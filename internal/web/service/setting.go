@@ -405,8 +405,12 @@ func (s *SettingService) getSetting(key string) (*model.Setting, error) {
 }
 
 func (s *SettingService) saveSetting(key string, value string) error {
-	setting, err := s.getSetting(key)
-	db := database.GetDB()
+	return saveSettingIn(database.GetDB(), key, value)
+}
+
+func saveSettingIn(db *gorm.DB, key, value string) error {
+	setting := &model.Setting{}
+	err := db.Where("key = ?", key).First(setting).Error
 	if database.IsNotFound(err) {
 		return db.Create(&model.Setting{
 			Key:   key,
@@ -531,12 +535,15 @@ func (s *SettingService) SetCoreType(coreType string) error {
 	}
 	// Distinguish an explicit selection made by a standalone-capable panel
 	// from an old Xray database which still needs canonical-user migration.
-	if coreType == CoreTypeXray || coreType == CoreTypeSingBoxUpstream {
-		if err := s.setString("standaloneCoreSelection", "enabled"); err != nil {
+	if coreType != CoreTypeXray && coreType != CoreTypeSingBoxUpstream {
+		return s.setString("coreType", coreType)
+	}
+	return database.GetDB().Transaction(func(tx *gorm.DB) error {
+		if err := saveSettingIn(tx, "standaloneCoreSelection", "enabled"); err != nil {
 			return err
 		}
-	}
-	return s.setString("coreType", coreType)
+		return saveSettingIn(tx, "coreType", coreType)
+	})
 }
 
 func (s *SettingService) GetXrayConfigTemplate() (string, error) {

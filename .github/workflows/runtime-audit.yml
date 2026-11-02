@@ -46,8 +46,8 @@ jobs:
       - name: Apply rollback, sidecars, gateway and standalone recovery
         run: |
           set -o pipefail
-          go test -race -p 2 -json ./internal/web/service -run '^(TestStage4(Gateway|Candidate|Xray|Stopped)|TestHiddify(PendingApplyBatchNoopAndRollback|BatchChangesDuringCandidateValidation|CoreFailureRollsBackExternalOutbound|Gateway.*)|TestStandalone(CoreAdapters|Update.*)|TestOwnerSingBoxCanonicalIdentity|TestSyncClientCoreCompatibilitySwitchesAutomaticClientState)' -count=1 | tee apply.jsonl
-          python3 tools/ci/require-go-tests.py apply.jsonl TestStage4GatewayPauseFailureRestoresPublishedConfig TestStage4CandidatePublicationRollback TestStage4XrayStartUsesNativeXrayConfiguration TestStage4StoppedXrayFailedRestartDoesNotLaunchOldCore TestHiddifyPendingApplyBatchNoopAndRollback TestHiddifyBatchChangesDuringCandidateValidation TestHiddifyCoreFailureRollsBackExternalOutbound TestStandaloneCoreAdapters TestOwnerSingBoxCanonicalIdentity TestSyncClientCoreCompatibilitySwitchesAutomaticClientState
+          go test -race -p 2 -json ./internal/web/service -run '^(TestStage4(Gateway|Candidate|Xray|Stopped|Atomic)|TestHiddify(PendingApplyBatchNoopAndRollback|BatchChangesDuringCandidateValidation|CoreFailureRollsBackExternalOutbound|Gateway.*)|TestStandalone(CoreAdapters|Update.*)|TestOwnerSingBoxCanonicalIdentity|TestSyncClientCoreCompatibilitySwitchesAutomaticClientState)' -count=1 | tee apply.jsonl
+          python3 tools/ci/require-go-tests.py apply.jsonl TestStage4AtomicCoreSelection TestStage4GatewayPauseFailureRestoresPublishedConfig TestStage4CandidatePublicationRollback TestStage4XrayStartUsesNativeXrayConfiguration TestStage4StoppedXrayFailedRestartDoesNotLaunchOldCore TestHiddifyPendingApplyBatchNoopAndRollback TestHiddifyBatchChangesDuringCandidateValidation TestHiddifyCoreFailureRollsBackExternalOutbound TestStandaloneCoreAdapters TestOwnerSingBoxCanonicalIdentity TestSyncClientCoreCompatibilitySwitchesAutomaticClientState
       - name: Download pinned and checksum-verified native engines
         env:
           GH_TOKEN: ${{ github.token }}
