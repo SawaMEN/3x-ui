@@ -114,7 +114,7 @@ func TestStage6SubscriptionImports(t *testing.T) {
 	for _, p := range profiles {
 		t.Run(p.name, func(t *testing.T) {
 			dir := t.TempDir()
-			input, parsed := filepath.Join(dir, "profile.txt"), filepath.Join(dir, "parsed.json")
+			input, parsed := filepath.Join(dir, "profile.json"), filepath.Join(dir, "parsed.json")
 			if e := os.WriteFile(input, []byte(p.body), 0600); e != nil {
 				t.Fatal(e)
 			}

@@ -36,6 +36,11 @@ func TestStage6NativeAccountingAndRevocation(t *testing.T) {
 	})
 	stage4Copy(t, filepath.Join(root, "owner", "x-ui", "bin", "hiddify-core-linux-"+runtime.GOARCH), svc.BinaryPath(), 0700)
 	settings := &SettingService{}
+	// The production default blocks private destinations. This fixture uses a
+	// loopback echo server and must explicitly allow it in the shared policy.
+	if err := settings.SetXrayConfigTemplate(`{"log":{"loglevel":"warning"},"inbounds":[],"outbounds":[{"protocol":"freedom","tag":"direct","settings":{}}],"routing":{"rules":[]}}`); err != nil {
+		t.Fatal(err)
+	}
 	if err := settings.SetCoreType(CoreTypeSingBox); err != nil {
 		t.Fatal(err)
 	}
@@ -84,6 +89,14 @@ func TestStage6NativeAccountingAndRevocation(t *testing.T) {
 	if err := svc.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if t.Failed() {
+			for _, path := range []string{svc.logPath(), svc.ProcessConfigPath()} {
+				data, _ := os.ReadFile(path)
+				t.Logf("%s: %s", filepath.Base(path), data)
+			}
+		}
+	})
 	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
 	dial := func(user string) (net.Conn, error) {
 		d, e := proxy.SOCKS5("tcp", address, &proxy.Auth{User: user, Password: "pass"}, &net.Dialer{Timeout: time.Second})
