@@ -82,6 +82,10 @@ git -C "$task_source/core" apply --directory=xui-dependencies/utls "$task_root/d
 git -C "$task_source/core" apply --directory=xui-dependencies/sing-vmess "$task_root/deploy/hiddify/sing-vmess-protection.patch"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/protection-options.patch"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/explicit-cipher-suites.patch"
+git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/stream-handshake.patch"
+cp -- "$task_root/deploy/hiddify/stream_upgrade_test.go.in" "$task_source/core/hiddify-sing-box/transport/v2rayhttpupgrade/xui_stream_test.go"
+cp -- "$task_root/deploy/hiddify/stream_trojan_test.go.in" "$task_source/core/hiddify-sing-box/transport/trojan/xui_stream_test.go"
+
 cp "$task_root/deploy/hiddify/explicit_cipher_suites_test.go.in" "$task_source/core/hiddify-sing-box/common/tls/xui_explicit_ciphers_test.go"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/transport-balancer.patch"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/vless-reverse.patch"
@@ -126,6 +130,7 @@ fi
 if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOSTARCH)" ]]; then
   (
     cd -- "$task_source/core"
+    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/transport/v2rayhttpupgrade github.com/sagernet/sing-box/transport/trojan -run '^TestXUIPanel' -count=1 -timeout=30s
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/experimental/clashapi/trafficontrol -run '^TestXUIPanelAuthenticatedUserIsConnectionMetadata$' -count=1
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box -run '^TestXUIPanelInboundFinalMask' -count=1 -timeout=60s
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/transport/v2rayxdrive -count=1 -timeout=90s

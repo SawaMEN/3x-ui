@@ -2,7 +2,7 @@ name: Protocol and TLS audit
 on:
   push:
     branches: [update]
-    paths: ['internal/hiddify/**', 'internal/sub/**', '.github/workflows/protocol-audit.yml', 'internal/singbox/**', 'internal/web/service/**', 'internal/web/runtime/**', '.github/workflows/runtime-audit.yml', 'tools/ci/download-audit-cores.sh']
+    paths: ['deploy/hiddify/**', 'docs/hiddify-core-target.json', 'tools/build-hiddify-core.sh', 'internal/hiddify/**', 'internal/sub/**', '.github/workflows/protocol-audit.yml', 'internal/singbox/**', 'internal/web/service/**', 'internal/web/runtime/**', '.github/workflows/runtime-audit.yml', 'tools/ci/download-audit-cores.sh']
   workflow_dispatch:
 permissions:
   contents: read
@@ -38,7 +38,7 @@ jobs:
         run: |
           set -o pipefail
           go test -race -p 2 -json ./internal/singbox ./internal/hiddify -count=1 | tee translation.jsonl
-          python3 tools/ci/require-go-tests.py translation.jsonl TestConfigMarshalNativeTLSCompatibility TestConfigMarshalRejectsInvalidNativeTLSCipherSuites TestConfigMarshalAcceptsNativeCipherDefaultsAndScalar TestStage5TLSNormalizationPreservesSharedSubtrees TestStage5TranslatorOmitsExplicitlyDisabledClients TestStage5DisabledProxyClientsCannotBecomeAnonymous
+          python3 tools/ci/require-go-tests.py translation.jsonl TestConfigMarshalNativeTLSCompatibility TestConfigMarshalRejectsInvalidNativeTLSCipherSuites TestConfigMarshalAcceptsNativeCipherDefaultsAndScalar TestStage5TLSNormalizationPreservesSharedSubtrees TestStage5TranslatorOmitsExplicitlyDisabledClients TestStage5DisabledProxyClientsCannotBecomeAnonymous TestStage5ReverseMappingSkipsDisabledUsers
           go test -race -p 2 -json ./internal/web/service -run '^(TestStage5|TestSyncClientCoreCompatibility)' -count=1 | tee compatibility.jsonl
           python3 tools/ci/require-go-tests.py compatibility.jsonl TestStage5LocalProtocolCompatibility TestStage5IncompatibleProtocolNeverPersists TestStage5ProtocolUsesStoredNodeCore
       - name: Owner native schema contracts
@@ -58,8 +58,17 @@ jobs:
           HIDDIFY_RUNTIME_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
         run: |
           set -o pipefail
-          go test -race -p 2 -json ./internal/hiddify -run '^(TestStage5ProtocolTraffic|TestPinnedBinaryRawRuntimeAndStatistics|TestXHTTPRuntimeTransfer)$' -count=1 | tee owner-transfer.jsonl
-          python3 tools/ci/require-go-tests.py owner-transfer.jsonl TestStage5ProtocolTraffic TestPinnedBinaryRawRuntimeAndStatistics TestXHTTPRuntimeTransfer
+          go test -race -p 2 -json ./internal/hiddify -run '^(TestStage5ExplicitLegacyCipherTraffic|TestStage5ProtocolTraffic|TestPinnedBinaryRawRuntimeAndStatistics|TestXHTTPRuntimeTransfer)$' -count=1 | tee owner-transfer.jsonl
+          python3 tools/ci/require-go-tests.py owner-transfer.jsonl TestStage5ExplicitLegacyCipherTraffic TestStage5ProtocolTraffic TestPinnedBinaryRawRuntimeAndStatistics TestXHTTPRuntimeTransfer
+      - name: Upstream native protocol TCP IPv4 IPv6 DNS and credential checks
+        if: ${{ !cancelled() }}
+        env:
+          STAGE5_RUNTIME_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/upstream/sing-box
+          STAGE5_NATIVE_PROFILE: upstream
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/hiddify -run '^TestStage5ProtocolTraffic$' -count=1 | tee upstream-transfer.jsonl
+          python3 tools/ci/require-go-tests.py upstream-transfer.jsonl TestStage5ProtocolTraffic
       - name: Xray real XHTTP TLS and Reality transfers
         if: ${{ !cancelled() }}
         env:

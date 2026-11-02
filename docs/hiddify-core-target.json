@@ -14,10 +14,13 @@
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-b310097c8e7a-338f0c9457a4-mask1-ciphers1-net62-sec1"
+    "version": "sawamen-b310097c8e7a-338f0c9457a4-mask1-ciphers1-net62-sec1-stream1"
   },
   "runtime_contract": {
-    "raw_config_command": ["srun", "-c"],
+    "raw_config_command": [
+      "srun",
+      "-c"
+    ],
     "validation_cli_available": true,
     "stats_grpc_method": "/v2ray.core.app.stats.command.StatsService/QueryStats",
     "panel_runtime_integrated": true,
@@ -106,7 +109,9 @@
     ],
     "sing_box_version": "sawamen-338f0c9457a4",
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
-    "runtime_dependencies": ["matching libcronet for Naive outbound"],
+    "runtime_dependencies": [
+      "matching libcronet for Naive outbound"
+    ],
     "activation_ready": false,
     "toolchain": "go1.26.10",
     "validation_cli_available": true,
@@ -151,7 +156,10 @@
     "speed_broker_overlay": "deploy/speed/masque.patch",
     "speed_broker_sdk": "internal/clientlimit/brokerclient/client.go",
     "explicit_cipher_overlay": "deploy/hiddify/explicit-cipher-suites.patch",
-    "explicit_cipher_test_overlay": "deploy/hiddify/explicit_cipher_suites_test.go.in"
+    "explicit_cipher_test_overlay": "deploy/hiddify/explicit_cipher_suites_test.go.in",
+    "stream_handshake_overlay": "deploy/hiddify/stream-handshake.patch",
+    "stream_upgrade_test_overlay": "deploy/hiddify/stream_upgrade_test.go.in",
+    "stream_trojan_test_overlay": "deploy/hiddify/stream_trojan_test.go.in"
   },
   "verification": {
     "report": "hiddify-core-stage-4-verification.md",

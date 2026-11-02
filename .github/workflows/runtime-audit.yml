@@ -2,7 +2,7 @@ name: Runtime lifecycle audit
 on:
   push:
     branches: [update]
-    paths: ['internal/singbox/**', 'internal/web/service/**', 'internal/web/runtime/**', '.github/workflows/runtime-audit.yml', 'tools/ci/download-audit-cores.sh']
+    paths: ['deploy/hiddify/**', 'docs/hiddify-core-target.json', 'tools/build-hiddify-core.sh', 'internal/singbox/**', 'internal/web/service/**', 'internal/web/runtime/**', '.github/workflows/runtime-audit.yml', 'tools/ci/download-audit-cores.sh']
   workflow_dispatch:
 permissions:
   contents: read

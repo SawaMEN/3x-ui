@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -19,7 +20,7 @@ func TestPinnedProtocolTransportMatrix(t *testing.T) {
 	dir := t.TempDir()
 	cert, key := testCertificate(t, dir)
 	for _, protocol := range []string{"vless", "vmess", "trojan"} {
-		for _, network := range []string{"tcp", "ws", "grpc", "httpupgrade", "http", "xhttp", "raw", "quic", "kcp"} {
+		for _, network := range []string{"tcp", "ws", "grpc", "httpupgrade", "http", "xhttp", "raw", "kcp", "native-raw", "native-quic"} {
 			for _, inbound := range []bool{false, true} {
 				direction := "outbound"
 				if inbound {
@@ -44,7 +45,7 @@ func TestPinnedProtocolTransportMatrix(t *testing.T) {
 						delete(settings, "servers")
 					}
 					streamNetwork := network
-					if network == "raw" || network == "quic" {
+					if strings.HasPrefix(network, "native-") {
 						streamNetwork = "tcp"
 					}
 					stream := map[string]any{"network": streamNetwork, "security": "tls", "tlsSettings": map[string]any{"serverName": "localhost"}}
@@ -77,17 +78,17 @@ func TestPinnedProtocolTransportMatrix(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if network == "raw" || network == "quic" {
+					if strings.HasPrefix(network, "native-") {
 						if !inbound {
 							translated["type"] = protocol
-							translated["transport"] = map[string]any{"type": network}
+							translated["transport"] = map[string]any{"type": strings.TrimPrefix(network, "native-")}
 							translated, err = TranslateOutbound(translated)
 							if err != nil {
 								t.Fatal(err)
 							}
 							cfg["outbounds"] = []any{translated}
 						} else {
-							translated["transport"] = map[string]any{"type": network}
+							translated["transport"] = map[string]any{"type": strings.TrimPrefix(network, "native-")}
 						}
 					}
 					data, err := json.Marshal(cfg)

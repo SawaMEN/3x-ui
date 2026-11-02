@@ -16,13 +16,16 @@ func takeReverseExtensions(settings map[string]any, protocol string, inbound boo
 		clients, _ := settings["clients"].([]any)
 		for _, client := range clients {
 			if user, ok := client.(map[string]any); ok {
+				if enabled, explicit := user["enable"].(bool); explicit && !enabled {
+					continue
+				}
 				users = append(users, user)
 			}
 		}
 	} else {
 		users = []map[string]any{vlessUser(settings)}
 	}
-	result := make([]map[string]any, len(users))
+	var result []map[string]any
 	for i, user := range users {
 		raw, exists := user["reverse"]
 		if !exists || raw == nil {
@@ -44,6 +47,9 @@ func takeReverseExtensions(settings map[string]any, protocol string, inbound boo
 			if key != "tag" && (key != "sniffing" || inbound) && meaningful(value) {
 				return nil, fmt.Errorf("unsupported reverse option %s", key)
 			}
+		}
+		if result == nil {
+			result = make([]map[string]any, len(users))
 		}
 		result[i] = fields
 		delete(user, "reverse")

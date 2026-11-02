@@ -6,6 +6,25 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
+func TestStage5ReverseMappingSkipsDisabledUsers(t *testing.T) {
+	raw := map[string]any{"protocol": "vless", "tag": "server", "port": 443, "settings": map[string]any{"clients": []any{
+		map[string]any{"id": "11111111-1111-4111-8111-111111111111", "email": "disabled", "enable": false, "reverse": map[string]any{"tag": "disabled-portal"}},
+		map[string]any{"id": "22222222-2222-4222-8222-222222222222", "email": "enabled", "enable": true, "reverse": map[string]any{"tag": "enabled-portal"}},
+	}}}
+	out, err := TranslateInbound(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	users := out["users"].([]map[string]any)
+	if len(users) != 1 || users[0]["name"] != "enabled" || users[0]["reverse"].(map[string]any)["tag"] != "enabled-portal" {
+		t.Fatalf("reverse assigned to wrong user: %+v", users)
+	}
+	settings := raw["settings"].(map[string]any)
+	if settings["clients"].([]any)[0].(map[string]any)["reverse"] == nil {
+		t.Fatal("disabled source mutated")
+	}
+}
+
 func TestReverseTranslationAndPortal(t *testing.T) {
 	raw := map[string]any{"protocol": "vless", "tag": "server", "port": 443, "settings": map[string]any{"clients": []any{map[string]any{"id": "11111111-1111-4111-8111-111111111111", "email": "reverse", "reverse": map[string]any{"tag": "portal"}}, map[string]any{"id": "22222222-2222-4222-8222-222222222222", "email": "ordinary"}}}}
 	out, err := TranslateInbound(raw)
