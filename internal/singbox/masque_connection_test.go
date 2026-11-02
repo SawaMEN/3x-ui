@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -171,6 +173,9 @@ func testMASQUEConnections(t *testing.T, limited bool) {
 					for _, network := range []string{"tcp", "udp"} {
 						t.Run(network, func(t *testing.T) {
 							c, e := net.DialTimeout(network, badAddress, time.Second)
+							if errors.Is(e, syscall.ECONNRESET) {
+								return // Authentication can reset a newly accepted TCP socket before Dial returns.
+							}
 							if e != nil {
 								t.Fatal(e)
 							}
@@ -182,6 +187,17 @@ func testMASQUEConnections(t *testing.T, limited bool) {
 								t.Fatal("invalid MASQUE credentials forwarded data")
 							}
 						})
+					}
+					log, _ = os.ReadFile(badLog)
+					if strings.Contains(string(log), "FATAL") || strings.Contains(string(log), "panic:") {
+						t.Fatalf("negative fixture crashed: %s", log)
+					}
+					probe, probeErr := net.DialTimeout("tcp", badAddress, time.Second)
+					if probe != nil {
+						_ = probe.Close()
+					}
+					if probeErr != nil && !errors.Is(probeErr, syscall.ECONNRESET) {
+						t.Fatalf("negative fixture lost its listener: %v; %s", probeErr, log)
 					}
 				})
 			}

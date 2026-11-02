@@ -30,8 +30,13 @@ def passed(items, root):
 def build(directory):
     rows = []
     def add(protocol, direction, core, transport, payload, status, source, test):
+        client = core if payload != 'none' else 'none'
+        if protocol in ('wireguard', 'awg') and payload != 'none':
+            client = 'owner endpoint + Go amneziawg/v3 peer (go.mod)'
+        if test.startswith('TestStage5FragmentedTrojanContract/'):
+            client = 'Go crypto/tls + raw Trojan framing (go.mod toolchain)'
         rows.append(dict(protocol=protocol, direction=direction, core=core,
-                         transport=transport, client=(core if payload != 'none' else 'none'), payload=payload, result=status,
+                         transport=transport, client=client, payload=payload, result=status,
                          evidence_file=source, evidence_test=test,
                          commit=os.environ.get('GITHUB_SHA', ''),
                          arch=os.environ.get('RUNNER_ARCH', '')))

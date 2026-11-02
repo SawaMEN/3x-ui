@@ -127,7 +127,7 @@ jobs:
           SINGBOX_TEST_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
         run: |
           set -o pipefail
-          go test -race -p 2 -json ./internal/singbox -run '^TestMASQUEConnections$' -count=1 | tee masque-transfer.jsonl
+          go test -race -p 2 -json ./internal/singbox -run '^TestMASQUEConnections$' -count=3 | tee masque-transfer.jsonl
           python3 tools/ci/require-go-tests.py masque-transfer.jsonl TestMASQUEConnections
       - name: Fragmented Trojan control and upstream defect classification
         if: ${{ !cancelled() }}
