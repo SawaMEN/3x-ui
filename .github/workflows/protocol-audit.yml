@@ -63,8 +63,8 @@ jobs:
           HIDDIFY_RUNTIME_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
         run: |
           set -o pipefail
-          go test -race -p 2 -json ./internal/hiddify -run '^(TestStage5ExplicitLegacyCipherTraffic|TestStage5ProtocolTraffic|TestPinnedBinaryRawRuntimeAndStatistics|TestXHTTPRuntimeTransfer)$' -count=1 | tee owner-transfer.jsonl
-          python3 tools/ci/require-go-tests.py owner-transfer.jsonl TestStage5ExplicitLegacyCipherTraffic TestStage5ProtocolTraffic TestPinnedBinaryRawRuntimeAndStatistics TestXHTTPRuntimeTransfer
+          go test -race -p 2 -json ./internal/hiddify -run '^(TestStage5ExtendedProtocolTraffic|TestStage5ExplicitLegacyCipherTraffic|TestStage5ProtocolTraffic|TestPinnedBinaryRawRuntimeAndStatistics|TestXHTTPRuntimeTransfer)$' -count=1 | tee owner-transfer.jsonl
+          python3 tools/ci/require-go-tests.py owner-transfer.jsonl TestStage5ExtendedProtocolTraffic TestStage5ExplicitLegacyCipherTraffic TestStage5ProtocolTraffic TestPinnedBinaryRawRuntimeAndStatistics TestXHTTPRuntimeTransfer
       - name: Upstream native protocol TCP IPv4 IPv6 DNS and credential checks
         if: ${{ !cancelled() }}
         env:

@@ -34,18 +34,25 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 		t.Fatal(err)
 	}
 	translateIn, translateOut := TranslateInbound, TranslateOutbound
-	networks := []string{"tcp", "raw", "ws", "grpc", "http", "httpupgrade", "xhttp", "kcp"}
+	networks := []string{"tcp", "raw", "ws", "grpc", "http", "httpupgrade", "xhttp", "kcp", "xdrive", "native-quic"}
 	if os.Getenv("STAGE5_NATIVE_PROFILE") == "upstream" {
 		translateIn, translateOut = singbox.TranslateXrayInbound, singbox.TranslateXrayOutbound
-		networks = networks[:len(networks)-2] // upstream has neither XHTTP nor mKCP
+		networks = networks[:6] // upstream has neither XHTTP nor mKCP
 	}
 	for _, protocol := range []string{"vless", "vmess", "trojan"} {
 		for _, network := range networks {
+			if network == "xdrive" && protocol != "vless" {
+				continue
+			}
 			t.Run(protocol+"/"+network, func(t *testing.T) {
 				dir := t.TempDir()
 				port := stage5Port(t)
-				serverStream := map[string]any{"network": network, "security": "none"}
-				clientStream := map[string]any{"network": network, "security": "none"}
+				streamNetwork := network
+				if network == "native-quic" {
+					streamNetwork = "tcp"
+				}
+				serverStream := map[string]any{"network": streamNetwork, "security": "none"}
+				clientStream := map[string]any{"network": streamNetwork, "security": "none"}
 				for _, stream := range []map[string]any{serverStream, clientStream} {
 					switch network {
 					case "xhttp":
@@ -60,21 +67,47 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 						stream["httpupgradeSettings"] = map[string]any{"path": "/stage5"}
 					}
 				}
-				if protocol == "trojan" {
+				if protocol == "trojan" || network == "native-quic" {
 					cert, key := testCertificate(t, dir)
 					serverStream["security"], clientStream["security"] = "tls", "tls"
 					serverStream["tlsSettings"] = map[string]any{"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}}
 					clientStream["tlsSettings"] = map[string]any{"serverName": "localhost", "certificates": []any{map[string]any{"usage": "verify", "certificateFile": cert}}}
 				}
+				var pair struct {
+					Encryption string `json:"encryption"`
+					Decryption string `json:"decryption"`
+				}
+				if network == "xdrive" {
+					if protocol != "vless" {
+						t.Fatal("XDrive matrix must only include VLESS")
+					}
+					data, err := exec.Command(binary, "vlessenc", "--json").CombinedOutput()
+					if err != nil {
+						t.Fatalf("vlessenc: %v %s", err, data)
+					}
+					if err := json.Unmarshal(data, &pair); err != nil || pair.Encryption == "" || pair.Decryption == "" {
+						t.Fatalf("invalid key pair: %v", err)
+					}
+					for _, stream := range []map[string]any{serverStream, clientStream} {
+						stream["xdriveSettings"] = map[string]any{"service": "local", "remoteFolder": filepath.Join(dir, "storage"), "pollIntervalMs": float64(10)}
+					}
+				}
 				users := []any{}
 				for i := 1; i <= 3; i++ {
 					users = append(users, map[string]any{"id": fmt.Sprintf("11111111-1111-4111-8111-%012d", i), "password": fmt.Sprintf("password%d", i), "email": fmt.Sprintf("user%d", i), "enable": i != 3})
 				}
-				inbound, err := translateIn(map[string]any{"protocol": protocol, "tag": "server", "listen": "127.0.0.1", "port": port, "settings": map[string]any{"clients": users, "decryption": "none"}, "streamSettings": serverStream})
+				serverSettings := map[string]any{"clients": users, "decryption": "none"}
+				if network == "xdrive" {
+					serverSettings["decryption"] = pair.Decryption
+				}
+				inbound, err := translateIn(map[string]any{"protocol": protocol, "tag": "server", "listen": "127.0.0.1", "port": port, "settings": serverSettings, "streamSettings": serverStream})
 				if err != nil {
 					t.Fatal(err)
 				}
-				stage5Start(t, binary, dir, "server", map[string]any{"inbounds": []any{inbound}, "outbounds": []any{map[string]any{"type": "direct"}}}, port, network != "kcp")
+				if network == "native-quic" {
+					inbound["transport"] = map[string]any{"type": "quic"}
+				}
+				stage5Start(t, binary, dir, "server", map[string]any{"inbounds": []any{inbound}, "outbounds": []any{map[string]any{"type": "direct"}}}, port, network != "kcp" && network != "xdrive" && network != "native-quic")
 				echoAddress := stage5Echo(t, "127.0.0.1:0")
 				v6 := stage5Echo(t, "[::1]:0")
 				_, echoPort, err := net.SplitHostPort(echoAddress)
@@ -85,15 +118,26 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 					t.Run(fmt.Sprintf("user%d", user), func(t *testing.T) {
 						socksPort := stage5Port(t)
 						settings := map[string]any{"address": "127.0.0.1", "port": port, "id": fmt.Sprintf("11111111-1111-4111-8111-%012d", user), "password": fmt.Sprintf("password%d", user)}
+						if network == "xdrive" {
+							settings["encryption"] = pair.Encryption
+						}
 						outbound, err := translateOut(map[string]any{"protocol": protocol, "tag": "proxy", "settings": settings, "streamSettings": clientStream})
 						if err != nil {
 							t.Fatal(err)
 						}
-						stage5Start(t, binary, dir, fmt.Sprint("client", user), map[string]any{"inbounds": []any{map[string]any{"type": "socks", "listen": "127.0.0.1", "listen_port": socksPort}}, "outbounds": []any{outbound}}, socksPort, true)
+						if network == "native-quic" {
+							outbound["transport"] = map[string]any{"type": "quic"}
+						}
+						relayPort := stage5Port(t)
+						udpTarget, udpPort := stage5UDPEcho(t)
+						relay := map[string]any{"type": "direct", "listen": "127.0.0.1", "listen_port": relayPort, "network": "udp", "override_address": udpTarget, "override_port": udpPort}
+						stage5Start(t, binary, dir, fmt.Sprint("client", user), map[string]any{"inbounds": []any{map[string]any{"type": "socks", "listen": "127.0.0.1", "listen_port": socksPort}, relay}, "outbounds": []any{outbound}}, socksPort, true)
 						dialer, err := proxy.SOCKS5("tcp", fmt.Sprintf("127.0.0.1:%d", socksPort), nil, proxy.Direct)
 						if err != nil {
 							t.Fatal(err)
 						}
+						stage5Data(t, "udp", fmt.Sprintf("127.0.0.1:%d", relayPort), user <= 2)
+
 						for attempt := range 2 {
 							ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 							target := echoAddress
@@ -217,6 +261,7 @@ func stage5Start(t *testing.T, binary, dir, name string, cfg map[string]any, por
 		command = "run"
 	}
 	cmd := exec.Command(binary, command, "-c", path)
+	cmd.Dir = filepath.Dir(binary)
 	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Start(); err != nil {
 		_ = log.Close()
