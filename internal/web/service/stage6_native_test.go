@@ -55,7 +55,7 @@ func TestStage6NativeAccountingAndRevocation(t *testing.T) {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 	_ = ln.Close()
-	clients := []model.Client{{Email: "stage6-alice", Password: "pass", Enable: true, ExpiryTime: -86400000}, {Email: "stage6-bob", Password: "pass", Enable: true}}
+	clients := []model.Client{{ID: "11111111-1111-4111-8111-111111111111", Email: "stage6-alice", Password: "pass", Enable: true, ExpiryTime: -86400000}, {ID: "22222222-2222-4222-8222-222222222222", Email: "stage6-bob", Password: "pass", Enable: true}}
 	ib := &model.Inbound{Enable: true, Listen: "127.0.0.1", Port: port, Protocol: model.Mixed, Tag: "stage6-traffic", Settings: clientsSettings(t, clients)}
 	db := database.GetDB()
 	if err := db.Create(ib).Error; err != nil {
