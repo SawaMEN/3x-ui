@@ -25,7 +25,9 @@ func translateTLSCipherSuites(out, in map[string]any, label string) error {
 	return nil
 }
 
-func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
+// The Go runtime's cipher catalog is fixed for the lifetime of the process.
+// Construct it once instead of allocating both catalogs for every TLS block.
+var knownTLSCipherSuites = func() map[string]bool {
 	known := make(map[string]bool)
 	for _, suite := range tls.CipherSuites() {
 		known[suite.Name] = true
@@ -33,7 +35,10 @@ func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
 	for _, suite := range tls.InsecureCipherSuites() {
 		known[suite.Name] = true
 	}
+	return known
+}()
 
+func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
 	values := make([]string, 0, len(names))
 	seen := make(map[string]bool)
 	for _, part := range names {
@@ -41,7 +46,7 @@ func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
 		if name == "" {
 			continue
 		}
-		if !known[name] {
+		if !knownTLSCipherSuites[name] {
 			return nil, fmt.Errorf("%s: unknown TLS cipher suite %q; select a cipher supported by the Go TLS runtime", label, name)
 		}
 		if !seen[name] {

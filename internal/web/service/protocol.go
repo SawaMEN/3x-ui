@@ -10,9 +10,8 @@ import (
 )
 
 // validateInboundRuntimeTarget validates the protocol against the core that
-// will actually host the inbound. Local inbounds preserve the historical rule
-// that only the sing-box-only protocols are gated here. Node inbounds are
-// checked against the node's persisted core so an Xray master can manage a
+// will actually host the inbound. Node inbounds are checked against the node's
+// persisted core so an Xray master can manage a
 // sing-box node (and vice versa) without validating against the wrong engine.
 func validateInboundRuntimeTarget(inbound *model.Inbound) error {
 	if inbound == nil {
@@ -22,36 +21,23 @@ func validateInboundRuntimeTarget(inbound *model.Inbound) error {
 	if err != nil {
 		return err
 	}
-	if inbound.NodeID != nil {
-		if coreSupportsInboundProtocol(core, inbound.Protocol) {
-			return nil
+	if !coreSupportsInboundProtocol(core, inbound.Protocol) {
+		if inbound.NodeID != nil {
+			return common.NewErrorf("%s is not supported by %s on the selected node", inbound.Protocol, core)
 		}
-		return common.NewErrorf("%s is not supported by %s on the selected node", inbound.Protocol, core)
+		return common.NewErrorf("%s is not supported by %s as the selected core", inbound.Protocol, core)
 	}
-	if inbound.Protocol != model.MASQUE && inbound.Protocol != model.Snell && inbound.Protocol != model.NaiveProxy && inbound.Protocol != model.AnyTLS && inbound.Protocol != model.ShadowTLS {
-		return nil
-	}
-	if IsNativeCore(core) {
-		if inbound.Protocol == model.MASQUE {
-			if _, err := NativeCore(core).CachedVersion(context.Background()); err != nil {
-				return common.NewErrorf("MASQUE requires an installed sing-box 1.15+: %v", err)
-			}
-			if !NativeCore(core).process().SupportsMASQUE() {
-				return common.NewErrorf("MASQUE requires sing-box 1.15.0-alpha.7 or newer; installed: %s", NativeCore(core).process().GetVersion())
-			}
+	// Node binaries are checked by the node. Only the local host can inspect
+	// the installed engine's version and optional features.
+	if inbound.NodeID == nil && inbound.Protocol == model.MASQUE {
+		if _, err := NativeCore(core).CachedVersion(context.Background()); err != nil {
+			return common.NewErrorf("MASQUE requires an installed sing-box 1.15+: %v", err)
 		}
-		return nil
+		if !NativeCore(core).process().SupportsMASQUE() {
+			return common.NewErrorf("MASQUE requires sing-box 1.15.0-alpha.7 or newer; installed: %s", NativeCore(core).process().GetVersion())
+		}
 	}
-	switch inbound.Protocol {
-	case model.NaiveProxy:
-		return common.NewErrorf("NaïveProxy requires sing-box as the selected core")
-	case model.AnyTLS:
-		return common.NewErrorf("AnyTLS requires sing-box as the selected core")
-	case model.ShadowTLS:
-		return common.NewErrorf("ShadowTLS requires sing-box as the selected core")
-	default:
-		return common.NewErrorf("%s requires sing-box as the selected core", inbound.Protocol)
-	}
+	return nil
 }
 
 func validateInboundRuntimeProtocol(protocol model.Protocol, existing *model.Inbound) error {

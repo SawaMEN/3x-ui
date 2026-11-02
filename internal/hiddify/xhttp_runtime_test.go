@@ -83,6 +83,11 @@ func TestXHTTPRuntimeTransfer(t *testing.T) {
 						block, _ := pem.Decode(data)
 						hash := sha256.Sum256(block.Bytes)
 						stream["tlsSettings"] = map[string]any{"serverName": "localhost", "pinnedPeerCertSha256": hex.EncodeToString(hash[:]), "alpn": []any{"h2"}}
+						if !xray {
+							// sing-box cannot express Xray's full-certificate pin.
+							// Trust this fixture's certificate and still verify its SNI.
+							stream["tlsSettings"] = map[string]any{"serverName": "localhost", "alpn": []any{"h2"}, "certificates": []any{map[string]any{"usage": "verify", "certificateFile": cert}}}
+						}
 					}
 					if security == "reality" {
 						target := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))

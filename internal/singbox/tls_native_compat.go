@@ -23,14 +23,21 @@ func normalizeRuntimeTLSConfig(cfg *configJSON) error {
 		if *section.nodes == nil {
 			continue
 		}
-		nodes := make([]map[string]any, len(*section.nodes))
+		nodes := *section.nodes
+		changed := false
 		for i, node := range *section.nodes {
 			label := fmt.Sprintf("%s[%d] %q", section.name, i, rawString(node, "tag"))
-			value, err := normalizeRuntimeTLSValue(node, label)
+			value, modified, err := normalizeRuntimeTLSValue(node, label)
 			if err != nil {
 				return err
 			}
-			nodes[i] = value.(map[string]any)
+			if modified {
+				if !changed {
+					nodes = append([]map[string]any(nil), nodes...)
+					changed = true
+				}
+				nodes[i] = value.(map[string]any)
+			}
 		}
 		*section.nodes = nodes
 	}
@@ -43,7 +50,7 @@ func normalizeRuntimeTLSConfig(cfg *configJSON) error {
 		if *section.node == nil {
 			continue
 		}
-		value, err := normalizeRuntimeTLSValue(*section.node, section.name)
+		value, _, err := normalizeRuntimeTLSValue(*section.node, section.name)
 		if err != nil {
 			return err
 		}
@@ -52,53 +59,85 @@ func normalizeRuntimeTLSConfig(cfg *configJSON) error {
 	return nil
 }
 
-func normalizeRuntimeTLSValue(value any, path string) (any, error) {
+// Copy only ancestors of rewritten TLS fields. All other subtrees are read-only
+// and go directly to json.Marshal; the persisted configuration stays untouched.
+func normalizeRuntimeTLSValue(value any, path string) (any, bool, error) {
 	switch v := value.(type) {
 	case map[string]any:
-		out := maps.Clone(v)
+		out := v
+		changed := false
 		for key, child := range v {
-			normalized, err := normalizeRuntimeTLSValue(child, path+"."+key)
+			switch child.(type) {
+			case map[string]any, []any, []map[string]any:
+			default:
+				continue
+			}
+			childPath := path + "." + key
+			normalized, modified, err := normalizeRuntimeTLSValue(child, childPath)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			if key == "tls" {
-				if tls, ok := normalized.(map[string]any); ok {
-					if err := normalizeNativeTLSCipherSuites(tls, path+".tls"); err != nil {
-						return nil, err
+				if tls, ok := normalized.(map[string]any); ok && tls["cipher_suites"] != nil {
+					if !modified {
+						tls = maps.Clone(tls)
 					}
+					if err := normalizeNativeTLSCipherSuites(tls, childPath); err != nil {
+						return nil, false, err
+					}
+					normalized, modified = tls, true
 				}
 			}
-			out[key] = normalized
+			if modified {
+				if !changed {
+					out = maps.Clone(v)
+					changed = true
+				}
+				out[key] = normalized
+			}
 		}
-		return out, nil
+		return out, changed, nil
 	case []any:
-		if v == nil {
-			return value, nil
-		}
-		out := make([]any, len(v))
+		out := v
+		changed := false
 		for i, child := range v {
-			normalized, err := normalizeRuntimeTLSValue(child, fmt.Sprintf("%s[%d]", path, i))
-			if err != nil {
-				return nil, err
+			switch child.(type) {
+			case map[string]any, []any, []map[string]any:
+			default:
+				continue
 			}
-			out[i] = normalized
+			normalized, modified, err := normalizeRuntimeTLSValue(child, fmt.Sprintf("%s[%d]", path, i))
+			if err != nil {
+				return nil, false, err
+			}
+			if modified {
+				if !changed {
+					out = append([]any(nil), v...)
+					changed = true
+				}
+				out[i] = normalized
+			}
 		}
-		return out, nil
+		return out, changed, nil
 	case []map[string]any:
-		if v == nil {
-			return value, nil
-		}
-		out := make([]map[string]any, len(v))
+		out := v
+		changed := false
 		for i, child := range v {
-			normalized, err := normalizeRuntimeTLSValue(child, fmt.Sprintf("%s[%d]", path, i))
+			normalized, modified, err := normalizeRuntimeTLSValue(child, fmt.Sprintf("%s[%d]", path, i))
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
-			out[i] = normalized.(map[string]any)
+			if modified {
+				if !changed {
+					out = append([]map[string]any(nil), v...)
+					changed = true
+				}
+				out[i] = normalized.(map[string]any)
+			}
 		}
-		return out, nil
+		return out, changed, nil
 	default:
-		return value, nil
+		return value, false, nil
 	}
 }
 
