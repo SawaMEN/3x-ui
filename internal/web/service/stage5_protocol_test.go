@@ -35,6 +35,17 @@ func TestStage5LocalProtocolCompatibility(t *testing.T) {
 	}
 }
 
+func TestStage5UnknownProtocolRejected(t *testing.T) {
+	for _, core := range []string{CoreTypeXray, CoreTypeSingBox, CoreTypeSingBoxUpstream} {
+		if CoreSupportsInboundProtocol(core, model.Protocol("unknown-protocol")) {
+			t.Fatalf("%s accepts an unknown protocol", core)
+		}
+	}
+	if CoreSupportsInboundProtocol("unknown-core", model.VLESS) {
+		t.Fatal("unknown core accepts VLESS")
+	}
+}
+
 func TestStage5IncompatibleProtocolNeverPersists(t *testing.T) {
 	setupBulkDB(t)
 	if err := (&SettingService{}).setString("coreType", CoreTypeSingBoxUpstream); err != nil {

@@ -17,6 +17,7 @@ func takeReverseExtensions(settings map[string]any, protocol string, inbound boo
 		for _, client := range clients {
 			if user, ok := client.(map[string]any); ok {
 				if enabled, explicit := user["enable"].(bool); explicit && !enabled {
+					delete(user, "reverse")
 					continue
 				}
 				users = append(users, user)

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"golang.org/x/net/proxy"
 )
 
@@ -22,6 +23,9 @@ import (
 // must never receive the echo payload.
 func TestStage5ProtocolTraffic(t *testing.T) {
 	binary := os.Getenv("HIDDIFY_RUNTIME_BINARY")
+	if selected := os.Getenv("STAGE5_RUNTIME_BINARY"); selected != "" {
+		binary = selected
+	}
 	if binary == "" {
 		t.Skip("set HIDDIFY_RUNTIME_BINARY for native protocol traffic")
 	}
@@ -29,8 +33,14 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	translateIn, translateOut := TranslateInbound, TranslateOutbound
+	networks := []string{"tcp", "raw", "ws", "grpc", "http", "httpupgrade", "xhttp", "kcp"}
+	if os.Getenv("STAGE5_NATIVE_PROFILE") == "upstream" {
+		translateIn, translateOut = singbox.TranslateXrayInbound, singbox.TranslateXrayOutbound
+		networks = networks[:len(networks)-2] // upstream has neither XHTTP nor mKCP
+	}
 	for _, protocol := range []string{"vless", "vmess", "trojan"} {
-		for _, network := range []string{"tcp", "raw", "ws", "grpc", "http", "httpupgrade", "kcp"} {
+		for _, network := range networks {
 			t.Run(protocol+"/"+network, func(t *testing.T) {
 				dir := t.TempDir()
 				port := stage5Port(t)
@@ -38,6 +48,8 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 				clientStream := map[string]any{"network": network, "security": "none"}
 				for _, stream := range []map[string]any{serverStream, clientStream} {
 					switch network {
+					case "xhttp":
+						stream["xhttpSettings"] = map[string]any{"path": "/stage5", "mode": "auto"}
 					case "ws":
 						stream["wsSettings"] = map[string]any{"path": "/stage5"}
 					case "grpc":
@@ -58,7 +70,7 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 				for i := 1; i <= 3; i++ {
 					users = append(users, map[string]any{"id": fmt.Sprintf("11111111-1111-4111-8111-%012d", i), "password": fmt.Sprintf("password%d", i), "email": fmt.Sprintf("user%d", i), "enable": i != 3})
 				}
-				inbound, err := TranslateInbound(map[string]any{"protocol": protocol, "tag": "server", "listen": "127.0.0.1", "port": port, "settings": map[string]any{"clients": users, "decryption": "none"}, "streamSettings": serverStream})
+				inbound, err := translateIn(map[string]any{"protocol": protocol, "tag": "server", "listen": "127.0.0.1", "port": port, "settings": map[string]any{"clients": users, "decryption": "none"}, "streamSettings": serverStream})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -73,7 +85,7 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 					t.Run(fmt.Sprintf("user%d", user), func(t *testing.T) {
 						socksPort := stage5Port(t)
 						settings := map[string]any{"address": "127.0.0.1", "port": port, "id": fmt.Sprintf("11111111-1111-4111-8111-%012d", user), "password": fmt.Sprintf("password%d", user)}
-						outbound, err := TranslateOutbound(map[string]any{"protocol": protocol, "tag": "proxy", "settings": settings, "streamSettings": clientStream})
+						outbound, err := translateOut(map[string]any{"protocol": protocol, "tag": "proxy", "settings": settings, "streamSettings": clientStream})
 						if err != nil {
 							t.Fatal(err)
 						}
@@ -124,7 +136,7 @@ func TestStage5ProtocolTraffic(t *testing.T) {
 						tls := maps.Clone(clientStream["tlsSettings"].(map[string]any))
 						tls["serverName"] = "wrong.invalid"
 						badStream["tlsSettings"] = tls
-						outbound, err := TranslateOutbound(map[string]any{"protocol": protocol, "tag": "proxy", "settings": map[string]any{"address": "127.0.0.1", "port": port, "password": "password1"}, "streamSettings": badStream})
+						outbound, err := translateOut(map[string]any{"protocol": protocol, "tag": "proxy", "settings": map[string]any{"address": "127.0.0.1", "port": port, "password": "password1"}, "streamSettings": badStream})
 						if err != nil {
 							t.Fatal(err)
 						}
@@ -200,7 +212,11 @@ func stage5Start(t *testing.T, binary, dir, name string, cfg map[string]any, por
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(binary, "srun", "-c", path)
+	command := "srun"
+	if os.Getenv("STAGE5_NATIVE_PROFILE") == "upstream" {
+		command = "run"
+	}
+	cmd := exec.Command(binary, command, "-c", path)
 	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Start(); err != nil {
 		_ = log.Close()

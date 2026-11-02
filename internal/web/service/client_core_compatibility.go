@@ -178,28 +178,19 @@ func CoreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
 }
 
 func coreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
-	switch core {
-	case CoreTypeXray:
-		switch protocol {
-		case model.NaiveProxy, model.MASQUE, model.Snell, model.AnyTLS, model.ShadowTLS:
-			return false
-		default:
-			return true
-		}
-	case CoreTypeSingBoxUpstream:
-		switch protocol {
-		case model.Tunnel, model.Snell, model.MASQUE:
-			return false
-		default:
-			return true
-		}
-	case CoreTypeSingBox:
-		switch protocol {
-		case model.Tunnel:
-			return false
-		default:
-			return true
-		}
+	switch protocol {
+	case model.Tunnel:
+		return core == CoreTypeXray
+	case model.Snell, model.MASQUE:
+		return core == CoreTypeSingBox
+	case model.NaiveProxy, model.AnyTLS, model.ShadowTLS:
+		return IsNativeCore(core)
+	case model.VMESS, model.VLESS, model.HTTP, model.Trojan, model.Shadowsocks,
+		model.Mixed, model.WireGuard, model.Tun, model.Hysteria, model.MTProto,
+		model.AmneziaWG, model.TUIC, model.Pingtunnel, model.TrustTunnel, model.FPTN,
+		model.OpenFlux, model.VetroffProxy, model.Mieru, model.VKTurnProxy, model.Sudoku:
+		// Sidecar protocols are hosted by their own server and relayed by the core.
+		return isSupportedCoreType(core)
 	default:
 		return false
 	}
