@@ -60,12 +60,13 @@ func stage7World(t *testing.T) (string, string) {
 		stage7Cmd(t, "ip", "-n", v.ns, "route", "add", "default", "via", gateway)
 	}
 	stage7Cmd(t, "sysctl", "-w", "net.ipv4.ip_forward=0")
+	stage7Cmd(t, "ip", "-n", target, "addr", "add", "203.0.114.2/32", "dev", "lo")
 	dir := t.TempDir()
 	script := filepath.Join(dir, "echo.py")
 	ready := filepath.Join(dir, "ready")
 	code := `import socket,threading,pathlib,sys
-tcp=socket.socket();tcp.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);tcp.bind(('198.18.0.2',18080));tcp.listen()
-udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);udp.bind(('198.18.0.2',18080))
+tcp=socket.socket();tcp.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);tcp.bind(('0.0.0.0',18080));tcp.listen()
+udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);udp.bind(('0.0.0.0',18080))
 def connection(c):
  try:
   while True:
@@ -283,6 +284,7 @@ func TestStage7KernelGateway(t *testing.T) {
 
 func TestStage7KernelTun(t *testing.T) {
 	stage7World(t)
+	stage7Cmd(t, "ip", "route", "add", "default", "via", "198.18.0.2", "dev", "wan0")
 	beforeRules := stage7Cmd(t, "ip", "-4", "rule", "show")
 	for _, blocked := range []bool{false, true} {
 		t.Run(fmt.Sprint("blocked=", blocked), func(t *testing.T) {
@@ -292,7 +294,7 @@ func TestStage7KernelTun(t *testing.T) {
 			}
 			stop := stage7KernelCore(t, map[string]any{"inbounds": []any{map[string]any{"type": "tun", "tag": "tun-test", "interface_name": "s7tun", "address": []string{"172.31.200.1/30"}, "auto_route": true, "strict_route": true, "stack": "system"}}, "outbounds": []any{map[string]any{"type": "direct", "tag": "direct"}}, "route": route})
 			for end := time.Now().Add(5 * time.Second); ; {
-				if _, err := net.InterfaceByName("s7tun"); err == nil {
+				if _, err := net.InterfaceByName("s7tun"); err == nil && strings.Contains(stage7Cmd(t, "ip", "-4", "rule", "show"), "lookup 2022") {
 					break
 				}
 				if time.Now().After(end) {
@@ -301,7 +303,7 @@ func TestStage7KernelTun(t *testing.T) {
 				time.Sleep(20 * time.Millisecond)
 			}
 			for _, network := range []string{"tcp", "udp"} {
-				stage7Packet(t, "", network, "198.18.0.2", 18080, !blocked)
+				stage7Packet(t, "", network, "203.0.114.2", 18080, !blocked)
 			}
 			var packets uint64
 			for _, name := range []string{"rx_packets", "tx_packets"} {

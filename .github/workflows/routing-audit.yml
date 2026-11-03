@@ -43,6 +43,7 @@ jobs:
             unshare --mount --net --mount-proc bash -euc '
               set -o pipefail
               mount --make-rprivate /
+              mount -t sysfs sysfs /sys
               ip link set lo up
               mount --bind "$STAGE7_TEMP/stage7-resolv.conf" /etc/resolv.conf
               "$STAGE7_GO" tool test2json -p github.com/SawaMEN/3x-ui/v3/internal/web/service -t "$STAGE7_TEMP/service.test" -test.v -test.run "^TestStage7Kernel" -test.timeout 5m | tee kernel.jsonl

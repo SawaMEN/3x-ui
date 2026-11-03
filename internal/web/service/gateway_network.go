@@ -564,12 +564,10 @@ table ip xui_gateway_nat {
         meta nfproto != ipv4 return
         iifname != %q return
         ip saddr != %s return
-        meta l4proto != { tcp, udp } return
         fib daddr type local return
         ip daddr @bypass return
         meta mark & 0x80 == 0x80 return
-        meta mark set (meta mark & 0xffffff3f) | 0x40
-        counter tproxy ip to 127.0.0.1:52345 accept comment "3x-ui gateway v2"
+        meta l4proto { tcp, udp } meta mark set (meta mark & 0xffffff3f) | 0x40 counter tproxy ip to 127.0.0.1:52345 accept comment "3x-ui gateway v2"
     }
 }%s`, lanNetwork, lanInterface, lanNetwork, nat)
 }
