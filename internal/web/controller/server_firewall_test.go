@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"gorm.io/gorm"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -36,6 +37,23 @@ func TestFirewallStatusInitializesAutoSyncWithoutEnablingFirewall(t *testing.T) 
 		if setting.Value != want {
 			t.Fatalf("%s = %q, want %q", key, setting.Value, want)
 		}
+	}
+	// Repeated GETs should not write initialized/safety settings again.
+	writes := 0
+	callbackName := "stage7_status_writes"
+	if err := database.GetDB().Callback().Update().Before("gorm:update").Register(callbackName, func(tx *gorm.DB) { writes++ }); err != nil {
+		t.Fatal(err)
+	}
+	defer database.GetDB().Callback().Update().Remove(callbackName)
+	for i := 0; i < 2; i++ {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "http://panel.example:8443/panel/api/server/firewall/status", nil))
+		if response.Code != http.StatusOK {
+			t.Fatal(response.Body.String())
+		}
+	}
+	if writes != 0 {
+		t.Fatalf("status polling rewrote settings %d times", writes)
 	}
 	var count int64
 	if err := database.GetDB().Model(&model.Setting{}).Where("key = ?", "firewallManagedEnabled").Count(&count).Error; err != nil {

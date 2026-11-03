@@ -124,3 +124,46 @@ func TestStage7GatewayResumeRouteFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestStage7StatusInitializationDoesNotOverrideInterval(t *testing.T) {
+	setupSettingTestDB(t)
+	// Polling the management page must not shorten a configured reconcile period.
+	for {
+		select {
+		case <-firewallSyncTrigger:
+			continue
+		default:
+			goto drained
+		}
+	}
+drained:
+	t.Cleanup(func() {
+		for {
+			select {
+			case <-firewallSyncTrigger:
+				continue
+			default:
+				return
+			}
+		}
+	})
+	s := &FirewallService{}
+	if err := s.MarkControlInitialized(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-firewallSyncTrigger:
+	default:
+		t.Fatal("initial visit did not schedule reconciliation")
+	}
+	for i := 0; i < 3; i++ {
+		if err := s.MarkControlInitialized(); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-firewallSyncTrigger:
+			t.Fatal("status polling bypassed configured interval")
+		default:
+		}
+	}
+}

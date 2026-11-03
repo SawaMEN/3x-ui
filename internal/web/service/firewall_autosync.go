@@ -33,7 +33,14 @@ func firewallSyncInterval() time.Duration {
 }
 
 func (s *FirewallService) MarkControlInitialized() error {
-	return (&SettingService{}).setBool(firewallControlInitializedKey, true)
+	if firewallControlInitialized() {
+		return nil
+	}
+	if err := (&SettingService{}).setBool(firewallControlInitializedKey, true); err != nil {
+		return err
+	}
+	TriggerFirewallSync()
+	return nil
 }
 
 // RememberSafetyPort persists the externally visible panel port discovered on
@@ -47,6 +54,9 @@ func (s *FirewallService) RememberSafetyPort(port int) error {
 	settings := &SettingService{}
 	panelPort, _ := settings.GetPort()
 	previous := rememberedFirewallSafetyPort()
+	if previous == port {
+		return nil
+	}
 	if previous > 0 && previous != panelPort && port == panelPort {
 		return nil
 	}

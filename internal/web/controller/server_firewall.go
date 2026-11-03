@@ -69,7 +69,6 @@ func (a *FirewallController) status(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	service.TriggerFirewallSync()
 	status, err := a.firewallService.GetManagedStatusSafe(c.Request.Context(), firewallSafetyPort(c))
 	a.jsonStatus(c, status, err)
 }

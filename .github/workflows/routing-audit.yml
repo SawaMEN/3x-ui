@@ -166,7 +166,7 @@ jobs:
         run: |
           set -o pipefail
           go test -race -timeout 20m -p 2 -json ./internal/web/service -run 'Stage7|Routing|Route|Gateway|Firewall|Automatic|Balancer|AdBlock|YouTube|DomainFront|DNS|Tun' -count=1 | tee policies.jsonl
-          python3 tools/ci/require-go-tests.py policies.jsonl TestStage7DeletedInboundCannotBroadenPolicy TestStage7CatalogDoesNotEraseInvalidRules TestStage7FirewallInterval TestStage7NftReplacementFailurePreservesFirewall TestStage7GatewayPauseCannotBecomeDirectFallback TestStage7ExternalFirewallRules TestStage7FirewallRuleLexer TestStage7GatewayResumeRouteFormat
+          python3 tools/ci/require-go-tests.py policies.jsonl TestStage7DeletedInboundCannotBroadenPolicy TestStage7CatalogDoesNotEraseInvalidRules TestStage7FirewallInterval TestStage7NftReplacementFailurePreservesFirewall TestStage7GatewayPauseCannotBecomeDirectFallback TestStage7ExternalFirewallRules TestStage7FirewallRuleLexer TestStage7GatewayResumeRouteFormat TestStage7StatusInitializationDoesNotOverrideInterval
           go test -race -p 2 -json ./internal/gateway ./internal/routingcatalog ./internal/domainfront ./internal/adblock/... ./internal/singbox ./internal/hiddify ./internal/web/controller -count=1 | tee engines.jsonl
       - uses: actions/setup-node@v7
         with:
