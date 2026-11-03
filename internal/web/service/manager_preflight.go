@@ -170,6 +170,7 @@ func managerCheckCertificates(ib *model.Inbound) error {
 		Certificate string `json:"certificate"`
 		PrivateKey  string `json:"privateKey"`
 		TLS         struct {
+			Enabled         *bool  `json:"enabled"`
 			ServerName      string `json:"serverName"`
 			CertificatePath string `json:"certificatePath"`
 			KeyPath         string `json:"keyPath"`
@@ -180,7 +181,7 @@ func managerCheckCertificates(ib *model.Inbound) error {
 		if ib.Protocol == model.VetroffProxy {
 			certificate, key, name = native.Certificate, native.PrivateKey, native.Hostname
 		}
-		if certificate != "" || key != "" {
+		if (ib.Protocol == model.VetroffProxy || native.TLS.Enabled == nil || *native.TLS.Enabled) && (certificate != "" || key != "") {
 			certBytes, err := recoveryReadFile(certificate)
 			if err != nil {
 				return fmt.Errorf("certificate: %w", err)
@@ -196,7 +197,8 @@ func managerCheckCertificates(ib *model.Inbound) error {
 	}
 
 	var stream struct {
-		TLS struct {
+		Security string `json:"security"`
+		TLS      struct {
 			ServerName   string `json:"serverName"`
 			Certificates []struct {
 				CertificateFile string   `json:"certificateFile"`
@@ -212,8 +214,11 @@ func managerCheckCertificates(ib *model.Inbound) error {
 			return err
 		}
 	}
+	if !strings.EqualFold(stream.Security, "tls") {
+		return nil
+	}
 	for _, cert := range stream.TLS.Certificates {
-		if cert.Usage == "verify" {
+		if strings.EqualFold(cert.Usage, "verify") {
 			continue
 		}
 		certificate, key := []byte(strings.Join(cert.Certificate, "\n")), []byte(strings.Join(cert.Key, "\n"))

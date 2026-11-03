@@ -100,7 +100,7 @@ def main():
                     db.execute("INSERT INTO settings(key,value) VALUES('subEnable','false')")
                 name = network + '-' + role
                 containers.append(name)
-                subprocess.run(['docker', 'run', '-d', '--name', name, '--network', network, '--cap-drop', 'ALL',
+                subprocess.run(['docker', 'run', '-d', '--name', name, '--network', network, '--cap-drop', 'ALL', '--user', f'{os.getuid()}:{os.getgid()}',
                     '-p', '127.0.0.1::2053', '-v', f'{panel}:/panel:ro', '-v', f'{home}/db:/data',
                     '-v', f'{home}/bin:/runtime', '-e', 'XUI_DB_FOLDER=/data', '-e', 'XUI_BIN_FOLDER=/runtime',
                     '-e', 'XUI_LOG_FOLDER=/data', '-e', 'XUI_INIT_WEB_BASE_PATH=/', '-e', 'NODE_TOKEN_ENCRYPTION=required',

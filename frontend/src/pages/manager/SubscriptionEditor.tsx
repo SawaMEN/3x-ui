@@ -351,8 +351,7 @@ export default function SubscriptionEditor({
                                 ) : (
                                   <FormField name={`entries.${i}.templateId`} label={m('template')}>
                                     <Select
-                                      showSearch
-                                      optionFilterProp="label"
+                                      showSearch={{ optionFilterProp: 'label' }}
                                       options={templates
                                         .filter(
                                           (v) =>
