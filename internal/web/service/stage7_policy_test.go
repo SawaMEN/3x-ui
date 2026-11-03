@@ -100,3 +100,27 @@ func TestStage7CatalogDoesNotEraseInvalidRules(t *testing.T) {
 		t.Fatal("catalog expansion silently erased malformed routing policy")
 	}
 }
+
+// ip -N renders route types numerically (type 2), whereas ownership uses
+// textual local routes. Keep numeric table lookup for rules, not route types.
+func TestStage7GatewayResumeRouteFormat(t *testing.T) {
+	s, h, cfg := newGatewayTestHost(t)
+	baseRun := s.run
+	s.run = func(ctx context.Context, name string, args ...string) (string, error) {
+		if name == "ip" && strings.Contains(strings.Join(args, " "), "route show") && strings.Contains(strings.Join(args, " "), "-N") && h.route != "" {
+			return "type 2 default dev lo scope 254\n", nil
+		}
+		return baseRun(ctx, name, args...)
+	}
+	for i := 0; i < 2; i++ {
+		if err := s.Enable(context.Background(), cfg); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Suspend(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Disable(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}

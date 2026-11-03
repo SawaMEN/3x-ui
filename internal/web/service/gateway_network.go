@@ -369,7 +369,7 @@ func (s *GatewayNetworkService) applyGatewayNetwork(ctx context.Context, cfg Gat
 	if err = s.configureGatewayRPFilter(ctx, cfg.LANInterface); err != nil {
 		return err
 	}
-	routes, routeErr := s.command(ctx, "ip", "-N", "-4", "route", "show", "table", "100")
+	routes, routeErr := s.command(ctx, "ip", "-4", "route", "show", "table", "100")
 	if routeErr != nil && !strings.Contains(routes, "FIB table does not exist") {
 		return routeErr
 	}

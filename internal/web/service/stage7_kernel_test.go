@@ -66,7 +66,7 @@ func stage7World(t *testing.T) (string, string) {
 	ready := filepath.Join(dir, "ready")
 	code := `import socket,threading,pathlib,sys
 tcp=socket.socket();tcp.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);tcp.bind(('0.0.0.0',18080));tcp.listen()
-udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);udp.bind(('0.0.0.0',18080))
+
 def connection(c):
  try:
   while True:
@@ -74,10 +74,13 @@ def connection(c):
    if not b: break
    c.sendall(b)
  finally: c.close()
-def datagrams():
+def datagrams(udp):
  while True:
   b,a=udp.recvfrom(65535);udp.sendto(b,a)
-threading.Thread(target=datagrams,daemon=True).start()
+# A connected UDP client only accepts replies from its destination address.
+for address in ('198.18.0.2','203.0.114.2'):
+ udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);udp.bind((address,18080))
+ threading.Thread(target=datagrams,args=(udp,),daemon=True).start()
 pathlib.Path(sys.argv[1]).write_text('ready')
 while True:
  c,a=tcp.accept();threading.Thread(target=connection,args=(c,),daemon=True).start()
