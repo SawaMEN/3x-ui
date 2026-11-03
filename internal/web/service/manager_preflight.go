@@ -35,7 +35,7 @@ func (s *ManagerService) Preflight(ctx context.Context, owner int, sub model.Man
 	if !sub.Enabled {
 		return ManagerPreflight{Entries: []ManagerPreflightEntry{{Message: "enable the subscription before generating connections"}}}
 	}
-	ports := map[string]bool{}
+	var ports []*model.Inbound
 	for i, e := range sub.Entries {
 		result := ManagerPreflightEntry{Index: i + 1, Ready: true, Message: "Ready"}
 		if e.Mode != "custom" {
@@ -61,15 +61,13 @@ func (s *ManagerService) Preflight(ctx context.Context, owner int, sub model.Man
 						err = s.preflightTarget(ctx, ib)
 					}
 					if ib.Port > 0 {
-						node := 0
-						if ib.NodeID != nil {
-							node = *ib.NodeID
+						for _, prior := range ports {
+							if managerGenerationPortConflict(prior, ib) {
+								err = fmt.Errorf("listener on port %d is used more than once in this generation", ib.Port)
+								break
+							}
 						}
-						key := fmt.Sprintf("%d/%d", node, ib.Port)
-						if ports[key] {
-							err = fmt.Errorf("port %d is used more than once in this generation", ib.Port)
-						}
-						ports[key] = true
+						ports = append(ports, ib)
 					}
 				}
 			}
@@ -141,27 +139,74 @@ func PreflightInbound(ctx context.Context, ib *model.Inbound) error {
 	if ib.Port == 0 {
 		return nil
 	}
-	var count int64
-	if err := database.GetDB().Model(&model.Inbound{}).Where("port = ? AND node_id IS NULL AND enable = ?", ib.Port, true).Count(&count).Error; err != nil {
+	return managerPreflightPorts(ctx, ib)
+}
+
+func managerPreflightPorts(ctx context.Context, ib *model.Inbound) error {
+	detail, err := (&InboundService{}).checkPortConflict(ib, 0)
+	if err != nil {
 		return err
 	}
-	if count > 0 {
-		return fmt.Errorf("port %d is already assigned", ib.Port)
+	if detail != nil {
+		return fmt.Errorf("%s", detail.String())
 	}
-	address := net.JoinHostPort(strings.Trim(ib.Listen, "[]"), strconv.Itoa(ib.Port))
-	udp := ib.Protocol == model.Hysteria || ib.Protocol == model.TUIC || ib.Protocol == model.WireGuard || ib.Protocol == model.AmneziaWG
-	if udp {
-		c, err := (&net.ListenConfig{}).ListenPacket(ctx, "udp", address)
-		if err != nil {
-			return fmt.Errorf("UDP port %d: %w", ib.Port, err)
+	for _, listener := range managerPortListeners(ib) {
+		for _, span := range inboundListenerSpans(listener) {
+			for port := span.first; port <= span.last; port++ {
+				if port < 1 || port > 65535 {
+					return fmt.Errorf("invalid port %d", port)
+				}
+				address := net.JoinHostPort(strings.Trim(listener.Listen, "[]"), strconv.Itoa(port))
+				if span.transport&transportTCP != 0 {
+					c, err := (&net.ListenConfig{}).Listen(ctx, "tcp", address)
+					if err != nil {
+						return fmt.Errorf("TCP port %d: %w", port, err)
+					}
+					if err := c.Close(); err != nil {
+						return err
+					}
+				}
+				if span.transport&transportUDP != 0 {
+					c, err := (&net.ListenConfig{}).ListenPacket(ctx, "udp", address)
+					if err != nil {
+						return fmt.Errorf("UDP port %d: %w", port, err)
+					}
+					if err := c.Close(); err != nil {
+						return err
+					}
+				}
+			}
 		}
-		return c.Close()
 	}
-	c, err := (&net.ListenConfig{}).Listen(ctx, "tcp", address)
-	if err != nil {
-		return fmt.Errorf("TCP port %d: %w", ib.Port, err)
+	return nil
+}
+
+func managerPortListeners(ib *model.Inbound) []*model.Inbound {
+	listeners := []*model.Inbound{ib}
+	if udp := vetroffH3Listener(ib); udp != nil {
+		listeners = append(listeners, udp)
 	}
-	return c.Close()
+	return listeners
+}
+
+func managerGenerationPortConflict(a, b *model.Inbound) bool {
+	node := func(ib *model.Inbound) int {
+		if ib.NodeID != nil {
+			return *ib.NodeID
+		}
+		return 0
+	}
+	if node(a) != node(b) {
+		return false
+	}
+	for _, x := range managerPortListeners(a) {
+		for _, y := range managerPortListeners(b) {
+			if port, _ := spansOverlap(inboundListenerSpans(x), inboundListenerSpans(y)); port > 0 && listenOverlaps(x.Listen, y.Listen) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func managerCheckCertificates(ib *model.Inbound) error {

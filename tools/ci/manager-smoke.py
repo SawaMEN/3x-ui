@@ -59,11 +59,11 @@ def public(base, token):
         return json.load(response)
 
 
-def exact(conn, size):
+def exact(conn, size, stage='payload'):
     out = b''
     while len(out) < size:
         part = conn.recv(size - len(out))
-        assert part, 'unexpected EOF'
+        assert part, f'unexpected EOF during {stage}'
         out += part
     return out
 
@@ -98,6 +98,15 @@ def main():
                 with sqlite3.connect(home / 'db/x-ui.db') as db:
                     db.execute("DELETE FROM settings WHERE key='subEnable'")
                     db.execute("INSERT INTO settings(key,value) VALUES('subEnable','false')")
+                    # This isolated test deliberately proxies to the bridge echo server.
+                    # Keep the production template's private-egress protection unchanged.
+                    template = json.loads((Path(__file__).resolve().parents[2] / 'internal/web/service/config.json').read_text())
+                    template['routing']['rules'] = [r for r in template['routing']['rules'] if 'geoip:private' not in r.get('ip', [])]
+                    for outbound in template['outbounds']:
+                        if outbound['protocol'] == 'freedom':
+                            outbound['settings']['finalRules'] = []
+                    db.execute("DELETE FROM settings WHERE key='xrayTemplateConfig'")
+                    db.execute("INSERT INTO settings(key,value) VALUES('xrayTemplateConfig',?)", (json.dumps(template),))
                 name = network + '-' + role
                 containers.append(name)
                 subprocess.run(['docker', 'run', '-d', '--name', name, '--network', network, '--cap-drop', 'ALL', '--user', f'{os.getuid()}:{os.getgid()}',
@@ -151,8 +160,9 @@ def main():
                     for index, outbound in enumerate(outbounds):
                         with socket.socket() as reserve:
                             reserve.bind(('127.0.0.1', 0)); port = reserve.getsockname()[1]
+                        print(f"Testing {outbound['type']} {outbound.get('server')}:{outbound.get('server_port')} transport={outbound.get('transport', {}).get('type', 'tcp')}", flush=True)
                         outbound = {**outbound, 'tag': 'test'}
-                        cfg = {'log': {'level': 'error'}, 'inbounds': [{'type': 'mixed', 'listen': '127.0.0.1', 'listen_port': port}],
+                        cfg = {'log': {'level': 'debug'}, 'inbounds': [{'type': 'mixed', 'listen': '127.0.0.1', 'listen_port': port}],
                                'outbounds': [outbound], 'route': {'final': 'test'}}
                         path = root / f'client-{index}.json'; path.write_text(json.dumps(cfg))
                         subprocess.run([str(core_dir / 'hiddify-core-linux-amd64'), 'check', '-c', str(path)], cwd=core_dir, check=True)
@@ -164,9 +174,9 @@ def main():
                                         raise RuntimeError((root / f'client-{index}.log').read_text())
                                     conn = socket.create_connection(('127.0.0.1', port), timeout=4)
                                     conn.settimeout(5)
-                                    conn.sendall(b'\x05\x01\x00'); assert exact(conn, 2) == b'\x05\x00'
+                                    conn.sendall(b'\x05\x01\x00'); assert exact(conn, 2, 'SOCKS negotiation') == b'\x05\x00'
                                     conn.sendall(b'\x05\x01\x00\x01' + socket.inet_aton(gateway) + struct.pack('!H', echo.server_address[1]))
-                                    header = exact(conn, 4); assert header[:2] == b'\x05\x00', header
+                                    header = exact(conn, 4, 'SOCKS connect reply'); assert header[:2] == b'\x05\x00', header
                                     exact(conn, 4 if header[3] == 1 else 16); exact(conn, 2)
                                     payload = secrets.token_bytes(4096); conn.sendall(payload); assert exact(conn, len(payload)) == payload
                                     conn.close(); return True
