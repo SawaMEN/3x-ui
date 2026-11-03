@@ -11,6 +11,39 @@ concurrency:
   group: routing-audit-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download pinned engines
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/download-audit-cores.sh ${{ matrix.arch }}
+      - name: Packet backed routing policy
+        run: |
+          set -o pipefail
+          go test -race -json ./internal/hiddify -run '^TestStage7' -count=1 | tee routing-native.jsonl
+          python3 tools/ci/require-go-tests.py routing-native.jsonl TestStage7RoutingTraffic TestStage7DNSPolicy
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: routing-native-${{ matrix.arch }}
+          path: |
+            routing-native.jsonl
+            native-binaries.sha256
   contracts:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
