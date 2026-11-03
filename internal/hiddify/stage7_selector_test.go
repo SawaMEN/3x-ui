@@ -49,6 +49,20 @@ func TestStage7SelectorTraffic(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer client.Close()
+			// The SOCKS listener can open before the management API is bound.
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				_, err := client.State(ctx, "selection")
+				cancel()
+				if err == nil {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("selector API did not become ready", err)
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
 			for _, target := range []string{"A", "B", "all-dead", "A"} {
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 				selected, err := client.Select(ctx, "selection", target)
