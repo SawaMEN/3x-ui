@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
@@ -17,7 +18,9 @@ func NewManagerController(g *gin.RouterGroup) *ManagerController {
 	a := &ManagerController{}
 	g = g.Group("/manager")
 	g.GET("/state", a.state)
+	g.GET("/subscriptions/:id", a.detail)
 	g.POST("/subscriptions", a.save)
+	g.POST("/preflight", a.preflight)
 	g.POST("/subscriptions/:id/rotate", a.rotate)
 	g.POST("/subscriptions/:id/delete", a.remove)
 	g.POST("/rotate", a.rotateAll)
@@ -32,7 +35,8 @@ func NewManagerController(g *gin.RouterGroup) *ManagerController {
 
 func (a *ManagerController) state(c *gin.Context) {
 	page, _ := strconv.Atoi(c.Query("page"))
-	v, err := a.service.Snapshot(session.GetLoginUser(c).Id, page, c.Query("state"), c.Query("kind"))
+	subPage, _ := strconv.Atoi(c.Query("subscriptionPage"))
+	v, err := a.service.Snapshot(session.GetLoginUser(c).Id, page, c.Query("state"), c.Query("kind"), service.ManagerListOptions{Page: subPage, Search: c.Query("search"), Compact: true})
 	jsonObj(c, v, err)
 }
 
@@ -119,4 +123,22 @@ func (a *ManagerController) uninstallRelay(c *gin.Context) { a.relayQueue(c, "re
 func (a *ManagerController) deleteRelay(c *gin.Context)    { a.relayQueue(c, "relay-delete") }
 func ServeManagerSubscription(c *gin.Context) {
 	service.ServeManagerSubscription(c.Writer, c.Request, c.Param("token"))
+}
+
+func (a *ManagerController) preflight(c *gin.Context) {
+	var in model.ManagerSubscription
+	if !managerBind(c, &in) {
+		return
+	}
+	jsonObj(c, a.service.Preflight(c.Request.Context(), session.GetLoginUser(c).Id, in), nil)
+}
+
+func (a *ManagerController) detail(c *gin.Context) {
+	id, ok := managerID(c)
+	if !ok {
+		return
+	}
+	var sub model.ManagerSubscription
+	err := database.GetDB().Where("id = ? AND user_id = ?", id, session.GetLoginUser(c).Id).First(&sub).Error
+	jsonObj(c, sub, err)
 }

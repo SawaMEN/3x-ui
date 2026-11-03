@@ -816,24 +816,25 @@ type Node struct {
 	// Heartbeat-updated fields. UpdatedAt advances on every probe even when
 	// the row is otherwise unchanged so the UI's "last seen" tooltip is
 	// truthful without us having to read LastHeartbeat separately.
-	Status           string             `json:"status" gorm:"default:unknown" example:"online"` // online|offline|unknown
-	LastHeartbeat    int64              `json:"lastHeartbeat" example:"1700000000"`             // unix seconds, 0 = never
-	LatencyMs        int                `json:"latencyMs" example:"42"`
-	XrayVersion      string             `json:"xrayVersion" example:"25.10.31"`
-	SingBoxVersion   string             `json:"singboxVersion" gorm:"column:singbox_version"`
-	SingBoxInstalled bool               `json:"singboxInstalled" gorm:"column:singbox_installed;default:false"`
-	SingBoxKnown     bool               `json:"singboxKnown" gorm:"column:singbox_known;default:false"`
-	CoreVersion      string             `json:"coreVersion"`
-	CoreState        string             `json:"coreState"`
-	CoreError        string             `json:"coreError"`
-	CoreCapabilities *core.Capabilities `json:"coreCapabilities" gorm:"serializer:json"`
-	CoreType         string             `json:"coreType" gorm:"column:core_type"`
-	RunningCore      string             `json:"runningCore" gorm:"column:running_core"`
-	PanelVersion     string             `json:"panelVersion" gorm:"column:panel_version" example:"v3.x.x"`
-	PanelEdition     string             `json:"panelEdition" gorm:"column:panel_edition;default:unknown" example:"sawamen"`
-	CpuPct           float64            `json:"cpuPct" example:"23.5"`
-	MemPct           float64            `json:"memPct" example:"45.1"`
-	UptimeSecs       uint64             `json:"uptimeSecs" example:"86400"`
+	Status               string                          `json:"status" gorm:"default:unknown" example:"online"` // online|offline|unknown
+	LastHeartbeat        int64                           `json:"lastHeartbeat" example:"1700000000"`             // unix seconds, 0 = never
+	LatencyMs            int                             `json:"latencyMs" example:"42"`
+	XrayVersion          string                          `json:"xrayVersion" example:"25.10.31"`
+	SingBoxVersion       string                          `json:"singboxVersion" gorm:"column:singbox_version"`
+	SingBoxInstalled     bool                            `json:"singboxInstalled" gorm:"column:singbox_installed;default:false"`
+	SingBoxKnown         bool                            `json:"singboxKnown" gorm:"column:singbox_known;default:false"`
+	CoreVersion          string                          `json:"coreVersion"`
+	CoreState            string                          `json:"coreState"`
+	CoreError            string                          `json:"coreError"`
+	CoreCapabilities     *core.Capabilities              `json:"coreCapabilities" gorm:"serializer:json"`
+	ProtocolAvailability map[string]ProtocolAvailability `json:"protocolAvailability,omitempty" gorm:"serializer:json"`
+	CoreType             string                          `json:"coreType" gorm:"column:core_type"`
+	RunningCore          string                          `json:"runningCore" gorm:"column:running_core"`
+	PanelVersion         string                          `json:"panelVersion" gorm:"column:panel_version" example:"v3.x.x"`
+	PanelEdition         string                          `json:"panelEdition" gorm:"column:panel_edition;default:unknown" example:"sawamen"`
+	CpuPct               float64                         `json:"cpuPct" example:"23.5"`
+	MemPct               float64                         `json:"memPct" example:"45.1"`
+	UptimeSecs           uint64                          `json:"uptimeSecs" example:"86400"`
 	// Nil on legacy rows and responses: zero remains a valid measured value.
 	UnavailableMetrics []string `json:"unavailableMetrics,omitempty" gorm:"serializer:json;column:unavailable_metrics"`
 	NetUp              uint64   `json:"netUp" gorm:"column:net_up" example:"1048576"`
@@ -881,27 +882,28 @@ type Node struct {
 // computed by the consuming master from its own per-GUID data, never trusted
 // from the child, so this carries identity/health only.
 type NodeSummary struct {
-	Guid             string             `json:"guid"`
-	ParentGuid       string             `json:"parentGuid"`
-	Name             string             `json:"name"`
-	Address          string             `json:"address"`
-	Scheme           string             `json:"scheme"`
-	Port             int                `json:"port"`
-	Status           string             `json:"status"`
-	LastHeartbeat    int64              `json:"lastHeartbeat"`
-	LatencyMs        int                `json:"latencyMs"`
-	PanelVersion     string             `json:"panelVersion"`
-	PanelEdition     string             `json:"panelEdition"`
-	XrayVersion      string             `json:"xrayVersion"`
-	SingBoxVersion   string             `json:"singboxVersion"`
-	SingBoxInstalled bool               `json:"singboxInstalled"`
-	SingBoxKnown     bool               `json:"singboxKnown"`
-	CoreVersion      string             `json:"coreVersion"`
-	CoreState        string             `json:"coreState"`
-	CoreError        string             `json:"coreError"`
-	CoreCapabilities *core.Capabilities `json:"coreCapabilities"`
-	CoreType         string             `json:"coreType"`
-	RunningCore      string             `json:"runningCore"`
+	Guid                 string                          `json:"guid"`
+	ParentGuid           string                          `json:"parentGuid"`
+	Name                 string                          `json:"name"`
+	Address              string                          `json:"address"`
+	Scheme               string                          `json:"scheme"`
+	Port                 int                             `json:"port"`
+	Status               string                          `json:"status"`
+	LastHeartbeat        int64                           `json:"lastHeartbeat"`
+	LatencyMs            int                             `json:"latencyMs"`
+	PanelVersion         string                          `json:"panelVersion"`
+	PanelEdition         string                          `json:"panelEdition"`
+	XrayVersion          string                          `json:"xrayVersion"`
+	SingBoxVersion       string                          `json:"singboxVersion"`
+	SingBoxInstalled     bool                            `json:"singboxInstalled"`
+	SingBoxKnown         bool                            `json:"singboxKnown"`
+	CoreVersion          string                          `json:"coreVersion"`
+	CoreState            string                          `json:"coreState"`
+	CoreError            string                          `json:"coreError"`
+	CoreCapabilities     *core.Capabilities              `json:"coreCapabilities"`
+	ProtocolAvailability map[string]ProtocolAvailability `json:"protocolAvailability,omitempty"`
+	CoreType             string                          `json:"coreType"`
+	RunningCore          string                          `json:"runningCore"`
 	// Core states/errors are forwarded so masters can surface failures on transitive sub-nodes too.
 	XrayState    string `json:"presenceRegistry"`
 	XrayError    string `json:"xrayError,omitempty"`

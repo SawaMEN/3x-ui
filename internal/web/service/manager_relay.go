@@ -89,15 +89,7 @@ func (s *ManagerService) SaveRelay(owner int, in ManagerRelayInput) (*model.Mana
 		}
 		return tx.Save(&r).Error
 	})
-	if err == nil {
-		for _, host := range []string{in.Address, node.Address} {
-			if name, e := managerDomain(host); e == nil {
-				if e := s.ImportDomains(owner, name, false); e != nil {
-					return nil, e
-				}
-			}
-		}
-	}
+
 	return &r, err
 }
 
@@ -136,7 +128,13 @@ func (s *ManagerService) executeRelay(ctx context.Context, op *model.ManagerOper
 			return err
 		}
 		for _, sub := range subs {
-			for _, e := range append(slices.Clone(sub.Entries), sub.Published...) {
+			entries := append(slices.Clone(sub.Entries), sub.Published...)
+			for _, g := range sub.Retired {
+				if g.ExpiresAt > time.Now().UnixMilli() {
+					entries = append(entries, g.Entries...)
+				}
+			}
+			for _, e := range entries {
 				if e.RelayID == r.ID {
 					return fmt.Errorf("remove relay from subscriptions and regenerate before uninstalling")
 				}
@@ -215,6 +213,11 @@ func (s *ManagerService) applyRelay(ctx context.Context, r model.ManagerRelay, i
 			continue
 		}
 		entries = append(entries, sub.Published...)
+		for _, g := range sub.Retired {
+			if g.ExpiresAt > time.Now().UnixMilli() {
+				entries = append(entries, g.Entries...)
+			}
+		}
 	}
 	ports := []int{}
 	for _, e := range entries {

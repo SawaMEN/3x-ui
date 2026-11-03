@@ -28,6 +28,7 @@ on:
       - sub
       - dns
       - telemt
+      - manager
     paths:
       - "**.go"
       - "deploy/speed/**"
@@ -483,3 +484,24 @@ jobs:
           SINGBOX_TEST_BINARY: ${{ runner.temp }}/speed-core/hiddify-core-linux-amd64
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/speed-core/hiddify-core-linux-amd64
         run: go test -race ./internal/clientlimit/... ./internal/mieru ./internal/sudoku ./internal/singbox ./internal/web/service -run '^TestNativeBroker|^TestMieruSpeedLimitLiveServer$|^TestSudokuSpeedLimits$|^TestMASQUESpeedLimits$|^TestClientSpeedLimit' -count=1 -timeout=5m
+
+  manager-live:
+    name: Manager local and remote protocol lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Fetch verified owner core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/fetch-latest-kernel.py --arch amd64 --output "$RUNNER_TEMP/manager-core"
+      - name: Build panel
+        run: |
+          make dist-stub
+          go build -o "$RUNNER_TEMP/manager-panel" .
+      - name: Exercise two actual installations and encrypted recovery
+        run: python3 tools/ci/manager-smoke.py --panel "$RUNNER_TEMP/manager-panel" --core-dir "$RUNNER_TEMP/manager-core"

@@ -38,6 +38,7 @@ export const SubscriptionSchema = z.object({
   enabled: z.boolean().default(true),
   autoRotate: z.boolean().default(false),
   intervalMinutes: z.number().min(10).max(525600).default(60),
+  graceMinutes: z.number().min(60).max(1440).default(120),
   nextRotation: z.number().default(0),
   lastRotation: z.number().default(0),
   happ: z.string().default(''),
@@ -77,6 +78,10 @@ export const SnapshotSchema = z.object({
     }),
   ),
   operationTotal: z.number(),
+  subscriptionTotal: z.number().default(0),
+  pendingOperations: z.number().default(0),
+  subscriptionPage: z.number().default(1),
+  pageSize: z.number().default(25),
   clients: z.record(
     z.string(),
     z.object({
@@ -105,4 +110,9 @@ export const newEntry = () =>
 export const newSubscription = (): Subscription => ({
   ...SubscriptionSchema.parse({ name: 'New', entries: [newEntry()] }),
   name: '',
+});
+
+export const PreflightSchema = z.object({
+  ready: z.boolean(),
+  entries: z.array(z.object({ index: z.number(), ready: z.boolean(), message: z.string() })),
 });

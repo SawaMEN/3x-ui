@@ -52,3 +52,7 @@ The initial implementation required an existing inbound template, which did not 
 The default entry mode now stores an independent protocol recipe in the existing JSON entry column. The preset picker includes the original connection types plus client-capable protocols from this fork. Each entry has its own protocol/transport/security settings and local/node destination. The native configuration editor saves drafts without creating an inbound; the manager later generates listeners through the normal services and runtime. Existing template, attachment and external-link modes remain supported.
 
 Regression coverage includes generation without any saved inbound on both destinations, a mixed local VLESS/remote VMess bundle with independent WebSocket settings, repeated Reality generation with new mathematically consistent key pairs, VetroffProxy deployment to a node, and refusing publication when the remote core restart fails. Frontend tests verify recipe submission and that editing a recipe never calls the inbound-create API. Live-node handshakes and live SSH forwarding still require separate infrastructure.
+
+## Reliability and complete recovery
+
+See [Manager reliability and recovery](manager-hardening.md) for HWID enforcement, generation rollback, transition periods, readiness checks, compact listing and the encrypted recovery CLI.

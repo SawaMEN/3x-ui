@@ -3222,7 +3222,14 @@
       "preset": "Protocol and connection type",
       "configureGeneration": "Connection settings",
       "recipeHint": "A new inbound is generated from this recipe on the selected server. No existing inbound is required. For TLS, open settings and select a certificate available on that server.",
-      "customConfig": "Individual configuration"
+      "customConfig": "Individual configuration",
+      "preflight": "Check readiness",
+      "ready": "All connections are ready for generation",
+      "graceMinutes": "Keep previous connections (minutes)",
+      "graceHint": "Previous connections remain available while devices update their subscriptions. Minimum: 60 minutes.",
+      "cleanup_pending": "Cleanup required",
+      "recovered": "Recovered",
+      "cleanup": "Cleanup"
     }
   },
   "tgbot": {

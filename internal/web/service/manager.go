@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -17,91 +16,12 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/link"
 )
 
 var managerMu sync.Mutex
-
-type (
-	ManagerService    struct{}
-	ManagerClientInfo struct {
-		Email      string `json:"email"`
-		Up         int64  `json:"up"`
-		Down       int64  `json:"down"`
-		Total      int64  `json:"total"`
-		ExpiryTime int64  `json:"expiryTime"`
-		Enabled    bool   `json:"enabled"`
-	}
-)
-
-type ManagerSnapshot struct {
-	Subscriptions  []model.ManagerSubscription  `json:"subscriptions"`
-	Relays         []model.ManagerRelay         `json:"relays"`
-	Domains        []model.ManagerDomain        `json:"domains"`
-	Operations     []model.ManagerOperation     `json:"operations"`
-	OperationTotal int64                        `json:"operationTotal"`
-	Clients        map[string]ManagerClientInfo `json:"clients"`
-}
-
-func (s *ManagerService) Snapshot(owner, page int, state, kind string) (ManagerSnapshot, error) {
-	db := database.GetDB()
-	v := ManagerSnapshot{Subscriptions: []model.ManagerSubscription{}, Relays: []model.ManagerRelay{}, Domains: []model.ManagerDomain{}, Operations: []model.ManagerOperation{}, Clients: map[string]ManagerClientInfo{}}
-	if err := db.Where("user_id = ?", owner).Order("id DESC").Find(&v.Subscriptions).Error; err != nil {
-		return v, err
-	}
-	if err := db.Where("user_id = ?", owner).Find(&v.Relays).Error; err != nil {
-		return v, err
-	}
-	if err := db.Where("user_id = ?", owner).Order("name").Find(&v.Domains).Error; err != nil {
-		return v, err
-	}
-	ids := []int{}
-	for _, sub := range v.Subscriptions {
-		if sub.ClientID > 0 {
-			ids = append(ids, sub.ClientID)
-		}
-	}
-	if len(ids) > 0 {
-		var clients []model.ClientRecord
-		if err := db.Where("id IN ?", ids).Find(&clients).Error; err != nil {
-			return v, err
-		}
-		emails := []string{}
-		for _, c := range clients {
-			emails = append(emails, c.Email)
-		}
-		var traffic []*coremodel.ClientTraffic
-		if err := db.Where("email IN ?", emails).Find(&traffic).Error; err != nil {
-			return v, err
-		}
-		overlayGlobalTraffic(db, traffic)
-		byEmail := map[string]*coremodel.ClientTraffic{}
-		for _, tr := range traffic {
-			byEmail[tr.Email] = tr
-		}
-		for _, c := range clients {
-			info := ManagerClientInfo{Email: c.Email, Total: c.TotalGB, ExpiryTime: c.ExpiryTime, Enabled: c.Enable}
-			if tr := byEmail[c.Email]; tr != nil {
-				info.Up, info.Down = tr.Up, tr.Down
-			}
-			v.Clients[strconv.Itoa(c.Id)] = info
-		}
-	}
-	q := db.Model(&model.ManagerOperation{}).Where("user_id = ?", owner)
-	if state != "" {
-		q = q.Where("state = ?", state)
-	}
-	if kind != "" {
-		q = q.Where("kind = ?", kind)
-	}
-	if err := q.Count(&v.OperationTotal).Error; err != nil {
-		return v, err
-	}
-	return v, q.Order("id DESC").Offset((max(1, page) - 1) * 20).Limit(20).Find(&v.Operations).Error
-}
 
 func (s *ManagerService) Save(owner int, in model.ManagerSubscription) (*model.ManagerSubscription, error) {
 	managerMu.Lock()
@@ -122,11 +42,12 @@ func (s *ManagerService) Save(owner int, in model.ManagerSubscription) (*model.M
 		if in.ClientID != old.ClientID {
 			return nil, fmt.Errorf("client cannot be changed after creation")
 		}
-		in.Token, in.OwnClient, in.Published, in.LastRotation, in.CreatedAt = old.Token, old.OwnClient, old.Published, old.LastRotation, old.CreatedAt
+		in.Token, in.OwnClient, in.Published, in.LastRotation, in.CreatedAt, in.Retired = old.Token, old.OwnClient, old.Published, old.LastRotation, old.CreatedAt, old.Retired
 	} else {
 		in.Token = uuid.NewString()
 		in.OwnClient = false
 		in.Published = nil
+		in.Retired = nil
 		in.LastRotation = 0
 		in.CreatedAt = 0
 	}
@@ -144,6 +65,12 @@ func (s *ManagerService) Save(owner int, in model.ManagerSubscription) (*model.M
 func (s *ManagerService) validate(in *model.ManagerSubscription) error {
 	if in.ID < 0 || in.ClientID < 0 {
 		return fmt.Errorf("invalid subscription or client ID")
+	}
+	if in.GraceMinutes == 0 {
+		in.GraceMinutes = 120
+	}
+	if in.GraceMinutes < 60 || in.GraceMinutes > 1440 {
+		return fmt.Errorf("grace period must be 60–1440 minutes")
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" || len(in.Name) > 256 || len(in.Note) > 4096 || len(in.Entries) < 1 || len(in.Entries) > 20 {
@@ -235,17 +162,7 @@ func (s *ManagerService) validate(in *model.ManagerSubscription) error {
 				return fmt.Errorf("relay must be installed and point to the selected node")
 			}
 		}
-		if ib.NodeID != nil {
-			var n model.Node
-			if err := database.GetDB().First(&n, *ib.NodeID).Error; err != nil {
-				return err
-			}
-			if name, err := managerDomain(n.Address); err == nil {
-				if err := s.ImportDomains(in.UserID, name, false); err != nil {
-					return err
-				}
-			}
-		}
+
 	}
 	return nil
 }
@@ -345,7 +262,7 @@ func (s *ManagerService) Enqueue(owner, id int, kind string) (*model.ManagerOper
 }
 
 func (s *ManagerService) enqueue(owner, id int, kind string) (*model.ManagerOperation, error) {
-	if kind != "rotate" && kind != "delete" {
+	if kind != "rotate" && kind != "delete" && kind != "cleanup" {
 		return nil, fmt.Errorf("invalid operation")
 	}
 	var sub model.ManagerSubscription
@@ -387,153 +304,15 @@ func (s *ManagerService) Retry(owner, id int) (*model.ManagerOperation, error) {
 	if err := database.GetDB().Where("id = ? AND user_id = ?", id, owner).First(&op).Error; err != nil {
 		return nil, err
 	}
-	if op.State != "failed" {
+	if op.State != "failed" && op.State != "cleanup_pending" {
 		return nil, fmt.Errorf("only failed operations may be retried; inspect interrupted operations first")
 	}
 	if op.RelayID > 0 {
 		return s.EnqueueRelay(owner, op.RelayID, op.Kind)
 	}
-	return s.Enqueue(owner, op.SubscriptionID, op.Kind)
-}
-
-func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token string) {
-	if _, err := uuid.Parse(token); err != nil {
-		http.NotFound(w, r)
-		return
+	kind := op.Kind
+	if op.State == "cleanup_pending" {
+		kind = "cleanup"
 	}
-	db := database.GetDB()
-	var sub model.ManagerSubscription
-	if err := db.Where("token = ? AND enabled = ?", token, true).First(&sub).Error; err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	var client model.ClientRecord
-	var traffic *coremodel.ClientTraffic
-	if sub.ClientID > 0 {
-		if err := db.First(&client, sub.ClientID).Error; err != nil || !client.Enable || client.ExpiryTime > 0 && client.ExpiryTime < time.Now().UnixMilli() {
-			http.NotFound(w, r)
-			return
-		}
-		var err error
-		traffic, err = (&InboundService{}).GetClientTrafficByEmail(client.Email)
-		if err != nil {
-			http.Error(w, "traffic unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		if traffic != nil && client.TotalGB > 0 && (traffic.Up >= client.TotalGB || traffic.Down >= client.TotalGB-traffic.Up) {
-			http.NotFound(w, r)
-			return
-		}
-	}
-	provider := subLinkProvider()
-	if provider == nil {
-		http.Error(w, "renderer unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	format := r.URL.Query().Get("format")
-	config := format == "singbox" || format == "hiddify" || format == "xray"
-	if format != "" && format != "raw" && format != "base64" && !config {
-		http.Error(w, "unknown format", http.StatusBadRequest)
-		return
-	}
-	host := r.Host
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		host = h
-	}
-	out := []string{}
-	var configBody, configType string
-	if config {
-		renderer, ok := provider.(interface {
-			ManagerFormat(string, model.ManagerSubscription, model.ClientRecord, string) (string, string, error)
-		})
-		if !ok {
-			http.Error(w, "format unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		var err error
-		configBody, configType, err = renderer.ManagerFormat(host, sub, client, format)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotAcceptable)
-			return
-		}
-	}
-
-	for _, e := range sub.Published {
-		if config {
-			break
-		}
-		if e.CustomLink != "" {
-			out = append(out, e.CustomLink)
-			continue
-		}
-		if e.ActiveInboundID < 1 || sub.ClientID < 1 {
-			continue
-		}
-		var ib model.Inbound
-		if err := db.Where("id = ? AND user_id = ? AND enable = ?", e.ActiveInboundID, sub.UserID, true).First(&ib).Error; err != nil {
-			continue
-		}
-		var n int64
-		if err := db.Model(&model.ClientInbound{}).Where("client_id = ? AND inbound_id = ?", client.Id, ib.Id).Count(&n).Error; err != nil || n == 0 {
-			continue
-		}
-		if e.RelayID > 0 {
-			var relay model.ManagerRelay
-			if err := db.Where("id = ? AND user_id = ? AND installed = ?", e.RelayID, sub.UserID, true).First(&relay).Error; err != nil {
-				continue
-			}
-			ib.ShareAddrStrategy, ib.ShareAddr = "custom", relay.Address
-		}
-		ib.Remark = strings.TrimSpace(e.Flag + " " + e.Label)
-		if ib.Remark == "" {
-			ib.Remark = sub.Name
-		}
-		if p, ok := provider.(interface {
-			ManagerLinksForClient(string, *model.Inbound, string, string, bool) []string
-		}); ok {
-			links := p.ManagerLinksForClient(host, &ib, client.Email, ib.Remark, e.RelayID > 0)
-			if len(links) == 0 {
-				http.Error(w, "A selected protocol requires JSON. Use ?format=singbox or ?format=hiddify", http.StatusNotAcceptable)
-				return
-			}
-			out = append(out, links...)
-		} else {
-			out = append(out, provider.LinksForClient(host, &ib, client.Email)...)
-		}
-	}
-	for _, p := range []string{sub.Happ, sub.Incy} {
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	if len(out) == 0 && configBody == "" {
-		http.Error(w, "subscription is not generated", http.StatusServiceUnavailable)
-		return
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("profile-title", "base64:"+base64.StdEncoding.EncodeToString([]byte(sub.Name)))
-	w.Header().Set("profile-update-interval", strconv.Itoa(max(1, sub.IntervalMinutes/60)))
-	if sub.Note != "" {
-		w.Header().Set("announce", "base64:"+base64.StdEncoding.EncodeToString([]byte(sub.Note)))
-	}
-	if sub.SupportURL != "" {
-		w.Header().Set("support-url", sub.SupportURL)
-	}
-	if sub.WebsiteURL != "" {
-		w.Header().Set("profile-web-page-url", sub.WebsiteURL)
-	}
-	if traffic != nil {
-		w.Header().Set("subscription-userinfo", fmt.Sprintf("upload=%d; download=%d; total=%d; expire=%d", traffic.Up, traffic.Down, client.TotalGB, max(0, client.ExpiryTime/1000)))
-	}
-	body := strings.Join(out, "\n")
-	if r.URL.Query().Get("format") != "raw" {
-		body = base64.StdEncoding.EncodeToString([]byte(body))
-	}
-	if config {
-		body = configBody
-		w.Header().Set("Content-Type", configType)
-	}
-	_, _ = w.Write([]byte(body))
+	return s.Enqueue(owner, op.SubscriptionID, kind)
 }

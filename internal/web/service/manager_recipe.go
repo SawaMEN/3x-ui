@@ -29,9 +29,7 @@ func managerEntrySource(e model.ManagerEntry, owner int) (*model.Inbound, error)
 		return nil, fmt.Errorf("automatic generation requires a protocol configuration")
 	}
 	c := e.Config
-	switch c.Protocol {
-	case model.VLESS, model.VMESS, model.Trojan, model.Shadowsocks, model.Hysteria, model.WireGuard, model.MTProto, model.AmneziaWG, model.TUIC, model.TrustTunnel, model.VetroffProxy, model.FPTN, model.OpenFlux, model.MASQUE, model.NaiveProxy, model.Snell, model.AnyTLS, model.ShadowTLS, model.Mieru, model.VKTurnProxy, model.Sudoku:
-	default:
+	if !model.InboundProtocolCapabilities[c.Protocol].ClientAttachable {
 		return nil, fmt.Errorf("protocol %q has no client generation support", c.Protocol)
 	}
 	for _, raw := range []string{c.Settings, c.StreamSettings, c.Sniffing} {

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -368,4 +369,24 @@ func clearClientHwidsBySubIDTx(tx *gorm.DB, subIDs ...string) error {
 		}
 	}
 	return nil
+}
+
+// CheckSubscriptionDevice shares device registration and response headers across subscription endpoints.
+func (s *ClientService) CheckSubscriptionDevice(w http.ResponseWriter, r *http.Request, subID string) (bool, error) {
+	result, err := s.EnforceHwidForSubID(subID, HwidRequest{
+		Hwid: r.Header.Get("X-HWID"), UserAgent: r.UserAgent(), DeviceOS: r.Header.Get("X-Device-OS"),
+		OsVersion: r.Header.Get("X-Ver-OS"), DeviceModel: r.Header.Get("X-Device-Model"),
+	})
+	if err != nil {
+		return false, err
+	}
+	for name, active := range map[string]bool{
+		"X-Hwid-Active": result.Active, "X-Hwid-Not-Supported": result.NotSupported,
+		"X-Hwid-Limit": result.LimitReached, "X-Hwid-Max-Devices-Reached": result.MaxDevicesReached,
+	} {
+		if active {
+			w.Header().Set(name, "true")
+		}
+	}
+	return result.Allowed, nil
 }

@@ -883,6 +883,12 @@ export interface ManagerInboundConfig {
   subSortIndex: number;
 }
 
+export interface ManagerListOptions {
+  compact: boolean;
+  page: number;
+  search: string;
+}
+
 export interface ManagerOperation {
   attempts: number;
   completed: number;
@@ -895,6 +901,17 @@ export interface ManagerOperation {
   state: string;
   subscriptionId: number;
   total: number;
+}
+
+export interface ManagerPreflight {
+  entries: ManagerPreflightEntry[];
+  ready: boolean;
+}
+
+export interface ManagerPreflightEntry {
+  index: number;
+  message: string;
+  ready: boolean;
 }
 
 export interface ManagerRelay {
@@ -926,7 +943,11 @@ export interface ManagerSnapshot {
   domains: ManagerDomain[];
   operationTotal: number;
   operations: ManagerOperation[];
+  pageSize: number;
+  pendingOperations: number;
   relays: ManagerRelay[];
+  subscriptionPage: number;
+  subscriptionTotal: number;
   subscriptions: ManagerSubscription[];
 }
 
@@ -936,6 +957,7 @@ export interface ManagerSubscription {
   createdAt: number;
   enabled: boolean;
   entries: ManagerEntry[];
+  graceMinutes: number;
   happ: string;
   id: number;
   incy: string;
@@ -1000,6 +1022,7 @@ export interface Node {
   pinnedCertSha256: string;
   port: number;
   presenceRegistry: string;
+  protocolAvailability?: Record<string, ProtocolAvailability>;
   remark: string;
   runningCore: string;
   scheme: string;
@@ -1077,6 +1100,7 @@ export interface NodeView {
   pinnedCertSha256: string;
   port: number;
   presenceRegistry: string;
+  protocolAvailability?: Record<string, ProtocolAvailability>;
   remark: string;
   runningCore: string;
   scheme: string;
@@ -1138,6 +1162,7 @@ export interface ProbeResultUI {
   panelEdition: string;
   panelVersion: string;
   presenceRegistry: string;
+  protocolAvailability?: Record<string, ProtocolAvailability>;
   runningCore: string;
   singboxError: string;
   singboxInstalled: boolean;
@@ -1149,6 +1174,14 @@ export interface ProbeResultUI {
   uptimeSecs: number;
   xrayError: string;
   xrayVersion: string;
+}
+
+export interface ProtocolAvailability {
+  component: string;
+  ready: boolean;
+  speedLimit: boolean;
+  supported: boolean;
+  version: string;
 }
 
 export interface RealityScanResult {

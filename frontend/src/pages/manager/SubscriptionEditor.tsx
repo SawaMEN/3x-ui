@@ -25,7 +25,7 @@ import { useNodesQuery } from '@/api/queries/useNodesQuery';
 import { nodeSupportsProtocol } from '@/lib/xray/node-protocols';
 import { isClientAttachableProtocol } from '@/lib/inbounds/client-attachable';
 import { HttpUtil } from '@/utils';
-import { ClientOptionsSchema, newEntry, SubscriptionSchema } from './schema';
+import { ClientOptionsSchema, newEntry, SubscriptionSchema, PreflightSchema } from './schema';
 import type { Relay, Subscription } from './schema';
 import { MANAGER_PRESETS, createManagerPreset } from './presets';
 import { DBInbound } from '@/models/dbinbound';
@@ -94,12 +94,53 @@ export default function SubscriptionEditor({
       enable: true,
     });
   }, [editingConfig, form]);
+  const [checked, setChecked] = useState<boolean | null>(null);
+  useEffect(() => {
+    const subscription = form.watch(() => setChecked(null));
+    return () => subscription.unsubscribe();
+  }, [form]);
+  const check = async () => {
+    const parsed = SubscriptionSchema.safeParse(form.getValues());
+    if (!parsed.success) {
+      setError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'));
+      return false;
+    }
+    setSaving(true);
+    setError('');
+    setChecked(null);
+    try {
+      const response = await HttpUtil.post('/panel/api/manager/preflight', parsed.data, {
+        headers: { 'Content-Type': 'application/json' },
+        silent: true,
+      });
+      if (!response.success) {
+        setError(response.msg);
+        return false;
+      }
+      const result = PreflightSchema.parse(response.obj);
+      setChecked(result.ready);
+      if (!result.ready)
+        setError(
+          result.entries
+            .filter((e) => !e.ready)
+            .map((e) => `${e.index}: ${e.message}`)
+            .join('\n'),
+        );
+      return result.ready;
+    } catch (e) {
+      setError(String(e));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
   const submit = async (generate: boolean) => {
     const parsed = SubscriptionSchema.safeParse(form.getValues());
     if (!parsed.success) {
       setError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'));
       return;
     }
+    if (generate && !(await check())) return;
     setSaving(true);
     setError('');
     try {
@@ -119,6 +160,9 @@ export default function SubscriptionEditor({
       footer={
         <Space wrap>
           <Button onClick={onClose}>{t('cancel')}</Button>
+          <Button loading={saving} onClick={() => void check()}>
+            {m('preflight')}
+          </Button>
           <Button loading={saving} onClick={() => void submit(false)}>
             {t('save')}
           </Button>
@@ -131,6 +175,7 @@ export default function SubscriptionEditor({
       <FormProvider {...form}>
         <Form layout="vertical" component="div">
           {error && <Alert type="error" showIcon title={error} />}
+          {checked === true && !error && <Alert type="success" showIcon title={m('ready')} />}
           <Tabs
             items={[
               {
@@ -177,6 +222,9 @@ export default function SubscriptionEditor({
                         </FormField>
                       </Col>
                     </Row>
+                    <FormField name="graceMinutes" label={m('graceMinutes')} extra={m('graceHint')}>
+                      <InputNumber min={60} max={1440} style={{ width: '100%' }} />
+                    </FormField>
                     <FormField name="note" label={m('note')}>
                       <Input.TextArea rows={3} />
                     </FormField>

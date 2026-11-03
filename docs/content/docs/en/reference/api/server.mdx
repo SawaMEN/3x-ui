@@ -240,6 +240,35 @@ _openapi:
         setting is empty).
       url: '#probediscover-reality-targets-and-return-each-verdict-ranked-by-feasibility-then-latency-each-comma-separated-token-may-be-a-domain-validated-with-sni-a-bare-ip-or-a-cidr-range-discovered-without-sni-by-reading-the-certificate-domain-when-empty-the-realityscancandidates-setting-is-probed-the-built-in-seed-list-if-that-setting-is-empty'
     - depth: 2
+      title: 'Start a queued SNI scan. JSON: mode=candidates|nearby|combined|recheck,
+        targets, purpose=reality|tls|shadowtls|fakeTls, optional nodeId.
+        Combined scans neighbors and the configured domain list. Recheck accepts
+        up to 20 saved {ip,host,port} targets. The ten best candidates get five
+        stability probes, median/spread, TCP/TLS timing, optional HTTP/2 HEAD
+        and DNS diagnostics. Jobs are polled for incremental results and expire
+        when polling stops for 30 seconds. Nodes must support this API; no
+        fallback to scanning from the master.'
+      url: '#start-a-queued-sni-scan-json-modecandidatesnearbycombinedrecheck-targets-purposerealitytlsshadowtlsfaketls-optional-nodeid-combined-scans-neighbors-and-the-configured-domain-list-recheck-accepts-up-to-20-saved-iphostport-targets-the-ten-best-candidates-get-five-stability-probes-medianspread-tcptls-timing-optional-http2-head-and-dns-diagnostics-jobs-are-polled-for-incremental-results-and-expire-when-polling-stops-for-30-seconds-nodes-must-support-this-api-no-fallback-to-scanning-from-the-master'
+    - depth: 2
+      title: 'Poll incremental results and discovery/stability progress. Optional
+        nodeId query must identify the same node used to start the job. Polling
+        renews the 30-second client lease. Each execution is bounded to six
+        minutes. Discovery reserves verification time: four minutes in a single
+        mode, or two minutes per phase in combined mode. Phase timeouts return
+        verified partial results with a warning; snapshot responses are not
+        cacheable.'
+      url: '#poll-incremental-results-and-discoverystability-progress-optional-nodeid-query-must-identify-the-same-node-used-to-start-the-job-polling-renews-the-30-second-client-lease-each-execution-is-bounded-to-six-minutes-discovery-reserves-verification-time-four-minutes-in-a-single-mode-or-two-minutes-per-phase-in-combined-mode-phase-timeouts-return-verified-partial-results-with-a-warning-snapshot-responses-are-not-cacheable'
+    - depth: 2
+      title: Cancel queued or active scan work. Optional nodeId query targets the
+        selected execution node.
+      url: '#cancel-queued-or-active-scan-work-optional-nodeid-query-targets-the-selected-execution-node'
+    - depth: 2
+      title: Return the latest 20 completed scans stored in the executing panel
+        database, with up to 20 certificate-verified targets per scan. Optional
+        nodeId loads that node’s history. Saved timestamps and metrics are
+        historical; recheck before applying.
+      url: '#return-the-latest-20-completed-scans-stored-in-the-executing-panel-database-with-up-to-20-certificate-verified-targets-per-scan-optional-nodeid-loads-that-nodes-history-saved-timestamps-and-metrics-are-historical-recheck-before-applying'
+    - depth: 2
       title: Fetch the fully aggregated inbound_client_ips database table. Used by
         nodes to sync recently active IPs across the cluster.
       url: '#fetch-the-fully-aggregated-inbound_client_ips-database-table-used-by-nodes-to-sync-recently-active-ips-across-the-cluster'
@@ -424,6 +453,32 @@ _openapi:
           realityScanCandidates setting is probed (the built-in seed list if
           that setting is empty).
         id: probediscover-reality-targets-and-return-each-verdict-ranked-by-feasibility-then-latency-each-comma-separated-token-may-be-a-domain-validated-with-sni-a-bare-ip-or-a-cidr-range-discovered-without-sni-by-reading-the-certificate-domain-when-empty-the-realityscancandidates-setting-is-probed-the-built-in-seed-list-if-that-setting-is-empty
+      - content: 'Start a queued SNI scan. JSON:
+          mode=candidates|nearby|combined|recheck, targets,
+          purpose=reality|tls|shadowtls|fakeTls, optional nodeId. Combined scans
+          neighbors and the configured domain list. Recheck accepts up to 20
+          saved {ip,host,port} targets. The ten best candidates get five
+          stability probes, median/spread, TCP/TLS timing, optional HTTP/2 HEAD
+          and DNS diagnostics. Jobs are polled for incremental results and
+          expire when polling stops for 30 seconds. Nodes must support this API;
+          no fallback to scanning from the master.'
+        id: start-a-queued-sni-scan-json-modecandidatesnearbycombinedrecheck-targets-purposerealitytlsshadowtlsfaketls-optional-nodeid-combined-scans-neighbors-and-the-configured-domain-list-recheck-accepts-up-to-20-saved-iphostport-targets-the-ten-best-candidates-get-five-stability-probes-medianspread-tcptls-timing-optional-http2-head-and-dns-diagnostics-jobs-are-polled-for-incremental-results-and-expire-when-polling-stops-for-30-seconds-nodes-must-support-this-api-no-fallback-to-scanning-from-the-master
+      - content: 'Poll incremental results and discovery/stability progress. Optional
+          nodeId query must identify the same node used to start the job.
+          Polling renews the 30-second client lease. Each execution is bounded
+          to six minutes. Discovery reserves verification time: four minutes in
+          a single mode, or two minutes per phase in combined mode. Phase
+          timeouts return verified partial results with a warning; snapshot
+          responses are not cacheable.'
+        id: poll-incremental-results-and-discoverystability-progress-optional-nodeid-query-must-identify-the-same-node-used-to-start-the-job-polling-renews-the-30-second-client-lease-each-execution-is-bounded-to-six-minutes-discovery-reserves-verification-time-four-minutes-in-a-single-mode-or-two-minutes-per-phase-in-combined-mode-phase-timeouts-return-verified-partial-results-with-a-warning-snapshot-responses-are-not-cacheable
+      - content: Cancel queued or active scan work. Optional nodeId query targets the
+          selected execution node.
+        id: cancel-queued-or-active-scan-work-optional-nodeid-query-targets-the-selected-execution-node
+      - content: Return the latest 20 completed scans stored in the executing panel
+          database, with up to 20 certificate-verified targets per scan.
+          Optional nodeId loads that node’s history. Saved timestamps and
+          metrics are historical; recheck before applying.
+        id: return-the-latest-20-completed-scans-stored-in-the-executing-panel-database-with-up-to-20-certificate-verified-targets-per-scan-optional-nodeid-loads-that-nodes-history-saved-timestamps-and-metrics-are-historical-recheck-before-applying
       - content: Fetch the fully aggregated inbound_client_ips database table. Used by
           nodes to sync recently active IPs across the cluster.
         id: fetch-the-fully-aggregated-inbound_client_ips-database-table-used-by-nodes-to-sync-recently-active-ips-across-the-cluster
@@ -456,7 +511,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/openapi.json","method":"get"},{"path":"/panel/api/server/status","method":"get"},{"path":"/panel/api/server/fail2banStatus","method":"get"},{"path":"/panel/api/server/cpuHistory/{bucket}","method":"get"},{"path":"/panel/api/server/history/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayMetricsState","method":"get"},{"path":"/panel/api/server/xrayMetricsHistory/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayObservatory","method":"get"},{"path":"/panel/api/server/xrayObservatoryHistory/{tag}/{bucket}","method":"get"},{"path":"/panel/api/server/core/capabilities","method":"get"},{"path":"/panel/api/dnstt/status","method":"get"},{"path":"/panel/api/dnstt/check-delegation","method":"get"},{"path":"/panel/api/dnstt/install","method":"post"},{"path":"/panel/api/dnstt/setup","method":"post"},{"path":"/panel/api/dnstt/disable","method":"post"},{"path":"/panel/api/dnstt/update","method":"post"},{"path":"/panel/api/dnstt/remove","method":"post"},{"path":"/panel/api/oxidns/status","method":"get"},{"path":"/panel/api/oxidns/logs","method":"get"},{"path":"/panel/api/oxidns/check","method":"post"},{"path":"/panel/api/oxidns/validate","method":"post"},{"path":"/panel/api/oxidns/setup","method":"post"},{"path":"/panel/api/oxidns/disable","method":"post"},{"path":"/panel/api/oxidns/install","method":"post"},{"path":"/panel/api/oxidns/update","method":"post"},{"path":"/panel/api/oxidns/remove","method":"post"},{"path":"/panel/api/server/singbox/outbound/check","method":"post"},{"path":"/panel/api/server/getPanelUpdateInfo","method":"get"},{"path":"/panel/api/server/getUpdateStatus","method":"get"},{"path":"/panel/api/server/getConfigJson","method":"get"},{"path":"/panel/api/server/getDb","method":"get"},{"path":"/panel/api/server/getMigration","method":"get"},{"path":"/panel/api/server/getNewUUID","method":"get"},{"path":"/panel/api/server/getWebCertFiles","method":"get"},{"path":"/panel/api/server/descendants","method":"get"},{"path":"/panel/api/server/getNewX25519Cert","method":"get"},{"path":"/panel/api/server/getNewmldsa65","method":"get"},{"path":"/panel/api/server/getNewmlkem768","method":"get"},{"path":"/panel/api/server/getNewVlessEnc","method":"get"},{"path":"/panel/api/server/stopXrayService","method":"post"},{"path":"/panel/api/server/restartXrayService","method":"post"},{"path":"/panel/api/server/updatePanel","method":"post"},{"path":"/panel/api/server/setUpdateChannel","method":"post"},{"path":"/panel/api/server/updateGeofile","method":"post"},{"path":"/panel/api/server/updateGeofile/{fileName}","method":"post"},{"path":"/panel/api/server/logs/{count}","method":"post"},{"path":"/panel/api/server/xraylogs/{count}","method":"post"},{"path":"/panel/api/server/amneziawglogs/{count}","method":"post"},{"path":"/panel/api/server/amneziawgMetrics","method":"get"},{"path":"/panel/api/server/importDB","method":"post"},{"path":"/panel/api/server/hiddify/preview","method":"post"},{"path":"/panel/api/server/hiddify/import","method":"post"},{"path":"/panel/api/server/hiddify/export","method":"get"},{"path":"/panel/api/server/getNewEchCert","method":"post"},{"path":"/panel/api/server/getCertHash","method":"post"},{"path":"/panel/api/server/getRemoteCertHash","method":"post"},{"path":"/panel/api/server/scanRealityTarget","method":"post"},{"path":"/panel/api/server/scanRealityTargets","method":"post"},{"path":"/panel/api/server/clientIps","method":"get"},{"path":"/panel/api/server/clientIps","method":"post"}]} showTitle />
+      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/openapi.json","method":"get"},{"path":"/panel/api/server/status","method":"get"},{"path":"/panel/api/server/fail2banStatus","method":"get"},{"path":"/panel/api/server/cpuHistory/{bucket}","method":"get"},{"path":"/panel/api/server/history/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayMetricsState","method":"get"},{"path":"/panel/api/server/xrayMetricsHistory/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayObservatory","method":"get"},{"path":"/panel/api/server/xrayObservatoryHistory/{tag}/{bucket}","method":"get"},{"path":"/panel/api/server/core/capabilities","method":"get"},{"path":"/panel/api/dnstt/status","method":"get"},{"path":"/panel/api/dnstt/check-delegation","method":"get"},{"path":"/panel/api/dnstt/install","method":"post"},{"path":"/panel/api/dnstt/setup","method":"post"},{"path":"/panel/api/dnstt/disable","method":"post"},{"path":"/panel/api/dnstt/update","method":"post"},{"path":"/panel/api/dnstt/remove","method":"post"},{"path":"/panel/api/oxidns/status","method":"get"},{"path":"/panel/api/oxidns/logs","method":"get"},{"path":"/panel/api/oxidns/check","method":"post"},{"path":"/panel/api/oxidns/validate","method":"post"},{"path":"/panel/api/oxidns/setup","method":"post"},{"path":"/panel/api/oxidns/disable","method":"post"},{"path":"/panel/api/oxidns/install","method":"post"},{"path":"/panel/api/oxidns/update","method":"post"},{"path":"/panel/api/oxidns/remove","method":"post"},{"path":"/panel/api/server/singbox/outbound/check","method":"post"},{"path":"/panel/api/server/getPanelUpdateInfo","method":"get"},{"path":"/panel/api/server/getUpdateStatus","method":"get"},{"path":"/panel/api/server/getConfigJson","method":"get"},{"path":"/panel/api/server/getDb","method":"get"},{"path":"/panel/api/server/getMigration","method":"get"},{"path":"/panel/api/server/getNewUUID","method":"get"},{"path":"/panel/api/server/getWebCertFiles","method":"get"},{"path":"/panel/api/server/descendants","method":"get"},{"path":"/panel/api/server/getNewX25519Cert","method":"get"},{"path":"/panel/api/server/getNewmldsa65","method":"get"},{"path":"/panel/api/server/getNewmlkem768","method":"get"},{"path":"/panel/api/server/getNewVlessEnc","method":"get"},{"path":"/panel/api/server/stopXrayService","method":"post"},{"path":"/panel/api/server/restartXrayService","method":"post"},{"path":"/panel/api/server/updatePanel","method":"post"},{"path":"/panel/api/server/setUpdateChannel","method":"post"},{"path":"/panel/api/server/updateGeofile","method":"post"},{"path":"/panel/api/server/updateGeofile/{fileName}","method":"post"},{"path":"/panel/api/server/logs/{count}","method":"post"},{"path":"/panel/api/server/xraylogs/{count}","method":"post"},{"path":"/panel/api/server/amneziawglogs/{count}","method":"post"},{"path":"/panel/api/server/amneziawgMetrics","method":"get"},{"path":"/panel/api/server/importDB","method":"post"},{"path":"/panel/api/server/hiddify/preview","method":"post"},{"path":"/panel/api/server/hiddify/import","method":"post"},{"path":"/panel/api/server/hiddify/export","method":"get"},{"path":"/panel/api/server/getNewEchCert","method":"post"},{"path":"/panel/api/server/getCertHash","method":"post"},{"path":"/panel/api/server/getRemoteCertHash","method":"post"},{"path":"/panel/api/server/scanRealityTarget","method":"post"},{"path":"/panel/api/server/scanRealityTargets","method":"post"},{"path":"/panel/api/server/sni/jobs","method":"post"},{"path":"/panel/api/server/sni/jobs/{id}","method":"get"},{"path":"/panel/api/server/sni/jobs/{id}","method":"delete"},{"path":"/panel/api/server/sni/history","method":"get"},{"path":"/panel/api/server/clientIps","method":"get"},{"path":"/panel/api/server/clientIps","method":"post"}]} showTitle />
     </>
   );
 }

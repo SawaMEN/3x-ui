@@ -16,12 +16,17 @@ database. Back it up regularly so you can recover or migrate.
 
 ## Manual backup
 
-You can download a backup from the panel's overview, or copy the database file
-directly from the server:
+Download a consistent database snapshot from the panel. Do not copy only a running SQLite `.db` file: recent committed data can still be in its WAL file. Stop the panel before making a filesystem copy, or use the panel's snapshot operation.
 
-```bash title="copy the SQLite database"
-cp /etc/x-ui/x-ui.db /root/x-ui-backup-$(date +%F).db
+For complete encrypted recovery, including the token keyring and configured local certificates, use:
+
+```bash
+x-ui recovery export --file /root/panel.recovery --password-file /root/recovery-password
+x-ui recovery check --file /root/panel.recovery --password-file /root/recovery-password
+x-ui recovery restore --file /root/panel.recovery --out /root/panel-restored --password-file /root/recovery-password
 ```
+
+The password file must be mode 0600 and contain at least 16 bytes. Restore extracts into a new directory for review; it does not replace the running installation. The bundle's `manifest.json` records the original paths. Preserve every key in the node-token keyring, including older rotation keys. A database alone cannot decrypt tokens after moving to a server without that keyring. Recreate external certificate renewal automation separately.
 
 To restore, stop the panel, put the database back in place, and start it again.
 

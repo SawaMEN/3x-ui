@@ -1034,6 +1034,11 @@ export const EXAMPLES: Record<string, unknown> = {
     "streamSettings": "",
     "subSortIndex": 0
   },
+  "ManagerListOptions": {
+    "compact": false,
+    "page": 0,
+    "search": ""
+  },
   "ManagerOperation": {
     "attempts": 0,
     "completed": 0,
@@ -1046,6 +1051,21 @@ export const EXAMPLES: Record<string, unknown> = {
     "state": "",
     "subscriptionId": 0,
     "total": 0
+  },
+  "ManagerPreflight": {
+    "entries": [
+      {
+        "index": 0,
+        "message": "",
+        "ready": false
+      }
+    ],
+    "ready": false
+  },
+  "ManagerPreflightEntry": {
+    "index": 0,
+    "message": "",
+    "ready": false
   },
   "ManagerRelay": {
     "address": "",
@@ -1093,6 +1113,8 @@ export const EXAMPLES: Record<string, unknown> = {
         "total": 0
       }
     ],
+    "pageSize": 0,
+    "pendingOperations": 0,
     "relays": [
       {
         "address": "",
@@ -1106,6 +1128,8 @@ export const EXAMPLES: Record<string, unknown> = {
         "username": ""
       }
     ],
+    "subscriptionPage": 0,
+    "subscriptionTotal": 0,
     "subscriptions": [
       {
         "autoRotate": false,
@@ -1128,6 +1152,7 @@ export const EXAMPLES: Record<string, unknown> = {
             "templateId": 0
           }
         ],
+        "graceMinutes": 0,
         "happ": "",
         "id": 0,
         "incy": "",
@@ -1181,6 +1206,7 @@ export const EXAMPLES: Record<string, unknown> = {
         "templateId": 0
       }
     ],
+    "graceMinutes": 0,
     "happ": "",
     "id": 0,
     "incy": "",
@@ -1259,6 +1285,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "pinnedCertSha256": "",
     "port": 2053,
     "presenceRegistry": "",
+    "protocolAvailability": {},
     "remark": "",
     "runningCore": "",
     "scheme": "https",
@@ -1340,6 +1367,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "pinnedCertSha256": "",
     "port": 2053,
     "presenceRegistry": "running",
+    "protocolAvailability": {},
     "remark": "Primary edge",
     "runningCore": "",
     "scheme": "https",
@@ -1399,6 +1427,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "panelEdition": "sawamen",
     "panelVersion": "v3.x.x",
     "presenceRegistry": "",
+    "protocolAvailability": {},
     "runningCore": "",
     "singboxError": "",
     "singboxInstalled": false,
@@ -1412,6 +1441,13 @@ export const EXAMPLES: Record<string, unknown> = {
     "uptimeSecs": 86400,
     "xrayError": "",
     "xrayVersion": "25.10.31"
+  },
+  "ProtocolAvailability": {
+    "component": "",
+    "ready": false,
+    "speedLimit": false,
+    "supported": false,
+    "version": ""
   },
   "RealityScanResult": {
     "alpn": "h2",

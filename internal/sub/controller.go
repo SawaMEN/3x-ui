@@ -846,38 +846,15 @@ func (a *SUBController) subPageContext(page PageData) map[string]any {
 }
 
 func (a *SUBController) enforceHwid(c *gin.Context) bool {
-	result, err := a.clientService.EnforceHwidForSubID(c.Param("subid"), service.HwidRequest{
-		Hwid:        c.GetHeader("X-HWID"),
-		UserAgent:   c.GetHeader("User-Agent"),
-		DeviceOS:    c.GetHeader("X-Device-OS"),
-		OsVersion:   c.GetHeader("X-Ver-OS"),
-		DeviceModel: c.GetHeader("X-Device-Model"),
-	})
+	allowed, err := a.clientService.CheckSubscriptionDevice(c.Writer, c.Request, c.Param("subid"))
 	if err != nil {
 		writeSubError(c, err)
 		return false
 	}
-	applyHwidHeaders(c, result)
-	if !result.Allowed {
+	if !allowed {
 		c.Status(http.StatusNotFound)
-		return false
 	}
-	return true
-}
-
-func applyHwidHeaders(c *gin.Context, result service.HwidGateResult) {
-	if result.Active {
-		c.Header("X-Hwid-Active", "true")
-	}
-	if result.NotSupported {
-		c.Header("X-Hwid-Not-Supported", "true")
-	}
-	if result.LimitReached {
-		c.Header("X-Hwid-Limit", "true")
-	}
-	if result.MaxDevicesReached {
-		c.Header("X-Hwid-Max-Devices-Reached", "true")
-	}
+	return allowed
 }
 
 // hwidStatus serves read-only device-slot counters for a subscription. It

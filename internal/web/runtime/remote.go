@@ -1075,3 +1075,10 @@ func (r *Remote) FetchClientIpsByGuid(ctx context.Context) (map[string]map[strin
 	}
 	return out, nil
 }
+
+func (r *Remote) PreflightInbound(ctx context.Context, ib *model.Inbound) error {
+	payload := *ib
+	payload.NodeID = nil
+	_, err := r.do(ctx, http.MethodPost, "panel/api/inbounds/preflight", &payload)
+	return err
+}

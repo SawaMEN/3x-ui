@@ -950,6 +950,13 @@ export const ManagerInboundConfigSchema = z.object({
 });
 export type ManagerInboundConfig = z.infer<typeof ManagerInboundConfigSchema>;
 
+export const ManagerListOptionsSchema = z.object({
+  compact: z.boolean(),
+  page: z.number().int(),
+  search: z.string(),
+});
+export type ManagerListOptions = z.infer<typeof ManagerListOptionsSchema>;
+
 export const ManagerOperationSchema = z.object({
   attempts: z.number().int(),
   completed: z.number().int(),
@@ -964,6 +971,19 @@ export const ManagerOperationSchema = z.object({
   total: z.number().int(),
 });
 export type ManagerOperation = z.infer<typeof ManagerOperationSchema>;
+
+export const ManagerPreflightSchema = z.object({
+  entries: z.array(z.lazy(() => ManagerPreflightEntrySchema)),
+  ready: z.boolean(),
+});
+export type ManagerPreflight = z.infer<typeof ManagerPreflightSchema>;
+
+export const ManagerPreflightEntrySchema = z.object({
+  index: z.number().int(),
+  message: z.string(),
+  ready: z.boolean(),
+});
+export type ManagerPreflightEntry = z.infer<typeof ManagerPreflightEntrySchema>;
 
 export const ManagerRelaySchema = z.object({
   address: z.string(),
@@ -996,7 +1016,11 @@ export const ManagerSnapshotSchema = z.object({
   domains: z.array(z.lazy(() => ManagerDomainSchema)),
   operationTotal: z.number().int(),
   operations: z.array(z.lazy(() => ManagerOperationSchema)),
+  pageSize: z.number().int(),
+  pendingOperations: z.number().int(),
   relays: z.array(z.lazy(() => ManagerRelaySchema)),
+  subscriptionPage: z.number().int(),
+  subscriptionTotal: z.number().int(),
   subscriptions: z.array(z.lazy(() => ManagerSubscriptionSchema)),
 });
 export type ManagerSnapshot = z.infer<typeof ManagerSnapshotSchema>;
@@ -1007,6 +1031,7 @@ export const ManagerSubscriptionSchema = z.object({
   createdAt: z.number().int(),
   enabled: z.boolean(),
   entries: z.array(z.lazy(() => ManagerEntrySchema)),
+  graceMinutes: z.number().int(),
   happ: z.string(),
   id: z.number().int(),
   incy: z.string(),
@@ -1074,6 +1099,7 @@ export const NodeSchema = z.object({
   pinnedCertSha256: z.string(),
   port: z.number().int().min(1).max(65535),
   presenceRegistry: z.string(),
+  protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   remark: z.string(),
   runningCore: z.string(),
   scheme: z.enum(['http', 'https']),
@@ -1153,6 +1179,7 @@ export const NodeViewSchema = z.object({
   pinnedCertSha256: z.string(),
   port: z.number().int(),
   presenceRegistry: z.string(),
+  protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   remark: z.string(),
   runningCore: z.string(),
   scheme: z.string(),
@@ -1218,6 +1245,7 @@ export const ProbeResultUISchema = z.object({
   panelEdition: z.string(),
   panelVersion: z.string(),
   presenceRegistry: z.string(),
+  protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   runningCore: z.string(),
   singboxError: z.string(),
   singboxInstalled: z.boolean(),
@@ -1231,6 +1259,15 @@ export const ProbeResultUISchema = z.object({
   xrayVersion: z.string(),
 });
 export type ProbeResultUI = z.infer<typeof ProbeResultUISchema>;
+
+export const ProtocolAvailabilitySchema = z.object({
+  component: z.string(),
+  ready: z.boolean(),
+  speedLimit: z.boolean(),
+  supported: z.boolean(),
+  version: z.string(),
+});
+export type ProtocolAvailability = z.infer<typeof ProtocolAvailabilitySchema>;
 
 export const RealityScanResultSchema = z.object({
   alpn: z.string(),

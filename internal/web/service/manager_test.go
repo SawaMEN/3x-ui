@@ -65,8 +65,8 @@ func TestManagerRotationKeepsIdentityAndDeletesOnlyOwnedGeneration(t *testing.T)
 	}
 	var n int64
 	database.GetDB().Model(&model.Inbound{}).Where("id = ?", old).Count(&n)
-	if n != 0 {
-		t.Fatal("retired inbound remains")
+	if n != 1 {
+		t.Fatal("previous generation removed before grace expired")
 	}
 	if err := database.GetDB().First(&model.Inbound{}, template.Id).Error; err != nil {
 		t.Fatalf("template deleted: %v", err)
@@ -152,7 +152,7 @@ func TestManagerRecoveryInterruptsRunningWithoutReplaying(t *testing.T) {
 		if err := database.GetDB().First(&v, op.ID).Error; err != nil {
 			t.Fatal(err)
 		}
-		if v.State == "interrupted" {
+		if v.State == "interrupted" || v.State == "recovered" {
 			if v.ActiveKey != nil {
 				t.Fatal("active lease retained")
 			}
@@ -299,13 +299,13 @@ func TestManagerRuntimeFailureKeepsOldGeneration(t *testing.T) {
 	}
 }
 
-func TestManagerNativeSNIUsesOwnerDomainsAndKeepsCertificate(t *testing.T) {
+func TestManagerNativeSNIUsesCertificateDomain(t *testing.T) {
 	s, _, _ := managerFixture(t)
 	if err := s.ImportDomains(1, "native.example.com", false); err != nil {
 		t.Fatal(err)
 	}
 	ib := &model.Inbound{Protocol: model.AnyTLS, Settings: `{"tls":{"enabled":true,"serverName":"old.example.com","certificatePath":"/cert.pem","keyPath":"/key.pem"},"clients":[]}`, StreamSettings: ``}
-	if err := s.applySNI(1, ib, "random"); err != nil {
+	if err := s.applySNI(1, ib, "native.example.com"); err != nil {
 		t.Fatal(err)
 	}
 	var settings map[string]any

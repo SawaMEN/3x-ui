@@ -3822,6 +3822,25 @@
         ],
         "type": "object"
       },
+      "ManagerListOptions": {
+        "properties": {
+          "compact": {
+            "type": "boolean"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "search": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "compact",
+          "page",
+          "search"
+        ],
+        "type": "object"
+      },
       "ManagerOperation": {
         "properties": {
           "attempts": {
@@ -3872,6 +3891,43 @@
           "state",
           "subscriptionId",
           "total"
+        ],
+        "type": "object"
+      },
+      "ManagerPreflight": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ManagerPreflightEntry"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entries",
+          "ready"
+        ],
+        "type": "object"
+      },
+      "ManagerPreflightEntry": {
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "index",
+          "message",
+          "ready"
         ],
         "type": "object"
       },
@@ -3985,11 +4041,25 @@
             },
             "type": "array"
           },
+          "pageSize": {
+            "type": "integer"
+          },
+          "pendingOperations": {
+            "format": "int64",
+            "type": "integer"
+          },
           "relays": {
             "items": {
               "$ref": "#/components/schemas/ManagerRelay"
             },
             "type": "array"
+          },
+          "subscriptionPage": {
+            "type": "integer"
+          },
+          "subscriptionTotal": {
+            "format": "int64",
+            "type": "integer"
           },
           "subscriptions": {
             "items": {
@@ -4003,7 +4073,11 @@
           "domains",
           "operationTotal",
           "operations",
+          "pageSize",
+          "pendingOperations",
           "relays",
+          "subscriptionPage",
+          "subscriptionTotal",
           "subscriptions"
         ],
         "type": "object"
@@ -4028,6 +4102,9 @@
               "$ref": "#/components/schemas/ManagerEntry"
             },
             "type": "array"
+          },
+          "graceMinutes": {
+            "type": "integer"
           },
           "happ": {
             "type": "string"
@@ -4084,6 +4161,7 @@
           "createdAt",
           "enabled",
           "entries",
+          "graceMinutes",
           "happ",
           "id",
           "incy",
@@ -4287,6 +4365,12 @@
           "presenceRegistry": {
             "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
             "type": "string"
+          },
+          "protocolAvailability": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProtocolAvailability"
+            },
+            "type": "object"
           },
           "remark": {
             "type": "string"
@@ -4669,6 +4753,12 @@
             "example": "running",
             "type": "string"
           },
+          "protocolAvailability": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProtocolAvailability"
+            },
+            "type": "object"
+          },
           "remark": {
             "example": "Primary edge",
             "type": "string"
@@ -4965,6 +5055,12 @@
             "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
             "type": "string"
           },
+          "protocolAvailability": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProtocolAvailability"
+            },
+            "type": "object"
+          },
           "runningCore": {
             "type": "string"
           },
@@ -5028,6 +5124,33 @@
           "uptimeSecs",
           "xrayError",
           "xrayVersion"
+        ],
+        "type": "object"
+      },
+      "ProtocolAvailability": {
+        "properties": {
+          "component": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "speedLimit": {
+            "type": "boolean"
+          },
+          "supported": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "component",
+          "ready",
+          "speedLimit",
+          "supported",
+          "version"
         ],
         "type": "object"
       },
@@ -6066,14 +6189,225 @@
     }
   ],
   "paths": {
+    "/panel/api/manager/subscriptions/{id}": {
+      "get": {
+        "tags": [
+          "Subscription manager"
+        ],
+        "summary": "Load a full subscription recipe for editing",
+        "operationId": "get_panel_api_manager_subscriptions_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/ManagerSubscription"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "autoRotate": false,
+                    "clientId": 0,
+                    "createdAt": 0,
+                    "enabled": false,
+                    "entries": [
+                      {
+                        "activeInboundId": 0,
+                        "config": null,
+                        "customLink": "",
+                        "flag": "",
+                        "label": "",
+                        "mode": "",
+                        "nodeId": null,
+                        "port": "",
+                        "preset": "",
+                        "relayId": 0,
+                        "sni": "",
+                        "templateId": 0
+                      }
+                    ],
+                    "graceMinutes": 0,
+                    "happ": "",
+                    "id": 0,
+                    "incy": "",
+                    "intervalMinutes": 0,
+                    "lastRotation": 0,
+                    "name": "",
+                    "nextRotation": 0,
+                    "note": "",
+                    "ownClient": false,
+                    "published": [
+                      {
+                        "activeInboundId": 0,
+                        "config": null,
+                        "customLink": "",
+                        "flag": "",
+                        "label": "",
+                        "mode": "",
+                        "nodeId": null,
+                        "port": "",
+                        "preset": "",
+                        "relayId": 0,
+                        "sni": "",
+                        "templateId": 0
+                      }
+                    ],
+                    "supportUrl": "",
+                    "token": "",
+                    "updatedAt": 0,
+                    "websiteUrl": ""
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/manager/preflight": {
+      "post": {
+        "tags": [
+          "Subscription manager"
+        ],
+        "summary": "Validate a generation before creating resources",
+        "operationId": "post_panel_api_manager_preflight",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagerSubscription"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/ManagerPreflight"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "entries": [
+                      {
+                        "index": 0,
+                        "message": "",
+                        "ready": false
+                      }
+                    ],
+                    "ready": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/inbounds/preflight": {
+      "post": {
+        "tags": [
+          "Subscription manager"
+        ],
+        "summary": "Check protocol components, certificates and port availability on the target node",
+        "operationId": "post_panel_api_inbounds_preflight",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Inbound"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/manager/state": {
       "get": {
         "tags": [
           "Subscription manager"
         ],
-        "summary": "List subscriptions and paginated operations",
+        "summary": "List compact subscription summaries and paginated operations",
         "operationId": "get_panel_api_manager_state",
         "parameters": [
+          {
+            "name": "subscriptionPage",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "page",
             "in": "query",
@@ -6147,6 +6481,8 @@
                         "total": 0
                       }
                     ],
+                    "pageSize": 0,
+                    "pendingOperations": 0,
                     "relays": [
                       {
                         "address": "",
@@ -6160,6 +6496,8 @@
                         "username": ""
                       }
                     ],
+                    "subscriptionPage": 0,
+                    "subscriptionTotal": 0,
                     "subscriptions": [
                       {
                         "autoRotate": false,
@@ -6182,6 +6520,7 @@
                             "templateId": 0
                           }
                         ],
+                        "graceMinutes": 0,
                         "happ": "",
                         "id": 0,
                         "incy": "",
@@ -6280,6 +6619,7 @@
                         "templateId": 0
                       }
                     ],
+                    "graceMinutes": 0,
                     "happ": "",
                     "id": 0,
                     "incy": "",
@@ -15091,6 +15431,7 @@
                       "pinnedCertSha256": "",
                       "port": 2053,
                       "presenceRegistry": "running",
+                      "protocolAvailability": {},
                       "remark": "Primary edge",
                       "runningCore": "",
                       "scheme": "https",
@@ -15307,6 +15648,7 @@
                     "pinnedCertSha256": "",
                     "port": 2053,
                     "presenceRegistry": "running",
+                    "protocolAvailability": {},
                     "remark": "Primary edge",
                     "runningCore": "",
                     "scheme": "https",
@@ -15472,6 +15814,7 @@
                     "pinnedCertSha256": "",
                     "port": 2053,
                     "presenceRegistry": "running",
+                    "protocolAvailability": {},
                     "remark": "Primary edge",
                     "runningCore": "",
                     "scheme": "https",
@@ -15714,6 +16057,7 @@
                     "panelEdition": "sawamen",
                     "panelVersion": "v3.x.x",
                     "presenceRegistry": "",
+                    "protocolAvailability": {},
                     "runningCore": "",
                     "singboxError": "",
                     "singboxInstalled": false,
@@ -21299,6 +21643,7 @@
                   "pinnedCertSha256": "",
                   "port": 2053,
                   "presenceRegistry": "running",
+                  "protocolAvailability": {},
                   "remark": "Primary edge",
                   "runningCore": "",
                   "scheme": "https",

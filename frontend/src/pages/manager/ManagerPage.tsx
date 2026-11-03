@@ -13,6 +13,7 @@ import {
   Layout,
   Modal,
   Progress,
+  Pagination,
   QRCode,
   Row,
   Select,
@@ -52,6 +53,7 @@ export default function ManagerPage() {
   const [msg, msgHolder] = message.useMessage();
   const [modal, modalHolder] = Modal.useModal();
   const [page, setPage] = useState(1);
+  const [subscriptionPage, setSubscriptionPage] = useState(1);
   const [state, setState] = useState('');
   const [kind, setKind] = useState('');
   const [sub, setSub] = useState<Subscription | null>(null);
@@ -68,17 +70,17 @@ export default function ManagerPage() {
   const nodeActions = useNodeMutations();
   const options = useInboundOptions();
   const q = useQuery({
-    queryKey: ['manager', page, state, kind],
+    queryKey: ['manager', page, state, kind, subscriptionPage, search],
     queryFn: async () => {
       const r = await HttpUtil.get(
         '/panel/api/manager/state',
-        { page, state, kind },
+        { page, state, kind, subscriptionPage, search },
         { silent: true },
       );
       if (!r.success) throw new Error(r.msg);
       return SnapshotSchema.parse(r.obj);
     },
-    refetchInterval: 5000,
+    refetchInterval: (query) => ((query.state.data?.pendingOperations ?? 0) > 0 ? 2000 : 30000),
     refetchIntervalInBackground: false,
   });
   const refresh = () => {
@@ -190,7 +192,7 @@ export default function ManagerPage() {
               <Spin spinning={q.isPending}>
                 <Row gutter={[12, 12]}>
                   {[
-                    [m('subscriptions'), q.data?.subscriptions.length ?? 0],
+                    [m('subscriptions'), q.data?.subscriptionTotal ?? 0],
                     [
                       m('autoRotate'),
                       q.data?.subscriptions.filter((v) => v.enabled && v.autoRotate).length ?? 0,
@@ -222,7 +224,10 @@ export default function ManagerPage() {
                             aria-label={m('search')}
                             placeholder={m('search')}
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            onChange={(e) => {
+                              setSubscriptionPage(1);
+                              setSearch(e.target.value);
+                            }}
                             style={{ maxWidth: 300 }}
                           />
                           <Space wrap>
@@ -240,108 +245,123 @@ export default function ManagerPage() {
                         </div>
                         {q.data?.subscriptions.length === 0 && <Empty description={m('empty')} />}
                         <Row gutter={[16, 16]}>
-                          {q.data?.subscriptions
-                            .filter((v) =>
-                              `${v.name} ${v.note}`.toLowerCase().includes(search.toLowerCase()),
-                            )
-                            .map((v) => {
-                              const job = q.data.operations.find(
-                                (op) =>
-                                  op.subscriptionId === v.id &&
-                                  ['queued', 'running'].includes(op.state),
-                              );
-                              const client = q.data.clients[String(v.clientId)];
-                              return (
-                                <Col xs={24} xl={12} key={v.id}>
-                                  <Card
-                                    title={v.name}
-                                    extra={
-                                      <Tag color={v.enabled ? 'green' : 'default'}>
-                                        {m(v.enabled ? 'enabled' : 'disabled')}
-                                      </Tag>
-                                    }
-                                  >
-                                    <Space orientation="vertical" style={{ width: '100%' }}>
-                                      <Typography.Text type="secondary">{v.note}</Typography.Text>
-                                      <Typography.Text>
-                                        {v.entries.length}/20 ·{' '}
-                                        {v.autoRotate
-                                          ? `${m('autoRotate')} · ${v.intervalMinutes} ${m('minutes')}`
-                                          : m('manual')}
-                                      </Typography.Text>
-                                      <Typography.Text type="secondary">
-                                        {m('lastRotation')}:{' '}
-                                        {v.lastRotation
-                                          ? new Date(v.lastRotation).toLocaleString()
-                                          : '—'}
-                                      </Typography.Text>
-                                      {client && (
-                                        <>
-                                          <Typography.Text>
-                                            {client.email} · {m('traffic')}:{' '}
-                                            {SizeFormatter.sizeFormat(client.up + client.down)} /{' '}
-                                            {client.total
-                                              ? SizeFormatter.sizeFormat(client.total)
-                                              : '∞'}{' '}
-                                            · {m('expiry')}:{' '}
-                                            {client.expiryTime > 0
-                                              ? new Date(client.expiryTime).toLocaleString()
-                                              : '∞'}
-                                          </Typography.Text>
-                                          <Button size="small" onClick={() => navigate('/clients')}>
-                                            {m('manageClient')}
-                                          </Button>
-                                        </>
-                                      )}
-                                      <Typography.Paragraph
-                                        copyable={{ text: publicURL(v) }}
-                                        style={{ marginBottom: 0, overflowWrap: 'anywhere' }}
+                          {q.data?.subscriptions.map((v) => {
+                            const job = q.data.operations.find(
+                              (op) =>
+                                op.subscriptionId === v.id &&
+                                ['queued', 'running'].includes(op.state),
+                            );
+                            const client = q.data.clients[String(v.clientId)];
+                            return (
+                              <Col xs={24} xl={12} key={v.id}>
+                                <Card
+                                  title={v.name}
+                                  extra={
+                                    <Tag color={v.enabled ? 'green' : 'default'}>
+                                      {m(v.enabled ? 'enabled' : 'disabled')}
+                                    </Tag>
+                                  }
+                                >
+                                  <Space orientation="vertical" style={{ width: '100%' }}>
+                                    <Typography.Text type="secondary">{v.note}</Typography.Text>
+                                    <Typography.Text>
+                                      {v.entries.length}/20 ·{' '}
+                                      {v.autoRotate
+                                        ? `${m('autoRotate')} · ${v.intervalMinutes} ${m('minutes')}`
+                                        : m('manual')}
+                                    </Typography.Text>
+                                    <Typography.Text type="secondary">
+                                      {m('lastRotation')}:{' '}
+                                      {v.lastRotation
+                                        ? new Date(v.lastRotation).toLocaleString()
+                                        : '—'}
+                                    </Typography.Text>
+                                    {client && (
+                                      <>
+                                        <Typography.Text>
+                                          {client.email} · {m('traffic')}:{' '}
+                                          {SizeFormatter.sizeFormat(client.up + client.down)} /{' '}
+                                          {client.total
+                                            ? SizeFormatter.sizeFormat(client.total)
+                                            : '∞'}{' '}
+                                          · {m('expiry')}:{' '}
+                                          {client.expiryTime > 0
+                                            ? new Date(client.expiryTime).toLocaleString()
+                                            : '∞'}
+                                        </Typography.Text>
+                                        <Button size="small" onClick={() => navigate('/clients')}>
+                                          {m('manageClient')}
+                                        </Button>
+                                      </>
+                                    )}
+                                    <Typography.Paragraph
+                                      copyable={{ text: publicURL(v) }}
+                                      style={{ marginBottom: 0, overflowWrap: 'anywhere' }}
+                                    >
+                                      {publicURL(v)}
+                                    </Typography.Paragraph>
+                                    <Space wrap>
+                                      <Button
+                                        size="small"
+                                        disabled={!!job || !v.enabled || pending}
+                                        onClick={() => void action(`/subscriptions/${v.id}/rotate`)}
                                       >
-                                        {publicURL(v)}
-                                      </Typography.Paragraph>
-                                      <Space wrap>
-                                        <Button
-                                          size="small"
-                                          disabled={!!job || !v.enabled || pending}
-                                          onClick={() =>
-                                            void action(`/subscriptions/${v.id}/rotate`)
-                                          }
-                                        >
-                                          {m('generate')}
-                                        </Button>
-                                        <Button
-                                          size="small"
-                                          disabled={!!job}
-                                          onClick={() => setSub(v)}
-                                        >
-                                          {t('edit')}
-                                        </Button>
-                                        <Button size="small" onClick={() => setQr(publicURL(v))}>
-                                          QR
-                                        </Button>
-                                        <Button
-                                          size="small"
-                                          danger
-                                          disabled={!!job || pending}
-                                          onClick={() => confirm(`/subscriptions/${v.id}/delete`)}
-                                        >
-                                          {t('delete')}
-                                        </Button>
-                                      </Space>
-                                      {job && (
-                                        <Progress
-                                          status="active"
-                                          percent={Math.round(
-                                            (100 * job.completed) / Math.max(1, job.total),
-                                          )}
-                                        />
-                                      )}
+                                        {m('generate')}
+                                      </Button>
+                                      <Button
+                                        size="small"
+                                        disabled={!!job}
+                                        onClick={() =>
+                                          void (async () => {
+                                            try {
+                                              const r = await HttpUtil.get(
+                                                `/panel/api/manager/subscriptions/${v.id}`,
+                                              );
+                                              if (r.success)
+                                                setSub(SubscriptionSchema.parse(r.obj));
+                                              else msg.error(r.msg);
+                                            } catch (e) {
+                                              msg.error(String(e));
+                                            }
+                                          })()
+                                        }
+                                      >
+                                        {t('edit')}
+                                      </Button>
+                                      <Button size="small" onClick={() => setQr(publicURL(v))}>
+                                        QR
+                                      </Button>
+                                      <Button
+                                        size="small"
+                                        danger
+                                        disabled={!!job || pending}
+                                        onClick={() => confirm(`/subscriptions/${v.id}/delete`)}
+                                      >
+                                        {t('delete')}
+                                      </Button>
                                     </Space>
-                                  </Card>
-                                </Col>
-                              );
-                            })}
+                                    {job && (
+                                      <Progress
+                                        status="active"
+                                        percent={Math.round(
+                                          (100 * job.completed) / Math.max(1, job.total),
+                                        )}
+                                      />
+                                    )}
+                                  </Space>
+                                </Card>
+                              </Col>
+                            );
+                          })}
                         </Row>
+                        <Pagination
+                          current={subscriptionPage}
+                          pageSize={q.data?.pageSize ?? 25}
+                          total={q.data?.subscriptionTotal ?? 0}
+                          showSizeChanger={false}
+                          onChange={setSubscriptionPage}
+                          style={{ marginTop: 16 }}
+                        />
                       </>
                     ),
                   },
@@ -565,6 +585,8 @@ export default function ManagerPage() {
                               'success',
                               'failed',
                               'interrupted',
+                              'cleanup_pending',
+                              'recovered',
                             ].map((v) => ({ value: v, label: v ? m(v) : m('allStates') }))}
                           />
                           <Select
@@ -582,6 +604,7 @@ export default function ManagerPage() {
                               'relay-install',
                               'relay-uninstall',
                               'relay-delete',
+                              'cleanup',
                             ].map((v) => ({ value: v, label: v || m('allProcesses') }))}
                           />
                         </Space>
@@ -630,7 +653,7 @@ export default function ManagerPage() {
                             {
                               title: m('actions'),
                               render: (_, op) =>
-                                op.state === 'failed' && (
+                                ['failed', 'cleanup_pending'].includes(op.state) && (
                                   <Button
                                     disabled={pending}
                                     onClick={() => void action(`/operations/${op.id}/retry`)}

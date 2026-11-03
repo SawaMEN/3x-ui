@@ -277,7 +277,8 @@ func (a *ServerController) status(c *gin.Context) {
 	obj["core"] = gin.H{
 		"type": coreType, "running": runningCore,
 		"state": selected["state"], "errorMsg": selected["errorMsg"], "version": selected["version"],
-		"capabilities": core.Type(coreType).Capabilities(),
+		"capabilities":         core.Type(coreType).Capabilities(),
+		"protocolAvailability": service.ProtocolAvailability(coreType, fmt.Sprint(selected["version"]), selected["installed"] == true),
 	}
 	jsonObj(c, obj, nil)
 }

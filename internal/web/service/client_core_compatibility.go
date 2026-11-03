@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/core"
+
 	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -177,32 +179,8 @@ func CoreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
 	return coreSupportsInboundProtocol(canonicalCoreType(core), protocol)
 }
 
-func coreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
-	switch core {
-	case CoreTypeXray:
-		switch protocol {
-		case model.NaiveProxy, model.MASQUE, model.Snell, model.AnyTLS, model.ShadowTLS:
-			return false
-		default:
-			return true
-		}
-	case CoreTypeSingBoxUpstream:
-		switch protocol {
-		case model.Tunnel, model.Snell, model.MASQUE:
-			return false
-		default:
-			return true
-		}
-	case CoreTypeSingBox:
-		switch protocol {
-		case model.Tunnel:
-			return false
-		default:
-			return true
-		}
-	default:
-		return false
-	}
+func coreSupportsInboundProtocol(kind string, protocol model.Protocol) bool {
+	return model.InboundProtocolCapabilities[protocol].SupportsCore(core.Type(kind))
 }
 
 func clearCoreAutoDisabledByEmail(email string) error {

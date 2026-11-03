@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -31,6 +32,9 @@ func (s *ManagerService) Run(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	var next time.Time
+	workers := make(chan struct{}, 4)
+	var jobs sync.WaitGroup
+	defer jobs.Wait()
 	for {
 		if ctx.Err() != nil {
 			return
@@ -41,7 +45,12 @@ func (s *ManagerService) Run(ctx context.Context) {
 		}
 		var op model.ManagerOperation
 		if err := db.Where("state = ?", "queued").Order("id").First(&op).Error; err == nil {
-			s.execute(ctx, &op)
+			select {
+			case workers <- struct{}{}:
+				jobs.Add(1)
+				go func(op model.ManagerOperation) { defer jobs.Done(); defer func() { <-workers }(); s.execute(ctx, &op) }(op)
+			default:
+			}
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			logger.Error("manager queue:", err)
 		}
@@ -71,6 +80,7 @@ func (s *ManagerService) schedule() {
 			logger.Error("manager schedule:", err)
 		}
 	}
+	s.scheduleMaintenance()
 	if err := db.Where("finished_at > 0 AND finished_at < ?", time.Now().Add(-30*24*time.Hour).UnixMilli()).Delete(&model.ManagerOperation{}).Error; err != nil {
 		logger.Error("manager journal:", err)
 	}
@@ -84,12 +94,13 @@ func (s *ManagerService) schedule() {
 
 func (s *ManagerService) execute(ctx context.Context, op *model.ManagerOperation) {
 	managerMu.Lock()
-	defer managerMu.Unlock()
 	db := database.GetDB()
 	q := db.Model(op).Where("state = ?", "queued").Update("state", "running")
+	managerMu.Unlock()
 	if q.Error != nil || q.RowsAffected != 1 {
 		return
 	}
+	started := time.Now()
 	var workErr error
 	defer func() {
 		if v := recover(); v != nil {
@@ -98,10 +109,14 @@ func (s *ManagerService) execute(ctx context.Context, op *model.ManagerOperation
 		op.State, op.Message = "success", "Completed"
 		if workErr != nil {
 			op.State, op.Message = "failed", workErr.Error()
+			if errors.Is(workErr, errManagerCleanupPending) {
+				op.State = "cleanup_pending"
+			}
 		}
 		if ctx.Err() != nil {
 			op.State, op.Message = "interrupted", "Panel stopped; inspect before retrying"
 		}
+		logger.Infof("component=manager operation_id=%d kind=%s state=%s completed=%d total=%d elapsed_ms=%d", op.ID, op.Kind, op.State, op.Completed, op.Total, time.Since(started).Milliseconds())
 		op.ActiveKey = nil
 		op.FinishedAt = time.Now().UnixMilli()
 		if err := db.Save(op).Error; err != nil {
@@ -109,11 +124,26 @@ func (s *ManagerService) execute(ctx context.Context, op *model.ManagerOperation
 		}
 	}()
 	if op.RelayID > 0 {
+		release := managerLockKeys([]string{fmt.Sprintf("relay/%d", op.RelayID)})
+		defer release()
 		workErr = s.executeRelay(ctx, op)
 		return
 	}
 	var sub model.ManagerSubscription
 	if workErr = db.Where("id = ? AND user_id = ?", op.SubscriptionID, op.UserID).First(&sub).Error; workErr != nil {
+		return
+	}
+	release := managerLockSubscription(&sub)
+	defer release()
+	if op.Kind == "cleanup" {
+		workErr = s.cleanupGeneration(ctx, op, &sub)
+		if workErr == nil {
+			op.Completed = op.Total
+			workErr = db.Model(&model.ManagerOperation{}).Where("subscription_id = ? AND id <> ? AND state IN ?", sub.ID, op.ID, []string{"cleanup_pending", "interrupted"}).Update("state", "recovered").Error
+		}
+		if workErr != nil {
+			workErr = fmt.Errorf("%w: %w", errManagerCleanupPending, workErr)
+		}
 		return
 	}
 	if op.Kind == "delete" {
@@ -167,7 +197,32 @@ func managerRetry(ctx context.Context, op *model.ManagerOperation, fn func() err
 	return err
 }
 
-func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription) error {
+func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription) (result error) {
+	report := s.Preflight(ctx, sub.UserID, *sub)
+	if !report.Ready {
+		for _, entry := range report.Entries {
+			if !entry.Ready {
+				return fmt.Errorf("entry %d preflight: %s", entry.Index, entry.Message)
+			}
+		}
+	}
+	published := false
+	defer func() {
+		if v := recover(); v != nil {
+			result = fmt.Errorf("generation panic: %v", v)
+		}
+		if published {
+			return
+		}
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		if err := s.rollbackGeneration(rollbackCtx, op, sub); err != nil {
+			result = fmt.Errorf("%w: %w; rollback: %w", errManagerCleanupPending, result, err)
+		}
+	}()
+	if err := s.cleanupGeneration(ctx, op, sub); err != nil {
+		return fmt.Errorf("%w: %w", errManagerCleanupPending, err)
+	}
 	finish := beginLocalConfigBatch()
 	defer finish()
 	db := database.GetDB()
@@ -177,6 +232,9 @@ func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation,
 	for i := range entries {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if err := managerStep(op, fmt.Sprintf("Preparing connection %d/%d", i+1, len(entries))); err != nil {
+			return err
 		}
 		e := &entries[i]
 		if e.Mode == "custom" {
@@ -229,6 +287,9 @@ func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation,
 		}
 	}
 	finish()
+	if err := managerStep(op, "Applying destination configurations"); err != nil {
+		return err
+	}
 	if err := s.applyGeneration(ctx, entries); err != nil {
 		return err
 	}
@@ -238,20 +299,31 @@ func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation,
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	if err := managerStep(op, "Publishing the verified generation"); err != nil {
+		return err
+	}
 	previous := sub.Published
+	if len(previous) > 0 {
+		grace := sub.GraceMinutes
+		if grace == 0 {
+			grace = 120
+		}
+		sub.Retired = append(sub.Retired, model.ManagerRetiredGeneration{Entries: previous, ExpiresAt: time.Now().Add(time.Duration(grace) * time.Minute).UnixMilli()})
+	}
 	sub.Entries, sub.Published = entries, entries
 	sub.LastRotation = time.Now().UnixMilli()
 	sub.NextRotation = time.Now().Add(time.Duration(sub.IntervalMinutes) * time.Minute).UnixMilli()
 	if err := db.Save(sub).Error; err != nil {
 		return err
 	}
+	published = true
 	InvalidateSubData()
-	active := map[int]bool{}
+	active := managerKeep(sub)
 	for _, e := range entries {
 		active[e.ActiveInboundID] = true
 	}
 	if err := s.cleanup(ctx, op, sub, active); err != nil {
-		return fmt.Errorf("generation published; cleanup pending: %w", err)
+		return fmt.Errorf("%w: generation published: %w", errManagerCleanupPending, err)
 	}
 	relays := map[int]bool{}
 	for _, e := range append(slices.Clone(previous), entries...) {
@@ -266,7 +338,7 @@ func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation,
 		}
 		if r.Installed {
 			if err := s.applyRelay(ctx, r, true, nil); err != nil {
-				return fmt.Errorf("generation published; relay cleanup pending: %w", err)
+				return fmt.Errorf("%w: generation published; relay: %w", errManagerCleanupPending, err)
 			}
 		}
 	}
@@ -317,6 +389,11 @@ func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, 
 	if err := s.applySNI(sub.UserID, ib, e.SNI); err != nil {
 		return nil, err
 	}
+	// Recheck the selected random target and certificate, not only the preview sample.
+	ib.Port, _ = strconv.Atoi(e.Port)
+	if err := s.preflightTarget(ctx, ib); err != nil {
+		return nil, err
+	}
 	if e.RelayID > 0 {
 		var r model.ManagerRelay
 		if err := db.First(&r, e.RelayID).Error; err != nil {
@@ -356,12 +433,37 @@ func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) erro
 		return nil
 	}
 	if sni == "random" {
+		var transport struct {
+			Security string `json:"security"`
+		}
+		if json.Unmarshal([]byte(ib.StreamSettings), &transport) != nil || transport.Security != "reality" {
+			return fmt.Errorf("random SNI is only available for Reality; use the certificate domain for TLS")
+		}
 		var names []string
 		if err := database.GetDB().Model(&model.ManagerDomain{}).Where("user_id = ?", owner).Pluck("name", &names).Error; err != nil {
 			return err
 		}
 		if len(names) == 0 {
 			return fmt.Errorf("SNI list is empty")
+		}
+		history, _ := SNIScanHistory()
+		verified := map[string]bool{}
+		for _, scan := range history {
+			for _, row := range scan.Results {
+				checked, err := time.Parse(time.RFC3339, row.CheckedAt)
+				if err == nil && checked.After(time.Now().Add(-time.Hour)) && row.Feasible && row.CertValid {
+					verified[row.Host] = true
+				}
+			}
+		}
+		preferred := []string{}
+		for _, name := range names {
+			if verified[name] {
+				preferred = append(preferred, name)
+			}
+		}
+		if len(preferred) > 0 {
+			names = preferred
 		}
 		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(names))))
 		if err != nil {
@@ -522,7 +624,11 @@ func (s *ManagerService) deleteSubscription(ctx context.Context, op *model.Manag
 		}
 	}
 	relays := map[int]bool{}
-	for _, e := range append(slices.Clone(sub.Entries), sub.Published...) {
+	entries := append(slices.Clone(sub.Entries), sub.Published...)
+	for _, g := range sub.Retired {
+		entries = append(entries, g.Entries...)
+	}
+	for _, e := range entries {
 		if e.RelayID > 0 {
 			relays[e.RelayID] = true
 		}
@@ -539,4 +645,9 @@ func (s *ManagerService) deleteSubscription(ctx context.Context, op *model.Manag
 		}
 	}
 	return db.Delete(sub).Error
+}
+
+func managerStep(op *model.ManagerOperation, message string) error {
+	op.Message = message
+	return database.GetDB().Model(op).Update("message", message).Error
 }

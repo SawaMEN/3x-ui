@@ -3796,6 +3796,25 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
+  "ManagerListOptions": {
+    "properties": {
+      "compact": {
+        "type": "boolean"
+      },
+      "page": {
+        "type": "integer"
+      },
+      "search": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "compact",
+      "page",
+      "search"
+    ],
+    "type": "object"
+  },
   "ManagerOperation": {
     "properties": {
       "attempts": {
@@ -3846,6 +3865,43 @@ export const SCHEMAS: Record<string, unknown> = {
       "state",
       "subscriptionId",
       "total"
+    ],
+    "type": "object"
+  },
+  "ManagerPreflight": {
+    "properties": {
+      "entries": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerPreflightEntry"
+        },
+        "type": "array"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "entries",
+      "ready"
+    ],
+    "type": "object"
+  },
+  "ManagerPreflightEntry": {
+    "properties": {
+      "index": {
+        "type": "integer"
+      },
+      "message": {
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "index",
+      "message",
+      "ready"
     ],
     "type": "object"
   },
@@ -3959,11 +4015,25 @@ export const SCHEMAS: Record<string, unknown> = {
         },
         "type": "array"
       },
+      "pageSize": {
+        "type": "integer"
+      },
+      "pendingOperations": {
+        "format": "int64",
+        "type": "integer"
+      },
       "relays": {
         "items": {
           "$ref": "#/components/schemas/ManagerRelay"
         },
         "type": "array"
+      },
+      "subscriptionPage": {
+        "type": "integer"
+      },
+      "subscriptionTotal": {
+        "format": "int64",
+        "type": "integer"
       },
       "subscriptions": {
         "items": {
@@ -3977,7 +4047,11 @@ export const SCHEMAS: Record<string, unknown> = {
       "domains",
       "operationTotal",
       "operations",
+      "pageSize",
+      "pendingOperations",
       "relays",
+      "subscriptionPage",
+      "subscriptionTotal",
       "subscriptions"
     ],
     "type": "object"
@@ -4002,6 +4076,9 @@ export const SCHEMAS: Record<string, unknown> = {
           "$ref": "#/components/schemas/ManagerEntry"
         },
         "type": "array"
+      },
+      "graceMinutes": {
+        "type": "integer"
       },
       "happ": {
         "type": "string"
@@ -4058,6 +4135,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "createdAt",
       "enabled",
       "entries",
+      "graceMinutes",
       "happ",
       "id",
       "incy",
@@ -4261,6 +4339,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "presenceRegistry": {
         "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
         "type": "string"
+      },
+      "protocolAvailability": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ProtocolAvailability"
+        },
+        "type": "object"
       },
       "remark": {
         "type": "string"
@@ -4643,6 +4727,12 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "running",
         "type": "string"
       },
+      "protocolAvailability": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ProtocolAvailability"
+        },
+        "type": "object"
+      },
       "remark": {
         "example": "Primary edge",
         "type": "string"
@@ -4939,6 +5029,12 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
         "type": "string"
       },
+      "protocolAvailability": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ProtocolAvailability"
+        },
+        "type": "object"
+      },
       "runningCore": {
         "type": "string"
       },
@@ -5002,6 +5098,33 @@ export const SCHEMAS: Record<string, unknown> = {
       "uptimeSecs",
       "xrayError",
       "xrayVersion"
+    ],
+    "type": "object"
+  },
+  "ProtocolAvailability": {
+    "properties": {
+      "component": {
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      },
+      "speedLimit": {
+        "type": "boolean"
+      },
+      "supported": {
+        "type": "boolean"
+      },
+      "version": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "component",
+      "ready",
+      "speedLimit",
+      "supported",
+      "version"
     ],
     "type": "object"
   },

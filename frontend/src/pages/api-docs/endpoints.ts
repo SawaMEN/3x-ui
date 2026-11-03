@@ -205,10 +205,32 @@ export const sections: readonly Section[] = [
     endpoints: [
       {
         method: 'GET',
+        path: '/panel/api/manager/subscriptions/:id',
+        summary: 'Load a full subscription recipe for editing',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+        responseSchema: 'ManagerSubscription',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/preflight',
+        summary: 'Validate a generation before creating resources',
+        requestSchema: { $ref: '#/components/schemas/ManagerSubscription' },
+        responseSchema: 'ManagerPreflight',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/inbounds/preflight',
+        summary: 'Check protocol components, certificates and port availability on the target node',
+        requestSchema: { $ref: '#/components/schemas/Inbound' },
+      },
+      {
+        method: 'GET',
         path: '/panel/api/manager/state',
-        summary: 'List subscriptions and paginated operations',
+        summary: 'List compact subscription summaries and paginated operations',
         responseSchema: 'ManagerSnapshot',
         params: [
+          { name: 'subscriptionPage', in: 'query', type: 'integer', optional: true },
+          { name: 'search', in: 'query', type: 'string', optional: true },
           { name: 'page', in: 'query', type: 'integer', optional: true },
           { name: 'state', in: 'query', type: 'string', optional: true },
           { name: 'kind', in: 'query', type: 'string', optional: true },
