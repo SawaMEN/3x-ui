@@ -14,7 +14,7 @@ func TestStage7ObservedFirewallPorts(t *testing.T) {
 		t.Fatal(got, err)
 	}
 	got, err = observedIPTablesPorts(`-N XUI-FIREWALL
--A XUI-FIREWALL -p tcp -m tcp --dport 2222 -j ACCEPT
+-A XUI-FIREWALL -p tcp -m tcp --dport 2222 -m comment --comment "3x-ui-managed" -j ACCEPT
 -A XUI-FIREWALL -p udp -m udp --dport 1000:1100 -j ACCEPT
 -A XUI-FIREWALL -s 10.0.0.1 -p tcp --dport 8443 -j ACCEPT
 -A ADMIN -p tcp --dport 443 -j ACCEPT

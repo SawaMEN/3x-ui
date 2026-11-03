@@ -91,8 +91,10 @@ func observedIPTablesPorts(text string) (map[string]bool, error) {
 				port = args[i+1]
 			case "-j":
 				verdict = args[i+1]
+			case "--comment":
+				// Comments do not restrict a port accept.
 			case "-m":
-				if args[i+1] != "tcp" && args[i+1] != "udp" {
+				if args[i+1] != "tcp" && args[i+1] != "udp" && args[i+1] != "comment" {
 					valid = false
 				}
 			default:
