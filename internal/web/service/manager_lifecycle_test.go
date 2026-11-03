@@ -165,3 +165,27 @@ func TestManagerSlowNodeDoesNotHoldQueueLock(t *testing.T) {
 		t.Fatal("slow node blocked saving an independent subscription")
 	}
 }
+
+func TestManagerSearchMatchesRussianNamesAndLiteralWildcards(t *testing.T) {
+	s, _, template := managerFixture(t)
+	ids := map[string]int{}
+	for _, name := range []string{"Офис_1", "ОфисX1", "Office_1", "OfficeX1"} {
+		draft := *template
+		draft.ID = 0
+		draft.Name = name
+		saved, err := s.Save(1, draft)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[name] = saved.ID
+	}
+	for query, name := range map[string]string{"офис_1": "Офис_1", "office_1": "Office_1"} {
+		snapshot, err := s.Snapshot(1, 1, "", "", ManagerListOptions{Page: 1, Search: query, Compact: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snapshot.SubscriptionTotal != 1 || len(snapshot.Subscriptions) != 1 || snapshot.Subscriptions[0].ID != ids[name] {
+			t.Fatalf("search %q did not match its literal, case-insensitive name: %+v", query, snapshot.Subscriptions)
+		}
+	}
+}

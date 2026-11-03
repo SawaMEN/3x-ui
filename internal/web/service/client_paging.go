@@ -141,17 +141,9 @@ func caseVariants(s string) []string {
 // clientSearchCond builds the search predicate for the given needle variants
 // (lowered first) and returns its arguments.
 func clientSearchCond(variants []string) (string, []any) {
-	var parts []string
-	var args []any
+	parts, args := textColumnSearchConditions(clientSearchCols, variants)
 	like := func(v string) string { return "%" + escapeLikeLiteral(v) + "%" }
-	for _, col := range clientSearchCols {
-		parts = append(parts, "LOWER("+col+") LIKE ? ESCAPE '\\'")
-		args = append(args, like(variants[0]))
-		for _, v := range variants {
-			parts = append(parts, col+" LIKE ? ESCAPE '\\'")
-			args = append(args, like(v))
-		}
-	}
+
 	parts = append(parts, "(COALESCE(c.tg_id, 0) <> 0 AND CAST(c.tg_id AS TEXT) LIKE ? ESCAPE '\\')")
 	args = append(args, like(variants[0]))
 	return "(" + strings.Join(parts, " OR ") + ")", args
@@ -738,4 +730,19 @@ func parseCSVInts(raw string) []int {
 		return nil
 	}
 	return out
+}
+
+func textColumnSearchConditions(columns, variants []string) ([]string, []any) {
+	var parts []string
+	var args []any
+	like := func(v string) string { return "%" + escapeLikeLiteral(v) + "%" }
+	for _, col := range columns {
+		parts = append(parts, "LOWER("+col+") LIKE ? ESCAPE '\\'")
+		args = append(args, like(variants[0]))
+		for _, v := range variants {
+			parts = append(parts, col+" LIKE ? ESCAPE '\\'")
+			args = append(args, like(v))
+		}
+	}
+	return parts, args
 }

@@ -47,8 +47,9 @@ func (s *ManagerService) Snapshot(owner, page int, state, kind string, options .
 	v.SubscriptionPage, v.PageSize = 1, 25
 	if len(options) > 0 {
 		v.SubscriptionPage = max(1, options[0].Page)
-		if options[0].Search != "" {
-			query = query.Where("(LOWER(name) LIKE ? OR LOWER(note) LIKE ?)", "%"+strings.ToLower(options[0].Search)+"%", "%"+strings.ToLower(options[0].Search)+"%")
+		if needle := strings.TrimSpace(options[0].Search); needle != "" {
+			parts, args := textColumnSearchConditions([]string{"name", "note"}, caseVariants(needle))
+			query = query.Where("("+strings.Join(parts, " OR ")+")", args...)
 		}
 	}
 	if err := query.Count(&v.SubscriptionTotal).Error; err != nil {

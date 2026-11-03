@@ -155,10 +155,13 @@ def main():
                         cfg = {'log': {'level': 'error'}, 'inbounds': [{'type': 'mixed', 'listen': '127.0.0.1', 'listen_port': port}],
                                'outbounds': [outbound], 'route': {'final': 'test'}}
                         path = root / f'client-{index}.json'; path.write_text(json.dumps(cfg))
+                        subprocess.run([str(core_dir / 'hiddify-core-linux-amd64'), 'check', '-c', str(path)], check=True)
                         with open(root / f'client-{index}.log', 'w') as log:
                             client = subprocess.Popen([str(core_dir / 'hiddify-core-linux-amd64'), 'run', '-c', str(path)], stdout=log, stderr=log)
                             try:
                                 def connect():
+                                    if client.poll() is not None:
+                                        raise RuntimeError((root / f'client-{index}.log').read_text())
                                     conn = socket.create_connection(('127.0.0.1', port), timeout=4)
                                     conn.settimeout(5)
                                     conn.sendall(b'\x05\x01\x00'); assert exact(conn, 2) == b'\x05\x00'
@@ -168,6 +171,9 @@ def main():
                                     payload = secrets.token_bytes(4096); conn.sendall(payload); assert exact(conn, len(payload)) == payload
                                     conn.close(); return True
                                 eventually(connect)
+                            except BaseException:
+                                print((root / f'client-{index}.log').read_text(), flush=True)
+                                raise
                             finally:
                                 client.terminate(); client.wait(timeout=10)
                     echo.shutdown()
