@@ -33,7 +33,11 @@ type FirewallManualRule = {
   label?: string;
 };
 
+type FirewallExternalRule = { id: string; label: string };
+
 type FirewallStatus = {
+  externalRules?: FirewallExternalRule[];
+  inspectionError?: string;
   supported: boolean;
   backend: string;
   enabled: boolean;
@@ -85,6 +89,9 @@ function useFirewallText() {
             safety:
               'Порт панели, текущий внешний порт панели, порт подписок и SSH защищаются автоматически, чтобы не потерять доступ к серверу.',
             rules: 'Активные и ожидаемые правила',
+            unknown: 'НЕИЗВЕСТНО',
+            deleteExternal: 'Удалить это существующее правило файрволла?',
+            inspectFailed: 'Не удалось прочитать существующие правила',
             manual: 'Ручные правила',
             add: 'Добавить',
             port: 'Порт',
@@ -128,6 +135,9 @@ function useFirewallText() {
             safety:
               'Panel, current external panel port, subscription port, and SSH are protected automatically to prevent lockout.',
             rules: 'Active and expected rules',
+            unknown: 'UNKNOWN',
+            deleteExternal: 'Delete this existing firewall rule?',
+            inspectFailed: 'Could not inspect existing rules',
             manual: 'Manual rules',
             add: 'Add',
             port: 'Port',
@@ -211,8 +221,22 @@ export function FirewallManager() {
   }
 
   async function saveInterval() {
-    if (!status || interval === null || interval < 5 || interval > 3600 || interval === (status.syncInterval ?? 60)) return;
-    if (await post('/panel/api/server/firewall/auto-sync', { enabled: status.autoSync, syncInterval: interval }, 'interval')) setInterval(null);
+    if (
+      !status ||
+      interval === null ||
+      interval < 5 ||
+      interval > 3600 ||
+      interval === (status.syncInterval ?? 60)
+    )
+      return;
+    if (
+      await post(
+        '/panel/api/server/firewall/auto-sync',
+        { enabled: status.autoSync, syncInterval: interval },
+        'interval',
+      )
+    )
+      setInterval(null);
   }
 
   const sourceLabel = (rule: FirewallRule) => {
@@ -417,6 +441,48 @@ export function FirewallManager() {
         pagination={false}
         scroll={{ x: 620 }}
       />
+
+      {status.inspectionError && (
+        <Alert type="warning" title={text.inspectFailed} description={status.inspectionError} />
+      )}
+      {Boolean(status.externalRules?.length) && (
+        <Table<FirewallExternalRule>
+          size="small"
+          rowKey="id"
+          dataSource={status.externalRules}
+          pagination={false}
+          showHeader={false}
+          columns={[
+            { key: 'state', width: 140, render: () => <Tag color="warning">{text.unknown}</Tag> },
+            {
+              dataIndex: 'label',
+              render: (value: string) => (
+                <Typography.Text style={{ overflowWrap: 'anywhere' }}>{value}</Typography.Text>
+              ),
+            },
+            {
+              key: 'delete',
+              width: 100,
+              render: (_: unknown, rule: FirewallExternalRule) => (
+                <Popconfirm
+                  title={text.deleteExternal}
+                  onConfirm={() =>
+                    void post(
+                      '/panel/api/server/firewall/rules/delete-external',
+                      { id: rule.id },
+                      `external-${rule.id}`,
+                    )
+                  }
+                >
+                  <Button danger size="small" loading={action === `external-${rule.id}`}>
+                    {text.remove}
+                  </Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
+      )}
 
       <Divider titlePlacement="start">{text.manual}</Divider>
       <Space wrap>

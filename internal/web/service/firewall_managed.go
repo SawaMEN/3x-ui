@@ -31,14 +31,16 @@ type FirewallManualRuleView struct {
 }
 
 type FirewallManagedStatus struct {
-	Supported    bool                     `json:"supported"`
-	Backend      string                   `json:"backend"`
-	Enabled      bool                     `json:"enabled"`
-	AutoSync     bool                     `json:"autoSync"`
-	SyncInterval int                      `json:"syncInterval"`
-	Rules        []FirewallRule           `json:"rules"`
-	ManualRules  []FirewallManualRuleView `json:"manualRules"`
-	Message      string                   `json:"message,omitempty"`
+	ExternalRules   []FirewallExternalRule   `json:"externalRules"`
+	InspectionError string                   `json:"inspectionError,omitempty"`
+	Supported       bool                     `json:"supported"`
+	Backend         string                   `json:"backend"`
+	Enabled         bool                     `json:"enabled"`
+	AutoSync        bool                     `json:"autoSync"`
+	SyncInterval    int                      `json:"syncInterval"`
+	Rules           []FirewallRule           `json:"rules"`
+	ManualRules     []FirewallManualRuleView `json:"manualRules"`
+	Message         string                   `json:"message,omitempty"`
 }
 
 func TriggerFirewallSync() {
@@ -325,6 +327,12 @@ func (s *FirewallService) managedStatusLocked(ctx context.Context, safetyPort in
 	}
 	status.Supported = true
 	status.Backend = backend.name
+	external, inspectErr := listExternalFirewallRules(ctx, backend)
+	if inspectErr != nil {
+		status.InspectionError = inspectErr.Error()
+	} else {
+		status.ExternalRules = externalRuleViews(external)
+	}
 	status.Enabled, _ = backend.enabled(ctx)
 	desired, err := s.managedDesiredRules(auto, safetyPort)
 	if err != nil {

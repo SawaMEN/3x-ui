@@ -41,6 +41,7 @@ func (a *FirewallController) initRouter(g *gin.RouterGroup) {
 	g.POST("/install-ufw", a.installUFW)
 	g.POST("/rules/add", a.addRule)
 	g.POST("/rules/delete", a.deleteRule)
+	g.POST("/rules/delete-external", a.deleteExternalRule)
 }
 
 func (a *FirewallController) jsonStatus(c *gin.Context, status service.FirewallManagedStatus, err error) {
@@ -248,4 +249,16 @@ func firewallSafetyPort(c *gin.Context) int {
 		return 443
 	}
 	return 0
+}
+
+func (a *FirewallController) deleteExternalRule(c *gin.Context) {
+	var req struct {
+		ID string `json:"id" binding:"required,len=64"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid firewall rule ID", err)
+		return
+	}
+	status, err := a.firewallService.DeleteExternalFirewallRule(c.Request.Context(), req.ID, firewallSafetyPort(c))
+	a.jsonStatus(c, status, err)
 }

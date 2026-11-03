@@ -83,13 +83,24 @@ jobs:
         run: |
           set -o pipefail
           go test -race -json ./internal/hiddify -run '^TestStage7' -count=1 | tee routing-native.jsonl
-          python3 tools/ci/require-go-tests.py routing-native.jsonl TestStage7RoutingTraffic TestStage7DNSPolicy
+          python3 tools/ci/require-go-tests.py routing-native.jsonl TestStage7RoutingTraffic TestStage7DNSPolicy TestStage7SelectorTraffic
+      - name: Live selector and adblock policy
+        run: |
+          set -o pipefail
+          mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+          SINGBOX_E2E_BINARY="$XUI_STAGE4_CORE_DIR/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}" go test -race -json ./internal/singbox -run '^TestSelectorLiveSwitch_E2E$' -count=1 | tee selector.jsonl
+          python3 tools/ci/require-go-tests.py selector.jsonl TestSelectorLiveSwitch_E2E
+          XUI_ADBLOCK_XRAY_BINARY="$XUI_STAGE4_CORE_DIR/xray/xray" XUI_ADBLOCK_SINGBOX_BINARY="$XUI_STAGE4_CORE_DIR/upstream/sing-box" \
+            go test -race -json ./internal/web/service -run '^(TestAdBlockRealCores|TestAdBlockManagedServerRealCores|TestAdBlockScopedConfigsAcceptedByRealCores|TestAdBlockPolicyRealCores)$' -count=1 | tee adblock-native.jsonl
+          python3 tools/ci/require-go-tests.py adblock-native.jsonl TestAdBlockRealCores TestAdBlockManagedServerRealCores TestAdBlockScopedConfigsAcceptedByRealCores TestAdBlockPolicyRealCores
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: routing-native-${{ matrix.arch }}
           path: |
             routing-native.jsonl
+            selector.jsonl
+            adblock-native.jsonl
             native-binaries.sha256
   contracts:
     runs-on: ubuntu-24.04
@@ -147,8 +158,8 @@ jobs:
         run: |
           set -o pipefail
           go test -race -timeout 20m -p 2 -json ./internal/web/service -run 'Stage7|Routing|Route|Gateway|Firewall|Automatic|Balancer|AdBlock|YouTube|DomainFront|DNS|Tun' -count=1 | tee policies.jsonl
-          python3 tools/ci/require-go-tests.py policies.jsonl TestStage7DeletedInboundCannotBroadenPolicy TestStage7CatalogDoesNotEraseInvalidRules TestStage7FirewallInterval TestStage7NftReplacementFailurePreservesFirewall TestStage7GatewayPauseCannotBecomeDirectFallback
-          go test -race -p 2 -json ./internal/gateway ./internal/routingcatalog ./internal/domainfront ./internal/adblock ./internal/singbox ./internal/hiddify ./internal/web/controller -count=1 | tee engines.jsonl
+          python3 tools/ci/require-go-tests.py policies.jsonl TestStage7DeletedInboundCannotBroadenPolicy TestStage7CatalogDoesNotEraseInvalidRules TestStage7FirewallInterval TestStage7NftReplacementFailurePreservesFirewall TestStage7GatewayPauseCannotBecomeDirectFallback TestStage7ExternalFirewallRules TestStage7FirewallRuleLexer TestStage7GatewayResumeRouteFormat
+          go test -race -p 2 -json ./internal/gateway ./internal/routingcatalog ./internal/domainfront ./internal/adblock/... ./internal/singbox ./internal/hiddify ./internal/web/controller -count=1 | tee engines.jsonl
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc

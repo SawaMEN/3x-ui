@@ -336,6 +336,19 @@ func TestStage7KernelFirewall(t *testing.T) {
 	ctx := context.Background()
 	stage7Cmd(t, "nft", "add", "table", "inet", "stage7_foreign")
 	t.Cleanup(func() { _ = exec.Command("nft", "delete", "table", "inet", "stage7_foreign").Run() })
+	stage7Cmd(t, "nft", "add", "chain", "inet", "stage7_foreign", "input")
+	stage7Cmd(t, "nft", "add", "rule", "inet", "stage7_foreign", "input", "ip", "saddr", "192.0.2.0/24", "counter", "drop")
+	b := firewallBackend{name: "nftables", binary: "nft"}
+	external, err := listExternalFirewallRules(ctx, b)
+	if err != nil || len(external) != 1 {
+		t.Fatal(external, err)
+	}
+	if err := deleteExternalFirewallRule(ctx, b, external[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := deleteExternalFirewallRule(ctx, b, external[0].ID); err == nil {
+		t.Fatal("deleted stale selection")
+	}
 	foreign := stage7Cmd(t, "nft", "-s", "list", "table", "inet", "stage7_foreign")
 	rules := []FirewallRule{{Port: 2222, Protocol: "tcp", Source: "session"}}
 	if err := applyManagedNftables(ctx, "nft", rules); err != nil {
