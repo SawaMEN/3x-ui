@@ -155,9 +155,9 @@ def main():
                         cfg = {'log': {'level': 'error'}, 'inbounds': [{'type': 'mixed', 'listen': '127.0.0.1', 'listen_port': port}],
                                'outbounds': [outbound], 'route': {'final': 'test'}}
                         path = root / f'client-{index}.json'; path.write_text(json.dumps(cfg))
-                        subprocess.run([str(core_dir / 'hiddify-core-linux-amd64'), 'check', '-c', str(path)], check=True)
+                        subprocess.run([str(core_dir / 'hiddify-core-linux-amd64'), 'check', '-c', str(path)], cwd=core_dir, check=True)
                         with open(root / f'client-{index}.log', 'w') as log:
-                            client = subprocess.Popen([str(core_dir / 'hiddify-core-linux-amd64'), 'run', '-c', str(path)], stdout=log, stderr=log)
+                            client = subprocess.Popen([str(core_dir / 'hiddify-core-linux-amd64'), 'srun', '-c', str(path)], cwd=core_dir, stdout=log, stderr=log)
                             try:
                                 def connect():
                                     if client.poll() is not None:
