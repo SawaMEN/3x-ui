@@ -107,6 +107,10 @@ def main():
                             outbound['settings']['finalRules'] = []
                     db.execute("DELETE FROM settings WHERE key='xrayTemplateConfig'")
                     db.execute("INSERT INTO settings(key,value) VALUES('xrayTemplateConfig',?)", (json.dumps(template),))
+                    # Persist the new installation's selected core alongside its template.
+                    # A template without coreType is intentionally treated as a legacy DB.
+                    db.execute("DELETE FROM settings WHERE key='coreType'")
+                    db.execute("INSERT INTO settings(key,value) VALUES('coreType','sing-box')")
                 name = network + '-' + role
                 containers.append(name)
                 subprocess.run(['docker', 'run', '-d', '--name', name, '--network', network, '--cap-drop', 'ALL', '--user', f'{os.getuid()}:{os.getgid()}',
