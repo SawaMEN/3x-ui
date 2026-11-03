@@ -54,9 +54,31 @@ exec 9>"$STATE.lock"
 exec 8>@RUNTIME_LOCK@
 @FLOCK@ -w 25 8
 [[ -f "$STATE" ]] || exit 0
-grep -qx 'NETWORK_ENABLED=0' "$STATE" && exit 0
 lan=$(sed -n 's/^LAN_IF=//p' "$STATE")
 [[ "$lan" =~ ^[a-zA-Z0-9_.:-]+$ ]] || { echo 'Invalid Gateway LAN interface' >&2; exit 1; }
+network=$(sed -n 's/^LAN_NETWORK=//p' "$STATE")
+[[ "$network" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]] || { echo 'Invalid Gateway LAN network' >&2; exit 1; }
+# Restore a forwarding guard before waiting for the core. Local management
+# uses INPUT and is never affected by this rule.
+guard=$(mktemp)
+trap 'rm -f "$guard"' EXIT
+tables=$(@NFT@ list tables)
+for table in 'inet xui_gateway' 'ip xui_gateway_nat'; do
+    if printf '%s\n' "$tables" | grep -qx "table $table"; then echo "delete table $table" >> "$guard"; fi
+done
+cat >> "$guard" <<RULES
+table inet xui_gateway {
+    chain forward {
+        type filter hook forward priority -5; policy accept;
+        iifname "$lan" ip saddr $network counter drop comment "3x-ui gateway suspended"
+    }
+}
+RULES
+@NFT@ -c -f "$guard"
+@NFT@ -f "$guard"
+rm -f "$guard"
+trap - EXIT
+grep -qx 'NETWORK_ENABLED=0' "$STATE" && exit 0
 if [[ "${1:-firewall}" == routing ]]; then
     # Check aliases numerically so named table 100 cannot be silently replaced.
     numeric_rules=$(@IP@ -N -4 rule show)

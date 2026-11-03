@@ -116,7 +116,7 @@ func TestStage7DNSPolicy(t *testing.T) {
 			cfg := map[string]any{
 				"inbounds":  []any{map[string]any{"type": "direct", "tag": "dns-in", "listen": "127.0.0.1", "listen_port": port, "override_address": "8.8.8.8", "override_port": 53}},
 				"outbounds": []any{map[string]any{"type": "direct", "tag": "direct"}},
-				"route":     map[string]any{"rules": []any{map[string]any{"inbound": []string{"dns-in"}, "action": "hijack-dns"}}},
+				"route":     map[string]any{"default_domain_resolver": "public", "rules": []any{map[string]any{"inbound": []string{"dns-in"}, "action": "hijack-dns"}}},
 				"dns": map[string]any{"servers": []any{
 					map[string]any{"type": "udp", "tag": "private", "server": "127.0.0.1", "server_port": udpPort},
 					map[string]any{"type": "tls", "tag": "secure", "server": "127.0.0.1", "server_port": ln.Addr().(*net.TCPAddr).Port, "tls": tlsConfig},

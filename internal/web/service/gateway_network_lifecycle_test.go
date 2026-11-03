@@ -203,7 +203,7 @@ func TestGatewayNetworkLifecyclePreservesBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, _ := s.loadGatewayNetworkState()
-	if state.DesiredActive || h.firewall != "" {
+	if state.DesiredActive || !strings.Contains(h.firewall, "3x-ui gateway suspended") || strings.Contains(h.firewall, "counter tproxy") {
 		t.Fatal("suspended Gateway still intercepts or restores at boot")
 	}
 	if err := s.Enable(ctx, cfg); err != nil {
@@ -260,7 +260,7 @@ func TestGatewayFailedRollbackRetainsRecovery(t *testing.T) {
 	if _, err := os.Stat(s.paths.rpFilter); err != nil {
 		t.Fatal("lost recovery snapshot:", err)
 	}
-	if h.firewall != "" {
+	if !strings.Contains(h.firewall, "3x-ui gateway suspended") || strings.Contains(h.firewall, "counter tproxy") {
 		t.Fatal("failed cleanup left interception active")
 	}
 	if err := s.Disable(context.Background()); err != nil {
@@ -458,7 +458,8 @@ esac
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(logPath)
-	if string(after) != string(previous) {
-		t.Fatal("inactive recovery marker executed network commands at boot")
+	delta := strings.TrimPrefix(string(after), string(previous))
+	if !strings.Contains(delta, "3x-ui gateway suspended") || strings.Contains(delta, "ip -4 rule") || strings.Contains(delta, "counter tproxy") {
+		t.Fatal("paused boot must restore only the forwarding guard, not interception", delta)
 	}
 }

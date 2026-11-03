@@ -11,6 +11,52 @@ concurrency:
   group: routing-audit-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Kernel network tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nftables iptables iproute2 python3
+          test -c /dev/net/tun || { sudo mkdir -p /dev/net; sudo mknod /dev/net/tun c 10 200; }
+      - name: Pinned native cores
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/download-audit-cores.sh amd64
+      - name: Compile isolated kernel and DNS probes
+        run: |
+          mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+          go test -c -race ./internal/web/service -o "$RUNNER_TEMP/service.test"
+          go test -c -race ./internal/hiddify -o "$RUNNER_TEMP/dns.test"
+          printf 'nameserver 127.0.0.1\noptions timeout:1 attempts:1\n' > "$RUNNER_TEMP/stage7-resolv.conf"
+      - name: Real packets in private network and mount namespaces
+        run: |
+          set -o pipefail
+          sudo env XUI_STAGE4_CORE_DIR="$XUI_STAGE4_CORE_DIR" STAGE7_NETNS=1 STAGE7_ISOLATED=1 GODEBUG=netdns=go \
+            STAGE7_TEMP="$RUNNER_TEMP" STAGE7_GO="$(command -v go)" \
+            unshare --mount --net --mount-proc bash -euc '
+              set -o pipefail
+              mount --make-rprivate /
+              ip link set lo up
+              mount --bind "$STAGE7_TEMP/stage7-resolv.conf" /etc/resolv.conf
+              "$STAGE7_GO" tool test2json -p github.com/SawaMEN/3x-ui/v3/internal/web/service -t "$STAGE7_TEMP/service.test" -test.v -test.run "^TestStage7Kernel" -test.timeout 5m | tee kernel.jsonl
+              "$STAGE7_GO" tool test2json -p github.com/SawaMEN/3x-ui/v3/internal/hiddify -t "$STAGE7_TEMP/dns.test" -test.v -test.run "^TestStage7DNSPolicy$" -test.timeout 2m | tee dns-leak.jsonl
+            '
+          python3 tools/ci/require-go-tests.py kernel.jsonl TestStage7KernelGateway TestStage7KernelTun TestStage7KernelFirewall
+          python3 tools/ci/require-go-tests.py dns-leak.jsonl TestStage7DNSPolicy
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: routing-kernel-evidence
+          path: |
+            kernel.jsonl
+            dns-leak.jsonl
   native:
     strategy:
       fail-fast: false
@@ -64,6 +110,7 @@ jobs:
             git show "fdeba8766eef7baeef5289a11e51bff4f379efe9:internal/web/service/$name" > "internal/web/service/$name"
           done
           cp internal/web/service/firewall_managed.go "$RUNNER_TEMP/firewall-current.go"
+          cp internal/web/service/gateway_network.go "$RUNNER_TEMP/gateway-current.go"
           python3 - <<'PY'
           import subprocess,pathlib
           p=pathlib.Path('internal/web/service/firewall_managed.go')
@@ -74,24 +121,32 @@ jobs:
               return a,s.index('\nfunc ',a+1)
           a,b=span(old);x,y=span(current)
           p.write_text(current[:x]+old[a:b]+current[y:])
+          p=pathlib.Path('internal/web/service/gateway_network.go')
+          old=subprocess.check_output(['git','show','fdeba8766eef7baeef5289a11e51bff4f379efe9:internal/web/service/gateway_network.go'],text=True)
+          current=p.read_text()
+          marker='func (s *GatewayNetworkService) Suspend('
+          a=old.index(marker);b=old.index('\nfunc ',a+1)
+          x=current.index(marker);y=current.index('\nfunc ',x+1)
+          p.write_text(current[:x]+old[a:b]+current[y:])
           PY
           set +e
-          go test -json ./internal/web/service -run '^(TestStage7DeletedInboundCannotBroadenPolicy|TestStage7CatalogDoesNotEraseInvalidRules|TestStage7NftReplacementFailurePreservesFirewall)$' -count=1 > before-policy.jsonl
+          go test -json ./internal/web/service -run '^(TestStage7DeletedInboundCannotBroadenPolicy|TestStage7CatalogDoesNotEraseInvalidRules|TestStage7NftReplacementFailurePreservesFirewall|TestStage7GatewayPauseCannotBecomeDirectFallback)$' -count=1 > before-policy.jsonl
           status=$?
           set -e
           for name in xray_setting_routing_sync.go routing_catalog.go; do cp "$RUNNER_TEMP/$name" "internal/web/service/$name"; done
           cp "$RUNNER_TEMP/firewall-current.go" internal/web/service/firewall_managed.go
+          cp "$RUNNER_TEMP/gateway-current.go" internal/web/service/gateway_network.go
           test "$status" -ne 0
           python3 - <<'PY'
           import json
           failed={e.get('Test') for line in open('before-policy.jsonl') if (e:=json.loads(line)).get('Action')=='fail'}
-          assert {'TestStage7DeletedInboundCannotBroadenPolicy','TestStage7CatalogDoesNotEraseInvalidRules','TestStage7NftReplacementFailurePreservesFirewall'} <= failed, failed
+          assert {'TestStage7DeletedInboundCannotBroadenPolicy','TestStage7CatalogDoesNotEraseInvalidRules','TestStage7NftReplacementFailurePreservesFirewall','TestStage7GatewayPauseCannotBecomeDirectFallback'} <= failed, failed
           PY
       - name: Routing DNS firewall policy contracts
         run: |
           set -o pipefail
           go test -race -timeout 20m -p 2 -json ./internal/web/service -run 'Stage7|Routing|Route|Gateway|Firewall|Automatic|Balancer|AdBlock|YouTube|DomainFront|DNS|Tun' -count=1 | tee policies.jsonl
-          python3 tools/ci/require-go-tests.py policies.jsonl TestStage7DeletedInboundCannotBroadenPolicy TestStage7CatalogDoesNotEraseInvalidRules TestStage7FirewallInterval TestStage7NftReplacementFailurePreservesFirewall
+          python3 tools/ci/require-go-tests.py policies.jsonl TestStage7DeletedInboundCannotBroadenPolicy TestStage7CatalogDoesNotEraseInvalidRules TestStage7FirewallInterval TestStage7NftReplacementFailurePreservesFirewall TestStage7GatewayPauseCannotBecomeDirectFallback
           go test -race -p 2 -json ./internal/gateway ./internal/routingcatalog ./internal/domainfront ./internal/adblock ./internal/singbox ./internal/hiddify ./internal/web/controller -count=1 | tee engines.jsonl
       - uses: actions/setup-node@v7
         with:

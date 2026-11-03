@@ -4,11 +4,31 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
+
+func TestStage7GatewayPauseCannotBecomeDirectFallback(t *testing.T) {
+	s, h, cfg := newGatewayTestHost(t)
+	if err := s.Enable(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Suspend(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(h.firewall, "chain forward") || !strings.Contains(h.firewall, "counter drop") || strings.Contains(h.firewall, "tproxy") || strings.Contains(h.firewall, "hook input") {
+		t.Fatalf("pause must block forwarding while preserving local management: %s", h.firewall)
+	}
+	if err := s.Disable(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.firewall != "" {
+		t.Fatal("explicit disable left the pause guard behind")
+	}
+}
 
 func TestStage7NftReplacementFailurePreservesFirewall(t *testing.T) {
 	dir := t.TempDir()

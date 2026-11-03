@@ -207,7 +207,8 @@ func (s *GatewayNetworkService) Enable(ctx context.Context, cfg GatewayNetworkCo
 }
 
 // Suspend removes interception before a core is reconfigured. Recovery data
-// and policy routing remain until Disable completes or Enable resumes.
+// and policy routing remain until Disable completes or Enable resumes. The
+// managed LAN stays fail-closed, without affecting local INPUT/management.
 func (s *GatewayNetworkService) Suspend(ctx context.Context) error {
 	state, err := s.loadGatewayNetworkState()
 	if os.IsNotExist(err) {
@@ -220,10 +221,14 @@ func (s *GatewayNetworkService) Suspend(ctx context.Context) error {
 	if err := s.saveGatewayNetworkState(state); err != nil {
 		return err
 	}
-	return s.removeGatewayTables(ctx)
+	return s.replaceGatewayTables(ctx, gatewaySuspendedNFTRules(state.LANNetwork, state.Config.LANInterface))
 }
 
 func (s *GatewayNetworkService) removeGatewayTables(ctx context.Context) error {
+	return s.replaceGatewayTables(ctx, "")
+}
+
+func (s *GatewayNetworkService) replaceGatewayTables(ctx context.Context, replacement string) error {
 	tables, err := s.command(ctx, "nft", "list", "tables")
 	if err != nil {
 		return err
@@ -234,6 +239,7 @@ func (s *GatewayNetworkService) removeGatewayTables(ctx context.Context) error {
 			fmt.Fprintf(&batch, "delete table %s %s\n", table.family, table.name)
 		}
 	}
+	batch.WriteString(replacement)
 	if batch.Len() == 0 {
 		return nil
 	}
@@ -286,6 +292,9 @@ func (s *GatewayNetworkService) Disable(ctx context.Context) error {
 		}
 	}
 	if err := s.restoreGatewayRPFilter(ctx); err != nil {
+		return err
+	}
+	if err := s.removeGatewayTables(ctx); err != nil {
 		return err
 	}
 	for _, path := range []string{s.networkPaths().firewallUnit, s.networkPaths().routingUnit, s.networkPaths().restoreScript, s.networkPaths().nft} {
@@ -519,6 +528,16 @@ func (s *GatewayNetworkService) installGatewayNetworkUnits(ctx context.Context) 
 	}
 	_, err = s.command(ctx, "systemctl", "enable", "xui-gateway-routing.service", "xui-gateway-firewall.service")
 	return err
+}
+
+func gatewaySuspendedNFTRules(lanNetwork, lanInterface string) string {
+	return fmt.Sprintf(`table inet xui_gateway {
+    chain forward {
+        type filter hook forward priority -5; policy accept;
+        iifname %q ip saddr %s counter drop comment "3x-ui gateway suspended"
+    }
+}
+`, lanInterface, lanNetwork)
 }
 
 func gatewayNFTRules(lanNetwork, wanInterface, lanInterface string) string {
