@@ -350,10 +350,21 @@ func (s *FirewallService) managedStatusLocked(ctx context.Context, safetyPort in
 	}
 
 	if backend.name == "nftables" || backend.name == "iptables" {
+		if !auto {
+			desired = appendFrozenInboundRules(desired, managed)
+		}
+		present := map[string]bool{}
+		if status.Enabled {
+			var inspectErr error
+			present, inspectErr = observedNativePorts(ctx, backend)
+			if inspectErr != nil {
+				status.InspectionError = inspectErr.Error()
+			}
+		}
 		for i := range desired {
 			key := firewallRuleSpec(desired[i])
 			desired[i].Owned = owned[key] || status.Enabled
-			desired[i].Exists = status.Enabled
+			desired[i].Exists = status.Enabled && present[key]
 		}
 		status.Rules = desired
 		return status, nil

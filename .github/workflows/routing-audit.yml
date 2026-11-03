@@ -162,11 +162,30 @@ jobs:
           failed={e.get('Test') for line in open('before-policy.jsonl') if (e:=json.loads(line)).get('Action')=='fail'}
           assert {'TestStage7DeletedInboundCannotBroadenPolicy','TestStage7CatalogDoesNotEraseInvalidRules','TestStage7NftReplacementFailurePreservesFirewall','TestStage7GatewayPauseCannotBecomeDirectFallback'} <= failed, failed
           PY
+      - name: Reproduce invented native open ports before fix
+        run: |
+          set -o pipefail
+          git fetch --depth=1 origin a2cdc3c431d52591813cfb387680e27d1ccf0ebe
+          for name in firewall_managed.go firewall_safe_ops.go; do
+            cp "internal/web/service/$name" "$RUNNER_TEMP/status-$name"
+            git show "a2cdc3c431d52591813cfb387680e27d1ccf0ebe:internal/web/service/$name" > "internal/web/service/$name"
+          done
+          set +e
+          go test -json ./internal/web/service -run '^TestStage7NativeStatusDoesNotInventOpenPorts$' -count=1 > before-status.jsonl
+          status=$?
+          set -e
+          for name in firewall_managed.go firewall_safe_ops.go; do cp "$RUNNER_TEMP/status-$name" "internal/web/service/$name"; done
+          test "$status" -ne 0
+          python3 - <<'PYCODE'
+          import json
+          failed={e.get('Test') for line in open('before-status.jsonl') if (e:=json.loads(line)).get('Action')=='fail'}
+          assert 'TestStage7NativeStatusDoesNotInventOpenPorts' in failed, failed
+          PYCODE
       - name: Routing DNS firewall policy contracts
         run: |
           set -o pipefail
           go test -race -timeout 20m -p 2 -json ./internal/web/service -run 'Stage7|Routing|Route|Gateway|Firewall|Automatic|Balancer|AdBlock|YouTube|DomainFront|DNS|Tun' -count=1 | tee policies.jsonl
-          python3 tools/ci/require-go-tests.py policies.jsonl TestStage7DeletedInboundCannotBroadenPolicy TestStage7CatalogDoesNotEraseInvalidRules TestStage7FirewallInterval TestStage7NftReplacementFailurePreservesFirewall TestStage7GatewayPauseCannotBecomeDirectFallback TestStage7ExternalFirewallRules TestStage7FirewallRuleLexer TestStage7GatewayResumeRouteFormat TestStage7StatusInitializationDoesNotOverrideInterval
+          python3 tools/ci/require-go-tests.py policies.jsonl TestStage7DeletedInboundCannotBroadenPolicy TestStage7CatalogDoesNotEraseInvalidRules TestStage7FirewallInterval TestStage7NftReplacementFailurePreservesFirewall TestStage7GatewayPauseCannotBecomeDirectFallback TestStage7ExternalFirewallRules TestStage7FirewallRuleLexer TestStage7GatewayResumeRouteFormat TestStage7StatusInitializationDoesNotOverrideInterval TestStage7ObservedFirewallPorts TestStage7NativeStatusDoesNotInventOpenPorts
           go test -race -p 2 -json ./internal/gateway ./internal/routingcatalog ./internal/domainfront ./internal/adblock/... ./internal/singbox ./internal/hiddify ./internal/web/controller -count=1 | tee engines.jsonl
       - uses: actions/setup-node@v7
         with:

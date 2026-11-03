@@ -86,40 +86,11 @@ func (s *FirewallService) syncManagedSafeLocked(ctx context.Context, backend fir
 	return saveManagedOwnedRules(desired)
 }
 
-func decorateFrozenNativeStatus(status FirewallManagedStatus, managed []FirewallRule) FirewallManagedStatus {
-	if status.AutoSync || (status.Backend != "nftables" && status.Backend != "iptables") {
-		return status
-	}
-	seen := make(map[string]bool, len(status.Rules)+len(managed))
-	for _, rule := range status.Rules {
-		if key := firewallRuleSpec(rule); key != "" {
-			seen[key] = true
-		}
-	}
-	for _, rule := range managed {
-		key := firewallRuleSpec(rule)
-		if key == "" || seen[key] || rule.Source != "inbound" {
-			continue
-		}
-		rule.Exists = status.Enabled
-		rule.Owned = true
-		status.Rules = append(status.Rules, rule)
-		seen[key] = true
-	}
-	sortFirewallRules(status.Rules)
-	return status
-}
-
 func (s *FirewallService) managedStatusSafeLocked(ctx context.Context, safetyPort int) (FirewallManagedStatus, error) {
 	status, err := s.managedStatusLocked(ctx, safetyPort)
 	if err != nil {
 		return FirewallManagedStatus{}, err
 	}
-	managed, err := loadManagedFirewallRules()
-	if err != nil {
-		return FirewallManagedStatus{}, err
-	}
-	status = decorateFrozenNativeStatus(status, managed)
 	// For UFW/firewalld, Enabled represents the 3x-ui management feature, not
 	// whether the host firewall daemon itself is running. This prevents the UI
 	// toggle from requiring a destructive global firewall shutdown.

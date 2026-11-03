@@ -355,6 +355,11 @@ func TestStage7KernelFirewall(t *testing.T) {
 	if err := applyManagedNftables(ctx, "nft", rules); err != nil {
 		t.Fatal(err)
 	}
+	present, err := observedNativePorts(ctx, b)
+	if err != nil || !present["2222/tcp"] || present["443/tcp"] {
+		t.Fatal("incorrect nft port observation", present, err)
+	}
+
 	stage7Packet(t, client, "tcp", "10.60.0.1", 2222, true)
 	before := stage7Cmd(t, "nft", "-s", "list", "table", "inet", managedNftTable)
 	dir := t.TempDir()
@@ -381,6 +386,11 @@ func TestStage7KernelFirewall(t *testing.T) {
 	if err := applyManagedIPTablesSafe(ctx, "iptables", rules); err != nil {
 		t.Fatal(err)
 	}
+	present, err = observedNativePorts(ctx, firewallBackend{name: "iptables", binary: "iptables"})
+	if err != nil || !present["2222/tcp"] || present["443/tcp"] {
+		t.Fatal("incorrect iptables port observation", present, err)
+	}
+
 	stage7Packet(t, client, "tcp", "10.60.0.1", 2222, true)
 	if err := removeManagedIPTables(ctx, "iptables"); err != nil {
 		t.Fatal(err)
