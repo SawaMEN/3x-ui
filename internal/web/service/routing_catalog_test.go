@@ -102,8 +102,8 @@ func TestRoutingCatalogMaterializationPreservesOrderAndMatchesEitherKind(t *test
 	if _, err := singbox.TranslateXrayRouting(cfg["routing"].(map[string]any)); err != nil {
 		t.Fatalf("native routing rejected: %v", err)
 	}
-	if ruleHasNonInboundMatchers(map[string]any{"routingListId": 1}) == false {
-		t.Fatal("catalog must count as a matcher during inbound reference cleanup")
+	if rules, changed := removeInboundTagFromRules([]map[string]any{{"inboundTag": []string{"gone"}, "routingListId": 1}}, "gone"); !changed || len(rules) != 0 {
+		t.Fatal("catalog policy must not lose its inbound scope")
 	}
 }
 

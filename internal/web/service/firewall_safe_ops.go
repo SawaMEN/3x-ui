@@ -181,9 +181,18 @@ func (s *FirewallService) SetManagedEnabledSafe(ctx context.Context, enabled boo
 	return s.managedStatusSafeLocked(ctx, safetyPort)
 }
 
-func (s *FirewallService) SetManagedAutoSyncPreferenceSafe(ctx context.Context, enabled bool, safetyPort int) (FirewallManagedStatus, error) {
+func (s *FirewallService) SetManagedAutoSyncPreferenceSafe(ctx context.Context, enabled bool, safetyPort int, interval ...int) (FirewallManagedStatus, error) {
 	firewallMu.Lock()
 	defer firewallMu.Unlock()
+	if len(interval) > 0 {
+		if err := ValidateFirewallSyncInterval(interval[0]); err != nil {
+			return FirewallManagedStatus{}, err
+		}
+		if err := (&SettingService{}).setInt(firewallSyncIntervalKey, interval[0]); err != nil {
+			return FirewallManagedStatus{}, err
+		}
+		TriggerFirewallSync()
+	}
 	if err := (&SettingService{}).setBool(firewallAutoSyncKey, enabled); err != nil {
 		return FirewallManagedStatus{}, err
 	}

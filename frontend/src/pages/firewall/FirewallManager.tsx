@@ -38,6 +38,7 @@ type FirewallStatus = {
   backend: string;
   enabled: boolean;
   autoSync: boolean;
+  syncInterval?: number;
   pingEnabled: boolean;
   canInstallUfw?: boolean;
   rules: FirewallRule[];
@@ -75,6 +76,7 @@ function useFirewallText() {
             enabled: 'Файрволл включён',
             disabled: 'Файрволл выключен',
             auto: 'Автоматически открывать и закрывать порты подключений',
+            interval: 'Период проверки правил, сек',
             autoHint:
               'При создании, изменении, включении или удалении inbound правила синхронизируются автоматически.',
             ping: 'Разрешить ping (ICMP)',
@@ -117,6 +119,7 @@ function useFirewallText() {
             enabled: 'Firewall enabled',
             disabled: 'Firewall disabled',
             auto: 'Automatically open and close inbound ports',
+            interval: 'Rule check interval, seconds',
             autoHint:
               'Rules are synchronized after inbound create, update, enable, disable, and delete.',
             ping: 'Allow ping (ICMP)',
@@ -159,6 +162,7 @@ export function FirewallManager() {
   const [port, setPort] = useState<number | null>(null);
   const [protocol, setProtocol] = useState('both');
   const [label, setLabel] = useState('');
+  const [interval, setInterval] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -204,6 +208,11 @@ export function FirewallManager() {
     } finally {
       setAction('');
     }
+  }
+
+  async function saveInterval() {
+    if (!status || interval === null || interval < 5 || interval > 3600 || interval === (status.syncInterval ?? 60)) return;
+    if (await post('/panel/api/server/firewall/auto-sync', { enabled: status.autoSync, syncInterval: interval }, 'interval')) setInterval(null);
   }
 
   const sourceLabel = (rule: FirewallRule) => {
@@ -362,6 +371,21 @@ export function FirewallManager() {
             <Typography.Text strong>{text.auto}</Typography.Text>
             <br />
             <Typography.Text type="secondary">{text.autoHint}</Typography.Text>
+            <br />
+            <Space>
+              <Typography.Text>{text.interval}</Typography.Text>
+              <InputNumber
+                aria-label={text.interval}
+                min={5}
+                max={3600}
+                precision={0}
+                value={interval ?? status.syncInterval ?? 60}
+                disabled={action === 'interval'}
+                onChange={setInterval}
+                onBlur={() => void saveInterval()}
+                onPressEnter={() => void saveInterval()}
+              />
+            </Space>
           </div>
         </Space>
       </div>

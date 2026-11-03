@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -12,7 +13,24 @@ import (
 const (
 	firewallControlInitializedKey = "firewallControlInitialized"
 	firewallSafetyPortKey         = "firewallSafetyPort"
+	firewallSyncIntervalKey       = "firewallSyncInterval"
 )
+
+func ValidateFirewallSyncInterval(seconds int) error {
+	if seconds < 5 || seconds > 3600 {
+		return fmt.Errorf("firewall sync interval must be 5..3600 seconds")
+	}
+	return nil
+}
+
+func firewallSyncInterval() time.Duration {
+	raw, err := firewallSetting(firewallSyncIntervalKey, "60")
+	seconds, parseErr := strconv.Atoi(raw)
+	if err != nil || parseErr != nil || ValidateFirewallSyncInterval(seconds) != nil {
+		seconds = 60
+	}
+	return time.Duration(seconds) * time.Second
+}
 
 func (s *FirewallService) MarkControlInitialized() error {
 	return (&SettingService{}).setBool(firewallControlInitializedKey, true)
@@ -92,7 +110,7 @@ func (s *FirewallService) SetAutoSyncPreference(ctx context.Context, enabled boo
 // RunAutoSync keeps firewall rules aligned with enabled local inbounds even
 // when changes arrive through imports, API calls, or node synchronization.
 // Inbound API mutations trigger an immediate coalesced reconcile; a periodic
-// five-second pass remains as drift repair for imports and future mutation
+// configurable pass remains as drift repair for imports and future mutation
 // paths and keeps the managed iptables jump behind newly added admin rules.
 func (s *FirewallService) RunAutoSync(parent context.Context) {
 	syncNow := func() {
@@ -168,15 +186,22 @@ func (s *FirewallService) RunAutoSync(parent context.Context) {
 	}
 
 	syncNow()
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
+	timer := time.NewTimer(firewallSyncInterval())
+	defer timer.Stop()
 	for {
 		select {
 		case <-parent.Done():
 			return
-		case <-ticker.C:
+		case <-timer.C:
 		case <-firewallSyncTrigger:
 		}
 		syncNow()
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer.Reset(firewallSyncInterval())
 	}
 }

@@ -5,11 +5,6 @@ import (
 	"strings"
 )
 
-var routingMatcherKeys = []string{
-	"domain", "domains", "ip", "port", "sourcePort", "localPort", "network",
-	"source", "sourceIP", "localIP", "user", "vlessRoute", "protocol", "attrs", "process", "routingListId",
-}
-
 func readInboundTags(raw any) []string {
 	switch tags := raw.(type) {
 	case []string:
@@ -38,15 +33,6 @@ func writeInboundTags(rule map[string]any, tags []string) {
 		return
 	}
 	rule["inboundTag"] = tags
-}
-
-func ruleHasNonInboundMatchers(rule map[string]any) bool {
-	for _, key := range routingMatcherKeys {
-		if hasRoutingMatcherValue(rule[key]) {
-			return true
-		}
-	}
-	return false
 }
 
 func hasRoutingMatcherValue(raw any) bool {
@@ -122,14 +108,12 @@ func removeInboundTagFromRules(rules []map[string]any, deletedTag string) ([]map
 			continue
 		}
 		changed = true
-		if len(nextTags) == 0 && !ruleHasNonInboundMatchers(rule) {
+		// Removing the final scope must remove the policy, not apply its
+		// remaining matchers to every other inbound.
+		if len(nextTags) == 0 {
 			continue
 		}
-		if len(nextTags) == 0 {
-			delete(rule, "inboundTag")
-		} else {
-			writeInboundTags(rule, nextTags)
-		}
+		writeInboundTags(rule, nextTags)
 		out = append(out, rule)
 	}
 	return out, changed

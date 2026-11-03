@@ -31,13 +31,14 @@ type FirewallManualRuleView struct {
 }
 
 type FirewallManagedStatus struct {
-	Supported   bool                     `json:"supported"`
-	Backend     string                   `json:"backend"`
-	Enabled     bool                     `json:"enabled"`
-	AutoSync    bool                     `json:"autoSync"`
-	Rules       []FirewallRule           `json:"rules"`
-	ManualRules []FirewallManualRuleView `json:"manualRules"`
-	Message     string                   `json:"message,omitempty"`
+	Supported    bool                     `json:"supported"`
+	Backend      string                   `json:"backend"`
+	Enabled      bool                     `json:"enabled"`
+	AutoSync     bool                     `json:"autoSync"`
+	SyncInterval int                      `json:"syncInterval"`
+	Rules        []FirewallRule           `json:"rules"`
+	ManualRules  []FirewallManualRuleView `json:"manualRules"`
+	Message      string                   `json:"message,omitempty"`
 }
 
 func TriggerFirewallSync() {
@@ -316,7 +317,7 @@ func (s *FirewallService) managedStatusLocked(ctx context.Context, safetyPort in
 	if err != nil {
 		return FirewallManagedStatus{}, err
 	}
-	status := FirewallManagedStatus{AutoSync: auto, ManualRules: manualRuleViews(manual, labels)}
+	status := FirewallManagedStatus{AutoSync: auto, SyncInterval: int(firewallSyncInterval().Seconds()), ManualRules: manualRuleViews(manual, labels)}
 	backend, err := detectManagedFirewallBackend(ctx)
 	if err != nil {
 		status.Message = err.Error()
@@ -629,8 +630,14 @@ func applyManagedNftables(ctx context.Context, binary string, rules []FirewallRu
 		_, _ = runFirewallCommand(ctx, binary, "delete", "table", "inet", managedNftTable)
 		return errors.New("another nftables input hook appeared; 3x-ui removed its managed table to avoid overriding administrator firewall policy")
 	}
-	_, _ = runFirewallCommand(ctx, binary, "delete", "table", "inet", managedNftTable)
+	tables, err := runFirewallCommand(ctx, binary, "list", "tables")
+	if err != nil {
+		return err
+	}
 	var script strings.Builder
+	if gatewayTablePresent(tables, "inet", managedNftTable) {
+		script.WriteString("delete table inet " + managedNftTable + "\n")
+	}
 	script.WriteString("table inet " + managedNftTable + " {\n")
 	script.WriteString(" chain " + managedNftChain + " {\n")
 	script.WriteString("  type filter hook input priority 100; policy drop;\n")
@@ -647,12 +654,16 @@ func applyManagedNftables(ctx context.Context, binary string, rules []FirewallRu
 		script.WriteString("  " + parts[1] + " dport " + nftPortExpression(rule) + " accept\n")
 	}
 	script.WriteString(" }\n}\n")
-	cmd := exec.CommandContext(ctx, binary, "-f", "-")
-	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	cmd.Stdin = strings.NewReader(script.String())
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("apply nftables firewall: %w: %s", err, strings.TrimSpace(string(out)))
+	// Validate and replace in one nft transaction. Deleting first would leave
+	// the host unprotected if parsing/applying the replacement fails.
+	for _, args := range [][]string{{"-c", "-f", "-"}, {"-f", "-"}} {
+		cmd := exec.CommandContext(ctx, binary, args...)
+		cmd.Env = append(os.Environ(), "LC_ALL=C")
+		cmd.Stdin = strings.NewReader(script.String())
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("apply nftables firewall: %w: %s", err, strings.TrimSpace(string(out)))
+		}
 	}
 	return nil
 }

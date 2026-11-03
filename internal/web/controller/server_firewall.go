@@ -109,16 +109,25 @@ func (a *FirewallController) setEnabled(c *gin.Context) {
 
 func (a *FirewallController) setAutoSync(c *gin.Context) {
 	var req struct {
-		Enabled bool `json:"enabled" form:"enabled"`
+		Enabled      bool `json:"enabled" form:"enabled"`
+		SyncInterval *int `json:"syncInterval" form:"syncInterval"`
 	}
 	if err := c.ShouldBind(&req); err != nil {
 		jsonMsg(c, "invalid firewall auto-sync state", err)
 		return
 	}
+	var interval []int
+	if req.SyncInterval != nil {
+		if err := service.ValidateFirewallSyncInterval(*req.SyncInterval); err != nil {
+			jsonMsg(c, "invalid firewall sync interval", err)
+			return
+		}
+		interval = []int{*req.SyncInterval}
+	}
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.SetManagedAutoSyncPreferenceSafe(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	status, err := a.firewallService.SetManagedAutoSyncPreferenceSafe(c.Request.Context(), req.Enabled, firewallSafetyPort(c), interval...)
 	a.jsonStatus(c, status, err)
 }
 

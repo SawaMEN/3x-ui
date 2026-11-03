@@ -448,6 +448,15 @@ func materializeNativeRoutingLists(template string, sources []model.RoutingList)
 	if err := json.Unmarshal([]byte(template), &cfg); err != nil {
 		return "", err
 	}
+	// Expansion must not silently discard a malformed sibling policy. The
+	// normal runtime validator would reject it before this transformation.
+	route, _ := cfg["route"].(map[string]any)
+	rawRules, _ := route["rules"].([]any)
+	for i, raw := range rawRules {
+		if _, ok := raw.(map[string]any); !ok {
+			return "", fmt.Errorf("route.rules[%d] must be an object", i)
+		}
+	}
 	var out []any
 	store := geodata.NewStore(assetDir())
 	for _, rule := range nativeCatalogRules(cfg) {
