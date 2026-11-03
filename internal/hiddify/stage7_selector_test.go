@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 
@@ -26,6 +27,12 @@ func TestStage7SelectorTraffic(t *testing.T) {
 			if engine == "upstream" {
 				binary = filepath.Join(root, "upstream", "sing-box")
 			}
+			directTCP := stage5Echo(t, "127.0.0.1:0")
+			_, portText, _ := net.SplitHostPort(directTCP)
+			tcpTarget, _ := strconv.Atoi(portText)
+			udpHost, udpTarget := stage5UDPEcho(t)
+			stage5Data(t, "tcp", directTCP, true)
+			stage5Data(t, "udp", net.JoinHostPort(udpHost, strconv.Itoa(udpTarget)), true)
 			a, b := stage7Marker(t, 'A'), stage7Marker(t, 'B')
 			in, api, dead := stage5Port(t), stage5Port(t), stage5Port(t)
 			outs := []any{map[string]any{"type": "selector", "tag": "selection", "outbounds": []string{"A", "B", "all-dead"}, "default": "A"}}
@@ -50,7 +57,11 @@ func TestStage7SelectorTraffic(t *testing.T) {
 					t.Fatal(selected, err)
 				}
 				for _, network := range []string{"tcp", "udp"} {
-					reply, err := stage7Exchange(net.JoinHostPort("127.0.0.1", fmt.Sprint(in)), "198.18.0.9", 443, network)
+					targetPort := tcpTarget
+					if network == "udp" {
+						targetPort = udpTarget
+					}
+					reply, err := stage7Exchange(net.JoinHostPort("127.0.0.1", fmt.Sprint(in)), "127.0.0.1", targetPort, network)
 					if target == "all-dead" {
 						if err == nil || len(reply) > 0 {
 							t.Fatalf("dead upstream leaked %s payload %q", network, reply)

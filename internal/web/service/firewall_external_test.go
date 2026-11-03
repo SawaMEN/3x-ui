@@ -54,6 +54,7 @@ func TestStage7ExternalFirewallRules(t *testing.T) {
 		dir := t.TempDir()
 		deleted := filepath.Join(dir, "deleted")
 		t.Setenv("STAGE7_EXTERNAL_DELETED", deleted)
+		fakeFirewallBinary(t, dir, "ip6tables", "exit 0")
 		fakeFirewallBinary(t, dir, "iptables", `if [ "$1" = -S ]; then
 cat <<'RULES'
 -P INPUT ACCEPT
