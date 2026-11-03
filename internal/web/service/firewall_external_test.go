@@ -54,7 +54,10 @@ func TestStage7ExternalFirewallRules(t *testing.T) {
 		dir := t.TempDir()
 		deleted := filepath.Join(dir, "deleted")
 		t.Setenv("STAGE7_EXTERNAL_DELETED", deleted)
-		fakeFirewallBinary(t, dir, "ip6tables", "exit 0")
+		t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+		ipv6Probe := filepath.Join(dir, "ipv6-probed")
+		t.Setenv("STAGE7_IPV6_PROBED", ipv6Probe)
+		fakeFirewallBinary(t, dir, "ip6tables", `echo probed > "$STAGE7_IPV6_PROBED"`)
 		fakeFirewallBinary(t, dir, "iptables", `if [ "$1" = -S ]; then
 cat <<'RULES'
 -P INPUT ACCEPT
@@ -67,6 +70,9 @@ else printf '%s\n' "$@" > "$STAGE7_EXTERNAL_DELETED"; fi`)
 		rules, err := listExternalFirewallRules(context.Background(), b)
 		if err != nil || len(rules) != 1 {
 			t.Fatal(rules, err)
+		}
+		if _, err := os.Stat(ipv6Probe); err != nil {
+			t.Fatal("IPv6 inventory was not inspected", err)
 		}
 		if err := deleteExternalFirewallRule(context.Background(), b, rules[0].ID); err != nil {
 			t.Fatal(err)
