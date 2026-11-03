@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -150,7 +151,7 @@ func stage7KernelCore(t *testing.T, cfg map[string]any) func() {
 	if root == "" {
 		t.Fatal("missing pinned native core")
 	}
-	binary := filepath.Join(root, "owner", "x-ui", "bin", "hiddify-core-linux-amd64")
+	binary := filepath.Join(root, "owner", "x-ui", "bin", "hiddify-core-linux-"+runtime.GOARCH)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "kernel.json")
 	b, err := json.Marshal(cfg)

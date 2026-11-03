@@ -12,7 +12,15 @@ concurrency:
   cancel-in-progress: true
 jobs:
   kernel:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
@@ -28,7 +36,7 @@ jobs:
       - name: Pinned native cores
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash tools/ci/download-audit-cores.sh amd64
+        run: bash tools/ci/download-audit-cores.sh ${{ matrix.arch }}
       - name: Compile isolated kernel and DNS probes
         run: |
           mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
@@ -54,7 +62,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: routing-kernel-evidence
+          name: routing-kernel-evidence-${{ matrix.arch }}
           path: |
             kernel.jsonl
             dns-leak.jsonl
