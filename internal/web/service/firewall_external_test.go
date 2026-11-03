@@ -98,6 +98,11 @@ RULES`)
 		if err != nil || len(rules) != 1 || len(rules[0].args) != 2 {
 			t.Fatal(rules, err)
 		}
+		other, err := listExternalFirewallRules(context.Background(), firewallBackend{name: "firewalld", binary: filepath.Join(dir, "firewall-cmd"), zone: "private"})
+		if err != nil || len(other) != 1 || other[0].ID == rules[0].ID {
+			t.Fatal("selection survived zone change", other, err)
+		}
+
 	})
 }
 

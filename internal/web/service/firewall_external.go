@@ -134,8 +134,14 @@ func listExternalFirewallRules(ctx context.Context, b firewallBackend) ([]extern
 	if err != nil {
 		return nil, err
 	}
+	occurrences := make(map[string]int, len(rules))
 	for i := range rules {
 		rules[i].binary = b.binary
+		identity := rules[i].ID
+		ordinal := occurrences[identity]
+		occurrences[identity]++
+		sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%d", b.name, b.binary, b.zone, identity, ordinal)))
+		rules[i].ID = hex.EncodeToString(sum[:])
 	}
 	if b.name == "iptables" {
 		ip6, err := managedIP6TablesPath(b.binary)
