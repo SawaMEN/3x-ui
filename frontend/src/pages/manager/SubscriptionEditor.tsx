@@ -94,12 +94,10 @@ export default function SubscriptionEditor({
       enable: true,
     });
   }, [editingConfig, form]);
-  const [checked, setChecked] = useState<boolean | null>(null);
-  useEffect(() => {
-    const subscription = form.watch(() => setChecked(null));
-    return () => subscription.unsubscribe();
-  }, [form]);
+  const [checked, setChecked] = useState<{ ready: boolean; signature: string } | null>(null);
+  const watchedValues = useWatch({ control: form.control });
   const check = async () => {
+    const signature = JSON.stringify(form.getValues());
     const parsed = SubscriptionSchema.safeParse(form.getValues());
     if (!parsed.success) {
       setError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'));
@@ -118,7 +116,7 @@ export default function SubscriptionEditor({
         return false;
       }
       const result = PreflightSchema.parse(response.obj);
-      setChecked(result.ready);
+      setChecked({ ready: result.ready, signature });
       if (!result.ready)
         setError(
           result.entries
@@ -175,7 +173,9 @@ export default function SubscriptionEditor({
       <FormProvider {...form}>
         <Form layout="vertical" component="div">
           {error && <Alert type="error" showIcon title={error} />}
-          {checked === true && !error && <Alert type="success" showIcon title={m('ready')} />}
+          {checked?.ready && checked.signature === JSON.stringify(watchedValues) && !error && (
+            <Alert type="success" showIcon title={m('ready')} />
+          )}
           <Tabs
             items={[
               {

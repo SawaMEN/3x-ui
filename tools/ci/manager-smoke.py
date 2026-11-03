@@ -96,7 +96,8 @@ def main():
                     '-port', '2053', '-webBasePath', '/', '-listenIP', '0.0.0.0', env=env)
                 token = re.search(r'apiToken:\s*(\S+)', run(str(panel), 'setting', '-getApiToken', '-tokenScope', 'admin', env=env))[1]
                 with sqlite3.connect(home / 'db/x-ui.db') as db:
-                    db.execute("INSERT INTO settings(key,value) VALUES('subEnable','false') ON CONFLICT(key) DO UPDATE SET value='false'")
+                    db.execute("DELETE FROM settings WHERE key='subEnable'")
+                    db.execute("INSERT INTO settings(key,value) VALUES('subEnable','false')")
                 name = network + '-' + role
                 containers.append(name)
                 subprocess.run(['docker', 'run', '-d', '--name', name, '--network', network, '--cap-drop', 'ALL',
