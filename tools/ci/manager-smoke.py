@@ -123,7 +123,7 @@ def main():
                 ip = json.loads(run('docker', 'inspect', name))[0]['NetworkSettings']['Networks'][network]['IPAddress']
                 base = 'http://127.0.0.1:' + host_port
                 eventually(lambda: api(base, token, 'server/status'))
-                installations.append((home, env, name, token, base, ip))
+                installations.append([home, env, name, token, base, ip])
             master, node = installations
             node_view = api(master[4], master[3], 'nodes/add', {'name': 'smoke-node', 'scheme': 'http',
                 'address': node[5], 'port': 2053, 'basePath': '/', 'apiToken': node[3], 'enable': True,
@@ -201,6 +201,9 @@ def main():
             failed = rotate('failed')
             assert failed['published'] == second['published'], 'failed operation replaced the publication'
             subprocess.run(['docker', 'start', node[2]], check=True, stdout=subprocess.DEVNULL)
+            # Docker may allocate a new host port for a dynamically published port.
+            host_port = run('docker', 'port', node[2], '2053/tcp').strip().rsplit(':', 1)[1]
+            node[4] = 'http://127.0.0.1:' + host_port
             eventually(lambda: api(node[4], node[3], 'server/status'))
             api(master[4], master[3], f'nodes/probe/{node_view["id"]}', {})
             rotate(); traffic()
