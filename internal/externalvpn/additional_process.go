@@ -101,7 +101,8 @@ func (m *Manager) additionalCommand(inst Instance, metricsAddr string) (*exec.Cm
 	}
 	// The official image starts HAProxy, DNS and FPTN together. All sysctls and
 	// firewall policy changes made by FPTN remain in Docker's network namespace.
-	args := []string{"run", "--rm", "--name", containerName(inst.ID), "--label", "app=3x-ui-fptn", "--cap-add", "NET_ADMIN", "--cap-add", "NET_RAW", "--device", "/dev/net/tun:/dev/net/tun", "--publish", inst.Bind() + ":443/tcp", "--publish", metricsAddr + ":443/tcp", "--mount", "type=bind,src=" + folder + ",dst=/etc/fptn", "--ulimit", "nofile=65536:65536"}
+	// Its HAProxy maxconn needs 250023 descriptors; 65536 prevents TLS startup.
+	args := []string{"run", "--rm", "--name", containerName(inst.ID), "--label", "app=3x-ui-fptn", "--cap-add", "NET_ADMIN", "--cap-add", "NET_RAW", "--device", "/dev/net/tun:/dev/net/tun", "--publish", inst.Bind() + ":443/tcp", "--publish", metricsAddr + ":443/tcp", "--mount", "type=bind,src=" + folder + ",dst=/etc/fptn", "--ulimit", "nofile=262144:262144"}
 	env := map[string]string{
 		"ENABLE_DETECT_PROBING": strconv.FormatBool(inst.Settings.DetectProbing), "ALLOWED_SNI_LIST": inst.Settings.AllowedSNI,
 		"ENABLE_DOMAIN_BLACKLIST_FILTER": "false", "DOMAIN_BLACKLIST_URLS": "", "ENABLE_ADS_FILTER": strconv.FormatBool(inst.Settings.AdsFilter), "ADS_BLOCKLIST_URLS": "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
