@@ -55,7 +55,7 @@ func TestStage8OpenFluxNativePayload(t *testing.T) {
 		}
 		time.Sleep(30 * time.Millisecond)
 	}
-	echo, err := net.Listen("tcp", "127.0.0.1:0")
+	echo, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,8 @@ func TestStage8OpenFluxNativePayload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := d.Dial("tcp", echo.Addr().String())
+	host := stage8NonLoopbackIP(t)
+	c, err := d.Dial("tcp", net.JoinHostPort(host, fmtPort(echo.Addr().(*net.TCPAddr).Port)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,4 +89,29 @@ func TestStage8OpenFluxNativePayload(t *testing.T) {
 	if err != nil || !bytes.Equal(data, got) {
 		t.Fatal("OpenFlux TCP payload", err)
 	}
+}
+
+func stage8NonLoopbackIP(t *testing.T) string {
+	t.Helper()
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addresses, err := iface.Addrs()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, address := range addresses {
+			ip, _, err := net.ParseCIDR(address.String())
+			if err == nil && ip.To4() != nil && !ip.IsLoopback() {
+				return ip.String()
+			}
+		}
+	}
+	t.Fatal("native OpenFlux IPv4 fixture requires a non-loopback interface")
+	return ""
 }

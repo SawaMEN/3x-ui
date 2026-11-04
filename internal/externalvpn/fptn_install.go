@@ -50,9 +50,10 @@ func InstallFPTNClient(ctx context.Context) error {
 	}
 	dockerfile := `FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends iptables iproute2 net-tools ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends iptables iproute2 net-tools ca-certificates libstdc++6 && rm -rf /var/lib/apt/lists/*
 COPY client.deb /tmp/client.deb
-RUN dpkg-deb -x /tmp/client.deb / && rm /tmp/client.deb
+RUN mkdir -p /opt/fptn-package && dpkg-deb -x /tmp/client.deb /opt/fptn-package && install -m 0755 /opt/fptn-package/usr/bin/fptn-client-cli /usr/bin/fptn-client-cli && rm -rf /opt/fptn-package /tmp/client.deb
+RUN /usr/bin/fptn-client-cli --help >/dev/null
 `
 	if err := os.WriteFile(filepath.Join(folder, "Dockerfile"), []byte(dockerfile), 0o600); err != nil {
 		return err

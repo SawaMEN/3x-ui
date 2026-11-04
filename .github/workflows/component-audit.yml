@@ -26,7 +26,7 @@ jobs:
         run: |
           set -o pipefail
           git fetch --depth=1 origin 466c2b10b0c7d5691e67362d7fa644a943245227
-          for name in manager.go outbound.go vetroff_process_linux.go; do
+          for name in manager.go outbound.go vetroff_process_linux.go vetroff_outbound.go; do
             cp "internal/externalvpn/$name" "$RUNNER_TEMP/stage8-$name"
             git show "466c2b10b0c7d5691e67362d7fa644a943245227:internal/externalvpn/$name" > "internal/externalvpn/$name"
           done
@@ -34,7 +34,7 @@ jobs:
           go test -p 2 -json ./internal/externalvpn -run '^(TestStage8ReconcileRejectsInvalidBeforeStopping|TestStage8InboundStartupFailureRestoresPrevious|TestStage8InvalidOutboundSetHasNoSideEffects|TestStage8CancelKillsDescendant|TestStage8ProbeFailureCleansPrivateFiles)$' -count=1 > before-components.jsonl
           status=$?
           set -e
-          for name in manager.go outbound.go vetroff_process_linux.go; do cp "$RUNNER_TEMP/stage8-$name" "internal/externalvpn/$name"; done
+          for name in manager.go outbound.go vetroff_process_linux.go vetroff_outbound.go; do cp "$RUNNER_TEMP/stage8-$name" "internal/externalvpn/$name"; done
           test "$status" -ne 0
           python3 - <<'PYCODE'
           import json
@@ -235,7 +235,7 @@ jobs:
         run: |
           set -o pipefail
           go test -race -c ./internal/mtproto -o "$RUNNER_TEMP/mtproto.test"
-          sudo env STAGE8_NETNS=1 unshare --net "$(command -v go)" tool test2json -p github.com/SawaMEN/3x-ui/v3/internal/mtproto -t "$RUNNER_TEMP/mtproto.test" -test.v -test.run '^TestStage8KernelMeko$' | tee meko-kernel.jsonl
+          (cd internal/mtproto; sudo env STAGE8_NETNS=1 unshare --net "$(command -v go)" tool test2json -p github.com/SawaMEN/3x-ui/v3/internal/mtproto -t "$RUNNER_TEMP/mtproto.test" -test.v -test.run '^TestStage8KernelMeko$') | tee meko-kernel.jsonl
           python3 tools/ci/require-go-tests.py meko-kernel.jsonl TestStage8KernelMeko
       - uses: actions/upload-artifact@v7
         if: always()
@@ -259,7 +259,8 @@ jobs:
         run: |
           mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
           test -c /dev/net/tun || { sudo mkdir -p /dev/net; sudo mknod /dev/net/tun c 10 200; }
-          docker pull fptnvpn/fptn-vpn-server:0.4.4
+          docker pull fptnvpn/fptn-vpn-server@sha256:073de56151a4f4f3803bbce10e84d352d1a5195fe771f4a851691c4aebbbb415
+          docker tag fptnvpn/fptn-vpn-server@sha256:073de56151a4f4f3803bbce10e84d352d1a5195fe771f4a851691c4aebbbb415 fptnvpn/fptn-vpn-server:0.4.4
           docker image inspect fptnvpn/fptn-vpn-server:0.4.4 --format '{{json .RepoDigests}}' | tee fptn-server-digest.json
           STAGE8_INSTALL_FPTN=1 go test ./internal/externalvpn -run '^TestStage8InstallFPTNClient$' -count=1
           docker image inspect 3x-ui-fptn-client:0.4.6 --format '{{.Id}}' | tee fptn-client-digest.txt
