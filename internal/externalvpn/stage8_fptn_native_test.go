@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -109,7 +108,7 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 			go func() { defer c.Close(); io.Copy(c, c) }()
 		}
 	}()
-	udp, err := net.ListenPacket("udp", "0.0.0.0:0")
+	udp, err := net.ListenPacket("udp", net.JoinHostPort(echoHost, "0"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,8 +163,6 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 		t.Fatal("FPTN TCP payload", err)
 	}
 	c.Close()
-	stage8FPTNUDPTrace(t, proc.container, udp.LocalAddr().(*net.UDPAddr).Port)
-	stage8FPTNUDPTrace(t, containerName(inst.ID), udp.LocalAddr().(*net.UDPAddr).Port)
 	packet, err := net.Dial("udp", net.JoinHostPort("127.0.0.1", fmtPort(udpPort)))
 	if err != nil {
 		t.Fatal(err)
@@ -207,45 +204,5 @@ func TestStage8InstallFPTNClient(t *testing.T) {
 	defer cancel()
 	if err := InstallFPTNClient(ctx); err != nil {
 		t.Fatal(err)
-	}
-}
-
-// Optional packet metadata makes a native UDP failure diagnosable. No payload
-// bytes are captured, and the root helper has its own fixed lifetime.
-func stage8FPTNUDPTrace(t *testing.T, container string, port int) {
-	t.Helper()
-	if _, err := exec.LookPath("tcpdump"); err != nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	pid, err := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{.State.Pid}}", container).Output()
-	cancel()
-	if err != nil {
-		return
-	}
-	file, err := os.CreateTemp(t.TempDir(), "udp-metadata-")
-	if err != nil {
-		return
-	}
-	cmd := exec.Command("sudo", "-n", "timeout", "18", "nsenter", "-t", strings.TrimSpace(string(pid)), "-n", "tcpdump", "-nn", "-l", "-i", "any", "udp", "and", "port", strconv.Itoa(port))
-	cmd.Stdout, cmd.Stderr = file, file
-	if err := cmd.Start(); err != nil {
-		file.Close()
-		return
-	}
-	t.Cleanup(func() {
-		_ = cmd.Wait()
-		file.Close()
-		if t.Failed() {
-			output, _ := os.ReadFile(file.Name())
-			t.Log("FPTN UDP metadata " + container + ":\n" + string(output))
-		}
-	})
-	for end := time.Now().Add(2 * time.Second); time.Now().Before(end); {
-		data, _ := os.ReadFile(file.Name())
-		if bytes.Contains(data, []byte("listening on")) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
