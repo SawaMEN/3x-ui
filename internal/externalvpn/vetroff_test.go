@@ -247,7 +247,11 @@ func TestOfficialVetroffBundle(t *testing.T) {
 	if archive == "" {
 		t.Skip("set VETROFF_TEST_ARCHIVE to verify the complete official binary release")
 	}
-	if err := verifyReleaseDigest(archive, "sha256:492d07be1b430d8fe8cfbe486dd4d3f006e4dcd04399ada2c7091f45380998d3"); err != nil {
+	digest := map[string]string{"amd64": "492d07be1b430d8fe8cfbe486dd4d3f006e4dcd04399ada2c7091f45380998d3", "arm64": "79ccd166d637ffea8f880c131a99fe6bc28f4ced08ef96b3c44572fb26db0d4c"}[runtime.GOARCH]
+	if digest == "" {
+		t.Fatal("unsupported Vetroff archive architecture")
+	}
+	if err := verifyReleaseDigest(archive, "sha256:"+digest); err != nil {
 		t.Fatal(err)
 	}
 	folder := t.TempDir()

@@ -22,11 +22,31 @@ jobs:
           cache: true
       - name: Prepare dependencies
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep && bash tools/ci/download-go-modules.sh
+      - name: Prove lifecycle regressions on prior implementation
+        run: |
+          set -o pipefail
+          git fetch --depth=1 origin 466c2b10b0c7d5691e67362d7fa644a943245227
+          for name in manager.go outbound.go vetroff_process_linux.go; do
+            cp "internal/externalvpn/$name" "$RUNNER_TEMP/stage8-$name"
+            git show "466c2b10b0c7d5691e67362d7fa644a943245227:internal/externalvpn/$name" > "internal/externalvpn/$name"
+          done
+          set +e
+          go test -p 2 -json ./internal/externalvpn -run '^(TestStage8ReconcileRejectsInvalidBeforeStopping|TestStage8InboundStartupFailureRestoresPrevious|TestStage8InvalidOutboundSetHasNoSideEffects|TestStage8CancelKillsDescendant|TestStage8ProbeFailureCleansPrivateFiles)$' -count=1 > before-components.jsonl
+          status=$?
+          set -e
+          for name in manager.go outbound.go vetroff_process_linux.go; do cp "$RUNNER_TEMP/stage8-$name" "internal/externalvpn/$name"; done
+          test "$status" -ne 0
+          python3 - <<'PYCODE'
+          import json
+          failed={e.get('Test') for line in open('before-components.jsonl') if (e:=json.loads(line)).get('Action')=='fail'}
+          required={'TestStage8ReconcileRejectsInvalidBeforeStopping','TestStage8InboundStartupFailureRestoresPrevious','TestStage8InvalidOutboundSetHasNoSideEffects','TestStage8CancelKillsDescendant','TestStage8ProbeFailureCleansPrivateFiles'}
+          assert required <= failed, failed
+          PYCODE
       - name: External lifecycle and native protocol contracts
         run: |
           set -o pipefail
           go test -race -p 2 -json ./internal/externalvpn ./internal/mtproto ./internal/olcrtc ./internal/mieru ./internal/sudoku ./internal/sidecaregress ./internal/tuic ./internal/snell -count=1 | tee component-contracts.jsonl
-          python3 tools/ci/require-go-tests.py component-contracts.jsonl TestStage8ReconcileRejectsInvalidBeforeStopping TestStage8InboundStartupFailureRestoresPrevious TestStage8InvalidOutboundSetHasNoSideEffects TestStage8CancelKillsDescendant TestVetroffRuntimeStopsWhenPanelDies TestDeploymentRollbackAndRecovery TestManagerRejectsInvalidConfigAndRollsBackFailedStartup TestMieruPayloadAcrossTCPAndUDP TestAudit3ManagerEnsureActualSendersWithPersistentTraffic
+          python3 tools/ci/require-go-tests.py component-contracts.jsonl TestStage8ReconcileRejectsInvalidBeforeStopping TestStage8InboundStartupFailureRestoresPrevious TestStage8InvalidOutboundSetHasNoSideEffects TestStage8CancelKillsDescendant TestStage8ProbeFailureCleansPrivateFiles TestVetroffRuntimeStopsWhenPanelDies TestDeploymentRollbackAndRecovery TestManagerRejectsInvalidConfigAndRollsBackFailedStartup TestMieruPayloadAcrossTCPAndUDP TestAudit3ManagerEnsureActualSendersWithPersistentTraffic
       - name: Panel integration and service contracts
         run: |
           set -o pipefail
@@ -85,8 +105,8 @@ jobs:
       - name: Vetroff actual inbound outbound TCP UDP and official bundle
         run: |
           set -o pipefail
-          go test -race -json ./internal/externalvpn -run '^(TestStage8VetroffNativePayload|TestOfficialVetroffBundle|TestVetroffAllTransportProfilesAndServerOptions|TestTrustTunnelPayloadUsesCoreSOCKS)$' -count=1 | tee external-native.jsonl
-          python3 tools/ci/require-go-tests.py external-native.jsonl TestStage8VetroffNativePayload TestOfficialVetroffBundle TestVetroffAllTransportProfilesAndServerOptions TestTrustTunnelPayloadUsesCoreSOCKS
+          go test -race -json ./internal/externalvpn -run '^(TestStage8VetroffNativePayload|TestOfficialVetroffBundle|TestVetroffAllTransportProfilesAndServerOptions|TestTrustTunnelPayloadUsesCoreSOCKS|TestStage8OpenFluxNativePayload)$' -count=1 | tee external-native.jsonl
+          python3 tools/ci/require-go-tests.py external-native.jsonl TestStage8VetroffNativePayload TestOfficialVetroffBundle TestVetroffAllTransportProfilesAndServerOptions TestTrustTunnelPayloadUsesCoreSOCKS TestStage8OpenFluxNativePayload
       - name: Official Sudoku traffic
         run: |
           set -o pipefail
@@ -191,3 +211,71 @@ jobs:
           runner: ubuntu-24.04
         - arch: arm64
           runner: ubuntu-24.04-arm
+
+  meko-kernel:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Native firewall tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nftables iptables
+      - name: Compile and run production MEKO helper in private netns
+        run: |
+          set -o pipefail
+          go test -race -c ./internal/mtproto -o "$RUNNER_TEMP/mtproto.test"
+          sudo env STAGE8_NETNS=1 unshare --net "$(command -v go)" tool test2json -p github.com/SawaMEN/3x-ui/v3/internal/mtproto -t "$RUNNER_TEMP/mtproto.test" -test.v -test.run '^TestStage8KernelMeko$' | tee meko-kernel.jsonl
+          python3 tools/ci/require-go-tests.py meko-kernel.jsonl TestStage8KernelMeko
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stage8-meko-${{ matrix.arch }}
+          path: meko-kernel.jsonl
+  fptn:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Pinned owner core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/download-audit-cores.sh amd64
+      - name: Prepare actual FPTN Docker components
+        run: |
+          mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+          test -c /dev/net/tun || { sudo mkdir -p /dev/net; sudo mknod /dev/net/tun c 10 200; }
+          docker pull fptnvpn/fptn-vpn-server:0.4.4
+          docker image inspect fptnvpn/fptn-vpn-server:0.4.4 --format '{{json .RepoDigests}}' | tee fptn-server-digest.json
+          STAGE8_INSTALL_FPTN=1 go test ./internal/externalvpn -run '^TestStage8InstallFPTNClient$' -count=1
+          docker image inspect 3x-ui-fptn-client:0.4.6 --format '{{.Id}}' | tee fptn-client-digest.txt
+          echo "STAGE8_DOCKER_GATEWAY=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')" >> "$GITHUB_ENV"
+      - name: Real FPTN private namespaces and owner bridge payload
+        env:
+          STAGE8_DOCKER: '1'
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/externalvpn -run '^TestStage8FPTNNativePayload$' -count=1 | tee fptn-native.jsonl
+          python3 tools/ci/require-go-tests.py fptn-native.jsonl TestStage8FPTNNativePayload
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stage8-fptn-evidence
+          path: |
+            fptn-native.jsonl
+            fptn-server-digest.json
+            fptn-client-digest.txt

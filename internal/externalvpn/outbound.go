@@ -632,11 +632,6 @@ func EnsureProbeOutbound(raw map[string]any) (map[string]any, func(), error) {
 	tag, _ := raw["tag"].(string)
 	probeTag := "__probe_" + uuid.NewString()
 	isolated["tag"] = probeTag
-	bridge, err := ensureOutbound(isolated, true)
-	if err != nil {
-		return nil, nil, err
-	}
-	bridge["tag"] = tag
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() {
@@ -650,6 +645,20 @@ func EnsureProbeOutbound(raw map[string]any) (map[string]any, func(), error) {
 			_ = os.RemoveAll(filepath.Join(directory(), "outbound-"+hex.EncodeToString(sum[:8])))
 		})
 	}
+	bridge, err := ensureOutbound(isolated, true)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	outboundMu.Lock()
+	proc := outboundProcesses[probeTag]
+	outboundMu.Unlock()
+	if err := waitOutboundStartup(probeTag, proc); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	bridge["tag"] = tag
+
 	return bridge, cleanup, nil
 }
 

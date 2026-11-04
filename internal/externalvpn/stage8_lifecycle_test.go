@@ -117,6 +117,7 @@ func TestStage8CancelKillsDescendant(t *testing.T) {
 	if pid == "" {
 		t.Fatal("child did not start")
 	}
+	t.Cleanup(func() { _ = exec.Command("kill", "-9", pid).Run() })
 	cancel()
 	select {
 	case <-done:
@@ -131,4 +132,21 @@ func TestStage8CancelKillsDescendant(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("descendant survived cancel")
+}
+
+func TestStage8ProbeFailureCleansPrivateFiles(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	previousPlans, previousProcesses := outboundPlans, outboundProcesses
+	outboundPlans = map[string]*managedOutbound{}
+	outboundProcesses = map[string]*managedOutbound{}
+	t.Cleanup(func() { KeepOutbounds(nil); outboundPlans = previousPlans; outboundProcesses = previousProcesses })
+	if _, cleanup, err := EnsureProbeOutbound(openFluxPlan("probe", "a")); err == nil {
+		cleanup()
+		t.Fatal("missing binary accepted")
+	}
+	files, err := filepath.Glob(filepath.Join(directory(), "outbound-*"))
+	if err != nil || len(files) != 0 {
+		t.Fatal("failed probe retained private files", files, err)
+	}
 }

@@ -586,9 +586,10 @@ func (m *Manager) CollectTraffic() []TrafficDelta {
 	return deltas
 }
 
+var metricsHTTPClient = &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil, MaxIdleConns: 32, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}}
+
 func (m *Manager) collectProcessTraffic(proc *running) []TrafficDelta {
 	var deltas []TrafficDelta
-	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}}
 	if proc.protocol == model.FPTN || proc.protocol == model.OpenFlux {
 		return m.collectAdditionalTraffic(proc)
 	}
@@ -599,7 +600,7 @@ func (m *Manager) collectProcessTraffic(proc *running) []TrafficDelta {
 	if err != nil {
 		return nil
 	}
-	response, err := client.Do(request)
+	response, err := metricsHTTPClient.Do(request)
 	if err != nil {
 		return nil
 	}
