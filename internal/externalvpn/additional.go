@@ -27,8 +27,9 @@ import (
 const DefaultFPTNImage = "fptnvpn/fptn-vpn-server:0.4.4"
 
 var (
-	imagePattern  = regexp.MustCompile(`^fptnvpn/fptn-vpn-server:(?:[0-9]+\.[0-9]+\.[0-9]+)(?:[-a-zA-Z0-9.]+)?$`)
-	domainPattern = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$`)
+	imagePattern      = regexp.MustCompile(`^fptnvpn/fptn-vpn-server:(?:[0-9]+\.[0-9]+\.[0-9]+)(?:[-a-zA-Z0-9.]+)?$`)
+	metricsKeyPattern = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+	domainPattern     = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$`)
 )
 
 // A stable ASCII username avoids the upstream users.list whitespace restriction
@@ -155,7 +156,7 @@ func (inst Instance) validateAdditional() error {
 		if !domainPattern.MatchString(s.Hostname) {
 			return fmt.Errorf("FPTN needs a certificate hostname")
 		}
-		if len(s.MetricsKey) < 32 || !regexp.MustCompile(`^[a-zA-Z0-9]+$`).MatchString(s.MetricsKey) {
+		if len(s.MetricsKey) < 32 || !metricsKeyPattern.MatchString(s.MetricsKey) {
 			return fmt.Errorf("invalid FPTN metrics key")
 		}
 		if (s.Certificate == "") != (s.PrivateKey == "") {

@@ -213,6 +213,10 @@ func TestStage8VetroffNativePayload(t *testing.T) {
 }
 
 func stage8SocksUDP(t *testing.T, address string, target int) {
+	stage8SocksUDPTo(t, address, "127.0.0.1", target)
+}
+
+func stage8SocksUDPTo(t *testing.T, address, host string, target int) {
 	t.Helper()
 	c, err := net.DialTimeout("tcp", address, 3*time.Second)
 	if err != nil {
@@ -238,7 +242,13 @@ func stage8SocksUDP(t *testing.T, address string, target int) {
 	defer u.Close()
 	u.SetDeadline(time.Now().Add(15 * time.Second))
 	payload := []byte("stage8-native-udp")
-	packet := append([]byte{0, 0, 0, 1, 127, 0, 0, 1, byte(target >> 8), byte(target)}, payload...)
+	ip := net.ParseIP(host).To4()
+	if ip == nil {
+		t.Fatal("IPv4 UDP target required")
+	}
+	packet := append([]byte{0, 0, 0, 1}, ip...)
+	packet = append(packet, byte(target>>8), byte(target))
+	packet = append(packet, payload...)
 	if _, err = u.Write(packet); err != nil {
 		t.Fatal(err)
 	}

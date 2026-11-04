@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 		t.Fatal(err)
 	}
 	port := stage8Port(t)
-	raw, _ := json.Marshal(Settings{Hostname: "example.test", Image: DefaultFPTNImage, MetricsKey: "stage8-metrics-secret", MaxSessions: 3, MTU: 1400, Clients: []Client{{Email: "alice", Password: "stage8-correct-secret-password-long", Enable: true}}})
+	raw, _ := json.Marshal(Settings{Hostname: "example.test", Image: DefaultFPTNImage, MetricsKey: strings.Repeat("a", 64), MaxSessions: 3, MTU: 1400, Clients: []Client{{Email: "alice", Password: "stage8-correct-secret-password-long", Enable: true}}})
 	ib := &model.Inbound{Id: 83, Tag: "fptn-native", Protocol: model.FPTN, Listen: "0.0.0.0", Port: port, Settings: string(raw)}
 	if err := PrepareAdditional(ib, ""); err != nil {
 		t.Fatal(err)
@@ -151,6 +152,38 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	if err != nil || !bytes.Equal(payload, got) {
 		t.Fatal("FPTN TCP payload", err)
 	}
+	c.Close()
+	udp, err := net.ListenPacket("udp", "0.0.0.0:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer udp.Close()
+	go func() {
+		b := make([]byte, 65535)
+		for {
+			n, a, e := udp.ReadFrom(b)
+			if e != nil {
+				return
+			}
+			udp.WriteTo(b[:n], a)
+		}
+	}()
+	stage8SocksUDPTo(t, net.JoinHostPort("127.0.0.1", fmtPort(localPort)), gateway, udp.LocalAddr().(*net.UDPAddr).Port)
+	manager.Remove(inst.ID)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	blocked, err := dialer.(proxy.ContextDialer).DialContext(ctx, "tcp", net.JoinHostPort(gateway, fmtPort(echo.Addr().(*net.TCPAddr).Port)))
+	if err == nil {
+		defer blocked.Close()
+		blocked.SetDeadline(time.Now().Add(2 * time.Second))
+		blocked.Write([]byte("forbidden"))
+		var b [9]byte
+		n, _ := io.ReadFull(blocked, b[:])
+		if n > 0 {
+			t.Fatal("dead FPTN tunnel escaped directly")
+		}
+	}
+
 }
 
 func TestStage8InstallFPTNClient(t *testing.T) {

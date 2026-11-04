@@ -308,9 +308,6 @@ func (m *Manager) Ensure(inst Instance) error {
 }
 
 func (m *Manager) ensureLocked(inst Instance) error {
-	// Keep rollback settings independent of caller-owned slices and pointers.
-	data, _ := json.Marshal(inst)
-	_ = json.Unmarshal(data, &inst)
 	if err := inst.Validate(); err != nil {
 		return err
 	}
@@ -417,7 +414,11 @@ func (m *Manager) startLocked(inst Instance) error {
 		cancel()
 		return fmt.Errorf("%s: %w", inst.Protocol, err)
 	}
-	proc := &running{instance: inst, protocol: inst.Protocol, fingerprint: fp, cancel: cancel, cmd: cmd, done: make(chan struct{}), metricsAddr: metricsAddr, tag: inst.Tag, counters: map[string]trafficCounters{}}
+	// Snapshot only when starting a new child; unchanged reconciles stay allocation-light.
+	snapshot := inst
+	data, _ := json.Marshal(inst)
+	_ = json.Unmarshal(data, &snapshot)
+	proc := &running{instance: snapshot, protocol: inst.Protocol, fingerprint: fp, cancel: cancel, cmd: cmd, done: make(chan struct{}), metricsAddr: metricsAddr, tag: inst.Tag, counters: map[string]trafficCounters{}}
 	m.procs[inst.ID] = proc
 	go func() {
 		err := cmd.Wait()
