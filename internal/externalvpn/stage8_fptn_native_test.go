@@ -106,23 +106,6 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	}
 	proc := outboundProcesses["fptn-native"]
 	containers = append(containers, proc.container)
-	address := net.JoinHostPort("127.0.0.1", fmtPort(proc.port))
-	for end := time.Now().Add(80 * time.Second); ; {
-		c, e := net.DialTimeout("tcp", address, 100*time.Millisecond)
-		if e == nil {
-			c.Close()
-			break
-		}
-		select {
-		case <-proc.done:
-			t.Fatal("FPTN bridge exited before ready")
-		default:
-		}
-		if time.Now().After(end) {
-			t.Fatal("FPTN owner bridge never opened", e)
-		}
-		time.Sleep(300 * time.Millisecond)
-	}
 	// Keep the echo distinct from the VPN server address and its bypass route.
 	echoHost := stage8NonLoopbackIP(t)
 	echo, err := net.Listen("tcp", "0.0.0.0:0")

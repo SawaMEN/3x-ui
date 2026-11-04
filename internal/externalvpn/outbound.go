@@ -277,6 +277,26 @@ func waitOutboundStartup(tag string, proc *managedOutbound) error {
 		return fmt.Errorf("managed outbound %q disappeared during apply", tag)
 	}
 	protocol, _ := proc.raw["protocol"].(string)
+	if strings.EqualFold(protocol, "fptn") {
+		// Docker's host proxy accepts TCP before the container has a listener.
+		// Wait for the authenticated tunnel address and the internal core instead.
+		deadline := time.NewTimer(90 * time.Second)
+		defer deadline.Stop()
+		poll := time.NewTicker(500 * time.Millisecond)
+		defer poll.Stop()
+		for {
+			select {
+			case <-proc.done:
+				return fmt.Errorf("FPTN outbound %q exited before its VPN bridge was ready: %s", tag, proc.cmd.ProcessState)
+			case <-deadline.C:
+				return fmt.Errorf("FPTN outbound %q did not start its VPN interface and owner bridge", tag)
+			case <-poll.C:
+				if fptnBridgeReady(proc.container) {
+					return nil
+				}
+			}
+		}
+	}
 	if !strings.EqualFold(protocol, "vetroff") {
 		timer := time.NewTimer(500 * time.Millisecond)
 		defer timer.Stop()
@@ -305,6 +325,12 @@ func waitOutboundStartup(tag string, proc *managedOutbound) error {
 			}
 		}
 	}
+}
+
+func fptnBridgeReady(container string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, "docker", "exec", container, "/bin/sh", "-c", `ip -4 -o addr show dev fptn0 | grep -q ' inet ' && [ -n "$(ss -H -lnt 'sport = :1080')" ]`).Run() == nil
 }
 
 // A SOCKS5 no-auth greeting checks the local bridge, without attempting to
