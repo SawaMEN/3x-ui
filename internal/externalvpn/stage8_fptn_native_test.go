@@ -68,20 +68,6 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	if _, err = leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: inst.Settings.Hostname}); err != nil {
 		t.Fatal("FPTN certificate hostname/trust", err)
 	}
-	// An ordinary TLS ClientHello is deliberately camouflaged by FPTN Reality
-	// mode. Only the official token-bearing client can check tunnel readiness.
-	target := net.JoinHostPort("127.0.0.1", fmtPort(port))
-	for end := time.Now().Add(60 * time.Second); ; {
-		c, e := net.DialTimeout("tcp", target, time.Second)
-		if e == nil {
-			c.Close()
-			break
-		}
-		if time.Now().After(end) {
-			t.Fatal("FPTN listener did not become ready", e)
-		}
-		time.Sleep(300 * time.Millisecond)
-	}
 	// The client runs in its own namespace. Use the actual Docker bridge address,
 	// not container loopback, as the public server/echo target in the fixture.
 	gateway := os.Getenv("STAGE8_DOCKER_GATEWAY")

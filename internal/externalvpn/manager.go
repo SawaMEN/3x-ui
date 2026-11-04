@@ -352,6 +352,11 @@ func (m *Manager) ensureLocked(inst Instance) error {
 }
 
 func waitInboundStartup(proc *running) error {
+	if proc.protocol == model.FPTN {
+		return waitFPTNReady(fmt.Sprintf("FPTN inbound %d", proc.instance.ID), proc.done, proc.cmd, func() bool {
+			return fptnExecReady(containerName(proc.instance.ID), `[ -n "$(ss -H -lnt 'sport = :443')" ] && [ -n "$(ss -H -lnt 'sport = :4430')" ]`)
+		})
+	}
 	timer := time.NewTimer(200 * time.Millisecond)
 	defer timer.Stop()
 	select {
