@@ -21,7 +21,13 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Prepare dependencies
-        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep && bash tools/ci/download-go-modules.sh
+        run: |
+          mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+          bash tools/ci/download-go-modules.sh
+          sudo apt-get update
+          sudo apt-get install -y caddy haproxy
+          echo "CADDY_TEST_BINARY=$(command -v caddy)" >> "$GITHUB_ENV"
+          echo "HAPROXY_TEST_BINARY=$(command -v haproxy)" >> "$GITHUB_ENV"
       - name: Prove lifecycle regressions on prior implementation
         run: |
           set -o pipefail
@@ -51,7 +57,7 @@ jobs:
         run: |
           set -o pipefail
           go test -race -p 2 -json ./internal/web/service ./internal/web/controller ./internal/sub -run 'Telemt|Mtproto|Meko|Vetroff|External|Olcrtc|OlcRTC|Sudoku|Mieru|Snell|TUIC|Tuic|Stage8|Sidecar' -count=1 | tee panel-components.jsonl
-          python3 tools/ci/require-go-tests.py panel-components.jsonl TestVetroffAutomaticTLSAndCredentials TestTelemtWebCertificatePairValidation
+          python3 tools/ci/require-go-tests.py panel-components.jsonl TestVetroffAutomaticTLSAndCredentials TestTelemtWebCertificatePairValidation TestTelemtWebAlternativeFrontends
           go test -race -p 2 -json ./internal/database -run 'Mtproto|SeedThenStrip' -count=1 | tee mtproto-migration.jsonl
           python3 tools/ci/require-go-tests.py mtproto-migration.jsonl TestSeedThenStripPreservesLegacySecretOnClient TestStripMtprotoInboundSecretsRemovesDeadSecret
           python3 -m unittest discover -s tools -p 'test_official_telemt.py'
