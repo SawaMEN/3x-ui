@@ -36,6 +36,7 @@ import {
   DownloadOutlined,
   EditOutlined,
   FilterOutlined,
+  GlobalOutlined,
   InfoCircleOutlined,
   LinkOutlined,
   MoreOutlined,
@@ -1823,6 +1824,16 @@ export default function ClientsPage() {
                                                 </>
                                               ),
                                               onClick: () => onShowQr(row.email),
+                                            },
+                                            {
+                                              key: 'activity',
+                                              label: (
+                                                <>
+                                                  <GlobalOutlined aria-hidden />{' '}
+                                                  {t('pages.index.domainActivityTitle')}
+                                                </>
+                                              ),
+                                              onClick: () => onShowActivity(row.email),
                                             },
                                             {
                                               key: 'reset',
