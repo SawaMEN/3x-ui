@@ -951,6 +951,7 @@
         "fptnBandwidth": "Bandwidth, Mibit/s (0 = maximum 2000)",
         "fptnProbing": "Active probing protection",
         "fptnAds": "FPTN ad filter",
+        "fptnAdsUnsupported": "This FPTN server image does not support ad filtering. Use routing adblock; an older enabled setting can be switched off.",
         "fptnTorrent": "Block BitTorrent",
         "fptnSpam": "Spam filter",
         "openfluxDirect": "Direct channel",
