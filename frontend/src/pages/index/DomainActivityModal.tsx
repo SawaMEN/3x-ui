@@ -79,12 +79,17 @@ export default function DomainActivityModal({
   const entries = useMemo(() => {
     const client = clientFilter.trim().toLowerCase();
     const domain = domainFilter.trim().toLowerCase();
-    return data.entries.filter(
-      (entry) =>
+    const cutoff = Date.now() - data.windowSeconds * 1000;
+    return data.entries.filter((entry) => {
+      const lastSeen = Date.parse(entry.lastSeen);
+      return (
+        Number.isFinite(lastSeen) &&
+        lastSeen >= cutoff &&
         entry.email.toLowerCase().includes(client) &&
-        entry.domain.toLowerCase().includes(domain),
-    );
-  }, [data.entries, clientFilter, domainFilter]);
+        entry.domain.toLowerCase().includes(domain)
+      );
+    });
+  }, [data.entries, data.windowSeconds, clientFilter, domainFilter, loading]);
 
   const columns: ColumnsType<DomainActivityEntry> = [
     { title: t('pages.index.domainActivityClient'), dataIndex: 'email', key: 'email', ellipsis: true },
