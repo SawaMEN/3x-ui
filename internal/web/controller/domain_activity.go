@@ -43,6 +43,7 @@ func (a *ServerController) domainActivityState() (domainActivityResponse, error)
 // getDomainActivity exposes only the last two minutes of domain metadata.
 // Existing panel API authentication, token scopes and CSRF middleware apply.
 func (a *ServerController) getDomainActivity(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
 	state, err := a.domainActivityState()
 	if err != nil {
 		jsonMsg(c, "Cannot read domain activity settings", err)
