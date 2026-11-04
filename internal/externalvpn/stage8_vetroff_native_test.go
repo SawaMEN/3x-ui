@@ -69,6 +69,22 @@ func TestStage8VetroffNativePayload(t *testing.T) {
 		}
 		time.Sleep(30 * time.Millisecond)
 	}
+	t.Run("bind-collision-preserves-active-server", func(t *testing.T) {
+		previous := manager.procs[inst.ID]
+		duplicate := inst
+		duplicate.ID = 85
+		if err := manager.Ensure(duplicate); err == nil {
+			t.Fatal("occupied native listener accepted")
+		}
+		if manager.procs[inst.ID] != previous {
+			t.Fatal("bind collision replaced the active server")
+		}
+		select {
+		case <-previous.done:
+			t.Fatal("bind collision stopped the active server")
+		default:
+		}
+	})
 	echo, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -172,7 +188,9 @@ func TestStage8VetroffNativePayload(t *testing.T) {
 				t.Fatal(err)
 			}
 			profile["tls"] = "go"
-			profile["transport"] = "h2-connect"
+			// Match the successful Go TLS H3 case above so rejection cannot be
+			// explained by an unsupported backend/transport combination.
+			profile["transport"] = "h3-connect"
 			switch field {
 			case "sni":
 				profile[field] = "wrong.example.test"

@@ -52,6 +52,8 @@ jobs:
           set -o pipefail
           go test -race -p 2 -json ./internal/web/service ./internal/web/controller ./internal/sub -run 'Telemt|Mtproto|Meko|Vetroff|External|Olcrtc|OlcRTC|Sudoku|Mieru|Snell|TUIC|Tuic|Stage8|Sidecar' -count=1 | tee panel-components.jsonl
           python3 tools/ci/require-go-tests.py panel-components.jsonl TestVetroffAutomaticTLSAndCredentials TestTelemtWebCertificatePairValidation
+          go test -race -p 2 -json ./internal/database -run 'Mtproto|SeedThenStrip' -count=1 | tee mtproto-migration.jsonl
+          python3 tools/ci/require-go-tests.py mtproto-migration.jsonl TestSeedThenStripPreservesLegacySecretOnClient TestStripMtprotoInboundSecretsRemovesDeadSecret
           python3 -m unittest discover -s tools -p 'test_official_telemt.py'
       - uses: actions/setup-node@v7
         with:

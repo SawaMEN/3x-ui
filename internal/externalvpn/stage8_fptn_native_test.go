@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -30,6 +31,16 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	if err := os.Symlink(core, config.OwnerCoreBinaryPath()); err != nil {
 		t.Fatal(err)
 	}
+	containers := []string{containerName(83)}
+	t.Cleanup(func() {
+		// Registered before process cleanups so this runs after both managers stop.
+		for _, name := range containers {
+			out, err := exec.Command("docker", "inspect", name).CombinedOutput()
+			if err == nil || !strings.Contains(string(out), "No such") {
+				t.Errorf("FPTN container survived cleanup: %s: %v %s", name, err, out)
+			}
+		}
+	})
 	port := stage8Port(t)
 	raw, _ := json.Marshal(Settings{Hostname: "example.test", Image: DefaultFPTNImage, MetricsKey: strings.Repeat("a", 64), MaxSessions: 3, MTU: 1400, Clients: []Client{{Email: "alice", Password: "stage8-correct-secret-password-long", Enable: true}}})
 	ib := &model.Inbound{Id: 83, Tag: "fptn-native", Protocol: model.FPTN, Listen: "0.0.0.0", Port: port, Settings: string(raw)}
@@ -84,6 +95,7 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 		t.Fatal(err)
 	}
 	proc := outboundProcesses["fptn-native"]
+	containers = append(containers, proc.container)
 	address := net.JoinHostPort("127.0.0.1", fmtPort(proc.port))
 	for end := time.Now().Add(80 * time.Second); ; {
 		c, e := net.DialTimeout("tcp", address, 100*time.Millisecond)
@@ -137,7 +149,9 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := dialer.Dial("tcp", net.JoinHostPort(gateway, fmtPort(echo.Addr().(*net.TCPAddr).Port)))
+	payloadCtx, payloadCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer payloadCancel()
+	c, err := dialer.(proxy.ContextDialer).DialContext(payloadCtx, "tcp", net.JoinHostPort(gateway, fmtPort(echo.Addr().(*net.TCPAddr).Port)))
 	if err != nil {
 		t.Fatal(err)
 	}
