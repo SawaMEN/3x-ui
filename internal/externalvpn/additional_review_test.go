@@ -126,3 +126,41 @@ func TestFPTNSessionCounterReset(t *testing.T) {
 		t.Fatal("invalid metrics endpoint")
 	}
 }
+
+func TestFPTNOfficialFilterEnvironment(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte("#!/bin/sh\nexit 99\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	ib := &model.Inbound{Id: 88, Protocol: model.FPTN, Port: 443, Settings: `{"hostname":"example.test","clients":[{"email":"alice","enable":true}]}`}
+	if err := PrepareAdditional(ib, ""); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := FromInbound(ib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, enabled := range []bool{false, true} {
+		inst.Settings.TorrentFilter, inst.Settings.SpamFilter = enabled, enabled
+		_, cancel, err := GetManager().additionalCommand(inst, "127.0.0.1:12443")
+		if err != nil {
+			t.Fatal(err)
+		}
+		cancel()
+		data, err := os.ReadFile(filepath.Join(directory(), "88", "docker.env"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"DISABLE_TORRENT_FILTER", "DISABLE_SPAM_FILTER"} {
+			if !strings.Contains(string(data), fmt.Sprintf("%s=%t\n", name, !enabled)) {
+				t.Fatal("official filter setting missing", name, string(data))
+			}
+		}
+	}
+	inst.Settings.AdsFilter = true
+	if err := inst.Validate(); err == nil {
+		t.Fatal("unsupported ad filtering accepted")
+	}
+}

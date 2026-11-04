@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -115,7 +116,7 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	}
 	server := bridge["settings"].(map[string]any)["vnext"].([]any)[0].(map[string]any)
 	user := server["users"].([]any)[0].(map[string]any)
-	native := map[string]any{"type": "vless", "tag": bridge["tag"], "server": server["address"], "server_port": server["port"], "uuid": user["id"]}
+	native := map[string]any{"packet_encoding": "", "type": "vless", "tag": bridge["tag"], "server": server["address"], "server_port": server["port"], "uuid": user["id"]}
 
 	localPort := stage8Port(t)
 	path := filepath.Join(dir, "test-client.json")
@@ -163,6 +164,7 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 			udp.WriteTo(b[:n], a)
 		}
 	}()
+	stage8FPTNUDPTrace(t, proc.container, udp.LocalAddr().(*net.UDPAddr).Port)
 	stage8SocksUDPTo(t, net.JoinHostPort("127.0.0.1", fmtPort(localPort)), echoHost, udp.LocalAddr().(*net.UDPAddr).Port)
 	manager.Remove(inst.ID)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -190,4 +192,31 @@ func TestStage8InstallFPTNClient(t *testing.T) {
 	if err := InstallFPTNClient(ctx); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Optional packet metadata makes a native UDP failure diagnosable. No payload
+// bytes are captured, and the root helper has its own fixed lifetime.
+func stage8FPTNUDPTrace(t *testing.T, container string, port int) {
+	t.Helper()
+	if _, err := exec.LookPath("tcpdump"); err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	pid, err := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{.State.Pid}}", container).Output()
+	cancel()
+	if err != nil {
+		return
+	}
+	var output bytes.Buffer
+	cmd := exec.Command("sudo", "-n", "timeout", "18", "nsenter", "-t", strings.TrimSpace(string(pid)), "-n", "tcpdump", "-nn", "-l", "-i", "any", "udp", "and", "port", strconv.Itoa(port))
+	cmd.Stdout, cmd.Stderr = &output, &output
+	if err := cmd.Start(); err != nil {
+		return
+	}
+	t.Cleanup(func() {
+		_ = cmd.Wait()
+		if t.Failed() {
+			t.Log("FPTN client UDP packet metadata:\n" + output.String())
+		}
+	})
 }

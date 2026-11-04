@@ -44,7 +44,8 @@ export function InstallVPNButton({ protocol }: { protocol: 'fptn' | 'openflux' |
 
 export function FptnFields() {
   const { t } = useTranslation();
-  const { setValue } = useFormContext();
+  const { control, setValue } = useFormContext();
+  const adsFilter = useWatch({ control, name: 'settings.adsFilter' });
   function preset(mobile: boolean) {
     for (const [key, value] of Object.entries({
       mtu: mobile ? 1280 : 1400,
@@ -85,9 +86,10 @@ export function FptnFields() {
       <FormField
         name={['settings', 'adsFilter']}
         label={t('pages.inbounds.form.fptnAds')}
+        extra={t('pages.inbounds.form.fptnAdsUnsupported')}
         valueProp="checked"
       >
-        <Switch />
+        <Switch disabled={adsFilter !== true} />
       </FormField>
       <FormField
         name={['settings', 'torrentFilter']}

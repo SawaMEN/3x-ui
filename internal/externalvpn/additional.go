@@ -144,6 +144,9 @@ func (inst Instance) validateAdditional() error {
 		return fmt.Errorf("listen must be an IP")
 	}
 	if inst.Protocol == model.FPTN {
+		if s.AdsFilter {
+			return fmt.Errorf("FPTN server image does not support ad filtering; use routing adblock")
+		}
 		if !imagePattern.MatchString(s.Image) {
 			return fmt.Errorf("FPTN requires a pinned fptnvpn/fptn-vpn-server image version")
 		}

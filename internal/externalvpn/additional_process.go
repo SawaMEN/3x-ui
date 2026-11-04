@@ -105,8 +105,8 @@ func (m *Manager) additionalCommand(inst Instance, metricsAddr string) (*exec.Cm
 	args := []string{"run", "--rm", "--name", containerName(inst.ID), "--label", "app=3x-ui-fptn", "--cap-add", "NET_ADMIN", "--cap-add", "NET_RAW", "--device", "/dev/net/tun:/dev/net/tun", "--publish", inst.Bind() + ":443/tcp", "--publish", metricsAddr + ":443/tcp", "--mount", "type=bind,src=" + folder + ",dst=/etc/fptn", "--ulimit", "nofile=262144:262144"}
 	env := map[string]string{
 		"ENABLE_DETECT_PROBING": strconv.FormatBool(inst.Settings.DetectProbing), "ALLOWED_SNI_LIST": inst.Settings.AllowedSNI,
-		"ENABLE_DOMAIN_BLACKLIST_FILTER": "false", "DOMAIN_BLACKLIST_URLS": "", "ENABLE_ADS_FILTER": strconv.FormatBool(inst.Settings.AdsFilter), "ADS_BLOCKLIST_URLS": "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
-		"ENABLE_TORRENT_FILTER": strconv.FormatBool(inst.Settings.TorrentFilter), "ENABLE_SPAM_FILTER": strconv.FormatBool(inst.Settings.SpamFilter),
+		"BLACKLIST_URL":          "",
+		"DISABLE_TORRENT_FILTER": strconv.FormatBool(!inst.Settings.TorrentFilter), "DISABLE_SPAM_FILTER": strconv.FormatBool(!inst.Settings.SpamFilter),
 		"PROMETHEUS_SECRET_ACCESS_KEY": inst.Settings.MetricsKey, "USE_REMOTE_SERVER_AUTH": "false", "MAX_ACTIVE_SESSIONS_PER_USER": strconv.Itoa(inst.Settings.MaxSessions),
 		"REMOTE_SERVER_AUTH_HOST": "127.0.0.1", "REMOTE_SERVER_AUTH_PORT": "8080", "SERVER_EXTERNAL_IPS": "",
 		"MTU_SIZE": strconv.Itoa(inst.Settings.MTU), "USING_DNS_SERVER": "unbound", "DNS_IPV6_ENABLE": "false", "DNS_IPV4_PRIMARY": "1.1.1.1", "DNS_IPV4_SECONDARY": "9.9.9.9", "DATA_DIR": "/etc/fptn/data",
