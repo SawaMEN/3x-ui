@@ -25,6 +25,7 @@ import (
 )
 
 type OutboundSettings struct {
+	CACert     string              `json:"caCert,omitempty"`
 	Link       string              `json:"link"`
 	EnableUDP  bool                `json:"enableUDP"`
 	UDPStream  bool                `json:"udpStream"`
@@ -201,6 +202,18 @@ func OutboundsApplied(raws []map[string]any) bool {
 // validation. Finish(true) retires obsolete children; Finish(false) restores
 // replaced ones and removes newly started children. Callers serialize applies.
 func ApplyOutbounds(raws []map[string]any) (finish func(bool) error, err error) {
+	// Reject an invalid desired set before touching any live sidecar.
+	seen := make(map[string]bool, len(raws))
+	for _, raw := range raws {
+		if err := ValidateAdditionalOutbound(raw); err != nil {
+			return nil, err
+		}
+		tag, _ := raw["tag"].(string)
+		if strings.TrimSpace(tag) == "" || seen[tag] {
+			return nil, fmt.Errorf("managed outbounds require unique nonempty tags")
+		}
+		seen[tag] = true
+	}
 	previous := map[string]*managedOutbound{}
 	tags := map[string]bool{}
 	outboundMu.Lock()
@@ -409,6 +422,9 @@ func startOutbound(tag string, proc *managedOutbound) error {
 			return fmt.Errorf("VetroffProxy outbound requires an installed VetroffProxy bundle: %w", err)
 		}
 		args := []string{"client", "--link-file", connection, "--listen", net.JoinHostPort("127.0.0.1", strconv.Itoa(proc.port))}
+		if s.CACert != "" {
+			args = append(args, "--ca-cert", s.CACert)
+		}
 		if s.EnableUDP {
 			args = append(args, "--enable-udp")
 		}
@@ -496,6 +512,7 @@ func startOutbound(tag string, proc *managedOutbound) error {
 		done()
 		proc.cmd = exec.CommandContext(ctx, "docker", "run", "--rm", "--name", proc.container, "--cap-add", "NET_ADMIN", "--device", "/dev/net/tun:/dev/net/tun", "--publish", fmt.Sprintf("127.0.0.1:%d:1080/tcp", proc.port), "--mount", "type=bind,src="+folder+",dst=/run/panel,readonly", "--mount", "type=bind,src="+sb+",dst=/usr/bin/panel-core,readonly", "3x-ui-fptn-client:0.4.6", "/bin/sh", "/run/panel/run.sh", strconv.Itoa(s.MTU), s.SNI, s.Bypass)
 	}
+	prepareVetroffCommand(proc.cmd)
 	proc.cmd.Stdout, proc.cmd.Stderr = os.Stdout, os.Stderr
 	if err := proc.cmd.Start(); err != nil {
 		cancel()

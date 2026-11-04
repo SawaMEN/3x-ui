@@ -119,10 +119,6 @@ func (m *Manager) additionalCommand(inst Instance, metricsAddr string) (*exec.Cm
 		return fail(err)
 	}
 	args = append(args, "--env-file", path, inst.Settings.Image)
-	// Remove only this panel's deterministic container after a previous crash.
-	cleanupCtx, done := context.WithTimeout(context.Background(), 5*time.Second)
-	_ = exec.CommandContext(cleanupCtx, "docker", "rm", "-f", containerName(inst.ID)).Run()
-	done()
 	return exec.CommandContext(ctx, "docker", args...), cancel, nil
 }
 

@@ -2,11 +2,14 @@ package externalvpn
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +21,15 @@ import (
 // requiring a downloaded sidecar just to save an outbound configuration.
 func validateVetroffOutbound(s OutboundSettings) error {
 	const bad = "invalid VetroffProxy outbound connection link"
+	if s.CACert != "" {
+		if !filepath.IsAbs(s.CACert) {
+			return fmt.Errorf("VetroffProxy CA path must be absolute")
+		}
+		data, err := os.ReadFile(s.CACert)
+		if err != nil || !x509.NewCertPool().AppendCertsFromPEM(data) {
+			return fmt.Errorf("VetroffProxy CA file must contain trusted PEM certificates")
+		}
+	}
 	if s.UDPStream && !s.EnableUDP {
 		return fmt.Errorf("VetroffProxy UDP streaming requires enableUDP")
 	}

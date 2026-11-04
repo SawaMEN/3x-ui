@@ -1,0 +1,193 @@
+name: External components lifecycle audit
+on:
+  push:
+    branches: [update]
+    paths: ['internal/**', 'tools/ci/download-stage8-components.py', 'docs/stage8-components.json', '.github/workflows/component-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: component-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Prepare dependencies
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep && bash tools/ci/download-go-modules.sh
+      - name: External lifecycle and native protocol contracts
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/externalvpn ./internal/mtproto ./internal/olcrtc ./internal/mieru ./internal/sudoku ./internal/sidecaregress ./internal/tuic ./internal/snell -count=1 | tee component-contracts.jsonl
+          python3 tools/ci/require-go-tests.py component-contracts.jsonl TestStage8ReconcileRejectsInvalidBeforeStopping TestStage8InboundStartupFailureRestoresPrevious TestStage8InvalidOutboundSetHasNoSideEffects TestStage8CancelKillsDescendant TestVetroffRuntimeStopsWhenPanelDies TestDeploymentRollbackAndRecovery TestManagerRejectsInvalidConfigAndRollsBackFailedStartup TestMieruPayloadAcrossTCPAndUDP TestAudit3ManagerEnsureActualSendersWithPersistentTraffic
+      - name: Panel integration and service contracts
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/web/service ./internal/web/controller ./internal/sub -run 'Telemt|Mtproto|Meko|Vetroff|External|Olcrtc|OlcRTC|Sudoku|Mieru|Snell|TUIC|Tuic|Stage8|Sidecar' -count=1 | tee panel-components.jsonl
+          python3 tools/ci/require-go-tests.py panel-components.jsonl TestVetroffAutomaticTLSAndCredentials TestTelemtWebCertificatePairValidation
+          python3 -m unittest discover -s tools -p 'test_official_telemt.py'
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Component UI and types
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm test -- src/test/telemt*.test.* src/test/vetroff*.test.* src/test/olcrtc*.test.* src/test/client-external-link-expiry.test.ts
+      - name: Vet component integration
+        run: go vet ./internal/externalvpn ./internal/mtproto ./internal/olcrtc ./internal/mieru ./internal/sudoku ./internal/tuic ./internal/web/service ./internal/web/controller
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stage8-contract-evidence
+          path: '*.jsonl'
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Pinned official components
+        run: python3 tools/ci/download-stage8-components.py '${{ matrix.arch }}' "$RUNNER_TEMP/components"
+      - name: Pinned owner core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/download-audit-cores.sh '${{ matrix.arch }}'
+      - name: Telemt official reload and WEB carriers
+        run: |
+          set -o pipefail
+          mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+          go test -race -json ./internal/mtproto -run '^TestOfficialTelemtConfigAndReload$' -count=1 | tee telemt-official.jsonl
+          python3 tools/ci/require-go-tests.py telemt-official.jsonl TestOfficialTelemtConfigAndReload
+          go test -race -p 2 -json ./internal/web/service -run '^TestNativeTelemtWebCarrierConfig$' -count=1 | tee telemt-web-native.jsonl
+          python3 tools/ci/require-go-tests.py telemt-web-native.jsonl TestNativeTelemtWebCarrierConfig
+      - name: Vetroff actual inbound outbound TCP UDP and official bundle
+        run: |
+          set -o pipefail
+          go test -race -json ./internal/externalvpn -run '^(TestStage8VetroffNativePayload|TestOfficialVetroffBundle|TestVetroffAllTransportProfilesAndServerOptions|TestTrustTunnelPayloadUsesCoreSOCKS)$' -count=1 | tee external-native.jsonl
+          python3 tools/ci/require-go-tests.py external-native.jsonl TestStage8VetroffNativePayload TestOfficialVetroffBundle TestVetroffAllTransportProfilesAndServerOptions TestTrustTunnelPayloadUsesCoreSOCKS
+      - name: Official Sudoku traffic
+        run: |
+          set -o pipefail
+          go test -race -json ./internal/sudoku -run '^(TestOfficialSudokuTraffic|TestSudokuBinaryIntegration)$' -count=1 | tee sudoku-native.jsonl
+          python3 tools/ci/require-go-tests.py sudoku-native.jsonl TestOfficialSudokuTraffic TestSudokuBinaryIntegration
+      - name: Native Snell TUIC Naive MASQUE and other owner protocol modes
+        env:
+          HIDDIFY_RUNTIME_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
+          HIDDIFY_TEST_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
+          SINGBOX_TEST_BINARY: ${{ env.XUI_STAGE4_CORE_DIR }}/owner/x-ui/bin/hiddify-core-linux-${{ matrix.arch }}
+        run: |
+          set -o pipefail
+          go test -race -p 2 -json ./internal/hiddify -run '^TestStage5ExtendedProtocolTraffic$' -count=1 | tee owner-components.jsonl
+          python3 tools/ci/require-go-tests.py owner-components.jsonl TestStage5ExtendedProtocolTraffic
+          go test -race -p 2 -json ./internal/singbox -run '^TestMASQUEConnections$' -count=1 | tee masque-native.jsonl
+          python3 tools/ci/require-go-tests.py masque-native.jsonl TestMASQUEConnections
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stage8-native-${{ matrix.arch }}
+          path: |
+            *.jsonl
+            stage8-binaries.sha256
+            native-binaries.sha256
+  olcrtc:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+        cache: true
+    - name: Go unit tests for the integration
+      run: go test -count=1 ./internal/olcrtc
+    - name: Test the patched manager, real Linux network namespace and quotas
+      run: 'git init -q /tmp/olcrtc-reviewed-manager
+  
+        git -C /tmp/olcrtc-reviewed-manager remote add origin https://github.com/BigDaddy3334/olcrtc-manager-panel.git
+  
+        git -C /tmp/olcrtc-reviewed-manager fetch --depth 1 origin df626030d21d00286304bc8ef1e990e28c247a55
+  
+        git -C /tmp/olcrtc-reviewed-manager checkout --detach FETCH_HEAD
+  
+        git -C /tmp/olcrtc-reviewed-manager apply "$GITHUB_WORKSPACE/internal/olcrtc/patches/manager.patch"
+  
+        cp internal/olcrtc/patches/panel_safety.go.txt /tmp/olcrtc-reviewed-manager/cmd/olcrtc-manager/panel_safety.go
+  
+        cp internal/olcrtc/patches/panel_safety_test.go.txt /tmp/olcrtc-reviewed-manager/cmd/olcrtc-manager/panel_safety_test.go
+  
+        cd /tmp/olcrtc-reviewed-manager
+  
+        sudo env PATH="$PATH" OLCRTC_KERNEL_TEST=1 go test -race -count=1 ./cmd/olcrtc-manager
+  
+        '
+    - name: Install OlcRTC through the production integration on an isolated CI VM
+      env:
+        INSTALLER_URL: https://raw.githubusercontent.com/BigDaddy3334/olcrtc-manager-panel/df626030d21d00286304bc8ef1e990e28c247a55/scripts/install.sh
+      run: "set -euo pipefail\ncurl --fail --show-error --silent --location \"$INSTALLER_URL\"\
+        \ -o /tmp/olcrtc-smoke-installer.sh\nbash -n /tmp/olcrtc-smoke-installer.sh\n\
+        sudo env -u HOME -u GOPATH -u GOCACHE -u GOMODCACHE PATH=\"$PATH\" \\\n  GOPATH=/tmp/olcrtc-smoke-go\
+        \ GOCACHE=/tmp/olcrtc-smoke-cache \\\n  OLCRTC_RUN_INSTALL_SMOKE=1 go test -count=1\
+        \ ./internal/olcrtc -run '^TestManagedInstallationSmoke$' -timeout 28m\n"
+    - name: Validate the pinned upstream installer source
+      env:
+        OLCRTC_PINNED_INSTALLER_PATH: /tmp/olcrtc-smoke-installer.sh
+      run: go test -count=1 ./internal/olcrtc -run '^TestPinned(UpstreamArchInstaller|InstallerInitializersWithoutHostnameI)$'
+    - name: Verify service, loopback binding, credentials and local API
+      run: "set -euo pipefail\nsudo systemctl --no-pager --full status olcrtc-manager\n\
+        test -x /usr/local/bin/olcrtc\ntest -x /usr/local/bin/olcrtc-manager\nsudo test\
+        \ -s /etc/olcrtc-manager/panel.env\nsudo test -s /etc/olcrtc-manager/config.json\n\
+        PORT=\"$(sudo python3 -c 'import json; print(json.load(open(\"/etc/olcrtc-manager/config.json\"\
+        ))[\"port\"])')\"\n# The service must be local-only; accepting connections on\
+        \ all interfaces\n# would accidentally expose its independent admin UI.\nsudo\
+        \ systemctl cat olcrtc-manager | grep -F 'OLCRTC_MANAGER_ADDR=127.0.0.1'\nsudo\
+        \ grep -q '^OLCRTC_MANAGER_USER=' /etc/olcrtc-manager/panel.env\nsudo grep -q\
+        \ '^OLCRTC_MANAGER_PASS=' /etc/olcrtc-manager/panel.env\nsudo bash -c '\n  set\
+        \ -euo pipefail\n  set -a\n  source /etc/olcrtc-manager/panel.env\n  set +a\n\
+        \  for attempt in $(seq 1 15); do\n    if curl --fail --silent --max-time 2\
+        \ \\\n      --user \"${OLCRTC_MANAGER_USER}:${OLCRTC_MANAGER_PASS}\" \\\n  \
+        \    \"http://127.0.0.1:${1}/api/settings\" > /tmp/olcrtc-api-settings.json;\
+        \ then\n      exit 0\n    fi\n    sleep 2\n  done\n  exit 1\n' bash \"$PORT\"\
+        \nsudo python3 - <<'PY'\nimport json\nwith open('/tmp/olcrtc-api-settings.json')\
+        \ as f:\n    response = json.load(f)\nassert response[\"port\"] > 0\nassert\
+        \ response[\"admin_user\"]\nprint(\"Authenticated local OlcRTC API responds\
+        \ correctly\")\nPY\n"
+    - name: Troubleshooting on failure
+      if: failure()
+      run: 'sudo systemctl --no-pager --full status olcrtc-manager || true
+  
+        sudo journalctl -u olcrtc-manager -n 100 --no-pager || true
+  
+        # Never print panel.env or installer stdout: they contain admin credentials.
+  
+        '
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - arch: amd64
+          runner: ubuntu-24.04
+        - arch: arm64
+          runner: ubuntu-24.04-arm

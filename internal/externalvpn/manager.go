@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -301,15 +302,70 @@ func requirePingtunnelForwardVersion(path string) error {
 }
 
 func (m *Manager) Ensure(inst Instance) error {
-	if err := inst.Validate(); err != nil {
-		return err
-	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.ensureLocked(inst)
 }
 
 func (m *Manager) ensureLocked(inst Instance) error {
+	// Keep rollback settings independent of caller-owned slices and pointers.
+	data, _ := json.Marshal(inst)
+	_ = json.Unmarshal(data, &inst)
+	if err := inst.Validate(); err != nil {
+		return err
+	}
+	old := m.procs[inst.ID]
+	if old != nil {
+		select {
+		case <-old.done:
+			old = nil
+		default:
+		}
+	}
+	err := m.startLocked(inst)
+	if err == nil {
+		if current := m.procs[inst.ID]; current != nil && current != old {
+			err = waitInboundStartup(current)
+		}
+	}
+	if err == nil {
+		return nil
+	}
+	if current := m.procs[inst.ID]; current != nil && current != old {
+		m.removeLocked(inst.ID)
+	}
+	if old != nil {
+		if m.procs[inst.ID] == old {
+			// Preflight may have written part of a shared config. Restore its files
+			// while preserving the still-running child.
+			_, cancel, restoreErr := m.prepareInboundCommand(old.instance, old.metricsAddr)
+			if cancel != nil {
+				cancel()
+			}
+			return errors.Join(err, restoreErr)
+		}
+		if restoreErr := m.startLocked(old.instance); restoreErr != nil {
+			return errors.Join(err, fmt.Errorf("restore previous external VPN: %w", restoreErr))
+		}
+		if restored := m.procs[inst.ID]; restored != nil {
+			err = errors.Join(err, waitInboundStartup(restored))
+		}
+	}
+	return err
+}
+
+func waitInboundStartup(proc *running) error {
+	timer := time.NewTimer(200 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-proc.done:
+		return fmt.Errorf("%s exited during startup: %v", proc.protocol, proc.cmd.ProcessState)
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (m *Manager) startLocked(inst Instance) error {
 	fp := fingerprint(inst)
 	if old := m.procs[inst.ID]; old != nil {
 		select {
@@ -319,7 +375,6 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			if old.fingerprint == fp && !certificateRenewalNeeded(inst) {
 				return nil
 			}
-			m.removeLocked(inst.ID)
 		}
 	}
 	if inst.Protocol == model.VetroffProxy || inst.Protocol == model.TrustTunnel || inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
@@ -328,6 +383,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			active = active || c.Enable
 		}
 		if !active {
+			m.removeLocked(inst.ID)
 			return nil
 		}
 	}
@@ -350,29 +406,13 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		metricsAddr = listener.Addr().String()
 		_ = listener.Close()
 	}
-	var cmd *exec.Cmd
-	var cancel context.CancelFunc
-	var ctx context.Context
-	if inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
-		var err error
-		cmd, cancel, err = m.additionalCommand(inst, metricsAddr)
-		if err != nil {
-			return err
-		}
-		ctx = context.Background()
-	} else {
-		args, err := files(inst, metricsAddr)
-		if err != nil {
-			return err
-		}
-		ctx, cancel = context.WithCancel(context.Background())
-		cmd = exec.CommandContext(ctx, binary(inst.Protocol), args...)
+	cmd, cancel, err := m.prepareInboundCommand(inst, metricsAddr)
+	if err != nil {
+		return err
 	}
-	if inst.Protocol == model.VetroffProxy {
-		cmd.Dir = filepath.Dir(binary(inst.Protocol))
-		prepareVetroffCommand(cmd)
-	}
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	m.removeLocked(inst.ID)
+	cleanupAdditional(inst.ID, inst.Protocol)
+
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return fmt.Errorf("%s: %w", inst.Protocol, err)
@@ -382,11 +422,37 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	go func() {
 		err := cmd.Wait()
 		close(proc.done)
-		if ctx.Err() == nil && !proc.stopping.Load() {
+		if !proc.stopping.Load() {
 			logger.Warningf("%s inbound %d exited: %v", inst.Protocol, inst.ID, err)
 		}
 	}()
 	return nil
+}
+
+func (m *Manager) prepareInboundCommand(inst Instance, metricsAddr string) (*exec.Cmd, context.CancelFunc, error) {
+	var cmd *exec.Cmd
+	var cancel context.CancelFunc
+	var ctx context.Context
+	if inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
+		var err error
+		cmd, cancel, err = m.additionalCommand(inst, metricsAddr)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		args, err := files(inst, metricsAddr)
+		if err != nil {
+			return nil, nil, err
+		}
+		ctx, cancel = context.WithCancel(context.Background())
+		cmd = exec.CommandContext(ctx, binary(inst.Protocol), args...)
+	}
+	if inst.Protocol == model.VetroffProxy {
+		cmd.Dir = filepath.Dir(binary(inst.Protocol))
+	}
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	prepareVetroffCommand(cmd)
+	return cmd, cancel, nil
 }
 
 func (m *Manager) removeLocked(id int) {
