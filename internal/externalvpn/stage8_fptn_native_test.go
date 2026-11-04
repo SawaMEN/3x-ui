@@ -109,6 +109,21 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 			go func() { defer c.Close(); io.Copy(c, c) }()
 		}
 	}()
+	udp, err := net.ListenPacket("udp", "0.0.0.0:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer udp.Close()
+	go func() {
+		b := make([]byte, 65535)
+		for {
+			n, a, e := udp.ReadFrom(b)
+			if e != nil {
+				return
+			}
+			udp.WriteTo(b[:n], a)
+		}
+	}()
 	// The host side of this bridge is VLESS, exactly as rendered by PlanOutbound.
 	bridge := outboundBridge("fptn-native", proc)
 	if bridge["protocol"] != "vless" {
@@ -116,11 +131,11 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	}
 	server := bridge["settings"].(map[string]any)["vnext"].([]any)[0].(map[string]any)
 	user := server["users"].([]any)[0].(map[string]any)
-	native := map[string]any{"packet_encoding": "", "type": "vless", "tag": bridge["tag"], "server": server["address"], "server_port": server["port"], "uuid": user["id"]}
+	native := map[string]any{"type": "vless", "tag": bridge["tag"], "server": server["address"], "server_port": server["port"], "uuid": user["id"]}
 
-	localPort := stage8Port(t)
+	localPort, udpPort := stage8Port(t), stage8Port(t)
 	path := filepath.Join(dir, "test-client.json")
-	cfg := map[string]any{"inbounds": []any{map[string]any{"type": "socks", "tag": "test", "listen": "127.0.0.1", "listen_port": localPort}}, "outbounds": []any{native}, "route": map[string]any{"final": "fptn-native"}}
+	cfg := map[string]any{"inbounds": []any{map[string]any{"type": "socks", "tag": "test", "listen": "127.0.0.1", "listen_port": localPort}, map[string]any{"type": "direct", "tag": "test-udp", "listen": "127.0.0.1", "listen_port": udpPort, "network": "udp", "override_address": echoHost, "override_port": udp.LocalAddr().(*net.UDPAddr).Port}}, "outbounds": []any{native}, "route": map[string]any{"final": "fptn-native"}}
 	data, _ := json.Marshal(cfg)
 	if err = os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
@@ -149,23 +164,24 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 		t.Fatal("FPTN TCP payload", err)
 	}
 	c.Close()
-	udp, err := net.ListenPacket("udp", "0.0.0.0:0")
+	stage8FPTNUDPTrace(t, proc.container, udp.LocalAddr().(*net.UDPAddr).Port)
+	stage8FPTNUDPTrace(t, containerName(inst.ID), udp.LocalAddr().(*net.UDPAddr).Port)
+	packet, err := net.Dial("udp", net.JoinHostPort("127.0.0.1", fmtPort(udpPort)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer udp.Close()
-	go func() {
-		b := make([]byte, 65535)
-		for {
-			n, a, e := udp.ReadFrom(b)
-			if e != nil {
-				return
-			}
-			udp.WriteTo(b[:n], a)
-		}
-	}()
-	stage8FPTNUDPTrace(t, proc.container, udp.LocalAddr().(*net.UDPAddr).Port)
-	stage8SocksUDPTo(t, net.JoinHostPort("127.0.0.1", fmtPort(localPort)), echoHost, udp.LocalAddr().(*net.UDPAddr).Port)
+	defer packet.Close()
+	packet.SetDeadline(time.Now().Add(15 * time.Second))
+	udpPayload := []byte("stage8-native-udp")
+	if _, err = packet.Write(udpPayload); err != nil {
+		t.Fatal(err)
+	}
+	var udpReply [128]byte
+	n, err := packet.Read(udpReply[:])
+	if err != nil || !bytes.Equal(udpReply[:n], udpPayload) {
+		t.Fatal("FPTN native UDP payload", n, err)
+	}
+
 	manager.Remove(inst.ID)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -207,16 +223,29 @@ func stage8FPTNUDPTrace(t *testing.T, container string, port int) {
 	if err != nil {
 		return
 	}
-	var output bytes.Buffer
+	file, err := os.CreateTemp(t.TempDir(), "udp-metadata-")
+	if err != nil {
+		return
+	}
 	cmd := exec.Command("sudo", "-n", "timeout", "18", "nsenter", "-t", strings.TrimSpace(string(pid)), "-n", "tcpdump", "-nn", "-l", "-i", "any", "udp", "and", "port", strconv.Itoa(port))
-	cmd.Stdout, cmd.Stderr = &output, &output
+	cmd.Stdout, cmd.Stderr = file, file
 	if err := cmd.Start(); err != nil {
+		file.Close()
 		return
 	}
 	t.Cleanup(func() {
 		_ = cmd.Wait()
+		file.Close()
 		if t.Failed() {
-			t.Log("FPTN client UDP packet metadata:\n" + output.String())
+			output, _ := os.ReadFile(file.Name())
+			t.Log("FPTN UDP metadata " + container + ":\n" + string(output))
 		}
 	})
+	for end := time.Now().Add(2 * time.Second); time.Now().Before(end); {
+		data, _ := os.ReadFile(file.Name())
+		if bytes.Contains(data, []byte("listening on")) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

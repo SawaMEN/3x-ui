@@ -424,7 +424,7 @@ func outboundBridge(tag string, proc *managedOutbound) map[string]any {
 	// OpenFlux exposes an unauthenticated SOCKS listener, restricted to loopback.
 	p, _ := proc.raw["protocol"].(string)
 	if strings.EqualFold(p, "fptn") {
-		return map[string]any{"tag": tag, "protocol": "vless", "settings": map[string]any{"packetEncoding": "none", "vnext": []any{map[string]any{"address": "127.0.0.1", "port": proc.port, "users": []any{map[string]any{"id": proc.password, "encryption": "none"}}}}}, "streamSettings": map[string]any{"network": "tcp", "security": "none"}}
+		return map[string]any{"tag": tag, "protocol": "vless", "settings": map[string]any{"vnext": []any{map[string]any{"address": "127.0.0.1", "port": proc.port, "users": []any{map[string]any{"id": proc.password, "encryption": "none"}}}}}, "streamSettings": map[string]any{"network": "tcp", "security": "none"}}
 	}
 	return map[string]any{"tag": tag, "protocol": "socks", "settings": map[string]any{"servers": []any{server}}}
 }
