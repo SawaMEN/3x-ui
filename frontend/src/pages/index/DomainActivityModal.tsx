@@ -68,6 +68,7 @@ export default function DomainActivityModal({
     try {
       const msg = await HttpUtil.post(
         '/panel/api/server/domainActivity/config', { enabled },
+        { headers: { 'Content-Type': 'application/json' } },
       );
       if (msg?.success) refresh();
     } finally {
