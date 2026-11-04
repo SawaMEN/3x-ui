@@ -3,9 +3,9 @@ package externalvpn
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net"
 	"os"
@@ -60,15 +60,25 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	if !roots.AppendCertsFromPEM([]byte(inst.Settings.CertificatePEM)) {
 		t.Fatal("invalid server trust anchor")
 	}
+	block, _ := pem.Decode([]byte(inst.Settings.CertificatePEM))
+	leaf, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: inst.Settings.Hostname}); err != nil {
+		t.Fatal("FPTN certificate hostname/trust", err)
+	}
+	// An ordinary TLS ClientHello is deliberately camouflaged by FPTN Reality
+	// mode. Only the official token-bearing client can check tunnel readiness.
 	target := net.JoinHostPort("127.0.0.1", fmtPort(port))
 	for end := time.Now().Add(60 * time.Second); ; {
-		c, e := tls.DialWithDialer(&net.Dialer{Timeout: time.Second}, "tcp", target, &tls.Config{RootCAs: roots, ServerName: inst.Settings.Hostname, MinVersion: tls.VersionTLS12})
+		c, e := net.DialTimeout("tcp", target, time.Second)
 		if e == nil {
 			c.Close()
 			break
 		}
 		if time.Now().After(end) {
-			t.Fatal("FPTN TLS endpoint did not become ready", e)
+			t.Fatal("FPTN listener did not become ready", e)
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -113,6 +123,8 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
+	// Keep the echo distinct from the VPN server address and its bypass route.
+	echoHost := stage8NonLoopbackIP(t)
 	echo, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
 		t.Fatal(err)
@@ -151,7 +163,7 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	}
 	payloadCtx, payloadCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer payloadCancel()
-	c, err := dialer.(proxy.ContextDialer).DialContext(payloadCtx, "tcp", net.JoinHostPort(gateway, fmtPort(echo.Addr().(*net.TCPAddr).Port)))
+	c, err := dialer.(proxy.ContextDialer).DialContext(payloadCtx, "tcp", net.JoinHostPort(echoHost, fmtPort(echo.Addr().(*net.TCPAddr).Port)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,11 +194,11 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 			udp.WriteTo(b[:n], a)
 		}
 	}()
-	stage8SocksUDPTo(t, net.JoinHostPort("127.0.0.1", fmtPort(localPort)), gateway, udp.LocalAddr().(*net.UDPAddr).Port)
+	stage8SocksUDPTo(t, net.JoinHostPort("127.0.0.1", fmtPort(localPort)), echoHost, udp.LocalAddr().(*net.UDPAddr).Port)
 	manager.Remove(inst.ID)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	blocked, err := dialer.(proxy.ContextDialer).DialContext(ctx, "tcp", net.JoinHostPort(gateway, fmtPort(echo.Addr().(*net.TCPAddr).Port)))
+	blocked, err := dialer.(proxy.ContextDialer).DialContext(ctx, "tcp", net.JoinHostPort(echoHost, fmtPort(echo.Addr().(*net.TCPAddr).Port)))
 	if err == nil {
 		defer blocked.Close()
 		blocked.SetDeadline(time.Now().Add(2 * time.Second))
