@@ -1927,6 +1927,7 @@ export default function ClientsPage() {
         </LazyMount>
         <LazyMount when={activityOpen}>
           <DomainActivityModal
+            key={activityOpen ? activityClient : "closed"}
             open={activityOpen}
             initialClient={activityClient}
             onClose={() => setActivityOpen(false)}
