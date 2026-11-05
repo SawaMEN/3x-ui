@@ -292,6 +292,12 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	}
 	if state.ManagedInboundID != 0 {
 		if managedPeriods.Len() > 0 {
+			if _, statErr := os.Stat(telemtBinaryPath); statErr == nil && !telemtWebVersionAtLeast(telemtVersion(), "3.5.15") {
+				return "", errors.New("WEB calendar quotas require Telemt 3.5.15 or newer")
+			}
+			if !strings.Contains(base, "[general]\n") {
+				return "", errors.New("WEB calendar quota state requires a general configuration section")
+			}
 			base = strings.Replace(base, "[general]\n", "[general]\nquota_state_path = \"/etc/x-ui/telemt-web-quotas.json\"\n", 1)
 			base += "\n[access.user_quota_periods]\n" + managedPeriods.String()
 		}
