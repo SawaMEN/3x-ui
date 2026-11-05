@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
@@ -12,6 +13,10 @@ import (
 // Xray process. Standalone Xray runs with xray.json; the old in-process Xray
 // setup uses config.json. Never read a stale legacy log for standalone Xray.
 func selectedXrayAccessLogPath() (string, error) {
+	// The log reader also serves diagnostics before database initialization.
+	if database.GetDB() == nil {
+		return xray.GetAccessLogPath()
+	}
 	core, err := (&SettingService{}).GetCoreType()
 	if err != nil || core != CoreTypeXray {
 		return xray.GetAccessLogPath()
