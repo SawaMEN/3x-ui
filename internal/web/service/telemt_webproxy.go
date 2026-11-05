@@ -177,7 +177,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	managedUsers := ""
 	managedProfiles := ""
 	managedUserCount := 0
-	var managedQuotas, managedExpirations, managedIPLimits strings.Builder
+	var managedQuotas, managedExpirations, managedIPLimits, managedRateLimits strings.Builder
 	if state.ManagedInboundID != 0 {
 		var inbound model.Inbound
 		if err := database.GetDB().First(&inbound, state.ManagedInboundID).Error; err != nil {
@@ -205,6 +205,9 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 			}
 			if user.LimitIP > 0 {
 				fmt.Fprintf(&managedIPLimits, "%q = %d\n", name, user.LimitIP)
+			}
+			if user.RateUpBps > 0 || user.RateDownBps > 0 {
+				fmt.Fprintf(&managedRateLimits, "%q = { up_bps = %d, down_bps = %d }\n", name, user.RateUpBps, user.RateDownBps)
 			}
 		}
 	}
@@ -293,6 +296,9 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		}
 		if managedIPLimits.Len() > 0 {
 			base += "\n[access.user_max_unique_ips]\n" + managedIPLimits.String()
+		}
+		if managedRateLimits.Len() > 0 {
+			base += "\n[access.user_rate_limits]\n" + managedRateLimits.String()
 		}
 	}
 	return strings.TrimRight(base, "\n") + "\n" + webConfig, nil
