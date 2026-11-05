@@ -29,6 +29,7 @@ export const MtprotoClientSchema = z.object({
     .optional(),
   email: z.string().min(1),
   limitIp: z.number().int().min(0).default(0),
+  speedLimit: z.object({ enabled: z.boolean(), uploadMbps: z.number().int().min(0).max(100000), downloadMbps: z.number().int().min(0).max(100000) }).optional(),
   totalGB: z.number().int().min(0).default(0),
   expiryTime: z.number().int().default(0),
   enable: z.boolean().default(true),
