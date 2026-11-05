@@ -34,7 +34,11 @@ func aggregateNativeDomainActivity(sessions []singbox.ActiveSession, now time.Ti
 
 		// The Clash metadata Host field is usually a sniffed hostname.
 		// The original destination may contain a domain when Host is empty.
-		domain := domainFromAccessDestination(net.JoinHostPort(strings.TrimSpace(session.Domain), "443"))
+		rawHost := strings.TrimSpace(session.Domain)
+		domain := domainFromAccessDestination(rawHost)
+		if domain == "" {
+			domain = domainFromAccessDestination(net.JoinHostPort(rawHost, "443"))
+		}
 		if domain == "" {
 			domain = domainFromAccessDestination(strings.TrimSpace(session.Destination))
 		}
