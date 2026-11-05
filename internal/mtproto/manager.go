@@ -242,15 +242,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		RouteXrayPort          int    `json:"routeXrayPort"`
 		PublicIPv4             string `json:"publicIpv4"`
 		PublicIPv6             string `json:"publicIpv6"`
-		Clients                []struct {
-			Email      string `json:"email"`
-			Secret     string `json:"secret"`
-			AdTag      string `json:"adTag"`
-			Enable     bool   `json:"enable"`
-			TotalGB    int64  `json:"totalGB"`
-			ExpiryTime int64  `json:"expiryTime"`
-			LimitIP    int    `json:"limitIp"`
-		} `json:"clients"`
+		Clients                []model.Client `json:"clients"`
 	}
 	if err := json.Unmarshal([]byte(ib.Settings), &parsed); err != nil {
 		return Instance{}, false
