@@ -6,11 +6,11 @@ URL or a browser tab title.
 
 ## Supported cores
 
-| Selected core | Source | Meaning |
-|---|---|---|
-| `sing-box` (bundled) | Existing authenticated Clash API session snapshot | Currently active connections |
-| `sing-box-upstream` (official) | Existing Clash API `GET /connections` | Currently active connections |
-| `xray` (standalone) | Existing Xray Access Log | Recently logged connections (past 120 seconds) |
+| Selected core                  | Source                                            | Meaning                                        |
+| ------------------------------ | ------------------------------------------------- | ---------------------------------------------- |
+| `sing-box` (bundled)           | Existing authenticated Clash API session snapshot | Currently active connections                   |
+| `sing-box-upstream` (official) | Existing Clash API `GET /connections`             | Currently active connections                   |
+| `xray` (standalone)            | Existing Xray Access Log                          | Recently logged connections (past 120 seconds) |
 
 For both sing-box variants, the panel reuses
 `SingBoxService.ActiveSessions(ctx)` / `hiddifySessions(ctx)` and reads
@@ -43,7 +43,7 @@ No new database or background collector is started.
 ## Limits and privacy
 
 - Active sing-box connections are refreshed every **3 seconds**, while the
-  viewer is open and visible. Rows show *time of observation*, not the time
+  viewer is open and visible. Rows show _time of observation_, not the time
   that a website was opened. Active sessions disappear on subsequent
   successful snapshots after they close.
 - Xray reads at most 2,000 lines from its existing access log and returns only
