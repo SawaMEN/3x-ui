@@ -53,12 +53,12 @@ const (
 )
 
 var defaultValueMap = map[string]string{
-	"domainFrontConfig":  "",
-	"subPublicURL":       "",
-	"subAllowedDomains":  "",
-	"subRestrictDomains": "false",
+	"domainFrontConfig":     "",
+	"subPublicURL":          "",
+	"subAllowedDomains":     "",
+	"subRestrictDomains":    "false",
 	"domainActivityEnabled": "false",
-	"subCDNEnable":       "false",
+	"subCDNEnable":          "false",
 
 	"rootRedirectEnable":       "false",
 	"rootRedirectURL":          "https://www.wikipedia.org/",
