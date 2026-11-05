@@ -7,19 +7,19 @@ import (
 
 func TestDomainFromAccessDestination(t *testing.T) {
 	tests := map[string]string{
-		"tcp:Example.COM:443": "example.com",
+		"tcp:Example.COM:443":     "example.com",
 		"udp:api.example.com:443": "api.example.com",
-		"sub.example.org.:80": "sub.example.org",
-		"8.8.8.8:443": "",
-		"[2001:db8::1]:443": "",
-		"localhost:80": "",
-		"example.com:0": "",
-		"example.com:99999": "",
-		"example.com:abc": "",
-		"example.com:443/secret": "",
-		"bad_site.example:443": "",
-		"-bad.example:443": "",
-		"example.com": "",
+		"sub.example.org.:80":     "sub.example.org",
+		"8.8.8.8:443":             "",
+		"[2001:db8::1]:443":       "",
+		"localhost:80":            "",
+		"example.com:0":           "",
+		"example.com:99999":       "",
+		"example.com:abc":         "",
+		"example.com:443/secret":  "",
+		"bad_site.example:443":    "",
+		"-bad.example:443":        "",
+		"example.com":             "",
 	}
 	for input, want := range tests {
 		if got := domainFromAccessDestination(input); got != want {
