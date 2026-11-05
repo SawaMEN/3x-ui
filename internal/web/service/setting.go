@@ -29,7 +29,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/totp"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/uripath"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/dnsconf"
 )
 
@@ -54,11 +53,12 @@ const (
 )
 
 var defaultValueMap = map[string]string{
-	"domainFrontConfig":  "",
-	"subPublicURL":       "",
-	"subAllowedDomains":  "",
-	"subRestrictDomains": "false",
-	"subCDNEnable":       "false",
+	"domainFrontConfig":     "",
+	"subPublicURL":          "",
+	"subAllowedDomains":     "",
+	"subRestrictDomains":    "false",
+	"domainActivityEnabled": "false",
+	"subCDNEnable":          "false",
 
 	"rootRedirectEnable":       "false",
 	"rootRedirectURL":          "https://www.wikipedia.org/",
@@ -1252,8 +1252,17 @@ func (s *SettingService) GetIpLimitEnable() (bool, error) {
 // GetAccessLogEnable reports whether an Xray access log is configured. Used by
 // the UI for features that genuinely read the log file (the xray log viewer) —
 // distinct from IP limiting, which works without it.
+// Domain activity is opt-in and disabled until an administrator enables it.
+func (s *SettingService) GetDomainActivityEnabled() (bool, error) {
+	return s.getBool("domainActivityEnabled")
+}
+
+func (s *SettingService) SetDomainActivityEnabled(enabled bool) error {
+	return s.setBool("domainActivityEnabled", enabled)
+}
+
 func (s *SettingService) GetAccessLogEnable() (bool, error) {
-	accessLogPath, err := xray.GetAccessLogPath()
+	accessLogPath, err := selectedXrayAccessLogPath()
 	if err != nil {
 		return false, err
 	}

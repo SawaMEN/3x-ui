@@ -83,6 +83,8 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/updateGeofile/:fileName", a.updateGeofile)
 	g.POST("/logs/:count", a.getLogs)
 	g.POST("/xraylogs/:count", a.getXrayLogs)
+	g.GET("/domainActivity", a.getDomainActivity)
+	g.POST("/domainActivity/config", a.setDomainActivity)
 	g.POST("/amneziawglogs/:count", a.getAmneziaWGLogs)
 	g.GET("/amneziawgMetrics", a.getAmneziaWGMetrics)
 	g.POST("/importDB", a.importDB)

@@ -36,6 +36,7 @@ import {
   DownloadOutlined,
   EditOutlined,
   FilterOutlined,
+  GlobalOutlined,
   InfoCircleOutlined,
   LinkOutlined,
   MoreOutlined,
@@ -81,6 +82,7 @@ import {
 } from '@/components/utility/speedTagStyle';
 const ClientFormModal = lazy(() => import('./ClientFormModal'));
 const ClientInfoModal = lazy(() => import('./ClientInfoModal'));
+const DomainActivityModal = lazy(() => import('../index/DomainActivityModal'));
 const ClientQrModal = lazy(() => import('./ClientQrModal'));
 const ClientBulkAddModal = lazy(() => import('./ClientBulkAddModal'));
 const ClientBulkAdjustModal = lazy(() => import('./ClientBulkAdjustModal'));
@@ -392,6 +394,8 @@ export default function ClientsPage() {
     {},
   );
   const [infoOpen, setInfoOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityClient, setActivityClient] = useState('');
   const [infoClient, setInfoClient] = useState<ClientRecord | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrClient, setQrClient] = useState<ClientRecord | null>(null);
@@ -1049,17 +1053,23 @@ export default function ClientsPage() {
     if (pag?.pageSize) setPageSizeChoice(pag.pageSize);
   };
 
+  const onShowActivity = useCallback((email: string) => {
+    setActivityClient(email);
+    setActivityOpen(true);
+  }, []);
+
   const columns = useMemo<ColumnsType<ClientRecord>>(
     () => [
       {
         title: t('pages.clients.actions'),
         key: 'actions',
-        width: 200,
+        width: 232,
         render: (_v, record) => (
           <ClientRowActions
             email={record.email}
             onShowQr={onShowQr}
             onShowInfo={onShowInfo}
+            onShowActivity={onShowActivity}
             onResetTraffic={onResetTraffic}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -1224,6 +1234,7 @@ export default function ClientsPage() {
     [
       t,
       togglingEmail,
+      onShowActivity,
       clientBucket,
       isOnline,
       inboundsById,
@@ -1815,6 +1826,16 @@ export default function ClientsPage() {
                                               onClick: () => onShowQr(row.email),
                                             },
                                             {
+                                              key: 'activity',
+                                              label: (
+                                                <>
+                                                  <GlobalOutlined aria-hidden />{' '}
+                                                  {t('pages.index.domainActivityTitle')}
+                                                </>
+                                              ),
+                                              onClick: () => onShowActivity(row.email),
+                                            },
+                                            {
                                               key: 'reset',
                                               label: (
                                                 <>
@@ -1902,6 +1923,14 @@ export default function ClientsPage() {
             save={onSave}
             resetTraffic={resetTraffic}
             onOpenChange={setFormOpen}
+          />
+        </LazyMount>
+        <LazyMount when={activityOpen}>
+          <DomainActivityModal
+            key={activityOpen ? activityClient : 'closed'}
+            open={activityOpen}
+            initialClient={activityClient}
+            onClose={() => setActivityOpen(false)}
           />
         </LazyMount>
         <LazyMount when={infoOpen}>
