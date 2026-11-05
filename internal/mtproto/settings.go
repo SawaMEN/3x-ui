@@ -48,6 +48,8 @@ func ValidateSettings(settings string) error {
 		Public4           string   `json:"publicIpv4"`
 		Public6           string   `json:"publicIpv6"`
 		Clients           []model.Client `json:"clients"`
+		OutboundTag        string `json:"outboundTag"`
+		FallbackOutboundTags []string `json:"fallbackOutboundTags"`
 	}
 	if err := json.Unmarshal([]byte(settings), &s); err != nil {
 		return fmt.Errorf("MTProto settings: %w", err)
@@ -82,6 +84,21 @@ func ValidateSettings(settings string) error {
 	if s.Connections < 0 {
 		return fmt.Errorf("MTProto connection limit cannot be negative")
 	}
+	if len(s.FallbackOutboundTags) > 3 {
+		return fmt.Errorf("MTProto supports at most three fallback outbounds")
+	}
+	if len(s.FallbackOutboundTags) > 0 && (!s.RouteThroughCore || strings.TrimSpace(s.OutboundTag) == "") {
+		return fmt.Errorf("MTProto fallback requires core routing and a primary outbound")
+	}
+	seen := map[string]bool{strings.TrimSpace(s.OutboundTag): true}
+	for _, name := range s.FallbackOutboundTags {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			return fmt.Errorf("MTProto fallback outbound must be a distinct non-empty tag")
+		}
+		seen[name] = true
+	}
+
 	for _, client := range s.Clients {
 		if err := client.SpeedLimit.Validate(); err != nil {
 			return fmt.Errorf("MTProto user %q: %w", client.Email, err)

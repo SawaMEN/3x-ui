@@ -46,3 +46,32 @@ func TestSingBoxMtprotoEgress(t *testing.T) {
 		t.Fatal("disabled inbound installed a bridge")
 	}
 }
+
+func TestSingBoxMtprotoFallbackOutbounds(t *testing.T) {
+	cfg := &singbox.Config{
+		Route: map[string]any{"rules": []map[string]any{}},
+		Outbounds: []map[string]any{{"tag": "primary", "type": "socks"}, {"tag": "reserve", "type": "socks"}},
+	}
+	ib := &model.Inbound{
+		Id: 23, Enable: true, Protocol: model.MTProto, Tag: "telegram",
+		Settings: `{"routeThroughXray":true,"routeXrayPort":32124,"outboundTag":"primary","fallbackOutboundTags":["reserve"]}`,
+	}
+	if err := injectSingBoxMtprotoEgress(cfg, ib); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Outbounds) != 3 {
+		t.Fatalf("expected one URLtest balancer, got %d", len(cfg.Outbounds))
+	}
+	group := cfg.Outbounds[2]
+	if group["type"] != "urltest" || group["tag"] != "__telemt_route_auto_23" || group["url"] != "https://core.telegram.org/" {
+		t.Fatalf("unexpected health-checked group: %#v", group)
+	}
+	rules := cfg.Route["rules"].([]map[string]any)
+	if len(rules) != 1 || rules[0]["outbound"] != group["tag"] {
+		t.Fatalf("MTProto egress must use the health-checked group: %#v", rules)
+	}
+	ib.Settings = `{"routeThroughXray":true,"routeXrayPort":32124,"outboundTag":"primary","fallbackOutboundTags":["missing"]}`
+	if err := injectSingBoxMtprotoEgress(&singbox.Config{Outbounds: []map[string]any{{"tag": "primary"}}}, ib); err == nil {
+		t.Fatal("missing fallback outbound must be rejected before publishing config")
+	}
+}

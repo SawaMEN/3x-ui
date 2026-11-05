@@ -400,3 +400,9 @@ The standalone Telemt connection card on the dashboard shows a server-supplied a
 ### Russia HTTPS availability (manual)
 
 The inbound WEB Proxy status offers an opt-in Globalping check using up to three probes located in Russia. It verifies that the configured, already-running HTTPS decoy responds from those probes; it does **not** authenticate through MTProto or prove accessibility through Russian cellular allowlists. To avoid consuming the shared Globalping quota, checks are manual and rate-limited/cached per panel for 15 minutes. The browser cannot submit an arbitrary target domain; the panel reads the active WEB configuration.
+
+### Optional MTProto Sing-box outbound fallback
+
+Ordinary MTProto inbounds routed through a Sing-box core can choose a primary outbound and up to three backup outbounds. A private `urltest` group probes `https://core.telegram.org/` through each configured outbound every two minutes. It favors the first healthy outbound (high switch tolerance), then falls back to a healthy alternate; recovered primary service is preferred again on subsequent probes. Existing connections are not interrupted. Missing or duplicate outbound tags are rejected, and fallback configuration on Xray is rejected on save.
+
+This mechanism validates HTTPS connectivity to a Telegram-owned host, **not** the MTProto DC handshake. AWG transport is supported only when exposed to the selected Sing-box core as an outbound. WEB Proxy remains independent of this egress feature.

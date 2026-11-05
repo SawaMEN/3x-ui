@@ -1093,6 +1093,15 @@ func (s *InboundService) normalizeMtprotoXrayPort(inbound *model.Inbound, oldSet
 		return nil
 	}
 	routed, _ := parsed["routeThroughXray"].(bool)
+	if raw, ok := parsed["fallbackOutboundTags"].([]any); ok && len(raw) > 0 {
+		coreType, err := s.coreTypeForInbound(inbound)
+		if err != nil {
+			return err
+		}
+		if !IsNativeCore(coreType) {
+			return fmt.Errorf("MTProto fallback outbounds require a Sing-box core, got %q", coreType)
+		}
+	}
 	if !routed {
 		_, hadPort := parsed["routeXrayPort"]
 		_, hadTag := parsed["outboundTag"]
@@ -1101,6 +1110,7 @@ func (s *InboundService) normalizeMtprotoXrayPort(inbound *model.Inbound, oldSet
 		}
 		delete(parsed, "routeXrayPort")
 		delete(parsed, "outboundTag")
+		delete(parsed, "fallbackOutboundTags")
 		if bs, err := json.MarshalIndent(parsed, "", "  "); err == nil {
 			inbound.Settings = string(bs)
 		} else {

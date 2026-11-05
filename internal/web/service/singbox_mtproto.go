@@ -18,6 +18,7 @@ func injectSingBoxMtprotoEgress(cfg *singbox.Config, inbound *model.Inbound) err
 	var settings struct {
 		Port     int    `json:"routeXrayPort"`
 		Outbound string `json:"outboundTag"`
+		FallbackOutboundTags []string `json:"fallbackOutboundTags"`
 	}
 	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
 		return err
@@ -31,6 +32,44 @@ func injectSingBoxMtprotoEgress(cfg *singbox.Config, inbound *model.Inbound) err
 		}
 	}
 	settings.Outbound = strings.TrimSpace(settings.Outbound)
+	if len(settings.FallbackOutboundTags) > 0 {
+		if settings.Outbound == "" || len(settings.FallbackOutboundTags) > 3 {
+			return fmt.Errorf("MTProto inbound %q has invalid fallback outbound settings", inbound.Tag)
+		}
+		tags := []string{settings.Outbound}
+		used := map[string]bool{settings.Outbound: true}
+		for _, raw := range settings.FallbackOutboundTags {
+			tag := strings.TrimSpace(raw)
+			if tag == "" || used[tag] {
+				return fmt.Errorf("MTProto inbound %q fallback targets must be distinct", inbound.Tag)
+			}
+			used[tag] = true
+			tags = append(tags, tag)
+		}
+		known := make(map[string]bool, len(cfg.Outbounds))
+		for _, outbound := range cfg.Outbounds {
+			if tag, ok := outbound["tag"].(string); ok && tag != "" {
+				known[tag] = true
+			}
+		}
+		for _, tag := range tags {
+			if !known[tag] {
+				return fmt.Errorf("MTProto inbound %q fallback target %q is not a Sing-box outbound", inbound.Tag, tag)
+			}
+		}
+		failoverTag := "__telemt_route_auto_" + fmt.Sprint(inbound.Id)
+		if known[failoverTag] {
+			return fmt.Errorf("MTProto failover tag %q conflicts with a configured outbound", failoverTag)
+		}
+		// Large tolerance prioritizes the first live entry rather than
+		// choosing the lowest-latency route. Failed HTTP checks have no delay.
+		cfg.Outbounds = append(cfg.Outbounds, map[string]any{
+			"type": "urltest", "tag": failoverTag, "outbounds": tags,
+			"url": "https://core.telegram.org/", "interval": "2m", "tolerance": 30000,
+			"interrupt_exist_connections": false,
+		})
+		settings.Outbound = failoverTag
+	}
 	if settings.Outbound != "" {
 		found := false
 		for _, targets := range [][]map[string]any{cfg.Outbounds, cfg.Endpoints} {

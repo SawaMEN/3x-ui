@@ -108,6 +108,7 @@ export const MtprotoInboundSettingsSchema = z.object({
   // is allocated by the backend and is never edited manually.
   routeThroughXray: z.boolean().optional(),
   outboundTag: z.string().optional(),
+  fallbackOutboundTags: z.array(z.string().min(1)).max(3).optional(),
   routeXrayPort: z.number().int().min(0).max(65535).optional(),
   // Public addresses are written to Telemt's listener announce_ip when their
   // address family matches the listener, so generated links advertise a

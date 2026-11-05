@@ -293,19 +293,35 @@ export default function MtprotoFields() {
             <Switch />
           </FormField>
           {routeThroughXray && (
-            <FormField
-              name={['settings', 'outboundTag']}
-              label={t('pages.inbounds.form.mtgRouteOutbound')}
-              tooltip={t('pages.inbounds.form.mtgRouteOutboundHint')}
-            >
-              <Select
-                id="mtprotoOutboundTag"
-                allowClear
-                showSearch
-                placeholder={t('pages.inbounds.form.mtgRouteOutboundPlaceholder')}
-                options={(outboundTags ?? []).map((tag) => ({ value: tag, label: tag }))}
-              />
-            </FormField>
+            <>
+              <FormField
+                name={['settings', 'outboundTag']}
+                label={t('pages.inbounds.form.mtgRouteOutbound')}
+                tooltip={t('pages.inbounds.form.mtgRouteOutboundHint')}
+              >
+                <Select
+                  id="mtprotoOutboundTag"
+                  allowClear
+                  showSearch
+                  placeholder={t('pages.inbounds.form.mtgRouteOutboundPlaceholder')}
+                  options={(outboundTags ?? []).map((tag) => ({ value: tag, label: tag }))}
+                />
+              </FormField>
+              <FormField
+                name={['settings', 'fallbackOutboundTags']}
+                label={ru ? 'Резервные выходы Telegram (Sing-box)' : 'Fallback Telegram outbounds (Sing-box)'}
+                extra={ru
+                  ? 'Необязательно. До 3 резервных outbound. Каждые 2 минуты проверяется HTTPS core.telegram.org через каждый выход. При недоступности основного выбирается живой резервный, после восстановления возвращается основной. Работает только в ядрах Sing-box, не в Xray.'
+                  : 'Optional: up to 3 backup outbounds. HTTPS core.telegram.org is checked every 2 minutes per route; available backup is used if primary is down. Returns to primary when it recovers. Sing-box cores only.'}
+              >
+                <Select
+                  mode="multiple"
+                  maxCount={3}
+                  showSearch
+                  options={(outboundTags ?? []).map((tag) => ({ value: tag, label: tag }))}
+                />
+              </FormField>
+            </>
           )}
           <Collapse
             items={[
