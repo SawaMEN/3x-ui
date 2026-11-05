@@ -177,7 +177,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	managedUsers := ""
 	managedProfiles := ""
 	managedUserCount := 0
-	var managedQuotas, managedExpirations, managedIPLimits, managedRateLimits strings.Builder
+	var managedQuotas, managedExpirations, managedIPLimits, managedRateLimits, managedPeriods strings.Builder
 	if state.ManagedInboundID != 0 {
 		var inbound model.Inbound
 		if err := database.GetDB().First(&inbound, state.ManagedInboundID).Error; err != nil {
@@ -208,6 +208,9 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 			}
 			if user.RateUpBps > 0 || user.RateDownBps > 0 {
 				fmt.Fprintf(&managedRateLimits, "%q = { up_bps = %d, down_bps = %d }\n", name, user.RateUpBps, user.RateDownBps)
+			}
+			if user.QuotaBytes > 0 && user.QuotaPeriod != "" {
+				fmt.Fprintf(&managedPeriods, "%q = %q\n", name, user.QuotaPeriod)
 			}
 		}
 	}
@@ -288,6 +291,10 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		}
 	}
 	if state.ManagedInboundID != 0 {
+		if managedPeriods.Len() > 0 {
+			base = strings.Replace(base, "[general]\n", "[general]\nquota_state_path = \"/etc/x-ui/telemt-web-quotas.json\"\n", 1)
+			base += "\n[access.user_quota_periods]\n" + managedPeriods.String()
+		}
 		if managedQuotas.Len() > 0 {
 			base += "\n[access.user_data_quota]\n" + managedQuotas.String()
 		}
