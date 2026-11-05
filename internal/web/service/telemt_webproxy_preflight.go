@@ -93,6 +93,13 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	if (len(options.Carriers) > 0 || options.Carrier != "https") && !telemtWebVersionAtLeast(version, "3.5.4") {
 		check("carriers", false, "Выбранные WEB-транспорты требуют Telemt 3.5.4+.")
 	}
+	if options.RetryJitter != nil && options.RetryJitter.Enabled {
+		if telemtWebVersionAtLeast(version, "3.5.16") {
+			check("retry-jitter", true, "HTTP retry jitter поддерживается Telemt 3.5.16+.")
+		} else {
+			check("retry-jitter", false, "HTTP retry jitter требует Telemt 3.5.16+.")
+		}
+	}
 	if options.Carrier != "https" {
 		result.Warnings = append(result.Warnings, "Для совместимости с Telegram iOS выберите HTTPS как основной транспорт. WebSocket можно оставить в списке автоматического выбора для поддерживающих его клиентов.")
 	}

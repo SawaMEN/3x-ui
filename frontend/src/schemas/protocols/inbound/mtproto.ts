@@ -29,7 +29,13 @@ export const MtprotoClientSchema = z.object({
     .optional(),
   email: z.string().min(1),
   limitIp: z.number().int().min(0).default(0),
-  speedLimit: z.object({ enabled: z.boolean(), uploadMbps: z.number().int().min(0).max(100000), downloadMbps: z.number().int().min(0).max(100000) }).optional(),
+  speedLimit: z
+    .object({
+      enabled: z.boolean(),
+      uploadMbps: z.number().int().min(0).max(100000),
+      downloadMbps: z.number().int().min(0).max(100000),
+    })
+    .optional(),
   totalGB: z.number().int().min(0).default(0),
   expiryTime: z.number().int().default(0),
   enable: z.boolean().default(true),
@@ -59,7 +65,14 @@ export const MtprotoInboundSettingsSchema = z.object({
       domain: z.string().default(''),
       basePath: TelemtWebBasePathSchema.default(''),
       aliases: z.array(TelemtWebDomainSchema).max(7).default([]),
-      retryJitter: z.object({ enabled: z.boolean(), minMs: z.number().int().min(0).max(30000), maxMs: z.number().int().min(0).max(30000) }).refine((value) => value.minMs <= value.maxMs).default({ enabled: false, minMs: 0, maxMs: 250 }),
+      retryJitter: z
+        .object({
+          enabled: z.boolean(),
+          minMs: z.number().int().min(0).max(30000),
+          maxMs: z.number().int().min(0).max(30000),
+        })
+        .refine((value) => value.minMs <= value.maxMs)
+        .default({ enabled: false, minMs: 0, maxMs: 250 }),
       frontend: z.enum(['nginx', 'caddy', 'haproxy']).default('nginx'),
       carrier: z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']).default('https'),
       carriers: z

@@ -83,7 +83,14 @@ export const TelemtWebDomainSchema = z
 
 export const TelemtWebProxyRequestSchema = z.object({
   aliases: z.array(TelemtWebDomainSchema).max(7).default([]),
-  retryJitter: z.object({ enabled: z.boolean(), minMs: z.number().int().min(0).max(30000), maxMs: z.number().int().min(0).max(30000) }).refine((value) => value.minMs <= value.maxMs).optional(),
+  retryJitter: z
+    .object({
+      enabled: z.boolean(),
+      minMs: z.number().int().min(0).max(30000),
+      maxMs: z.number().int().min(0).max(30000),
+    })
+    .refine((value) => value.minMs <= value.maxMs)
+    .optional(),
   basePath: TelemtWebBasePathSchema.default(''),
   site: TelemtWebSiteSchema.optional(),
   domain: TelemtWebDomainSchema,

@@ -65,6 +65,9 @@ export default function MtprotoWebStatus() {
     frontend: proposed?.frontend ?? 'nginx',
     carrier: proposed?.carrier ?? 'https',
     carriers: proposed?.carriers ?? [],
+    aliases: proposed?.aliases ?? [],
+    basePath: proposed?.basePath ?? '',
+    retryJitter: proposed?.retryJitter,
     site: proposed?.site,
   });
   const [preflight, setPreflight] = useState<{ key: string; result: WebPreflight }>();
