@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func ValidDomain(domain string) bool {
@@ -45,6 +47,7 @@ func ValidateSettings(settings string) error {
 		Connections       int      `json:"throttleMaxConnections"`
 		Public4           string   `json:"publicIpv4"`
 		Public6           string   `json:"publicIpv6"`
+		Clients           []model.Client `json:"clients"`
 	}
 	if err := json.Unmarshal([]byte(settings), &s); err != nil {
 		return fmt.Errorf("MTProto settings: %w", err)
@@ -78,6 +81,11 @@ func ValidateSettings(settings string) error {
 	}
 	if s.Connections < 0 {
 		return fmt.Errorf("MTProto connection limit cannot be negative")
+	}
+	for _, client := range s.Clients {
+		if err := client.SpeedLimit.Validate(); err != nil {
+			return fmt.Errorf("MTProto user %q: %w", client.Email, err)
+		}
 	}
 	if s.Public4 != "" && validAnnounceIP(s.Public4, false) == "" {
 		return fmt.Errorf("MTProto invalid public IPv4 address")

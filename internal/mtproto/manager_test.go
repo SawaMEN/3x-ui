@@ -290,3 +290,17 @@ func TestTelemtNativePeriodicQuotas(t *testing.T) {
 		t.Fatal("unlimited user must have no periodic quota")
 	}
 }
+
+func TestTelemtRuntimeRejectsDuplicateCredentials(t *testing.T) {
+	inst := Instance{Secrets: []SecretEntry{
+		{Name: "a", Secret: "11111111111111111111111111111111"},
+		{Name: "b", Secret: "11111111111111111111111111111111"},
+	}}
+	if err := validateSecretEntries(inst.Secrets); err == nil {
+		t.Fatal("duplicate credentials must not reach Telemt process manager")
+	}
+	inst.Secrets[1].Secret = "22222222222222222222222222222222"
+	if err := validateSecretEntries(inst.Secrets); err != nil {
+		t.Fatal(err)
+	}
+}

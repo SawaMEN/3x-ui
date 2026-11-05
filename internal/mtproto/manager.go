@@ -399,6 +399,17 @@ func stopManaged(cur *managed) error {
 	return nil
 }
 
+func validateSecretEntries(secrets []SecretEntry) error {
+	seen := make(map[string]string, len(secrets))
+	for _, client := range secrets {
+		if previous, found := seen[client.Secret]; found {
+			return fmt.Errorf("mtproto: users %q and %q share the same secret", previous, client.Name)
+		}
+		seen[client.Secret] = client.Name
+	}
+	return nil
+}
+
 func checkTelemtQuotaPeriodVersion(inst Instance) error {
 	if !slices.ContainsFunc(inst.Secrets, func(e SecretEntry) bool { return e.QuotaPeriod != "" }) {
 		return nil
@@ -423,6 +434,9 @@ func checkTelemtQuotaPeriodVersion(inst Instance) error {
 }
 
 func (m *Manager) ensureLocked(inst Instance) error {
+	if err := validateSecretEntries(inst.Secrets); err != nil {
+		return err
+	}
 	if err := checkTelemtQuotaPeriodVersion(inst); err != nil {
 		return err
 	}

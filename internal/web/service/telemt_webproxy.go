@@ -193,6 +193,9 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		if !ok {
 			return "", errors.New("telemt web proxy: managed inbound has no enabled clients")
 		}
+		if err := mtproto.ValidateUniqueSecrets(effective); err != nil {
+			return "", err
+		}
 		managedUserCount = len(inst.Secrets)
 		for _, user := range inst.Secrets {
 			// Stable identities retain per-user counters across list reordering.
