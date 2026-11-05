@@ -1175,7 +1175,7 @@ func (s *ServerService) GetXrayLogs(
 	}
 	countInt = min(countInt, 2000)
 
-	pathToAccessLog, err := xray.GetAccessLogPath()
+	pathToAccessLog, err := selectedXrayAccessLogPath()
 	if err != nil || pathToAccessLog == "" || pathToAccessLog == "none" {
 		return nil
 	}
