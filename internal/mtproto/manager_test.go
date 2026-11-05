@@ -272,3 +272,21 @@ func TestTelemtDuplicateLegacySecrets(t *testing.T) {
 		t.Fatalf("disabled client must not prevent saving: %v", err)
 	}
 }
+
+func TestTelemtNativePeriodicQuotas(t *testing.T) {
+	inst := Instance{Id: 7, FakeTLSDomain: "example.org", Secrets: []SecretEntry{
+		{Name: "weekly", Secret: "00112233445566778899aabbccddeeff", QuotaBytes: 1024, QuotaPeriod: "weekly"},
+		{Name: "unlimited", Secret: "ffeeddccbbaa99887766554433221100"},
+	}}
+	cfg := renderConfig(inst, 9091, "token")
+	if !strings.Contains(cfg, `[access.user_quota_periods]
+"weekly" = "weekly"`) {
+		t.Fatalf("missing calendar policy: %s", cfg)
+	}
+	if !strings.Contains(cfg, "quota_state_path = ") {
+		t.Fatal("calendar counters must persist across Telemt restart")
+	}
+	if strings.Contains(cfg, `"unlimited" = "weekly"`) {
+		t.Fatal("unlimited user must have no periodic quota")
+	}
+}
