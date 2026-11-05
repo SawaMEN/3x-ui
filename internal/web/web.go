@@ -477,6 +477,8 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 			logger.Warningf("Telegram notify: failed to load runtime: %v", err)
 		}
 		scheduleSettingJob(s.cron, "Telegram notify", runtime, "@daily", job.NewStatsNotifyJob())
+		// Weekly MTProto-only traffic deltas, Monday 10:00 server time.
+		_, _ = s.cron.AddJob("0 0 10 * * 1", job.NewTelemtWeeklyReportJob())
 
 		// check for Telegram bot callback query hash storage reset
 		_, _ = s.cron.AddJob(cadenceCheckHash, job.NewCheckHashStorageJob())

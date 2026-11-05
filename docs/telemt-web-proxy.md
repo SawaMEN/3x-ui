@@ -406,3 +406,7 @@ The inbound WEB Proxy status offers an opt-in Globalping check using up to three
 Ordinary MTProto inbounds routed through a Sing-box core can choose a primary outbound and up to three backup outbounds. A private `urltest` group probes `https://core.telegram.org/` through each configured outbound every two minutes. It favors the first healthy outbound (high switch tolerance), then falls back to a healthy alternate; recovered primary service is preferred again on subsequent probes. Existing connections are not interrupted. Missing or duplicate outbound tags are rejected, and fallback configuration on Xray is rejected on save.
 
 This mechanism validates HTTPS connectivity to a Telegram-owned host, **not** the MTProto DC handshake. AWG transport is supported only when exposed to the selected Sing-box core as an outbound. WEB Proxy remains independent of this egress feature.
+
+### Weekly MTProto Telegram summary
+
+If the admin Telegram bot is enabled, a weekly report is scheduled for Monday at 10:00 (server timezone). A root-readable-only, atomic checkpoint at `/etc/x-ui/telemt-weekly-report.json` records client traffic counters. The first run initializes the baseline and explicitly reports that historic weekly deltas are unavailable. Subsequent runs report the deltas and top five users; the report is independent from whether the selected proxy core is running. Preserve this checkpoint during server migration.
