@@ -612,6 +612,35 @@ func resetQuota(port int, token, email string) {
 	}
 }
 
+// ValidateUniqueSecrets ensures Telemt cannot silently route two enabled users
+// to one credential. Legacy dd/ee links share the same raw secret identity.
+func ValidateUniqueSecrets(ib *model.Inbound) error {
+	if ib == nil || ib.Protocol != model.MTProto {
+		return nil
+	}
+	var payload struct {
+		Clients []model.Client `json:"clients"`
+	}
+	if err := json.Unmarshal([]byte(ib.Settings), &payload); err != nil {
+		return fmt.Errorf("mtproto: decode clients: %w", err)
+	}
+	owners := make(map[string]string, len(payload.Clients))
+	for _, client := range payload.Clients {
+		if !client.Enable || client.Secret == "" {
+			continue
+		}
+		raw, _ := decodeLegacySecret(client.Secret)
+		if !validRawSecret(raw) {
+			continue
+		}
+		if previous, exists := owners[raw]; exists {
+			return fmt.Errorf("mtproto: users %q and %q have the same proxy secret", previous, client.Email)
+		}
+		owners[raw] = client.Email
+	}
+	return nil
+}
+
 func FreeLocalPort() (int, error) {
 	l, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
