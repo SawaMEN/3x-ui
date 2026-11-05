@@ -137,7 +137,7 @@ export default function OverviewActionBar({
             },
           ]
         : []),
-      ...(coreType === 'xray'
+      ...(['xray', 'sing-box', 'sing-box-upstream'].includes(coreType)
         ? [{
             key: 'domainActivity',
             icon: <GlobalOutlined />,
