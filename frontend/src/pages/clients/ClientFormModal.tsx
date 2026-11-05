@@ -75,6 +75,7 @@ const SPEED_LIMIT_PROTOCOLS = new Set([
   'mieru',
   'sudoku',
   'masque',
+  'mtproto',
 ]);
 
 const FLOW_OPTIONS = Object.values(TLS_FLOW_CONTROL);
