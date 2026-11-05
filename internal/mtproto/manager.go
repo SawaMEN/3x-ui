@@ -31,6 +31,7 @@ type SecretEntry struct {
 	LimitIP     int
 	RateUpBps   uint64
 	RateDownBps uint64
+	QuotaPeriod string
 }
 
 type Instance struct {
@@ -107,7 +108,7 @@ func (inst Instance) mekoFingerprint() string {
 func (inst Instance) secretsFingerprint() string {
 	pairs := make([]string, 0, len(inst.Secrets))
 	for _, e := range inst.Secrets {
-		pairs = append(pairs, fmt.Sprintf("%s=%s;tag=%s;q=%d;exp=%d;ip=%d;up=%d;down=%d", e.Name, e.Secret, e.AdTag, e.QuotaBytes, e.ExpiresUnix, e.LimitIP, e.RateUpBps, e.RateDownBps))
+		pairs = append(pairs, fmt.Sprintf("%s=%s;tag=%s;q=%d;exp=%d;ip=%d;up=%d;down=%d;period=%s", e.Name, e.Secret, e.AdTag, e.QuotaBytes, e.ExpiresUnix, e.LimitIP, e.RateUpBps, e.RateDownBps, e.QuotaPeriod))
 	}
 	slices.Sort(pairs)
 	return strings.Join(pairs, "|")
@@ -279,6 +280,12 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		}
 		if c.ExpiryTime > 0 {
 			e.ExpiresUnix = c.ExpiryTime / 1000
+		}
+		if e.QuotaBytes > 0 {
+			switch c.TrafficReset {
+			case "daily", "weekly", "monthly":
+				e.QuotaPeriod = c.TrafficReset
+			}
 		}
 		secrets = append(secrets, e)
 	}
@@ -735,6 +742,9 @@ func renderConfig(inst Instance, apiPort int, apiToken string) string {
 		}
 	}
 	fmt.Fprintf(&b, "[general]\ndata_path = %s\nfast_mode = true\nuse_middle_proxy = %t\n", tomlQuote(filepath.Join(configDir(), "state", strconv.Itoa(inst.Id))), inst.useMiddleProxy())
+	if slices.ContainsFunc(inst.Secrets, func(e SecretEntry) bool { return e.QuotaPeriod != "" }) {
+		fmt.Fprintf(&b, "quota_state_path = %s\n", tomlQuote(filepath.Join(configDir(), "state", strconv.Itoa(inst.Id), "quotas.json")))
+	}
 	if inst.Debug {
 		b.WriteString("log_level = \"debug\"\n")
 	} else {
@@ -818,6 +828,16 @@ func renderConfig(inst Instance, apiPort int, apiToken string) string {
 				quota = true
 			}
 			fmt.Fprintf(&b, "%s = %d\n", tomlQuote(nativeUsername(e.Name)), e.QuotaBytes)
+		}
+	}
+	periods := false
+	for _, e := range inst.Secrets {
+		if e.QuotaBytes > 0 && e.QuotaPeriod != "" {
+			if !periods {
+				b.WriteString("\n[access.user_quota_periods]\n")
+				periods = true
+			}
+			fmt.Fprintf(&b, "%s = %s\n", tomlQuote(nativeUsername(e.Name)), tomlQuote(e.QuotaPeriod))
 		}
 	}
 	exp := false
