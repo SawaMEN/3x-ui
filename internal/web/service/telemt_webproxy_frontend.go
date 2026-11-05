@@ -45,6 +45,10 @@ type TelemtWebProxyOptions struct {
 }
 
 func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, error) {
+	if o.Site != nil && o.Site.Mode == "origin" && o.Site.OriginResolve &&
+		!telemtWebVersionAtLeast(telemtVersion(), "3.5.16") {
+		return o, errors.New("WEB private DNS origin requires Telemt 3.5.16 or newer")
+	}
 	if o.RetryJitter != nil && (o.RetryJitter.MinMS < 0 || o.RetryJitter.MaxMS < o.RetryJitter.MinMS || o.RetryJitter.MaxMS > 30000) {
 		return o, errors.New("WEB retry jitter requires 0 <= minMs <= maxMs <= 30000")
 	}

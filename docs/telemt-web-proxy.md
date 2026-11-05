@@ -410,3 +410,7 @@ This mechanism validates HTTPS connectivity to a Telegram-owned host, **not** th
 ### Weekly MTProto Telegram summary
 
 If the admin Telegram bot is enabled, a weekly report is scheduled for Monday at 10:00 (server timezone). A root-readable-only, atomic checkpoint at `/etc/x-ui/telemt-weekly-report.json` records client traffic counters. The first run initializes the baseline and explicitly reports that historic weekly deltas are unavailable. Subsequent runs report the deltas and top five users; the report is independent from whether the selected proxy core is running. Preserve this checkpoint during server migration.
+
+### Private DNS HTTP origin (Telemt 3.5.16+)
+
+In the optional cover-site settings, choose a local HTTP origin and enable **Resolve private origin on startup** to use a private DNS hostname (for example `http://website.internal:8080`) instead of a literal loopback address. The panel validates the resolved IPs against private and loopback ranges, and Telemt independently resolves and pins the origin at startup. Public origins, remote URLs, URL paths and credentials remain prohibited. Without this opt-in, the strict loopback-only behavior is unchanged.

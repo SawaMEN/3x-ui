@@ -255,6 +255,9 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	if state.Site != nil && state.Site.Mode == "origin" {
 		staticDecoy := fmt.Sprintf("[web.vhosts.decoy]\nmode = \"static_directory\"\ndirectory = %q\nindex = \"index.html\"", decoyDir)
 		originDecoy := fmt.Sprintf("[web.vhosts.decoy]\nmode = \"http_upstream\"\nupstream = %q", telemtWebCanonicalOrigin(state.Site.Origin))
+		if state.Site.OriginResolve {
+			originDecoy += "\nresolve = \"startup\""
+		}
 		webConfig = strings.Replace(webConfig, staticDecoy, originDecoy, 1)
 	}
 	webConfig = strings.Replace(webConfig, "carrier = \"https\"", "carrier = "+strconv.Quote(options.Carrier), 1)
@@ -286,6 +289,9 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		webConfig += fmt.Sprintf("public_addr = %q\n", aliasAddr)
 		if state.Site != nil && state.Site.Mode == "origin" {
 			webConfig += fmt.Sprintf("\n[web.vhosts.decoy]\nmode = \"http_upstream\"\nupstream = %q\n", telemtWebCanonicalOrigin(state.Site.Origin))
+			if state.Site.OriginResolve {
+				webConfig += "resolve = \"startup\"\n"
+			}
 		} else {
 			webConfig += fmt.Sprintf("\n[web.vhosts.decoy]\nmode = \"static_directory\"\ndirectory = %q\nindex = \"index.html\"\n", decoyDir)
 		}

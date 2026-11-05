@@ -136,3 +136,19 @@ func TestTelemtWebProfileCapacityGrowth(t *testing.T) {
 		}
 	}
 }
+
+func TestTelemtPrivateDNSOriginOptIn(t *testing.T) {
+	origin := &TelemtWebSiteOptions{Mode: "origin", Origin: "http://localhost:8080", OriginResolve: true}
+	if err := validateTelemtWebSite(origin); err != nil {
+		t.Fatalf("expected a private startup-resolved hostname, got: %v", err)
+	}
+	origin.OriginResolve = false
+	if err := validateTelemtWebSite(origin); err == nil {
+		t.Fatal("DNS origin must require explicit opt-in")
+	}
+	origin.OriginResolve = true
+	origin.Origin = "http://localhost:8080/admin"
+	if err := validateTelemtWebSite(origin); err == nil {
+		t.Fatal("private origin may not contain a path")
+	}
+}

@@ -1,4 +1,4 @@
-import { Alert, Collapse, Input, Select } from 'antd';
+import { Alert, Collapse, Input, Select, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
@@ -92,12 +92,24 @@ export default function TelemtWebSiteFields({
               </FormField>
               {mode === 'origin' && (
                 <FormField
+                  name={`${prefix}.originResolve`}
+                  label={ru ? 'Разрешать частный origin по DNS (Telemt 3.5.16+)' : 'Resolve private HTTP origin on startup (Telemt 3.5.16+)'}
+                  extra={ru
+                    ? 'Только адреса локальной или частной сети. DNS разрешается при запуске Telemt, публичные IP запрещены.'
+                    : 'Private or loopback addresses only. Telemt resolves the DNS name on startup; public IPs are rejected.'}
+                  valueProp="checked"
+                >
+                  <Switch disabled={disabled} />
+                </FormField>
+              )}
+              {mode === 'origin' && (
+                <FormField
                   name={`${prefix}.origin`}
                   label={ru ? 'Локальный HTTP-адрес' : 'Local HTTP origin'}
                   extra={
                     ru
-                      ? 'Только 127.0.0.1 или ::1 с портом. Обычные запросы к WEB-домену будут направляться этому локальному сайту.'
-                      : 'Only 127.0.0.1 or ::1 with a port. Ordinary requests to the WEB domain are forwarded to this local website.'
+                      ? '127.0.0.1 или ::1 с портом. При включённой опции DNS можно использовать частный HTTP-origin по имени.'
+                      : '127.0.0.1 or ::1 with a port. Enable private DNS resolution to use an internal HTTP hostname.'
                   }
                 >
                   <Input placeholder="http://127.0.0.1:8080" disabled={disabled} />

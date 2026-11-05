@@ -93,6 +93,10 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	if (len(options.Carriers) > 0 || options.Carrier != "https") && !telemtWebVersionAtLeast(version, "3.5.4") {
 		check("carriers", false, "Выбранные WEB-транспорты требуют Telemt 3.5.4+.")
 	}
+	if options.Site != nil && options.Site.Mode == "origin" && options.Site.OriginResolve {
+		check("private-origin-dns", telemtWebVersionAtLeast(version, "3.5.16"),
+			"WEB private DNS origin requires Telemt 3.5.16 or newer.")
+	}
 	if options.RetryJitter != nil && options.RetryJitter.Enabled {
 		if telemtWebVersionAtLeast(version, "3.5.16") {
 			check("retry-jitter", true, "HTTP retry jitter поддерживается Telemt 3.5.16+.")

@@ -24,6 +24,7 @@ var telemtWebSiteHTMLDocument = regexp.MustCompile(`(?i)<html(?:\s|>)`)
 type TelemtWebSiteOptions struct {
 	Mode        string `json:"mode" example:"auto"`
 	Origin      string `json:"origin,omitempty" example:"http://127.0.0.1:8080"`
+	OriginResolve bool `json:"originResolve,omitempty"`
 	Theme       string `json:"theme,omitempty" example:"travel"`
 	Title       string `json:"title,omitempty" example:"A travel notebook"`
 	Description string `json:"description,omitempty" example:"Stories from quiet places."`
@@ -55,6 +56,9 @@ func validateTelemtWebSite(site *TelemtWebSiteOptions) error {
 	case "", "auto":
 		return nil
 	case "origin":
+		if site.OriginResolve {
+			return validateTelemtWebPrivateDNSOrigin(site.Origin)
+		}
 		return validateTelemtWebOrigin(site.Origin)
 	case "generate":
 		if site.Theme == "" || isTelemtWebTheme(site.Theme) {
@@ -101,6 +105,35 @@ func validateTelemtWebOrigin(raw string) error {
 	port, portErr := strconv.Atoi(u.Port())
 	if ip == nil || !ip.IsLoopback() || portErr != nil || port < 1 || port > 65535 {
 		return errors.New("WEB origin must be a loopback IP with a valid TCP port")
+	}
+	return nil
+}
+
+// An opted-in hostname must resolve entirely to private/loopback addresses.
+// Telemt 3.5.16+ resolves it at startup and pins the checked address, avoiding
+// a public HTTP origin or a post-connection DNS rebinding redirect.
+func validateTelemtWebPrivateDNSOrigin(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "http" || u.User != nil || (u.Path != "" && u.Path != "/") ||
+		u.RawQuery != "" || u.Fragment != "" {
+		return errors.New("WEB private origin must be HTTP without a path, query or credentials")
+	}
+	port, portErr := strconv.Atoi(u.Port())
+	if portErr != nil || port < 1 || port > 65535 {
+		return errors.New("WEB private origin requires a TCP port")
+	}
+	hostname := u.Hostname()
+	if hostname != "localhost" && !telemtWebDomainPattern.MatchString(hostname) {
+		return errors.New("WEB private origin requires a valid DNS hostname")
+	}
+	addrs, err := net.LookupIP(hostname)
+	if err != nil || len(addrs) == 0 {
+		return errors.New("WEB private origin hostname did not resolve")
+	}
+	for _, addr := range addrs {
+		if !addr.IsLoopback() && !addr.IsPrivate() {
+			return errors.New("WEB private origin DNS includes a public or unsupported address")
+		}
 	}
 	return nil
 }

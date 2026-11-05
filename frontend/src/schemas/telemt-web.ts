@@ -27,6 +27,7 @@ export const TelemtWebSiteSchema = z
     title: z.string().max(80).optional(),
     description: z.string().max(300).optional(),
     origin: z.string().optional(),
+    originResolve: z.boolean().optional(),
     html: z
       .string()
       .refine(
@@ -51,7 +52,10 @@ export const TelemtWebSiteSchema = z
         const port = Number(url.port);
         return (
           url.protocol === 'http:' &&
-          ['127.0.0.1', '[::1]'].includes(url.hostname) &&
+          (['127.0.0.1', '[::1]'].includes(url.hostname) ||
+            (site.originResolve === true &&
+              (url.hostname === 'localhost' ||
+                /^(?:[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?\.)+[a-z]{2,63}$/i.test(url.hostname)))) &&
           !!url.port &&
           port > 0 &&
           port <= 65535 &&
@@ -65,7 +69,7 @@ export const TelemtWebSiteSchema = z
         return false;
       }
     },
-    { path: ['origin'], message: 'Укажите локальный HTTP-адрес, например http://127.0.0.1:8080' },
+    { path: ['origin'], message: 'Укажите локальный HTTP-адрес; DNS-имя требует включить разрешение при запуске' },
   )
   .refine(
     (site) => site.mode !== 'catalog' || isTelemtWebCatalogTemplate(site.catalog, site.template),
