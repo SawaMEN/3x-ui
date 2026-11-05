@@ -73,6 +73,9 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if ib == nil || ib.Protocol != model.MTProto {
 		return nil
 	}
+	if err := mtproto.ValidateUniqueSecrets(ib); err != nil {
+		return err
+	}
 	opts, err := mtprotoWebForInbound(ib)
 	if err != nil || !opts.Enabled {
 		return err
