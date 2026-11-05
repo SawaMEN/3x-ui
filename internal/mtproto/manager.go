@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os/exec"
+	"regexp"
 	"os"
 	"path/filepath"
 	"slices"
@@ -405,7 +407,33 @@ func stopManaged(cur *managed) error {
 	return nil
 }
 
+func checkTelemtQuotaPeriodVersion(inst Instance) error {
+	if !slices.ContainsFunc(inst.Secrets, func(e SecretEntry) bool { return e.QuotaPeriod != "" }) {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, GetBinaryPath(), "--version").Output()
+	if err != nil {
+		return fmt.Errorf("mtproto: verify Telemt >= 3.5.15 for calendar quotas: %w", err)
+	}
+	match := regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`).FindStringSubmatch(string(out))
+	if len(match) != 4 {
+		return fmt.Errorf("mtproto: unknown Telemt version %q; calendar quotas require 3.5.15+", strings.TrimSpace(string(out)))
+	}
+	major, _ := strconv.Atoi(match[1])
+	minor, _ := strconv.Atoi(match[2])
+	patch, _ := strconv.Atoi(match[3])
+	if major < 3 || (major == 3 && (minor < 5 || (minor == 5 && patch < 15))) {
+		return fmt.Errorf("mtproto: Telemt %s does not support calendar quotas; update to 3.5.15+", match[0])
+	}
+	return nil
+}
+
 func (m *Manager) ensureLocked(inst Instance) error {
+	if err := checkTelemtQuotaPeriodVersion(inst); err != nil {
+		return err
+	}
 	structFP, secFP, mekoFP := inst.structuralFingerprint(), inst.secretsFingerprint(), inst.mekoFingerprint()
 	if cur, ok := m.procs[inst.Id]; ok {
 		switch ensureActionFor(cur.proc.IsRunning(), cur.structuralFP, cur.secretsFP, structFP, secFP) {
