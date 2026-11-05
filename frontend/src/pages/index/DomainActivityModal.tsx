@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Input, Modal, Space, Switch, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -52,6 +52,14 @@ export default function DomainActivityModal({
   const [clientFilter, setClientFilter] = useState(initialClient);
   const [domainFilter, setDomainFilter] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const lastSnapshot = useRef<DomainActivityState>(EMPTY);
+
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [open]);
 
   useEffect(() => {
     if (open) setClientFilter(initialClient);
@@ -61,9 +69,18 @@ export default function DomainActivityModal({
     const msg = await HttpUtil.get<DomainActivityState>(
       '/panel/api/server/domainActivity', undefined, { signal, silent: true },
     );
-    return msg?.obj && Array.isArray(msg.obj.entries)
-      ? { ...msg.obj, error: msg.success ? undefined : msg.msg }
-      : undefined;
+    if (signal.aborted) return undefined;
+    if (msg.success && msg.obj && Array.isArray(msg.obj.entries)) {
+      lastSnapshot.current = msg.obj;
+      return msg.obj;
+    }
+    // Clear potentially sensitive stale results when a request fails rather
+    // than displaying old connections as if they were still live.
+    return {
+      ...lastSnapshot.current,
+      entries: [],
+      error: msg.msg || 'Request failed',
+    };
   }, []);
 
   // The backend returns only a short rolling window; polling stops when closed
@@ -86,7 +103,7 @@ export default function DomainActivityModal({
   const entries = useMemo(() => {
     const client = clientFilter.trim().toLowerCase();
     const domain = domainFilter.trim().toLowerCase();
-    const cutoff = Date.now() - (data.mode === 'active' ? 15000 : data.windowSeconds * 1000);
+    const cutoff = now - (data.mode === 'active' ? 15000 : data.windowSeconds * 1000);
     return data.entries.filter((entry) => {
       const lastSeen = Date.parse(entry.lastSeen);
       return (
@@ -96,7 +113,7 @@ export default function DomainActivityModal({
         entry.domain.toLowerCase().includes(domain)
       );
     });
-  }, [data.entries, data.mode, data.windowSeconds, clientFilter, domainFilter, loading]);
+  }, [data.entries, data.mode, data.windowSeconds, clientFilter, domainFilter, now]);
 
   const columns: ColumnsType<DomainActivityEntry> = [
     { title: t('pages.index.domainActivityClient'), dataIndex: 'email', key: 'email', ellipsis: true },
