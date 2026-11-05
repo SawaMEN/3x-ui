@@ -63,7 +63,9 @@ export default function DomainActivityModal({
 
   const load = useCallback(async (signal: AbortSignal) => {
     const msg = await HttpUtil.get<DomainActivityState>(
-      '/panel/api/server/domainActivity', undefined, { signal, silent: true },
+      '/panel/api/server/domainActivity',
+      undefined,
+      { signal, silent: true },
     );
     if (signal.aborted) return undefined;
     if (msg.success && msg.obj && Array.isArray(msg.obj.entries)) {
@@ -87,7 +89,8 @@ export default function DomainActivityModal({
     setUpdating(true);
     try {
       const msg = await HttpUtil.post(
-        '/panel/api/server/domainActivity/config', { enabled },
+        '/panel/api/server/domainActivity/config',
+        { enabled },
         { headers: { 'Content-Type': 'application/json' } },
       );
       if (msg?.success) refresh();
@@ -112,12 +115,24 @@ export default function DomainActivityModal({
   }, [data.entries, data.mode, data.windowSeconds, clientFilter, domainFilter, now]);
 
   const columns: ColumnsType<DomainActivityEntry> = [
-    { title: t('pages.index.domainActivityClient'), dataIndex: 'email', key: 'email', ellipsis: true },
-    { title: t('pages.index.domainActivityDomain'), dataIndex: 'domain', key: 'domain', ellipsis: true },
     {
-      title: t(data.mode === 'active'
-        ? 'pages.index.domainActivityCheckedAt'
-        : 'pages.index.domainActivityLastSeen'),
+      title: t('pages.index.domainActivityClient'),
+      dataIndex: 'email',
+      key: 'email',
+      ellipsis: true,
+    },
+    {
+      title: t('pages.index.domainActivityDomain'),
+      dataIndex: 'domain',
+      key: 'domain',
+      ellipsis: true,
+    },
+    {
+      title: t(
+        data.mode === 'active'
+          ? 'pages.index.domainActivityCheckedAt'
+          : 'pages.index.domainActivityLastSeen',
+      ),
       dataIndex: 'lastSeen',
       key: 'lastSeen',
       width: 125,
@@ -127,9 +142,11 @@ export default function DomainActivityModal({
       },
     },
     {
-      title: t(data.mode === 'active'
-        ? 'pages.index.domainActivityActiveConnections'
-        : 'pages.index.domainActivityConnections'),
+      title: t(
+        data.mode === 'active'
+          ? 'pages.index.domainActivityActiveConnections'
+          : 'pages.index.domainActivityConnections',
+      ),
       dataIndex: 'count',
       key: 'count',
       width: 110,
@@ -149,15 +166,22 @@ export default function DomainActivityModal({
         <Alert
           type="info"
           showIcon
-          description={data.mode === 'active'
-            ? t('pages.index.domainActivityActiveDescription')
-            : t('pages.index.domainActivityDescription', { seconds: data.windowSeconds })}
+          description={
+            data.mode === 'active'
+              ? t('pages.index.domainActivityActiveDescription')
+              : t('pages.index.domainActivityDescription', { seconds: data.windowSeconds })
+          }
         />
         {!data.supported && (
           <Alert type="warning" showIcon title={t('pages.index.domainActivityUnavailable')} />
         )}
         {!!data.error && (
-          <Alert type="error" showIcon title={t('pages.index.domainActivityReadError')} description={data.error} />
+          <Alert
+            type="error"
+            showIcon
+            title={t('pages.index.domainActivityReadError')}
+            description={data.error}
+          />
         )}
         {data.mode === 'recent' && data.supported && !data.accessLogEnabled && (
           <Alert type="warning" showIcon title={t('pages.index.domainActivityEnableLog')} />
@@ -166,7 +190,11 @@ export default function DomainActivityModal({
           <Typography.Text>{t('pages.index.domainActivityToggle')}</Typography.Text>
           <Switch
             checked={data.enabled}
-            disabled={updating || (!data.enabled && (!data.supported || (data.mode === 'recent' && !data.accessLogEnabled)))}
+            disabled={
+              updating ||
+              (!data.enabled &&
+                (!data.supported || (data.mode === 'recent' && !data.accessLogEnabled)))
+            }
             loading={updating}
             onChange={(value) => void toggle(value)}
             aria-label={t('pages.index.domainActivityToggle')}
@@ -202,9 +230,13 @@ export default function DomainActivityModal({
               rowKey={(entry) => entry.email + ':' + entry.domain}
               pagination={false}
               scroll={{ x: 680, y: 420 }}
-              locale={{ emptyText: t(data.mode === 'active'
-                ? 'pages.index.domainActivityNoActiveData'
-                : 'pages.index.domainActivityNoData') }}
+              locale={{
+                emptyText: t(
+                  data.mode === 'active'
+                    ? 'pages.index.domainActivityNoActiveData'
+                    : 'pages.index.domainActivityNoData',
+                ),
+              }}
               loading={loading && entries.length === 0}
             />
           </>

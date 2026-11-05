@@ -138,12 +138,14 @@ export default function OverviewActionBar({
           ]
         : []),
       ...(['xray', 'sing-box', 'sing-box-upstream'].includes(coreType)
-        ? [{
-            key: 'domainActivity',
-            icon: <GlobalOutlined />,
-            text: t('pages.index.domainActivityTitle'),
-            onClick: onOpenDomainActivity,
-          }]
+        ? [
+            {
+              key: 'domainActivity',
+              icon: <GlobalOutlined />,
+              text: t('pages.index.domainActivityTitle'),
+              onClick: onOpenDomainActivity,
+            },
+          ]
         : []),
       ...(status.amneziawg.configured
         ? [
