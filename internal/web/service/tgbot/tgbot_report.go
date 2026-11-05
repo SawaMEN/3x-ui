@@ -237,6 +237,24 @@ func (t *Tgbot) UserLoginNotify(attempt LoginAttempt) {
 	})
 }
 
+// clientLimitWarn identifies both the historical absolute thresholds and the
+// early warning points: >=80% of a quota or <=3 days before expiration.
+func clientLimitWarn(total, used, expiry, now, trafficRemaining, expiryRemaining int64) bool {
+	if total > 0 {
+		remaining := total - used
+		if remaining <= total/5 || (trafficRemaining > 0 && remaining < trafficRemaining) {
+			return true
+		}
+	}
+	if expiry > 0 {
+		remaining := expiry - now
+		if remaining <= 3*86400000 || (expiryRemaining > 0 && remaining < expiryRemaining) {
+			return true
+		}
+	}
+	return false
+}
+
 // notifyExhausted sends notifications for exhausted clients.
 func (t *Tgbot) notifyExhausted() {
 	trDiff := int64(0)
@@ -278,8 +296,7 @@ func (t *Tgbot) notifyExhausted() {
 									output.WriteString(t.I18nBot("tgbot.messages.exhaustedCount", "Type=="+t.I18nBot("tgbot.clients")))
 									for _, traffic := range traffics {
 										if traffic.Enable {
-											if (traffic.ExpiryTime > 0 && (traffic.ExpiryTime-now < exDiff)) ||
-												(traffic.Total > 0 && (traffic.Total-(common.TrafficUsage(traffic.Up, traffic.Down)) < trDiff)) {
+											if clientLimitWarn(traffic.Total, common.TrafficUsage(traffic.Up, traffic.Down), traffic.ExpiryTime, now, trDiff, exDiff) {
 												exhaustedClients = append(exhaustedClients, *traffic)
 											}
 										} else {

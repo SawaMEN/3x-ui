@@ -59,6 +59,8 @@ export default function TelemtConnectionsCard() {
   const [rows, setRows] = useState<TelemtConnection[]>([]);
   const [installed, setInstalled] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [ipSamples, setIpSamples] = useState<{ at: number; count: number }[]>([]);
+  const [uniqueIPCount, setUniqueIPCount] = useState<number | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -82,6 +84,8 @@ export default function TelemtConnectionsCard() {
         setInstalled(available);
         if (!available) {
           setRows([]);
+          setIpSamples([]);
+          setUniqueIPCount(null);
           return;
         }
         setLoading(true);
@@ -92,12 +96,29 @@ export default function TelemtConnectionsCard() {
         );
 
         if (!disposed && msg?.success && Array.isArray(msg.obj)) {
-          setRows(
-            msg.obj.map((row) => ({
-              ...row,
-              activeIPs: Array.isArray(row.activeIPs) ? row.activeIPs : [],
-            })),
+          const updated = msg.obj.map((row) => ({
+            ...row,
+            activeIPs: Array.isArray(row.activeIPs) ? row.activeIPs : [],
+          }));
+          setRows(updated);
+          // The same public IP may occur under multiple Telemt users; count it once.
+          // When an active connection has no source-IP information, display N/A
+          // rather than reporting a potentially misleading zero.
+          const complete = !updated.some(
+            (row) => row.active && row.currentConnections > 0 && row.activeIPs.length === 0,
           );
+          if (complete) {
+            const count = new Set(
+              updated.filter((row) => row.active).flatMap((row) => row.activeIPs.map((item) => item.ip)),
+            ).size;
+            setUniqueIPCount(count);
+            setIpSamples((previous) => {
+              const at = Date.now();
+              return [...previous.filter((sample) => sample.at >= at - 15 * 60_000), { at, count }];
+            });
+          } else {
+            setUniqueIPCount(null);
+          }
         }
       } finally {
         if (!disposed) {
@@ -116,6 +137,7 @@ export default function TelemtConnectionsCard() {
   }, []);
 
   const activeCount = useMemo(() => rows.filter((row) => row.active).length, [rows]);
+  const ipPeak = ipSamples.length ? Math.max(...ipSamples.map((sample) => sample.count)) : null;
 
   const columns = useMemo(
     () => [
@@ -210,6 +232,7 @@ export default function TelemtConnectionsCard() {
           </span>
           <span className="ov-telemt-count">
             {activeCount > 0 ? `${activeCount} активных / ${rows.length}` : rows.length}
+            {' · IP: '}{uniqueIPCount ?? '—'}{' · пик за 15 мин: '}{ipPeak ?? '—'}
           </span>
         </div>
       }
