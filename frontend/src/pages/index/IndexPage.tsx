@@ -416,7 +416,7 @@ export default function IndexPage() {
           <XrayLogModal open={xrayLogsOpen} onClose={() => setXrayLogsOpen(false)} />
         </LazyMount>
         <LazyMount when={domainActivityOpen}>
-          <DomainActivityModal open={domainActivityOpen} onClose={() => setDomainActivityOpen(false)} />
+          <DomainActivityModal key={domainActivityOpen ? "all" : "closed"} open={domainActivityOpen} onClose={() => setDomainActivityOpen(false)} />
         </LazyMount>
         <LazyMount when={amneziawgLogsOpen}>
           <AmneziaWGLogModal open={amneziawgLogsOpen} onClose={() => setAmneziawgLogsOpen(false)} />
