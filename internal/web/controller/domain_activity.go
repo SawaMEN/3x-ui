@@ -47,6 +47,9 @@ func (a *ServerController) domainActivityState() (domainActivityResponse, error)
 	state.Core = coreType
 	state.Mode = domainActivityCoreMode(coreType)
 	state.Supported = state.Mode != ""
+	if state.Mode == "active" {
+		state.WindowSeconds = 0 // a live session snapshot has no time window
+	}
 	if coreType == service.CoreTypeXray {
 		state.AccessLogEnabled, err = a.settingService.GetAccessLogEnable()
 		if err != nil {
