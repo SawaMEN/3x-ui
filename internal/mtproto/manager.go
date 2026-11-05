@@ -29,6 +29,8 @@ type SecretEntry struct {
 	QuotaBytes  int64
 	ExpiresUnix int64
 	LimitIP     int
+	RateUpBps   uint64
+	RateDownBps uint64
 }
 
 type Instance struct {
@@ -105,7 +107,7 @@ func (inst Instance) mekoFingerprint() string {
 func (inst Instance) secretsFingerprint() string {
 	pairs := make([]string, 0, len(inst.Secrets))
 	for _, e := range inst.Secrets {
-		pairs = append(pairs, fmt.Sprintf("%s=%s;tag=%s;q=%d;exp=%d;ip=%d", e.Name, e.Secret, e.AdTag, e.QuotaBytes, e.ExpiresUnix, e.LimitIP))
+		pairs = append(pairs, fmt.Sprintf("%s=%s;tag=%s;q=%d;exp=%d;ip=%d;up=%d;down=%d", e.Name, e.Secret, e.AdTag, e.QuotaBytes, e.ExpiresUnix, e.LimitIP, e.RateUpBps, e.RateDownBps))
 	}
 	slices.Sort(pairs)
 	return strings.Join(pairs, "|")
@@ -268,6 +270,10 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 			domains[strings.ToLower(embeddedDomain)] = struct{}{}
 		}
 		e := SecretEntry{Name: c.Email, Secret: raw, AdTag: usableAdTag(c.AdTag), LimitIP: max(c.LimitIP, 0)}
+		if c.SpeedLimit != nil && c.SpeedLimit.Enabled && c.SpeedLimit.Validate() == nil {
+			e.RateUpBps = uint64(c.SpeedLimit.UploadMbps) * 1_000_000
+			e.RateDownBps = uint64(c.SpeedLimit.DownloadMbps) * 1_000_000
+		}
 		if c.TotalGB > 0 {
 			e.QuotaBytes = c.TotalGB
 		}
@@ -793,6 +799,16 @@ func renderConfig(inst Instance, apiPort int, apiToken string) string {
 				exp = true
 			}
 			fmt.Fprintf(&b, "%s = %s\n", tomlQuote(nativeUsername(e.Name)), tomlQuote(expiresString(e.ExpiresUnix)))
+		}
+	}
+	rateLimits := false
+	for _, e := range inst.Secrets {
+		if e.RateUpBps > 0 || e.RateDownBps > 0 {
+			if !rateLimits {
+				b.WriteString("\n[access.user_rate_limits]\n")
+				rateLimits = true
+			}
+			fmt.Fprintf(&b, "%s = { up_bps = %d, down_bps = %d }\n", tomlQuote(nativeUsername(e.Name)), e.RateUpBps, e.RateDownBps)
 		}
 	}
 	ipLimits := false
