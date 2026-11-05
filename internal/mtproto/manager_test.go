@@ -237,3 +237,38 @@ func TestLegacyFrontingMigratesToNativeMask(t *testing.T) {
 		t.Fatal("native PROXY/mask options missing")
 	}
 }
+
+func TestTelemtNativeUserSpeedLimits(t *testing.T) {
+	inst := Instance{FakeTLSDomain: "example.org", Secrets: []SecretEntry{
+		{Name: "alice", Secret: "00112233445566778899aabbccddeeff", RateUpBps: 5000000, RateDownBps: 20000000},
+		{Name: "bob", Secret: "ffeeddccbbaa99887766554433221100"},
+	}}
+	config := renderConfig(inst, 9091, "token")
+	if !strings.Contains(config, "[access.user_rate_limits]") ||
+		!strings.Contains(config, "\"alice\" = { up_bps = 5000000, down_bps = 20000000 }") {
+		t.Fatalf("rate limits not rendered: %s", config)
+	}
+	if strings.Contains(config, "\"bob\" = { up_bps") {
+		t.Fatal("unlimited user must not receive a rate limit")
+	}
+	before := inst.secretsFingerprint()
+	inst.Secrets[0].RateDownBps = 10000000
+	if inst.secretsFingerprint() == before {
+		t.Fatal("a rate change must trigger the user policy reload")
+	}
+}
+
+func TestTelemtDuplicateLegacySecrets(t *testing.T) {
+	const raw = "00112233445566778899aabbccddeeff"
+	ib := &model.Inbound{Protocol: model.MTProto, Settings: `{"clients":[
+		{"email":"one","enable":true,"secret":"00112233445566778899aabbccddeeff"},
+		{"email":"two","enable":true,"secret":"dd00112233445566778899aabbccddeeff"}
+	]}`}
+	if err := ValidateUniqueSecrets(ib); err == nil {
+		t.Fatal("duplicate secret with a dd prefix must be rejected")
+	}
+	ib.Settings = `{"clients":[{"email":"one","enable":true,"secret":"` + raw + `"},{"email":"two","enable":false,"secret":"dd` + raw + `"}]}`
+	if err := ValidateUniqueSecrets(ib); err != nil {
+		t.Fatalf("disabled client must not prevent saving: %v", err)
+	}
+}
