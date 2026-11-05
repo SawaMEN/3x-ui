@@ -61,10 +61,6 @@ export default function DomainActivityModal({
     return () => window.clearInterval(timer);
   }, [open]);
 
-  useEffect(() => {
-    if (open) setClientFilter(initialClient);
-  }, [open, initialClient]);
-
   const load = useCallback(async (signal: AbortSignal) => {
     const msg = await HttpUtil.get<DomainActivityState>(
       '/panel/api/server/domainActivity', undefined, { signal, silent: true },
