@@ -59,6 +59,7 @@ export const MtprotoInboundSettingsSchema = z.object({
       domain: z.string().default(''),
       basePath: TelemtWebBasePathSchema.default(''),
       aliases: z.array(TelemtWebDomainSchema).max(7).default([]),
+      retryJitter: z.object({ enabled: z.boolean(), minMs: z.number().int().min(0).max(30000), maxMs: z.number().int().min(0).max(30000) }).refine((value) => value.minMs <= value.maxMs).optional(),
       frontend: z.enum(['nginx', 'caddy', 'haproxy']).default('nginx'),
       carrier: z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']).default('https'),
       carriers: z

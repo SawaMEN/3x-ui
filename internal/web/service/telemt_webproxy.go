@@ -52,6 +52,7 @@ type TelemtWebProxyState struct {
 	Frontend           string                `json:"frontend,omitempty"`
 	Carrier            string                `json:"carrier,omitempty"`
 	Carriers           []string              `json:"carriers,omitempty"`
+	RetryJitter        *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
 	Enabled            bool                  `json:"enabled"`
 	Domain             string                `json:"domain"`
 	BasePath           string                `json:"basePath,omitempty"`
@@ -73,6 +74,7 @@ type TelemtWebProxyStatus struct {
 	FrontendActive              bool                  `json:"frontendActive"`
 	Carrier                     string                `json:"carrier"`
 	Carriers                    []string              `json:"carriers"`
+	RetryJitter                 *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
 	CarrierNegotiationSupported bool                  `json:"carrierNegotiationSupported"`
 	Enabled                     bool                  `json:"enabled"`
 	Supported                   bool                  `json:"supported"`
@@ -237,7 +239,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		listenPort = telemtWebListenPort
 	}
 	webConfig := fmt.Sprintf("\n[[server.listeners]]\nip = \"%s\"\nport = %d\ntransport = \"web\"\nproxy_protocol = false\nreuse_allow = false\nweb_client_ip_source = \"x_forwarded_for\"\nweb_trusted_proxy_cidrs = [\"127.0.0.1/32\"]\n\n[web]\nenabled = true\ncarrier = \"https\"\n\n[[web.vhosts]]\nhost = \"%s\"\npublic_addr = \"%s\"\n\n[web.vhosts.decoy]\nmode = \"static_directory\"\ndirectory = \"%s\"\nindex = \"index.html\"\n\n[[web.vhosts.profiles]]\nuser = \"%s\"\nsecret_mode = \"dd\"\n", telemtWebListenIP, listenPort, state.Domain, publicAddr, decoyDir, telemtWebUser)
-	options, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: state.Frontend, Carrier: state.Carrier, Carriers: state.Carriers, BasePath: &state.BasePath, Aliases: &state.Aliases})
+	options, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: state.Frontend, Carrier: state.Carrier, Carriers: state.Carriers, BasePath: &state.BasePath, Aliases: &state.Aliases, RetryJitter: state.RetryJitter})
 	if err != nil {
 		return "", err
 	}
@@ -289,6 +291,9 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		} else {
 			webConfig += fmt.Sprintf("\n[[web.vhosts.profiles]]\nuser = %q\nsecret_mode = \"dd\"\n", telemtWebUser)
 		}
+	}
+	if options.RetryJitter != nil && options.RetryJitter.Enabled {
+		webConfig += fmt.Sprintf("\n[web.retry_jitter]\nenabled = true\nmin_ms = %d\nmax_ms = %d\ndistribution = \"uniform\"\n", options.RetryJitter.MinMS, options.RetryJitter.MaxMS)
 	}
 	if state.ManagedInboundID != 0 {
 		if managedPeriods.Len() > 0 {
@@ -345,7 +350,7 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 	nginxOwns443 := telemtWebNginxOwnsPort443()
 	frontendActive := state.Enabled && telemtWebFrontendActive(state) && (frontend != "nginx" || nginxOwns443)
 	port443, inspectionErr := inspectTelemtWebPort443(state, frontend)
-	status := TelemtWebProxyStatus{Aliases: state.Aliases, Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, BasePath: state.BasePath, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: port443.Free, Port443Available: port443.Available, Port443Owner: port443.Owner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
+	status := TelemtWebProxyStatus{Aliases: state.Aliases, Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, RetryJitter: state.RetryJitter, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, BasePath: state.BasePath, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: port443.Free, Port443Available: port443.Available, Port443Owner: port443.Owner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
 	if state.Enabled && state.ManagedInboundID == 0 && state.Domain != "" && state.Secret != "" {
 		for _, host := range telemtWebHosts(state) {
 			status.Links = append(status.Links, telemtWebLinkWithPath(host, state.Secret, state.BasePath))
@@ -411,6 +416,7 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 	// the saved hostname of a previous WEB installation.
 	state.Domain = domain
 	state.Frontend, state.Carrier, state.Carriers = options.Frontend, options.Carrier, options.Carriers
+	state.RetryJitter = options.RetryJitter
 	if options.BasePath != nil {
 		state.BasePath = *options.BasePath
 	}

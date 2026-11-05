@@ -28,6 +28,12 @@ const (
 
 var telemtWebOperationMu sync.Mutex
 
+type TelemtWebRetryJitter struct {
+	Enabled bool `json:"enabled"`
+	MinMS   int  `json:"minMs"`
+	MaxMS   int  `json:"maxMs"`
+}
+
 type TelemtWebProxyOptions struct {
 	Site     *TelemtWebSiteOptions `json:"site,omitempty"`
 	Frontend string                `json:"frontend"`
@@ -35,9 +41,13 @@ type TelemtWebProxyOptions struct {
 	BasePath *string               `json:"basePath,omitempty"`
 	Aliases  *[]string             `json:"aliases,omitempty"`
 	Carriers []string              `json:"carriers"`
+	RetryJitter *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
 }
 
 func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, error) {
+	if o.RetryJitter != nil && (o.RetryJitter.MinMS < 0 || o.RetryJitter.MaxMS < o.RetryJitter.MinMS || o.RetryJitter.MaxMS > 30000) {
+		return o, errors.New("WEB retry jitter requires 0 <= minMs <= maxMs <= 30000")
+	}
 	if err := validateTelemtWebSite(o.Site); err != nil {
 		return o, err
 	}
@@ -113,7 +123,7 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	o := TelemtWebProxyOptions{Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site, BasePath: &old.BasePath, Aliases: &old.Aliases}
+	o := TelemtWebProxyOptions{Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site, BasePath: &old.BasePath, Aliases: &old.Aliases, RetryJitter: old.RetryJitter}
 	if len(options) > 0 {
 		if options[0].Aliases != nil {
 			o.Aliases = options[0].Aliases
@@ -133,10 +143,16 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 		if options[0].Carriers != nil {
 			o.Carriers = options[0].Carriers
 		}
+		if options[0].RetryJitter != nil {
+			o.RetryJitter = options[0].RetryJitter
+		}
 	}
 	o, err = normalizeTelemtWebOptions(o)
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
+	}
+	if o.RetryJitter != nil && o.RetryJitter.Enabled && !telemtWebVersionAtLeast(telemtVersion(), "3.5.16") {
+		return TelemtWebProxyStatus{}, errors.New("WEB retry jitter requires Telemt 3.5.16 or newer")
 	}
 	if (len(o.Carriers) > 0 || o.Carrier != "https") && !telemtWebVersionAtLeast(telemtVersion(), "3.5.4") {
 		return TelemtWebProxyStatus{}, errors.New("WEB carrier selection requires Telemt 3.5.4 or newer")

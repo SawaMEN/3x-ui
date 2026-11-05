@@ -30,6 +30,14 @@ type mtprotoWebSettings struct {
 	Frontend string                `json:"frontend"`
 	Carrier  string                `json:"carrier"`
 	Carriers []string              `json:"carriers"`
+	RetryJitter *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
+}
+
+func telemtWebRetryJitterEqual(a, b *TelemtWebRetryJitter) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 func mtprotoWebForInbound(ib *model.Inbound) (mtprotoWebSettings, error) {
@@ -100,7 +108,7 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if _, err := normalizeTelemtWebAliases(domain, opts.Aliases); err != nil {
 		return err
 	}
-	normalizedSettings, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases})
+	normalizedSettings, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases, RetryJitter: opts.RetryJitter})
 	if err != nil {
 		return err
 	}
@@ -203,7 +211,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 	if opts.Site == nil {
 		opts.Site = &TelemtWebSiteOptions{Mode: "auto"}
 	}
-	normalized, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases})
+	normalized, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases, RetryJitter: opts.RetryJitter})
 	if err != nil {
 		return err
 	}
@@ -224,7 +232,8 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 		state.Domain == domain && state.BasePath == *normalized.BasePath && strings.Join(state.Aliases, ",") == strings.Join(*normalized.Aliases, ",") && telemtWebFrontend(state) == normalized.Frontend &&
 		telemtWebCarrier(state) == normalized.Carrier &&
 		strings.Join(state.Carriers, ",") == strings.Join(normalized.Carriers, ",") &&
-		telemtWebSitesEqual(state.Site, normalized.Site)
+		telemtWebSitesEqual(state.Site, normalized.Site) &&
+		telemtWebRetryJitterEqual(state.RetryJitter, normalized.RetryJitter)
 	svc := TelemtService{}
 	if unchanged && state.UserFingerprint == fingerprint && svc.WebProxyTelemtActive() {
 		// Recover the HTTPS entry point even when only its process was stopped.

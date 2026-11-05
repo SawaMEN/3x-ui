@@ -388,3 +388,7 @@ and confirm rollback on a deliberately invalid certificate.
 
 No production or cross-operator connectivity guarantee is implied by a
 successful preflight or local test.
+
+### Additional WEB retry jitter (Telemt 3.5.16+)
+
+The MTProto inbound WEB Proxy form exposes an optional, disabled-by-default random HTTP retry delay. The min/max values are milliseconds (0–30000) and use Telemt's uniform distribution. When enabled, the manager checks for Telemt 3.5.16 or newer before applying the configuration. The feature applies only to HTTP bridge retries, not to traffic shaping or TCP packet fragmentation.
