@@ -29,7 +29,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/totp"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/uripath"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/dnsconf"
 )
 
@@ -1263,7 +1262,7 @@ func (s *SettingService) SetDomainActivityEnabled(enabled bool) error {
 }
 
 func (s *SettingService) GetAccessLogEnable() (bool, error) {
-	accessLogPath, err := xray.GetAccessLogPath()
+	accessLogPath, err := selectedXrayAccessLogPath()
 	if err != nil {
 		return false, err
 	}
