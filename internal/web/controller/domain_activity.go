@@ -18,6 +18,18 @@ type domainActivityResponse struct {
 	Entries          []service.DomainActivityEntry `json:"entries"`
 }
 
+// domainActivityCoreMode identifies the source without probing another core.
+func domainActivityCoreMode(coreType string) string {
+	switch coreType {
+	case service.CoreTypeXray:
+		return "recent"
+	case service.CoreTypeSingBox, service.CoreTypeSingBoxUpstream:
+		return "active"
+	default:
+		return ""
+	}
+}
+
 func (a *ServerController) domainActivityState() (domainActivityResponse, error) {
 	state := domainActivityResponse{
 		WindowSeconds: service.DomainActivityWindowSeconds,
@@ -33,12 +45,8 @@ func (a *ServerController) domainActivityState() (domainActivityResponse, error)
 		return state, err
 	}
 	state.Core = coreType
-	state.Supported = coreType == service.CoreTypeXray || coreType == service.CoreTypeSingBox || coreType == service.CoreTypeSingBoxUpstream
-	if coreType == service.CoreTypeXray {
-		state.Mode = "recent"
-	} else if service.IsNativeCore(coreType) {
-		state.Mode = "active"
-	}
+	state.Mode = domainActivityCoreMode(coreType)
+	state.Supported = state.Mode != ""
 	if coreType == service.CoreTypeXray {
 		state.AccessLogEnabled, err = a.settingService.GetAccessLogEnable()
 		if err != nil {
