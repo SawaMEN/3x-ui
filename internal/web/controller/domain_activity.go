@@ -12,6 +12,8 @@ type domainActivityResponse struct {
 	Enabled          bool                          `json:"enabled"`
 	Supported        bool                          `json:"supported"`
 	AccessLogEnabled bool                          `json:"accessLogEnabled"`
+	Core             string                        `json:"core"`
+	Mode             string                        `json:"mode"`
 	WindowSeconds    int                           `json:"windowSeconds"`
 	Entries          []service.DomainActivityEntry `json:"entries"`
 }
@@ -30,8 +32,14 @@ func (a *ServerController) domainActivityState() (domainActivityResponse, error)
 	if err != nil {
 		return state, err
 	}
-	state.Supported = coreType == service.CoreTypeXray
-	if state.Supported {
+	state.Core = coreType
+	state.Supported = coreType == service.CoreTypeXray || coreType == service.CoreTypeSingBox || coreType == service.CoreTypeSingBoxUpstream
+	if coreType == service.CoreTypeXray {
+		state.Mode = "recent"
+	} else if service.IsNativeCore(coreType) {
+		state.Mode = "active"
+	}
+	if coreType == service.CoreTypeXray {
 		state.AccessLogEnabled, err = a.settingService.GetAccessLogEnable()
 		if err != nil {
 			return state, err
@@ -49,8 +57,16 @@ func (a *ServerController) getDomainActivity(c *gin.Context) {
 		jsonMsg(c, "Cannot read domain activity settings", err)
 		return
 	}
-	if state.Enabled && state.Supported && state.AccessLogEnabled {
-		state.Entries = a.serverService.GetRecentDomainActivity(time.Now())
+	if state.Enabled && state.Supported {
+		if state.Mode == "active" {
+			state.Entries, err = a.serverService.GetNativeDomainActivity(c.Request.Context(), time.Now())
+			if err != nil {
+				jsonMsgObj(c, "Unable to read sing-box active connections", state, err)
+				return
+			}
+		} else if state.AccessLogEnabled {
+			state.Entries = a.serverService.GetRecentDomainActivity(time.Now())
+		}
 	}
 	jsonObj(c, state, nil)
 }
@@ -74,10 +90,10 @@ func (a *ServerController) setDomainActivity(c *gin.Context) {
 			return
 		}
 		if !state.Supported {
-			jsonMsg(c, "Domain activity requires the Xray core", errors.New("unsupported core"))
+			jsonMsg(c, "Domain activity is unsupported by the selected core", errors.New("unsupported core"))
 			return
 		}
-		if !state.AccessLogEnabled {
+		if state.Mode == "recent" && !state.AccessLogEnabled {
 			jsonMsg(c, "Enable the Xray access log first", errors.New("Xray access log is disabled"))
 			return
 		}
