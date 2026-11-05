@@ -15,6 +15,14 @@ type WebStatus = {
   error?: string;
 };
 
+type WebAvailability = {
+  domain: string;
+  probes: number;
+  reachable: number;
+  checkedAt: string;
+  description: string;
+};
+
 type WebPreflight = {
   ready: boolean;
   checks: { id: string; ok: boolean; message: string }[];
@@ -29,6 +37,28 @@ export default function MtprotoWebStatus() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
+  const [availability, setAvailability] = useState<WebAvailability>();
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState('');
+  const checkRussia = async () => {
+    setAvailabilityLoading(true);
+    setAvailabilityError('');
+    try {
+      const response = await HttpUtil.post<WebAvailability>(
+        '/panel/api/telemt/webproxy/availability',
+        {},
+        { silent: true },
+      );
+      if (!response?.success || !response.obj) {
+        throw new Error(response?.msg || 'Globalping check failed');
+      }
+      setAvailability(response.obj);
+    } catch (reason: unknown) {
+      setAvailabilityError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
   const proposed = useWatch({ control, name: 'settings.webProxy' });
   const requestKey = JSON.stringify({
     domain: proposed?.domain ?? '',
@@ -221,6 +251,26 @@ export default function MtprotoWebStatus() {
             ? 'Проверяются введённые параметры WEB Proxy…'
             : 'Checking proposed WEB Proxy settings…'}
         </Typography.Text>
+      )}
+      {status?.frontendActive && (
+        <>
+          <Button size="small" loading={availabilityLoading} onClick={() => void checkRussia()}>
+            {ru ? 'Проверить HTTPS из России (Globalping)' : 'Check HTTPS from Russia (Globalping)'}
+          </Button>
+          {availability && (
+            <Typography.Text>
+              {ru ? 'Российские зонды: ' : 'Russian probes: '}
+              {availability.reachable}/{availability.probes}
+              {' · '}{new Date(availability.checkedAt).toLocaleString()}
+            </Typography.Text>
+          )}
+          {availabilityError && <Alert type="warning" title={availabilityError} />}
+          <Typography.Text type="secondary">
+            {ru
+              ? 'Проверяется только HTTPS-сайт прикрытия, не MTProto и не мобильные белые списки. Результат кэшируется 15 минут.'
+              : 'Checks only the HTTPS decoy, not MTProto or mobile allowlists. Cached for 15 minutes.'}
+          </Typography.Text>
+        </>
       )}
       <Button
         loading={loading}

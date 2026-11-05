@@ -396,3 +396,7 @@ The MTProto inbound WEB Proxy form exposes an optional, disabled-by-default rand
 ### Connection IP summary
 
 The standalone Telemt connection card on the dashboard shows a server-supplied active-IP count deduplicated across users, plus the highest sample observed in the last 15 minutes while the page is open. Missing source IPs are displayed as unavailable, not as zero. This is a session-local UI summary, not a durable historical peak.
+
+### Russia HTTPS availability (manual)
+
+The inbound WEB Proxy status offers an opt-in Globalping check using up to three probes located in Russia. It verifies that the configured, already-running HTTPS decoy responds from those probes; it does **not** authenticate through MTProto or prove accessibility through Russian cellular allowlists. To avoid consuming the shared Globalping quota, checks are manual and rate-limited/cached per panel for 15 minutes. The browser cannot submit an arbitrary target domain; the panel reads the active WEB configuration.
