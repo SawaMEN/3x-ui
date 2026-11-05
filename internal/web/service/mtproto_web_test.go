@@ -171,3 +171,34 @@ func TestCheckPortConflictMtprotoWebEffectivePort(t *testing.T) {
 		}
 	})
 }
+
+func TestManagedTelemtWebRateLimitRendering(t *testing.T) {
+	setupConflictDB(t)
+	settings := `{"clients":[{"email":"alice","enable":true,"secret":"00112233445566778899aabbccddeeff","speedLimit":{"enabled":true,"uploadMbps":3,"downloadMbps":12}}]}`
+	seedInboundConflict(t, "mt-web-rate", "", 46112, model.MTProto, "", settings)
+	ib := loadInboundByTag(t, "mt-web-rate")
+	state := TelemtWebProxyState{
+		Enabled: true, ManagedInboundID: ib.Id, Domain: "web.example.com",
+		Secret: "0123456789abcdef0123456789abcdef",
+		PublicAddr: "203.0.113.10:443", ListenPort: 15080,
+	}
+	config, err := appendTelemtWebProxyConfig("[access.users]\nxui = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n", state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed struct {
+		Access struct {
+			UserRateLimits map[string]struct {
+				UpBps   uint64 `toml:"up_bps"`
+				DownBps uint64 `toml:"down_bps"`
+			} `toml:"user_rate_limits"`
+		} `toml:"access"`
+	}
+	if err := toml.Unmarshal([]byte(config), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	rate := parsed.Access.UserRateLimits[mtprotoWebUsername(ib.Id, "alice")]
+	if rate.UpBps != 3000000 || rate.DownBps != 12000000 {
+		t.Fatalf("incorrect native WEB speed limit: %+v", rate)
+	}
+}
