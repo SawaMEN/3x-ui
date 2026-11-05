@@ -46,3 +46,14 @@ func TestAggregateNativeDomainActivityLimits(t *testing.T) {
 		t.Fatalf("too many entries for client: %d", len(got))
 	}
 }
+
+func TestAggregateNativeDomainActivityHostPort(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	got := aggregateNativeDomainActivity([]singbox.ActiveSession{
+		{ID: "one", User: "user", Domain: "EXAMPLE.org:443", Destination: "192.0.2.1:443"},
+		{ID: "two", User: "user", Domain: "", Destination: "tcp:api.example.org:443"},
+	}, now)
+	if len(got) != 2 || got[0].Domain != "api.example.org" || got[1].Domain != "example.org" {
+		t.Fatalf("unexpected Clash Host metadata normalization: %+v", got)
+	}
+}
