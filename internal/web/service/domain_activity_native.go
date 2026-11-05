@@ -31,7 +31,6 @@ func aggregateNativeDomainActivity(sessions []singbox.ActiveSession, now time.Ti
 		if _, exists := seenIDs[session.ID]; exists {
 			continue
 		}
-		seenIDs[session.ID] = struct{}{}
 
 		// The Clash metadata Host field is usually a sniffed hostname.
 		// The original destination may contain a domain when Host is empty.
@@ -42,6 +41,7 @@ func aggregateNativeDomainActivity(sessions []singbox.ActiveSession, now time.Ti
 		if domain == "" {
 			continue
 		}
+		seenIDs[session.ID] = struct{}{}
 		key := user + "\x00" + domain
 		if entry := byKey[key]; entry != nil {
 			entry.Count++
