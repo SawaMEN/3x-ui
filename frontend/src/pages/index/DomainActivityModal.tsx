@@ -145,7 +145,7 @@ export default function DomainActivityModal({
       width={isMobile ? 'calc(100vw - 16px)' : 900}
       destroyOnHidden
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Space orientation="vertical" style={{ width: '100%' }} size="middle">
         <Alert
           type="info"
           showIcon
@@ -154,13 +154,13 @@ export default function DomainActivityModal({
             : t('pages.index.domainActivityDescription', { seconds: data.windowSeconds })}
         />
         {!data.supported && (
-          <Alert type="warning" showIcon message={t('pages.index.domainActivityUnavailable')} />
+          <Alert type="warning" showIcon title={t('pages.index.domainActivityUnavailable')} />
         )}
         {!!data.error && (
-          <Alert type="error" showIcon message={t('pages.index.domainActivityReadError')} description={data.error} />
+          <Alert type="error" showIcon title={t('pages.index.domainActivityReadError')} description={data.error} />
         )}
         {data.mode === 'recent' && data.supported && !data.accessLogEnabled && (
-          <Alert type="warning" showIcon message={t('pages.index.domainActivityEnableLog')} />
+          <Alert type="warning" showIcon title={t('pages.index.domainActivityEnableLog')} />
         )}
         <Space align="center" wrap>
           <Typography.Text>{t('pages.index.domainActivityToggle')}</Typography.Text>
