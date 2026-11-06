@@ -265,7 +265,8 @@ func nodeProxyHTTPClient(n *model.Node, proxyURL string) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch strings.ToLower(p.Scheme) {
+	scheme := strings.ToLower(p.Scheme)
+	switch scheme {
 	case "http", "https":
 		if !n.AllowPrivateAddress {
 			return nil, common.NewError("node HTTP proxy cannot enforce public-only destination routing; use a SOCKS egress or explicitly permit private addresses")
@@ -275,7 +276,7 @@ func nodeProxyHTTPClient(n *model.Node, proxyURL string) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p.Scheme == "socks5" || p.Scheme == "socks5h" {
+	if scheme == "socks5" || scheme == "socks5h" {
 		transport, ok := client.Transport.(*http.Transport)
 		if !ok || transport.DialContext == nil {
 			return nil, common.NewError("node SOCKS transport does not support guarded destination dialing")
