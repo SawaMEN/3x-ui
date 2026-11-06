@@ -126,3 +126,21 @@ func TestStage12TrafficWriterBurstAcrossRestarts(t *testing.T) {
 		t.Fatalf("executed %d writes, expected exactly %d", completed.Load(), want)
 	}
 }
+
+// A repeatable throughput reference for the serial traffic pipeline. This
+// reports ns/op and allocation counts; no environment-specific speed
+// threshold is used as a correctness check.
+func BenchmarkStage12TrafficWriterSubmission(b *testing.B) {
+	StopTrafficWriter()
+	StartTrafficWriter()
+	b.Cleanup(StopTrafficWriter)
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			if err := submitTrafficWrite(func() error { return nil }); err != nil {
+				b.Errorf("traffic writer submit failed: %v", err)
+				return
+			}
+		}
+	})
+}
