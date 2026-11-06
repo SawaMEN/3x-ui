@@ -10,8 +10,8 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
 func TestReloadMasterMtlsClientDoesNotMintMissingCredential(t *testing.T) {
