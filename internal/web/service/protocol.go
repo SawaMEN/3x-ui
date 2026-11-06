@@ -52,6 +52,17 @@ func validateInboundRuntimeTarget(inbound *model.Inbound) error {
 	return nil
 }
 
+// Validate a protocol replacement against the inbound's existing host assignment.
+// Update payloads cannot redirect validation to an unrelated node.
+func validateInboundRuntimeProtocol(protocol model.Protocol, existing *model.Inbound) error {
+	if existing == nil {
+		return nil
+	}
+	candidate := *existing
+	candidate.Protocol = protocol
+	return validateInboundRuntimeTarget(&candidate)
+}
+
 // Check the panel transport contract before persisting the row. Native JSON
 // templates have a separate binary preflight; "quic" there is not an Xray
 // panel streamSettings transport and must not silently become plain TCP here.
