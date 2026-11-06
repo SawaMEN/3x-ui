@@ -18,6 +18,7 @@ import PromptModal from '@/components/feedback/PromptModal';
 import TextModal from '@/components/feedback/TextModal';
 import { isBalancerLoopbackTag } from '../balancers/balancer-loopback';
 import { HttpUtil } from '@/utils';
+import { useInboundOptions } from '@/api/queries/useInboundOptions';
 import AdBlockTab from '@/pages/adblock/AdBlockTab';
 import RoutingBasic from './RoutingBasic';
 import QuickRoutingPanel from './QuickRoutingPanel';
@@ -28,7 +29,7 @@ import type { RoutingRule } from './RuleFormModal';
 import RuleCardList from './RuleCardList';
 import { usePointerRowReorder } from '@/hooks/usePointerRowReorder';
 import { useRoutingColumns } from './useRoutingColumns';
-import { arrJoin, originalRuleIndex } from './helpers';
+import { arrJoin, originalRuleIndex, uniqueSelectableInboundTags } from './helpers';
 import type { RuleRow } from './types';
 import type { XraySettingsValue, SetTemplate } from '@/hooks/useXraySetting';
 import type { RuleObject } from '@/schemas/routing';
@@ -52,6 +53,7 @@ export default function RoutingTab({
   isMobile,
 }: RoutingTabProps) {
   const { t } = useTranslation();
+  const { data: availableInbounds } = useInboundOptions();
   const [messageApi, messageContextHolder] = message.useMessage();
   const location = useLocation();
   const navigate = useNavigate();
@@ -231,13 +233,13 @@ export default function RoutingTab({
   );
 
   const inboundTagOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
+    const tags: Array<string | undefined> = [];
     const push = (tag?: string) => {
-      if (!tag || seen.has(tag) || isBalancerLoopbackTag(tag)) return;
-      seen.add(tag);
-      out.push(tag);
+      tags.push(tag);
     };
+    // Panel-created inbounds are stored in the database, not necessarily in the
+    // editable Xray template. Use the same authenticated list as the inbound picker.
+    for (const ib of availableInbounds || []) push(ib.tag);
     for (const ib of (templateSettings?.inbounds as Array<{ tag?: string }>) || []) push(ib?.tag);
     for (const tag of inboundTags || []) push(tag);
     for (const ob of templateSettings?.outbounds || []) {
@@ -252,8 +254,8 @@ export default function RoutingTab({
       ?.servers || []) {
       if (typeof s === 'object' && s?.tag) push(s.tag);
     }
-    return out;
-  }, [templateSettings, inboundTags]);
+    return uniqueSelectableInboundTags(tags);
+  }, [templateSettings, inboundTags, availableInbounds]);
 
   const outboundTagOptions = useMemo(() => {
     const out = new Set<string>(['']);
