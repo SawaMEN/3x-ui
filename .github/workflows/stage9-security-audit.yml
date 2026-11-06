@@ -106,7 +106,36 @@ jobs:
           mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
           go test -race -json ./internal/web/runtime -run '^(TestStage9RemoteCacheAndIdentityIsolatedPerNode|TestManagerEgressResolverMayReenterManager|TestManagerEgressResolverConcurrentReplacement)$' -count=1 | tee stage9-multinode.jsonl
           python3 tools/ci/require-go-tests.py stage9-multinode.jsonl TestStage9RemoteCacheAndIdentityIsolatedPerNode TestManagerEgressResolverMayReenterManager TestManagerEgressResolverConcurrentReplacement
-          go test -race -json ./internal/web/service -run '^(TestNodeCredentialsAreWriteOnly|TestNodeTokenEncryption.*|TestNodeOriginGuid.*|TestNodeSharedGuid.*)$' -count=1 | tee stage9-node-service.jsonl
+          go test -race -json ./internal/web/service -run '^(TestNodeCannotClaimClientOfAnotherInbound|TestNodeCredentialsNeverMarshal|TestNodeViewExposesOnlyCredentialPresence|TestNodeToken_EncryptedAtRest_PlaintextInMemory|TestSetRemoteTraffic_DropsForeignActiveInboundGuid|TestEffectiveNodeKey_FallsBackOnCollision|TestRecountByGuid_SplitsClonedNodesWithSharedGuid)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stage9-multinode-evidence
+          path: stage9-*.jsonl
+
+  failures-and-vet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Race regressions and static checks
+        run: |
+          set -o pipefail
+          mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+          go test -race -json ./internal/web/runtime -run '^(TestStage9.*|TestManagerEgressResolverConcurrentReplacement|TestCredentialRotatingTransport.*)$' -count=3 | tee stage9-race.jsonl
+          python3 tools/ci/require-go-tests.py stage9-race.jsonl TestStage9RemoteCacheAndIdentityIsolatedPerNode TestStage9NodeSOCKSProxyDoesNotBypassPrivateDestinationGuard TestStage9NodeTrustModeRejectsInvalidOrCleartextMTLS
+          go vet ./internal/web/runtime ./internal/web/controller ./internal/web/service ./internal/util/netsafe
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stage9-race-evidence
+          path: stage9-race.jsonl
+ -count=1 | tee stage9-node-service.jsonl
+          python3 tools/ci/require-go-tests.py stage9-node-service.jsonl TestNodeCannotClaimClientOfAnotherInbound TestNodeCredentialsNeverMarshal TestNodeViewExposesOnlyCredentialPresence TestSetRemoteTraffic_DropsForeignActiveInboundGuid TestEffectiveNodeKey_FallsBackOnCollision TestRecountByGuid_SplitsClonedNodesWithSharedGuid
       - uses: actions/upload-artifact@v7
         if: always()
         with:
