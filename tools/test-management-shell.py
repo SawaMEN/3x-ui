@@ -328,11 +328,11 @@ release_curl() {
     done
     case "$TEST_MODE" in
         valid)
-            printf '%s  release.tar.gz\\n' "$(sha256sum "$TEST_ROOT/archive" | awk '{print $1}')" > "$dest"
+            printf '%s  release.tar.gz\n' "$(sha256sum "$TEST_ROOT/archive" | awk '{print $1}')" > "$dest"
             printf 200 ;;
         missing) printf 404 ;;
-        malformed) printf 'not-a-hash\\n' > "$dest"; printf 200 ;;
-        mismatch) printf '%064d  release.tar.gz\\n' 0 > "$dest"; printf 200 ;;
+        malformed) printf 'not-a-hash\n' > "$dest"; printf 200 ;;
+        mismatch) printf '%064d  release.tar.gz\n' 0 > "$dest"; printf 200 ;;
         offline) return 7 ;;
     esac
 }
