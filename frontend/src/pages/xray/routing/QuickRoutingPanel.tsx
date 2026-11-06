@@ -26,6 +26,7 @@ import {
 } from '@ant-design/icons';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
 import { buildRemarkByTag, formatInboundTag } from './helpers';
+import { selectableRoutingInboundTags } from './inbound-options';
 import {
   compileQuickRoute,
   diagnoseRouting,
@@ -81,10 +82,13 @@ export default function QuickRoutingPanel({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [messageApi, contextHolder] = message.useMessage();
-  const { data: inboundOptions } = useInboundOptions();
+  const { data: inboundOptions, isPending: inboundOptionsLoading, isError: inboundOptionsError } = useInboundOptions();
   const remarkByTag = useMemo(() => buildRemarkByTag(inboundOptions || []), [inboundOptions]);
   const tags = useMemo(() => [...new Set(outboundTags.filter(Boolean))], [outboundTags]);
-  const inTags = useMemo(() => [...new Set(inboundTags.filter(Boolean))], [inboundTags]);
+  const inTags = useMemo(
+    () => selectableRoutingInboundTags(engine, inboundTags, inboundOptions || []),
+    [engine, inboundTags, inboundOptions],
+  );
   const managed = useMemo(
     () =>
       rules.map((rule, index) => ({ rule, index })).filter(({ rule }) => isQuickRule(rule, engine)),
@@ -251,6 +255,19 @@ export default function QuickRoutingPanel({
               label: formatInboundTag(value, remarkByTag),
             }))}
           />
+
+          {inTags.length === 0 && (
+            <Alert
+              type="info"
+              showIcon
+              title={inboundOptionsLoading ? 'Загрузка входящих подключений' : 'Нет доступных входящих подключений'}
+              description={
+                inboundOptionsError
+                  ? 'Не удалось загрузить список подключений. Обновите страницу и проверьте API входящих.'
+                  : 'Проверьте, что есть включённые локальные входящие подключения, поддерживаемые выбранным ядром.'
+              }
+            />
+          )}
 
           <Typography.Text className="quick-routing-field">3. Куда направлять</Typography.Text>
           <Select

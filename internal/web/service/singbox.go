@@ -150,6 +150,44 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 	return cfg, nil
 }
 
+// editorRoutingInbounds lists real native listeners and panel-managed endpoints.
+// WireGuard and VK TURN endpoints must be selectable just like MASQUE inbounds;
+// subscription/manual endpoints stay in the editable outbound list.
+func editorRoutingInbounds(cfg *singbox.Config, inbounds []*model.Inbound) ([]string, []map[string]any) {
+	tags := make([]string, 0, len(cfg.Inbounds)+len(cfg.Endpoints))
+	seen := make(map[string]bool, cap(tags))
+	appendTag := func(tag string) {
+		if tag != "" && !seen[tag] {
+			seen[tag] = true
+			tags = append(tags, tag)
+		}
+	}
+	for _, inbound := range cfg.Inbounds {
+		tag, _ := inbound["tag"].(string)
+		appendTag(tag)
+	}
+	managedEndpoints := make(map[string]bool)
+	for _, inbound := range inbounds {
+		if inbound == nil || !inbound.Enable || inbound.NodeID != nil {
+			continue
+		}
+		switch inbound.Protocol {
+		case model.MASQUE, model.WireGuard, model.VKTurnProxy:
+			managedEndpoints[inbound.Tag] = true
+		}
+	}
+	editableEndpoints := make([]map[string]any, 0, len(cfg.Endpoints))
+	for _, endpoint := range cfg.Endpoints {
+		tag, _ := endpoint["tag"].(string)
+		if managedEndpoints[tag] {
+			appendTag(tag)
+		} else {
+			editableEndpoints = append(editableEndpoints, endpoint)
+		}
+	}
+	return tags, editableEndpoints
+}
+
 type SingBoxEditorSnapshot struct {
 	Warnings         []string       `json:"warnings,omitempty"`
 	SubscriptionTags []string       `json:"subscriptionTags"`
@@ -208,31 +246,11 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	if _, ok := raw["outbounds"]; ok {
 		raw["outbounds"] = editorConfig.Outbounds
 	}
-	inboundTags := make([]string, 0, len(editorConfig.Inbounds))
-	for _, inbound := range editorConfig.Inbounds {
-		if tag, ok := inbound["tag"].(string); ok && tag != "" {
-			inboundTags = append(inboundTags, tag)
-		}
-	}
 	managedRows, err := singBoxInboundService.GetAllInbounds()
 	if err != nil {
 		return nil, err
 	}
-	managedTags := map[string]bool{}
-	for _, row := range managedRows {
-		if row != nil && row.NodeID == nil && row.Protocol == model.MASQUE {
-			managedTags[row.Tag] = true
-		}
-	}
-	editableEndpoints := make([]map[string]any, 0, len(editorConfig.Endpoints))
-	for _, endpoint := range editorConfig.Endpoints {
-		tag, _ := endpoint["tag"].(string)
-		if managedTags[tag] {
-			inboundTags = append(inboundTags, tag)
-		} else {
-			editableEndpoints = append(editableEndpoints, endpoint)
-		}
-	}
+	inboundTags, editableEndpoints := editorRoutingInbounds(&editorConfig, managedRows)
 	if _, exists := raw["endpoints"]; exists {
 		raw["endpoints"] = editableEndpoints
 	}

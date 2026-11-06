@@ -138,6 +138,7 @@ export const InboundOptionSchema = z
     remark: z.string().optional(),
     tag: z.string().optional(),
     protocol: z.string().optional(),
+    enable: z.boolean().optional(),
     port: z.number().optional(),
     network: z.string().optional(),
     security: z.string().optional(),
