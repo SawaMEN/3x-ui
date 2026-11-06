@@ -42,6 +42,7 @@ func TestFirewallFallsBackToLegacyOnIncompatibleNft(t *testing.T) {
 	fakeFirewallBinary(t, dir, "nft", failure)
 	fakeFirewallBinary(t, dir, "iptables", failure)
 	fakeFirewallBinary(t, dir, "iptables-legacy", "if [ \"$1\" = '-S' ]; then exit 0; fi; exit 1")
+	fakeFirewallBinary(t, dir, "ip6tables-legacy", "if [ \"$1\" = '-S' ]; then exit 0; fi; exit 1")
 	backend, err := detectManagedFirewallBackend(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +90,7 @@ func TestFirewallLegacyRequiresMatchingIPv6BeforeApplyingRules(t *testing.T) {
 
 func TestFirewallLegacyKernelErrorClassification(t *testing.T) {
 	for _, tc := range []struct {
-		message string
+		message    string
 		compatible bool
 	}{
 		{"modprobe: FATAL: Module ip_tables not found in directory /lib/modules/7.2.9-zen1-1-zen\niptables v1.8.13 (legacy): can't initialize iptables table `filter': Table does not exist (do you need to insmod?)", true},
@@ -109,6 +110,7 @@ func TestFirewallSelectsIptablesNftWhenLegacyModulesMissing(t *testing.T) {
 	t.Setenv("PATH", dir)
 	fakeFirewallBinary(t, dir, "nft", "echo 'netlink: Error: cache initialization failed: Invalid argument' >&2; exit 1")
 	fakeFirewallBinary(t, dir, "iptables-nft", "if [ \"$1\" = '-S' ]; then exit 0; fi; exit 1")
+	fakeFirewallBinary(t, dir, "ip6tables-nft", "if [ \"$1\" = '-S' ]; then exit 0; fi; exit 1")
 	fakeFirewallBinary(t, dir, "iptables-legacy", "echo \"iptables v1.8.13 (legacy): can't initialize iptables table: Table does not exist\" >&2; exit 1")
 	backend, err := detectManagedFirewallBackend(context.Background())
 	if err != nil {
@@ -131,5 +133,22 @@ func TestFirewallSelectsNftWhenLegacyBinaryUnusable(t *testing.T) {
 	}
 	if backend.name != "nftables" {
 		t.Fatalf("expected native nftables, got %+v", backend)
+	}
+}
+
+func TestFirewallSkipsIncompleteIPv6BackendPair(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PATH", dir)
+	fakeFirewallBinary(t, dir, "nft", "echo 'netlink: Error: cache initialization failed: Invalid argument' >&2; exit 1")
+	fakeFirewallBinary(t, dir, "iptables-nft", "if [ \"$1\" = '-S' ]; then exit 0; fi; exit 1")
+	// ip6tables-nft is deliberately absent. A valid legacy pair remains.
+	fakeFirewallBinary(t, dir, "iptables-legacy", "if [ \"$1\" = '-S' ]; then exit 0; fi; exit 1")
+	fakeFirewallBinary(t, dir, "ip6tables-legacy", "if [ \"$1\" = '-S' ]; then exit 0; fi; exit 1")
+	backend, err := detectManagedFirewallBackend(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(backend.binary) != "iptables-legacy" {
+		t.Fatalf("incomplete iptables-nft pair must not be chosen: %+v", backend)
 	}
 }
