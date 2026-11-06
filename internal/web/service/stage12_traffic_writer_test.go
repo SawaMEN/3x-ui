@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -97,7 +96,7 @@ func TestStage12TrafficWriterBurstAcrossRestarts(t *testing.T) {
 		StartTrafficWriter()
 		var wg sync.WaitGroup
 		errs := make(chan error, workers)
-		for worker := range workers {
+		for range workers {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -124,6 +123,6 @@ func TestStage12TrafficWriterBurstAcrossRestarts(t *testing.T) {
 	}
 
 	if want := int64(cycles * workers); completed.Load() != want {
-		t.Fatal(fmt.Sprintf("executed %d writes, expected exactly %d", completed.Load(), want))
+		t.Fatalf("executed %d writes, expected exactly %d", completed.Load(), want)
 	}
 }
