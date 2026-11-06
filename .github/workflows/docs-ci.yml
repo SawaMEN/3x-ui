@@ -2,7 +2,7 @@ name: Docs CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, update]
     paths:
       - 'docs/**'
       - '.github/workflows/docs-ci.yml'
