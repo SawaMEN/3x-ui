@@ -27,7 +27,7 @@ func translateTLSCipherSuites(out, in map[string]any, label string) error {
 
 // The Go runtime's cipher catalog is fixed for the lifetime of the process.
 // Construct it once instead of allocating both catalogs for every TLS block.
-var knownTLSCipherSuites = func() map[string]bool {
+var knownTLSCipherSuites, legacyTLSCipherSuites = func() (map[string]bool, map[string]bool) {
 	known := make(map[string]bool)
 	for _, suite := range tls.CipherSuites() {
 		known[suite.Name] = true
@@ -38,7 +38,7 @@ var knownTLSCipherSuites = func() map[string]bool {
 	for _, suite := range tls.InsecureCipherSuites() {
 		legacy[suite.Name] = true
 	}
-	return known
+	return known, legacy
 }()
 
 func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
@@ -49,7 +49,7 @@ func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
 		if name == "" {
 			continue
 		}
-		if legacy[name] {
+		if legacyTLSCipherSuites[name] {
 			return nil, fmt.Errorf("%s: TLS cipher suite %q is unsupported by the pinned sing-box core; select an ECDHE or TLS 1.3 suite", label, name)
 		}
 		if !knownTLSCipherSuites[name] {
