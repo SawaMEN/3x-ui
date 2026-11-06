@@ -22,6 +22,9 @@ func validateInboundRuntimeTarget(inbound *model.Inbound) error {
 	if err != nil {
 		return err
 	}
+	if inbound.NodeID != nil && !isNodeEligibleProtocol(inbound.Protocol) {
+		return common.NewErrorf("%s inbounds cannot be assigned to a node", inbound.Protocol)
+	}
 	if !coreSupportsInboundProtocol(core, inbound.Protocol) {
 		if inbound.NodeID != nil {
 			return common.NewErrorf("%s is not supported by %s on the selected node", inbound.Protocol, core)

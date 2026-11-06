@@ -105,6 +105,7 @@ var monitorScopeAllow = map[string]struct{}{
 
 // nodeSyncScopeAllow is the node-sync route/method allowlist relative to /panel/api; Gin patterns prevent concrete parameters broadening authority.
 var nodeSyncScopeAllow = map[string]map[string]struct{}{
+	"/inbounds/preflight":                         {http.MethodPost: {}},
 	"/server/status":                              {http.MethodGet: {}},
 	"/inbounds/list":                              {http.MethodGet: {}},
 	"/inbounds/add":                               {http.MethodPost: {}},
@@ -257,6 +258,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 
 	// Subscription balancers — client-side balancers for the JSON sub output
 	NewSubBalancerController(api)
+	NewManagerController(api)
 
 	// Extra routes
 	api.POST("/backuptotgbot", a.BackuptoTgbot)
@@ -274,6 +276,7 @@ func (a *APIController) StartBackground(ctx context.Context) {
 			func() { a.firewallController.firewallService.RunAutoSync(ctx) },
 			func() { a.adBlockController.runAdBlockScheduler(ctx) },
 			func() { service.RunTelemtConnectionMonitor(ctx) },
+			func() { (&service.ManagerService{}).Run(ctx) },
 		}
 		for _, worker := range workers {
 			a.backgroundWG.Add(1)

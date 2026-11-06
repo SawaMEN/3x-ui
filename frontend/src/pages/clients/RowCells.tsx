@@ -5,6 +5,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   InfoCircleOutlined,
+  GlobalOutlined,
   QrcodeOutlined,
   RetweetOutlined,
 } from '@ant-design/icons';
@@ -18,6 +19,7 @@ interface ClientRowActionsProps {
   email: string;
   onShowQr: (email: string) => void;
   onShowInfo: (email: string) => void;
+  onShowActivity: (email: string) => void;
   onResetTraffic: (email: string) => void;
   onEdit: (email: string) => void;
   onDelete: (email: string) => void;
@@ -32,6 +34,7 @@ export const ClientRowActions = memo(function ClientRowActions({
   email,
   onShowQr,
   onShowInfo,
+  onShowActivity,
   onResetTraffic,
   onEdit,
   onDelete,
@@ -57,6 +60,16 @@ export const ClientRowActions = memo(function ClientRowActions({
           icon={<InfoCircleOutlined aria-hidden />}
           aria-label={t('pages.clients.clientInfo')}
           onClick={() => onShowInfo(email)}
+        />
+      </Tooltip>
+      <Tooltip title={t('pages.index.domainActivityTitle')}>
+        <Button
+          size="small"
+          type="text"
+          style={ICON_BUTTON_STYLE}
+          icon={<GlobalOutlined aria-hidden />}
+          aria-label={t('pages.index.domainActivityTitle')}
+          onClick={() => onShowActivity(email)}
         />
       </Tooltip>
       <Tooltip title={t('pages.inbounds.resetTraffic')}>

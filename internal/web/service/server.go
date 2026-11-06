@@ -57,7 +57,6 @@ import (
 	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
 )
 
@@ -1175,7 +1174,7 @@ func (s *ServerService) GetXrayLogs(
 	}
 	countInt = min(countInt, 2000)
 
-	pathToAccessLog, err := xray.GetAccessLogPath()
+	pathToAccessLog, err := selectedXrayAccessLogPath()
 	if err != nil || pathToAccessLog == "" || pathToAccessLog == "none" {
 		return nil
 	}

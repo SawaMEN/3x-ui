@@ -15,6 +15,15 @@ export type VKTurnProxyForwardType = z.infer<typeof VKTurnProxyForwardTypeSchema
 export const clientResetPolicySchema = z.number().int();
 export type clientResetPolicy = z.infer<typeof clientResetPolicySchema>;
 
+export const nearbySNIProbeSchema = z.unknown();
+export type nearbySNIProbe = z.infer<typeof nearbySNIProbeSchema>;
+
+export const sniProgressSchema = z.unknown();
+export type sniProgress = z.infer<typeof sniProgressSchema>;
+
+export const sniScanFuncSchema = z.unknown();
+export type sniScanFunc = z.infer<typeof sniScanFuncSchema>;
+
 export const staticEgressResolverSchema = z.string();
 export type staticEgressResolver = z.infer<typeof staticEgressResolverSchema>;
 
@@ -896,6 +905,150 @@ export const MLKEM768ResponseSchema = z.object({
 });
 export type MLKEM768Response = z.infer<typeof MLKEM768ResponseSchema>;
 
+export const ManagerClientInfoSchema = z.object({
+  down: z.number().int(),
+  email: z.string(),
+  enabled: z.boolean(),
+  expiryTime: z.number().int(),
+  total: z.number().int(),
+  up: z.number().int(),
+});
+export type ManagerClientInfo = z.infer<typeof ManagerClientInfoSchema>;
+
+export const ManagerDomainSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+});
+export type ManagerDomain = z.infer<typeof ManagerDomainSchema>;
+
+export const ManagerEntrySchema = z.object({
+  activeInboundId: z.number().int(),
+  config: z.lazy(() => ManagerInboundConfigSchema).nullable().optional(),
+  customLink: z.string(),
+  flag: z.string(),
+  label: z.string(),
+  mode: z.string(),
+  nodeId: z.number().int().nullable().optional(),
+  port: z.string(),
+  preset: z.string().optional(),
+  relayId: z.number().int(),
+  sni: z.string(),
+  templateId: z.number().int(),
+});
+export type ManagerEntry = z.infer<typeof ManagerEntrySchema>;
+
+export const ManagerInboundConfigSchema = z.object({
+  disableFlow: z.boolean(),
+  listen: z.string(),
+  protocol: z.lazy(() => ProtocolSchema),
+  settings: z.string(),
+  shareAddr: z.string(),
+  shareAddrStrategy: z.string(),
+  sniffing: z.string(),
+  streamSettings: z.string(),
+  subSortIndex: z.number().int(),
+});
+export type ManagerInboundConfig = z.infer<typeof ManagerInboundConfigSchema>;
+
+export const ManagerListOptionsSchema = z.object({
+  compact: z.boolean(),
+  page: z.number().int(),
+  search: z.string(),
+});
+export type ManagerListOptions = z.infer<typeof ManagerListOptionsSchema>;
+
+export const ManagerOperationSchema = z.object({
+  attempts: z.number().int(),
+  completed: z.number().int(),
+  createdAt: z.number().int(),
+  finishedAt: z.number().int(),
+  id: z.number().int(),
+  kind: z.string(),
+  message: z.string(),
+  relayId: z.number().int(),
+  state: z.string(),
+  subscriptionId: z.number().int(),
+  total: z.number().int(),
+});
+export type ManagerOperation = z.infer<typeof ManagerOperationSchema>;
+
+export const ManagerPreflightSchema = z.object({
+  entries: z.array(z.lazy(() => ManagerPreflightEntrySchema)),
+  ready: z.boolean(),
+});
+export type ManagerPreflight = z.infer<typeof ManagerPreflightSchema>;
+
+export const ManagerPreflightEntrySchema = z.object({
+  index: z.number().int(),
+  message: z.string(),
+  ready: z.boolean(),
+});
+export type ManagerPreflightEntry = z.infer<typeof ManagerPreflightEntrySchema>;
+
+export const ManagerRelaySchema = z.object({
+  address: z.string(),
+  hostKey: z.string(),
+  id: z.number().int(),
+  installed: z.boolean(),
+  keyAuth: z.boolean(),
+  name: z.string(),
+  nodeId: z.number().int(),
+  sshPort: z.number().int(),
+  username: z.string(),
+});
+export type ManagerRelay = z.infer<typeof ManagerRelaySchema>;
+
+export const ManagerRelayInputSchema = z.object({
+  address: z.string(),
+  credential: z.string(),
+  hostKey: z.string(),
+  id: z.number().int(),
+  keyAuth: z.boolean(),
+  name: z.string(),
+  nodeId: z.number().int(),
+  sshPort: z.number().int(),
+  username: z.string(),
+});
+export type ManagerRelayInput = z.infer<typeof ManagerRelayInputSchema>;
+
+export const ManagerSnapshotSchema = z.object({
+  clients: z.record(z.string(), z.lazy(() => ManagerClientInfoSchema)),
+  domains: z.array(z.lazy(() => ManagerDomainSchema)),
+  operationTotal: z.number().int(),
+  operations: z.array(z.lazy(() => ManagerOperationSchema)),
+  pageSize: z.number().int(),
+  pendingOperations: z.number().int(),
+  relays: z.array(z.lazy(() => ManagerRelaySchema)),
+  subscriptionPage: z.number().int(),
+  subscriptionTotal: z.number().int(),
+  subscriptions: z.array(z.lazy(() => ManagerSubscriptionSchema)),
+});
+export type ManagerSnapshot = z.infer<typeof ManagerSnapshotSchema>;
+
+export const ManagerSubscriptionSchema = z.object({
+  autoRotate: z.boolean(),
+  clientId: z.number().int(),
+  createdAt: z.number().int(),
+  enabled: z.boolean(),
+  entries: z.array(z.lazy(() => ManagerEntrySchema)),
+  graceMinutes: z.number().int(),
+  happ: z.string(),
+  id: z.number().int(),
+  incy: z.string(),
+  intervalMinutes: z.number().int(),
+  lastRotation: z.number().int(),
+  name: z.string(),
+  nextRotation: z.number().int(),
+  note: z.string(),
+  ownClient: z.boolean(),
+  published: z.array(z.lazy(() => ManagerEntrySchema)),
+  supportUrl: z.string(),
+  token: z.string(),
+  updatedAt: z.number().int(),
+  websiteUrl: z.string(),
+});
+export type ManagerSubscription = z.infer<typeof ManagerSubscriptionSchema>;
+
 export const MsgSchema = z.object({
   msg: z.string(),
   obj: z.unknown(),
@@ -946,6 +1099,7 @@ export const NodeSchema = z.object({
   pinnedCertSha256: z.string(),
   port: z.number().int().min(1).max(65535),
   presenceRegistry: z.string(),
+  protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   remark: z.string(),
   runningCore: z.string(),
   scheme: z.enum(['http', 'https']),
@@ -1025,6 +1179,7 @@ export const NodeViewSchema = z.object({
   pinnedCertSha256: z.string(),
   port: z.number().int(),
   presenceRegistry: z.string(),
+  protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   remark: z.string(),
   runningCore: z.string(),
   scheme: z.string(),
@@ -1090,6 +1245,7 @@ export const ProbeResultUISchema = z.object({
   panelEdition: z.string(),
   panelVersion: z.string(),
   presenceRegistry: z.string(),
+  protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   runningCore: z.string(),
   singboxError: z.string(),
   singboxInstalled: z.boolean(),
@@ -1104,26 +1260,46 @@ export const ProbeResultUISchema = z.object({
 });
 export type ProbeResultUI = z.infer<typeof ProbeResultUISchema>;
 
+export const ProtocolAvailabilitySchema = z.object({
+  component: z.string(),
+  ready: z.boolean(),
+  speedLimit: z.boolean(),
+  supported: z.boolean(),
+  version: z.string(),
+});
+export type ProtocolAvailability = z.infer<typeof ProtocolAvailabilitySchema>;
+
 export const RealityScanResultSchema = z.object({
   alpn: z.string(),
+  attempts: z.number().int().optional(),
   certChainBytes: z.number().int(),
   certChainValid: z.boolean(),
   certIssuer: z.string(),
   certSubject: z.string(),
   certValid: z.boolean(),
+  checkedAt: z.string().optional(),
   curveID: z.string(),
+  dnsLookupError: z.string().optional(),
+  dnsMatchesIP: z.boolean().nullable().optional(),
   feasible: z.boolean(),
   h2: z.boolean(),
   host: z.string(),
+  http2OK: z.boolean().nullable().optional(),
   ip: z.string(),
+  jitterMs: z.number().optional(),
   latencyMs: z.number().int(),
+  medianMs: z.number().optional(),
   notAfter: z.string(),
   port: z.number().int(),
   privateTarget: z.boolean(),
   reason: z.string(),
   serverNames: z.array(z.string()),
+  source: z.string().optional(),
+  successes: z.number().int().optional(),
   target: z.string(),
+  tcpMs: z.number().optional(),
   tls13: z.boolean(),
+  tlsMs: z.number().optional(),
   tlsVersion: z.string(),
   x25519: z.boolean(),
 });
@@ -1163,6 +1339,38 @@ export const RoutingPresetViewSchema = z.object({
   updatedAt: z.number().int(),
 });
 export type RoutingPresetView = z.infer<typeof RoutingPresetViewSchema>;
+
+export const SNIJobSnapshotSchema = z.object({
+  completed: z.number().int(),
+  createdAt: z.string(),
+  error: z.string().optional(),
+  finishedAt: z.string().optional(),
+  id: z.string(),
+  phase: z.string(),
+  results: z.array(z.lazy(() => RealityScanResultSchema).nullable()),
+  source: z.string(),
+  state: z.string(),
+  total: z.number().int(),
+  verified: z.number().int(),
+  verifyTotal: z.number().int(),
+});
+export type SNIJobSnapshot = z.infer<typeof SNIJobSnapshotSchema>;
+
+export const SNISavedTargetSchema = z.object({
+  host: z.string(),
+  ip: z.string(),
+  port: z.number().int(),
+});
+export type SNISavedTarget = z.infer<typeof SNISavedTargetSchema>;
+
+export const SNIScanRequestSchema = z.object({
+  mode: z.string().optional(),
+  nodeId: z.number().int().nullable().optional(),
+  purpose: z.string().optional(),
+  recheck: z.array(z.lazy(() => SNISavedTargetSchema).nullable()).optional(),
+  targets: z.string().optional(),
+});
+export type SNIScanRequest = z.infer<typeof SNIScanRequestSchema>;
 
 export const ServerSettingsSchema = z.object({
   contentPaddingAddition: z.string().optional(),

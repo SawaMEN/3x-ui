@@ -283,6 +283,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	g.GET("/service-worker.js", controller.ServePWAServiceWorker)
 	g.GET("/icons/:name", controller.ServePWAIcon)
 
+	g.GET("/bus/:token", controller.ServeManagerSubscription)
 	s.index = controller.NewIndexController(g)
 	s.panel = controller.NewXUIController(g)
 	s.api = controller.NewAPIController(g, s.settingService)
@@ -607,6 +608,16 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	// The closures bridge into CoreService (which owns the running xray
 	// process state) without forcing the runtime package to import service.
 	runtime.SetManager(runtime.NewManager(runtime.LocalDeps{
+		RestartCore: func(ctx context.Context) error {
+			kind, err := s.settingService.GetCoreType()
+			if err != nil {
+				return err
+			}
+			if service.IsNativeCore(kind) {
+				return service.SelectedNativeCore().Restart(ctx)
+			}
+			return s.xrayService.RestartXray(false)
+		},
 		CoreType: func() string {
 			core, err := s.settingService.GetCoreType()
 			if err != nil {

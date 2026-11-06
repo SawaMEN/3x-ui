@@ -141,7 +141,7 @@ func TestPinnedBinaryChecksGeneratedConfigurations(t *testing.T) {
 		stream["network"], stream["security"] = "tcp", "tls"
 		delete(stream, "xhttpSettings")
 		stream["tlsSettings"] = map[string]any{
-			"cipherSuites": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:TLS_RSA_WITH_AES_128_GCM_SHA256",
+			"cipherSuites": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 			"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}},
 		}
 		stream["finalmask"] = map[string]any{"tcp": []any{map[string]any{"type": "fragment", "settings": map[string]any{"packets": "tlshello", "length": "10-20", "delay": "0"}}}}
@@ -157,7 +157,7 @@ func TestPinnedBinaryChecksGeneratedConfigurations(t *testing.T) {
 			"settings": map[string]any{"clients": []any{map[string]any{"email": "alice", "password": "test-password"}}},
 			"streamSettings": map[string]any{
 				"network": "hysteria", "security": "tls", "hysteriaSettings": map[string]any{"version": 2},
-				"tlsSettings": map[string]any{"cipherSuites": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:TLS_RSA_WITH_AES_128_GCM_SHA256", "certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}},
+				"tlsSettings": map[string]any{"cipherSuites": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}},
 				"finalmask":   map[string]any{"udp": []any{map[string]any{"type": "salamander", "settings": map[string]any{"password": "test-obfs", "packetSize": "100-200"}}}},
 			},
 		})
@@ -172,7 +172,7 @@ func TestPinnedBinaryChecksGeneratedConfigurations(t *testing.T) {
 			"users": []any{map[string]any{"name": "alice", "password": "test-password"}},
 			"tls": map[string]any{
 				"enabled": true, "certificate_path": cert, "key_path": key,
-				"cipher_suites": []any{"TLS_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"},
+				"cipher_suites": []any{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"},
 			},
 		}}}
 		data, err := cfg.Marshal()
@@ -184,6 +184,25 @@ func TestPinnedBinaryChecksGeneratedConfigurations(t *testing.T) {
 			t.Fatal(err)
 		}
 		checked(t, wire)
+	})
+	t.Run("legacy RSA cipher is rejected before starting core", func(t *testing.T) {
+		raw := vlessInbound()
+		stream := object(raw, "streamSettings")
+		stream["network"], stream["security"] = "tcp", "tls"
+		stream["tlsSettings"] = map[string]any{
+			"cipherSuites": "TLS_RSA_WITH_AES_128_GCM_SHA256",
+		}
+		if _, err := TranslateInbound(raw); err == nil || !strings.Contains(err.Error(), "unsupported by the pinned sing-box core") {
+			t.Fatalf("expected actionable legacy TLS suite error, got %v", err)
+		}
+		cfg := &singbox.Config{Inbounds: []map[string]any{{
+			"type": "hysteria2", "tag": "legacy", "tls": map[string]any{
+				"enabled": true, "cipher_suites": []any{"TLS_RSA_WITH_AES_128_GCM_SHA256"},
+			},
+		}}}
+		if _, err := cfg.Marshal(); err == nil || !strings.Contains(err.Error(), "unsupported by the pinned sing-box core") {
+			t.Fatalf("native legacy TLS suite was not rejected: %v", err)
+		}
 	})
 	t.Run("explicit config required", func(t *testing.T) {
 		out, err := run("check")

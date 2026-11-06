@@ -25,6 +25,7 @@ import {
   validateRealityTarget,
 } from '@/lib/xray/stream-wire-normalize';
 import type { RealityScanResult } from '@/generated/types';
+import type { SNIScanCallback } from './sni-scanner';
 import RealityTargetScannerModal, {
   MLDSA65_MIN_CERT_CHAIN_BYTES,
 } from './RealityTargetScannerModal';
@@ -34,7 +35,7 @@ interface RealityFormProps {
   scanning: boolean;
   scanResult: RealityScanResult | null;
   scanRealityTarget: (allowPrivate?: boolean) => void;
-  scanRealityCandidates: (targets?: string) => Promise<RealityScanResult[]>;
+  scanRealityCandidates: SNIScanCallback;
   applyRealityScanResult: (result: RealityScanResult, replaceServerNames?: boolean) => void;
   randomizeShortIds: () => void;
   randomizeSpiderX: () => void;
@@ -62,6 +63,7 @@ export default function RealityForm({
   const uid = useId();
   const { getFieldState, trigger } = useFormContext();
   const [scannerOpen, setScannerOpen] = useState(false);
+  const nodeId = useWatch({ name: 'nodeId' }) as number | null | undefined;
   const mldsa65Seed = useWatch({
     name: 'streamSettings.realitySettings.mldsa65Seed',
   });
@@ -386,6 +388,8 @@ export default function RealityForm({
       />
       <RealityTargetScannerModal
         open={scannerOpen}
+        nodeId={nodeId}
+        enableHistory
         onClose={() => setScannerOpen(false)}
         scanRealityCandidates={scanRealityCandidates}
         onPick={(r) => applyRealityScanResult(r, true)}

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/core"
+
 	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -177,23 +179,8 @@ func CoreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
 	return coreSupportsInboundProtocol(canonicalCoreType(core), protocol)
 }
 
-func coreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
-	switch protocol {
-	case model.Tunnel:
-		return core == CoreTypeXray
-	case model.Snell, model.MASQUE:
-		return core == CoreTypeSingBox
-	case model.NaiveProxy, model.AnyTLS, model.ShadowTLS:
-		return IsNativeCore(core)
-	case model.VMESS, model.VLESS, model.HTTP, model.Trojan, model.Shadowsocks,
-		model.Mixed, model.WireGuard, model.Tun, model.Hysteria, model.MTProto,
-		model.AmneziaWG, model.TUIC, model.Pingtunnel, model.TrustTunnel, model.FPTN,
-		model.OpenFlux, model.VetroffProxy, model.Mieru, model.VKTurnProxy, model.Sudoku:
-		// Sidecar protocols are hosted by their own server and relayed by the core.
-		return isSupportedCoreType(core)
-	default:
-		return false
-	}
+func coreSupportsInboundProtocol(kind string, protocol model.Protocol) bool {
+	return model.InboundProtocolCapabilities[protocol].SupportsCore(core.Type(kind))
 }
 
 func clearCoreAutoDisabledByEmail(email string) error {

@@ -23,10 +23,5 @@ func (s *ClientSpeedLimit) Validate() error {
 }
 
 func SupportsClientSpeedLimit(protocol Protocol) bool {
-	switch protocol {
-	case VMESS, VLESS, HTTP, Trojan, Shadowsocks, Mixed, Hysteria, TUIC, NaiveProxy, AnyTLS, Snell, ShadowTLS, Mieru, Sudoku, MASQUE, MTProto:
-		return true
-	default:
-		return false
-	}
+	return InboundProtocolCapabilities[protocol].SpeedLimit
 }

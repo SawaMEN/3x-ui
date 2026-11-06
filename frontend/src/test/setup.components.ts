@@ -1,5 +1,5 @@
 import { afterEach, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
@@ -78,26 +78,16 @@ if (!i18next.isInitialized) {
 }
 
 afterEach(async () => {
-  cleanup();
-  document.body.innerHTML = '';
-  /*
-   * React 19 defers passive-effect flushes onto a macrotask (setImmediate),
-   * whose callback reads `window.event`. If one is still queued when vitest
-   * tears down the jsdom environment, it fires after `window` is gone and
-   * throws "window is not defined". Drain a few macrotask ticks here so any
-   * pending callback runs while `window` still exists. Several ticks are used
-   * because a microtask resolving mid-drain (rc-trigger/AntD) can queue a new
-   * one behind the first.
-   */
-  for (let i = 0; i < 3; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-  /*
-   * AntD Form debounces clearing its error list by 10ms (useDebounce via
-   * rc-util useDelayState), and that timer survives unmount. Wait past it so
-   * it fires while `window` still exists.
-   */
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  // Keep late async updates and React's passive effects inside act before jsdom closes.
+  await act(async () => {
+    cleanup();
+    document.body.innerHTML = '';
+    for (let i = 0; i < 3; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    // AntD Form clears debounced errors after 10ms, including during unmount.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
 });
 
 import { HttpUtil, Msg } from '@/utils';

@@ -519,7 +519,15 @@ func (a *SUBController) subs(c *gin.Context) {
 			return
 		}
 		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), format != "xray") {
-			writeSubError(c, nil)
+			// External sidecars such as VetroffProxy cannot be represented
+			// as native JSON outbounds. Keep their separate raw URI links.
+			if !a.formatAllowed(c, "links") {
+				writeSubError(c, nil)
+			} else {
+				logSubscriptionRoute(userAgent, "native-fallback-raw")
+				a.serveRawSubscription(c)
+			}
+			return
 		}
 		a.recordSubscriptionFetch(c)
 		logSubscriptionRoute(userAgent, format+"-json")
@@ -538,7 +546,13 @@ func (a *SUBController) subs(c *gin.Context) {
 	}
 	if format == "xray" || format == "sing-box" {
 		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), format == "sing-box") {
-			writeSubError(c, nil)
+			if !a.formatAllowed(c, "links") {
+				writeSubError(c, nil)
+			} else {
+				logSubscriptionRoute(userAgent, "native-fallback-raw")
+				a.serveRawSubscription(c)
+			}
+			return
 		}
 		a.recordSubscriptionFetch(c)
 		return
@@ -572,6 +586,14 @@ func (a *SUBController) subs(c *gin.Context) {
 		}
 	}
 	logSubscriptionRoute(userAgent, "raw")
+	a.serveRawSubscription(c)
+}
+
+// serveRawSubscription emits the lossless link format when a requested native
+// config cannot represent every protocol in a subscription. The caller already
+// checked the device limit and whether link output is permitted.
+func (a *SUBController) serveRawSubscription(c *gin.Context) {
+	userAgent := c.GetHeader("User-Agent")
 	subId := c.Param("subid")
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	subReq := a.subService.ForRequest(host)
@@ -824,38 +846,15 @@ func (a *SUBController) subPageContext(page PageData) map[string]any {
 }
 
 func (a *SUBController) enforceHwid(c *gin.Context) bool {
-	result, err := a.clientService.EnforceHwidForSubID(c.Param("subid"), service.HwidRequest{
-		Hwid:        c.GetHeader("X-HWID"),
-		UserAgent:   c.GetHeader("User-Agent"),
-		DeviceOS:    c.GetHeader("X-Device-OS"),
-		OsVersion:   c.GetHeader("X-Ver-OS"),
-		DeviceModel: c.GetHeader("X-Device-Model"),
-	})
+	allowed, err := a.clientService.CheckSubscriptionDevice(c.Writer, c.Request, c.Param("subid"))
 	if err != nil {
 		writeSubError(c, err)
 		return false
 	}
-	applyHwidHeaders(c, result)
-	if !result.Allowed {
+	if !allowed {
 		c.Status(http.StatusNotFound)
-		return false
 	}
-	return true
-}
-
-func applyHwidHeaders(c *gin.Context, result service.HwidGateResult) {
-	if result.Active {
-		c.Header("X-Hwid-Active", "true")
-	}
-	if result.NotSupported {
-		c.Header("X-Hwid-Not-Supported", "true")
-	}
-	if result.LimitReached {
-		c.Header("X-Hwid-Limit", "true")
-	}
-	if result.MaxDevicesReached {
-		c.Header("X-Hwid-Max-Devices-Reached", "true")
-	}
+	return allowed
 }
 
 // hwidStatus serves read-only device-slot counters for a subscription. It

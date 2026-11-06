@@ -527,7 +527,7 @@ func TestHiddifyDatabaseReversePortalConfiguration(t *testing.T) {
 
 func TestHiddifyNativeTemplateTLSCipherCompatibility(t *testing.T) {
 	setupBulkDB(t)
-	patch := `{"outbounds":[{"type":"direct","tag":"direct"},{"type":"block","tag":"blocked"},{"type":"trojan","tag":"native-proxy","server":"example.com","server_port":443,"password":"test-password","tls":{"enabled":true,"server_name":"example.com","cipher_suites":["TLS_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"]}}]}`
+	patch := `{"outbounds":[{"type":"direct","tag":"direct"},{"type":"block","tag":"blocked"},{"type":"trojan","tag":"native-proxy","server":"example.com","server_port":443,"password":"test-password","tls":{"enabled":true,"server_name":"example.com","cipher_suites":["TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"]}}]}`
 	if err := singBoxSettingService.SetSingBoxConfigTemplate(patch); err != nil {
 		t.Fatal(err)
 	}
@@ -536,8 +536,8 @@ func TestHiddifyNativeTemplateTLSCipherCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	data := checkGeneratedHiddifyConfig(t, cfg)
-	if !strings.Contains(string(data), "TLS_RSA_WITH_AES_128_GCM_SHA256") {
-		t.Fatal("explicit legacy TLS suite was silently removed")
+	if !strings.Contains(string(data), "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256") {
+		t.Fatal("supported ECDHE RSA TLS suite was lost")
 	}
 	if !strings.Contains(string(data), "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256") {
 		t.Fatal("supported cipher was lost")

@@ -67,6 +67,7 @@ func migrationModels() []any {
 		&model.SubBalancer{},
 		&model.TuicTrafficReceipt{},
 		&model.CoreTrafficCheckpoint{},
+		&model.ManagerSubscription{}, &model.ManagerOperation{}, &model.ManagerRelay{}, &model.ManagerDomain{},
 	}
 }
 
@@ -152,10 +153,56 @@ func MigrateData(srcPath, dstDSN string) error {
 	return nil
 }
 
-// ExportPostgresToSQLite copies every row from the PostgreSQL database described
-// by srcDSN into a fresh SQLite file at dstPath. It is the reverse of
-// MigrateData and is used to hand a PostgreSQL-backed panel a portable .db file.
-// dstPath is created/overwritten; the PostgreSQL source is left untouched.
+// MigrateLegacyData imports an older SQLite panel into PostgreSQL without
+// altering the user's source file. Unlike a regular import, older panels may
+// lack entire tables or columns that today's migrationModels enumerates.
+// Snapshot the live SQLite database (including its WAL) first, upgrade only
+// that private snapshot, then use the strict transactional row copier.
+func MigrateLegacyData(srcPath, dstDSN string) error {
+	if dstDSN == "" {
+		return errors.New("destination DSN is required")
+	}
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		return fmt.Errorf("source sqlite not found at %s: %w", srcPath, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("source sqlite %q is not a regular file", srcPath)
+	}
+	stage, err := os.MkdirTemp("", "3x-ui-legacy-migration-*")
+	if err != nil {
+		return fmt.Errorf("create migration snapshot directory: %w", err)
+	}
+	defer os.RemoveAll(stage)
+	snapshot := filepath.Join(stage, "source.db")
+
+	src, err := gorm.Open(sqlite.Open(srcPath+"?_busy_timeout=10000"), &gorm.Config{Logger: logger.Discard})
+	if err != nil {
+		return fmt.Errorf("open legacy sqlite: %w", err)
+	}
+	sqlDB, err := src.DB()
+	if err != nil {
+		return err
+	}
+	// VACUUM INTO takes a transactionally consistent snapshot, unlike a raw
+	// file copy that could omit uncheckpointed SQLite WAL transactions.
+	backupErr := src.Exec("VACUUM INTO ?", snapshot).Error
+	closeErr := sqlDB.Close()
+	if backupErr != nil {
+		return fmt.Errorf("snapshot legacy sqlite: %w", backupErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close legacy sqlite: %w", closeErr)
+	}
+	if err := PrepareSQLiteForMigration(snapshot); err != nil {
+		return fmt.Errorf("prepare legacy sqlite snapshot: %w", err)
+	}
+	return MigrateData(snapshot, dstDSN)
+}
+
+// ExportPostgresToSQLite copies every row from PostgreSQL into a portable
+// SQLite file. Publish the finished backup atomically: failure to reach the
+// source or copy a table must never destroy a previous valid export.
 func ExportPostgresToSQLite(srcDSN, dstPath string) error {
 	if srcDSN == "" {
 		return errors.New("source DSN is required")

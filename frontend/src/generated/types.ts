@@ -4,6 +4,9 @@ export type ProcessState = string;
 export type Protocol = string;
 export type VKTurnProxyForwardType = string;
 export type clientResetPolicy = number;
+export type nearbySNIProbe = unknown;
+export type sniProgress = unknown;
+export type sniScanFunc = unknown;
 export type staticEgressResolver = string;
 export type trafficLocalApplyAction = number;
 export type transportBits = number;
@@ -839,6 +842,138 @@ export interface MLKEM768Response {
   seed: string;
 }
 
+export interface ManagerClientInfo {
+  down: number;
+  email: string;
+  enabled: boolean;
+  expiryTime: number;
+  total: number;
+  up: number;
+}
+
+export interface ManagerDomain {
+  id: number;
+  name: string;
+}
+
+export interface ManagerEntry {
+  activeInboundId: number;
+  config?: ManagerInboundConfig | null;
+  customLink: string;
+  flag: string;
+  label: string;
+  mode: string;
+  nodeId?: number | null;
+  port: string;
+  preset?: string;
+  relayId: number;
+  sni: string;
+  templateId: number;
+}
+
+export interface ManagerInboundConfig {
+  disableFlow: boolean;
+  listen: string;
+  protocol: Protocol;
+  settings: string;
+  shareAddr: string;
+  shareAddrStrategy: string;
+  sniffing: string;
+  streamSettings: string;
+  subSortIndex: number;
+}
+
+export interface ManagerListOptions {
+  compact: boolean;
+  page: number;
+  search: string;
+}
+
+export interface ManagerOperation {
+  attempts: number;
+  completed: number;
+  createdAt: number;
+  finishedAt: number;
+  id: number;
+  kind: string;
+  message: string;
+  relayId: number;
+  state: string;
+  subscriptionId: number;
+  total: number;
+}
+
+export interface ManagerPreflight {
+  entries: ManagerPreflightEntry[];
+  ready: boolean;
+}
+
+export interface ManagerPreflightEntry {
+  index: number;
+  message: string;
+  ready: boolean;
+}
+
+export interface ManagerRelay {
+  address: string;
+  hostKey: string;
+  id: number;
+  installed: boolean;
+  keyAuth: boolean;
+  name: string;
+  nodeId: number;
+  sshPort: number;
+  username: string;
+}
+
+export interface ManagerRelayInput {
+  address: string;
+  credential: string;
+  hostKey: string;
+  id: number;
+  keyAuth: boolean;
+  name: string;
+  nodeId: number;
+  sshPort: number;
+  username: string;
+}
+
+export interface ManagerSnapshot {
+  clients: Record<string, ManagerClientInfo>;
+  domains: ManagerDomain[];
+  operationTotal: number;
+  operations: ManagerOperation[];
+  pageSize: number;
+  pendingOperations: number;
+  relays: ManagerRelay[];
+  subscriptionPage: number;
+  subscriptionTotal: number;
+  subscriptions: ManagerSubscription[];
+}
+
+export interface ManagerSubscription {
+  autoRotate: boolean;
+  clientId: number;
+  createdAt: number;
+  enabled: boolean;
+  entries: ManagerEntry[];
+  graceMinutes: number;
+  happ: string;
+  id: number;
+  incy: string;
+  intervalMinutes: number;
+  lastRotation: number;
+  name: string;
+  nextRotation: number;
+  note: string;
+  ownClient: boolean;
+  published: ManagerEntry[];
+  supportUrl: string;
+  token: string;
+  updatedAt: number;
+  websiteUrl: string;
+}
+
 export interface Msg {
   msg: string;
   obj: unknown;
@@ -887,6 +1022,7 @@ export interface Node {
   pinnedCertSha256: string;
   port: number;
   presenceRegistry: string;
+  protocolAvailability?: Record<string, ProtocolAvailability>;
   remark: string;
   runningCore: string;
   scheme: string;
@@ -964,6 +1100,7 @@ export interface NodeView {
   pinnedCertSha256: string;
   port: number;
   presenceRegistry: string;
+  protocolAvailability?: Record<string, ProtocolAvailability>;
   remark: string;
   runningCore: string;
   scheme: string;
@@ -1025,6 +1162,7 @@ export interface ProbeResultUI {
   panelEdition: string;
   panelVersion: string;
   presenceRegistry: string;
+  protocolAvailability?: Record<string, ProtocolAvailability>;
   runningCore: string;
   singboxError: string;
   singboxInstalled: boolean;
@@ -1038,26 +1176,45 @@ export interface ProbeResultUI {
   xrayVersion: string;
 }
 
+export interface ProtocolAvailability {
+  component: string;
+  ready: boolean;
+  speedLimit: boolean;
+  supported: boolean;
+  version: string;
+}
+
 export interface RealityScanResult {
   alpn: string;
+  attempts?: number;
   certChainBytes: number;
   certChainValid: boolean;
   certIssuer: string;
   certSubject: string;
   certValid: boolean;
+  checkedAt?: string;
   curveID: string;
+  dnsLookupError?: string;
+  dnsMatchesIP?: boolean | null;
   feasible: boolean;
   h2: boolean;
   host: string;
+  http2OK?: boolean | null;
   ip: string;
+  jitterMs?: number;
   latencyMs: number;
+  medianMs?: number;
   notAfter: string;
   port: number;
   privateTarget: boolean;
   reason: string;
   serverNames: string[];
+  source?: string;
+  successes?: number;
   target: string;
+  tcpMs?: number;
   tls13: boolean;
+  tlsMs?: number;
   tlsVersion: string;
   x25519: boolean;
 }
@@ -1091,6 +1248,35 @@ export interface RoutingPresetView {
   name: string;
   ruleCount: number;
   updatedAt: number;
+}
+
+export interface SNIJobSnapshot {
+  completed: number;
+  createdAt: string;
+  error?: string;
+  finishedAt?: string;
+  id: string;
+  phase: string;
+  results: (RealityScanResult | null)[];
+  source: string;
+  state: string;
+  total: number;
+  verified: number;
+  verifyTotal: number;
+}
+
+export interface SNISavedTarget {
+  host: string;
+  ip: string;
+  port: number;
+}
+
+export interface SNIScanRequest {
+  mode?: string;
+  nodeId?: number | null;
+  purpose?: string;
+  recheck?: (SNISavedTarget | null)[];
+  targets?: string;
 }
 
 export interface ServerSettings {

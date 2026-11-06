@@ -3645,6 +3645,514 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
+  "ManagerClientInfo": {
+    "properties": {
+      "down": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "email": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "expiryTime": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "total": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "up": {
+        "format": "int64",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "down",
+      "email",
+      "enabled",
+      "expiryTime",
+      "total",
+      "up"
+    ],
+    "type": "object"
+  },
+  "ManagerDomain": {
+    "properties": {
+      "id": {
+        "type": "integer"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name"
+    ],
+    "type": "object"
+  },
+  "ManagerEntry": {
+    "properties": {
+      "activeInboundId": {
+        "type": "integer"
+      },
+      "config": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ManagerInboundConfig"
+          }
+        ],
+        "nullable": true
+      },
+      "customLink": {
+        "type": "string"
+      },
+      "flag": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string"
+      },
+      "nodeId": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "port": {
+        "type": "string"
+      },
+      "preset": {
+        "type": "string"
+      },
+      "relayId": {
+        "type": "integer"
+      },
+      "sni": {
+        "type": "string"
+      },
+      "templateId": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "activeInboundId",
+      "customLink",
+      "flag",
+      "label",
+      "mode",
+      "port",
+      "relayId",
+      "sni",
+      "templateId"
+    ],
+    "type": "object"
+  },
+  "ManagerInboundConfig": {
+    "properties": {
+      "disableFlow": {
+        "type": "boolean"
+      },
+      "listen": {
+        "type": "string"
+      },
+      "protocol": {
+        "type": "string"
+      },
+      "settings": {
+        "type": "string"
+      },
+      "shareAddr": {
+        "type": "string"
+      },
+      "shareAddrStrategy": {
+        "type": "string"
+      },
+      "sniffing": {
+        "type": "string"
+      },
+      "streamSettings": {
+        "type": "string"
+      },
+      "subSortIndex": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "disableFlow",
+      "listen",
+      "protocol",
+      "settings",
+      "shareAddr",
+      "shareAddrStrategy",
+      "sniffing",
+      "streamSettings",
+      "subSortIndex"
+    ],
+    "type": "object"
+  },
+  "ManagerListOptions": {
+    "properties": {
+      "compact": {
+        "type": "boolean"
+      },
+      "page": {
+        "type": "integer"
+      },
+      "search": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "compact",
+      "page",
+      "search"
+    ],
+    "type": "object"
+  },
+  "ManagerOperation": {
+    "properties": {
+      "attempts": {
+        "type": "integer"
+      },
+      "completed": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "finishedAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "kind": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      },
+      "relayId": {
+        "type": "integer"
+      },
+      "state": {
+        "type": "string"
+      },
+      "subscriptionId": {
+        "type": "integer"
+      },
+      "total": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "attempts",
+      "completed",
+      "createdAt",
+      "finishedAt",
+      "id",
+      "kind",
+      "message",
+      "relayId",
+      "state",
+      "subscriptionId",
+      "total"
+    ],
+    "type": "object"
+  },
+  "ManagerPreflight": {
+    "properties": {
+      "entries": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerPreflightEntry"
+        },
+        "type": "array"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "entries",
+      "ready"
+    ],
+    "type": "object"
+  },
+  "ManagerPreflightEntry": {
+    "properties": {
+      "index": {
+        "type": "integer"
+      },
+      "message": {
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "index",
+      "message",
+      "ready"
+    ],
+    "type": "object"
+  },
+  "ManagerRelay": {
+    "properties": {
+      "address": {
+        "type": "string"
+      },
+      "hostKey": {
+        "type": "string"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "installed": {
+        "type": "boolean"
+      },
+      "keyAuth": {
+        "type": "boolean"
+      },
+      "name": {
+        "type": "string"
+      },
+      "nodeId": {
+        "type": "integer"
+      },
+      "sshPort": {
+        "type": "integer"
+      },
+      "username": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "address",
+      "hostKey",
+      "id",
+      "installed",
+      "keyAuth",
+      "name",
+      "nodeId",
+      "sshPort",
+      "username"
+    ],
+    "type": "object"
+  },
+  "ManagerRelayInput": {
+    "properties": {
+      "address": {
+        "type": "string"
+      },
+      "credential": {
+        "type": "string"
+      },
+      "hostKey": {
+        "type": "string"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "keyAuth": {
+        "type": "boolean"
+      },
+      "name": {
+        "type": "string"
+      },
+      "nodeId": {
+        "type": "integer"
+      },
+      "sshPort": {
+        "type": "integer"
+      },
+      "username": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "address",
+      "credential",
+      "hostKey",
+      "id",
+      "keyAuth",
+      "name",
+      "nodeId",
+      "sshPort",
+      "username"
+    ],
+    "type": "object"
+  },
+  "ManagerSnapshot": {
+    "properties": {
+      "clients": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ManagerClientInfo"
+        },
+        "type": "object"
+      },
+      "domains": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerDomain"
+        },
+        "type": "array"
+      },
+      "operationTotal": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "operations": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerOperation"
+        },
+        "type": "array"
+      },
+      "pageSize": {
+        "type": "integer"
+      },
+      "pendingOperations": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "relays": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerRelay"
+        },
+        "type": "array"
+      },
+      "subscriptionPage": {
+        "type": "integer"
+      },
+      "subscriptionTotal": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "subscriptions": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerSubscription"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "clients",
+      "domains",
+      "operationTotal",
+      "operations",
+      "pageSize",
+      "pendingOperations",
+      "relays",
+      "subscriptionPage",
+      "subscriptionTotal",
+      "subscriptions"
+    ],
+    "type": "object"
+  },
+  "ManagerSubscription": {
+    "properties": {
+      "autoRotate": {
+        "type": "boolean"
+      },
+      "clientId": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "entries": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerEntry"
+        },
+        "type": "array"
+      },
+      "graceMinutes": {
+        "type": "integer"
+      },
+      "happ": {
+        "type": "string"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "incy": {
+        "type": "string"
+      },
+      "intervalMinutes": {
+        "type": "integer"
+      },
+      "lastRotation": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "name": {
+        "type": "string"
+      },
+      "nextRotation": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "note": {
+        "type": "string"
+      },
+      "ownClient": {
+        "type": "boolean"
+      },
+      "published": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerEntry"
+        },
+        "type": "array"
+      },
+      "supportUrl": {
+        "type": "string"
+      },
+      "token": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "websiteUrl": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "autoRotate",
+      "clientId",
+      "createdAt",
+      "enabled",
+      "entries",
+      "graceMinutes",
+      "happ",
+      "id",
+      "incy",
+      "intervalMinutes",
+      "lastRotation",
+      "name",
+      "nextRotation",
+      "note",
+      "ownClient",
+      "published",
+      "supportUrl",
+      "token",
+      "updatedAt",
+      "websiteUrl"
+    ],
+    "type": "object"
+  },
   "Msg": {
     "properties": {
       "msg": {
@@ -3831,6 +4339,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "presenceRegistry": {
         "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
         "type": "string"
+      },
+      "protocolAvailability": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ProtocolAvailability"
+        },
+        "type": "object"
       },
       "remark": {
         "type": "string"
@@ -4213,6 +4727,12 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "running",
         "type": "string"
       },
+      "protocolAvailability": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ProtocolAvailability"
+        },
+        "type": "object"
+      },
       "remark": {
         "example": "Primary edge",
         "type": "string"
@@ -4509,6 +5029,12 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
         "type": "string"
       },
+      "protocolAvailability": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ProtocolAvailability"
+        },
+        "type": "object"
+      },
       "runningCore": {
         "type": "string"
       },
@@ -4575,11 +5101,41 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
+  "ProtocolAvailability": {
+    "properties": {
+      "component": {
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      },
+      "speedLimit": {
+        "type": "boolean"
+      },
+      "supported": {
+        "type": "boolean"
+      },
+      "version": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "component",
+      "ready",
+      "speedLimit",
+      "supported",
+      "version"
+    ],
+    "type": "object"
+  },
   "RealityScanResult": {
     "properties": {
       "alpn": {
         "example": "h2",
         "type": "string"
+      },
+      "attempts": {
+        "type": "integer"
       },
       "certChainBytes": {
         "description": "CertChainBytes is the sum of DER lengths of the presented peer chain.\nxray-core ML-DSA-65 REALITY needs \u003e= 3500 bytes (constant lives in xray-core).",
@@ -4603,9 +5159,19 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": true,
         "type": "boolean"
       },
+      "checkedAt": {
+        "type": "string"
+      },
       "curveID": {
         "example": "X25519",
         "type": "string"
+      },
+      "dnsLookupError": {
+        "type": "string"
+      },
+      "dnsMatchesIP": {
+        "nullable": true,
+        "type": "boolean"
       },
       "feasible": {
         "example": true,
@@ -4619,13 +5185,23 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "www.cloudflare.com",
         "type": "string"
       },
+      "http2OK": {
+        "nullable": true,
+        "type": "boolean"
+      },
       "ip": {
         "example": "104.16.124.96",
         "type": "string"
       },
+      "jitterMs": {
+        "type": "number"
+      },
       "latencyMs": {
         "example": 180,
         "type": "integer"
+      },
+      "medianMs": {
+        "type": "number"
       },
       "notAfter": {
         "example": "2026-08-01T00:00:00Z",
@@ -4649,13 +5225,25 @@ export const SCHEMAS: Record<string, unknown> = {
         },
         "type": "array"
       },
+      "source": {
+        "type": "string"
+      },
+      "successes": {
+        "type": "integer"
+      },
       "target": {
         "example": "www.cloudflare.com:443",
         "type": "string"
       },
+      "tcpMs": {
+        "type": "number"
+      },
       "tls13": {
         "example": true,
         "type": "boolean"
+      },
+      "tlsMs": {
+        "type": "number"
       },
       "tlsVersion": {
         "example": "1.3",
@@ -4799,6 +5387,116 @@ export const SCHEMAS: Record<string, unknown> = {
       "ruleCount",
       "updatedAt"
     ],
+    "type": "object"
+  },
+  "SNIJobSnapshot": {
+    "properties": {
+      "completed": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "error": {
+        "type": "string"
+      },
+      "finishedAt": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "phase": {
+        "type": "string"
+      },
+      "results": {
+        "items": {
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/RealityScanResult"
+            }
+          ],
+          "nullable": true
+        },
+        "type": "array"
+      },
+      "source": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "total": {
+        "type": "integer"
+      },
+      "verified": {
+        "type": "integer"
+      },
+      "verifyTotal": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "completed",
+      "createdAt",
+      "id",
+      "phase",
+      "results",
+      "source",
+      "state",
+      "total",
+      "verified",
+      "verifyTotal"
+    ],
+    "type": "object"
+  },
+  "SNISavedTarget": {
+    "properties": {
+      "host": {
+        "type": "string"
+      },
+      "ip": {
+        "type": "string"
+      },
+      "port": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "host",
+      "ip",
+      "port"
+    ],
+    "type": "object"
+  },
+  "SNIScanRequest": {
+    "properties": {
+      "mode": {
+        "type": "string"
+      },
+      "nodeId": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "purpose": {
+        "type": "string"
+      },
+      "recheck": {
+        "description": "Recheck pins both IP and SNI from a saved result; never resolves it to\nanother destination. The ordinary SSRF guard still applies to every IP.",
+        "items": {
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/SNISavedTarget"
+            }
+          ],
+          "nullable": true
+        },
+        "type": "array"
+      },
+      "targets": {
+        "type": "string"
+      }
+    },
     "type": "object"
   },
   "ServerSettings": {

@@ -13,7 +13,7 @@ describe('hiddify core selection', () => {
   it('uses native core protocol eligibility', () => {
     expect(nodeSupportsProtocol({ coreType: 'hiddify-core' }, Protocols.SNELL)).toBe(true);
     expect(nodeSupportsProtocol({ coreType: 'hiddify-core' }, Protocols.NAIVE)).toBe(true);
-    expect(nodeSupportsProtocol({ coreType: 'hiddify-core' }, Protocols.WIREGUARD)).toBe(false);
+    expect(nodeSupportsProtocol({ coreType: 'hiddify-core' }, Protocols.WIREGUARD)).toBe(true);
   });
 });
 

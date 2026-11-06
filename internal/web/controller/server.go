@@ -83,6 +83,8 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/updateGeofile/:fileName", a.updateGeofile)
 	g.POST("/logs/:count", a.getLogs)
 	g.POST("/xraylogs/:count", a.getXrayLogs)
+	g.GET("/domainActivity", a.getDomainActivity)
+	g.POST("/domainActivity/config", a.setDomainActivity)
 	g.POST("/amneziawglogs/:count", a.getAmneziaWGLogs)
 	g.GET("/amneziawgMetrics", a.getAmneziaWGMetrics)
 	g.POST("/importDB", a.importDB)
@@ -96,6 +98,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/clientIps", a.setClientIps)
 
 	a.initVKTurnProxyRouter(g)
+	a.initSNIJobRouter(g)
 }
 
 func (a *ServerController) readHiddify(c *gin.Context) (*service.HiddifyBackup, service.HiddifyPreview, error) {
@@ -276,7 +279,8 @@ func (a *ServerController) status(c *gin.Context) {
 	obj["core"] = gin.H{
 		"type": coreType, "running": runningCore,
 		"state": selected["state"], "errorMsg": selected["errorMsg"], "version": selected["version"],
-		"capabilities": core.Type(coreType).Capabilities(),
+		"capabilities":         core.Type(coreType).Capabilities(),
+		"protocolAvailability": service.ProtocolAvailability(coreType, fmt.Sprint(selected["version"]), selected["installed"] == true),
 	}
 	jsonObj(c, obj, nil)
 }
@@ -729,7 +733,17 @@ func (a *ServerController) scanRealityTarget(c *gin.Context) {
 // scanRealityTargets probes the supplied comma-separated targets, or the
 // realityScanCandidates setting when empty, ranked by feasibility then latency.
 func (a *ServerController) scanRealityTargets(c *gin.Context) {
-	res, err := a.serverService.ScanRealityTargets(c.PostForm("targets"))
+	mode := c.PostForm("mode")
+	var res []*service.RealityScanResult
+	var err error
+	switch mode {
+	case "", "candidates":
+		res, err = a.serverService.ScanRealityTargetsContext(c.Request.Context(), c.PostForm("targets"))
+	case "nearby":
+		res, err = a.serverService.ScanNearbySNIs(c.Request.Context(), c.PostForm("targets"))
+	default:
+		err = fmt.Errorf("unknown SNI scan mode: %s", mode)
+	}
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.scanRealityTargetError"), err)
 		return

@@ -63,32 +63,15 @@ func inboundCanEnableTlsFlow(protocol, streamSettings, settings string) bool {
 // runtime. Core-specific support is validated separately by
 // coreSupportsInboundProtocol, so sidecar protocols remain assignable to either
 // core while Xray/sing-box-only listeners are rejected for the wrong core.
-var nodeEligibleProtocols = map[model.Protocol]bool{
-	model.VLESS:       true,
-	model.VMESS:       true,
-	model.Trojan:      true,
-	model.Shadowsocks: true,
-	model.WireGuard:   true,
-	model.Hysteria:    true,
-	model.HTTP:        true,
-	model.Mixed:       true,
-	model.Tunnel:      true,
-	model.Tun:         true,
-	model.MTProto:     true,
-	model.AmneziaWG:   true,
-	model.TUIC:        true,
-	model.Pingtunnel:  true,
-	model.TrustTunnel: true,
-	model.FPTN:        true,
-	model.OpenFlux:    true,
-	model.NaiveProxy:  true,
-	model.Snell:       true,
-	model.AnyTLS:      true,
-	model.ShadowTLS:   true,
-	model.Mieru:       true,
-	model.VKTurnProxy: true,
-	model.Sudoku:      true,
-}
+var nodeEligibleProtocols = func() map[model.Protocol]bool {
+	result := map[model.Protocol]bool{}
+	for protocol, capability := range model.InboundProtocolCapabilities {
+		if capability.NodeEligible {
+			result[protocol] = true
+		}
+	}
+	return result
+}()
 
 func isNodeEligibleProtocol(protocol model.Protocol) bool {
 	return nodeEligibleProtocols[protocol]
@@ -107,6 +90,17 @@ var nodeProtocolFirstRelease = map[model.Protocol]string{
 func checkNodeCanHostProtocol(db *gorm.DB, nodeID int, protocol model.Protocol) error {
 	if !nodeEligibleProtocols[protocol] {
 		return common.NewErrorf("%s inbounds cannot be assigned to a node", protocol)
+	}
+	var target model.Node
+	if err := db.First(&target, nodeID).Error; err != nil {
+		return err
+	}
+	if target.ProtocolAvailability != nil {
+		capability, exists := target.ProtocolAvailability[string(protocol)]
+		if !exists || !capability.Supported || !capability.Ready {
+			return common.NewErrorf("node %q is not ready for %s; install a compatible component and refresh its heartbeat", target.Name, protocol)
+		}
+		return nil
 	}
 	firstRelease, ok := nodeProtocolFirstRelease[protocol]
 	if !ok {

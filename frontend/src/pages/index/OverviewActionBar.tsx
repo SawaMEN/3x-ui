@@ -10,6 +10,7 @@ import {
   CloudDownloadOutlined,
   CloudServerOutlined,
   ControlOutlined,
+  GlobalOutlined,
   PoweroffOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
@@ -34,6 +35,7 @@ interface OverviewActionBarProps {
   onRestartXray: () => void;
   onOpenLogs: () => void;
   onOpenXrayLogs: () => void;
+  onOpenDomainActivity: () => void;
   onOpenAmneziaWGLogs: () => void;
   onOpenConfig: () => void;
   onOpenBackup: () => void;
@@ -75,6 +77,7 @@ export default function OverviewActionBar({
   onRestartXray,
   onOpenLogs,
   onOpenXrayLogs,
+  onOpenDomainActivity,
   onOpenAmneziaWGLogs,
   onOpenConfig,
   onOpenBackup,
@@ -131,6 +134,16 @@ export default function OverviewActionBar({
               icon: <BarsOutlined />,
               text: t('pages.index.accessLogs'),
               onClick: onOpenXrayLogs,
+            },
+          ]
+        : []),
+      ...(['xray', 'sing-box', 'sing-box-upstream'].includes(coreType)
+        ? [
+            {
+              key: 'domainActivity',
+              icon: <GlobalOutlined />,
+              text: t('pages.index.domainActivityTitle'),
+              onClick: onOpenDomainActivity,
             },
           ]
         : []),

@@ -997,6 +997,246 @@ export const EXAMPLES: Record<string, unknown> = {
     "client": "mlkem768-client",
     "seed": "mlkem768-seed"
   },
+  "ManagerClientInfo": {
+    "down": 0,
+    "email": "",
+    "enabled": false,
+    "expiryTime": 0,
+    "total": 0,
+    "up": 0
+  },
+  "ManagerDomain": {
+    "id": 0,
+    "name": ""
+  },
+  "ManagerEntry": {
+    "activeInboundId": 0,
+    "config": null,
+    "customLink": "",
+    "flag": "",
+    "label": "",
+    "mode": "",
+    "nodeId": null,
+    "port": "",
+    "preset": "",
+    "relayId": 0,
+    "sni": "",
+    "templateId": 0
+  },
+  "ManagerInboundConfig": {
+    "disableFlow": false,
+    "listen": "",
+    "protocol": "",
+    "settings": "",
+    "shareAddr": "",
+    "shareAddrStrategy": "",
+    "sniffing": "",
+    "streamSettings": "",
+    "subSortIndex": 0
+  },
+  "ManagerListOptions": {
+    "compact": false,
+    "page": 0,
+    "search": ""
+  },
+  "ManagerOperation": {
+    "attempts": 0,
+    "completed": 0,
+    "createdAt": 0,
+    "finishedAt": 0,
+    "id": 0,
+    "kind": "",
+    "message": "",
+    "relayId": 0,
+    "state": "",
+    "subscriptionId": 0,
+    "total": 0
+  },
+  "ManagerPreflight": {
+    "entries": [
+      {
+        "index": 0,
+        "message": "",
+        "ready": false
+      }
+    ],
+    "ready": false
+  },
+  "ManagerPreflightEntry": {
+    "index": 0,
+    "message": "",
+    "ready": false
+  },
+  "ManagerRelay": {
+    "address": "",
+    "hostKey": "",
+    "id": 0,
+    "installed": false,
+    "keyAuth": false,
+    "name": "",
+    "nodeId": 0,
+    "sshPort": 0,
+    "username": ""
+  },
+  "ManagerRelayInput": {
+    "address": "",
+    "credential": "",
+    "hostKey": "",
+    "id": 0,
+    "keyAuth": false,
+    "name": "",
+    "nodeId": 0,
+    "sshPort": 0,
+    "username": ""
+  },
+  "ManagerSnapshot": {
+    "clients": {},
+    "domains": [
+      {
+        "id": 0,
+        "name": ""
+      }
+    ],
+    "operationTotal": 0,
+    "operations": [
+      {
+        "attempts": 0,
+        "completed": 0,
+        "createdAt": 0,
+        "finishedAt": 0,
+        "id": 0,
+        "kind": "",
+        "message": "",
+        "relayId": 0,
+        "state": "",
+        "subscriptionId": 0,
+        "total": 0
+      }
+    ],
+    "pageSize": 0,
+    "pendingOperations": 0,
+    "relays": [
+      {
+        "address": "",
+        "hostKey": "",
+        "id": 0,
+        "installed": false,
+        "keyAuth": false,
+        "name": "",
+        "nodeId": 0,
+        "sshPort": 0,
+        "username": ""
+      }
+    ],
+    "subscriptionPage": 0,
+    "subscriptionTotal": 0,
+    "subscriptions": [
+      {
+        "autoRotate": false,
+        "clientId": 0,
+        "createdAt": 0,
+        "enabled": false,
+        "entries": [
+          {
+            "activeInboundId": 0,
+            "config": null,
+            "customLink": "",
+            "flag": "",
+            "label": "",
+            "mode": "",
+            "nodeId": null,
+            "port": "",
+            "preset": "",
+            "relayId": 0,
+            "sni": "",
+            "templateId": 0
+          }
+        ],
+        "graceMinutes": 0,
+        "happ": "",
+        "id": 0,
+        "incy": "",
+        "intervalMinutes": 0,
+        "lastRotation": 0,
+        "name": "",
+        "nextRotation": 0,
+        "note": "",
+        "ownClient": false,
+        "published": [
+          {
+            "activeInboundId": 0,
+            "config": null,
+            "customLink": "",
+            "flag": "",
+            "label": "",
+            "mode": "",
+            "nodeId": null,
+            "port": "",
+            "preset": "",
+            "relayId": 0,
+            "sni": "",
+            "templateId": 0
+          }
+        ],
+        "supportUrl": "",
+        "token": "",
+        "updatedAt": 0,
+        "websiteUrl": ""
+      }
+    ]
+  },
+  "ManagerSubscription": {
+    "autoRotate": false,
+    "clientId": 0,
+    "createdAt": 0,
+    "enabled": false,
+    "entries": [
+      {
+        "activeInboundId": 0,
+        "config": null,
+        "customLink": "",
+        "flag": "",
+        "label": "",
+        "mode": "",
+        "nodeId": null,
+        "port": "",
+        "preset": "",
+        "relayId": 0,
+        "sni": "",
+        "templateId": 0
+      }
+    ],
+    "graceMinutes": 0,
+    "happ": "",
+    "id": 0,
+    "incy": "",
+    "intervalMinutes": 0,
+    "lastRotation": 0,
+    "name": "",
+    "nextRotation": 0,
+    "note": "",
+    "ownClient": false,
+    "published": [
+      {
+        "activeInboundId": 0,
+        "config": null,
+        "customLink": "",
+        "flag": "",
+        "label": "",
+        "mode": "",
+        "nodeId": null,
+        "port": "",
+        "preset": "",
+        "relayId": 0,
+        "sni": "",
+        "templateId": 0
+      }
+    ],
+    "supportUrl": "",
+    "token": "",
+    "updatedAt": 0,
+    "websiteUrl": ""
+  },
   "Msg": {
     "msg": "",
     "obj": null,
@@ -1045,6 +1285,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "pinnedCertSha256": "",
     "port": 2053,
     "presenceRegistry": "",
+    "protocolAvailability": {},
     "remark": "",
     "runningCore": "",
     "scheme": "https",
@@ -1126,6 +1367,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "pinnedCertSha256": "",
     "port": 2053,
     "presenceRegistry": "running",
+    "protocolAvailability": {},
     "remark": "Primary edge",
     "runningCore": "",
     "scheme": "https",
@@ -1185,6 +1427,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "panelEdition": "sawamen",
     "panelVersion": "v3.x.x",
     "presenceRegistry": "",
+    "protocolAvailability": {},
     "runningCore": "",
     "singboxError": "",
     "singboxInstalled": false,
@@ -1199,19 +1442,33 @@ export const EXAMPLES: Record<string, unknown> = {
     "xrayError": "",
     "xrayVersion": "25.10.31"
   },
+  "ProtocolAvailability": {
+    "component": "",
+    "ready": false,
+    "speedLimit": false,
+    "supported": false,
+    "version": ""
+  },
   "RealityScanResult": {
     "alpn": "h2",
+    "attempts": 0,
     "certChainBytes": 3427,
     "certChainValid": true,
     "certIssuer": "Google Trust Services",
     "certSubject": "cloudflare.com",
     "certValid": true,
+    "checkedAt": "",
     "curveID": "X25519",
+    "dnsLookupError": "",
+    "dnsMatchesIP": null,
     "feasible": true,
     "h2": true,
     "host": "www.cloudflare.com",
+    "http2OK": null,
     "ip": "104.16.124.96",
+    "jitterMs": 0,
     "latencyMs": 180,
+    "medianMs": 0,
     "notAfter": "2026-08-01T00:00:00Z",
     "port": 443,
     "privateTarget": false,
@@ -1219,8 +1476,12 @@ export const EXAMPLES: Record<string, unknown> = {
     "serverNames": [
       ""
     ],
+    "source": "",
+    "successes": 0,
     "target": "www.cloudflare.com:443",
+    "tcpMs": 0,
     "tls13": true,
+    "tlsMs": 0,
     "tlsVersion": "1.3",
     "x25519": true
   },
@@ -1260,6 +1521,36 @@ export const EXAMPLES: Record<string, unknown> = {
     "name": "",
     "ruleCount": 0,
     "updatedAt": 0
+  },
+  "SNIJobSnapshot": {
+    "completed": 0,
+    "createdAt": "",
+    "error": "",
+    "finishedAt": "",
+    "id": "",
+    "phase": "",
+    "results": [
+      null
+    ],
+    "source": "",
+    "state": "",
+    "total": 0,
+    "verified": 0,
+    "verifyTotal": 0
+  },
+  "SNISavedTarget": {
+    "host": "",
+    "ip": "",
+    "port": 0
+  },
+  "SNIScanRequest": {
+    "mode": "",
+    "nodeId": null,
+    "purpose": "",
+    "recheck": [
+      null
+    ],
+    "targets": ""
   },
   "ServerSettings": {
     "contentPaddingAddition": "",

@@ -40,6 +40,9 @@ type expandedLink struct {
 // callers distinguish a valid user with zero connections from an unknown SubID
 // without manufacturing a real connection or weakening URL validation.
 func (s *SubService) getClientExternalLinksBySubId(subId string) ([]externalLinkEntry, error) {
+	if s.managerInbounds != nil {
+		return s.managerExternal, nil
+	}
 	db := database.GetDB()
 	var recs []model.ClientRecord
 	if err := db.Where("sub_id = ?", subId).Find(&recs).Error; err != nil {

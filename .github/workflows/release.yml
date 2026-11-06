@@ -2,6 +2,9 @@ name: Release 3X-UI
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -14,7 +17,7 @@ on:
 # manually dispatched runs are never cancelled here.
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/update') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/update')) }}
 
 jobs:
   frontend:

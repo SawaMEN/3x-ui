@@ -209,12 +209,17 @@ func TestAudit3FirstTransportReturnsPositiveEchoAfterOppositeModePacket(t *testi
 			relayAddr, u, _, _ := audit3RestartableSOCKS(t)
 			audit3StartUDPEcho(u, nil)
 			_, c, _, _ := startLifecycleTestServer(t, relayAddr, "audit3-first-mode@x")
+			// The race-detector CI runs many packages in parallel. QUIC stream
+			// scheduling and the SOCKS UDP echo can legitimately take longer
+			// than one second under CPU contention; still require the exact
+			// response through the association's *first* transport.
+			const echoTimeout = 5 * time.Second
 			audit3SendPacket(t, c, first, 43221, 1, "first")
-			if _, p, err := audit3ReceivePacket(c, first, time.Second); err != nil || string(p) != "first" {
+			if _, p, err := audit3ReceivePacket(c, first, echoTimeout); err != nil || string(p) != "first" {
 				t.Fatalf("initial mode echo %q %v", p, err)
 			}
 			audit3SendPacket(t, c, 1-first, 43221, 2, "opposite")
-			if _, p, err := audit3ReceivePacket(c, first, time.Second); err != nil || string(p) != "opposite" {
+			if _, p, err := audit3ReceivePacket(c, first, echoTimeout); err != nil || string(p) != "opposite" {
 				t.Fatalf("opposite request response did not keep first transport: %q %v", p, err)
 			}
 		})

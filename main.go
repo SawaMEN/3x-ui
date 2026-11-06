@@ -719,6 +719,10 @@ func main() {
 		runWebServer()
 	case "migrate":
 		migrateDb()
+	case "recovery":
+		if err := recoveryCLI(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	case "encrypt-tokens":
 		encryptNodeTokens()
 	case "gateway":
@@ -756,7 +760,9 @@ func main() {
 			}
 			fmt.Printf("Restored %s -> %s\n", migrateRestore, migrateOut)
 		case migrateDsn != "":
-			if err := database.MigrateData(src, migrateDsn); err != nil {
+			// Migrate a private, schema-upgraded snapshot. A v3.9.8 database
+			// lacks newer panel tables and must not be modified in place.
+			if err := database.MigrateLegacyData(src, migrateDsn); err != nil {
 				fmt.Println("migration failed:", err)
 				os.Exit(1)
 			}
@@ -832,6 +838,7 @@ Commands:
     migrate        migrate from other/old x-ui
     core-migrate   migrate an offline installation to the owner sing-box (--backup-dir)
     migrate-db     SQLite <-> .dump (--dump/--restore) or copy into PostgreSQL (--dsn)
+    recovery      export, check or extract an encrypted complete recovery bundle
     encrypt-tokens encrypt node bearer tokens with the configured active key
     setting        set settings
     gateway         configure transparent gateway mode

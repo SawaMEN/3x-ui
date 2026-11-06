@@ -62,6 +62,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	engine.Use(s.subscriptionDomainValidator(subDomain))
+	engine.GET("/bus/:token", func(c *gin.Context) { service.ServeManagerSubscription(c.Writer, c.Request, c.Param("token")) })
 	engine.Use(func(c *gin.Context) {
 		if enabled, _ := s.settingService.GetSubCDNEnable(); enabled && !strings.Contains(c.Request.URL.Path, "/assets/") {
 			c.Header("Cache-Control", "private, no-store, max-age=0")

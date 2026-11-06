@@ -405,3 +405,11 @@ func pauseSpeedSidecar(ib *model.Inbound) error {
 	}
 	return nil
 }
+
+// ApplyConfigNow confirms a manager generation before publishing its subscription.
+func (l *Local) ApplyConfigNow(ctx context.Context) error {
+	if l.deps.RestartCore == nil {
+		return errors.New("synchronous core apply is not configured")
+	}
+	return l.deps.RestartCore(ctx)
+}

@@ -40,20 +40,21 @@ type HeartbeatPatch struct {
 	SingBoxInstalled bool
 	SingBoxKnown     bool
 	// CoreInfoKnown distinguishes a valid legacy response from a failed probe.
-	CoreInfoKnown      bool
-	CoreVersion        string
-	CoreState          string
-	CoreError          string
-	CoreCapabilities   *core.Capabilities
-	CoreType           string
-	RunningCore        string
-	PanelVersion       string
-	PanelEdition       string
-	Guid               string
-	CpuPct             float64
-	MemPct             float64
-	UptimeSecs         uint64
-	UnavailableMetrics []string
+	CoreInfoKnown        bool
+	CoreVersion          string
+	CoreState            string
+	CoreError            string
+	CoreCapabilities     *core.Capabilities
+	ProtocolAvailability map[string]model.ProtocolAvailability
+	CoreType             string
+	RunningCore          string
+	PanelVersion         string
+	PanelEdition         string
+	Guid                 string
+	CpuPct               float64
+	MemPct               float64
+	UptimeSecs           uint64
+	UnavailableMetrics   []string
 	// NetUp/NetDown are the node's current interface throughput (bytes/sec),
 	// summed over non-virtual interfaces, read from its status response.
 	NetUp     uint64
@@ -1079,6 +1080,18 @@ func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 			updates["core_capabilities"] = string(data)
 		}
 	}
+	if p.CoreInfoKnown {
+		if p.ProtocolAvailability == nil {
+			updates["protocol_availability"] = nil
+		} else {
+			data, err := json.Marshal(p.ProtocolAvailability)
+			if err != nil {
+				return err
+			}
+			updates["protocol_availability"] = string(data)
+		}
+	}
+
 	// Older node builds overload xray with the selected core. Never erase a
 	// previously known Xray version when probing such a sing-box node.
 	if p.XrayVersion != "" {
@@ -1374,12 +1387,13 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 				ErrorMsg  string `json:"errorMsg"`
 			} `json:"singbox"`
 			Core struct {
-				Capabilities *core.Capabilities `json:"capabilities"`
-				Type         string             `json:"type"`
-				Running      string             `json:"running"`
-				State        string             `json:"state"`
-				Version      string             `json:"version"`
-				ErrorMsg     string             `json:"errorMsg"`
+				Capabilities         *core.Capabilities                    `json:"capabilities"`
+				ProtocolAvailability map[string]model.ProtocolAvailability `json:"protocolAvailability"`
+				Type                 string                                `json:"type"`
+				Running              string                                `json:"running"`
+				State                string                                `json:"state"`
+				Version              string                                `json:"version"`
+				ErrorMsg             string                                `json:"errorMsg"`
 			} `json:"core"`
 			PanelVersion string `json:"panelVersion"`
 			PanelEdition string `json:"panelEdition"`
@@ -1416,6 +1430,7 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 	patch.CoreState = o.Core.State
 	patch.CoreError = o.Core.ErrorMsg
 	patch.CoreCapabilities = o.Core.Capabilities
+	patch.ProtocolAvailability = o.Core.ProtocolAvailability
 	patch.CoreType = normalizeNodeCoreType(o.Core.Type)
 	patch.RunningCore = normalizeNodeCoreType(o.Core.Running)
 	if o.SingBox != nil {
@@ -1482,25 +1497,26 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 }
 
 type ProbeResultUI struct {
-	Status             string             `json:"status" example:"online"`
-	LatencyMs          int                `json:"latencyMs" example:"42"`
-	XrayVersion        string             `json:"xrayVersion" example:"25.10.31"`
-	SingBoxVersion     string             `json:"singboxVersion"`
-	SingBoxInstalled   bool               `json:"singboxInstalled"`
-	SingBoxKnown       bool               `json:"singboxKnown"`
-	CoreVersion        string             `json:"coreVersion"`
-	CoreState          string             `json:"coreState"`
-	CoreError          string             `json:"coreError"`
-	CoreCapabilities   *core.Capabilities `json:"coreCapabilities"`
-	CoreType           string             `json:"coreType"`
-	RunningCore        string             `json:"runningCore"`
-	PanelVersion       string             `json:"panelVersion" example:"v3.x.x"`
-	PanelEdition       string             `json:"panelEdition" example:"sawamen"`
-	CpuPct             float64            `json:"cpuPct" example:"12.5"`
-	MemPct             float64            `json:"memPct" example:"45.2"`
-	UptimeSecs         uint64             `json:"uptimeSecs" example:"86400"`
-	UnavailableMetrics []string           `json:"unavailableMetrics,omitempty"`
-	Error              string             `json:"error"`
+	Status               string                                `json:"status" example:"online"`
+	LatencyMs            int                                   `json:"latencyMs" example:"42"`
+	XrayVersion          string                                `json:"xrayVersion" example:"25.10.31"`
+	SingBoxVersion       string                                `json:"singboxVersion"`
+	SingBoxInstalled     bool                                  `json:"singboxInstalled"`
+	SingBoxKnown         bool                                  `json:"singboxKnown"`
+	CoreVersion          string                                `json:"coreVersion"`
+	CoreState            string                                `json:"coreState"`
+	CoreError            string                                `json:"coreError"`
+	CoreCapabilities     *core.Capabilities                    `json:"coreCapabilities"`
+	ProtocolAvailability map[string]model.ProtocolAvailability `json:"protocolAvailability,omitempty"`
+	CoreType             string                                `json:"coreType"`
+	RunningCore          string                                `json:"runningCore"`
+	PanelVersion         string                                `json:"panelVersion" example:"v3.x.x"`
+	PanelEdition         string                                `json:"panelEdition" example:"sawamen"`
+	CpuPct               float64                               `json:"cpuPct" example:"12.5"`
+	MemPct               float64                               `json:"memPct" example:"45.2"`
+	UptimeSecs           uint64                                `json:"uptimeSecs" example:"86400"`
+	UnavailableMetrics   []string                              `json:"unavailableMetrics,omitempty"`
+	Error                string                                `json:"error"`
 	// XrayState/XrayError are populated on successful probes even when the node's
 	// Xray core is not healthy. The UI uses them for a distinct "panel ok, xray failed" indicator.
 	XrayState    string `json:"presenceRegistry"`
@@ -1516,7 +1532,7 @@ func (p HeartbeatPatch) ToUI(ok bool) ProbeResultUI {
 		SingBoxVersion:   p.SingBoxVersion,
 		SingBoxInstalled: p.SingBoxInstalled,
 		SingBoxKnown:     p.SingBoxKnown,
-		CoreVersion:      p.CoreVersion, CoreState: p.CoreState, CoreError: p.CoreError, CoreCapabilities: p.CoreCapabilities,
+		CoreVersion:      p.CoreVersion, CoreState: p.CoreState, CoreError: p.CoreError, CoreCapabilities: p.CoreCapabilities, ProtocolAvailability: p.ProtocolAvailability,
 		CoreType:           p.CoreType,
 		RunningCore:        p.RunningCore,
 		PanelVersion:       p.PanelVersion,

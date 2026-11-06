@@ -13,6 +13,17 @@ export const NodeCoreCapabilitiesSchema = z
   })
   .loose();
 
+export const NodeProtocolAvailabilitySchema = z.record(
+  z.string(),
+  z.object({
+    supported: z.boolean(),
+    ready: z.boolean(),
+    version: z.string(),
+    speedLimit: z.boolean(),
+    component: z.string(),
+  }),
+);
+
 export const NodeRecordSchema = z
   .object({
     id: z.number(),
@@ -38,6 +49,7 @@ export const NodeRecordSchema = z
     coreState: z.string().optional(),
     coreError: z.string().optional(),
     coreCapabilities: NodeCoreCapabilitiesSchema.nullish(),
+    protocolAvailability: NodeProtocolAvailabilitySchema.nullish(),
     coreType: z.string().optional(),
     runningCore: z.string().optional(),
     panelVersion: z.string().optional(),
@@ -91,6 +103,7 @@ export const ProbeResultSchema = z
     coreState: z.string().optional(),
     coreError: z.string().optional(),
     coreCapabilities: NodeCoreCapabilitiesSchema.nullish(),
+    protocolAvailability: NodeProtocolAvailabilitySchema.nullish(),
     coreType: z.string().optional(),
     runningCore: z.string().optional(),
     error: z.string().optional(),

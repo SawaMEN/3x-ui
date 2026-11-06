@@ -84,6 +84,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.GET("/get/:id/links", a.getScopedInboundLinks)
 	g.GET("/:id/fallbacks", a.getFallbacks)
 
+	g.POST("/preflight", a.preflightInbound)
 	g.POST("/add", a.addInbound)
 	g.POST("/del/:id", a.delInbound)
 	g.POST("/bulkDel", a.bulkDelInbounds)
@@ -545,4 +546,14 @@ func (a *InboundController) reorder(c *gin.Context) {
 		return
 	}
 	jsonMsg(c, "inbounds reordered", nil)
+}
+
+func (a *InboundController) preflightInbound(c *gin.Context) {
+	var inbound model.Inbound
+	if err := c.ShouldBindJSON(&inbound); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	inbound.NodeID = nil
+	jsonObj(c, nil, service.PreflightInbound(c.Request.Context(), &inbound))
 }
