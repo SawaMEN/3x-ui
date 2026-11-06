@@ -2,10 +2,22 @@
 
 The panel probes the real INPUT ruleset before selecting a native iptables
 backend. A successful `iptables --version` alone does not prove kernel support.
+It automatically classifies missing `ip_tables`/`ip6_tables` modules and absent
+legacy `filter` tables as compatibility failures, attempts to load already
+installed legacy modules once per process, and retries firewall detection.
+When no active host firewall takes precedence, it automatically tries safe
+native `nft`, `iptables-nft`, `iptables`, and `iptables-legacy` backends.
+The selected backend is always verified against the running kernel.
 If nf_tables reports `Could not fetch rule set generation id: Invalid argument`
 or a backend-not-supported error, the panel can use installed `iptables-legacy`
 and `ip6tables-legacy` together. It does not change system alternatives.
 Permission errors and conflicting nftables input hooks are not bypassed.
+
+Automatic remediation never installs OS/kernel packages, changes system
+`iptables` alternatives, disables existing host firewall services, or reboots
+remote servers. These actions can disconnect SSH or change externally managed
+policies. There is no safe fully automatic repair for a kernel missing all
+supported firewall backends.
 
 If UFW is already enabled in `/etc/ufw/ufw.conf` and cannot read its ruleset,
 the panel reports the compatibility problem instead of installing a second
