@@ -178,7 +178,7 @@ func detectOwnedNativeFirewallBackend(ctx context.Context) (firewallBackend, boo
 			return b, true
 		}
 	}
-	for _, name := range []string{"iptables", "iptables-legacy"} {
+	for _, name := range []string{"iptables-nft", "iptables", "iptables-legacy"} {
 		path, err := exec.LookPath(name)
 		if err != nil {
 			continue
@@ -204,6 +204,10 @@ func detectOwnedNativeFirewallBackend(ctx context.Context) (firewallBackend, boo
 
 func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) {
 	legacy, legacyErr := detectFirewallBackend(ctx)
+	if legacyErr != nil && tryLoadLegacyIPTablesModules(ctx, legacyErr) {
+		// Re-check UFW/firewalld after loading available kernel modules.
+		legacy, legacyErr = detectFirewallBackend(ctx)
+	}
 	if legacyErr == nil {
 		if on, _ := legacy.enabled(ctx); on {
 			return legacy, nil
@@ -211,10 +215,10 @@ func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) 
 	}
 	// UFW with enabled persistent policy must be repaired by the host operator;
 	// silently bypassing it with another filtering layer can block panel access.
-	if legacyErr != nil && isNftablesCompatibilityError(legacyErr) && ufwConfiguredEnabled() {
-		return firewallBackend{}, fmt.Errorf("UFW cannot use this kernel's nf_tables backend; configure matching iptables/ip6tables legacy alternatives or update the host kernel, then reload UFW: %w", legacyErr)
+	if legacyErr != nil && isFirewallKernelCompatibilityError(legacyErr) && ufwConfiguredEnabled() {
+		return firewallBackend{}, fmt.Errorf("UFW is configured enabled but its firewall backend cannot read the kernel ruleset. 3x-ui will not bypass UFW or change active firewall alternatives automatically: restore matching kernel modules or configure supported nft/iptables alternatives for both IPv4 and IPv6, then reload UFW using provider console access: %w", legacyErr)
 	}
-	if legacyErr != nil && !isNftablesCompatibilityError(legacyErr) && !strings.Contains(legacyErr.Error(), "no supported firewall") {
+	if legacyErr != nil && !isFirewallKernelCompatibilityError(legacyErr) && !strings.Contains(legacyErr.Error(), "no supported firewall") {
 		return firewallBackend{}, legacyErr
 	}
 	if native, ok := detectOwnedNativeFirewallBackend(ctx); ok {
@@ -236,12 +240,12 @@ func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) 
 		if err == nil {
 			return firewallBackend{}, errors.New("existing nftables input hooks detected; install/use UFW or firewalld, or remove the conflicting native input hook before enabling 3x-ui firewall")
 		}
-		if !isNftablesCompatibilityError(err) {
+		if !isFirewallKernelCompatibilityError(err) {
 			return firewallBackend{}, err
 		}
 		probeErrors = append(probeErrors, err)
 	}
-	for _, name := range []string{"iptables", "iptables-legacy"} {
+	for _, name := range []string{"iptables-nft", "iptables", "iptables-legacy"} {
 		path, err := exec.LookPath(name)
 		if err != nil {
 			continue
@@ -249,7 +253,7 @@ func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) 
 		// Read the actual ruleset: --version succeeds even on unsupported kernels.
 		if _, err := runFirewallCommand(ctx, path, "-S", "INPUT"); err != nil {
 			probeErrors = append(probeErrors, err)
-			if !isNftablesCompatibilityError(err) {
+			if !isFirewallKernelCompatibilityError(err) {
 				return firewallBackend{}, err
 			}
 			continue
@@ -259,7 +263,7 @@ func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) 
 		}), nil
 	}
 	if len(probeErrors) > 0 {
-		return firewallBackend{}, fmt.Errorf("no usable firewall backend (nf_tables is incompatible with the host kernel; install iptables-legacy or update the host kernel): %w", errors.Join(probeErrors...))
+		return firewallBackend{}, fmt.Errorf("no usable firewall backend (the installed firewall tools cannot access kernel rulesets; install a compatible nftables backend or matching kernel modules): %w", errors.Join(probeErrors...))
 	}
 	if legacyErr != nil && !strings.Contains(legacyErr.Error(), "no supported firewall") {
 		return firewallBackend{}, legacyErr
