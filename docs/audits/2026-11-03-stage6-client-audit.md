@@ -6,13 +6,13 @@
 
 **Этап 6 завершён: 5/5 пунктов. Общий прогресс: 6/14 этапов, 30/70 групп исходного плана.**
 
-| Пункт | Выполненная матрица |
-| --- | --- |
-| 6.1 | CRUD, attach/detach, detached-клиенты, группы/hosts, null/дубликаты/имена, HWID; HTTP/API и компонентные контракты форм |
-| 6.2 | Upload/download, local/global/shared квоты, node receipts, повторные и конкурентные heartbeat, checkpoint rollback, открытие БД и перезапуск настоящего ядра |
-| 6.3 | Delayed activation только при положительном трафике, calendar/DST/interval boundaries, renewal allowance/reset, закрытие сессий и отказ нового подключения для disabled/expired/spent |
-| 6.4 | Upload/download/unlimited, общий бюджет соединений/маршрутов/TCP/UDP, изоляция другого клиента, rollback и перезапуск ядра; настоящие Mieru/Sudoku/MASQUE |
-| 6.5 | URI/base64/Xray JSON/sing-box JSON/Hiddify JSON/Clash modern+legacy YAML, настоящие TCP/UDP импорты, escaping/templates, TLS/Reality/ECH fields, headers и capability tokens |
+| Пункт | Выполненная матрица                                                                                                                                                                   |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6.1   | CRUD, attach/detach, detached-клиенты, группы/hosts, null/дубликаты/имена, HWID; HTTP/API и компонентные контракты форм                                                               |
+| 6.2   | Upload/download, local/global/shared квоты, node receipts, повторные и конкурентные heartbeat, checkpoint rollback, открытие БД и перезапуск настоящего ядра                          |
+| 6.3   | Delayed activation только при положительном трафике, calendar/DST/interval boundaries, renewal allowance/reset, закрытие сессий и отказ нового подключения для disabled/expired/spent |
+| 6.4   | Upload/download/unlimited, общий бюджет соединений/маршрутов/TCP/UDP, изоляция другого клиента, rollback и перезапуск ядра; настоящие Mieru/Sudoku/MASQUE                             |
+| 6.5   | URI/base64/Xray JSON/sing-box JSON/Hiddify JSON/Clash modern+legacy YAML, настоящие TCP/UDP импорты, escaping/templates, TLS/Reality/ECH fields, headers и capability tokens          |
 
 ## Исправления и оптимизация
 
@@ -39,12 +39,12 @@ Workflow: `.github/workflows/client-audit.yml`. Проверки обязате�
 
 Native [41524484044](https://github.com/SawaMEN/3x-ui/actions/runs/41524484044), SHA `c4246dee`: обе архитектуры PASS. По 45 PASS test/subtest events, 0 FAIL/SKIP. Core accounting/lifecycle: 5; imports: 31; Mieru: 1; Sudoku: 4; MASQUE: 4.
 
-| Измерение | AMD64 | ARM64 |
-| --- | ---: | ---: |
-| Alice 256 KiB, 1 Mbps | 1.612 s | 1.643 s |
-| Bob 256 KiB, unlimited | 1.642 ms | 1.177 ms |
-| После restart, общие 256 KiB TCP + 256 KiB UDP Alice | 4.160 s | 4.166 s |
-| Учтено после 3 × 32 KiB + restart + 32 KiB | 131072 up / 131072 down | 131072 up / 131072 down |
+| Измерение                                            |                   AMD64 |                   ARM64 |
+| ---------------------------------------------------- | ----------------------: | ----------------------: |
+| Alice 256 KiB, 1 Mbps                                |                 1.612 s |                 1.643 s |
+| Bob 256 KiB, unlimited                               |                1.642 ms |                1.177 ms |
+| После restart, общие 256 KiB TCP + 256 KiB UDP Alice |                 4.160 s |                 4.166 s |
+| Учтено после 3 × 32 KiB + restart + 32 KiB           | 131072 up / 131072 down | 131072 up / 131072 down |
 
 Дополнительно на этом SHA прошли [database audit](https://github.com/SawaMEN/3x-ui/actions/runs/41524483696), [runtime AMD64/ARM64](https://github.com/SawaMEN/3x-ui/actions/runs/41524483490), [protocol build](https://github.com/SawaMEN/3x-ui/actions/runs/41524483777) и [общий Go suite/frontend build](https://github.com/SawaMEN/3x-ui/actions/runs/41524483957/job/125548806448).
 

@@ -6,13 +6,13 @@
 
 **Этап 5 завершён: 5/5 пунктов. Общий прогресс: 5/14 этапов, 25/70 групп.**
 
-| Пункт | Результат проверки |
-| --- | --- |
-| 5.1 | Реестр моделей/форм/переводчиков, 78 core-policy rows и binary constructors; ранние отказы до сохранения |
-| 5.2 | 68 classic protocol/transport pairs, SS/SOCKS/HTTP, form-switch contracts, XDrive/QUIC и конкретная outbound chain |
-| 5.3 | Перечисленные ниже native расширенные протоколы и WG/AWG; внешние режимы отдельно от native, по исходной границе этапа 8 |
-| 5.4 | TLS/SNI/ALPN, legacy cipher, Reality, сохранение/отказ ECH/FinalMask; актуальный XDNS формат |
-| 5.5 | Нативная клиентская матрица обеих архитектур, source evidence и фиксированные версии; ограничения и сторонний дефект не замаскированы под data-pass |
+| Пункт | Результат проверки                                                                                                                                  |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5.1   | Реестр моделей/форм/переводчиков, 78 core-policy rows и binary constructors; ранние отказы до сохранения                                            |
+| 5.2   | 68 classic protocol/transport pairs, SS/SOCKS/HTTP, form-switch contracts, XDrive/QUIC и конкретная outbound chain                                  |
+| 5.3   | Перечисленные ниже native расширенные протоколы и WG/AWG; внешние режимы отдельно от native, по исходной границе этапа 8                            |
+| 5.4   | TLS/SNI/ALPN, legacy cipher, Reality, сохранение/отказ ECH/FinalMask; актуальный XDNS формат                                                        |
+| 5.5   | Нативная клиентская матрица обеих архитектур, source evidence и фиксированные версии; ограничения и сторонний дефект не замаскированы под data-pass |
 
 Завершение этапа означает выполнение указанной матрицы аудита. Это не утверждение
 об отсутствии ошибок в сторонних бинарниках или успехе всех возможных сочетаний
@@ -116,19 +116,19 @@ source file/test, commit и architecture. Клиенты — закреплён�
 для WireGuard/AWG peer — Go amneziawg/v3 `v3.1.20260828`, для фрагментированного
 Trojan — Go 1.27.3 crypto/tls и ручной Trojan frame.
 
-| Область | Проверенные сценарии | Точная граница |
-| --- | --- | --- |
-| Owner VLESS/VMess/Trojan | 28 protocol/transport pairs: TCP, raw, WS, gRPC, HTTP, HTTPUpgrade, XHTTP, KCP, native QUIC; XDrive только VLESS | Native QUIC отделён от неподдерживаемого panel `network=quic` |
-| Upstream VLESS/VMess/Trojan | 18 pairs: TCP/raw/WS/gRPC/HTTP/HTTPUpgrade | Нет заявленного успеха XHTTP/KCP/XDrive в upstream |
-| Xray VLESS/VMess/Trojan | 22 pairs: TCP/raw/WS/gRPC/HTTPUpgrade/XHTTP/KCP; XDrive только VLESS с MUX | Удалённые HTTP/QUIC и MASQUE с чужим protocol отвергаются |
-| TCP/UDP для этих 68 pairs | Оба payload, два разрешённых пользователя, disabled/unknown, reconnect | TCP: IPv4/IPv6 destination и localhost DNS; UDP: IPv4 destination. Outer UDP KCP/QUIC не подменяет proxied UDP |
-| Расширенные owner protocols | SOCKS, HTTP, SS AES-128-GCM, SS2022 AES-128-GCM, Hysteria1/2, TUIC, AnyTLS, Naive, Snell5/6 | TCP IPv4/IPv6/DNS, reconnect, неверный пароль; UDP IPv4 у поддерживающих его protocols. HTTP/Naive — TCP-only. SS profiles — single PSK |
-| WireGuard | Native initiator и responder: IPv4/IPv6 TCP/UDP, peer revocation | Это роли endpoint/handshake; не проверка всех gateway/TUN routing modes |
-| AWG | Native outbound initiator: IPv4/IPv6 TCP/UDP, peer revocation, header protection и padding | Фиксированный listening port в native mode **unsupported**, явно отвергается. Внешний server mode — этап 8 |
-| AnyTLS → ShadowTLS | TCP/UDP через реально сгенерированную subscription chain; неверный пароль каждого слоя отдельно | IPv4; не все сочетания wrapper/inner |
-| MASQUE | HTTP 1/2/3 без version fallback, TCP/UDP, неверный пароль | IPv4; без утверждения об IPv6 CONNECT-IP |
-| XHTTP | Owner: 11 modes none/TLS; Xray: 18 none/TLS/Reality; split download и большие HTTP bodies | Только явно перечисленные security/mode pairs |
-| TLS | Trusted local cert, SNI/ALPN, legacy TLS 1.2 с явным RSA cipher, Xray Reality; ECH/FinalMask translation, preservation/rejection и constructors | ECH и каждый отдельный mask не объявляются полным data cross-product |
+| Область                     | Проверенные сценарии                                                                                                                            | Точная граница                                                                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Owner VLESS/VMess/Trojan    | 28 protocol/transport pairs: TCP, raw, WS, gRPC, HTTP, HTTPUpgrade, XHTTP, KCP, native QUIC; XDrive только VLESS                                | Native QUIC отделён от неподдерживаемого panel `network=quic`                                                                           |
+| Upstream VLESS/VMess/Trojan | 18 pairs: TCP/raw/WS/gRPC/HTTP/HTTPUpgrade                                                                                                      | Нет заявленного успеха XHTTP/KCP/XDrive в upstream                                                                                      |
+| Xray VLESS/VMess/Trojan     | 22 pairs: TCP/raw/WS/gRPC/HTTPUpgrade/XHTTP/KCP; XDrive только VLESS с MUX                                                                      | Удалённые HTTP/QUIC и MASQUE с чужим protocol отвергаются                                                                               |
+| TCP/UDP для этих 68 pairs   | Оба payload, два разрешённых пользователя, disabled/unknown, reconnect                                                                          | TCP: IPv4/IPv6 destination и localhost DNS; UDP: IPv4 destination. Outer UDP KCP/QUIC не подменяет proxied UDP                          |
+| Расширенные owner protocols | SOCKS, HTTP, SS AES-128-GCM, SS2022 AES-128-GCM, Hysteria1/2, TUIC, AnyTLS, Naive, Snell5/6                                                     | TCP IPv4/IPv6/DNS, reconnect, неверный пароль; UDP IPv4 у поддерживающих его protocols. HTTP/Naive — TCP-only. SS profiles — single PSK |
+| WireGuard                   | Native initiator и responder: IPv4/IPv6 TCP/UDP, peer revocation                                                                                | Это роли endpoint/handshake; не проверка всех gateway/TUN routing modes                                                                 |
+| AWG                         | Native outbound initiator: IPv4/IPv6 TCP/UDP, peer revocation, header protection и padding                                                      | Фиксированный listening port в native mode **unsupported**, явно отвергается. Внешний server mode — этап 8                              |
+| AnyTLS → ShadowTLS          | TCP/UDP через реально сгенерированную subscription chain; неверный пароль каждого слоя отдельно                                                 | IPv4; не все сочетания wrapper/inner                                                                                                    |
+| MASQUE                      | HTTP 1/2/3 без version fallback, TCP/UDP, неверный пароль                                                                                       | IPv4; без утверждения об IPv6 CONNECT-IP                                                                                                |
+| XHTTP                       | Owner: 11 modes none/TLS; Xray: 18 none/TLS/Reality; split download и большие HTTP bodies                                                       | Только явно перечисленные security/mode pairs                                                                                           |
+| TLS                         | Trusted local cert, SNI/ALPN, legacy TLS 1.2 с явным RSA cipher, Xray Reality; ECH/FinalMask translation, preservation/rejection и constructors | ECH и каждый отдельный mask не объявляются полным data cross-product                                                                    |
 
 IPv6 в этом стенде означает loopback destination или адрес внутри WG tunnel;
 DNS — `localhost`. Это не проверка публичного IPv6-интернета или DNS leak.
