@@ -54,10 +54,15 @@ func TestClientSpeedLimitPersistenceAndCompatibility(t *testing.T) {
 	if err = s.SyncInbound(nil, ib.Id, []model.Client{c}); err == nil || !strings.Contains(err.Error(), "between 0 and 100000") {
 		t.Fatalf("invalid cap accepted: %v", err)
 	}
-	unsupported := mkInbound(t, 30122, model.MTProto, `{"clients":[]}`)
+	mtproto := mkInbound(t, 30122, model.MTProto, `{"clients":[]}`)
 	c.SpeedLimit = &model.ClientSpeedLimit{Enabled: true, UploadMbps: 1}
-	if err = s.SyncInbound(nil, unsupported.Id, []model.Client{c}); err == nil || !strings.Contains(err.Error(), "not supported for mtproto") {
-		t.Fatalf("unsupported protocol silently accepted cap: %v", err)
+	if err = s.SyncInbound(nil, mtproto.Id, []model.Client{c}); err != nil {
+		t.Fatalf("MTProto native speed cap rejected: %v", err)
+	}
+	mtprotoRows, err := s.ListForInbound(nil, mtproto.Id)
+	if err != nil || len(mtprotoRows) != 1 || mtprotoRows[0].SpeedLimit == nil ||
+		mtprotoRows[0].SpeedLimit.UploadMbps != 1 {
+		t.Fatalf("MTProto native speed cap was not persisted: %v %v", mtprotoRows, err)
 	}
 }
 
