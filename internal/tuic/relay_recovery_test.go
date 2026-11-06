@@ -214,7 +214,7 @@ func TestAudit3UDPAssociationMustRecoverAfterBridgeReadFailure(t *testing.T) {
 				case h.AssocID == 42132 && string(payload) == "fresh":
 					seen[42132] = true
 				default:
-					t.Fatalf("unexpected UDP response after bridge recovery: association=%d packet=%d payload=%q", h.AssocID, h.PacketID, payload)
+					t.Fatalf("unexpected UDP response after bridge recovery: association=%d packet=%d payload=%q", h.AssocID, h.PktID, payload)
 				}
 			}
 		})
