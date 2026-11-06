@@ -1,4 +1,14 @@
+import { isBalancerLoopbackTag } from '../balancers/balancer-loopback';
 import type { RuleRow } from './types';
+
+/** Keep the first occurrence of each selectable inbound tag. */
+export function uniqueSelectableInboundTags(tags: Iterable<string | undefined>): string[] {
+  const seen = new Set<string>();
+  for (const tag of tags) {
+    if (tag && !isBalancerLoopbackTag(tag)) seen.add(tag);
+  }
+  return [...seen];
+}
 
 export function arrJoin(v: unknown): string | undefined {
   if (v == null) return undefined;

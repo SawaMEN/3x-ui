@@ -2491,10 +2491,10 @@ func (s *InboundService) updateClientTraffics(tx *gorm.DB, oldInbound *model.Inb
 	return nil
 }
 
-func (s *InboundService) GetInboundTags() (string, error) {
+func (s *InboundService) GetInboundTags(userId int) (string, error) {
 	db := database.GetDB()
 	var inboundTags []string
-	err := db.Model(model.Inbound{}).Select("tag").Find(&inboundTags).Error
+	err := db.Model(model.Inbound{}).Where("user_id = ?", userId).Order("sort_order ASC, id ASC").Pluck("tag", &inboundTags).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", err
 	}

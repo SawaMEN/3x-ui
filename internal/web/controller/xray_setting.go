@@ -14,6 +14,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/integration"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 
 	"github.com/gin-gonic/gin"
 )
@@ -100,7 +101,7 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 	if clean, cleanErr := service.NormalizeSubscriptionTemplate(xraySetting, false); cleanErr == nil {
 		xraySetting = clean
 	}
-	inboundTags, err := a.InboundService.GetInboundTags()
+	inboundTags, err := a.InboundService.GetInboundTags(session.GetLoginUser(c).Id)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
 		return
