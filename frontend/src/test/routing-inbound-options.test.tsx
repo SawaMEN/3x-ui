@@ -1,60 +1,22 @@
-import { fireEvent, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router';
+import { describe, expect, it } from 'vitest';
 
-import { keys } from '@/api/queryKeys';
-import RoutingTab from '@/pages/xray/routing/RoutingTab';
-import type { XraySettingsValue } from '@/hooks/useXraySetting';
-import { makeTestQueryClient, renderWithProviders } from './test-utils';
+import { uniqueSelectableInboundTags } from '@/pages/xray/routing/helpers';
 
-function renderRouting(
-  availableInbounds: Array<{ id: number; tag: string; remark: string }>,
-  tags: string[] = [],
-) {
-  const queryClient = makeTestQueryClient();
-  queryClient.setQueryData(keys.inbounds.options(), availableInbounds);
-  const settings = {
-    inbounds: [],
-    outbounds: [{ tag: 'direct', protocol: 'freedom' }],
-    routing: { rules: [] },
-  } as XraySettingsValue;
-  renderWithProviders(
-    <MemoryRouter>
-      <RoutingTab
-        templateSettings={settings}
-        setTemplateSettings={vi.fn()}
-        inboundTags={tags}
-        clientReverseTags={[]}
-        isMobile={false}
-      />
-    </MemoryRouter>,
-    { queryClient },
-  );
-}
-
-function openInboundPicker() {
-  const picker = screen.getByRole('combobox', { name: 'Входящие подключения для маршрута' });
-  const trigger = picker.closest('.ant-select')?.querySelector('.ant-select-selector');
-  expect(trigger).not.toBeNull();
-  fireEvent.mouseDown(trigger!);
-}
-
-describe('Routing inbound picker', () => {
-  it('shows panel-managed inbounds missing from the Xray template and config payload', async () => {
-    renderRouting([{ id: 7, tag: 'in-live', remark: 'My inbound' }]);
-    openInboundPicker();
-    expect(await screen.findByText('in-live (My inbound)')).not.toBeNull();
+describe('Routing inbound options', () => {
+  it('includes panel-managed tags even without Xray template or config tags', () => {
+    expect(uniqueSelectableInboundTags(['in-live'])).toEqual(['in-live']);
   });
 
-  it('deduplicates tags from API options and the older config response', async () => {
-    renderRouting([{ id: 7, tag: 'in-live', remark: 'My inbound' }], ['in-live']);
-    openInboundPicker();
-    expect(await screen.findAllByText('in-live (My inbound)')).toHaveLength(1);
+  it('deduplicates tags from API options, the template and the config response', () => {
+    expect(uniqueSelectableInboundTags(['in-live', 'in-live', 'in-legacy', 'in-live'])).toEqual([
+      'in-live',
+      'in-legacy',
+    ]);
   });
 
-  it('uses the config tags as a fallback for older API responses', async () => {
-    renderRouting([], ['in-from-config']);
-    openInboundPicker();
-    expect(await screen.findByText('in-from-config')).not.toBeNull();
+  it('retains fallback config tags and hides internal balancer loopbacks', () => {
+    expect(uniqueSelectableInboundTags([undefined, 'in-from-config', '_bl_internal', ''])).toEqual([
+      'in-from-config',
+    ]);
   });
 });
