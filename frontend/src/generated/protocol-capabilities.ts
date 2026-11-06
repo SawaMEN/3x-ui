@@ -78,7 +78,7 @@ export const protocolCapabilities = {
     "xray": true,
     "upstream": true,
     "native": true,
-    "speedLimit": false,
+    "speedLimit": true,
     "component": "telemt"
   },
   "naive": {

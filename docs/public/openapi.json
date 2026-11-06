@@ -5878,6 +5878,9 @@
             "example": "http://127.0.0.1:8080",
             "type": "string"
           },
+          "originResolve": {
+            "type": "boolean"
+          },
           "template": {
             "example": "notes",
             "type": "string"
@@ -22962,6 +22965,37 @@
         ],
         "summary": "Return the Telemt Web Proxy and external port 443 status.",
         "operationId": "get_panel_api_telemt_webproxy_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/availability": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Manually check WEB Proxy cover-site HTTPS reachability from Russian probes.",
+        "operationId": "post_panel_api_telemt_webproxy_availability",
+        "description": "Uses up to three Globalping HTTPS HEAD probes (15-minute cache and rate limit). Does not test MTProto or cellular allowlists.",
         "responses": {
           "200": {
             "description": "Successful response",

@@ -1468,6 +1468,7 @@ export const TelemtWebSiteOptionsSchema = z.object({
   html: z.string().optional(),
   mode: z.string(),
   origin: z.string().optional(),
+  originResolve: z.boolean().optional(),
   template: z.string().optional(),
   theme: z.string().optional(),
   title: z.string().optional(),

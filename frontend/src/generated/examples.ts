@@ -1647,6 +1647,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "html": "",
     "mode": "auto",
     "origin": "http://127.0.0.1:8080",
+    "originResolve": false,
     "template": "notes",
     "theme": "travel",
     "title": "A travel notebook"

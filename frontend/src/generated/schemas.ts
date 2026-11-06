@@ -5852,6 +5852,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "http://127.0.0.1:8080",
         "type": "string"
       },
+      "originResolve": {
+        "type": "boolean"
+      },
       "template": {
         "example": "notes",
         "type": "string"

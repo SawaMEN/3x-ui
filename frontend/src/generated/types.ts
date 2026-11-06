@@ -1369,6 +1369,7 @@ export interface TelemtWebSiteOptions {
   html?: string;
   mode: string;
   origin?: string;
+  originResolve?: boolean;
   template?: string;
   theme?: string;
   title?: string;
