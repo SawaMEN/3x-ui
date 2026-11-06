@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // Only kernel/backend compatibility errors permit trying another backend.
@@ -56,4 +58,51 @@ func managedIP6TablesPath(binary string) (string, error) {
 		return "", fmt.Errorf("%s is required alongside %s: %w", name, binary, err)
 	}
 	return path, nil
+}
+
+// A legacy binary can exist even when the running kernel has no ip_tables
+// support. This is a backend compatibility failure, not a permission failure.
+func isLegacyIPTablesKernelError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "module ip_tables not found") ||
+		strings.Contains(message, "module ip6_tables not found") ||
+		(strings.Contains(message, "table does not exist") &&
+			(strings.Contains(message, "can't initialize iptables table") ||
+				strings.Contains(message, "can't initialize ip6tables table")))
+}
+
+func isFirewallKernelCompatibilityError(err error) bool {
+	return isNftablesCompatibilityError(err) || isLegacyIPTablesKernelError(err)
+}
+
+// Loading an already-installed module is non-destructive. Never install kernel
+// packages, change system alternatives or reboot a remote host from a status
+// request: doing so can sever SSH and leave its existing firewall unmanaged.
+// A failed probe is remembered for this process to avoid repeated modprobe
+// attempts on every UI refresh.
+var legacyIPTablesModuleProbe sync.Once
+
+func tryLoadLegacyIPTablesModules(ctx context.Context, backendError error) bool {
+	if !isLegacyIPTablesKernelError(backendError) {
+		return false
+	}
+	recovered := false
+	legacyIPTablesModuleProbe.Do(func() {
+		modprobe, err := exec.LookPath("modprobe")
+		if err != nil {
+			return
+		}
+		for _, name := range []string{"ip_tables", "iptable_filter", "ip6_tables", "ip6table_filter"} {
+			if ctx.Err() != nil {
+				return
+			}
+			if _, err := runFirewallCommand(ctx, modprobe, "-q", name); err == nil {
+				recovered = true
+			}
+		}
+	})
+	return recovered
 }
