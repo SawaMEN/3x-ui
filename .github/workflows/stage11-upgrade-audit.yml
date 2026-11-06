@@ -1,0 +1,112 @@
+name: Stage 11 installer, upgrade and rollback audit
+
+on:
+  push:
+    branches: [update]
+    paths:
+      - install.sh
+      - update.sh
+      - core-migration.sh
+      - x-ui.sh
+      - x-ui-core.sh
+      - x-ui.rc
+      - tools/test-core-migration-shell.py
+      - tools/test-management-shell.py
+      - deploy/test/**
+      - .github/workflows/stage11-upgrade-audit.yml
+  pull_request:
+    paths:
+      - install.sh
+      - update.sh
+      - core-migration.sh
+      - x-ui.sh
+      - x-ui-core.sh
+      - x-ui.rc
+      - tools/test-core-migration-shell.py
+      - tools/test-management-shell.py
+      - deploy/test/**
+      - .github/workflows/stage11-upgrade-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage11-upgrade-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check shell syntax
+        run: |
+          bash -n install.sh update.sh core-migration.sh x-ui.sh x-ui-core.sh
+      - name: Validate checksum and HTTP failure contracts on both installers
+        run: |
+          python3 tools/test-management-shell.py \
+            ManagementTests.test_both_installers_require_matching_release_checksum \
+            ManagementTests.test_asset_download_keeps_http_failure_for_diagnostics \
+            ManagementTests.test_install_and_update_share_release_selection -v
+
+  migration-rollback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test migration, restore, symlink bins and verified-snapshot cleanup
+        run: python3 tools/test-core-migration-shell.py -v
+
+  interrupted-updates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise complete updater, failed start, failed enable and bad digest
+        run: |
+          python3 tools/test-management-shell.py \
+            ManagementTests.test_full_update_success_and_failed_start_with_sandboxed_services \
+            ManagementTests.test_update_exit_status_includes_rollback_failure \
+            ManagementTests.test_post_update_stops_after_failed_database_migration -v
+      - name: Repeat interruption, lock, disk and orphaned-staging checks
+        run: |
+          python3 tools/test-core-migration-shell.py \
+            UpgradeInterruptionTests.test_interruption_after_stop_before_snapshot_restarts_original_panel \
+            UpgradeStorageTests.test_abandoned_release_staging_pruned_only_under_lock \
+            UpgradeStorageTests.test_verified_update_never_discards_unverified_recovery_history \
+            UpgradeStorageTests.test_low_space_rejects_release_before_staging_or_service_stop -v
+
+  service-portability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate shell and OpenRC syntax
+        run: |
+          bash -n install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh
+          sh -n x-ui.rc
+          shellcheck --shell=bash --severity=error install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh
+      - name: Validate distribution service unit syntax and startup commands
+        run: |
+          for file in x-ui.service.debian x-ui.service.arch x-ui.service.rhel; do
+            cp "$file" /tmp/x-ui.service
+            sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+            systemd-analyze verify /tmp/x-ui.service
+          done
+      - name: Exercise Alpine/OpenRC, Arch, CLI and service failures in sandbox
+        run: |
+          python3 tools/test-management-shell.py -v
+          python3 tools/test-core-migration-shell.py \
+            ReleaseMigrationTests.test_alpine_rollback_after_new_service_crashes \
+            ReleaseMigrationTests.test_repair_rollback_without_registered_unit \
+            ReleaseMigrationTests.test_disabled_autostart_survives_upgrade -v
+
+  clean-host-install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install and reinstall a real published panel release in an isolated Docker host
+        run: bash deploy/test/smoke-noninteractive.sh
