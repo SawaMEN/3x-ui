@@ -1330,7 +1330,7 @@ update_x-ui() {
             if [ -f "/etc/init.d/x-ui" ]; then
                 rc-service x-ui stop > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
                 core_migration_begin || _fail "Cannot snapshot installation; no release files replaced"
-                rc-update del x-ui > /dev/null 2>&1
+                rc-update del x-ui > /dev/null 2>&1 || _fail "Cannot disable old x-ui service before replacement"
                 echo -e "${green}Removing old service unit version...${plain}"
                 rm -f /etc/init.d/x-ui > /dev/null 2>&1
             else
@@ -1346,10 +1346,10 @@ update_x-ui() {
                     systemctl stop x-ui.service > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
                 fi
                 core_migration_begin || _fail "Cannot snapshot installation; no release files replaced"
-                systemctl disable x-ui > /dev/null 2>&1
+                systemctl disable x-ui > /dev/null 2>&1 || _fail "Cannot disable old x-ui service before replacement"
                 echo -e "${green}Removing old systemd unit version...${plain}"
                 rm "${xui_service}/x-ui.service" -f > /dev/null 2>&1
-                systemctl daemon-reload > /dev/null 2>&1
+                systemctl daemon-reload > /dev/null 2>&1 || _fail "Cannot reload service definitions before replacement"
             else
                 rm -f "${archive}"
                 _fail "ERROR: x-ui systemd unit not installed."
@@ -1419,7 +1419,7 @@ update_x-ui() {
         for unit in telemt.service telemt-meko-fix.service telemt-update.service telemt-update.timer; do
             [[ ! -f "$unit" ]] || install -m 0644 "$unit" "${xui_service}/$unit"
         done
-        systemctl daemon-reload > /dev/null 2>&1
+        systemctl daemon-reload > /dev/null 2>&1 || _fail "Cannot reload component service definitions"
     fi
     [[ -f bin/pingtunnel ]] && chmod 0755 bin/pingtunnel
     [[ -f bin/trusttunnel_endpoint ]] && chmod 0755 bin/trusttunnel_endpoint
@@ -1446,16 +1446,16 @@ update_x-ui() {
         _fail "ERROR: Failed to install x-ui.sh script"
     fi
 
-    chmod +x "${xui_folder}/x-ui.sh" > /dev/null 2>&1
-    chmod +x /usr/bin/x-ui > /dev/null 2>&1
+    chmod +x "${xui_folder}/x-ui.sh" > /dev/null 2>&1 || _fail "Cannot enable packaged management script"
+    chmod +x /usr/bin/x-ui > /dev/null 2>&1 || _fail "Cannot enable installed management script"
     mkdir -p /var/log/x-ui > /dev/null 2>&1
 
     echo -e "${green}Changing owner...${plain}"
-    chown -R root:root "${xui_folder}" > /dev/null 2>&1
+    chown -R root:root "${xui_folder}" > /dev/null 2>&1 || _fail "Cannot secure release installation ownership"
 
     if [ -f "${xui_folder}/bin/config.json" ]; then
         echo -e "${green}Changing on config file permissions...${plain}"
-        chmod 640 "${xui_folder}/bin/config.json" > /dev/null 2>&1
+        chmod 640 "${xui_folder}/bin/config.json" > /dev/null 2>&1 || _fail "Cannot secure panel configuration permissions"
     fi
 
     core_migration_apply || _fail "Modified Sing-box migration failed; restoring previous installation"
@@ -1479,15 +1479,15 @@ update_x-ui() {
         fi
         chmod +x /etc/init.d/x-ui > /dev/null 2>&1
         chown root:root /etc/init.d/x-ui > /dev/null 2>&1
-        rc-update add x-ui > /dev/null 2>&1
+        rc-update add x-ui > /dev/null 2>&1 || _fail "Cannot enable x-ui OpenRC service"
         rc-service x-ui start > /dev/null 2>&1 || _fail "ERROR: Failed to start x-ui after update (OpenRC)"
     else
         echo -e "${green}Installing staged systemd unit...${plain}"
         _install_xui_service_unit "$cm_service_unit" false || _fail "Cannot install staged systemd unit"
         chown root:root "${xui_service}/x-ui.service" > /dev/null 2>&1
         chmod 644 "${xui_service}/x-ui.service" > /dev/null 2>&1
-        systemctl daemon-reload > /dev/null 2>&1
-        systemctl enable x-ui > /dev/null 2>&1
+        systemctl daemon-reload > /dev/null 2>&1 || _fail "Cannot reload new x-ui service definition"
+        systemctl enable x-ui > /dev/null 2>&1 || _fail "Cannot enable new x-ui service"
         if ! systemctl start x-ui > /dev/null 2>&1; then
             _fail "ERROR: Failed to start x-ui after update. Check: journalctl -u x-ui -n 100 --no-pager"
         fi
