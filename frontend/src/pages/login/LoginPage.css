@@ -330,8 +330,7 @@
   }
 
   .login-wrapper {
-    padding: calc(56px + env(safe-area-inset-top)) 12px
-      max(24px, env(safe-area-inset-bottom));
+    padding: calc(56px + env(safe-area-inset-top)) 12px max(24px, env(safe-area-inset-bottom));
   }
 
   .login-card {

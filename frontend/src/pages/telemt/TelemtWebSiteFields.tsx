@@ -93,10 +93,16 @@ export default function TelemtWebSiteFields({
               {mode === 'origin' && (
                 <FormField
                   name={`${prefix}.originResolve`}
-                  label={ru ? 'Разрешать частный origin по DNS (Telemt 3.5.16+)' : 'Resolve private HTTP origin on startup (Telemt 3.5.16+)'}
-                  extra={ru
-                    ? 'Только адреса локальной или частной сети. DNS разрешается при запуске Telemt, публичные IP запрещены.'
-                    : 'Private or loopback addresses only. Telemt resolves the DNS name on startup; public IPs are rejected.'}
+                  label={
+                    ru
+                      ? 'Разрешать частный origin по DNS (Telemt 3.5.16+)'
+                      : 'Resolve private HTTP origin on startup (Telemt 3.5.16+)'
+                  }
+                  extra={
+                    ru
+                      ? 'Только адреса локальной или частной сети. DNS разрешается при запуске Telemt, публичные IP запрещены.'
+                      : 'Private or loopback addresses only. Telemt resolves the DNS name on startup; public IPs are rejected.'
+                  }
                   valueProp="checked"
                 >
                   <Switch disabled={disabled} />

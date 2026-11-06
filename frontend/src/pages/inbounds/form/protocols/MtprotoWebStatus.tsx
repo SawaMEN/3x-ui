@@ -264,7 +264,8 @@ export default function MtprotoWebStatus() {
             <Typography.Text>
               {ru ? 'Российские зонды: ' : 'Russian probes: '}
               {availability.reachable}/{availability.probes}
-              {' · '}{new Date(availability.checkedAt).toLocaleString()}
+              {' · '}
+              {new Date(availability.checkedAt).toLocaleString()}
             </Typography.Text>
           )}
           {availabilityError && <Alert type="warning" title={availabilityError} />}

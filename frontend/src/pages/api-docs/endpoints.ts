@@ -3664,7 +3664,8 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/telemt/webproxy/availability',
         summary: 'Manually check WEB Proxy cover-site HTTPS reachability from Russian probes.',
-        description: 'Uses up to three Globalping HTTPS HEAD probes (15-minute cache and rate limit). Does not test MTProto or cellular allowlists.',
+        description:
+          'Uses up to three Globalping HTTPS HEAD probes (15-minute cache and rate limit). Does not test MTProto or cellular allowlists.',
       },
       {
         method: 'POST',

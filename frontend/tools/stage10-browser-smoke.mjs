@@ -38,8 +38,12 @@ try {
       const card = document.querySelector('.login-card');
       const submit = document.querySelector('.login-card button[type="submit"]');
       const toolbar = document.querySelector('.login-toolbar');
-      if (!(card instanceof HTMLElement) || !(submit instanceof HTMLElement) ||
-        !(toolbar instanceof HTMLElement)) throw Error('login UI missing');
+      if (
+        !(card instanceof HTMLElement) ||
+        !(submit instanceof HTMLElement) ||
+        !(toolbar instanceof HTMLElement)
+      )
+        throw Error('login UI missing');
       const cardRect = card.getBoundingClientRect();
       const submitRect = submit.getBoundingClientRect();
       const toolbarRect = toolbar.getBoundingClientRect();
@@ -53,18 +57,25 @@ try {
         cardMinHeight: cardRect.height,
       };
     });
-    assert.ok(geometry.bodyScrollWidth <= geometry.viewportWidth + 1,
-      `${viewport.name}: horizontal overflow: ${JSON.stringify(geometry)}`);
-    assert.ok(geometry.cardLeft >= -1 && geometry.cardRight <= viewport.width + 1,
-      `${viewport.name}: login card outside viewport: ${JSON.stringify(geometry)}`);
-    assert.ok(geometry.submitWidth >= 100 && geometry.toolbarRight <= viewport.width + 1,
-      `${viewport.name}: login actions inaccessible: ${JSON.stringify(geometry)}`);
+    assert.ok(
+      geometry.bodyScrollWidth <= geometry.viewportWidth + 1,
+      `${viewport.name}: horizontal overflow: ${JSON.stringify(geometry)}`,
+    );
+    assert.ok(
+      geometry.cardLeft >= -1 && geometry.cardRight <= viewport.width + 1,
+      `${viewport.name}: login card outside viewport: ${JSON.stringify(geometry)}`,
+    );
+    assert.ok(
+      geometry.submitWidth >= 100 && geometry.toolbarRight <= viewport.width + 1,
+      `${viewport.name}: login actions inaccessible: ${JSON.stringify(geometry)}`,
+    );
 
     await page.locator('.login-card input[autocomplete="username"]').fill('admin');
     await page.locator('.login-card input[autocomplete="current-password"]').focus();
     assert.equal(
       await page.locator('.login-card input[autocomplete="username"]').inputValue(),
-      'admin', `${viewport.name}: editable login input`,
+      'admin',
+      `${viewport.name}: editable login input`,
     );
     console.log(`PASS ${viewport.name} ${viewport.width}x${viewport.height}: responsive login`);
     await context.close();
@@ -75,10 +86,18 @@ try {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.route('**/getTwoFactorEnable', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"success":true,"obj":false}' });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '{"success":true,"obj":false}',
+    });
   });
   await page.route('**/panel/api/server/status', async (route) => {
-    await route.fulfill({ status: 401, contentType: 'application/json', body: '{"success":false}' });
+    await route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: '{"success":false}',
+    });
   });
   await page.goto(root + '/login.html');
   await page.locator('.login-card').waitFor();

@@ -109,7 +109,9 @@ export default function TelemtConnectionsCard() {
           );
           if (complete) {
             const count = new Set(
-              updated.filter((row) => row.active).flatMap((row) => row.activeIPs.map((item) => item.ip)),
+              updated
+                .filter((row) => row.active)
+                .flatMap((row) => row.activeIPs.map((item) => item.ip)),
             ).size;
             setUniqueIPCount(count);
             setIpSamples((previous) => {
@@ -232,7 +234,10 @@ export default function TelemtConnectionsCard() {
           </span>
           <span className="ov-telemt-count">
             {activeCount > 0 ? `${activeCount} активных / ${rows.length}` : rows.length}
-            {' · IP: '}{uniqueIPCount ?? '—'}{' · пик за 15 мин: '}{ipPeak ?? '—'}
+            {' · IP: '}
+            {uniqueIPCount ?? '—'}
+            {' · пик за 15 мин: '}
+            {ipPeak ?? '—'}
           </span>
         </div>
       }

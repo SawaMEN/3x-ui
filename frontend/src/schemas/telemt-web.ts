@@ -71,7 +71,10 @@ export const TelemtWebSiteSchema = z
         return false;
       }
     },
-    { path: ['origin'], message: 'Укажите локальный HTTP-адрес; DNS-имя требует включить разрешение при запуске' },
+    {
+      path: ['origin'],
+      message: 'Укажите локальный HTTP-адрес; DNS-имя требует включить разрешение при запуске',
+    },
   )
   .refine(
     (site) => site.mode !== 'catalog' || isTelemtWebCatalogTemplate(site.catalog, site.template),

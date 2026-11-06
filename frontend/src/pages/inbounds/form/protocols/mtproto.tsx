@@ -107,23 +107,37 @@ export default function MtprotoFields() {
             <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="web2.example.com" />
           </FormField>
           <Collapse
-            items={[{
-              key: 'retry-jitter',
-              label: ru ? 'Повторные HTTP-запросы (Telemt 3.5.16+)' : 'HTTP retry jitter (Telemt 3.5.16+)',
-              children: (
-                <>
-                  <FormField name={['settings', 'webProxy', 'retryJitter', 'enabled']} label={ru ? 'Случайная задержка повторов' : 'Random retry delay'} valueProp="checked">
-                    <Switch />
-                  </FormField>
-                  <FormField name={['settings', 'webProxy', 'retryJitter', 'minMs']} label={ru ? 'Минимум, мс' : 'Minimum, ms'}>
-                    <InputNumber min={0} max={30000} style={{ width: '100%' }} />
-                  </FormField>
-                  <FormField name={['settings', 'webProxy', 'retryJitter', 'maxMs']} label={ru ? 'Максимум, мс' : 'Maximum, ms'}>
-                    <InputNumber min={0} max={30000} style={{ width: '100%' }} />
-                  </FormField>
-                </>
-              ),
-            }]}
+            items={[
+              {
+                key: 'retry-jitter',
+                label: ru
+                  ? 'Повторные HTTP-запросы (Telemt 3.5.16+)'
+                  : 'HTTP retry jitter (Telemt 3.5.16+)',
+                children: (
+                  <>
+                    <FormField
+                      name={['settings', 'webProxy', 'retryJitter', 'enabled']}
+                      label={ru ? 'Случайная задержка повторов' : 'Random retry delay'}
+                      valueProp="checked"
+                    >
+                      <Switch />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'webProxy', 'retryJitter', 'minMs']}
+                      label={ru ? 'Минимум, мс' : 'Minimum, ms'}
+                    >
+                      <InputNumber min={0} max={30000} style={{ width: '100%' }} />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'webProxy', 'retryJitter', 'maxMs']}
+                      label={ru ? 'Максимум, мс' : 'Maximum, ms'}
+                    >
+                      <InputNumber min={0} max={30000} style={{ width: '100%' }} />
+                    </FormField>
+                  </>
+                ),
+              },
+            ]}
           />
           <FormField
             name={['settings', 'webProxy', 'basePath']}
@@ -309,10 +323,16 @@ export default function MtprotoFields() {
               </FormField>
               <FormField
                 name={['settings', 'fallbackOutboundTags']}
-                label={ru ? 'Резервные выходы Telegram (Sing-box)' : 'Fallback Telegram outbounds (Sing-box)'}
-                extra={ru
-                  ? 'Необязательно. До 3 резервных outbound. Каждые 2 минуты проверяется HTTPS core.telegram.org через каждый выход. При недоступности основного выбирается живой резервный, после восстановления возвращается основной. Работает только в ядрах Sing-box, не в Xray.'
-                  : 'Optional: up to 3 backup outbounds. HTTPS core.telegram.org is checked every 2 minutes per route; available backup is used if primary is down. Returns to primary when it recovers. Sing-box cores only.'}
+                label={
+                  ru
+                    ? 'Резервные выходы Telegram (Sing-box)'
+                    : 'Fallback Telegram outbounds (Sing-box)'
+                }
+                extra={
+                  ru
+                    ? 'Необязательно. До 3 резервных outbound. Каждые 2 минуты проверяется HTTPS core.telegram.org через каждый выход. При недоступности основного выбирается живой резервный, после восстановления возвращается основной. Работает только в ядрах Sing-box, не в Xray.'
+                    : 'Optional: up to 3 backup outbounds. HTTPS core.telegram.org is checked every 2 minutes per route; available backup is used if primary is down. Returns to primary when it recovers. Sing-box cores only.'
+                }
               >
                 <Select
                   mode="multiple"
