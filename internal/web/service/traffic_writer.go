@@ -40,28 +40,43 @@ var (
 // on <-req.done with no consumer (including the AddTraffic call inside
 // CoreService.GetXrayConfig that runs from startTask).
 func StartTrafficWriter() {
-	twMu.Lock()
-	defer twMu.Unlock()
-
-	if twCancel != nil && twDone != nil {
-		select {
-		case <-twDone:
-			clearTrafficWriterState()
-		default:
-			return
+	for {
+		twMu.Lock()
+		if twCancel != nil && twDone != nil {
+			select {
+			case <-twDone:
+				// The previous generation exited; replace it under the lock.
+				clearTrafficWriterState()
+			default:
+				if twCtx != nil && twCtx.Err() != nil {
+					// A concurrent Stop has cancelled the old generation but
+					// is still draining queued writes. A plain return here
+					// loses the Start request permanently on panel restart.
+					// Never wait while holding twMu: Stop needs that lock
+					// to clear its previous generation.
+					done := twDone
+					twMu.Unlock()
+					<-done
+					continue
+				}
+				twMu.Unlock()
+				return
+			}
 		}
+
+		queue := make(chan *trafficWriteRequest, trafficWriterQueueSize)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+
+		twQueue = queue
+		twCtx = ctx
+		twCancel = cancel
+		twDone = done
+
+		go runTrafficWriter(ctx, queue, done)
+		twMu.Unlock()
+		return
 	}
-
-	queue := make(chan *trafficWriteRequest, trafficWriterQueueSize)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-
-	twQueue = queue
-	twCtx = ctx
-	twCancel = cancel
-	twDone = done
-
-	go runTrafficWriter(ctx, queue, done)
 }
 
 // StopTrafficWriter cancels the writer context and waits for the goroutine to
