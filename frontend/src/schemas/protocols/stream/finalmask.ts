@@ -48,7 +48,7 @@ export const XdnsSettingsSchema = z
             labelLimit: z.number().int().min(0).optional(),
             edns0: z.number().int().min(0).optional(),
           })
-          .passthrough(),
+          .loose(),
       )
       .optional(),
     resolvers: z
@@ -58,12 +58,12 @@ export const XdnsSettingsSchema = z
             addrs: z.array(z.string().min(1)).min(1),
             worker: z.number().int().min(0).optional(),
           })
-          .passthrough(),
+          .loose(),
       )
       .optional(),
     extraPoll: z.number().int().optional(),
   })
-  .passthrough();
+  .loose();
 
 export const UdpMaskSchema = z
   .object({
