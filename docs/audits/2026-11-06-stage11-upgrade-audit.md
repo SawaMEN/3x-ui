@@ -1,8 +1,8 @@
 # Этап 11 — установщик, обновление и восстановление
 
-**Статус: IMPLEMENTED / AWAITING CI.** Изменения записаны в `update`, открытый draft PR [#296](https://github.com/SawaMEN/3x-ui/pull/296). `main` не менялся в ходе этапа 11.
+**COMPLETE — этап 11 завершён: 5/5 групп.** Изменения внесены в `update`, открыт draft PR [#296](https://github.com/SawaMEN/3x-ui/pull/296); `main` не менялся в ходе этапа 11.
 
-Подтверждённый базовый итог до CI этапа 11: **10/14 этапов, 50/70 групп**. После успешного завершения всех обязательных проверок этапа 11 будет **11/14, 55/70**, останется **3 этапа, 15 групп**. До того этап 11 нельзя считать закрытым.
+Подтверждено **11/14 этапов, 55/70 групп**. Осталось **3 этапа и 15 групп**.
 
 ## План приёмки
 
@@ -26,10 +26,12 @@
 
 Добавлен workflow [`.github/workflows/stage11-upgrade-audit.yml`](https://github.com/SawaMEN/3x-ui/blob/update/.github/workflows/stage11-upgrade-audit.yml) с пятью группами: `release-integrity`, `migration-rollback`, `interrupted-updates`, `service-portability`, `clean-host-install`.
 
-GitHub Actions: [run 42273168814](https://github.com/SawaMEN/3x-ui/actions/runs/42273168814) — проверка на SHA `5f6474b7eef272041b5149a471b7096425362d35` **запущена, результат пока неизвестен**. Доказательством завершения будет только conclusion `success` для последнего кодового SHA и обязательных jobs. Общие CI/release также должны быть проверены отдельно.
+**Завершённая проверка:** [run 42273386577](https://github.com/SawaMEN/3x-ui/actions/runs/42273386577) — **success, 5/5 jobs PASS** на SHA `410fc40b7880e380e21459975183606f83aa40e0`: `release-integrity`, `migration-rollback`, `interrupted-updates`, `service-portability`, `clean-host-install`. Независимый запуск [42273375586](https://github.com/SawaMEN/3x-ui/actions/runs/42273375586) также завершился успешно.
+
+**Общие проверки на том же SHA:** Deploy Smoke Tests — success; CI, Docs CI и Release 3X-UI — failure. Эти общие ошибки не покрываются специализированным gate этапа 11 и требуют отдельного разбора до финального release acceptance.
 
 ## Ограничения
 
 - Отрицательные shell-кейсы выполняются в песочнице, а не на production узле.
-- Реальный clean-host smoke зависит от доступности опубликованного релиза и его sha256 sidecar. До успешного выполнения нет подтверждения реальной установки.
+- Реальный clean-host smoke на опубликованном релизе прошёл; это не заменяет проверки физических узлов и всех поддерживаемых дистрибутивов.
 - Не заявляем полное покрытие всех дистрибутивов без их native smoke, ни восстановление после физической потери питания. Проверки физического узла и полный release gate остаются обязательными для финальной готовности.
