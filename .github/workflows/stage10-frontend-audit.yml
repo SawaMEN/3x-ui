@@ -10,6 +10,7 @@ on:
       - 'internal/web/websocket/**'
       - 'internal/web/service/panel/websocket.go'
       - '.github/workflows/stage10-frontend-audit.yml'
+      - 'docs/audits/2026-11-06-stage10-frontend-audit.md'
   workflow_dispatch:
 
 permissions:
