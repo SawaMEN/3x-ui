@@ -1,6 +1,6 @@
 # Этап 8: Telemt, Vetroff и внешние компоненты
 
-**IN PROGRESS — финальный обязательный CI-прогон ещё не завершён.** Общий подтверждённый прогресс до его окончания: 7/14 этапов, 35/70 групп.
+**COMPLETE — этап 8 закрыт: 5/5 групп.** Завершено 8/14 этапов, 40/70 групп; осталось 6 этапов и 30 групп. Финальный обязательный CI-прогон [42181418323](https://github.com/SawaMEN/3x-ui/actions/runs/42181418323) подтвердил **8/8 jobs PASS** на кодовом коммите `c3b3bcc86b7a7f8233d10bdf5cfa3465499786b8`.
 
 Ветка `update`, draft PR #279; `main` не изменён. Исходный диапазон аудита: v3.9.8@416a66a3 → main@4aa74411. Код этапа 8 начинается после `466c2b10`.
 
@@ -18,7 +18,9 @@
 
 10. FPTN inbound ждёт HAProxy и backend внутри контейнера; outbound ждёт настоящий адрес `fptn0` и внутренний listener owner core с timeout/cancel, а не открытый Docker proxy. На Docker host порт был доступен до аутентификации и запуска bridge. Обычный TLS ClientHello не используется как readiness-проба: Reality mode намеренно перенаправляет его на decoy.
 
-11. FPTN spam/torrent options используют реальные `DISABLE_*` переменные официального образа с обратной полярностью. Неиспользуемые ENABLE/ADS переменные удалены; неподдерживаемый AdsFilter явно отвергается; UI объясняет ограничение, запрещает включение и позволяет выключить старое значение. Native TCP прошёл в run 41853350512; UDP проверяется отдельным native direct-inbound, как в protocol audit. Echo привязан к целевому host IPv4, чтобы ответ сохранял IP назначения и проходил reverse NAT; bind 0.0.0.0 давал ответ с адреса Docker gateway. Это подтверждено packet metadata в run 41855979567; framing private VLESS bridge не изменён.
+11. FPTN spam/torrent options используют реальные `DISABLE_*` переменные официального образа с обратной полярностью. Неиспользуемые ENABLE/ADS переменные удалены; неподдерживаемый AdsFilter явно отвергается; UI объясняет ограничение, запрещает включение и позволяет выключить старое значение. И TCP, и UDP проверены реальным native payload через owner VLESS bridge в Linux namespace на [финальном прогоне 42181418323](https://github.com/SawaMEN/3x-ui/actions/runs/42181418323). Отдельный удалённый echo с veth устраняет ложный timeout из-за host-local Docker hairpin NAT; изоляция не отключает проверку настоящего трафика. Framing private VLESS bridge не изменён.
+
+12. Тест TUIC UDP recovery теперь собирает ответы на сохранённую и свежую ассоциации с общим deadline; отменённый старый QUIC stream не считается потерянным UDP-ответом. Успешная доставка обоих пакетов обязательна; не ожидаемые ошибки и payload отвергаются. Исправления подтверждены contracts в run 42181418323.
 
 Оптимизация: общий prepare helper вместо дублирования render/launch, удалена повторная валидация в Ensure, снимок настроек создаётся только при новом запуске, а не при каждой неизменившейся сверке. Клиент HTTP метрик использует ограниченный общий пул соединений; regexp ключа FPTN компилируется один раз. Измеренное ускорение всей панели не заявляется.
 
@@ -44,7 +46,7 @@ Workflow `.github/workflows/component-audit.yml`: contracts, native AMD64/ARM64,
 
 Полный прогон [42177240822](https://github.com/SawaMEN/3x-ui/actions/runs/42177240822) на commit `ca073adc5ae52c33062299b93b53d471ccda96b4` подтвердил **8/8 jobs PASS**: contracts, native AMD64/ARM64, MEKO AMD64/ARM64, OlcRTC AMD64/ARM64, FPTN AMD64. Это свидетельство относится именно к указанному SHA, а не автоматически к следующим коммитам.
 
-В последующих изменениях независимый FPTN TCP/UDP echo вынесен в отдельный Linux network namespace с адресом из RFC 2544, чтобы NAT Docker gateway не подменял источник ответов host-local UDP echo. [Прогон 42179787927](https://github.com/SawaMEN/3x-ui/actions/runs/42179787927) подтвердил обязательный native FPTN test **PASS** на коде с этим исправлением. Остальные jobs нового прогона должны завершиться прежде, чем этап будет объявлен завершённым на актуальной ветке.
+В последующих изменениях независимый FPTN TCP/UDP echo вынесен в отдельный Linux network namespace с адресом из RFC 2544, чтобы NAT Docker gateway не подменял источник ответов host-local UDP echo. [Прогон 42179787927](https://github.com/SawaMEN/3x-ui/actions/runs/42179787927) подтвердил обязательный native FPTN test **PASS** на коде с этим исправлением. Финальный прогон [42181418323](https://github.com/SawaMEN/3x-ui/actions/runs/42181418323) на коммите `c3b3bcc86b7a7f8233d10bdf5cfa3465499786b8` завершён с общим заключением **success: 8/8 jobs PASS** (contracts, native AMD64/ARM64, MEKO AMD64/ARM64, OlcRTC AMD64/ARM64, FPTN AMD64). Контракты включали исправленный тест восстановления TUIC после отказа UDP bridge: допускается ожидаемая отмена устаревшего QUIC-потока, но оба правильных UDP-echo ответа обязательны. Этап 8 закрыт. Следующие только документационные изменения не меняют подтверждённый SHA кода.
 
 ## Границы результата
 
