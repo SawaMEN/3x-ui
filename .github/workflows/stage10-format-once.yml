@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   format:
-    if: github.event.head_commit.message == 'chore(stage10): run one-shot frontend formatting'
+    if: "github.event.head_commit.message == 'chore(stage10): run one-shot frontend formatting'"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
