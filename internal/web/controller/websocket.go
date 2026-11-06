@@ -21,30 +21,50 @@ var upgrader = ws.Upgrader{
 	CheckOrigin:       checkSameOrigin,
 }
 
-// checkSameOrigin allows requests with no Origin header (same-origin or non-browser
-// clients) and otherwise requires the Origin hostname to match the request hostname.
-// Comparison is case-insensitive (RFC 7230 §2.7.3) and ignores port differences
-// (the panel often sits behind a reverse proxy on a different port).
+// checkSameOrigin rejects cross-origin WebSocket upgrades before session
+// cookies are used. A hostname-only check is unsafe: http://host:8080 and
+// https://host:443 are different origins even though the DNS name matches.
+// Compare the effective port as well. TLS-terminating reverse proxies can
+// leave r.TLS nil, so only enforce the Origin scheme when TLS is observable.
 func checkSameOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
-		return true
+		return true // Non-browser WebSocket clients do not always send Origin.
 	}
 	u, err := url.Parse(origin)
-	if err != nil || u.Hostname() == "" {
+	if err != nil || u.Host == "" || u.Hostname() == "" ||
+		(u.Scheme != "http" && u.Scheme != "https") ||
+		u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 		return false
 	}
-	host, _, err := net.SplitHostPort(r.Host)
-	if err != nil {
-		// IPv6 literals without a port arrive as "[::1]"; net.SplitHostPort
-		// fails in that case while url.Hostname() returns the address without
-		// brackets. Strip them so same-origin checks pass for bare IPv6 hosts.
-		host = r.Host
-		if len(host) >= 2 && host[0] == '[' && host[len(host)-1] == ']' {
-			host = host[1 : len(host)-1]
+	if r.TLS != nil && u.Scheme != "https" {
+		return false
+	}
+	host := r.Host
+	hostPort := ""
+	if parsedHost, port, splitErr := net.SplitHostPort(host); splitErr == nil {
+		host = parsedHost
+		hostPort = port
+	} else if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	}
+	if !strings.EqualFold(u.Hostname(), host) {
+		return false
+	}
+	originPort := u.Port()
+	if originPort == "" {
+		if u.Scheme == "https" {
+			originPort = "443"
+		} else {
+			originPort = "80"
 		}
 	}
-	return strings.EqualFold(u.Hostname(), host)
+	if hostPort != "" {
+		return hostPort == originPort
+	}
+	// Without an explicit request port the Host header refers to the
+	// browser's default origin port. Accept its explicit default spelling.
+	return u.Port() == "" || u.Port() == originPort
 }
 
 // WebSocketController handles the HTTP→WebSocket upgrade for real-time updates.
