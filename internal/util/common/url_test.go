@@ -21,6 +21,14 @@ func TestEnsureURLScheme(t *testing.T) {
 		{"mailto", "mailto:support@example.com", "mailto:support@example.com"},
 		{"tel", "tel:+1234567890", "tel:+1234567890"},
 		{"trims whitespace", "  t.me/xui_support  ", "https://t.me/xui_support"},
+		{"custom messenger link remains valid", "viber://chat?number=123", "viber://chat?number=123"},
+		{"javascript scheme blocked", "javascript://%0aalert(1)", ""},
+		{"javascript without slashes blocked", "JaVaScRiPt:alert(1)", ""},
+		{"data scheme blocked", "DATA://text/html;base64,abc", ""},
+		{"file scheme blocked", "file:///etc/passwd", ""},
+		{"blob scheme blocked", "blob://example.com/abc", ""},
+		{"embedded CRLF blocked", "https://example.com/\r\nInjected: yes", ""},
+		{"embedded tab blocked", "java\tscript://example.com", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

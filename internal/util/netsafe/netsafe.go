@@ -19,6 +19,10 @@ var ErrPrivateAddressBlocked = errors.New("blocked private/internal address")
 // Ranges Go's net.IP predicates do not treat as internal. The transition
 // mechanisms here are deprecated (RFC 7526) or local-use, so none carry public traffic.
 var blockedPrefixes = []netip.Prefix{
+	// Not globally routable even though Go considers some globally unicast.
+	netip.MustParsePrefix("0.0.0.0/8"),    // IPv4 current-network addresses
+	netip.MustParsePrefix("198.18.0.0/15"), // Benchmarking networks (RFC 2544)
+	netip.MustParsePrefix("240.0.0.0/4"),   // Reserved/class E IPv4
 	netip.MustParsePrefix("100.64.0.0/10"),  // CGNAT (RFC 6598)
 	netip.MustParsePrefix("2002::/16"),      // 6to4 (RFC 3056)
 	netip.MustParsePrefix("2001::/32"),      // Teredo (RFC 4380)
@@ -31,13 +35,15 @@ var blockedPrefixes = []netip.Prefix{
 var nat64WellKnown = netip.MustParsePrefix("64:ff9b::/96")
 
 func IsBlockedIP(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+	// IsGlobalUnicast excludes multicast, broadcast, loopback and unspecified
+	// addresses; IsPrivate additionally excludes RFC 1918 and IPv6 ULA.
+	if !ip.IsGlobalUnicast() || ip.IsPrivate() {
 		return true
 	}
 	addr, ok := netip.AddrFromSlice(ip)
 	if !ok {
-		return false
+		// Malformed addresses must never bypass the SSRF guard.
+		return true
 	}
 	addr = addr.Unmap()
 	for _, prefix := range blockedPrefixes {
