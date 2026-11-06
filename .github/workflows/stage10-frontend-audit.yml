@@ -1,0 +1,140 @@
+name: Stage 10 frontend, mobile and WebSocket audit
+
+on:
+  push:
+    branches: [update]
+    paths:
+      - 'frontend/**'
+      - 'internal/web/controller/websocket.go'
+      - 'internal/web/controller/stage10_websocket_origin_test.go'
+      - 'internal/web/websocket/**'
+      - 'internal/web/service/panel/websocket.go'
+      - '.github/workflows/stage10-frontend-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage10-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install pinned frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Lint and reject deprecated APIs
+        working-directory: frontend
+        run: npm run lint && npm run lint:deprecated
+      - name: Enforce source formatting
+        working-directory: frontend
+        run: npm run format:check
+      - name: Typecheck and compile frontend bundles
+        working-directory: frontend
+        run: npm run typecheck && npm run build:ci
+
+  mobile-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend and Chromium
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Launch Vite with simulated authentication API
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run dev -- --host 127.0.0.1 > /tmp/stage10-vite.log 2>&1 &
+          echo $! > /tmp/stage10-vite.pid
+          for i in {1..90}; do
+            if curl -fsS http://127.0.0.1:5173/login.html > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/stage10-vite.log
+          exit 1
+      - name: Check 320px, 375px, tablet and desktop layout, plus HTTP 401 expiry
+        working-directory: frontend
+        run: node tools/stage10-browser-smoke.mjs
+      - name: Print Vite diagnostics on failure
+        if: failure()
+        run: cat /tmp/stage10-vite.log || true
+
+  websocket-server:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: WebSocket origin and hub lifecycle race regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+          go test -race -json ./internal/web/controller ./internal/web/websocket -run '^(TestStage10WebSocketOriginIsPortAndSchemeScoped|TestHub_.*)$' -count=2 | tee stage10-websocket.jsonl
+          python3 tools/ci/require-go-tests.py stage10-websocket.jsonl TestStage10WebSocketOriginIsPortAndSchemeScoped TestHub_StopClosesAllClients TestHub_UnregisterWaitsForFullQueueWithoutLeaking
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stage10-websocket-server-tests
+          path: stage10-websocket.jsonl
+
+  websocket-client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Verify offline-to-online and mobile foreground connection recovery
+        working-directory: frontend
+        run: npx vitest run --project unit src/test/stage10-websocket-reconnect.test.ts
+      - name: Verify shared connection, fresh callbacks and React Query resync
+        working-directory: frontend
+        run: npx vitest run --project components src/test/audit-websocket.test.tsx src/test/websocket-handler-freshness.test.tsx src/test/websocket-shared-client.test.tsx src/test/websocket-bridge-outbounds.test.tsx
+
+  browser-component-suite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend and Playwright browser
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install chromium
+      - name: Run complete frontend unit, React component and Storybook browser suites
+        working-directory: frontend
+        run: npm test
