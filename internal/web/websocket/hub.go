@@ -79,6 +79,9 @@ type Hub struct {
 
 	throttleMu    sync.Mutex
 	lastBroadcast map[MessageType]time.Time
+	// Only one trailing REST invalidation is retained per throttled topic.
+	// Dropping the final update entirely leaves an open browser stale.
+	pendingInvalidations map[MessageType]*time.Timer
 }
 
 // NewHub creates a hub. Call Run in a goroutine to start its event loop.
@@ -91,6 +94,7 @@ func NewHub() *Hub {
 		ctx:           ctx,
 		cancel:        cancel,
 		lastBroadcast: make(map[MessageType]time.Time),
+		pendingInvalidations: make(map[MessageType]*time.Timer),
 	}
 }
 
@@ -109,6 +113,17 @@ func (h *Hub) shouldThrottle(msgType MessageType) bool {
 	defer h.throttleMu.Unlock()
 	now := time.Now()
 	if last, ok := h.lastBroadcast[msgType]; ok && now.Sub(last) < minBroadcastInterval {
+		if h.pendingInvalidations[msgType] == nil {
+			remaining := minBroadcastInterval - now.Sub(last)
+			h.pendingInvalidations[msgType] = time.AfterFunc(remaining, func() {
+				h.throttleMu.Lock()
+				delete(h.pendingInvalidations, msgType)
+				h.throttleMu.Unlock()
+				if h.ctx.Err() == nil {
+					h.broadcastInvalidate(msgType)
+				}
+			})
+		}
 		return true
 	}
 	h.lastBroadcast[msgType] = now
@@ -362,7 +377,16 @@ func (h *Hub) Unregister(c *Client) {
 
 // Stop signals the hub to shut down and close all client connections.
 func (h *Hub) Stop() {
-	if h != nil && h.cancel != nil {
+	if h == nil {
+		return
+	}
+	if h.cancel != nil {
 		h.cancel()
 	}
+	h.throttleMu.Lock()
+	for _, timer := range h.pendingInvalidations {
+		timer.Stop()
+	}
+	clear(h.pendingInvalidations)
+	h.throttleMu.Unlock()
 }
