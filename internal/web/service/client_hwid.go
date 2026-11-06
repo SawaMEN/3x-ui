@@ -133,7 +133,7 @@ func (s *ClientService) EnforceHwidForSubID(subID string, req HwidRequest) (Hwid
 	err = db.Transaction(func(tx *gorm.DB) error {
 		// SQLite uses BEGIN IMMEDIATE (InitDB), so writers are serialized before
 		// any count is read. PostgreSQL needs explicit parent locks instead.
-		if tx.Dialector.Name() == "postgres" {
+		if tx.Name() == "postgres" {
 			var owners []model.ClientRecord
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("sub_id = ?", subID).Order("id").Find(&owners).Error; err != nil {
 				return err

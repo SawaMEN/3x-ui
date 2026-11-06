@@ -89,12 +89,12 @@ func TestStage7DNSPolicy(t *testing.T) {
 				}
 				m := new(dns.Msg)
 				if err != nil || len(b) > 4096 || m.Unpack(b) != nil {
-					http.Error(w, "invalid DNS request", 400)
+					http.Error(w, "invalid DNS request", http.StatusBadRequest)
 					return
 				}
 				reply, err := public.answer(m, 33).Pack()
 				if err != nil {
-					http.Error(w, "DNS response", 500)
+					http.Error(w, "DNS response", http.StatusInternalServerError)
 					return
 				}
 				w.Header().Set("Content-Type", "application/dns-message")
@@ -194,7 +194,7 @@ func TestStage7DNSPolicy(t *testing.T) {
 					log     *stage7DNSLog
 					allowed string
 				}{{private, "private.test"}, {secure, "secure.test"}, {public, "public.test"}} {
-					if name != peer.allowed && !(peer.allowed == "public.test" && name == "missing.public.test") && peer.log.count(name) > 0 {
+					if name != peer.allowed && (peer.allowed != "public.test" || name != "missing.public.test") && peer.log.count(name) > 0 {
 						t.Fatal("query leaked across split DNS policy", name, peer.allowed)
 					}
 				}

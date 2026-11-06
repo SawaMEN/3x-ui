@@ -19,7 +19,7 @@ func stage8OpenFlux(t *testing.T) (*Manager, Instance) {
 	t.Setenv("XUI_BIN_FOLDER", dir)
 	// A real child exits on the rejected setting, otherwise remains available.
 	script := "#!/bin/sh\nif grep -q 'SessionContext = broken' \"$2\"; then exit 3; fi\nexec sleep 60\n"
-	if err := os.WriteFile(filepath.Join(dir, "openflux"), []byte(script), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "openflux"), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	m := &Manager{procs: map[int]*running{}, lastErrors: map[int]string{}}

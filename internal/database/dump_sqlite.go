@@ -62,7 +62,7 @@ func DumpSQLiteToBytes(srcPath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	var b bytes.Buffer
 	b.WriteString("PRAGMA foreign_keys=OFF;\n")
@@ -261,14 +261,14 @@ func dumpTableData(db sqliteQuerier, table string, b sqliteDumpWriter) error {
 		if err := rows.Scan(ptrs...); err != nil {
 			return err
 		}
-		b.WriteString(prefix)
+		_, _ = b.WriteString(prefix)
 		for i, v := range vals {
 			if i > 0 {
-				b.WriteByte(',')
+				_ = b.WriteByte(',')
 			}
-			b.WriteString(sqliteLiteral(v))
+			_, _ = b.WriteString(sqliteLiteral(v))
 		}
-		b.WriteString(");\n")
+		_, _ = b.WriteString(");\n")
 	}
 	return rows.Err()
 }

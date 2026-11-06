@@ -417,7 +417,7 @@ func groupUsageSince(counter, baseline int64) int64 {
 func groupTrafficTotals(tx *gorm.DB, condition string, args ...any) ([]GroupSummary, error) {
 	query := tx.Table("clients AS c").Joins("LEFT JOIN client_traffics ct ON ct.email = c.email").Where(condition, args...)
 	up, down := "COALESCE(SUM(ct.up), 0)", "COALESCE(SUM(ct.down), 0)"
-	if tx.Dialector.Name() == "postgres" {
+	if tx.Name() == "postgres" {
 		up = fmt.Sprintf("LEAST(%s, %d)", up, int64(math.MaxInt64))
 		down = fmt.Sprintf("LEAST(%s, %d)", down, int64(math.MaxInt64))
 	}
@@ -426,7 +426,7 @@ func groupTrafficTotals(tx *gorm.DB, condition string, args ...any) ([]GroupSumm
 	if err == nil {
 		return totals, nil
 	}
-	if tx.Dialector.Name() != "sqlite" || !strings.Contains(err.Error(), "integer overflow") {
+	if tx.Name() != "sqlite" || !strings.Contains(err.Error(), "integer overflow") {
 		return nil, err
 	}
 	rows, err := query.Session(&gorm.Session{}).Select("COALESCE(c.group_name, ''), COALESCE(ct.up, 0), COALESCE(ct.down, 0)").Rows()

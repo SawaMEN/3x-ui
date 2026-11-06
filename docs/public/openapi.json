@@ -9730,9 +9730,9 @@
     "/panel/api/server/domainActivity": {
       "get": {
         "tags": [
-          "Server"
+          "Runtime services"
         ],
-        "summary": "Get the current domain activity monitor status and recent domain activity.",
+        "summary": "Read domain activity statistics for authenticated operators.",
         "operationId": "get_panel_api_server_domainActivity",
         "responses": {
           "200": {
@@ -9760,9 +9760,9 @@
     "/panel/api/server/domainActivity/config": {
       "post": {
         "tags": [
-          "Server"
+          "Runtime services"
         ],
-        "summary": "Update domain activity monitoring configuration.",
+        "summary": "Update domain activity collection settings.",
         "operationId": "post_panel_api_server_domainActivity_config",
         "responses": {
           "200": {

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/sha256"
 	"embed"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -126,12 +128,14 @@ func validateTelemtWebPrivateDNSOrigin(raw string) error {
 	if hostname != "localhost" && !telemtWebDomainPattern.MatchString(hostname) {
 		return errors.New("WEB private origin requires a valid DNS hostname")
 	}
-	addrs, err := net.LookupIP(hostname)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, hostname)
 	if err != nil || len(addrs) == 0 {
 		return errors.New("WEB private origin hostname did not resolve")
 	}
 	for _, addr := range addrs {
-		if !addr.IsLoopback() && !addr.IsPrivate() {
+		if !addr.IP.IsLoopback() && !addr.IP.IsPrivate() {
 			return errors.New("WEB private origin DNS includes a public or unsupported address")
 		}
 	}

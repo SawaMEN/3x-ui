@@ -109,7 +109,7 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	path := filepath.Join(dir, "test-client.json")
 	cfg := map[string]any{"inbounds": []any{map[string]any{"type": "socks", "tag": "test", "listen": "127.0.0.1", "listen_port": localPort}, map[string]any{"type": "direct", "tag": "test-udp", "listen": "127.0.0.1", "listen_port": udpPort, "network": "udp", "override_address": echoHost, "override_port": udpEchoPort}}, "outbounds": []any{native}, "route": map[string]any{"final": "fptn-native"}}
 	data, _ := json.Marshal(cfg)
-	if err = os.WriteFile(path, data, 0600); err != nil {
+	if err = os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := stage8StartCore(t, core, path, localPort)
@@ -225,7 +225,7 @@ func stage8RemoteEcho(t *testing.T) (string, int, int) {
 		"    data, peer = udp.recvfrom(65535)",
 		"    udp.sendto(data, peer)",
 	}, "\n") + "\n"
-	if err := os.WriteFile(script, []byte(program), 0600); err != nil {
+	if err := os.WriteFile(script, []byte(program), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("sudo", "ip", "netns", "exec", ns, "python3", "-u", script, remoteIP, strconv.Itoa(tcpPort), strconv.Itoa(udpPort))
