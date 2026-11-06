@@ -114,6 +114,37 @@ def audit(upstream):
     print("This audit does not establish traffic, quota, gateway or platform compatibility")
 
 
+def validate_runtime_security_dependencies(pins, builder):
+    """Validate minimum patched versions and the build's single source of truth.
+
+    The manifest owns the exact pins. Duplicating their entire version map in
+    this audit made every security update fail CI even when the builder read
+    the new manifest correctly.
+    """
+    floors = {
+        "golang.org/x/net": (0, 62, 0),
+        "golang.org/x/crypto": (0, 58, 1),
+        "github.com/go-chi/chi/v5": (5, 3, 0),
+        "github.com/google/cel-go": (0, 30, 0),
+        "github.com/andybalholm/brotli": (1, 2, 7),
+        "github.com/klauspost/compress": (1, 20, 2),
+    }
+    require(isinstance(pins, dict) and set(pins) == set(floors),
+            "Runtime security dependency set differs from audited packages")
+    for module, minimum in floors.items():
+        version = pins[module]
+        match = re.fullmatch(r"v(\\d+)\\.(\\d+)\\.(\\d+)(?:[-+].*)?", version) if isinstance(version, str) else None
+        require(match is not None and tuple(map(int, match.groups())) >= minimum,
+                f"Unpatched or invalid runtime security pin: {module}={version}")
+    # The builder must consume the *entire* manifest mapping; an independently
+    # copied version list would allow the audit and actual binary to diverge.
+    require("['panel_build']['security_dependencies']" in builder
+            and 'go mod edit -go=' in builder
+            and '"${security_flags[@]}"' in builder
+            and 'go mod download "${security_dependencies[@]}"' in builder,
+            "Runtime build script does not enforce the pinned dependency set")
+
+
 def audit_build(source):
     lock = json.loads((ROOT / "docs/hiddify-core-target.json").read_text())
     require(lock["schema_version"] == 2 and lock["stage"] in (2, 4), "Unknown runtime lock schema/stage")
@@ -124,7 +155,9 @@ def audit_build(source):
     require(not lock["runtime_contract"]["automatic_migration_ready"], "Runtime profile cannot enable automatic migration before integration gates")
     require(build["toolchain"] == "go1.26.10", "Runtime must use the pinned security-patched toolchain")
     require(tuple(map(int, build["toolchain"].removeprefix("go").split("."))) >= tuple(map(int, fork["required_go_directive"].split("."))), "Runtime toolchain is older than the audited source requirement")
-    require(build["security_dependencies"] == {"golang.org/x/net": "v0.62.0", "github.com/go-chi/chi/v5": "v5.3.0", "github.com/google/cel-go": "v0.30.0"}, "Runtime security dependency lock differs from the build script")
+    validate_runtime_security_dependencies(
+        build["security_dependencies"], (ROOT / "tools/build-hiddify-core.sh").read_text()
+    )
     require({"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_masque", "with_clash_api"}.issubset(build["tags"]), "Runtime build lacks required tags")
     process = (ROOT / "internal/hiddify/process.go").read_text()
     tag_block = re.search(r"var requiredBuildTags = \[\]string\{([^}]+)\}", process)
