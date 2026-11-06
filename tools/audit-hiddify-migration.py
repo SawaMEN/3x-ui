@@ -133,7 +133,7 @@ def validate_runtime_security_dependencies(pins, builder):
             "Runtime security dependency set differs from audited packages")
     for module, minimum in floors.items():
         version = pins[module]
-        match = re.fullmatch(r"v(\\d+)\\.(\\d+)\\.(\\d+)(?:[-+].*)?", version) if isinstance(version, str) else None
+        match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)(?:[-+].*)?", version) if isinstance(version, str) else None
         require(match is not None and tuple(map(int, match.groups())) >= minimum,
                 f"Unpatched or invalid runtime security pin: {module}={version}")
     # The builder must consume the *entire* manifest mapping; an independently
