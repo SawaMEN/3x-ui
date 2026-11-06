@@ -4,13 +4,13 @@
 
 ## Приёмочная матрица
 
-| Группа | Проверка | Критерий |
-| --- | --- | --- |
-| 12.1 | WebSocket fanout / disconnect | `go test -race` для hub, 96 конкурентных клиентов, параллельные send/unregister, закрытие каналов и отмена 100 timer generations |
-| 12.2 | Серийная запись трафика | `go test -race`, одновременные Start/Stop во время незавершённой записи; 64 рестарта × 16 запросов с точным счётом, восемь повторов |
-| 12.3 | Manager и многоузловые обновления | Реальные service-level race-тесты на поколение manager, node bulk, client address claims и heartbeat |
-| 12.4 | PostgreSQL contention | Настоящая PostgreSQL 16 в CI и конкурентные транзакции traffic/client sync с race detector |
-| 12.5 | Ограниченный soak и throughput | 30 повторов новых тестов под `-race`; 3 прогона параллельного benchmark, ns/op, B/op, allocs/op; без ложного обещания 24-часового теста |
+| Группа | Проверка                          | Критерий                                                                                                                                |
+| ------ | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 12.1   | WebSocket fanout / disconnect     | `go test -race` для hub, 96 конкурентных клиентов, параллельные send/unregister, закрытие каналов и отмена 100 timer generations        |
+| 12.2   | Серийная запись трафика           | `go test -race`, одновременные Start/Stop во время незавершённой записи; 64 рестарта × 16 запросов с точным счётом, восемь повторов     |
+| 12.3   | Manager и многоузловые обновления | Реальные service-level race-тесты на поколение manager, node bulk, client address claims и heartbeat                                    |
+| 12.4   | PostgreSQL contention             | Настоящая PostgreSQL 16 в CI и конкурентные транзакции traffic/client sync с race detector                                              |
+| 12.5   | Ограниченный soak и throughput    | 30 повторов новых тестов под `-race`; 3 прогона параллельного benchmark, ns/op, B/op, allocs/op; без ложного обещания 24-часового теста |
 
 ## Подтверждённые кодовые изменения
 
