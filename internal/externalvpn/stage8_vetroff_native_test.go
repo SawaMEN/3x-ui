@@ -43,7 +43,7 @@ func TestStage8VetroffNativePayload(t *testing.T) {
 	port := stage8Port(t)
 	inst := Instance{ID: 82, Tag: "stage8-vetroff", Protocol: model.VetroffProxy, Listen: "127.0.0.1", Port: port, Settings: Settings{Hostname: "example.test", Clients: []Client{{Email: "alice", Password: "stage8-correct-secret-with-32-bytes", Enable: true}}}}
 	certDir := filepath.Join(dir, "cert")
-	_ = os.MkdirAll(certDir, 0700)
+	_ = os.MkdirAll(certDir, 0o700)
 	cert, key, err := certificate(inst, certDir)
 	if err != nil {
 		t.Fatal(err)

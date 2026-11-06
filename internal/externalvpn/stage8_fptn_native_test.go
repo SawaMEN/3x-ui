@@ -166,7 +166,6 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 			t.Fatal("dead FPTN tunnel escaped directly")
 		}
 	}
-
 }
 
 // stage8RemoteEcho serves TCP and UDP from a separate network namespace instead
