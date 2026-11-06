@@ -1,0 +1,47 @@
+name: One-time Go formatter for update
+
+on:
+  push:
+    branches: [update]
+    paths:
+      - '.github/workflows/format-update-go-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install the same Go formatters used by CI
+        run: |
+          go install mvdan.cc/gofumpt@latest
+          go install golang.org/x/tools/cmd/goimports@latest
+      - name: Format tracked Go sources
+        run: |
+          set -euo pipefail
+          mapfile -d '' sources < <(git ls-files -z -- '*.go')
+          "$(go env GOPATH)/bin/gofumpt" -w "${sources[@]}"
+          "$(go env GOPATH)/bin/goimports" -local github.com/SawaMEN/3x-ui -w "${sources[@]}"
+          git diff --check
+          git diff --shortstat
+      - name: Commit formatting only to update
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '*.go'
+          if git diff --cached --quiet; then
+            echo "No formatting changes required"
+            exit 0
+          fi
+          git commit -m "chore(format): normalize Go sources with gofumpt and goimports"
+          git push origin HEAD:update
