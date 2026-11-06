@@ -66,6 +66,17 @@ func AllowPrivateFromContext(ctx context.Context) bool {
 var defaultDialer = &net.Dialer{Timeout: 10 * time.Second}
 
 func SSRFGuardedDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return SSRFGuardedDialWith(ctx, network, addr, defaultDialer.DialContext)
+}
+
+// SSRFGuardedDialWith enforces the same destination checks when the actual
+// connection is made through a SOCKS dialer instead of a direct net.Dialer.
+// Resolving to the approved numeric IP prevents the proxy from resolving the
+// original hostname to an internal address after validation (DNS rebinding).
+func SSRFGuardedDialWith(ctx context.Context, network, addr string, dial func(context.Context, string, string) (net.Conn, error)) (net.Conn, error) {
+	if dial == nil {
+		return nil, errors.New("missing guarded dialer")
+	}
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -90,7 +101,7 @@ func SSRFGuardedDialContext(ctx context.Context, network, addr string) (net.Conn
 		if ipAddr.Zone != "" {
 			target += "%" + ipAddr.Zone
 		}
-		conn, derr := defaultDialer.DialContext(ctx, network, net.JoinHostPort(target, port))
+		conn, derr := dial(ctx, network, net.JoinHostPort(target, port))
 		if derr == nil {
 			return conn, nil
 		}
