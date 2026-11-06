@@ -1,6 +1,6 @@
 # Этап 13 — аудит исторического DEV→main и совместимости
 
-**Статус: IN PROGRESS / CI не завершён.** Подтверждённая база: **12/14 этапов и 60/70 групп**. Этап 13 имеет пять групп приёмки. До успешного запуска всех пяти jobs не засчитывать этап.
+**Статус: COMPLETE — этап 13 закрыт, 5/5 групп.** Специализированная матрица прошла на кодовом SHA `dac0064a5ee20cb659d09723a1895fc9d36423bb`. Подтверждено **13/14 этапов и 65/70 групп**. Остался **1 этап и 5 групп**. Это не является финальным разрешением на выпуск.
 
 ## Неизменяемые контрольные точки
 
@@ -15,6 +15,7 @@
 ## Исторические области повышенного риска
 
 Исторические 57 путей в исходном окне сгруппированы по реальным изменениям:
+
 - Логи: `internal/logger`, `internal/util/tail`, `internal/web/service/server_diagnostic_logs*`, `server.go`, `server_syslog_test.go`, `server_xray_accesslog_test.go`, фронтенд `LogModal*`. Риски: неверная классификация INFO/DEBUG/ERROR, обрезка stack trace, сортировка по часовым поясам, блокировки на `journalctl`, память при больших логах.
 - Перезапуск и live-подписки: `internal/web/job/check_xray_running_job*`, `internal/web/websocket/hub*`, frontend `useWebSocket.ts`, `websocket-handler-freshness.test.tsx`, `chunk-load-recovery*`. Риски: потеря клиентского соединения, переполнение очереди, freeze после отказа загрузки JS chunk.
 - Маршрутизация Xray и sing-box: `QuickRoutingPanel*`, `quick-routing.ts`, `inbound-bindings.ts`, `NativeRoutingBasic.tsx`, native bindings. Риски: перезапись управляемых inbound/outbound маршрутов, несовпадение UI и backend.
@@ -38,6 +39,18 @@
 - **13.5 Frontend + generated contracts:** QuickRouting, bindings, обработка WebSocket, chunk recovery, legacy TLS и точное совпадение генерации OpenAPI/Zod с backend.
 
 Workflow: [stage13-dev-delta-audit.yml](https://github.com/SawaMEN/3x-ui/blob/update/.github/workflows/stage13-dev-delta-audit.yml).
+
+## Подтверждение успешной приёмки
+
+[GitHub Actions run #42282156706](https://github.com/SawaMEN/3x-ui/actions/runs/42282156706): **conclusion success, 5/5 обязательных jobs PASS** на `dac0064a5ee20cb659d09723a1895fc9d36423bb`.
+
+- **13.1 `immutable-history` — PASS:** полный Git-инвентарь 131/283/414 коммитов и 57 изменённых путей исходного окна, результаты CSV и JSON сохранены как artifact.
+- **13.2 `kernel-security-pins` — PASS:** защитные уровни всех шести модулей, отрицательные тесты, реальные инструменты сборки.
+- **13.3 `historic-backend` — PASS:** повторённые `-race` проверки logging, tail, core recovery, TLS и Vetroff.
+- **13.4 `historic-service-websocket` — PASS:** регрессии диагностики, WebSocket и конкурентных событий.
+- **13.5 `historical-frontend-contracts` — PASS:** typecheck, routing/websocket/import regression tests, точное совпадение Zod/OpenAPI после генерации.
+
+**Docs CI:** на этом же SHA `42282156691` обнаружено лишь нарушение форматирования этого отчёта (отсутствующий пустой абзац перед списком). Оно исправлено последующим документационным коммитом; успешность Docs CI после исправления требуется проверить отдельно. Общий CI и release-матрица относятся к независимой финальной приёмке этапа 14.
 
 ## Ограничения
 
