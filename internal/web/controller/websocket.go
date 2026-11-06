@@ -62,9 +62,10 @@ func checkSameOrigin(r *http.Request) bool {
 	if hostPort != "" {
 		return hostPort == originPort
 	}
-	// Without an explicit request port the Host header refers to the
-	// browser's default origin port. Accept its explicit default spelling.
-	return u.Port() == "" || u.Port() == originPort
+	// Without an explicit request port, only an implicit or explicit
+	// default port is a match. A custom Origin port is a different site.
+	return u.Port() == "" || (u.Scheme == "https" && u.Port() == "443") ||
+		(u.Scheme == "http" && u.Port() == "80")
 }
 
 // WebSocketController handles the HTTP→WebSocket upgrade for real-time updates.
