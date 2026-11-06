@@ -320,6 +320,58 @@ func TestHub_OversizedBroadcastUsesSmallInvalidateMessage(t *testing.T) {
 	}
 }
 
+// A burst that ends with a throttled change must still refresh open tabs.
+// Returning early without a trailing invalidate leaves the last state stale
+// until the next unrelated mutation, even with a perfectly connected socket.
+func TestHub_ThrottledFinalMutationTriggersRESTInvalidation(t *testing.T) {
+	h := NewHub()
+	go h.Run()
+	defer h.Stop()
+
+	c := NewClient("last-update")
+	h.Register(c)
+	waitClientCount(t, h, 1)
+
+	h.Broadcast(MessageTypeTraffic, map[string]int{"up": 1})
+	select {
+	case raw := <-c.Send:
+		var m Message
+		if err := json.Unmarshal(raw, &m); err != nil || m.Type != MessageTypeTraffic {
+			t.Fatalf("first snapshot not delivered: %v %s", err, raw)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("initial traffic snapshot missing")
+	}
+	h.Broadcast(MessageTypeTraffic, map[string]int{"up": 2})
+	select {
+	case raw := <-c.Send:
+		var m Message
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatal(err)
+		}
+		if m.Type != MessageTypeInvalidate {
+			t.Fatalf("throttled final mutation was lost: received %q, expected invalidate", m.Type)
+		}
+		var detail struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(mustJSON(t, m.Payload), &detail); err != nil || detail.Type != string(MessageTypeTraffic) {
+			t.Fatalf("invalidate must name the changed topic: type=%q err=%v", detail.Type, err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("throttled final mutation never triggered REST invalidation")
+	}
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
 func waitClientCount(t *testing.T, h *Hub, want int) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
