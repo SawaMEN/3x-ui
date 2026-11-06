@@ -7,7 +7,10 @@ import RoutingTab from '@/pages/xray/routing/RoutingTab';
 import type { XraySettingsValue } from '@/hooks/useXraySetting';
 import { makeTestQueryClient, renderWithProviders } from './test-utils';
 
-function renderRouting(availableInbounds: Array<{ id: number; tag: string; remark: string }>, tags: string[] = []) {
+function renderRouting(
+  availableInbounds: Array<{ id: number; tag: string; remark: string }>,
+  tags: string[] = [],
+) {
   const queryClient = makeTestQueryClient();
   queryClient.setQueryData(keys.inbounds.options(), availableInbounds);
   const settings = {
