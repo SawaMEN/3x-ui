@@ -453,7 +453,7 @@ fi
     def test_full_update_success_and_failed_start_with_sandboxed_services(self):
         panel = runpy.run_path(str(ROOT / "tools/test-core-migration-shell.py"))["PANEL"]
         panel = panel.replace('set -eu\n', 'set -eu\nif [[ "$1" == -v ]]; then echo test-version; exit 0; fi\n', 1)
-        for failure in ("none", "failed_start", "bad_checksum"):
+        for failure in ("none", "failed_start", "failed_enable", "bad_checksum"):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as raw:
                 base = Path(raw)
                 old = base / "x-ui"
@@ -514,6 +514,8 @@ systemctl() {
             # Only the new release fails; rollback must start the original.
             if [[ "$FAIL_START" == 1 ]] && grep -q '# upgraded' "$TEST_ROOT/x-ui/x-ui"; then return 37; fi
             touch "$TEST_ROOT/running";;
+        enable)
+            if [[ "$FAIL_ENABLE" == 1 ]] && grep -q '# upgraded' "$TEST_ROOT/x-ui/x-ui"; then return 71; fi ;;
         *) return 0;;
     esac
 }
@@ -528,7 +530,8 @@ update_x-ui
                            TEST_LOG=str(base / "calls"), TEST_SHA=hashlib.sha256(archive.read_bytes()).hexdigest(),
                            XUI_MAIN_FOLDER=str(old), XUI_SERVICE=str(base / "service"),
                            XUI_DB_FOLDER=str(base / "db-dir"), FAIL_START=str(int(failure == "failed_start")),
-                           BAD_CHECKSUM=str(int(failure == "bad_checksum")))
+                           BAD_CHECKSUM=str(int(failure == "bad_checksum")),
+                           FAIL_ENABLE=str(int(failure == "failed_enable")))
                 result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0 if failure == "none" else 2, result.stdout + result.stderr)
                 self.assertEqual((base / "database").read_text(),
@@ -538,6 +541,10 @@ update_x-ui
                     self.assertEqual((old / "x-ui").read_text(), panel + "\n# original\n")
                     self.assertEqual((base / "host-cli").read_text(), "original-menu")
                     self.assertEqual((base / "service/x-ui.service").read_text(), "original-service")
+                    if failure == "bad_checksum":
+                        # A rejected release must never stop an active panel.
+                        calls = (base / "calls").read_text() if (base / "calls").exists() else ""
+                        self.assertNotIn("stop x-ui", calls)
                 else:
                     self.assertIn(str(old), (base / "service/x-ui.service").read_text())
                     self.assertIn('upgraded-menu', (base / "host-cli").read_text())
