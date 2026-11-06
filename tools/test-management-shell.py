@@ -309,13 +309,39 @@ rc=$?
 [[ "$rc" == 22 && "$download_http_status" == 404 ]]
 ''', {"TEST_ROOT": raw})
 
-    def test_modern_release_cannot_skip_missing_checksum(self):
-        with tempfile.TemporaryDirectory() as raw:
-            self.run_script(function("install.sh", "verify_release_checksum") + r'''
-release_curl() { printf 404; }
-(verify_release_checksum https://github.com/SawaMEN/3x-ui/releases/download/dev-latest/archive "$TEST_ROOT/archive") >/dev/null
-[[ $? == 1 ]]
-''', {"TEST_ROOT": raw})
+    def test_both_installers_require_matching_release_checksum(self):
+        # The two installer paths must share the exact same trust decision.
+        self.assertEqual(function("install.sh", "verify_release_checksum"),
+                         function("update.sh", "verify_release_checksum"))
+        for installer in ("install.sh", "update.sh"):
+            for mode, want in (("valid", 0), ("missing", 1),
+                               ("malformed", 1), ("mismatch", 1),
+                               ("offline", 1)):
+                with self.subTest(installer=installer, mode=mode), tempfile.TemporaryDirectory() as raw:
+                    self.run_script(function(installer, "verify_release_checksum") + r'''
+printf 'signed release bytes' > "$TEST_ROOT/archive"
+release_curl() {
+    local dest=""
+    while (( $# )); do
+        if [[ "$1" == -o ]]; then dest="$2"; shift; fi
+        shift
+    done
+    case "$TEST_MODE" in
+        valid)
+            printf '%s  release.tar.gz\\n' "$(sha256sum "$TEST_ROOT/archive" | awk '{print $1}')" > "$dest"
+            printf 200 ;;
+        missing) printf 404 ;;
+        malformed) printf 'not-a-hash\\n' > "$dest"; printf 200 ;;
+        mismatch) printf '%064d  release.tar.gz\\n' 0 > "$dest"; printf 200 ;;
+        offline) return 7 ;;
+    esac
+}
+verify_release_checksum https://github.com/SawaMEN/3x-ui/releases/download/v3.10.0/release.tar.gz "$TEST_ROOT/archive" >/dev/null 2>&1
+rc=$?
+[[ "$rc" == "$EXPECTED" ]] || { echo "checksum result=$rc, expected=$EXPECTED"; exit 1; }
+[[ "$(cat "$TEST_ROOT/archive")" == 'signed release bytes' ]]
+[[ ! -e "$TEST_ROOT/archive.sha256" ]]
+''', {"TEST_ROOT": raw, "TEST_MODE": mode, "EXPECTED": str(want)})
 
     def test_unsupported_architecture_is_failure_without_deleting_script(self):
         for file in ("install.sh", "update.sh"):
@@ -455,11 +481,12 @@ core_migration_resume_gateway() { :; }
                 archive = base / "release.tar.gz"
                 with tarfile.open(archive, "w:gz") as target: target.add(bundle, arcname="x-ui")
                 script = "".join(function("update.sh", name) for name in
-                    ("acquire_update_download_lock", "preflight_update_download_space", "rewrite_release_service_paths", "prepare_release_host_files", "_install_xui_service_unit", "update_x-ui")).replace("/usr/bin/x-ui", "${TEST_ROOT}/host-cli") + r'''
+                    ("acquire_update_download_lock", "preflight_update_download_space", "verify_release_checksum", "rewrite_release_service_paths", "prepare_release_host_files", "_install_xui_service_unit", "update_x-ui")).replace("/usr/bin/x-ui", "${TEST_ROOT}/host-cli") + r'''
 _fail() { echo "$*" >&2; exit 2; }
 load_xui_env() { :; }
 select_release_tag() { printf dev-latest; }
 arch() { printf amd64; }
+release_curl() { curl "$@"; }
 download_release_asset() { command cp "$ARCHIVE" "$2"; }
 curl() {
     local dest=""
