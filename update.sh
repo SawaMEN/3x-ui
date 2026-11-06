@@ -1047,6 +1047,32 @@ resolve_latest_tag() {
     printf '%s\n' "$tag"
 }
 
+verify_release_checksum() {
+    local url="$1" file="$2" sums="$2.sha256" code expected actual
+    rm -f -- "$sums"
+    # Missing or unreachable checksums are not evidence that an archive is
+    # authentic. Never execute a release payload without a verified digest.
+    if ! code=$(release_curl -sL --retry 3 --retry-delay 3 --connect-timeout 15 --max-time 60 -o "$sums" -w '%{http_code}' "$url.sha256"); then
+        rm -f -- "$sums"
+        echo "Cannot retrieve release SHA-256; installation unchanged." >&2
+        return 1
+    fi
+    if [[ "$code" != 200 || ! -s "$sums" ]]; then
+        rm -f -- "$sums"
+        echo "Release SHA-256 is unavailable or invalid (HTTP $code); installation unchanged." >&2
+        return 1
+    fi
+    expected=$(awk 'NR == 1 {print $1}' "$sums") || { rm -f -- "$sums"; return 1; }
+    actual=$(sha256sum -- "$file" | awk '{print $1}') || { rm -f -- "$sums"; return 1; }
+    rm -f -- "$sums"
+    if [[ ! "$expected" =~ ^[0-9a-f]{64}$ || "$expected" != "$actual" ]]; then
+        echo "Release checksum mismatch or malformed checksum sidecar; installation unchanged." >&2
+        return 1
+    fi
+    echo "Release archive SHA-256 verified: $actual"
+}
+
+
 # The fork's old stable tags predate the core migration. Default commands
 # select a compatible build; explicitly requested versions are never substituted.
 select_release_tag() {
@@ -1267,31 +1293,8 @@ update_x-ui() {
         _fail "ERROR: Downloaded x-ui release archive is empty, please be sure that your server can access GitHub"
     fi
 
-    # Releases publish <asset>.sha256 next to each archive. A mismatch or a
-    # failed sidecar download aborts the update; only a 404 (releases
-    # predating the sidecar) is tolerated with a warning.
-    rm -f "${archive}.sha256"
-    sidecar_code=$(${curl_bin} -sL --retry 3 --retry-delay 3 --connect-timeout 15 --max-time 60 -o "${archive}.sha256" -w '%{http_code}' "${asset_url}.sha256" 2> /dev/null)
-    if [[ "${sidecar_code}" == "000" ]]; then
-        rm -f "${archive}.sha256"
-        sidecar_code=$(${curl_bin} -4 -sL --retry 3 --retry-delay 3 --connect-timeout 15 --max-time 60 -o "${archive}.sha256" -w '%{http_code}' "${asset_url}.sha256" 2> /dev/null)
-    fi
-    if [[ "${sidecar_code}" == "200" ]]; then
-        expected_sha256=$(awk 'NR == 1 {print $1}' "${archive}.sha256")
-        actual_sha256=$(sha256sum "${archive}" | awk '{print $1}')
-        rm -f "${archive}.sha256"
-        if [[ ! "${expected_sha256}" =~ ^[0-9a-f]{64}$ || "${expected_sha256}" != "${actual_sha256}" ]]; then
-            rm -f "${archive}"
-            _fail "ERROR: Checksum mismatch for $(basename "${archive}"): expected ${expected_sha256:-<none>}, got ${actual_sha256}"
-        fi
-        echo -e "${green}Checksum verified: ${actual_sha256}${plain}"
-    elif [[ "${sidecar_code}" == "404" && "${tag_version}" != dev-* ]]; then
-        rm -f "${archive}.sha256"
-        echo -e "${yellow}No checksum published for this release, skipping verification${plain}"
-    else
-        rm -f "${archive}.sha256" "${archive}"
-        _fail "ERROR: Failed to download the checksum for x-ui-linux-${machine_arch}.tar.gz (HTTP ${sidecar_code})"
-    fi
+    # Validate before unpacking, sourcing executable helpers or stopping x-ui.
+    verify_release_checksum "$asset_url" "$archive" || _fail "Release checksum verification failed; existing installation unchanged."
 
     # Validate the complete archive before touching the running installation.
     # A corrupt/truncated asset used to be discovered only after the old binary
