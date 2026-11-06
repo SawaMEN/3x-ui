@@ -453,8 +453,8 @@ fi
     def test_full_update_success_and_failed_start_with_sandboxed_services(self):
         panel = runpy.run_path(str(ROOT / "tools/test-core-migration-shell.py"))["PANEL"]
         panel = panel.replace('set -eu\n', 'set -eu\nif [[ "$1" == -v ]]; then echo test-version; exit 0; fi\n', 1)
-        for failure in (False, True):
-            with self.subTest(failed_start=failure), tempfile.TemporaryDirectory() as raw:
+        for failure in ("none", "failed_start", "bad_checksum"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as raw:
                 base = Path(raw)
                 old = base / "x-ui"
                 (old / "bin").mkdir(parents=True)
@@ -494,7 +494,11 @@ curl() {
         if [[ "$1" == -o ]]; then dest="$2"; shift; fi
         shift
     done
-    printf '%s  release.tar.gz\n' "$TEST_SHA" > "$dest"
+    if [[ "$BAD_CHECKSUM" == 1 ]]; then
+        printf '%064d  release.tar.gz\n' 0 > "$dest"
+    else
+        printf '%s  release.tar.gz\n' "$TEST_SHA" > "$dest"
+    fi
     printf 200
 }
 mkdir() { [[ "${@: -1}" == /var/log/x-ui ]] || command mkdir "$@"; }
@@ -523,12 +527,14 @@ update_x-ui
                 env = dict(os.environ, TEST_ROOT=raw, ARCHIVE=str(archive), TEST_DB=str(base / "database"),
                            TEST_LOG=str(base / "calls"), TEST_SHA=hashlib.sha256(archive.read_bytes()).hexdigest(),
                            XUI_MAIN_FOLDER=str(old), XUI_SERVICE=str(base / "service"),
-                           XUI_DB_FOLDER=str(base / "db-dir"), FAIL_START=str(int(failure)))
+                           XUI_DB_FOLDER=str(base / "db-dir"), FAIL_START=str(int(failure == "failed_start")),
+                           BAD_CHECKSUM=str(int(failure == "bad_checksum")))
                 result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
-                self.assertEqual(result.returncode, 2 if failure else 0, result.stdout + result.stderr)
-                self.assertEqual((base / "database").read_text(), "original-data" if failure else "new-core\n")
+                self.assertEqual(result.returncode, 0 if failure == "none" else 2, result.stdout + result.stderr)
+                self.assertEqual((base / "database").read_text(),
+                                 "new-core\n" if failure == "none" else "original-data")
                 self.assertTrue((base / "running").exists())
-                if failure:
+                if failure != "none":
                     self.assertEqual((old / "x-ui").read_text(), panel + "\n# original\n")
                     self.assertEqual((base / "host-cli").read_text(), "original-menu")
                     self.assertEqual((base / "service/x-ui.service").read_text(), "original-service")
