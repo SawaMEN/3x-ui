@@ -31,6 +31,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
       - name: Install pinned frontend dependencies
         working-directory: frontend
         run: npm ci --no-audit --no-fund
@@ -40,6 +44,14 @@ jobs:
       - name: Enforce source formatting
         working-directory: frontend
         run: npm run format:check
+      - name: Regenerate and assert frontend API/OpenAPI contracts are current
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd frontend
+          npm run gen
+          cd ..
+          git diff --exit-code -- frontend/src/generated frontend/public/openapi.json docs/public/openapi.json
       - name: Typecheck and compile frontend bundles
         working-directory: frontend
         run: npm run typecheck && npm run build:ci
