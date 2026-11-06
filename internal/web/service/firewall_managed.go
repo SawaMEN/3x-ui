@@ -202,6 +202,25 @@ func detectOwnedNativeFirewallBackend(ctx context.Context) (firewallBackend, boo
 	return firewallBackend{}, false
 }
 
+
+func probeManagedIPTablesBackend(ctx context.Context, binary string) error {
+	// Prove the backend works in the running kernel for both families before
+	// accepting it. A present binary or successful --version is insufficient.
+	if _, err := runFirewallCommand(ctx, binary, "-S", "INPUT"); err != nil {
+		return err
+	}
+	ip6, err := managedIP6TablesPath(binary)
+	if err != nil {
+		return err
+	}
+	if ip6 != "" {
+		if _, err := runFirewallCommand(ctx, ip6, "-S", "INPUT"); err != nil {
+			return fmt.Errorf("%s IPv6 preflight: %w", ip6, err)
+		}
+	}
+	return nil
+}
+
 func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) {
 	legacy, legacyErr := detectFirewallBackend(ctx)
 	if legacyErr != nil && tryLoadLegacyIPTablesModules(ctx, legacyErr) {
@@ -250,10 +269,13 @@ func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) 
 		if err != nil {
 			continue
 		}
-		// Read the actual ruleset: --version succeeds even on unsupported kernels.
-		if _, err := runFirewallCommand(ctx, path, "-S", "INPUT"); err != nil {
+		// Verify the actual IPv4 and IPv6 rulesets, not --version.
+		if err := probeManagedIPTablesBackend(ctx, path); err != nil {
 			probeErrors = append(probeErrors, err)
-			if !isFirewallKernelCompatibilityError(err) {
+			// An explicitly named backend without its matching IPv6 binary
+			// is incomplete, but another candidate may still be usable.
+			if !isFirewallKernelCompatibilityError(err) &&
+				!strings.Contains(err.Error(), "is required alongside") {
 				return firewallBackend{}, err
 			}
 			continue
