@@ -29,17 +29,29 @@ class FakeSocket {
 }
 
 const sockets: FakeSocket[] = [];
-let originalWS: typeof WebSocket;
 
 beforeEach(() => {
   vi.useFakeTimers();
   sockets.length = 0;
-  originalWS = globalThis.WebSocket;
-  globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket;
+  const browser = new EventTarget();
+  const doc = new EventTarget();
+  vi.stubGlobal('window', {
+    location: { protocol: 'https:', host: 'panel.example' },
+    addEventListener: browser.addEventListener.bind(browser),
+    removeEventListener: browser.removeEventListener.bind(browser),
+    dispatchEvent: browser.dispatchEvent.bind(browser),
+  });
+  vi.stubGlobal('document', {
+    visibilityState: 'visible',
+    addEventListener: doc.addEventListener.bind(doc),
+    removeEventListener: doc.removeEventListener.bind(doc),
+    dispatchEvent: doc.dispatchEvent.bind(doc),
+  });
+  vi.stubGlobal('WebSocket', FakeSocket);
 });
 
 afterEach(() => {
-  globalThis.WebSocket = originalWS;
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
