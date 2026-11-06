@@ -13,17 +13,21 @@ import (
 
 func TestStage9NodeSOCKSProxyDoesNotBypassPrivateDestinationGuard(t *testing.T) {
 	n := &model.Node{Id: 9901, Scheme: "https", Address: "127.0.0.1", Port: 443, TlsVerifyMode: "verify", AllowPrivateAddress: false}
-	client, err := HTTPClientForNode(n, "socks5://127.0.0.1:1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	req, err := http.NewRequestWithContext(netsafe.ContextWithAllowPrivate(context.Background(), false), http.MethodGet, "https://127.0.0.1:443/", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = client.Do(req)
-	if !errors.Is(err, netsafe.ErrPrivateAddressBlocked) {
-		t.Fatalf("SOCKS proxy bypassed the private-destination guard: %v", err)
+	for _, proxyURL := range []string{"socks5://127.0.0.1:1", "SOCKS5://127.0.0.1:1", "socks5h://127.0.0.1:1"} {
+		t.Run(proxyURL, func(t *testing.T) {
+			client, err := HTTPClientForNode(n, proxyURL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req, err := http.NewRequestWithContext(netsafe.ContextWithAllowPrivate(context.Background(), false), http.MethodGet, "https://127.0.0.1:443/", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = client.Do(req)
+			if !errors.Is(err, netsafe.ErrPrivateAddressBlocked) {
+				t.Fatalf("SOCKS proxy bypassed the private-destination guard: %v", err)
+			}
+		})
 	}
 }
 
