@@ -8,6 +8,8 @@ on:
       - "tools/build-speed-components.py"
       - "deploy/hiddify/**"
       - "tools/build-hiddify-core.sh"
+      - "tools/verify-hiddify-build.py"
+      - "deploy/hiddify/fork-contract.json"
       - "docs/hiddify-core-target.json"
       - "go.mod"
       - "go.sum"
@@ -36,6 +38,8 @@ on:
       - "tools/build-speed-components.py"
       - "deploy/hiddify/**"
       - "tools/build-hiddify-core.sh"
+      - "tools/verify-hiddify-build.py"
+      - "deploy/hiddify/fork-contract.json"
       - "docs/hiddify-core-target.json"
       - "go.mod"
       - "go.sum"
@@ -78,6 +82,8 @@ jobs:
           python3 tools/test-core-migration-shell.py
           python3 tools/test-management-shell.py
           python3 -m unittest discover -s tools/ci -p 'test_*.py'
+      - name: Check pinned custom kernel build contract
+        run: python3 tools/verify-hiddify-build.py
 
   meko-firewall:
     runs-on: ubuntu-latest
