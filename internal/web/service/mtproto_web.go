@@ -22,14 +22,14 @@ import (
 )
 
 type mtprotoWebSettings struct {
-	Site     *TelemtWebSiteOptions `json:"site,omitempty"`
-	Enabled  bool                  `json:"enabled"`
-	Domain   string                `json:"domain"`
-	BasePath string                `json:"basePath"`
-	Aliases  []string              `json:"aliases"`
-	Frontend string                `json:"frontend"`
-	Carrier  string                `json:"carrier"`
-	Carriers []string              `json:"carriers"`
+	Site        *TelemtWebSiteOptions `json:"site,omitempty"`
+	Enabled     bool                  `json:"enabled"`
+	Domain      string                `json:"domain"`
+	BasePath    string                `json:"basePath"`
+	Aliases     []string              `json:"aliases"`
+	Frontend    string                `json:"frontend"`
+	Carrier     string                `json:"carrier"`
+	Carriers    []string              `json:"carriers"`
 	RetryJitter *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
 }
 

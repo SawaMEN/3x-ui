@@ -35,14 +35,14 @@ func TestStage4RejectsBrokenCoreExecutables(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "core")
 			cfg := filepath.Join(dir, "config.json")
-			if err := os.WriteFile(cfg, []byte("{}"), 0600); err != nil {
+			if err := os.WriteFile(cfg, []byte("{}"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			data := []byte("#!/bin/sh\necho unrelated-program\n")
-			mode := os.FileMode(0700)
+			mode := os.FileMode(0o700)
 			switch kind {
 			case "not-executable":
-				mode = 0600
+				mode = 0o600
 			case "bad-format":
 				data = []byte("not an executable")
 			case "missing-loader":

@@ -2,10 +2,12 @@ package service
 
 import (
 	"errors"
+	"testing"
+
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"gorm.io/gorm"
-	"testing"
 )
 
 func TestStage4AtomicCoreSelection(t *testing.T) {

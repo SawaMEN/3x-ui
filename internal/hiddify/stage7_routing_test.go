@@ -15,8 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"golang.org/x/net/proxy"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
 // Read a SOCKS address without resolving it: the marker peers also prove that

@@ -5,9 +5,9 @@ import "testing"
 func TestClientLimitWarnEarlyThresholds(t *testing.T) {
 	const now = int64(1_700_000_000_000)
 	for _, tc := range []struct {
-		name string
+		name                string
 		total, used, expiry int64
-		want bool
+		want                bool
 	}{
 		{"no limits", 0, 0, 0, false},
 		{"below 80 percent", 100, 79, 0, false},

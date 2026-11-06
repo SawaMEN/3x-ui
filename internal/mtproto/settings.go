@@ -31,25 +31,25 @@ func ValidDomain(domain string) bool {
 // Telemt rejects later. Legacy fields remain compatible with existing imports.
 func ValidateSettings(settings string) error {
 	var s struct {
-	TLSMask              *bool          `json:"tlsMask"`
-	TLSEmulation         *bool          `json:"tlsEmulation"`
-	LegacyModes          *bool          `json:"allowLegacyModes"`
-	ProxyListener        bool           `json:"proxyProtocolListener"`
-	RouteThroughCore     bool           `json:"routeThroughXray"`
-	Debug                bool           `json:"debug"`
-	Domain               string         `json:"fakeTlsDomain"`
-	MaskHost             string         `json:"maskHost"`
-	MaskPort             int            `json:"maskPort"`
-	MaskProxyProtocol    int            `json:"maskProxyProtocol"`
-	Trusted              []string       `json:"proxyProtocolTrustedCidrs"`
-	PreferIP             string         `json:"preferIp"`
-	SNIAction            string         `json:"unknownSniAction"`
-	Connections          int            `json:"throttleMaxConnections"`
-	Public4              string         `json:"publicIpv4"`
-	Public6              string         `json:"publicIpv6"`
-	Clients              []model.Client `json:"clients"`
-	OutboundTag          string         `json:"outboundTag"`
-	FallbackOutboundTags []string       `json:"fallbackOutboundTags"`
+		TLSMask              *bool          `json:"tlsMask"`
+		TLSEmulation         *bool          `json:"tlsEmulation"`
+		LegacyModes          *bool          `json:"allowLegacyModes"`
+		ProxyListener        bool           `json:"proxyProtocolListener"`
+		RouteThroughCore     bool           `json:"routeThroughXray"`
+		Debug                bool           `json:"debug"`
+		Domain               string         `json:"fakeTlsDomain"`
+		MaskHost             string         `json:"maskHost"`
+		MaskPort             int            `json:"maskPort"`
+		MaskProxyProtocol    int            `json:"maskProxyProtocol"`
+		Trusted              []string       `json:"proxyProtocolTrustedCidrs"`
+		PreferIP             string         `json:"preferIp"`
+		SNIAction            string         `json:"unknownSniAction"`
+		Connections          int            `json:"throttleMaxConnections"`
+		Public4              string         `json:"publicIpv4"`
+		Public6              string         `json:"publicIpv6"`
+		Clients              []model.Client `json:"clients"`
+		OutboundTag          string         `json:"outboundTag"`
+		FallbackOutboundTags []string       `json:"fallbackOutboundTags"`
 	}
 	if err := json.Unmarshal([]byte(settings), &s); err != nil {
 		return fmt.Errorf("MTProto settings: %w", err)

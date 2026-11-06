@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/testpg"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 func stage6DB(t *testing.T) *gorm.DB {

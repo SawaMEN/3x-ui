@@ -31,6 +31,7 @@ func TestNativeAWGConnections(t *testing.T) {
 		t.Run(fmt.Sprint("responder=", responder), func(t *testing.T) { testNativeWireGuardProtocol(t, true, responder) })
 	}
 }
+
 func TestNativeWireGuardConnections(t *testing.T) {
 	for _, responder := range []bool{false, true} {
 		t.Run(fmt.Sprint("responder=", responder), func(t *testing.T) { testNativeWireGuardProtocol(t, false, responder) })
@@ -259,7 +260,6 @@ func testNativeWireGuardProtocol(t *testing.T, obfuscated, responder bool) {
 			}
 		})
 	}
-
 }
 
 func nativeAWGEcho(network, address string) error {

@@ -93,10 +93,10 @@ func TestStage4NativeEngineLifecycle(t *testing.T) {
 			if engine == CoreTypeSingBoxUpstream {
 				source = filepath.Join(root, "upstream", "sing-box")
 			}
-			stage4Copy(t, source, svc.BinaryPath(), 0700)
+			stage4Copy(t, source, svc.BinaryPath(), 0o700)
 			if engine == CoreTypeXray {
 				for _, name := range []string{"geoip.dat", "geosite.dat"} {
-					stage4Copy(t, filepath.Join(filepath.Dir(source), name), filepath.Join(filepath.Dir(svc.BinaryPath()), name), 0600)
+					stage4Copy(t, filepath.Join(filepath.Dir(source), name), filepath.Join(filepath.Dir(svc.BinaryPath()), name), 0o600)
 				}
 			}
 			settings := &SettingService{}
@@ -172,7 +172,7 @@ func TestStage4NativeEngineLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(svc.ProcessConfigPath(), []byte("{invalid"), 0600); err != nil {
+			if err := os.WriteFile(svc.ProcessConfigPath(), []byte("{invalid"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			if err := svc.process().Restart(ctx); err == nil {

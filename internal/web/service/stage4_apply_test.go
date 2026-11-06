@@ -48,11 +48,11 @@ func TestStage4CandidatePublicationRollback(t *testing.T) {
 			target := filepath.Join(dir, "core.json")
 			candidate := filepath.Join(dir, "candidate.json")
 			if exists {
-				if err := os.WriteFile(target, []byte("previous"), 0600); err != nil {
+				if err := os.WriteFile(target, []byte("previous"), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if err := os.WriteFile(candidate, []byte("candidate"), 0600); err != nil {
+			if err := os.WriteFile(candidate, []byte("candidate"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			c := &nativeConfigCandidate{path: candidate, target: target}
@@ -96,7 +96,7 @@ case "$1" in
  *) exit 19;;
 esac
 `
-	if err := os.WriteFile(svc.BinaryPath(), []byte(script), 0700); err != nil {
+	if err := os.WriteFile(svc.BinaryPath(), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := (&SettingService{}).SetCoreType(CoreTypeXray); err != nil {
@@ -126,7 +126,6 @@ func TestStage4XrayStartUsesNativeXrayConfiguration(t *testing.T) {
 			t.Fatal("Xray received sing-box outbound schema")
 		}
 	}
-
 }
 
 func TestStage4StoppedXrayFailedRestartDoesNotLaunchOldCore(t *testing.T) {

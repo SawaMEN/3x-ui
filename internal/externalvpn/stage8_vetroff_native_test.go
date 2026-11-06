@@ -16,8 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"golang.org/x/net/proxy"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func stage8Port(t *testing.T) int {
@@ -227,7 +228,6 @@ func TestStage8VetroffNativePayload(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func stage8SocksUDP(t *testing.T, address string, target int) {

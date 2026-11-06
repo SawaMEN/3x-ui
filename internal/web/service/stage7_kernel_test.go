@@ -86,7 +86,7 @@ pathlib.Path(sys.argv[1]).write_text('ready')
 while True:
  c,a=tcp.accept();threading.Thread(target=connection,args=(c,),daemon=True).start()
 `
-	if err := os.WriteFile(script, []byte(code), 0600); err != nil {
+	if err := os.WriteFile(script, []byte(code), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("ip", "netns", "exec", target, "python3", script, ready)
@@ -158,7 +158,7 @@ func stage7KernelCore(t *testing.T, cfg map[string]any) func() {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(path, b, 0600); err != nil {
+	if err = os.WriteFile(path, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	log, err := os.Create(filepath.Join(dir, "core.log"))

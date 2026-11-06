@@ -83,6 +83,7 @@ func snapshotNativeConfig(path string, applied []byte) (*nativeConfigFileSnapsho
 	}
 	return snapshot, nil
 }
+
 func (s *nativeConfigFileSnapshot) restore() error {
 	if s.exists {
 		return writeNativeConfigBytes(s.path, s.data)

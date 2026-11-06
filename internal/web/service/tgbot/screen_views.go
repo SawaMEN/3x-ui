@@ -158,7 +158,7 @@ func (t *Tgbot) depleteReport() string {
 			continue
 		}
 		if (inbound.ExpiryTime > 0 && inbound.ExpiryTime-now < exDiff) ||
-			(inbound.Total > 0 && inbound.Total-(common.TrafficUsage(inbound.Up, inbound.Down)) < trDiff) {
+			(inbound.Total > 0 && inbound.Total-common.TrafficUsage(inbound.Up, inbound.Down) < trDiff) {
 			exhaustedInbounds++
 		}
 		for _, client := range inbound.ClientStats {
@@ -171,7 +171,7 @@ func (t *Tgbot) depleteReport() string {
 				continue
 			}
 			if (client.ExpiryTime > 0 && client.ExpiryTime-now < exDiff) ||
-				(client.Total > 0 && client.Total-(common.TrafficUsage(client.Up, client.Down)) < trDiff) {
+				(client.Total > 0 && client.Total-common.TrafficUsage(client.Up, client.Down) < trDiff) {
 				exhaustedClients++
 				clientLines.WriteString(t.clientInfoMsg(&client, true, false, false, true, true, false))
 				clientLines.WriteString("\n")

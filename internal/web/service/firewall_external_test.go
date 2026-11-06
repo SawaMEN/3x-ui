@@ -15,7 +15,7 @@ func TestStage7ExternalFirewallRules(t *testing.T) {
 		state := filepath.Join(dir, "state")
 		deleted := filepath.Join(dir, "deleted")
 		doc := `{"nftables":[{"rule":{"family":"inet","table":"admin","chain":"input","handle":8,"expr":[{"counter":{"packets":1,"bytes":32}},{"drop":null}]}},{"rule":{"family":"inet","table":"xui_firewall","chain":"input","handle":2,"expr":[{"accept":null}]}}]}`
-		if err := os.WriteFile(state, []byte(doc), 0600); err != nil {
+		if err := os.WriteFile(state, []byte(doc), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		t.Setenv("STAGE7_EXTERNAL_STATE", state)
@@ -28,7 +28,7 @@ func TestStage7ExternalFirewallRules(t *testing.T) {
 		}
 		id := rules[0].ID
 		changed := strings.ReplaceAll(doc, `"packets":1`, `"packets":100`)
-		if err := os.WriteFile(state, []byte(changed), 0600); err != nil {
+		if err := os.WriteFile(state, []byte(changed), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := deleteExternalFirewallRule(context.Background(), b, id); err != nil {
@@ -40,7 +40,7 @@ func TestStage7ExternalFirewallRules(t *testing.T) {
 		}
 		_ = os.Remove(deleted)
 		changed = strings.ReplaceAll(changed, `"drop":null`, `"accept":null`)
-		if err := os.WriteFile(state, []byte(changed), 0600); err != nil {
+		if err := os.WriteFile(state, []byte(changed), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := deleteExternalFirewallRule(context.Background(), b, id); err == nil {
@@ -108,7 +108,6 @@ RULES`)
 		if err != nil || len(other) != 1 || other[0].ID == rules[0].ID {
 			t.Fatal("selection survived zone change", other, err)
 		}
-
 	})
 }
 

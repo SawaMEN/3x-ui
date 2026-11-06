@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"golang.org/x/net/proxy"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func TestStage8OpenFluxNativePayload(t *testing.T) {

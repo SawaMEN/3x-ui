@@ -14,7 +14,6 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-
 )
 
 type GroupSummary struct {

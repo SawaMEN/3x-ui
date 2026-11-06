@@ -88,12 +88,12 @@ type Hub struct {
 func NewHub() *Hub {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Hub{
-		clients:       make(map[*Client]struct{}),
-		broadcast:     make(chan []byte, hubBroadcastQueue),
-		ops:           make(chan clientOp, hubOpsQueue),
-		ctx:           ctx,
-		cancel:        cancel,
-		lastBroadcast: make(map[MessageType]time.Time),
+		clients:              make(map[*Client]struct{}),
+		broadcast:            make(chan []byte, hubBroadcastQueue),
+		ops:                  make(chan clientOp, hubOpsQueue),
+		ctx:                  ctx,
+		cancel:               cancel,
+		lastBroadcast:        make(map[MessageType]time.Time),
 		pendingInvalidations: make(map[MessageType]*time.Timer),
 	}
 }

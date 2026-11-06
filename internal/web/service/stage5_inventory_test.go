@@ -42,7 +42,7 @@ func TestStage5CapabilityInventory(t *testing.T) {
 		t.Fatal(err)
 	}
 	if path := os.Getenv("STAGE5_CAPABILITY_OUTPUT"); path != "" {
-		if err := os.WriteFile(path, data, 0600); err != nil {
+		if err := os.WriteFile(path, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

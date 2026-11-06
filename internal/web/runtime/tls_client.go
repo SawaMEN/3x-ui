@@ -9,8 +9,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
-	"net/url"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -163,7 +163,7 @@ func rejectNodeRedirect(*http.Request, []*http.Request) error {
 }
 
 var defaultNodeHTTPClient = &http.Client{
-	Transport: newNodeTransport(nil),
+	Transport:     newNodeTransport(nil),
 	CheckRedirect: rejectNodeRedirect,
 }
 

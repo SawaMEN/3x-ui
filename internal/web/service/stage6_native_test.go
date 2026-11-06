@@ -13,11 +13,12 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/proxy"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	webRuntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"golang.org/x/net/proxy"
 )
 
 func TestStage6NativeAccountingAndRevocation(t *testing.T) {
@@ -34,7 +35,7 @@ func TestStage6NativeAccountingAndRevocation(t *testing.T) {
 		_ = svc.process().Stop()
 		hiddifyRuntime, hiddifyProcess, upstreamProcess, standaloneXrayProcess = oldRuntime, oldOwner, oldUpstream, oldXray
 	})
-	stage4Copy(t, filepath.Join(root, "owner", "x-ui", "bin", "hiddify-core-linux-"+runtime.GOARCH), svc.BinaryPath(), 0700)
+	stage4Copy(t, filepath.Join(root, "owner", "x-ui", "bin", "hiddify-core-linux-"+runtime.GOARCH), svc.BinaryPath(), 0o700)
 	settings := &SettingService{}
 	// The production default blocks private destinations. This fixture uses a
 	// loopback echo server and must explicitly allow it in the shared policy.

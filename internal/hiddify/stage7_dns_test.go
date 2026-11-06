@@ -31,6 +31,7 @@ func (l *stage7DNSLog) count(name string) int {
 	defer l.mu.Unlock()
 	return l.hits[dns.Fqdn(name)]
 }
+
 func (l *stage7DNSLog) answer(req *dns.Msg, marker int) *dns.Msg {
 	l.mu.Lock()
 	for _, q := range req.Question {

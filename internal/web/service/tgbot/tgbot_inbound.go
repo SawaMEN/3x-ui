@@ -27,7 +27,7 @@ func (t *Tgbot) getInboundUsages() string {
 	for _, inbound := range inbounds {
 		info.WriteString(t.I18nBot("tgbot.messages.inbound", "Remark=="+inbound.Remark))
 		info.WriteString(t.I18nBot("tgbot.messages.port", "Port=="+strconv.Itoa(inbound.Port)))
-		info.WriteString(t.I18nBot("tgbot.messages.traffic", "Total=="+common.FormatTraffic((common.TrafficUsage(inbound.Up, inbound.Down))), "Upload=="+common.FormatTraffic(inbound.Up), "Download=="+common.FormatTraffic(inbound.Down)))
+		info.WriteString(t.I18nBot("tgbot.messages.traffic", "Total=="+common.FormatTraffic(common.TrafficUsage(inbound.Up, inbound.Down)), "Upload=="+common.FormatTraffic(inbound.Up), "Download=="+common.FormatTraffic(inbound.Down)))
 
 		clients, listErr := t.clientService.ListForInbound(nil, inbound.Id)
 		if listErr == nil {
@@ -129,7 +129,7 @@ func (t *Tgbot) searchInbound(chatId int64, remark string) {
 		info := ""
 		info += t.I18nBot("tgbot.messages.inbound", "Remark=="+inbound.Remark)
 		info += t.I18nBot("tgbot.messages.port", "Port=="+strconv.Itoa(inbound.Port))
-		info += t.I18nBot("tgbot.messages.traffic", "Total=="+common.FormatTraffic((common.TrafficUsage(inbound.Up, inbound.Down))), "Upload=="+common.FormatTraffic(inbound.Up), "Download=="+common.FormatTraffic(inbound.Down))
+		info += t.I18nBot("tgbot.messages.traffic", "Total=="+common.FormatTraffic(common.TrafficUsage(inbound.Up, inbound.Down)), "Upload=="+common.FormatTraffic(inbound.Up), "Download=="+common.FormatTraffic(inbound.Down))
 
 		if inbound.ExpiryTime == 0 {
 			info += t.I18nBot("tgbot.messages.expire", "Time=="+t.I18nBot("tgbot.unlimited"))

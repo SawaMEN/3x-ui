@@ -14,8 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"golang.org/x/net/proxy"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
 // Test real panel translation in both directions, not a manually patched
@@ -308,7 +309,7 @@ func stage5Start(t *testing.T, binary, dir, name string, cfg map[string]any, por
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, name+".json")
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	log, err := os.Create(filepath.Join(dir, name+".log"))

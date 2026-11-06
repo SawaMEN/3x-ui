@@ -115,7 +115,7 @@ func TestStage6SubscriptionImports(t *testing.T) {
 		t.Run(p.name, func(t *testing.T) {
 			dir := t.TempDir()
 			input, parsed := filepath.Join(dir, "profile.json"), filepath.Join(dir, "parsed.json")
-			if e := os.WriteFile(input, []byte(p.body), 0600); e != nil {
+			if e := os.WriteFile(input, []byte(p.body), 0o600); e != nil {
 				t.Fatal(e)
 			}
 			xray := p.name == "xray-json"
@@ -129,7 +129,7 @@ func TestStage6SubscriptionImports(t *testing.T) {
 				if out, err := cmd.CombinedOutput(); err != nil {
 					t.Fatalf("Xray client import: %v %s", err, out)
 				}
-				if err := os.WriteFile(parsed, []byte(p.body), 0600); err != nil {
+				if err := os.WriteFile(parsed, []byte(p.body), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			} else {
@@ -181,7 +181,7 @@ func TestStage6SubscriptionImports(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(path, data, 0600); err != nil {
+				if err := os.WriteFile(path, data, 0o600); err != nil {
 					t.Fatal(err)
 				}
 				clientLog = filepath.Join(dir, "xray-client.log")

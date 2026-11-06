@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/xtls/xray-core/infra/conf"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/xtls/xray-core/infra/conf"
 )
 
 // validateInboundRuntimeTarget validates the protocol against the core that

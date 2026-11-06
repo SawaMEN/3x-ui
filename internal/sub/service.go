@@ -533,7 +533,7 @@ func (s *SubService) resolveInfoNodeRemark(subId string, uniqueEmails []string, 
 	}
 	nowMillis := time.Now().UnixMilli()
 	isExpired := common.Expired(traffic.ExpiryTime, nowMillis)
-	isDepleted := traffic.Total > 0 && (common.TrafficUsage(traffic.Up, traffic.Down)) >= traffic.Total
+	isDepleted := traffic.Total > 0 && common.TrafficUsage(traffic.Up, traffic.Down) >= traffic.Total
 
 	primaryEmail := ""
 	if len(uniqueEmails) > 0 {
@@ -3180,7 +3180,7 @@ func (s *SubService) BuildPageData(subId string, hostHeader string, traffic core
 	remained := ""
 	if traffic.Total > 0 {
 		total = common.FormatTraffic(traffic.Total)
-		left := max(traffic.Total-(common.TrafficUsage(traffic.Up, traffic.Down)), 0)
+		left := max(traffic.Total-common.TrafficUsage(traffic.Up, traffic.Down), 0)
 		remained = common.FormatTraffic(left)
 	}
 

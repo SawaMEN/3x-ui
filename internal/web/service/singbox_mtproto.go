@@ -16,8 +16,8 @@ func injectSingBoxMtprotoEgress(cfg *singbox.Config, inbound *model.Inbound) err
 		return nil
 	}
 	var settings struct {
-		Port     int    `json:"routeXrayPort"`
-		Outbound string `json:"outboundTag"`
+		Port                 int      `json:"routeXrayPort"`
+		Outbound             string   `json:"outboundTag"`
 		FallbackOutboundTags []string `json:"fallbackOutboundTags"`
 	}
 	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {

@@ -17,11 +17,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/gin-gonic/gin"
 )
 
 func TestStage4NativeCoreSwitchAPI(t *testing.T) {
@@ -52,7 +53,7 @@ func TestStage4NativeCoreSwitchAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer in.Close()
-		out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0700)
+		out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o700)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -145,14 +146,14 @@ func TestStage4NativeCoreSwitchAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Rename(saved, xray.BinaryPath())
-	if err := os.WriteFile(xray.BinaryPath(), []byte("invalid executable"), 0700); err != nil {
+	if err := os.WriteFile(xray.BinaryPath(), []byte("invalid executable"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	call(service.CoreTypeXray, false)
 	check(service.CoreTypeSingBox)
 	// Delegate genuine checks to Xray, then inject failure only at runtime start.
 	script := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = version ] || [ \"$2\" = -test ]; then exec %q \"$@\"; fi\necho stage4-injected-startup-failure >&2\nexit 7\n", saved)
-	if err := os.WriteFile(xray.BinaryPath(), []byte(script), 0700); err != nil {
+	if err := os.WriteFile(xray.BinaryPath(), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	call(service.CoreTypeXray, false)

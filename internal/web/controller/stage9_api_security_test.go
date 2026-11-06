@@ -22,7 +22,7 @@ func TestStage9APIAuthScopeMatrix(t *testing.T) {
 	}
 	cases := []struct {
 		scope, method, path string
-		want int
+		want                int
 	}{
 		{model.ApiScopeMonitor, http.MethodGet, "/panel/api/server/status", http.StatusOK},
 		{model.ApiScopeMonitor, http.MethodGet, "/panel/api/ping", http.StatusForbidden},

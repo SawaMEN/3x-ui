@@ -179,7 +179,7 @@ func TestManagedTelemtWebRateLimitRendering(t *testing.T) {
 	ib := loadInboundByTag(t, "mt-web-rate")
 	state := TelemtWebProxyState{
 		Enabled: true, ManagedInboundID: ib.Id, Domain: "web.example.com",
-		Secret: "0123456789abcdef0123456789abcdef",
+		Secret:     "0123456789abcdef0123456789abcdef",
 		PublicAddr: "203.0.113.10:443", ListenPort: 15080,
 	}
 	config, err := appendTelemtWebProxyConfig("[access.users]\nxui = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n", state)

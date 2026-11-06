@@ -236,12 +236,12 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 			Port          int    `json:"port"`
 			ProxyProtocol bool   `json:"proxyProtocol"`
 		} `json:"domainFronting"`
-		PreferIP               string `json:"preferIp"`
-		ThrottleMaxConnections int    `json:"throttleMaxConnections"`
-		RouteThroughXray       bool   `json:"routeThroughXray"`
-		RouteXrayPort          int    `json:"routeXrayPort"`
-		PublicIPv4             string `json:"publicIpv4"`
-		PublicIPv6             string `json:"publicIpv6"`
+		PreferIP               string         `json:"preferIp"`
+		ThrottleMaxConnections int            `json:"throttleMaxConnections"`
+		RouteThroughXray       bool           `json:"routeThroughXray"`
+		RouteXrayPort          int            `json:"routeXrayPort"`
+		PublicIPv4             string         `json:"publicIpv4"`
+		PublicIPv6             string         `json:"publicIpv6"`
 		Clients                []model.Client `json:"clients"`
 	}
 	if err := json.Unmarshal([]byte(ib.Settings), &parsed); err != nil {

@@ -202,7 +202,6 @@ func detectOwnedNativeFirewallBackend(ctx context.Context) (firewallBackend, boo
 	return firewallBackend{}, false
 }
 
-
 func probeManagedIPTablesBackend(ctx context.Context, binary string) error {
 	// Prove the backend works in the running kernel for both families before
 	// accepting it. A present binary or successful --version is insufficient.

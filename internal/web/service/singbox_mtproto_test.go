@@ -49,7 +49,7 @@ func TestSingBoxMtprotoEgress(t *testing.T) {
 
 func TestSingBoxMtprotoFallbackOutbounds(t *testing.T) {
 	cfg := &singbox.Config{
-		Route: map[string]any{"rules": []map[string]any{}},
+		Route:     map[string]any{"rules": []map[string]any{}},
 		Outbounds: []map[string]any{{"tag": "primary", "type": "socks"}, {"tag": "reserve", "type": "socks"}},
 	}
 	ib := &model.Inbound{

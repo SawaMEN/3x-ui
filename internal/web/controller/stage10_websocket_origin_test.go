@@ -10,7 +10,7 @@ import (
 func TestStage10WebSocketOriginIsPortAndSchemeScoped(t *testing.T) {
 	for _, tc := range []struct {
 		name, host, origin string
-		tls, allow bool
+		tls, allow         bool
 	}{
 		{"no Origin for native clients", "panel.example:8443", "", true, true},
 		{"same HTTPS origin", "panel.example:8443", "https://panel.example:8443", true, true},

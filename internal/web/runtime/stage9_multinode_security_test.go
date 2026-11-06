@@ -25,11 +25,13 @@ func TestStage9RemoteCacheAndIdentityIsolatedPerNode(t *testing.T) {
 	right.cacheSet("shared", 202)
 	for _, tc := range []struct {
 		remote *Remote
-		tag string
-		want int
+		tag    string
+		want   int
 	}{
-		{left, "shared", 101}, {right, "shared", 202},
-		{left, "n911-shared", 101}, {right, "n912-shared", 202},
+		{left, "shared", 101},
+		{right, "shared", 202},
+		{left, "n911-shared", 101},
+		{right, "n912-shared", 202},
 	} {
 		got, ok := tc.remote.cacheGetTag(tc.tag)
 		if !ok || got != tc.want {

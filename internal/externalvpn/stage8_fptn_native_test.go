@@ -17,9 +17,10 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/proxy"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"golang.org/x/net/proxy"
 )
 
 func TestStage8FPTNNativePayload(t *testing.T) {

@@ -24,15 +24,15 @@ const telemtWebSiteMaxBytes = 256 * 1024
 var telemtWebSiteHTMLDocument = regexp.MustCompile(`(?i)<html(?:\s|>)`)
 
 type TelemtWebSiteOptions struct {
-	Mode        string `json:"mode" example:"auto"`
-	Origin      string `json:"origin,omitempty" example:"http://127.0.0.1:8080"`
-	OriginResolve bool `json:"originResolve,omitempty"`
-	Theme       string `json:"theme,omitempty" example:"travel"`
-	Title       string `json:"title,omitempty" example:"A travel notebook"`
-	Description string `json:"description,omitempty" example:"Stories from quiet places."`
-	HTML        string `json:"html,omitempty"`
-	Catalog     string `json:"catalog,omitempty" example:"builtin"`
-	Template    string `json:"template,omitempty" example:"notes"`
+	Mode          string `json:"mode" example:"auto"`
+	Origin        string `json:"origin,omitempty" example:"http://127.0.0.1:8080"`
+	OriginResolve bool   `json:"originResolve,omitempty"`
+	Theme         string `json:"theme,omitempty" example:"travel"`
+	Title         string `json:"title,omitempty" example:"A travel notebook"`
+	Description   string `json:"description,omitempty" example:"Stories from quiet places."`
+	HTML          string `json:"html,omitempty"`
+	Catalog       string `json:"catalog,omitempty" example:"builtin"`
+	Template      string `json:"template,omitempty" example:"notes"`
 }
 
 func telemtWebSitesEqual(a, b *TelemtWebSiteOptions) bool {

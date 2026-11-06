@@ -35,12 +35,12 @@ type TelemtWebRetryJitter struct {
 }
 
 type TelemtWebProxyOptions struct {
-	Site     *TelemtWebSiteOptions `json:"site,omitempty"`
-	Frontend string                `json:"frontend"`
-	Carrier  string                `json:"carrier"`
-	BasePath *string               `json:"basePath,omitempty"`
-	Aliases  *[]string             `json:"aliases,omitempty"`
-	Carriers []string              `json:"carriers"`
+	Site        *TelemtWebSiteOptions `json:"site,omitempty"`
+	Frontend    string                `json:"frontend"`
+	Carrier     string                `json:"carrier"`
+	BasePath    *string               `json:"basePath,omitempty"`
+	Aliases     *[]string             `json:"aliases,omitempty"`
+	Carriers    []string              `json:"carriers"`
 	RetryJitter *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
 }
 
