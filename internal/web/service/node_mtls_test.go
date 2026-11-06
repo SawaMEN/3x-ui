@@ -46,6 +46,7 @@ func TestNormalizeKeepsMtls(t *testing.T) {
 	}{
 		{"mtls over https preserved", model.Node{Name: "n", Address: "node.example.com", Port: 2053, Scheme: "https", TlsVerifyMode: "mtls"}, "mtls", false},
 		{"mtls over http rejected", model.Node{Name: "n", Address: "node.example.com", Port: 2053, Scheme: "http", TlsVerifyMode: "mtls"}, "", true},
+		{"pin over http rejected", model.Node{Name: "n", Address: "node.example.com", Port: 2053, Scheme: "http", TlsVerifyMode: "pin"}, "", true},
 		{"unknown mode clamped to verify", model.Node{Name: "n", Address: "node.example.com", Port: 2053, Scheme: "https", TlsVerifyMode: "bogus"}, "verify", false},
 	}
 	for _, c := range cases {
