@@ -1,8 +1,8 @@
 # Этап 9: API, авторизация, безопасность и multi-node
 
-**IN PROGRESS — закрывать этап только после пяти обязательных успешных CI jobs на одном кодовом SHA.**
+**COMPLETE — этап 9 закрыт: 5/5 групп. Подтверждено 9/14 этапов и 45/70 групп; осталось 5 этапов и 25 групп.**
 
-Ветка `update`, draft PR #279; `main` не изменяется. Диапазон полного аудита: `v3.9.8@416a66a3` → исходный `main@4aa74411`. После завершения этапа 8 общий прогресс: 8/14 этапов, 40/70 групп.
+Ветка `update`, draft PR #279; `main` не изменяется. Диапазон полного аудита: `v3.9.8@416a66a3` → исходный `main@4aa74411`. На момент закрытия этапа 9: 9/14 этапов и 45/70 групп. Остаток: 5 этапов и 25 групп.
 
 ## Пять групп и критерии приёмки
 
@@ -27,7 +27,15 @@
 
 Workflow `.github/workflows/stage9-security-audit.yml` включает пять обязательных job: `api-auth`, `node-mtls`, `egress-ssrf`, `multi-node`, `failures-and-vet`. Каждый gate требует именованные Go test roots через `tools/ci/require-go-tests.py`; отсутствующий/упавший/пропущенный тест не считается PASS. Параллельно работают существующие CI/CodeQL/release проверки.
 
-**Финальный CI и проверенный SHA:** заполняются только после успешного полного прогона.
+**Финальный CI и проверенный SHA:** [workflow 42185497412](https://github.com/SawaMEN/3x-ui/actions/runs/42185497412), **5/5 jobs PASS**, conclusion **success** на коде `e5e8a3ed7df70b54effc57d6085e2e917702fa04`.
+
+- `api-auth` — PASS, матрица bearer scopes и spoofed proxy-certificate headers.
+- `node-mtls` — PASS, действительный TLS listener/client-cert handshake, CA trust, cert rotation, reject of insecure trust modes.
+- `egress-ssrf` — PASS, private-address/dial guard, SOCKS5/SOCKS5h и redirect credential retention checks.
+- `multi-node` — PASS, node-bound mutable caches, token confidentiality, cloned GUID and foreign-client isolation, reentrant resolver.
+- `failures-and-vet` — PASS, тройные запуски race-sensitive roots и go vet.
+
+Все именованные mandatory roots выполнены без FAIL/SKIP; JSONL и диагностические артефакты приложены к соответствующим GitHub Actions jobs.
 
 ## Границы
 
