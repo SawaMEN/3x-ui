@@ -82,7 +82,11 @@ export default function QuickRoutingPanel({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [messageApi, contextHolder] = message.useMessage();
-  const { data: inboundOptions, isPending: inboundOptionsLoading, isError: inboundOptionsError } = useInboundOptions();
+  const {
+    data: inboundOptions,
+    isPending: inboundOptionsLoading,
+    isError: inboundOptionsError,
+  } = useInboundOptions();
   const remarkByTag = useMemo(() => buildRemarkByTag(inboundOptions || []), [inboundOptions]);
   const tags = useMemo(() => [...new Set(outboundTags.filter(Boolean))], [outboundTags]);
   const inTags = useMemo(
@@ -260,7 +264,11 @@ export default function QuickRoutingPanel({
             <Alert
               type="info"
               showIcon
-              title={inboundOptionsLoading ? 'Загрузка входящих подключений' : 'Нет доступных входящих подключений'}
+              title={
+                inboundOptionsLoading
+                  ? 'Загрузка входящих подключений'
+                  : 'Нет доступных входящих подключений'
+              }
               description={
                 inboundOptionsError
                   ? 'Не удалось загрузить список подключений. Обновите страницу и проверьте API входящих.'
