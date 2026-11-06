@@ -228,23 +228,22 @@ func (h *Hub) fanout(msg []byte) {
 	if msg == nil {
 		return
 	}
+	// Keep the read lock across non-blocking sends. Unregister and Stop
+	// close Send under the write lock; releasing it before send allowed
+	// send/close to race even when trySend recovered from the panic.
+	// Avoid allocating a targets slice on every broadcast.
 	h.mu.RLock()
 	if len(h.clients) == 0 {
 		h.mu.RUnlock()
 		return
 	}
-	targets := make([]*Client, 0, len(h.clients))
-	for c := range h.clients {
-		targets = append(targets, c)
-	}
-	h.mu.RUnlock()
-
 	var dead []*Client
-	for _, c := range targets {
+	for c := range h.clients {
 		if !trySend(c, msg) {
 			dead = append(dead, c)
 		}
 	}
+	h.mu.RUnlock()
 
 	if len(dead) == 0 {
 		return
