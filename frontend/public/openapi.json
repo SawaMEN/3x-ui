@@ -9724,6 +9724,66 @@
         }
       }
     },
+    "/panel/api/server/domainActivity": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Get the current domain activity monitor status and recent domain activity.",
+        "operationId": "get_panel_api_server_domainActivity",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/domainActivity/config": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Update domain activity monitoring configuration.",
+        "operationId": "post_panel_api_server_domainActivity_config",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/fail2banStatus": {
       "get": {
         "tags": [
