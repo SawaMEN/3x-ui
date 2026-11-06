@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -92,37 +93,9 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	}
 	proc := outboundProcesses["fptn-native"]
 	containers = append(containers, proc.container)
-	// Keep the echo distinct from the VPN server address and its bypass route.
-	echoHost := stage8NonLoopbackIP(t)
-	echo, err := net.Listen("tcp", "0.0.0.0:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer echo.Close()
-	go func() {
-		for {
-			c, e := echo.Accept()
-			if e != nil {
-				return
-			}
-			go func() { defer c.Close(); io.Copy(c, c) }()
-		}
-	}()
-	udp, err := net.ListenPacket("udp", net.JoinHostPort(echoHost, "0"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer udp.Close()
-	go func() {
-		b := make([]byte, 65535)
-		for {
-			n, a, e := udp.ReadFrom(b)
-			if e != nil {
-				return
-			}
-			udp.WriteTo(b[:n], a)
-		}
-	}()
+	// A remote network namespace avoids Docker gateway hairpin SNAT on UDP replies.
+	// It also verifies both protocols against the same independent echo host.
+	echoHost, tcpEchoPort, udpEchoPort := stage8RemoteEcho(t)
 	// The host side of this bridge is VLESS, exactly as rendered by PlanOutbound.
 	bridge := outboundBridge("fptn-native", proc)
 	if bridge["protocol"] != "vless" {
@@ -134,7 +107,7 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 
 	localPort, udpPort := stage8Port(t), stage8Port(t)
 	path := filepath.Join(dir, "test-client.json")
-	cfg := map[string]any{"inbounds": []any{map[string]any{"type": "socks", "tag": "test", "listen": "127.0.0.1", "listen_port": localPort}, map[string]any{"type": "direct", "tag": "test-udp", "listen": "127.0.0.1", "listen_port": udpPort, "network": "udp", "override_address": echoHost, "override_port": udp.LocalAddr().(*net.UDPAddr).Port}}, "outbounds": []any{native}, "route": map[string]any{"final": "fptn-native"}}
+	cfg := map[string]any{"inbounds": []any{map[string]any{"type": "socks", "tag": "test", "listen": "127.0.0.1", "listen_port": localPort}, map[string]any{"type": "direct", "tag": "test-udp", "listen": "127.0.0.1", "listen_port": udpPort, "network": "udp", "override_address": echoHost, "override_port": udpEchoPort}}, "outbounds": []any{native}, "route": map[string]any{"final": "fptn-native"}}
 	data, _ := json.Marshal(cfg)
 	if err = os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
@@ -147,7 +120,7 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	}
 	payloadCtx, payloadCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer payloadCancel()
-	c, err := dialer.(proxy.ContextDialer).DialContext(payloadCtx, "tcp", net.JoinHostPort(echoHost, fmtPort(echo.Addr().(*net.TCPAddr).Port)))
+	c, err := dialer.(proxy.ContextDialer).DialContext(payloadCtx, "tcp", net.JoinHostPort(echoHost, fmtPort(tcpEchoPort)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +155,7 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 	manager.Remove(inst.ID)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	blocked, err := dialer.(proxy.ContextDialer).DialContext(ctx, "tcp", net.JoinHostPort(echoHost, fmtPort(echo.Addr().(*net.TCPAddr).Port)))
+	blocked, err := dialer.(proxy.ContextDialer).DialContext(ctx, "tcp", net.JoinHostPort(echoHost, fmtPort(tcpEchoPort)))
 	if err == nil {
 		defer blocked.Close()
 		blocked.SetDeadline(time.Now().Add(2 * time.Second))
@@ -194,6 +167,121 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 		}
 	}
 
+}
+
+
+ // stage8RemoteEcho serves TCP and UDP from a separate network namespace instead
+ // of the runner host. Docker's host-to-container UDP hairpin would otherwise
+ // rewrite the source to the bridge gateway, which the FPTN client deliberately
+ // excludes from its tunnel to keep the transport connection alive.
+func stage8RemoteEcho(t *testing.T) (string, int, int) {
+	t.Helper()
+	suffix := strconv.Itoa(os.Getpid())
+	ns := "s8fptn-" + suffix
+	hostLink, peerLink := "s8fh"+suffix, "s8fn"+suffix
+	const remoteIP = "198.18.240.2" // RFC 2544 benchmark range; never public internet.
+	runIP := func(args ...string) {
+		t.Helper()
+		output, err := exec.Command("sudo", append([]string{"ip"}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("configure isolated echo namespace (%s): %v: %s", strings.Join(args, " "), err, output)
+		}
+	}
+	runIP("netns", "add", ns)
+	t.Cleanup(func() {
+		if output, err := exec.Command("sudo", "ip", "netns", "delete", ns).CombinedOutput(); err != nil {
+			t.Errorf("remove isolated echo namespace: %v: %s", err, output)
+		}
+	})
+	runIP("link", "add", hostLink, "type", "veth", "peer", "name", peerLink)
+	runIP("link", "set", peerLink, "netns", ns)
+	runIP("addr", "add", "198.18.240.1/30", "dev", hostLink)
+	runIP("link", "set", hostLink, "up")
+	runIP("-n", ns, "addr", "add", remoteIP+"/30", "dev", peerLink)
+	runIP("-n", ns, "link", "set", "lo", "up")
+	runIP("-n", ns, "link", "set", peerLink, "up")
+
+	tcpPort, udpPort := stage8Port(t), stage8Port(t)
+	script := filepath.Join(t.TempDir(), "echo.py")
+	program := strings.Join([]string{
+		"import socket, sys, threading",
+		"host, tcp_port, udp_port = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])",
+		"tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)",
+		"tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)",
+		"tcp.bind((host, tcp_port))",
+		"tcp.listen()",
+		"udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)",
+		"udp.bind((host, udp_port))",
+		"def echo_tcp(conn):",
+		"    with conn:",
+		"        while data := conn.recv(65535):",
+		"            conn.sendall(data)",
+		"def accept_tcp():",
+		"    while True:",
+		"        conn, _ = tcp.accept()",
+		"        threading.Thread(target=echo_tcp, args=(conn,), daemon=True).start()",
+		"threading.Thread(target=accept_tcp, daemon=True).start()",
+		"while True:",
+		"    data, peer = udp.recvfrom(65535)",
+		"    udp.sendto(data, peer)",
+	}, "\n") + "\n"
+	if err := os.WriteFile(script, []byte(program), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sudo", "ip", "netns", "exec", ns, "python3", "-u", script, remoteIP, strconv.Itoa(tcpPort), strconv.Itoa(udpPort))
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		// sudo/ip can fork: terminate all tasks in the disposable namespace,
+		// then reap the launched command before removing its veth pair.
+		if output, err := exec.Command("sudo", "ip", "netns", "pids", ns).Output(); err == nil {
+			if pids := strings.Fields(string(output)); len(pids) != 0 {
+				_ = exec.Command("sudo", append([]string{"kill", "-TERM"}, pids...)...).Run()
+			}
+		}
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+
+	tcpAddress := net.JoinHostPort(remoteIP, strconv.Itoa(tcpPort))
+	ready := false
+	for attempt := 0; attempt < 30; attempt++ {
+		conn, err := net.DialTimeout("tcp", tcpAddress, 200*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			ready = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !ready {
+		t.Fatalf("isolated TCP echo not ready: %s", stderr.String())
+	}
+	probe, err := net.Dial("udp", net.JoinHostPort(remoteIP, strconv.Itoa(udpPort)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer probe.Close()
+	ready = false
+	for attempt := 0; attempt < 15; attempt++ {
+		_ = probe.SetDeadline(time.Now().Add(200 * time.Millisecond))
+		if _, err = probe.Write([]byte("ready")); err == nil {
+			var reply [16]byte
+			var n int
+			n, err = probe.Read(reply[:])
+			if err == nil && bytes.Equal(reply[:n], []byte("ready")) {
+				ready = true
+				break
+			}
+		}
+	}
+	if !ready {
+		t.Fatalf("isolated UDP echo not reachable directly: %v (%s)", err, stderr.String())
+	}
+	return remoteIP, tcpPort, udpPort
 }
 
 func TestStage8InstallFPTNClient(t *testing.T) {
