@@ -1,12 +1,15 @@
 package runtime
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net"
+	"net/url"
 	"net/http"
 	"strings"
 	"sync"
@@ -152,7 +155,17 @@ func newNodeTransport(tlsCfg *tls.Config) *http.Transport {
 
 // defaultNodeHTTPClient reaches nodes trusting the system CA store ("verify"
 // mode or plain http); shared so connections pool across nodes.
-var defaultNodeHTTPClient = &http.Client{Transport: newNodeTransport(nil)}
+// A node API endpoint must never redirect a request containing a node token,
+// client certificate or mutable configuration to a different HTTP endpoint.
+// Redirect responses are handled as non-200 errors by Remote.doWithTimeout.
+func rejectNodeRedirect(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
+}
+
+var defaultNodeHTTPClient = &http.Client{
+	Transport: newNodeTransport(nil),
+	CheckRedirect: rejectNodeRedirect,
+}
 
 // nodeClients caches one client per node: heartbeat and traffic sync reach it
 // every few seconds, and a rebuilt client would open its own empty pool.
@@ -169,7 +182,7 @@ var (
 // nodeClientIdentity covers everything that decides how the node is trusted; the
 // proxy URL is a variant of it, so it stays out of the identity itself.
 func nodeClientIdentity(n *model.Node, mode string) string {
-	return fmt.Sprintf("%d|%s|%s|%s|%d|%s", n.Id, mode, n.Scheme, n.Address, n.Port, n.PinnedCertSha256)
+	return fmt.Sprintf("%d|%s|%s|%s|%d|%s|%t", n.Id, mode, n.Scheme, n.Address, n.Port, n.PinnedCertSha256, n.AllowPrivateAddress)
 }
 
 // dropNodeClients discards every cached client of one node except keep, so a
@@ -187,9 +200,21 @@ func dropNodeClients(nodeID int, keep string) {
 // HTTPClientForNode returns the pooled client for n, building it on first use
 // and whenever the node's identity or TLS material changes.
 func HTTPClientForNode(n *model.Node, proxyURL string) (*http.Client, error) {
+	if n == nil {
+		return nil, common.NewError("node is required")
+	}
 	mode := n.TlsVerifyMode
 	if mode == "" {
 		mode = "verify"
+	}
+	switch mode {
+	case "verify", "skip", "pin", "mtls":
+	default:
+		// A damaged DB row must not silently turn into InsecureSkipVerify.
+		return nil, common.NewError("unsupported node TLS verification mode")
+	}
+	if (mode == "pin" || mode == "mtls") && n.Scheme != "https" {
+		return nil, common.NewError("certificate pinning and mtls require https")
 	}
 	if mode == "verify" || n.Scheme == "http" {
 		// Shared across nodes and not node-specific: nothing to key on.
@@ -214,6 +239,7 @@ func HTTPClientForNode(n *model.Node, proxyURL string) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	client.CheckRedirect = rejectNodeRedirect
 
 	nodeClientsMu.Lock()
 	if entry, ok := nodeClientsCache[key]; ok {
@@ -230,12 +256,48 @@ func HTTPClientForNode(n *model.Node, proxyURL string) (*http.Client, error) {
 	return client, nil
 }
 
+// nodeProxyHTTPClient retains destination SSRF protection while using a node
+// egress SOCKS bridge. HTTP CONNECT proxies resolve the destination themselves
+// and cannot enforce our checked-IP policy; require an explicit private-address
+// opt-in rather than silently bypassing the guard.
+func nodeProxyHTTPClient(n *model.Node, proxyURL string) (*http.Client, error) {
+	p, err := url.Parse(proxyURL)
+	if err != nil {
+		return nil, err
+	}
+	scheme := strings.ToLower(p.Scheme)
+	switch scheme {
+	case "http", "https":
+		if !n.AllowPrivateAddress {
+			return nil, common.NewError("node HTTP proxy cannot enforce public-only destination routing; use a SOCKS egress or explicitly permit private addresses")
+		}
+	}
+	client, err := netproxy.NewHTTPClient(proxyURL, remoteHTTPTimeout)
+	if err != nil {
+		return nil, err
+	}
+	if scheme == "socks5" || scheme == "socks5h" {
+		transport, ok := client.Transport.(*http.Transport)
+		if !ok || transport.DialContext == nil {
+			return nil, common.NewError("node SOCKS transport does not support guarded destination dialing")
+		}
+		dial := transport.DialContext
+		// The requested SOCKS bridge, not an environment HTTP_PROXY, must
+		// handle node traffic; the latter could redirect credentials.
+		transport.Proxy = nil
+		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			return netsafe.SSRFGuardedDialWith(ctx, network, address, dial)
+		}
+	}
+	return client, nil
+}
+
 func buildNodeHTTPClient(n *model.Node, mode, proxyURL string) (*http.Client, error) {
 	if proxyURL != "" {
 		if mode == "mtls" && n.Scheme != "http" {
 			timeout := remoteHTTPTimeout
 			build := func() (idleClosingRoundTripper, error) {
-				client, err := netproxy.NewHTTPClient(proxyURL, remoteHTTPTimeout)
+				client, err := nodeProxyHTTPClient(n, proxyURL)
 				if err != nil {
 					return nil, err
 				}
@@ -256,7 +318,7 @@ func buildNodeHTTPClient(n *model.Node, mode, proxyURL string) (*http.Client, er
 			}
 			return &http.Client{Transport: transport, Timeout: timeout}, nil
 		}
-		client, err := netproxy.NewHTTPClient(proxyURL, remoteHTTPTimeout)
+		client, err := nodeProxyHTTPClient(n, proxyURL)
 		if err != nil {
 			return nil, err
 		}

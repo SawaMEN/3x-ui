@@ -14,11 +14,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 )
 
 var telemtLatestCache struct {
@@ -52,15 +58,17 @@ type TelemtConfig struct {
 }
 
 type TelemtStatus struct {
-	Installed       bool                 `json:"installed"`
-	Active          bool                 `json:"active"`
-	Enabled         bool                 `json:"enabled"`
-	Configured      bool                 `json:"configured"`
-	Version         string               `json:"version"`
-	LatestVersion   string               `json:"latestVersion"`
-	UpdateAvailable bool                 `json:"updateAvailable"`
-	MekoEnabled     bool                 `json:"mekoEnabled"`
-	WebProxy        TelemtWebProxyStatus `json:"webProxy"`
+	Supported         bool                 `json:"supported"`
+	UnsupportedReason string               `json:"unsupportedReason,omitempty"`
+	Installed         bool                 `json:"installed"`
+	Active            bool                 `json:"active"`
+	Enabled           bool                 `json:"enabled"`
+	Configured        bool                 `json:"configured"`
+	Version           string               `json:"version"`
+	LatestVersion     string               `json:"latestVersion"`
+	UpdateAvailable   bool                 `json:"updateAvailable"`
+	MekoEnabled       bool                 `json:"mekoEnabled"`
+	WebProxy          TelemtWebProxyStatus `json:"webProxy"`
 }
 
 type TelemtProxy struct {
@@ -104,24 +112,43 @@ func renderTelemtConfig(c TelemtConfig) (string, error) {
 	if c.TLS && sni == "" {
 		sni = defaultTelemtSNI
 	}
-	if strings.ContainsAny(sni, "\"\r\n\t ") {
+	if sni != "" && !mtproto.ValidDomain(sni) {
 		return "", errors.New("telemt: invalid SNI")
 	}
 
 	listeners := ""
-	if c.IPv4 {
+	webState, webStateErr := readTelemtWebState()
+	if webStateErr != nil {
+		return "", webStateErr
+	}
+	if webState.ManagedInboundID > 0 {
+		if webState.BackendPort <= 0 {
+			return "", errors.New("telemt: managed WEB backend has no local control port")
+		}
+		// The HTTPS frontend alone owns a public listener. The auxiliary
+		// MTProto listener is confined to loopback and cannot collide with
+		// ordinary public MTProto inbounds.
+		c.Port = webState.BackendPort
+		listeners = fmt.Sprintf("[[server.listeners]]\nip = %s\n\n", strconv.Quote("127.0.0.1"))
+	}
+	if c.IPv4 && webState.ManagedInboundID == 0 {
 		listeners += "[[server.listeners]]\nip = \"0.0.0.0\"\n\n"
 	}
-	if c.IPv6 {
+	if c.IPv6 && webState.ManagedInboundID == 0 {
 		listeners += "[[server.listeners]]\nip = \"::\"\n\n"
 	}
 
 	censorship := ""
 	if c.TLS {
-		censorship = fmt.Sprintf("[censorship]\ntls_domain = \"%s\"\nmask = true\ntls_emulation = true\ntls_front_dir = \"tlsfront\"\n\n", sni)
+		censorship = fmt.Sprintf("[censorship]\ntls_domain = %s\nmask = true\ntls_emulation = true\ntls_front_dir = \"tlsfront\"\n\n", strconv.Quote(sni))
 	}
 
+	api, err := telemtAPISettingsForRender(c.Port)
+	if err != nil {
+		return "", err
+	}
 	base := fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = \"*\"\n\n[server.api]\nenabled = true\nlisten = \"127.0.0.1:9091\"\nwhitelist = [\"127.0.0.1/32\", \"::1/128\"]\nread_only = false\n\n[network]\nipv4 = %t\nipv6 = %t\n\n[server]\nport = %d\n\n%s%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Port, listeners, censorship, strings.ToLower(c.Secret))
+	base = strings.Replace(base, "listen = \"127.0.0.1:9091\"", "listen = "+strconv.Quote(api.Listen)+"\nauth_header = "+strconv.Quote(api.Auth), 1)
 	base = preserveTelemtUsers(base)
 	state, err := readTelemtWebState()
 	if err != nil {
@@ -150,7 +177,7 @@ func preserveTelemtUsers(base string) string {
 	preserved := make([]string, 0, len(lines))
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "xui = ") || strings.HasPrefix(trimmed, telemtWebUser+" = ") {
+		if trimmed == "" || strings.HasPrefix(trimmed, "xui = ") || strings.HasPrefix(trimmed, telemtWebUser+" = ") || strings.HasPrefix(trimmed, "\"mtweb_") {
 			continue
 		}
 		preserved = append(preserved, line)
@@ -235,57 +262,97 @@ func ensureTelemtConfig() error {
 	return nil
 }
 
+func (TelemtService) IsInstalled() bool {
+	info, err := os.Stat(telemtBinaryPath)
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
+}
+
 func (TelemtService) Status() TelemtStatus {
-	_, binErr := os.Stat(telemtBinaryPath)
+	installed := (TelemtService{}).IsInstalled()
 	_, cfgErr := os.Stat(telemtConfigPath)
 	version := ""
-	if binErr == nil {
+	if installed {
 		version = telemtVersion()
 	}
 	latest, available := telemtLatestVersion(version)
-	return TelemtStatus{Installed: binErr == nil, Active: systemctl("is-active", "--quiet", telemtServiceName) == nil, Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil, Configured: cfgErr == nil, Version: version, LatestVersion: latest, UpdateAvailable: available, MekoEnabled: systemctl("is-enabled", "--quiet", telemtMekoServiceName) == nil}
+	// A present but non-reporting executable may be corrupt or incompatible.
+	// Offer an explicit repair through the regular update action.
+	if installed && version == "" {
+		available = true
+	}
+	supported := runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")
+	reason := ""
+	if !supported {
+		reason = "Официальный Telemt поддерживается на Linux amd64 и arm64."
+	}
+	return TelemtStatus{Installed: installed, Supported: supported, UnsupportedReason: reason, Active: systemctl("is-active", "--quiet", telemtServiceName) == nil, Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil, Configured: cfgErr == nil, Version: version, LatestVersion: latest, UpdateAvailable: available, MekoEnabled: systemctl("is-enabled", "--quiet", telemtMekoServiceName) == nil}
+}
+
+// telemtNeedsUpdate compares the official stable version numerically. It also
+// migrates legacy +3xui builds to the unmodified upstream binary without ever
+// offering a downgrade from a newer installed Telemt.
+func telemtNeedsUpdate(current, latest string) bool {
+	if current == "" || latest == "" {
+		return false
+	}
+	parts := func(value string) ([]int, bool) {
+		match := telemtVersionPattern.FindStringSubmatch(value)
+		if len(match) < 2 {
+			return nil, false
+		}
+		v := strings.Split(strings.SplitN(strings.SplitN(match[1], "+", 2)[0], "-", 2)[0], ".")
+		if len(v) != 3 {
+			return nil, false
+		}
+		out := make([]int, 3)
+		for i, part := range v {
+			n, err := strconv.Atoi(part)
+			if err != nil {
+				return nil, false
+			}
+			out[i] = n
+		}
+		return out, true
+	}
+	installed, okInstalled := parts(current)
+	upstream, okLatest := parts(latest)
+	if !okInstalled || !okLatest {
+		return false
+	}
+	for i := range installed {
+		if installed[i] < upstream[i] {
+			return true
+		}
+		if installed[i] > upstream[i] {
+			return false
+		}
+	}
+	return strings.Contains(strings.ToLower(current), "+3xui")
 }
 
 func telemtLatestVersion(current string) (string, bool) {
 	telemtLatestCache.Lock()
 	defer telemtLatestCache.Unlock()
 
-	// Do not perform a network request on every status refresh.
-	if telemtLatestCache.latest != "" &&
-		telemtLatestCache.current == current &&
-		time.Since(telemtLatestCache.checked) < 10*time.Minute {
+	// Include failed lookups in the cache. Otherwise a GitHub outage can
+	// block every settings refresh for another eight seconds.
+	ttl := 10 * time.Minute
+	if telemtLatestCache.latest == "" {
+		ttl = 2 * time.Minute
+	}
+	if telemtLatestCache.current == current &&
+		time.Since(telemtLatestCache.checked) < ttl {
 		latest := telemtLatestCache.latest
-		return latest, current != "" && normalizeTelemtVersion(current) != normalizeTelemtVersion(latest)
+		return latest, telemtNeedsUpdate(current, latest)
 	}
 
-	latest := ""
-	if _, err := os.Stat("/usr/local/x-ui/telemt-update.sh"); err == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-		out, _ := telemtUpdaterCommand(ctx, telemtUpdaterPath, "--check").CombinedOutput()
-		cancel()
-
-		for _, line := range strings.Split(string(out), "\n") {
-			if strings.HasPrefix(line, "latest=") {
-				latest = strings.TrimSpace(strings.TrimPrefix(line, "latest="))
-				break
-			}
-		}
-	}
-
-	// The bundled updater is optional and its output format has changed across
-	// releases. Fall back to the official Telemt release API so the panel can
-	// always display the latest published version independently of the updater.
-	if latest == "" {
-		latest = fetchTelemtLatestRelease()
-	}
-	if latest == "" {
-		return "", false
-	}
-
+	// One bounded request rather than the updater's GitHub request followed
+	// by another identical fallback request on failure.
+	latest := fetchTelemtLatestRelease()
 	telemtLatestCache.latest = latest
 	telemtLatestCache.checked = time.Now()
 	telemtLatestCache.current = current
-	return latest, current != "" && normalizeTelemtVersion(current) != normalizeTelemtVersion(latest)
+	return latest, telemtNeedsUpdate(current, latest)
 }
 
 var telemtVersionPattern = regexp.MustCompile(`(?i)v?(\d+\.\d+\.\d+(?:[-+][0-9a-z.-]+)?)`)
@@ -327,13 +394,20 @@ func fetchTelemtLatestRelease() string {
 	return strings.TrimSpace(release.TagName)
 }
 
-const telemtUpdaterPath = "/usr/local/x-ui/telemt-update.sh"
-const telemtUpdaterURL = "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/internal/Telemt/telemt-update.sh"
+const (
+	telemtUpdaterPath = "/usr/local/x-ui/telemt-update.sh"
+	telemtUpdaterURL  = "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/internal/Telemt/telemt-update.sh"
+)
 
 func telemtUpdaterCommand(ctx context.Context, path string, args ...string) *exec.Cmd {
 	// Bash can read a previously installed 0644 script even before its mode is
 	// repaired. It also works when an old archive lost the executable bit.
-	return exec.CommandContext(ctx, "/bin/bash", append([]string{path}, args...)...)
+	cmd := exec.CommandContext(ctx, "/bin/bash", append([]string{path}, args...)...)
+	// Let Bash's signal trap restore a partially replaced engine on timeout.
+	// SIGKILL would bypass both the transaction rollback and cleanup traps.
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = time.Minute
+	return cmd
 }
 
 func repairTelemtUpdaterMode(path string) error {
@@ -407,7 +481,7 @@ func telemtUpdate() error {
 	if err := ensureTelemtUpdater(); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 	out, err := telemtUpdaterCommand(ctx, telemtUpdaterPath).CombinedOutput()
 	if err != nil {
@@ -526,7 +600,7 @@ type telemtRuntimeConfigResponse struct {
 
 func fetchTelemtRuntimeConfig() (telemtRuntimeConfigResponse, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:9091/v1/config", nil)
+	req, err := telemtAPIRequest(http.MethodGet, "/v1/config")
 	if err != nil {
 		return telemtRuntimeConfigResponse{}, err
 	}
@@ -744,13 +818,15 @@ func (TelemtService) ListProxies() ([]TelemtProxy, error) {
 }
 
 func (TelemtService) DeleteProxy(username string) error {
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 	username = strings.TrimSpace(username)
 	if username == "" || username == "xui" || username == telemtWebUser || strings.ContainsAny(username, "/\\\r\n") {
 		return errors.New("telemt: invalid proxy username")
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
-	endpoint := "http://127.0.0.1:9091/v1/users/" + url.PathEscape(username)
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, endpoint, nil)
+	endpoint := "/v1/users/" + url.PathEscape(username)
+	req, err := telemtAPIRequest(http.MethodDelete, endpoint)
 	if err != nil {
 		return fmt.Errorf("telemt: create delete request: %w", err)
 	}
@@ -778,20 +854,35 @@ func (TelemtService) DeleteProxy(username string) error {
 }
 
 func telemtGeneratedLink(username string, tls bool) (string, error) {
+	return telemtGeneratedLinkContext(context.Background(), username, tls)
+}
+
+func telemtGeneratedLinkContext(ctx context.Context, username string, tls bool) (string, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	endpoint := "http://127.0.0.1:9091/v1/users/" + url.PathEscape(username)
+	endpoint := "/v1/users/" + url.PathEscape(username)
 	var lastErr error
 	for i := 0; i < 10; i++ {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint, nil)
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		req, err := telemtAPIRequest(http.MethodGet, endpoint)
 		if err != nil {
 			lastErr = err
-			time.Sleep(300 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
 			continue
 		}
-		resp, err := client.Do(req)
+		resp, err := client.Do(req.WithContext(ctx))
 		if err != nil {
 			lastErr = err
-			time.Sleep(300 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
 			continue
 		}
 		var envelope map[string]interface{}
@@ -799,13 +890,21 @@ func telemtGeneratedLink(username string, tls bool) (string, error) {
 		resp.Body.Close()
 		if err != nil {
 			lastErr = err
-			time.Sleep(300 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
 			continue
 		}
 		ok, _ := envelope["ok"].(bool)
 		if !ok {
 			lastErr = errors.New("Telemt API returned an error")
-			time.Sleep(300 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
 			continue
 		}
 		data, _ := envelope["data"].(map[string]interface{})
@@ -823,7 +922,11 @@ func telemtGeneratedLink(username string, tls bool) (string, error) {
 			}
 		}
 		lastErr = errors.New("Telemt API returned no client link")
-		time.Sleep(300 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(300 * time.Millisecond):
+		}
 	}
 	if lastErr == nil {
 		lastErr = errors.New("Telemt API is unavailable")
@@ -833,69 +936,83 @@ func telemtGeneratedLink(username string, tls bool) (string, error) {
 
 func (TelemtService) Apply(action string) error {
 	switch action {
+	case "install":
+		if runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
+			return errors.New("telemt: unsupported platform (requires Linux amd64 or arm64)")
+		}
+		if (TelemtService{}).IsInstalled() {
+			return errors.New("telemt: component is already installed")
+		}
+		if err := telemtUpdate(); err != nil {
+			return err
+		}
+		if !(TelemtService{}).IsInstalled() {
+			return errors.New("telemt: installer finished without an executable binary")
+		}
+		return nil
+	case "remove":
+		// The single MTProto protocol runs through Telemt sidecars. A disabled
+		// inbound still references this engine and may be re-enabled later, so
+		// prevent uninstall even when there are no generated TOML files.
+		db := database.GetDB()
+		if db == nil {
+			return errors.New("telemt: database unavailable; refusing unsafe removal")
+		}
+		var inboundCount int64
+		if err := db.Model(&model.Inbound{}).
+			Where("protocol = ? AND node_id IS NULL", model.MTProto).
+			Count(&inboundCount).Error; err != nil {
+			return fmt.Errorf("telemt: check MTProto inbound dependencies: %w", err)
+		}
+		if inboundCount > 0 {
+			return fmt.Errorf("telemt: %d MTProto inbound(s) still use Telemt; delete them before uninstalling", inboundCount)
+		}
+		if mtproto.GetManager().HasRunning() {
+			return errors.New("telemt: managed MTProto processes are still running; refusing removal")
+		}
+		// Preserve files/configuration; only uninstall the binary when unused.
+		configs, err := filepath.Glob(filepath.Join(filepath.Dir(telemtBinaryPath), "mtproto", "telemt-*.toml"))
+		if err != nil {
+			return err
+		}
+		if len(configs) != 0 {
+			return errors.New("telemt: remove MTProto inbounds before uninstalling the runtime")
+		}
+		if systemctl("is-active", "--quiet", telemtServiceName) == nil {
+			if err := systemctl("stop", telemtServiceName); err != nil {
+				return err
+			}
+		}
+		if systemctl("is-enabled", "--quiet", telemtServiceName) == nil {
+			if err := systemctl("disable", telemtServiceName); err != nil {
+				return err
+			}
+		}
+		// The optional updater must not reinstall Telemt after removal.
+		if systemctl("is-enabled", "--quiet", "telemt-update.timer") == nil {
+			if err := systemctl("disable", "--now", "telemt-update.timer"); err != nil {
+				return err
+			}
+		}
+		if err := os.Remove(telemtBinaryPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		_ = os.Remove("/etc/x-ui/telemt.version")
+		return nil
 	case "start", "stop", "restart", "enable", "disable":
 		return systemctl(action, telemtServiceName)
 	case "update":
+		if !(TelemtService{}).IsInstalled() {
+			return errors.New("telemt: not installed; use install")
+		}
 		return telemtUpdate()
-	case "meko-enable":
-		if err := ensureTelemtMekoFixInstalled(); err != nil {
-			return err
-		}
-		if err := systemctl("enable", "--now", telemtMekoServiceName); err != nil {
-			return fmt.Errorf("telemt meko: enable failed: %w", err)
-		}
-		return nil
-	case "meko-disable":
-		_ = systemctl("disable", "--now", telemtMekoServiceName)
-		return nil
+	case "meko-enable", "meko-disable":
+		cfg := TelemtService{}.GetMekoConfig()
+		cfg.Enabled = action == "meko-enable"
+		return TelemtService{}.SaveMekoConfig(cfg)
 	default:
 		return errors.New("telemt: unsupported action")
 	}
-}
-
-func ensureTelemtMekoFixInstalled() error {
-	const scriptURL = "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/telemt-meko-fix.sh"
-	const unitURL = "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/telemt-meko-fix.service"
-	client := &http.Client{Timeout: 15 * time.Second}
-	download := func(url, path string, mode os.FileMode) error {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
-		if err != nil {
-			return err
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			return fmt.Errorf("download %s: %w", url, err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("download %s: HTTP %d", url, resp.StatusCode)
-		}
-		data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		if err != nil {
-			return err
-		}
-		if len(data) == 0 {
-			return errors.New("downloaded file is empty")
-		}
-		if err := os.WriteFile(path, data, mode); err != nil {
-			return err
-		}
-		return os.Chmod(path, mode)
-	}
-	if _, err := os.Stat("/usr/local/x-ui/telemt-meko-fix.sh"); errors.Is(err, os.ErrNotExist) {
-		if err := download(scriptURL, "/usr/local/x-ui/telemt-meko-fix.sh", 0o700); err != nil {
-			return fmt.Errorf("install MEKO fix script: %w", err)
-		}
-	}
-	if _, err := os.Stat("/etc/systemd/system/telemt-meko-fix.service"); errors.Is(err, os.ErrNotExist) {
-		if err := download(unitURL, "/etc/systemd/system/telemt-meko-fix.service", 0o644); err != nil {
-			return fmt.Errorf("install MEKO fix service: %w", err)
-		}
-	}
-	if err := systemctl("daemon-reload"); err != nil {
-		return fmt.Errorf("telemt meko: daemon-reload failed: %w", err)
-	}
-	return nil
 }
 
 func systemctl(args ...string) error {

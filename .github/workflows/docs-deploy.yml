@@ -13,12 +13,13 @@ on:
       - 'frontend/.storybook/**'
       - 'frontend/package-lock.json'
       - '.github/workflows/docs-deploy.yml'
+  pull_request:
+    paths: ['.github/workflows/docs-deploy.yml']
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  pages: read
 
 concurrency:
   group: pages
@@ -31,8 +32,26 @@ defaults:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages_enabled: ${{ steps.pages.outputs.enabled }}
     steps:
       - uses: actions/checkout@v7
+      - name: Check GitHub Pages configuration
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh api -i "repos/$GH_REPO/pages" > /tmp/pages-response 2> /tmp/pages-error; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          elif grep -Eq '(^HTTP/[^ ]+ 404|HTTP 404)' /tmp/pages-response /tmp/pages-error; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages is not enabled; the documentation artifact will be built without deployment." >> "$GITHUB_STEP_SUMMARY"
+          else
+            cat /tmp/pages-error >&2
+            exit 1
+          fi
       - uses: pnpm/action-setup@v6
         with:
           package_json_file: docs/package.json
@@ -68,6 +87,11 @@ jobs:
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request' && needs.build.outputs.pages_enabled == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     runs-on: ubuntu-latest
     environment:
       name: github-pages

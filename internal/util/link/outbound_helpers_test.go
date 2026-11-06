@@ -8,23 +8,26 @@ import (
 	"testing"
 )
 
-func TestDefaultPort(t *testing.T) {
-	cases := []struct {
-		in   string
-		def  int
-		want int
+func TestParseLinkPort(t *testing.T) {
+	for _, tc := range []struct {
+		in        string
+		def, want int
+		invalid   bool
 	}{
-		{"", 443, 443},
-		{"8080", 443, 8080},
-		{"0", 443, 443},   // non-positive falls back
-		{"-1", 443, 443},  // negative falls back
-		{"abc", 443, 443}, // unparseable falls back
-		{"65535", 443, 65535},
-	}
-	for _, c := range cases {
-		if got := defaultPort(c.in, c.def); got != c.want {
-			t.Errorf("defaultPort(%q,%d) = %d, want %d", c.in, c.def, got, c.want)
-		}
+		{"", 443, 443, false},
+		{"8080", 443, 8080, false},
+		{"65535", 443, 65535, false},
+		{"0", 443, 0, true},
+		{"-1", 443, 0, true},
+		{"abc", 443, 0, true},
+		{"65536", 443, 0, true},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			got, err := parseLinkPort(tc.in, tc.def)
+			if (err != nil) != tc.invalid || !tc.invalid && got != tc.want {
+				t.Fatalf("parseLinkPort(%q, %d) = %d, %v", tc.in, tc.def, got, err)
+			}
+		})
 	}
 }
 
@@ -83,8 +86,8 @@ func TestDecodeHash(t *testing.T) {
 	if got := decodeHash(""); got != "" {
 		t.Errorf("decodeHash(empty) = %q, want empty", got)
 	}
-	if got := decodeHash("a%20b"); got != "a b" {
-		t.Errorf("decodeHash(a%%20b) = %q, want 'a b'", got)
+	if got := decodeHash("a%20b"); got != "a%20b" {
+		t.Errorf("decodeHash(a%%20b) = %q, want already-decoded fragment unchanged", got)
 	}
 	if got := decodeHash("plain"); got != "plain" {
 		t.Errorf("decodeHash(plain) = %q, want plain", got)
@@ -124,12 +127,12 @@ func TestParse_RealitySecurityMapped(t *testing.T) {
 }
 
 func TestParse_TLSSecurityMapped(t *testing.T) {
-	res, err := ParseLink("trojan://pw@h.com:443?type=tcp&security=tls&sni=SNI&fp=chrome&alpn=h2,http/1.1&ech=ECH&vcn=VCN&pcs=PCS")
+	res, err := ParseLink("trojan://pw@h.com:443?type=tcp&security=tls&sni=SNI&fp=chrome&alpn=h2,http/1.1&ech=ECH&vcn=VCN&pcs=PCS&cs=TLS_AES_128_GCM_SHA256")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	tls := streamSub(t, res, "tlsSettings")
-	if tls["serverName"] != "SNI" || tls["fingerprint"] != "chrome" || tls["echConfigList"] != "ECH" || tls["verifyPeerCertByName"] != "VCN" || tls["pinnedPeerCertSha256"] != "PCS" {
+	if tls["serverName"] != "SNI" || tls["fingerprint"] != "chrome" || tls["echConfigList"] != "ECH" || tls["verifyPeerCertByName"] != "VCN" || tls["pinnedPeerCertSha256"] != "PCS" || tls["cipherSuites"] != "TLS_AES_128_GCM_SHA256" {
 		t.Errorf("tlsSettings fields = %#v", tls)
 	}
 	if alpn, _ := tls["alpn"].([]string); !reflect.DeepEqual(alpn, []string{"h2", "http/1.1"}) {
@@ -175,6 +178,52 @@ func TestParse_XhttpExtraAndSnakeCaseFields(t *testing.T) {
 	}
 	if xh["scMaxEachPostBytes"] != "1000000" {
 		t.Errorf("scMaxEachPostBytes = %v, want 1000000 (dropped from the extra blob)", xh["scMaxEachPostBytes"])
+	}
+}
+
+func TestParse_VmessXhttpInlineFields(t *testing.T) {
+	// The vmess emitter writes the XHTTP extra fields at the top level of the link JSON.
+	cases := []struct {
+		name  string
+		extra string
+		want  map[string]any
+	}{
+		{
+			name:  "session placement and padding obfs",
+			extra: `"sessionIDPlacement":"header","sessionIDKey":"X-Sid","sessionPlacement":"header","sessionKey":"X-Sid","xPaddingObfsMode":true,"xPaddingKey":"pk","xPaddingHeader":"X-Pad","xPaddingPlacement":"header","xPaddingMethod":"tokenish"`,
+			want: map[string]any{
+				"sessionIDPlacement": "header", "sessionIDKey": "X-Sid", "xPaddingObfsMode": true,
+				"xPaddingKey": "pk", "xPaddingHeader": "X-Pad", "xPaddingPlacement": "header", "xPaddingMethod": "tokenish",
+			},
+		},
+		{
+			name:  "uplink and xmux",
+			extra: `"uplinkDataPlacement":"cookie","uplinkDataKey":"d","uplinkHTTPMethod":"PUT","uplinkChunkSize":4096,"xmux":{"maxConcurrency":"16-32"}`,
+			want: map[string]any{
+				"uplinkDataPlacement": "cookie", "uplinkDataKey": "d", "uplinkHTTPMethod": "PUT",
+				"uplinkChunkSize": float64(4096), "xmux": map[string]any{"maxConcurrency": "16-32"},
+			},
+		},
+		{
+			name:  "legacy session keys",
+			extra: `"sessionPlacement":"query","sessionKey":"sid"`,
+			want:  map[string]any{"sessionIDPlacement": "query", "sessionIDKey": "sid"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			inner := `{"v":"2","add":"h","port":443,"id":"11111111-2222-4333-8444-555555555555","net":"xhttp","path":"/xh","mode":"packet-up","tls":"none",` + c.extra + `}`
+			res, err := ParseLink("vmess://" + base64.StdEncoding.EncodeToString([]byte(inner)))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			xh := streamSub(t, res, "xhttpSettings")
+			for k, want := range c.want {
+				if !reflect.DeepEqual(xh[k], want) {
+					t.Errorf("xhttpSettings.%s = %#v, want %#v", k, xh[k], want)
+				}
+			}
+		})
 	}
 }
 
@@ -264,6 +313,11 @@ func mkcpLegacyMasks(t *testing.T, res *ParseResult) []mkcpMask {
 	return out
 }
 
+func vmessKcpLink(fields string) string {
+	inner := `{"v":"2","add":"h.com","port":443,"id":"11111111-2222-4333-8444-555555555555","net":"kcp","tls":"none",` + fields + `}`
+	return "vmess://" + base64.StdEncoding.EncodeToString([]byte(inner))
+}
+
 func TestParse_KcpShareParams(t *testing.T) {
 	// The emitter flattens one mkcp-legacy mask per field into headerType/seed; a merged
 	// mask drops the seed in xray-core (MkcpLegacy.Build), so import rebuilds them separately.
@@ -301,6 +355,27 @@ func TestParse_KcpShareParams(t *testing.T) {
 			wantMTU: 1350,
 			wantTTI: 20,
 		},
+		{
+			name:      "vmess header and seed from type and path",
+			link:      vmessKcpLink(`"type":"wechat-video","path":"secret-seed","mtu":1400,"tti":50`),
+			wantMTU:   1400,
+			wantTTI:   50,
+			wantMasks: []mkcpMask{{"", "secret-seed"}, {"wechat", ""}},
+		},
+		{
+			name:      "vmess explicit seed takes priority over path",
+			link:      vmessKcpLink(`"type":"none","seed":"legacy-seed","path":"other-seed"`),
+			wantMTU:   1350,
+			wantTTI:   20,
+			wantMasks: []mkcpMask{{"", "legacy-seed"}},
+		},
+		{
+			name:      "vmess fm mkcp-legacy mask wins over path",
+			link:      vmessKcpLink(`"type":"none","path":"s3cr3tSeed","mtu":1350,"tti":20,"fm":"{\"udp\":[{\"settings\":{\"header\":\"\",\"value\":\"s3cr3tSeed\"},\"type\":\"mkcp-legacy\"}]}"`),
+			wantMTU:   1350,
+			wantTTI:   20,
+			wantMasks: []mkcpMask{{"", "s3cr3tSeed"}},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -316,5 +391,30 @@ func TestParse_KcpShareParams(t *testing.T) {
 				t.Fatalf("mkcp-legacy masks = %v, want %v", got, c.wantMasks)
 			}
 		})
+	}
+}
+
+func TestParse_VmessFinalMask(t *testing.T) {
+	res, err := ParseLink(vmessKcpLink(`"type":"none","fm":"{\"udp\":[{\"settings\":{\"password\":\"obfspw123\"},\"type\":\"salamander\"}]}"`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	udp := finalmaskUDP(t, res)
+	want := []any{map[string]any{"type": "salamander", "settings": map[string]any{"password": "obfspw123"}}}
+	if !reflect.DeepEqual(udp, want) {
+		t.Fatalf("finalmask.udp = %#v, want %#v", udp, want)
+	}
+}
+
+func TestParse_VmessCipherSuites(t *testing.T) {
+	inner := `{"v":"2","add":"h","port":443,"id":"11111111-2222-4333-8444-555555555555","net":"ws","tls":"tls","cs":"TLS_AES_128_GCM_SHA256"}`
+	link := "vmess://" + base64.StdEncoding.EncodeToString([]byte(inner))
+	res, err := ParseLink(link)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	tls := streamSub(t, res, "tlsSettings")
+	if tls["cipherSuites"] != "TLS_AES_128_GCM_SHA256" {
+		t.Errorf("tlsSettings cipherSuites = %v, want TLS_AES_128_GCM_SHA256", tls["cipherSuites"])
 	}
 }

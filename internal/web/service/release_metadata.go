@@ -98,7 +98,7 @@ func getGitHubLatestReleaseVersion(repo string) (string, error) {
 	}
 
 	var release Release
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := decodeReleaseMetadata(resp.Body, &release); err != nil {
 		return "", err
 	}
 
@@ -107,4 +107,17 @@ func getGitHubLatestReleaseVersion(repo string) (string, error) {
 		return "", fmt.Errorf("GitHub latest release tag for %s is empty", repo)
 	}
 	return tag, nil
+}
+
+const maxReleaseMetadataBytes = 4 << 20
+
+func decodeReleaseMetadata(body io.Reader, target any) error {
+	raw, err := io.ReadAll(io.LimitReader(body, maxReleaseMetadataBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(raw) > maxReleaseMetadataBytes {
+		return fmt.Errorf("release metadata exceeds %d bytes", maxReleaseMetadataBytes)
+	}
+	return json.Unmarshal(raw, target)
 }

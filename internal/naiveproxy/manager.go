@@ -34,12 +34,16 @@ const (
 var managerMu sync.Mutex
 
 type Status struct {
-	Installed       bool   `json:"installed"`
-	Version         string `json:"version"`
-	LatestVersion   string `json:"latestVersion"`
-	UpdateAvailable bool   `json:"updateAvailable"`
-	Binary          string `json:"binary"`
-	Running         bool   `json:"running"`
+	Source            string `json:"source,omitempty"`
+	FallbackReason    string `json:"fallbackReason,omitempty"`
+	Supported         bool   `json:"supported"`
+	UnsupportedReason string `json:"unsupportedReason,omitempty"`
+	Installed         bool   `json:"installed"`
+	Version           string `json:"version"`
+	LatestVersion     string `json:"latestVersion"`
+	UpdateAvailable   bool   `json:"updateAvailable"`
+	Binary            string `json:"binary"`
+	Running           bool   `json:"running"`
 }
 
 type User struct {
@@ -77,17 +81,28 @@ type inboundSettings struct {
 
 func GetStatus(ctx context.Context) (Status, error) {
 	binary := BinaryPath()
-	_, statErr := os.Stat(binary)
+	info, statErr := os.Stat(binary)
 	status := Status{
-		Installed: statErr == nil,
+		Supported: runtime.GOOS == "linux" && runtime.GOARCH == "amd64",
+		Installed: statErr == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0,
 		Version:   installedVersion(binary),
 		Binary:    binary,
 		Running:   processRunning(),
 	}
 
+	if !status.Supported {
+		status.Installed = false
+		status.UnsupportedReason = fmt.Sprintf("Caddy-Naive server is published only for linux/amd64; current platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+		return status, nil
+	}
 	rel, err := fetchLatestRelease(ctx)
 	if err != nil {
 		// Network failure must not make an installed component look absent.
+		return status, nil
+	}
+	if _, err := pickAsset(rel.Assets); err != nil {
+		status.Supported = false
+		status.UnsupportedReason = err.Error()
 		return status, nil
 	}
 	status.LatestVersion = strings.TrimSpace(rel.TagName)
@@ -151,7 +166,7 @@ func Update(ctx context.Context) (Status, error) {
 		_ = os.Remove(staged)
 		return Status{}, err
 	}
-	if err := os.WriteFile(versionPath(), []byte(strings.TrimSpace(rel.TagName)+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(VersionPath(), []byte(strings.TrimSpace(rel.TagName)+"\n"), 0o644); err != nil {
 		return Status{}, err
 	}
 
@@ -288,7 +303,7 @@ func startLocked() error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(BinaryPath(), "run", "--config", configPath(), "--adapter", "caddyfile")
+	cmd := exec.CommandContext(context.Background(), BinaryPath(), "run", "--config", configPath(), "--adapter", "caddyfile")
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {
@@ -391,7 +406,7 @@ func validateConfig(ctx context.Context, path string) error {
 }
 
 func BinaryPath() string  { return filepath.Join(config.GetBinFolderPath(), "caddy-naive") }
-func versionPath() string { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.version") }
+func VersionPath() string { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.version") }
 func configPath() string  { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.Caddyfile") }
 func pidPath() string     { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.pid") }
 func logPath() string     { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.log") }
@@ -406,7 +421,7 @@ func statusWithoutRelease() (Status, error) {
 }
 
 func installedVersion(binary string) string {
-	if data, err := os.ReadFile(versionPath()); err == nil {
+	if data, err := os.ReadFile(VersionPath()); err == nil {
 		if value := strings.TrimSpace(string(data)); value != "" {
 			return value
 		}
@@ -498,7 +513,7 @@ func extractTarXZ(ctx context.Context, archivePath, dst string) error {
 	if _, err := exec.LookPath("tar"); err != nil {
 		return fmt.Errorf("tar with xz support is required to install Caddy-Naive: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, "tar", "-xJf", archivePath, "-C", dst)
+	cmd := exec.CommandContext(ctx, "tar", "--no-same-owner", "--no-same-permissions", "-xJf", archivePath, "-C", dst)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("extract Caddy-Naive: %w: %s", err, strings.TrimSpace(string(output)))
 	}

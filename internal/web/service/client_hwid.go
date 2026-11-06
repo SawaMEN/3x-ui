@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -130,6 +131,14 @@ func (s *ClientService) EnforceHwidForSubID(subID string, req HwidRequest) (Hwid
 	hwidHash := hashHwid(req.Hwid)
 
 	err = db.Transaction(func(tx *gorm.DB) error {
+		// SQLite uses BEGIN IMMEDIATE (InitDB), so writers are serialized before
+		// any count is read. PostgreSQL needs explicit parent locks instead.
+		if tx.Name() == "postgres" {
+			var owners []model.ClientRecord
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("sub_id = ?", subID).Order("id").Find(&owners).Error; err != nil {
+				return err
+			}
+		}
 		limit, err := effectiveHwidLimitForSubID(tx, subID)
 		if err != nil {
 			return err
@@ -204,20 +213,18 @@ func (s *ClientService) HwidSlotStatusForSubID(subID string) (status HwidSlotSta
 	}
 
 	db := database.GetDB()
-	var enabled int64
-	if err := db.Model(&model.ClientRecord{}).
-		Where("sub_id = ? AND enable = ?", subID, true).
-		Count(&enabled).Error; err != nil {
+	var state struct {
+		Enabled  int64
+		MaxLimit int
+	}
+	if err := db.Model(&model.ClientRecord{}).Where("sub_id = ? AND enable = ?", subID, true).
+		Select("COUNT(*) AS enabled, COALESCE(MAX(limit_hwid), 0) AS max_limit").Scan(&state).Error; err != nil {
 		return status, false, err
 	}
-	if enabled == 0 {
+	if state.Enabled == 0 {
 		return status, false, nil
 	}
-
-	limit, err := effectiveHwidLimitForSubID(db, subID)
-	if err != nil {
-		return status, false, err
-	}
+	limit := state.MaxLimit
 	if limit <= 0 {
 		return status, true, nil
 	}
@@ -368,4 +375,24 @@ func clearClientHwidsBySubIDTx(tx *gorm.DB, subIDs ...string) error {
 		}
 	}
 	return nil
+}
+
+// CheckSubscriptionDevice shares device registration and response headers across subscription endpoints.
+func (s *ClientService) CheckSubscriptionDevice(w http.ResponseWriter, r *http.Request, subID string) (bool, error) {
+	result, err := s.EnforceHwidForSubID(subID, HwidRequest{
+		Hwid: r.Header.Get("X-HWID"), UserAgent: r.UserAgent(), DeviceOS: r.Header.Get("X-Device-OS"),
+		OsVersion: r.Header.Get("X-Ver-OS"), DeviceModel: r.Header.Get("X-Device-Model"),
+	})
+	if err != nil {
+		return false, err
+	}
+	for name, active := range map[string]bool{
+		"X-Hwid-Active": result.Active, "X-Hwid-Not-Supported": result.NotSupported,
+		"X-Hwid-Limit": result.LimitReached, "X-Hwid-Max-Devices-Reached": result.MaxDevicesReached,
+	} {
+		if active {
+			w.Header().Set(name, "true")
+		}
+	}
+	return result.Allowed, nil
 }

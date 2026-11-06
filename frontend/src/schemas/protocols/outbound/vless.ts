@@ -1,3 +1,4 @@
+import { VisionTestseedSchema } from '@/schemas/protocols/vision';
 import { z } from 'zod';
 
 import { FlowSchema, SniffingSchema } from '@/schemas/primitives';
@@ -17,6 +18,6 @@ export const VlessOutboundSettingsSchema = z.object({
   testpre: z.number().int().min(0).optional(),
   // TODO: narrow to flow === 'xtls-rprx-vision' once a per-flow discriminator
   // exists.
-  testseed: z.array(z.number().int().positive()).length(4).optional(),
+  testseed: VisionTestseedSchema.length(4).optional(),
 });
 export type VlessOutboundSettings = z.infer<typeof VlessOutboundSettingsSchema>;

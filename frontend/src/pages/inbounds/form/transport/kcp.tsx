@@ -1,45 +1,34 @@
 import { useTranslation } from 'react-i18next';
 import { InputNumber } from 'antd';
-
-import { FormField } from '@/components/form/rhf';
+import { FormField, rhfZodValidate } from '@/components/form/rhf';
+import { KcpStreamSettingsSchema } from '@/schemas/protocols/stream/kcp';
 
 export default function KcpForm() {
   const { t } = useTranslation();
   return (
     <>
-      <FormField name={['streamSettings', 'kcpSettings', 'mtu']} label="MTU">
-        <InputNumber min={576} max={1460} />
-      </FormField>
-      <FormField
-        name={['streamSettings', 'kcpSettings', 'tti']}
-        label={t('pages.inbounds.form.ttiMs')}
-      >
-        <InputNumber min={10} max={100} />
-      </FormField>
-      <FormField
-        name={['streamSettings', 'kcpSettings', 'uplinkCapacity']}
-        label={t('pages.inbounds.form.uplinkMbps')}
-      >
-        <InputNumber min={0} />
-      </FormField>
-      <FormField
-        name={['streamSettings', 'kcpSettings', 'downlinkCapacity']}
-        label={t('pages.inbounds.form.downlinkMbps')}
-      >
-        <InputNumber min={0} />
-      </FormField>
-      <FormField
-        name={['streamSettings', 'kcpSettings', 'cwndMultiplier']}
-        label={t('pages.inbounds.form.cwndMultiplier')}
-      >
-        <InputNumber min={1} />
-      </FormField>
-      <FormField
-        name={['streamSettings', 'kcpSettings', 'maxSendingWindow']}
-        label={t('pages.inbounds.form.maxSendingWindow')}
-      >
-        <InputNumber min={0} />
-      </FormField>
+      {(
+        [
+          'mtu',
+          'tti',
+          'uplinkCapacity',
+          'downlinkCapacity',
+          'cwndMultiplier',
+          'maxSendingWindow',
+        ] as const
+      ).map((field) => (
+        <FormField
+          key={field}
+          name={['streamSettings', 'kcpSettings', field]}
+          label={t(`pages.inbounds.form.${field}`)}
+          rules={{ validate: rhfZodValidate(KcpStreamSettingsSchema.shape[field]) }}
+        >
+          <InputNumber
+            min={field === 'uplinkCapacity' || field === 'downlinkCapacity' ? 0 : 1}
+            style={{ width: '100%' }}
+          />
+        </FormField>
+      ))}
     </>
   );
 }

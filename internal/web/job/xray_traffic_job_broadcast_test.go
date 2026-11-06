@@ -4,11 +4,11 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 )
 
 func TestSplitMovedClientTraffics(t *testing.T) {
-	rows := []*xray.ClientTraffic{
+	rows := []*coremodel.ClientTraffic{
 		{Email: "idle@x", Up: 0, Down: 0},
 		{Email: "up@x", Up: 1024, Down: 0},
 		{Email: "down@x", Up: 0, Down: 2048},
@@ -49,7 +49,7 @@ func TestSplitMovedClientTraffics(t *testing.T) {
 	})
 
 	t.Run("an all-idle poll broadcasts nothing", func(t *testing.T) {
-		moved, emails, active := splitMovedClientTraffics([]*xray.ClientTraffic{
+		moved, emails, active := splitMovedClientTraffics([]*coremodel.ClientTraffic{
 			{Email: "a@x"}, {Email: "b@x"},
 		})
 		if len(moved) != 0 || len(emails) != 0 || len(active) != 0 {

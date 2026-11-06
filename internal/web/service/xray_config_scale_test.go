@@ -15,7 +15,7 @@ import (
 // settings rebuild is spent on indented vs plain JSON marshaling.
 func TestGetXrayConfigScale(t *testing.T) {
 	setupScaleDB(t)
-	svc := &XrayService{}
+	svc := &CoreService{}
 	shapes := []struct {
 		name     string
 		inbounds int

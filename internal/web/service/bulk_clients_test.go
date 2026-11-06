@@ -20,7 +20,7 @@ func setupBulkDB(t *testing.T) {
 	t.Cleanup(func() { _ = database.CloseDB() })
 }
 
-func clientsSettings(t *testing.T, clients []model.Client) string {
+func clientsSettings(t testing.TB, clients []model.Client) string {
 	t.Helper()
 	b, err := json.Marshal(map[string][]model.Client{"clients": clients})
 	if err != nil {

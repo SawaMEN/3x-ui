@@ -43,12 +43,12 @@ func TestClientToRecordRoundTripWireGuard(t *testing.T) {
 }
 
 // ToClient feeds the settings JSON of every protocol, not just the tunnels, and
-// that JSON reaches xray-core verbatim through GenXrayInboundConfig.
+// that JSON reaches xray-core verbatim through GenInboundConfig.
 func TestClientToClientOmitsUnsetKeepAlive(t *testing.T) {
 	rec := &ClientRecord{Email: "vless@example.test", UUID: "11111111-2222-3333-4444-555555555555", Enable: true}
 
 	if got := rec.ToClient().KeepAlive; got != nil {
-		t.Fatalf("KeepAlive for a record that never set one = %d, want nil", *got)
+		t.Fatalf("KeepAlive for a record that never set one = %s, want nil", *got)
 	}
 	blob, err := json.Marshal(map[string][]Client{"clients": {*rec.ToClient()}})
 	if err != nil {

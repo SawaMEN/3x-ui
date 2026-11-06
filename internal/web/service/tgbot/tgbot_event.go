@@ -5,7 +5,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
 )
@@ -25,23 +24,31 @@ func getHostname() string {
 	return cachedHostname
 }
 
-var tgEventLimiter = eventbus.NewRateLimiter(1 * time.Minute)
-
-// HandleEvent is the eventbus subscriber callback. It formats incoming events
-// as Telegram messages and sends them to all admin chats.
+// HandleEvent is the eventbus subscriber callback: one kind of event keeps ONE
+// live card per admin chat, so a repeat edits it instead of a wall of messages.
 func (t *Tgbot) HandleEvent(e eventbus.Event) {
 	if !t.isEventEnabled(e.Type) {
 		return
 	}
-	if e.Type != eventbus.EventLoginAttempt {
-		if !tgEventLimiter.Allow(e.Type, e.Source) {
-			return
+	msg := t.formatEventMessage(e)
+	if msg == "" {
+		return
+	}
+	kind := t.eventNoticeKind(e)
+	for _, adminID := range adminSnapshot() {
+		t.liveNotice(adminID, kind, msg)
+	}
+}
+
+// eventNoticeKind is the live card a repeat of this event edits. A login success
+// must not fold into the failure card from the same IP: outcome is part of the key.
+func (t *Tgbot) eventNoticeKind(e eventbus.Event) string {
+	if e.Type == eventbus.EventLoginAttempt {
+		if data, ok := e.Data.(*eventbus.LoginEventData); ok {
+			return string(e.Type) + ":" + e.Source + ":" + data.Status
 		}
 	}
-	msg := t.formatEventMessage(e)
-	if msg != "" {
-		t.SendMsgToTgbotAdmins(msg)
-	}
+	return string(e.Type) + ":" + e.Source
 }
 
 func (t *Tgbot) isEventEnabled(eventType eventbus.EventType) bool {
@@ -55,19 +62,6 @@ func (t *Tgbot) isEventEnabled(eventType eventbus.EventType) bool {
 		}
 	}
 	return false
-}
-
-func appendNodeCoreDetails(msg string, data *eventbus.NodeHealthData) string {
-	if data == nil {
-		return msg
-	}
-	if core := data.EffectiveCore(); core != "" {
-		msg += "\n<b>Core:</b> " + core
-	}
-	if state := data.EffectiveCoreState(); state != "" {
-		msg += "\n<b>State:</b> " + state
-	}
-	return msg
 }
 
 func (t *Tgbot) formatEventMessage(e eventbus.Event) string {
@@ -112,21 +106,15 @@ func (t *Tgbot) formatEventMessage(e eventbus.Event) string {
 
 	case eventbus.EventNodeDown:
 		msg := header + "🔴 " + t.I18nBot("tgbot.messages.eventNodeDown", "Name=="+e.Source)
-		if data, ok := e.Data.(*eventbus.NodeHealthData); ok {
-			msg = appendNodeCoreDetails(msg, data)
-			if coreErr := data.EffectiveCoreError(); coreErr != "" {
-				msg += "\n" + t.I18nBot("tgbot.messages.eventErrorDetail", "Error=="+coreErr)
-			}
+		if data, ok := e.Data.(*eventbus.NodeHealthData); ok && data.XrayError != "" {
+			msg += "\n" + t.I18nBot("tgbot.messages.eventErrorDetail", "Error=="+data.XrayError)
 		}
 		return msg
 
 	case eventbus.EventNodeUp:
 		msg := header + "🟢 " + t.I18nBot("tgbot.messages.eventNodeUp", "Name=="+e.Source)
-		if data, ok := e.Data.(*eventbus.NodeHealthData); ok {
-			msg = appendNodeCoreDetails(msg, data)
-			if data.LatencyMs > 0 {
-				msg += "\n" + t.I18nBot("tgbot.messages.eventDelayDetail", "Delay=="+fmt.Sprintf("%d", data.LatencyMs))
-			}
+		if data, ok := e.Data.(*eventbus.NodeHealthData); ok && data.LatencyMs > 0 {
+			msg += "\n" + t.I18nBot("tgbot.messages.eventDelayDetail", "Delay=="+fmt.Sprintf("%d", data.LatencyMs))
 		}
 		return msg
 

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // mkInboundStream is mkInbound with explicit stream settings, needed to make an
@@ -179,7 +179,7 @@ func TestBulkAdjust_DaysApplyDespiteIneligibleFlow(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	// ClientTraffic is the store the enforcement job reads; seed it to match.
-	if err := database.GetDB().Create(&xray.ClientTraffic{Email: "mix@x", Enable: true, ExpiryTime: baseExpiry, Total: baseTotal}).Error; err != nil {
+	if err := database.GetDB().Create(&coremodel.ClientTraffic{Email: "mix@x", Enable: true, ExpiryTime: baseExpiry, Total: baseTotal}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
 	}
 
@@ -205,7 +205,7 @@ func TestBulkAdjust_DaysApplyDespiteIneligibleFlow(t *testing.T) {
 	}
 
 	// ClientTraffic advanced in lockstep — no divergence.
-	var ct xray.ClientTraffic
+	var ct coremodel.ClientTraffic
 	if err := database.GetDB().Where("email = ?", "mix@x").First(&ct).Error; err != nil {
 		t.Fatalf("traffic row: %v", err)
 	}
@@ -385,7 +385,7 @@ func TestBulkAdjust_DaysApplyDespiteIneligibleAdTag(t *testing.T) {
 	if err := svc.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if err := database.GetDB().Create(&xray.ClientTraffic{Email: "vless-days@x", Enable: true, ExpiryTime: baseExpiry}).Error; err != nil {
+	if err := database.GetDB().Create(&coremodel.ClientTraffic{Email: "vless-days@x", Enable: true, ExpiryTime: baseExpiry}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
 	}
 
@@ -493,7 +493,7 @@ func TestBulkAdjust_UnchangedClientKeepsUpdatedAt(t *testing.T) {
 	if err := svc.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if err := database.GetDB().Create(&xray.ClientTraffic{Email: "chg@x", Enable: true, ExpiryTime: baseExpiry}).Error; err != nil {
+	if err := database.GetDB().Create(&coremodel.ClientTraffic{Email: "chg@x", Enable: true, ExpiryTime: baseExpiry}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
 	}
 

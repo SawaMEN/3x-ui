@@ -55,3 +55,10 @@ func TestPostgresModelSettled_TracksSchemaPresence(t *testing.T) {
 		t.Error("ClientGroup settled despite missing table")
 	}
 }
+
+func TestTextPrimaryKeyHasNoSequence(t *testing.T) {
+	db := stage3SQLite(t, filepath.Join(t.TempDir(), "empty.db"))
+	if table, ok := tableWithIdColumn(db, &model.TuicTrafficReceipt{}); ok {
+		t.Fatalf("text primary key included in sequence resync: %s", table)
+	}
+}

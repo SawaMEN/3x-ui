@@ -9,9 +9,9 @@ export type XHttpMode = z.infer<typeof XHttpModeSchema>;
 // The field set is large because the schema mirrors what the server-side
 // listener reads — plus a few client-only fields (`uplinkHTTPMethod`,
 // `headers`) the panel embeds into share-link `extra` blobs even though the
-// server ignores them at runtime. Outbound has additional fields (uplinkChunk
-// sizes, noGRPCHeader, scMinPostsIntervalMs, xmux, downloadSettings) which
-// belong on the outbound class instead, not modeled here.
+// server ignores them at runtime. Client tuning and downloadSettings also
+// live here so editing an inbound preserves the settings its subscriptions
+// must distribute.
 // XMUX is the connection-multiplexing layer xHTTP uses to fan out
 // parallel requests over a small pool of upstream connections. Fields
 // are strings because they accept dash-range values like '16-32'.
@@ -61,9 +61,17 @@ export const XHTTP_SESSION_ID_TABLES = [
 // sessionIDTable/sessionIDLength. Lift any legacy keys persisted by an older
 // panel onto the new names so a saved inbound/outbound never silently loses
 // its session setting, then drop the legacy keys so we never emit both.
-function migrateLegacyXhttp(v: unknown): unknown {
+// Flatten extra using core precedence before form defaults are applied; keeping
+// a stale extra would make Xray ignore subsequent edits to the tuning fields.
+export function migrateLegacyXhttp(v: unknown): unknown {
   if (v == null || typeof v !== 'object' || Array.isArray(v)) return v;
-  const o = { ...(v as Record<string, unknown>) };
+  const raw = v as Record<string, unknown>;
+  const extra = raw.extra;
+  const o: Record<string, unknown> =
+    extra && typeof extra === 'object' && !Array.isArray(extra)
+      ? { ...(extra as Record<string, unknown>), host: raw.host, path: raw.path, mode: raw.mode }
+      : { ...raw };
+  delete o.extra;
   if (o.sessionIDPlacement === undefined && o.sessionPlacement !== undefined) {
     o.sessionIDPlacement = o.sessionPlacement;
   }
@@ -72,6 +80,16 @@ function migrateLegacyXhttp(v: unknown): unknown {
   }
   delete o.sessionPlacement;
   delete o.sessionKey;
+  if (o.headers && typeof o.headers === 'object' && !Array.isArray(o.headers)) {
+    const headers = { ...(o.headers as Record<string, unknown>) };
+    for (const name of Object.keys(headers)) {
+      if (name.toLowerCase() === 'host') {
+        if (!o.host && typeof headers[name] === 'string') o.host = headers[name];
+        delete headers[name];
+      }
+    }
+    o.headers = headers;
+  }
   return o;
 }
 
@@ -81,7 +99,7 @@ export const XHttpStreamSettingsSchema = z.preprocess(
     path: z.string().default('/'),
     host: z.string().default(''),
     mode: XHttpModeSchema.default('auto'),
-    xPaddingBytes: z.string().default('100-1000'),
+    xPaddingBytes: z.union([z.string(), z.number()]).transform(String).default('100-1000'),
     xPaddingObfsMode: z.boolean().default(false),
     xPaddingKey: z.string().default(''),
     xPaddingHeader: z.string().default(''),
@@ -101,7 +119,7 @@ export const XHttpStreamSettingsSchema = z.preprocess(
     // Empty default on purpose: xray-core already defaults to 1MB/30ms, and
     // baking the literal values into every config and share link gives DPI a
     // stable fingerprint (#5141 — TSPU keys on scMinPostsIntervalMs=30).
-    scMaxEachPostBytes: z.string().default(''),
+    scMaxEachPostBytes: z.union([z.string(), z.number()]).transform(String).default(''),
     noSSEHeader: z.boolean().default(false),
     scMaxBufferedPosts: z.number().int().min(0).default(30),
     scStreamUpServerSecs: z.string().default('20-80'),
@@ -113,8 +131,8 @@ export const XHttpStreamSettingsSchema = z.preprocess(
     // them in share-link `extra` blobs so the same xhttp config can
     // round-trip on both sides.
     // - scMinPostsIntervalMs: preserved when non-default (stripped at '' or '30')
-    // - uplinkChunkSize & noGRPCHeader: outbound-only; stripped from inbound wire
-    scMinPostsIntervalMs: z.string().default(''),
+    // - uplinkChunkSize, noGRPCHeader and downloadSettings: stored for clients
+    scMinPostsIntervalMs: z.union([z.string(), z.number()]).transform(String).default(''),
     uplinkChunkSize: z.number().int().min(0).default(0),
     noGRPCHeader: z.boolean().default(false),
     xmux: XHttpXmuxSchema.optional(),
@@ -122,6 +140,7 @@ export const XHttpStreamSettingsSchema = z.preprocess(
     // Never present on the wire — outbound modal strips it via the
     // form-to-wire adapter.
     enableXmux: z.boolean().default(false),
+    downloadSettings: z.record(z.string(), z.unknown()).optional(),
   }),
 );
 export type XHttpStreamSettings = z.infer<typeof XHttpStreamSettingsSchema>;

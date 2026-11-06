@@ -3,15 +3,15 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // makeImportInbound builds an inbound shaped like the import payload: a clients
 // JSON blob plus carried-over ClientStats (the exported traffic counters). The
 // stats mirror what controller.importInbound feeds AddInbound after zeroing ids.
-func makeImportInbound(tag string, port int, settings string, stats []xray.ClientTraffic) *model.Inbound {
+func makeImportInbound(tag string, port int, settings string, stats []coremodel.ClientTraffic) *model.Inbound {
 	for i := range stats {
 		stats[i].Id = 0
 		stats[i].Enable = true
@@ -43,7 +43,7 @@ func TestAddInbound_ImportTwoInboundsSharingClients(t *testing.T) {
 		`{"id":"11111111-1111-1111-1111-111111111111","email":"alice","subId":"s-alice","enable":true},` +
 		`{"id":"22222222-2222-2222-2222-222222222222","email":"bob","subId":"s-bob","enable":true}` +
 		`],"decryption":"none","encryption":"none"}`
-	in1 := makeImportInbound("in-9101-tcp", 9101, settings1, []xray.ClientTraffic{
+	in1 := makeImportInbound("in-9101-tcp", 9101, settings1, []coremodel.ClientTraffic{
 		{Email: "alice", Up: 100, Down: 200, Total: 1000},
 		{Email: "bob", Up: 1, Down: 2, Total: 1000},
 	})
@@ -56,7 +56,7 @@ func TestAddInbound_ImportTwoInboundsSharingClients(t *testing.T) {
 		`{"id":"11111111-1111-1111-1111-111111111111","email":"alice","subId":"s-alice","enable":true},` +
 		`{"id":"33333333-3333-3333-3333-333333333333","email":"carol","subId":"s-carol","enable":true}` +
 		`],"decryption":"none","encryption":"none"}`
-	in2 := makeImportInbound("in-9102-tcp", 9102, settings2, []xray.ClientTraffic{
+	in2 := makeImportInbound("in-9102-tcp", 9102, settings2, []coremodel.ClientTraffic{
 		{Email: "alice", Up: 999, Down: 999, Total: 9999}, // would clobber the shared row if inserted
 		{Email: "carol", Up: 3, Down: 4, Total: 1000},
 	})
@@ -73,7 +73,7 @@ func TestAddInbound_ImportTwoInboundsSharingClients(t *testing.T) {
 		{"bob", 1},
 		{"carol", 3},
 	} {
-		var rows []xray.ClientTraffic
+		var rows []coremodel.ClientTraffic
 		if err := database.GetDB().Where("email = ?", tc.email).Find(&rows).Error; err != nil {
 			t.Fatalf("query %s: %v", tc.email, err)
 		}
@@ -99,14 +99,14 @@ func TestAddInbound_ImportStatsMissingClientStillGetsTrafficRow(t *testing.T) {
 		`{"id":"55555555-5555-5555-5555-555555555555","email":"erin","subId":"s-erin","enable":true,"totalGB":2000}` +
 		`],"decryption":"none","encryption":"none"}`
 	// Stats cover dave only; erin is missing.
-	in := makeImportInbound("in-9103-tcp", 9103, settings, []xray.ClientTraffic{
+	in := makeImportInbound("in-9103-tcp", 9103, settings, []coremodel.ClientTraffic{
 		{Email: "dave", Up: 7, Down: 8, Total: 1000},
 	})
 	if _, _, err := svc.AddInbound(in); err != nil {
 		t.Fatalf("import inbound: %v", err)
 	}
 
-	var dave xray.ClientTraffic
+	var dave coremodel.ClientTraffic
 	if err := database.GetDB().Where("email = ?", "dave").First(&dave).Error; err != nil {
 		t.Fatalf("dave row: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestAddInbound_ImportStatsMissingClientStillGetsTrafficRow(t *testing.T) {
 		t.Fatalf("dave Up = %d, want 7 (imported counters preserved)", dave.Up)
 	}
 
-	var erin xray.ClientTraffic
+	var erin coremodel.ClientTraffic
 	if err := database.GetDB().Where("email = ?", "erin").First(&erin).Error; err != nil {
 		t.Fatalf("erin must still get a traffic row despite missing from clientStats: %v", err)
 	}
@@ -144,14 +144,14 @@ func TestAddInbound_ImportForcedEnableSurvivesDisabledSettingsClient(t *testing.
 		`],"decryption":"none","encryption":"none"}`
 	// makeImportInbound forces Enable=true on every stats row, matching
 	// controller.importInbound's behavior regardless of what's passed here.
-	in := makeImportInbound("in-9104-tcp", 9104, settings, []xray.ClientTraffic{
+	in := makeImportInbound("in-9104-tcp", 9104, settings, []coremodel.ClientTraffic{
 		{Email: "frank", Up: 10, Down: 20, Total: 5000},
 	})
 	if _, _, err := svc.AddInbound(in); err != nil {
 		t.Fatalf("import inbound: %v", err)
 	}
 
-	var frank xray.ClientTraffic
+	var frank coremodel.ClientTraffic
 	if err := database.GetDB().Where("email = ?", "frank").First(&frank).Error; err != nil {
 		t.Fatalf("frank row: %v", err)
 	}

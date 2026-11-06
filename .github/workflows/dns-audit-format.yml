@@ -1,0 +1,38 @@
+name: DNS audit format snapshot
+on:
+  push:
+    branches: [dns]
+    paths:
+      - '.github/workflows/dns-audit-format.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Canonical Go formatter
+        run: |
+          gofmt -w internal/oxidns/manager.go internal/oxidns/lifecycle_systemd_test.go
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          for path in ['internal/oxidns/manager.go','internal/oxidns/lifecycle_systemd_test.go']:
+              print('GOFMT_FILE:'+path+':'+base64.b64encode(Path(path).read_bytes()).decode())
+          PY
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Canonical React formatter
+        working-directory: frontend
+        run: |
+          npx oxfmt src/pages/settings/SystemUpdateModal.tsx src/pages/singbox/OxiDNSSettings.tsx src/test/system-update-components.test.tsx
+          node -e 'const fs=require("fs"); for (const p of process.argv.slice(1)) console.log("OXFMT_FILE:"+p+":"+fs.readFileSync(p).toString("base64"))' src/pages/settings/SystemUpdateModal.tsx src/pages/singbox/OxiDNSSettings.tsx src/test/system-update-components.test.tsx
+      - name: Focused component regression
+        working-directory: frontend
+        run: npm test -- src/test/system-update-components.test.tsx

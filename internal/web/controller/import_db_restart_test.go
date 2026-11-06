@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -12,9 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,7 +26,7 @@ import (
 // restartPanel follow-up can 401 once the imported users table lands (#6446).
 func TestImportDBSchedulesPanelRestart(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("the stub xray binary is a shell script")
+		t.Skip("the stub sing-box binary is a shell script")
 	}
 	uploadPath := filepath.Join(t.TempDir(), "x-ui.db")
 	if err := database.InitDB(uploadPath); err != nil {
@@ -41,9 +44,12 @@ func TestImportDBSchedulesPanelRestart(t *testing.T) {
 	binDir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", binDir)
 	t.Setenv("XUI_LOG_FOLDER", t.TempDir())
-	if err := os.WriteFile(filepath.Join(binDir, xray.GetBinaryName()), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatalf("write stub xray: %v", err)
+	if err := os.WriteFile(filepath.Join(binDir, filepath.Base(config.OwnerCoreBinaryPath())), []byte(fmt.Sprintf("#!/bin/sh\ncase \"$1\" in\nversion) printf 'hiddify-core version %%s\\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque,with_gvisor,with_naive_outbound,with_purego,tfogo_checklinkname0\\nRevision: %%s\\n' '%s' '%s';;\ncheck) exit 0;;\nsrun) exec sleep 60;;\nesac\n", hiddify.TargetVersion, hiddify.TargetRevision)), 0o755); err != nil {
+		t.Fatalf("write stub sing-box: %v", err)
 	}
+
+	service.InitializeNativeCoreRuntime()
+	t.Cleanup(func() { _ = (&service.ServerService{}).StopXrayService(); service.InitializeNativeCoreRuntime() })
 
 	restarts := make(chan struct{}, 1)
 	global.SetRestartHook(func() {

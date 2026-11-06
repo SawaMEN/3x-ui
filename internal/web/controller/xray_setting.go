@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,7 +14,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/integration"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,7 +25,7 @@ type XraySettingController struct {
 	SettingService              service.SettingService
 	InboundService              service.InboundService
 	OutboundService             outbound.OutboundService
-	XrayService                 service.XrayService
+	CoreService                 service.CoreService
 	WarpService                 integration.WarpService
 	NordService                 integration.NordService
 	PiaService                  integration.PiaService
@@ -54,9 +55,6 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/resetOutboundsTraffic", a.resetOutboundsTraffic)
 	g.POST("/testOutbound", a.testOutbound)
 	g.POST("/testOutbounds", a.testOutbounds)
-	g.POST("/balancerStatus", a.balancerStatus)
-	g.POST("/balancerOverride", a.balancerOverride)
-	g.POST("/routeTest", a.routeTest)
 
 	g.GET("/geodata/files", a.geodataFiles)
 	g.GET("/geodata/categories", a.geodataCategories)
@@ -66,7 +64,9 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 	// Outbound subscription (remote outbound lists)
 	g.GET("/outbound-subs", a.listOutboundSubs)
 	g.POST("/outbound-subs", a.createOutboundSub)
+	g.POST("/outbound-subs/apply", a.applyOutboundSubs)
 	g.POST("/outbound-subs/:id/refresh", a.refreshOutboundSub)
+	g.POST("/outbound-subs/:id/probe", a.probeOutboundSub)
 	g.POST("/outbound-subs/:id/move", a.moveOutboundSub)
 	g.POST("/outbound-subs/:id", a.updateOutboundSub)
 	g.DELETE("/outbound-subs/:id", a.deleteOutboundSub)
@@ -98,7 +98,10 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 			xraySetting = unwrapped
 		}
 	}
-	inboundTags, err := a.InboundService.GetInboundTags()
+	if clean, cleanErr := service.NormalizeSubscriptionTemplate(xraySetting, false); cleanErr == nil {
+		xraySetting = clean
+	}
+	inboundTags, err := a.InboundService.GetInboundTags(session.GetLoginUser(c).Id)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
 		return
@@ -142,7 +145,7 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 // outbounds or routing rules changed, with a process restart otherwise.
 func (a *XraySettingController) updateSetting(c *gin.Context) {
 	xraySetting := c.PostForm("xraySetting")
-	if err := a.XraySettingService.SaveXraySetting(xraySetting); err != nil {
+	if err := a.XraySettingService.SaveValidatedXraySetting(c.Request.Context(), xraySetting); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 		return
 	}
@@ -155,8 +158,8 @@ func (a *XraySettingController) updateSetting(c *gin.Context) {
 		return
 	}
 	// Only reconcile a running core; a manually stopped xray stays stopped.
-	if a.XrayService.IsXrayRunning() {
-		if err := a.XrayService.RestartXray(false); err != nil {
+	if a.CoreService.IsCoreRunning() {
+		if err := a.CoreService.RestartXray(false); err != nil {
 			jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 			return
 		}
@@ -176,7 +179,7 @@ func (a *XraySettingController) getDefaultXrayConfig(c *gin.Context) {
 
 // getXrayResult retrieves the current Xray service result.
 func (a *XraySettingController) getXrayResult(c *gin.Context) {
-	jsonObj(c, a.XrayService.GetXrayResult(), nil)
+	jsonObj(c, a.CoreService.GetCoreResult(), nil)
 }
 
 // warp handles Warp-related operations based on the action parameter.
@@ -198,7 +201,7 @@ func (a *XraySettingController) warp(c *gin.Context) {
 	case "changeIp":
 		resp, err = a.WarpService.ChangeWarpIP()
 		if err == nil {
-			a.XrayService.SetToNeedRestart()
+			a.CoreService.SetToNeedRestart()
 			// Restart the auto-update clock so a scheduled rotation
 			// doesn't fire right after this manual one.
 			err = a.SettingService.SetWarpLastUpdate(time.Now().Unix())
@@ -322,7 +325,13 @@ func (a *XraySettingController) testOutbound(c *gin.Context) {
 		return
 	}
 
-	result, err := a.OutboundService.TestOutbound(outboundJSON, testURL, allOutboundsJSON, mode)
+	coreType, err := a.SettingService.GetCoreType()
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	probeService := outbound.OutboundService{CoreType: coreType}
+	result, err := probeService.TestOutbound(outboundJSON, testURL, allOutboundsJSON, mode)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
@@ -355,84 +364,19 @@ func (a *XraySettingController) testOutbounds(c *gin.Context) {
 		return
 	}
 
-	results, err := a.OutboundService.TestOutbounds(outboundsJSON, testURL, allOutboundsJSON, mode)
+	coreType, err := a.SettingService.GetCoreType()
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	probeService := outbound.OutboundService{CoreType: coreType}
+	results, err := probeService.TestOutbounds(outboundsJSON, testURL, allOutboundsJSON, mode)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 
 	jsonObj(c, results, nil)
-}
-
-// balancerStatus reports the live state (override + strategy picks) of the
-// balancer tags given as a comma-separated "tags" form field.
-func (a *XraySettingController) balancerStatus(c *gin.Context) {
-	raw := c.PostForm("tags")
-	var tags []string
-	for tag := range strings.SplitSeq(raw, ",") {
-		if tag = strings.TrimSpace(tag); tag != "" {
-			tags = append(tags, tag)
-		}
-	}
-	statuses, err := a.XrayService.GetBalancersStatus(tags)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	byTag := make(map[string]service.BalancerStatus, len(statuses))
-	for _, status := range statuses {
-		byTag[status.Tag] = status
-	}
-	jsonObj(c, byTag, nil)
-}
-
-// balancerOverride forces a balancer to a specific outbound tag; an empty
-// "target" clears the override.
-func (a *XraySettingController) balancerOverride(c *gin.Context) {
-	tag := c.PostForm("tag")
-	if tag == "" {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), common.NewError("tag is required"))
-		return
-	}
-	target := c.PostForm("target")
-	if err := a.XrayService.OverrideBalancer(tag, target); err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	jsonObj(c, "", nil)
-}
-
-// routeTest asks the running core which outbound it would route a synthetic
-// connection to.
-func (a *XraySettingController) routeTest(c *gin.Context) {
-	port := 0
-	if portStr := c.PostForm("port"); portStr != "" {
-		parsed, err := strconv.Atoi(portStr)
-		if err != nil || parsed < 0 || parsed > 65535 {
-			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), common.NewError("invalid port"))
-			return
-		}
-		port = parsed
-	}
-	req := xray.RouteTestRequest{
-		InboundTag: c.PostForm("inboundTag"),
-		Domain:     c.PostForm("domain"),
-		IP:         c.PostForm("ip"),
-		Port:       port,
-		Network:    c.PostForm("network"),
-		Protocol:   c.PostForm("protocol"),
-		Email:      c.PostForm("email"),
-	}
-	if req.Domain == "" && req.IP == "" {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), common.NewError("domain or ip is required"))
-		return
-	}
-	result, err := a.XrayService.TestRoute(req)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	jsonObj(c, result, nil)
 }
 
 // maxGeodataTokens bounds one validation request; a routing rule listing more
@@ -514,6 +458,11 @@ func (a *XraySettingController) listOutboundSubs(c *gin.Context) {
 }
 
 func (a *XraySettingController) createOutboundSub(c *gin.Context) {
+	balance, err := parseOutboundBalanceOptions(c)
+	if err != nil {
+		jsonMsg(c, "Invalid automatic balancer settings", err)
+		return
+	}
 	remark := c.PostForm("remark")
 	rawURL := c.PostForm("url")
 	prefix := c.PostForm("tagPrefix")
@@ -529,15 +478,21 @@ func (a *XraySettingController) createOutboundSub(c *gin.Context) {
 			interval = v
 		}
 	}
-	sub, err := a.OutboundSubscriptionService.Create(remark, rawURL, prefix, userAgent, enabled, interval, allowPrivate, prepend, allowInsecure)
+	sub, err := a.OutboundSubscriptionService.Create(remark, rawURL, prefix, userAgent, enabled, interval, allowPrivate, prepend, allowInsecure, balance)
 	if err != nil {
 		jsonMsg(c, "Failed to create outbound subscription", err)
 		return
 	}
+	markOutboundCoreRestart()
 	jsonObj(c, sub, nil)
 }
 
 func (a *XraySettingController) updateOutboundSub(c *gin.Context) {
+	balance, err := parseOutboundBalanceOptions(c)
+	if err != nil {
+		jsonMsg(c, "Invalid automatic balancer settings", err)
+		return
+	}
 	id := c.Param("id")
 	var subID int
 	if _, err := fmt.Sscanf(id, "%d", &subID); err != nil {
@@ -559,8 +514,13 @@ func (a *XraySettingController) updateOutboundSub(c *gin.Context) {
 			interval = v
 		}
 	}
-	if err := a.OutboundSubscriptionService.Update(subID, remark, rawURL, prefix, userAgent, enabled, interval, allowPrivate, prepend, allowInsecure); err != nil {
+	if err := a.OutboundSubscriptionService.Update(subID, remark, rawURL, prefix, userAgent, enabled, interval, allowPrivate, prepend, allowInsecure, balance); err != nil {
 		jsonMsg(c, "Failed to update outbound subscription", err)
+		return
+	}
+	markOutboundCoreRestart()
+	if err := a.applyOutboundSubscriptionChanges(c.Request.Context()); err != nil {
+		jsonMsg(c, "Подписка сохранена, но не применена к ядру", err)
 		return
 	}
 	jsonObj(c, "", nil)
@@ -573,12 +533,16 @@ func (a *XraySettingController) deleteOutboundSub(c *gin.Context) {
 		jsonMsg(c, "Invalid id", err)
 		return
 	}
-	if err := a.OutboundSubscriptionService.Delete(subID); err != nil {
+	if err := a.OutboundSubscriptionService.DeleteReplacing(subID, c.PostForm("replacement")); err != nil {
 		jsonMsg(c, "Failed to delete outbound subscription", err)
 		return
 	}
 	// Signal that xray should drop this subscription's outbounds on next reload.
-	a.XrayService.SetToNeedRestart()
+	markOutboundCoreRestart()
+	if err := a.applyOutboundSubscriptionChanges(c.Request.Context()); err != nil {
+		jsonMsg(c, "Подписка сохранена, но не применена к ядру", err)
+		return
+	}
 	jsonObj(c, "", nil)
 }
 
@@ -594,9 +558,63 @@ func (a *XraySettingController) refreshOutboundSub(c *gin.Context) {
 		jsonMsg(c, "Refresh failed", err)
 		return
 	}
-	// Signal that xray should pick up the new outbounds on next restart/reload
-	a.XrayService.SetToNeedRestart()
+	// Disabled subscriptions are stored for later use; they have no runtime
+	// outbounds, so refreshing them must not restart the selected core.
+	sub, err := a.OutboundSubscriptionService.Get(subID)
+	if err != nil {
+		jsonMsg(c, "Subscription refreshed, but its status could not be read", err)
+		return
+	}
+	if !sub.Enabled {
+		jsonObj(c, obs, nil)
+		return
+	}
+	// A manual refresh of an active subscription must publish its nodes.
+	markOutboundCoreRestart()
+	// Mass refreshes defer applying the intermediate state. The final
+	// request publishes all fetched connections with just one core restart.
+	if c.PostForm("deferApply") == "true" {
+		jsonObj(c, obs, nil)
+		return
+	}
+	if err := a.applyOutboundSubscriptionChanges(c.Request.Context()); err != nil {
+		jsonMsg(c, "Subscription saved, but runtime apply failed", err)
+		return
+	}
 	jsonObj(c, obs, nil)
+}
+
+// applyOutboundSubs publishes all already fetched profiles in one restart.
+// It never re-downloads subscriptions, even when the final fetch failed.
+func (a *XraySettingController) applyOutboundSubs(c *gin.Context) {
+	markOutboundCoreRestart()
+	if err := a.applyOutboundSubscriptionChanges(c.Request.Context()); err != nil {
+		jsonMsg(c, "Failed to apply outbound subscriptions", err)
+		return
+	}
+	jsonObj(c, "", nil)
+}
+
+func (a *XraySettingController) applyOutboundSubscriptionChanges(ctx context.Context) error {
+	core, err := (&service.SettingService{}).GetCoreType()
+	if err != nil {
+		return err
+	}
+	if !service.SelectedNativeCore().IsRunning() {
+		return nil
+	}
+	applyCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	if err := service.SelectedNativeCore().Restart(applyCtx); err != nil {
+		return fmt.Errorf("sing-box restart: %w", err)
+	}
+	if core == service.CoreTypeXray {
+		return nil
+	}
+	if _, err := a.OutboundSubscriptionService.ApplyAutomaticSelections(); err != nil {
+		return fmt.Errorf("automatic selector acknowledgement: %w", err)
+	}
+	return nil
 }
 
 func (a *XraySettingController) moveOutboundSub(c *gin.Context) {
@@ -612,7 +630,7 @@ func (a *XraySettingController) moveOutboundSub(c *gin.Context) {
 		return
 	}
 	// Order affects the merged outbounds, so xray needs a reload.
-	a.XrayService.SetToNeedRestart()
+	markOutboundCoreRestart()
 	jsonObj(c, "", nil)
 }
 
@@ -649,7 +667,61 @@ func (a *XraySettingController) parseOutboundSubURL(c *gin.Context) {
 }
 
 func parseIntSafe(s string) (int, error) {
-	var v int
-	_, err := fmt.Sscanf(s, "%d", &v)
-	return v, err
+	return strconv.Atoi(strings.TrimSpace(s))
+}
+
+func parseOutboundBalanceOptions(c *gin.Context) (*service.BalanceOptions, error) {
+	if _, present := c.GetPostForm("autoBalance"); !present {
+		return nil, nil
+	}
+	o := &service.BalanceOptions{Enabled: c.PostForm("autoBalance") == "true", Mode: c.PostForm("balanceMode"), URL: strings.TrimSpace(c.PostForm("probeURL")), Interval: 300, Tolerance: 50, SwitchInterval: 900, HealthInterval: 30}
+	for key, target := range map[string]*int{"probeInterval": &o.Interval, "tolerance": &o.Tolerance, "switchInterval": &o.SwitchInterval, "healthInterval": &o.HealthInterval} {
+		if raw, present := c.GetPostForm(key); present {
+			v, err := parseIntSafe(raw)
+			if err != nil {
+				return nil, fmt.Errorf("invalid %s", key)
+			}
+			*target = v
+		}
+	}
+	if err := o.Validate(c.PostForm("allowPrivate") == "true"); err != nil {
+		return nil, err
+	}
+	return o, nil
+}
+
+func markOutboundCoreRestart() {
+	core, _ := (&service.SettingService{}).GetCoreType()
+	if service.IsNativeCore(core) {
+		service.SelectedNativeCore().SetToNeedRestart()
+	} else {
+		(&service.CoreService{}).SetToNeedRestart()
+	}
+}
+
+func (a *XraySettingController) probeOutboundSub(c *gin.Context) {
+	id, err := parseIntSafe(c.Param("id"))
+	if err != nil || id <= 0 {
+		jsonMsg(c, "Invalid subscription id", fmt.Errorf("invalid id"))
+		return
+	}
+	sub, err := a.OutboundSubscriptionService.Get(id)
+	if err != nil {
+		jsonMsg(c, "Subscription not found", err)
+		return
+	}
+	if !sub.Enabled || !sub.AutoBalance {
+		jsonMsg(c, "Automatic balancing is disabled", fmt.Errorf("enable automatic balancing first"))
+		return
+	}
+	_, err = a.OutboundSubscriptionService.ProbeAutomaticSubscriptions(id)
+	if err == nil {
+		_, err = a.OutboundSubscriptionService.ApplyAutomaticSelections()
+	}
+	if err != nil {
+		jsonMsg(c, "Automatic check failed", err)
+		return
+	}
+	sub, err = a.OutboundSubscriptionService.Get(id)
+	jsonObj(c, sub, err)
 }

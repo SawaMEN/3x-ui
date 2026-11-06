@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ import (
 
 const (
 	subscriptionCacheTTL      = 5 * time.Minute
+	subscriptionRetryDelay    = 30 * time.Second
 	subscriptionMaxBytes      = 2 << 20 // 2 MiB
 	subscriptionCacheCapacity = 256
 )
@@ -28,8 +30,9 @@ const (
 var subscriptionHTTPClient = &http.Client{Timeout: 6 * time.Second}
 
 type subscriptionCacheEntry struct {
-	links     []string
-	fetchedAt time.Time
+	links      []string
+	fetchedAt  time.Time
+	retryAfter time.Time
 }
 
 type subscriptionFetch struct {
@@ -66,7 +69,7 @@ func fetchSubscriptionLinks(rawURL string) subscriptionFetchResult {
 
 	subscriptionCache.Lock()
 	cached, ok := subscriptionCache.m[rawURL]
-	if ok && time.Since(cached.fetchedAt) < subscriptionCacheTTL {
+	if ok && (time.Since(cached.fetchedAt) < subscriptionCacheTTL || time.Now().Before(cached.retryAfter)) {
 		subscriptionCache.Unlock()
 		return subscriptionFetchResult{links: cached.links}
 	}
@@ -86,19 +89,18 @@ func fetchSubscriptionLinks(rawURL string) subscriptionFetchResult {
 	}()
 
 	links, err := doFetchSubscriptionLinks(rawURL)
+	entry := subscriptionCacheEntry{links: links, fetchedAt: time.Now()}
 	if err != nil {
-		if ok {
-			fetch.links = cached.links
-		}
-		return subscriptionFetchResult{links: fetch.links, fetched: true, err: err}
+		entry = cached
+		entry.retryAfter = time.Now().Add(subscriptionRetryDelay)
 	}
 
 	subscriptionCache.Lock()
-	subscriptionCache.m[rawURL] = subscriptionCacheEntry{links: links, fetchedAt: time.Now()}
+	subscriptionCache.m[rawURL] = entry
 	trimSubscriptionCacheLocked(rawURL)
 	subscriptionCache.Unlock()
-	fetch.links = links
-	return subscriptionFetchResult{links: links, fetched: true}
+	fetch.links = entry.links
+	return subscriptionFetchResult{links: fetch.links, fetched: true, err: err}
 }
 
 func trimSubscriptionCacheLocked(keep string) {
@@ -169,10 +171,15 @@ func doFetchSubscriptionLinks(rawURL string) ([]string, error) {
 	if len(body) > subscriptionMaxBytes {
 		return nil, errSubscriptionBodyTooLarge
 	}
-	return decodeSubscriptionBody(body), nil
+	links := decodeSubscriptionBody(body)
+	if len(links) == 0 && strings.TrimSpace(string(body)) != "" {
+		return nil, errInvalidSubscriptionBody
+	}
+	return links, nil
 }
 
 var (
+	errInvalidSubscriptionBody  = &subError{"subscription response contains no share links"}
 	errBadStatus                = &subError{"non-2xx subscription response"}
 	errSubscriptionBodyTooLarge = &subError{"subscription response body exceeds size limit"}
 )
@@ -207,7 +214,12 @@ func serverHwid() string {
 		return ""
 	}
 	if strings.TrimSpace(row.Value) == "" {
-		return hwid
+		if err := db.Model(&model.Setting{}).Where("key = ? AND (value = ? OR value IS NULL)", serverHwidKey, row.Value).Update("value", hwid).Error; err != nil {
+			return ""
+		}
+		if err := db.Where("key = ?", serverHwidKey).First(&row).Error; err != nil {
+			return ""
+		}
 	}
 	return strings.TrimSpace(row.Value)
 }
@@ -233,7 +245,7 @@ func decodeSubscriptionBody(body []byte) []string {
 		if ln == "" || strings.HasPrefix(ln, "#") {
 			continue
 		}
-		if strings.Contains(ln, "://") {
+		if looksLikeSubscriptionLink(ln) {
 			out = append(out, ln)
 		}
 	}
@@ -255,4 +267,31 @@ func tryDecodeBase64Body(s string) (string, bool) {
 		return string(b), true
 	}
 	return "", false
+}
+
+// Keep unfamiliar URI schemes for client-side import, including opaque fptn:
+// tokens. Reject HTML and arbitrary text containing an embedded URL.
+func looksLikeSubscriptionLink(line string) bool {
+	address := strings.SplitN(line, "#", 2)[0]
+	if strings.ContainsAny(address, "<>\"' \t") {
+		return false
+	}
+	colon := strings.IndexByte(line, ':')
+	if colon <= 0 || colon == len(line)-1 {
+		return false
+	}
+	for i, r := range line[:colon] {
+		letter := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		digit := r >= '0' && r <= '9'
+		punctuation := r == '+' || r == '-' || r == '.'
+		if !letter && (i == 0 || (!digit && !punctuation)) {
+			return false
+		}
+	}
+	scheme := strings.ToLower(line[:colon])
+	if scheme == "http" || scheme == "https" {
+		u, err := url.Parse(address)
+		return err == nil && u.User != nil && u.Hostname() != "" && u.Port() != ""
+	}
+	return strings.HasPrefix(line[colon+1:], "//") || scheme == "fptn"
 }

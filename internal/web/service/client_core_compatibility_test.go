@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
@@ -21,7 +21,7 @@ func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
 	db := database.GetDB()
 	makeInbound := func(tag string, protocol model.Protocol, port int, email string) *model.Inbound {
 		payload, _ := json.Marshal(map[string][]model.Client{
-			"clients": []model.Client{{Email: email, Enable: true}},
+			"clients": {{Email: email, Enable: true}},
 		})
 		ib := &model.Inbound{Tag: tag, Protocol: protocol, Port: port, Enable: true, Settings: string(payload)}
 		if err := db.Create(ib).Error; err != nil {
@@ -61,12 +61,12 @@ func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
 		{vless, "vless@example"},
 		{naive, "naive@example"},
 	} {
-		if err := db.Create(&xray.ClientTraffic{InboundId: pair.ib.Id, Email: pair.e, Enable: true}).Error; err != nil {
+		if err := db.Create(&coremodel.ClientTraffic{InboundId: pair.ib.Id, Email: pair.e, Enable: true}).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := SyncClientCoreCompatibility(CoreTypeXray, CoreTypeSingBox); err != nil {
+	if err := SyncClientCoreCompatibility(CoreTypeXray, legacyCoreTypeHiddify); err != nil {
 		t.Fatal(err)
 	}
 
@@ -81,15 +81,22 @@ func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
 		}
 	}
 
-	check("wg@example", false, CoreTypeSingBox)
+	check("wg@example", true, "")
 	check("vless@example", true, "")
 	check("naive@example", true, "")
 
-	if err := SyncClientCoreCompatibility(CoreTypeSingBox, CoreTypeXray); err != nil {
+	if err := SyncClientCoreCompatibility(legacyCoreTypeHiddify, CoreTypeXray); err != nil {
 		t.Fatal(err)
 	}
 	check("wg@example", true, "")
+	// Xray does not support NaiveProxy; this client must be auto-disabled.
 	check("naive@example", false, CoreTypeXray)
+
+	// Switching back enables a client only when disabled by the previous core.
+	if err := SyncClientCoreCompatibility(CoreTypeXray, CoreTypeSingBox); err != nil {
+		t.Fatal(err)
+	}
+	check("naive@example", true, "")
 }
 
 func TestCoreCompatibilityManualClientEditClearsAutoDisableMarker(t *testing.T) {

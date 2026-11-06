@@ -43,8 +43,8 @@ func TestSSRFGuardedDialContext_LiteralPrivateIPv6Blocked(t *testing.T) {
 // accepted (kills `>` -> `>=` / off-by-one mutations of the bound), while the
 // same hostname at 254 chars must be rejected.
 func TestNormalizeHost_LengthBoundary(t *testing.T) {
-	label := strings.Repeat("a", 61)
-	base := label + "." + label + "." + label + "." // 186 chars, valid pattern
+	label := strings.Repeat("a", 63)
+	base := label + "." + label + "." + label + "."
 	h253 := base + strings.Repeat("a", 253-len(base))
 	if len(h253) != 253 {
 		t.Fatalf("test setup: expected 253-char host, got %d", len(h253))

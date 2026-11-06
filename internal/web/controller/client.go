@@ -3,16 +3,18 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
-
-	"github.com/gin-gonic/gin"
 )
 
 func notifyClientsChanged() {
@@ -37,7 +39,7 @@ func parseInboundIdsQuery(raw string) []int {
 type ClientController struct {
 	clientService  service.ClientService
 	inboundService service.InboundService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	singBoxService service.SingBoxService
 	settingService service.SettingService
 	happGenerator  service.HappLinkGenerator
@@ -54,6 +56,7 @@ func (a *ClientController) initRouter(g *gin.RouterGroup) {
 	g.GET("/list", a.list)
 	g.GET("/list/paged", a.listPaged)
 	g.GET("/get/:email", a.get)
+	g.GET("/get/subId/:subId", a.getBySubId)
 	g.GET("/get/tgId/:tgId", a.getByTgId)
 	g.GET("/traffic/:email", a.getTrafficByEmail)
 	g.GET("/subLinks/:subId", a.getSubLinks)
@@ -132,7 +135,7 @@ func (a *ClientController) buildClientPayload(rec *model.ClientRecord) (gin.H, e
 	rec.Flow = flow
 	var usedTraffic int64
 	if t, tErr := a.inboundService.GetClientTrafficByEmail(rec.Email); tErr == nil && t != nil {
-		usedTraffic = t.Up + t.Down
+		usedTraffic = common.TrafficUsage(t.Up, t.Down)
 	}
 	tunnelAllowedIPs, err := a.clientService.TunnelAllowedIPsByInbound(&a.inboundService, rec.Email, inboundIds)
 	if err != nil {
@@ -212,6 +215,24 @@ func (a *ClientController) provisionTelemtSubscriptions(c *gin.Context, payloads
 	}
 }
 
+// disconnectSingBoxUsersBestEffort immediately closes active sing-box
+// sessions after an identity is disabled or removed. The config mutation is
+// authoritative, so runtime API failures must not roll it back; the existing
+// deferred core restart remains the fallback for unsupported/sticky sessions.
+func (a *ClientController) disconnectSingBoxUsersBestEffort(c *gin.Context, emails ...string) {
+	coreType, err := a.settingService.GetCoreType()
+	if err != nil || !service.IsNativeCore(coreType) {
+		return
+	}
+	for _, email := range emails {
+		email = strings.TrimSpace(email)
+		if email == "" {
+			continue
+		}
+		_, _ = service.SelectedNativeCore().DisconnectUserSessions(c.Request.Context(), "", email)
+	}
+}
+
 func (a *ClientController) create(c *gin.Context) {
 	var payload service.ClientCreatePayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
@@ -257,6 +278,10 @@ func (a *ClientController) update(c *gin.Context) {
 	// A partly-applied call committed real changes; a rejected one touched
 	// nothing, and broadcasting those would refetch every panel for nothing.
 	if needRestart || err == nil {
+		newEmail := strings.TrimSpace(req.Email)
+		if !req.Enable || (newEmail != "" && newEmail != email) {
+			a.disconnectSingBoxUsersBestEffort(c, email)
+		}
 		notifyClientsChanged()
 	}
 	if err != nil {
@@ -278,6 +303,7 @@ func (a *ClientController) delete(c *gin.Context) {
 	// A partly-applied call committed real removals; a rejected one touched
 	// nothing, and broadcasting those would refetch every panel for nothing.
 	if needRestart || err == nil {
+		a.disconnectSingBoxUsersBestEffort(c, email)
 		notifyClientsChanged()
 	}
 	if err != nil {
@@ -335,15 +361,18 @@ func (a *ClientController) setExternalLinks(c *gin.Context) {
 
 func (a *ClientController) resetAllTraffics(c *gin.Context) {
 	needRestart, err := a.clientService.ResetAllTraffics()
+	if needRestart {
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
+		notifyClientsChanged()
+	}
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.resetAllClientTrafficSuccess"), nil)
-	if needRestart {
-		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
+	if !needRestart {
+		notifyClientsChanged()
 	}
-	notifyClientsChanged()
 }
 
 type bulkAdjustRequest struct {
@@ -439,6 +468,7 @@ func (a *ClientController) bulkDelete(c *gin.Context) {
 	if needRestart {
 		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
+	a.disconnectSingBoxUsersBestEffort(c, req.Emails...)
 	notifyClientsChanged()
 }
 
@@ -468,6 +498,9 @@ func (a *ClientController) bulkSetEnable(c *gin.Context, enable bool) {
 	jsonObj(c, result, nil)
 	if needRestart {
 		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
+	}
+	if !enable {
+		a.disconnectSingBoxUsersBestEffort(c, req.Emails...)
 	}
 	notifyClientsChanged()
 }
@@ -560,15 +593,18 @@ func (a *ClientController) delOrphans(c *gin.Context) {
 func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 	email := c.Param("email")
 	needRestart, err := a.clientService.ResetTrafficByEmail(&a.inboundService, email)
+	if needRestart {
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
+	}
+	// The local reset may have committed even if a node failed afterwards.
+	if needRestart || err == nil {
+		notifyClientsChanged()
+	}
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.resetInboundClientTrafficSuccess"), nil)
-	if needRestart {
-		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
-	}
-	notifyClientsChanged()
 }
 
 type trafficUpdateRequest struct {
@@ -738,11 +774,34 @@ func (a *ClientController) bulkResetTraffic(c *gin.Context) {
 		return
 	}
 	affected, err := a.clientService.BulkResetTraffic(&a.inboundService, req.Emails)
+	if affected > 0 {
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
+		notifyClientsChanged()
+	}
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 	jsonObj(c, gin.H{"affected": affected}, nil)
-	markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
-	notifyClientsChanged()
+}
+
+func (a *ClientController) getBySubId(c *gin.Context) {
+	records, err := a.clientService.GetRecordsBySubID(c.Param("subId"))
+	if err == nil && len(records) == 0 {
+		err = gorm.ErrRecordNotFound
+	}
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
+		return
+	}
+	results := make([]gin.H, 0, len(records))
+	for _, rec := range records {
+		payload, err := a.buildClientPayload(rec)
+		if err != nil {
+			jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
+			return
+		}
+		results = append(results, payload)
+	}
+	jsonObj(c, results, nil)
 }

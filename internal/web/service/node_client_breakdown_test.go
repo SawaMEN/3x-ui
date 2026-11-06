@@ -3,9 +3,9 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // The node-page client breakdown must classify by EMAIL, not by
@@ -48,7 +48,7 @@ func TestGetAll_ClientBreakdownMatchesByEmailNotStaleInboundId(t *testing.T) {
 
 	// Traffic rows carry a STALE inbound_id (999), unrelated to the node inbound.
 	const staleInboundID = 999
-	rows := []*xray.ClientTraffic{
+	rows := []*coremodel.ClientTraffic{
 		{InboundId: staleInboundID, Email: "active@x", Enable: true},
 		{InboundId: staleInboundID, Email: "disabled@x", Enable: false},
 		{InboundId: staleInboundID, Email: "depleted@x", Enable: true, Total: 100, Up: 60, Down: 60}, // exhausted

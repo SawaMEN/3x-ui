@@ -40,6 +40,22 @@ func TestAppendTelemtWebProxyConfig(t *testing.T) {
 	}
 }
 
+func TestRemoveTelemtWebUserPreservesOtherTables(t *testing.T) {
+	base := "[access.users]\nwebproxy = \"old-secret\"\nxui = \"user-secret\"\n\n[other.settings]\nwebproxy = \"keep-this-setting\"\n"
+	want := "[access.users]\nxui = \"user-secret\"\n\n[other.settings]\nwebproxy = \"keep-this-setting\"\n"
+	if got := removeTelemtWebUser(base); got != want {
+		t.Fatalf("removing Telemt WEB user modified unrelated settings:\n%s", got)
+	}
+}
+
+func TestRemoveTelemtWebManagedUsers(t *testing.T) {
+	base := "[access.users]\n\"mtweb_12_alice\" = \"old-secret\"\nwebproxy = \"legacy\"\nxui = \"keep\"\n\n[other]\n\"mtweb_12_alice\" = \"keep-setting\"\n"
+	want := "[access.users]\nxui = \"keep\"\n\n[other]\n\"mtweb_12_alice\" = \"keep-setting\"\n"
+	if got := removeTelemtWebUser(base); got != want {
+		t.Fatalf("stale credential or unrelated setting changed: %s", got)
+	}
+}
+
 func TestTelemtWebSubscriptionLocationsRouteImportedHiddifyPath(t *testing.T) {
 	locations := renderTelemtWebSubscriptionLocations([]HiddifyLegacySubscriptionAlias{
 		{Path: "BackupPath123"},

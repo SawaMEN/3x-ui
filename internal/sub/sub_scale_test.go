@@ -15,10 +15,10 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	xuilogger "github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const scaleTargetSubId = "scale-target-sub"
@@ -163,9 +163,9 @@ func seedScaleSubDataset(t *testing.T, n int) {
 	if err := tx.CreateInBatches(links, 1000).Error; err != nil {
 		t.Fatalf("seed client_inbounds: %v", err)
 	}
-	traffics := make([]xray.ClientTraffic, n)
+	traffics := make([]coremodel.ClientTraffic, n)
 	for i := range clients {
-		traffics[i] = xray.ClientTraffic{
+		traffics[i] = coremodel.ClientTraffic{
 			InboundId:  ib.Id,
 			Email:      clients[i].Email,
 			Enable:     true,

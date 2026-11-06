@@ -21,8 +21,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
@@ -53,6 +53,9 @@ type cachedSubTemplate struct {
 
 // SUBController handles HTTP requests for subscription links and JSON configurations.
 type SUBController struct {
+	liveFormats         bool
+	subFormatMode       string
+	subDefaultFormat    string
 	subTitle            string
 	subSupportUrl       string
 	subProfileMode      string
@@ -88,12 +91,17 @@ type SUBController struct {
 
 	subTemplateMu    sync.RWMutex
 	subTemplateCache map[string]*cachedSubTemplate
+
+	releaseSettingsCache func()
 }
 
 type subControllerConfig struct {
-	subPath      string
-	subJsonPath  string
-	subClashPath string
+	liveFormats      bool
+	subFormatMode    string
+	subDefaultFormat string
+	subPath          string
+	subJsonPath      string
+	subClashPath     string
 
 	subClashAutoDetect     bool
 	subClashUserAgentRegex string
@@ -115,6 +123,7 @@ type subControllerConfig struct {
 	subJsonObservatory    string
 	subClashEnableRouting bool
 	subClashRules         string
+	subClashRemoteDNS     bool
 
 	subTitle         string
 	subSupportURL    string
@@ -128,6 +137,13 @@ type subControllerConfig struct {
 
 	subIncyEnableRouting bool
 	subIncyRoutingRules  string
+}
+
+func WithSUBFormats(mode, defaultFormat string) SUBControllerOption {
+	return func(config *subControllerConfig) {
+		config.subFormatMode = mode
+		config.subDefaultFormat = defaultFormat
+	}
 }
 
 type SUBControllerOption func(*subControllerConfig)
@@ -262,13 +278,15 @@ func WithSUBHappConfig(value HappConfig) SUBControllerOption {
 
 func defaultSUBControllerConfig() subControllerConfig {
 	return subControllerConfig{
-		subPath:        "/sub/",
-		subJsonPath:    "/json/",
-		subClashPath:   "/clash/",
-		subEncrypt:     true,
-		remarkTemplate: service.DefaultRemarkTemplate,
-		updateInterval: "12",
-		subProfileMode: service.SubProfileModeNone,
+		subFormatMode:    "both",
+		subDefaultFormat: "auto",
+		subPath:          "/sub/",
+		subJsonPath:      "/json/",
+		subClashPath:     "/clash/",
+		subEncrypt:       true,
+		remarkTemplate:   service.DefaultRemarkTemplate,
+		updateInterval:   "12",
+		subProfileMode:   service.SubProfileModeNone,
 	}
 }
 
@@ -280,10 +298,14 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 	}
 
 	sub := NewSubService(config.remarkTemplate)
+	releaseSettingsCache := sub.enableSettingsCache()
 	subJsonSvc := NewSubJsonService(config.subJsonMux, config.subJsonRules, config.subJsonFinalMask, config.subJsonRoutingRules, sub)
 	subJsonSvc.SetObservatoryConfig(config.subJsonObservatory)
 	subJsonSvc.SetDnsConfig(config.subJsonDns)
 	a := &SUBController{
+		liveFormats:         config.liveFormats,
+		subFormatMode:       config.subFormatMode,
+		subDefaultFormat:    config.subDefaultFormat,
 		subTitle:            config.subTitle,
 		subSupportUrl:       config.subSupportURL,
 		subProfileMode:      config.subProfileMode,
@@ -313,9 +335,10 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 
 		subService:      sub,
 		subJsonService:  subJsonSvc,
-		subClashService: NewSubClashService(config.subClashEnableRouting, config.subClashRules, sub),
+		subClashService: NewSubClashService(config.subClashEnableRouting, config.subClashRules, sub, config.subClashRemoteDNS),
 
-		subTemplateCache: map[string]*cachedSubTemplate{},
+		subTemplateCache:     map[string]*cachedSubTemplate{},
+		releaseSettingsCache: releaseSettingsCache,
 	}
 	a.initRouter(g)
 	return a
@@ -324,18 +347,19 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 // initRouter registers HTTP routes for subscription links and JSON endpoints
 // on the provided router group.
 func (a *SUBController) initRouter(g *gin.RouterGroup) {
-	gLink := g.Group(a.subPath)
+	g.Use(a.loadSubscriptionFormats)
+	gLink := g.Group(a.subPath, setNoCacheHeaders)
 	gLink.GET(":subid", a.subs)
 	gLink.HEAD(":subid", a.subs)
 	gLink.GET(":subid/hwid-status", a.hwidStatus)
 	gLink.HEAD(":subid/hwid-status", a.hwidStatus)
 	if a.jsonEnabled {
-		gJson := g.Group(a.subJsonPath)
+		gJson := g.Group(a.subJsonPath, setNoCacheHeaders)
 		gJson.GET(":subid", a.subJsons)
 		gJson.HEAD(":subid", a.subJsons)
 	}
 	if a.clashEnabled {
-		gClash := g.Group(a.subClashPath)
+		gClash := g.Group(a.subClashPath, setNoCacheHeaders)
 		gClash.GET(":subid", a.subClashs)
 		gClash.HEAD(":subid", a.subClashs)
 		if sameSubscriptionPath(a.subClashPath, subMihomoPath) {
@@ -343,14 +367,14 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 		} else if owner := a.configuredSubscriptionPathOwner(subMihomoPath); owner != "" {
 			logger.Warningf("Mihomo subscription alias %q is unavailable because it conflicts with the configured %s path", subMihomoPath, owner)
 		} else {
-			gMihomo := g.Group(subMihomoPath)
+			gMihomo := g.Group(subMihomoPath, setNoCacheHeaders)
 			gMihomo.GET(":subid", a.subClashs)
 			gMihomo.HEAD(":subid", a.subClashs)
 		}
 		if owner := a.configuredSubscriptionPathOwner(subClashLegacyPath); owner != "" {
 			logger.Warningf("Legacy Clash subscription alias %q is unavailable because it conflicts with the configured %s path", subClashLegacyPath, owner)
 		} else {
-			gLegacy := g.Group(subClashLegacyPath)
+			gLegacy := g.Group(subClashLegacyPath, setNoCacheHeaders)
 			gLegacy.GET(":subid", a.subClashLegacy)
 			gLegacy.HEAD(":subid", a.subClashLegacy)
 		}
@@ -405,7 +429,6 @@ func (a *SUBController) maybeServeSubInfo(c *gin.Context) bool {
 	info := a.subPageContext(page)
 	delete(info, "links")
 	info["emails"] = dedupeEmails(page.Emails)
-	setNoCacheHeaders(c)
 	c.JSON(http.StatusOK, info)
 	return true
 }
@@ -435,6 +458,16 @@ func (a *SUBController) buildSubPageData(c *gin.Context) (PageData, bool) {
 	metadata := a.metadataForSubRequest(func() *SubService { return subReq }, subId, "")
 	page := subReq.BuildPageData(subId, hostHeader, traffic, lastOnline, subs, emails, subURL, subJsonURL, subClashURL, basePathStr, metadata.Title, metadata.SupportURL)
 	page.SubAnnounce = metadata.Announce
+	page.SubFormatMode = a.formatMode(c)
+	if a.formatAllowed(c, "xray") {
+		jsonURL := subJsonURL
+		if jsonURL == "" {
+			jsonURL = subURL
+		}
+		page.SubJsonUrl = appendSubscriptionFormat(jsonURL, "xray")
+	} else {
+		page.SubJsonUrl = ""
+	}
 	return page, true
 }
 
@@ -477,44 +510,90 @@ func (a *SUBController) subs(c *gin.Context) {
 		logSubscriptionRoute(userAgent, "info")
 		return
 	}
-	if a.maybeServeSubPage(c) {
-		logSubscriptionRoute(userAgent, "html")
-		return
-	}
-	// An explicit format selector on the main subscription URL must be honored
-	// before user-agent auto-detection. sing-box imports a remote profile and
-	// therefore needs the native JSON document instead of the raw link list.
-	if strings.EqualFold(c.Query("format"), "sing-box") {
+	// Explicit native formats must take precedence over both HTML Accept
+	// headers and app-specific User-Agent guessing. This also makes the links
+	// on the subscription page directly inspectable in a browser.
+	format := subscriptionFormat(c)
+	if format == "sing-box" || format == "hiddify" || format == "xray" {
 		if !a.enforceHwid(c) {
 			return
 		}
-		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", false, true) {
-			writeSubError(c, nil)
+		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), format != "xray") {
+			// External sidecars such as VetroffProxy cannot be represented
+			// as native JSON outbounds. Keep their separate raw URI links.
+			if !a.formatAllowed(c, "links") {
+				writeSubError(c, nil)
+			} else {
+				logSubscriptionRoute(userAgent, "native-fallback-raw")
+				a.serveRawSubscription(c)
+			}
+			return
 		}
 		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "sing-box-json")
+		logSubscriptionRoute(userAgent, format+"-json")
+		return
+	}
+	if format == "" && a.maybeServeSubPage(c) {
+		logSubscriptionRoute(userAgent, "html")
 		return
 	}
 	if !a.enforceHwid(c) {
 		return
 	}
-	if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasShadowTLSSubscription(c.Param("subid")) &&
-		a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
+	if format == "" {
+		format = a.defaultBodyFormat(c)
+		c.Set("subscriptionFormat", format)
+	}
+	if format == "xray" || format == "sing-box" {
+		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), format == "sing-box") {
+			if !a.formatAllowed(c, "links") {
+				writeSubError(c, nil)
+			} else {
+				logSubscriptionRoute(userAgent, "native-fallback-raw")
+				a.serveRawSubscription(c)
+			}
+			return
+		}
 		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "hiddify-shadowtls-sing-box")
 		return
 	}
-	if shouldAutoServeClash(a.subClashAutoDetect, a.clashEnabled, false, userAgent, a.clashUserAgent) && a.serveClashBody(c, false, false) {
-		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "clash")
+	if !a.formatAllowed(c, "links") {
+		c.Status(http.StatusNotFound)
 		return
 	}
-	if shouldAutoServeJson(a.jsonAutoDetect, a.jsonEnabled, false, userAgent, a.jsonUserAgent) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, false) {
-		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "json")
-		return
+	if format != "links" && format != "all" {
+		if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasHiddifyNativeSubscription(c.Param("subid")) &&
+			a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
+			a.recordSubscriptionFetch(c)
+			logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
+			return
+		}
+		// MASQUE endpoints and ShadowTLS detours require native JSON for sing-box clients.
+		if wantsNativeSingBox(userAgent) && a.hasNativeSingBoxSubscription(c.Param("subid")) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
+			a.recordSubscriptionFetch(c)
+			logSubscriptionRoute(userAgent, "native-sing-box")
+			return
+		}
+		if shouldAutoServeClash(a.subClashAutoDetect, a.clashEnabled, false, userAgent, a.clashUserAgent) && a.serveClashBody(c, false, false) {
+			a.recordSubscriptionFetch(c)
+			logSubscriptionRoute(userAgent, "clash")
+			return
+		}
+		if shouldAutoServeJson(a.jsonAutoDetect, a.jsonEnabled, false, userAgent, a.jsonUserAgent) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, false) {
+			a.recordSubscriptionFetch(c)
+			logSubscriptionRoute(userAgent, "json")
+			return
+		}
 	}
 	logSubscriptionRoute(userAgent, "raw")
+	a.serveRawSubscription(c)
+}
+
+// serveRawSubscription emits the lossless link format when a requested native
+// config cannot represent every protocol in a subscription. The caller already
+// checked the device limit and whether link output is permitted.
+func (a *SUBController) serveRawSubscription(c *gin.Context) {
+	userAgent := c.GetHeader("User-Agent")
 	subId := c.Param("subid")
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	subReq := a.subService.ForRequest(host)
@@ -530,10 +609,13 @@ func (a *SUBController) subs(c *gin.Context) {
 		metadata := a.metadataForSubRequest(func() *SubService { return subReq }, subId, builtinProfileURL(c, scheme, hostWithPort))
 		a.ApplyCommonHeaders(c, header, a.updateInterval, metadata.Title, metadata.SupportURL, metadata.ProfileURL, metadata.Announce, a.subEnableRouting, a.subRoutingRules, a.subHideSettings)
 
-		if a.subIncyEnableRouting && a.subIncyRoutingRules != "" {
+		// Incy's profile rides the raw body; other clients must not see that line (#6062).
+		if IsIncyClient(userAgent) && a.subIncyEnableRouting && a.subIncyRoutingRules != "" {
 			incyRules, _, err := resolveIncyRoutingSource(a.subIncyRoutingRules)
 			if err == nil && strings.TrimSpace(incyRules) != "" {
 				result += incyRules + "\n"
+				// INCY prioritizes the Routing header over its own body profile.
+				c.Writer.Header().Del("Routing")
 			}
 		}
 
@@ -546,17 +628,41 @@ func (a *SUBController) subs(c *gin.Context) {
 	}
 }
 
-func (a *SUBController) hasShadowTLSSubscription(subID string) bool {
-	inbounds, err := a.subService.getInboundsBySubId(subID)
-	if err != nil {
-		return false
-	}
-	for _, inbound := range inbounds {
-		if inbound.Protocol == "shadowtls" || model.ShadowTLSTransport(inbound.Settings) != nil {
+func wantsNativeSingBox(agent string) bool {
+	agent = strings.ToLower(agent)
+	for _, name := range []string{"sing-box", "singbox", "nekobox", "nekoray"} {
+		if strings.Contains(agent, name) {
 			return true
 		}
 	}
 	return false
+}
+
+func (a *SUBController) hasHiddifyNativeSubscription(subID string) bool {
+	req := a.subService.ForRequest("")
+	inbounds, err := req.getInboundsBySubId(subID)
+	if err != nil {
+		return false
+	}
+	for _, inbound := range inbounds {
+		if !hiddifyExtendedProtocol(inbound.Protocol) && inbound.Protocol != model.MASQUE && inbound.Protocol != model.WireGuard && !containsNativeTLSSubscription([]*model.Inbound{inbound}) && !usesXDriveTransport(inbound) {
+			continue
+		}
+		for _, client := range req.matchingClients(inbound, subID) {
+			if client.Enable {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (a *SUBController) hasNativeSingBoxSubscription(subID string) bool {
+	inbounds, err := a.subService.ForRequest("").getInboundsBySubId(subID)
+	if err != nil {
+		return false
+	}
+	return containsNativeTLSSubscription(inbounds) || containsSubscriptionProtocol(inbounds, model.MASQUE)
 }
 
 func (a *SUBController) recordSubscriptionFetch(c *gin.Context) {
@@ -648,6 +754,10 @@ func (a *SUBController) serveSubPage(c *gin.Context, basePath string, page PageD
 	}
 
 	subData := a.subPageContext(page)
+	appearance, err := a.settingService.GetSubscriptionAppearance()
+	if err == nil {
+		subData["appearance"] = appearance
+	}
 
 	// When an admin has configured a custom subscription theme, render it
 	// instead of the default SPA. We render into a buffer first so a template
@@ -663,7 +773,6 @@ func (a *SUBController) serveSubPage(c *gin.Context, basePath string, page PageD
 			if execErr := tmpl.Execute(&buf, subData); execErr != nil {
 				logger.Error("sub: custom template execution failed, using default page:", execErr)
 			} else {
-				setNoCacheHeaders(c)
 				c.Data(http.StatusOK, "text/html; charset=utf-8", buf.Bytes())
 				return
 			}
@@ -692,7 +801,6 @@ func (a *SUBController) serveSubPage(c *gin.Context, basePath string, page PageD
 		`window.__SUB_PAGE_DATA__=` + string(subDataJSON) + `;</script></head>`)
 	out := bytes.Replace(body, []byte("</head>"), inject, 1)
 
-	setNoCacheHeaders(c)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", out)
 }
 
@@ -725,6 +833,7 @@ func (a *SUBController) subPageContext(page PageData) map[string]any {
 		"totalByte":     page.TotalByte,
 		"subUrl":        page.SubUrl,
 		"subJsonUrl":    page.SubJsonUrl,
+		"subFormatMode": page.SubFormatMode,
 		"subClashUrl":   page.SubClashUrl,
 		"subTitle":      page.SubTitle,
 		"subSupportUrl": page.SubSupportUrl,
@@ -737,38 +846,15 @@ func (a *SUBController) subPageContext(page PageData) map[string]any {
 }
 
 func (a *SUBController) enforceHwid(c *gin.Context) bool {
-	result, err := a.clientService.EnforceHwidForSubID(c.Param("subid"), service.HwidRequest{
-		Hwid:        c.GetHeader("X-HWID"),
-		UserAgent:   c.GetHeader("User-Agent"),
-		DeviceOS:    c.GetHeader("X-Device-OS"),
-		OsVersion:   c.GetHeader("X-Ver-OS"),
-		DeviceModel: c.GetHeader("X-Device-Model"),
-	})
+	allowed, err := a.clientService.CheckSubscriptionDevice(c.Writer, c.Request, c.Param("subid"))
 	if err != nil {
 		writeSubError(c, err)
 		return false
 	}
-	applyHwidHeaders(c, result)
-	if !result.Allowed {
+	if !allowed {
 		c.Status(http.StatusNotFound)
-		return false
 	}
-	return true
-}
-
-func applyHwidHeaders(c *gin.Context, result service.HwidGateResult) {
-	if result.Active {
-		c.Header("X-Hwid-Active", "true")
-	}
-	if result.NotSupported {
-		c.Header("X-Hwid-Not-Supported", "true")
-	}
-	if result.LimitReached {
-		c.Header("X-Hwid-Limit", "true")
-	}
-	if result.MaxDevicesReached {
-		c.Header("X-Hwid-Max-Devices-Reached", "true")
-	}
+	return allowed
 }
 
 // hwidStatus serves read-only device-slot counters for a subscription. It
@@ -779,12 +865,11 @@ func (a *SUBController) hwidStatus(c *gin.Context) {
 		writeSubError(c, err)
 		return
 	}
-	setNoCacheHeaders(c)
 	c.JSON(http.StatusOK, status)
 }
 
-// setNoCacheHeaders marks a subscription page response as non-cacheable so VPN
-// clients and browsers always fetch fresh traffic/expiry data.
+// setNoCacheHeaders runs on every subscription route group: each one serves a per-subscriber body
+// with live traffic, expiry and routing headers that no cache may keep.
 func setNoCacheHeaders(c *gin.Context) {
 	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 	c.Header("Pragma", "no-cache")
@@ -845,7 +930,12 @@ func (a *SUBController) loadSubTemplate(themeDir string) (*template.Template, er
 // subJsons handles HTTP requests for JSON subscription configurations. The
 // device limit is enforced on every body route, ?view=raw included (#GHSA-7ww3).
 func (a *SUBController) subJsons(c *gin.Context) {
-	if strings.EqualFold(c.Query("view"), "raw") {
+	format := subscriptionFormat(c)
+	if format == "" && a.formatMode(c) != "both" && a.formatMode(c) != "" {
+		format = a.defaultBodyFormat(c)
+		c.Set("subscriptionFormat", format)
+	}
+	if format == "xray" || format == "sing-box" || format == "hiddify" || strings.EqualFold(c.Query("view"), "raw") {
 		if !a.enforceHwid(c) {
 			return
 		}
@@ -876,14 +966,22 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	var jsonSub, header string
 	var err error
-	if forceSingBox || strings.EqualFold(c.Query("format"), "sing-box") {
-		if strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify") {
-			jsonSub, header, err = a.subJsonService.GetHiddifySingBoxJson(subId, host)
-		} else {
-			jsonSub, header, err = a.subJsonService.GetSingBoxJson(subId, host, alwaysReturnArray)
-		}
+	format := subscriptionFormat(c)
+	isHiddify := strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify")
+	// Hiddify needs native sing-box JSON for AnyTLS and ShadowTLS even if the
+	// user imported the panel's /json/ subscription path. Plain Xray JSON
+	// cannot encode either protocol. An explicit format also works when the
+	// importing app does not identify itself in User-Agent.
+	native := forceSingBox || format == "sing-box" || format == "hiddify" || (format != "xray" && (isHiddify && a.hasHiddifyNativeSubscription(subId) || wantsNativeSingBox(c.Request.UserAgent()) && a.hasNativeSingBoxSubscription(subId)))
+	if native && !a.formatAllowed(c, "sing-box") || !native && !a.formatAllowed(c, "xray") {
+		return false
+	}
+	if format == "hiddify" || (isHiddify && native && format != "xray") {
+		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, false, true, format == "hiddify" || format == "sing-box")
+	} else if native {
+		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, alwaysReturnArray, false, format == "sing-box")
 	} else {
-		jsonSub, header, err = a.subJsonService.GetJson(subId, host, alwaysReturnArray)
+		jsonSub, header, err = a.subJsonService.getJson(subId, host, alwaysReturnArray, format == "xray")
 	}
 	if err != nil {
 		if errors.Is(err, errSubscriptionFormatUnsupported) {
@@ -1019,6 +1117,12 @@ func (a *SUBController) ApplyCommonHeaders(
 		c.Writer.Header().Set("Announce", "base64:"+base64.StdEncoding.EncodeToString([]byte(profileAnnounce)))
 	}
 
+	// The Happ tab is Happ-only, so INCY reads it as blank and gets the shared
+	// JSON profile instead; INCY takes a routing link of any scheme (#6062).
+	incyClient := c.Request != nil && IsIncyClient(c.GetHeader("User-Agent"))
+	if incyClient {
+		profileEnableRouting, profileRoutingRules = false, ""
+	}
 	rules, remote, routingErr := resolveRoutingSource(remoteRoutingHapp, profileRoutingRules)
 	if strings.TrimSpace(profileRoutingRules) == "" {
 		// Happ/INCY fetch the geo files the baked rules reference through this
@@ -1043,4 +1147,13 @@ func (a *SUBController) ApplyCommonHeaders(
 	}
 
 	ApplyHappHeaders(c, a.happConfig, happManaged)
+}
+
+func WithSUBClashRemoteDNS(value bool) SUBControllerOption {
+	return func(config *subControllerConfig) { config.subClashRemoteDNS = value }
+}
+
+// Close unhooks the controller's settings cache from panel mutations.
+func (a *SUBController) Close() {
+	a.releaseSettingsCache()
 }

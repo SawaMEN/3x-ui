@@ -33,11 +33,16 @@ type FirewallManualRule = {
   label?: string;
 };
 
+type FirewallExternalRule = { id: string; label: string };
+
 type FirewallStatus = {
+  externalRules?: FirewallExternalRule[];
+  inspectionError?: string;
   supported: boolean;
   backend: string;
   enabled: boolean;
   autoSync: boolean;
+  syncInterval?: number;
   pingEnabled: boolean;
   canInstallUfw?: boolean;
   rules: FirewallRule[];
@@ -75,6 +80,7 @@ function useFirewallText() {
             enabled: 'Файрволл включён',
             disabled: 'Файрволл выключен',
             auto: 'Автоматически открывать и закрывать порты подключений',
+            interval: 'Период проверки правил, сек',
             autoHint:
               'При создании, изменении, включении или удалении inbound правила синхронизируются автоматически.',
             ping: 'Разрешить ping (ICMP)',
@@ -82,8 +88,10 @@ function useFirewallText() {
               'Отвечать на входящие ICMP Echo Request по IPv4 и IPv6. Служебный ICMP остаётся доступен. Настройка применяется, когда файрволл включён.',
             safety:
               'Порт панели, текущий внешний порт панели, порт подписок и SSH защищаются автоматически, чтобы не потерять доступ к серверу.',
-            sync: 'Синхронизировать сейчас',
             rules: 'Активные и ожидаемые правила',
+            unknown: 'НЕИЗВЕСТНО',
+            deleteExternal: 'Удалить это существующее правило файрволла?',
+            inspectFailed: 'Не удалось прочитать существующие правила',
             manual: 'Ручные правила',
             add: 'Добавить',
             port: 'Порт',
@@ -118,6 +126,7 @@ function useFirewallText() {
             enabled: 'Firewall enabled',
             disabled: 'Firewall disabled',
             auto: 'Automatically open and close inbound ports',
+            interval: 'Rule check interval, seconds',
             autoHint:
               'Rules are synchronized after inbound create, update, enable, disable, and delete.',
             ping: 'Allow ping (ICMP)',
@@ -125,8 +134,10 @@ function useFirewallText() {
               'Respond to incoming ICMP Echo Requests over IPv4 and IPv6. Control ICMP remains available. This setting applies while the firewall is enabled.',
             safety:
               'Panel, current external panel port, subscription port, and SSH are protected automatically to prevent lockout.',
-            sync: 'Sync now',
             rules: 'Active and expected rules',
+            unknown: 'UNKNOWN',
+            deleteExternal: 'Delete this existing firewall rule?',
+            inspectFailed: 'Could not inspect existing rules',
             manual: 'Manual rules',
             add: 'Add',
             port: 'Port',
@@ -156,17 +167,22 @@ function useFirewallText() {
 export function FirewallManager() {
   const text = useFirewallText();
   const [status, setStatus] = useState<FirewallStatus | null>(null);
-  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [action, setAction] = useState('');
   const [port, setPort] = useState<number | null>(null);
   const [protocol, setProtocol] = useState('both');
   const [label, setLabel] = useState('');
+  const [interval, setInterval] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    void (async () => {
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      if (document.hidden) {
+        timer = setTimeout(() => void refresh(), 15000);
+        return;
+      }
       try {
         const msg = await HttpUtil.get<FirewallStatus>('/panel/api/server/firewall/status');
         if (cancelled) return;
@@ -179,12 +195,14 @@ export function FirewallManager() {
       } catch {
         if (!cancelled) setLoadError(true);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) timer = setTimeout(() => void refresh(), 15000);
       }
-    })();
+    };
+    void refresh();
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, []);
 
@@ -200,6 +218,25 @@ export function FirewallManager() {
     } finally {
       setAction('');
     }
+  }
+
+  async function saveInterval() {
+    if (
+      !status ||
+      interval === null ||
+      interval < 5 ||
+      interval > 3600 ||
+      interval === (status.syncInterval ?? 60)
+    )
+      return;
+    if (
+      await post(
+        '/panel/api/server/firewall/auto-sync',
+        { enabled: status.autoSync, syncInterval: interval },
+        'interval',
+      )
+    )
+      setInterval(null);
   }
 
   const sourceLabel = (rule: FirewallRule) => {
@@ -307,7 +344,7 @@ export function FirewallManager() {
         title={canInstallUfw ? text.noFirewall : status.message || text.unsupported}
         description={
           canInstallUfw ? (
-            <Space direction="vertical" size="small">
+            <Space orientation="vertical" size="small">
               <Typography.Text>{text.installUfwHint}</Typography.Text>
               <Button
                 type="primary"
@@ -328,7 +365,7 @@ export function FirewallManager() {
   }
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       <Space size="large" wrap>
         <Space>
           <Switch
@@ -341,12 +378,6 @@ export function FirewallManager() {
           <Typography.Text strong>{status.enabled ? text.enabled : text.disabled}</Typography.Text>
         </Space>
         <Tag>{status.backend}</Tag>
-        <Button
-          loading={action === 'sync' || loading}
-          onClick={() => void post('/panel/api/server/firewall/sync', undefined, 'sync')}
-        >
-          {text.sync}
-        </Button>
       </Space>
 
       <Alert type="info" showIcon title={text.safety} />
@@ -364,6 +395,21 @@ export function FirewallManager() {
             <Typography.Text strong>{text.auto}</Typography.Text>
             <br />
             <Typography.Text type="secondary">{text.autoHint}</Typography.Text>
+            <br />
+            <Space>
+              <Typography.Text>{text.interval}</Typography.Text>
+              <InputNumber
+                aria-label={text.interval}
+                min={5}
+                max={3600}
+                precision={0}
+                value={interval ?? status.syncInterval ?? 60}
+                disabled={action === 'interval'}
+                onChange={setInterval}
+                onBlur={() => void saveInterval()}
+                onPressEnter={() => void saveInterval()}
+              />
+            </Space>
           </div>
         </Space>
       </div>
@@ -395,6 +441,48 @@ export function FirewallManager() {
         pagination={false}
         scroll={{ x: 620 }}
       />
+
+      {status.inspectionError && (
+        <Alert type="warning" title={text.inspectFailed} description={status.inspectionError} />
+      )}
+      {Boolean(status.externalRules?.length) && (
+        <Table<FirewallExternalRule>
+          size="small"
+          rowKey="id"
+          dataSource={status.externalRules}
+          pagination={false}
+          showHeader={false}
+          columns={[
+            { key: 'state', width: 140, render: () => <Tag color="warning">{text.unknown}</Tag> },
+            {
+              dataIndex: 'label',
+              render: (value: string) => (
+                <Typography.Text style={{ overflowWrap: 'anywhere' }}>{value}</Typography.Text>
+              ),
+            },
+            {
+              key: 'delete',
+              width: 100,
+              render: (_: unknown, rule: FirewallExternalRule) => (
+                <Popconfirm
+                  title={text.deleteExternal}
+                  onConfirm={() =>
+                    void post(
+                      '/panel/api/server/firewall/rules/delete-external',
+                      { id: rule.id },
+                      `external-${rule.id}`,
+                    )
+                  }
+                >
+                  <Button danger size="small" loading={action === `external-${rule.id}`}>
+                    {text.remove}
+                  </Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
+      )}
 
       <Divider titlePlacement="start">{text.manual}</Divider>
       <Space wrap>
@@ -452,7 +540,6 @@ export function FirewallManager() {
         pagination={false}
         locale={{ emptyText: text.noManual }}
       />
-      {loading ? <Typography.Text type="secondary">{text.loading}</Typography.Text> : null}
     </Space>
   );
 }

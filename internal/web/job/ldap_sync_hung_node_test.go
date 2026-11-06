@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // ldapHungNodeInbound seeds an online node whose client writes hang until the gate
@@ -74,7 +74,7 @@ func ldapHungNodeInbound(t *testing.T, emails []string) (*resetGate, *model.Inbo
 		if err := db.Create(&model.ClientInbound{ClientId: rec.Id, InboundId: ib.Id}).Error; err != nil {
 			t.Fatalf("link client: %v", err)
 		}
-		if err := db.Create(&xray.ClientTraffic{InboundId: ib.Id, Email: c.Email, Enable: true}).Error; err != nil {
+		if err := db.Create(&coremodel.ClientTraffic{InboundId: ib.Id, Email: c.Email, Enable: true}).Error; err != nil {
 			t.Fatalf("create client traffic: %v", err)
 		}
 	}

@@ -28,20 +28,46 @@ function normalizeOutboundTestUrl(url: string) {
 
 // The core lowercases a protocol id and a transport name before resolving
 // either, so "WireGuard"/"KCP" still build a UDP handler a TCP dial misreports.
+// Groups also need an HTTP probe: they do not have one TCP server endpoint.
 export function isUdpOutbound(outbound: unknown): boolean {
   const o = outbound as
-    | { protocol?: unknown; streamSettings?: { network?: unknown } }
+    | {
+        protocol?: unknown;
+        settings?: { detour?: unknown; transport?: { type?: unknown } };
+        streamSettings?: { network?: unknown; sockopt?: { dialerProxy?: unknown } };
+      }
     | null
     | undefined;
+  const protocol =
+    typeof o?.protocol === 'string'
+      ? o.protocol
+          .trim()
+          .toLowerCase()
+          .replace(/^singbox:/, '')
+      : '';
+  const detour = o?.settings?.detour;
+  const dialerProxy = o?.streamSettings?.sockopt?.dialerProxy;
+  const nativeTransport = o?.settings?.transport?.type;
   const rawNetwork = o?.streamSettings?.network;
   const network = typeof rawNetwork === 'string' ? rawNetwork.toLowerCase() : '';
   return (
-    isOutboundProtocol(o, 'wireguard') ||
-    isOutboundProtocol(o, 'hysteria') ||
-    isOutboundProtocol(o, 'amneziawg') ||
+    (typeof detour === 'string' && detour.trim() !== '') ||
+    (typeof dialerProxy === 'string' && dialerProxy.trim() !== '') ||
+    (typeof nativeTransport === 'string' && nativeTransport.toLowerCase() === 'quic') ||
+    [
+      'wireguard',
+      'amneziawg',
+      'hysteria',
+      'hysteria2',
+      'tuic',
+      'selector',
+      'urltest',
+      'mieru',
+    ].includes(protocol) ||
     network === 'hysteria' ||
     network === 'kcp' ||
-    // The core resolves "kcp" and "mkcp" to the same mKCP transport.
+    // Legacy UDP transports must reach core validation rather than report
+    // success from a bare TCP connection.
     network === 'mkcp' ||
     network === 'quic'
   );
@@ -96,7 +122,7 @@ export interface UseXraySettingResult {
     mode?: string,
   ) => Promise<OutboundTestResult | null>;
   testAllOutbounds: (mode?: string) => Promise<void>;
-  saveAll: () => Promise<void>;
+  saveAll: (next?: XraySettingsValue) => Promise<boolean>;
   resetToDefault: () => Promise<void>;
 }
 
@@ -251,8 +277,8 @@ export function useXraySetting(): UseXraySettingResult {
   }, [queryClient]);
 
   const saveMut = useMutation({
-    mutationFn: async () => {
-      const sentXraySetting = xraySettingRef.current;
+    mutationFn: async (next?: XraySettingsValue) => {
+      const sentXraySetting = next ? JSON.stringify(next, null, 2) : xraySettingRef.current;
       const sentTestUrl = normalizeOutboundTestUrl(outboundTestUrlRef.current);
       const msg = await HttpUtil.post('/panel/api/xray/update', {
         xraySetting: sentXraySetting,
@@ -288,9 +314,15 @@ export function useXraySetting(): UseXraySettingResult {
     },
   });
 
-  const saveAll = useCallback(async () => {
-    await saveMut.mutateAsync();
-  }, [saveMut]);
+  const saveAll = useCallback(
+    async (next?: XraySettingsValue) => {
+      const { msg } = await saveMut.mutateAsync(next);
+      if (!msg?.success) throw new Error(msg?.msg || 'Не удалось сохранить настройки Xray');
+      if (next) setTemplateSettings(next);
+      return true;
+    },
+    [saveMut, setTemplateSettings],
+  );
   const resetOutboundsTraffic = useCallback(
     async (tag: string) => {
       await resetTrafficMut.mutateAsync(tag);

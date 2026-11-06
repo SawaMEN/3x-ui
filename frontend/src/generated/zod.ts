@@ -3,9 +3,6 @@ import { z } from 'zod';
 export const GeoKindSchema = z.string();
 export type GeoKind = z.infer<typeof GeoKindSchema>;
 
-export const OnlineAPISupportSchema = z.number().int();
-export type OnlineAPISupport = z.infer<typeof OnlineAPISupportSchema>;
-
 export const ProcessStateSchema = z.string();
 export type ProcessState = z.infer<typeof ProcessStateSchema>;
 
@@ -14,6 +11,18 @@ export type Protocol = z.infer<typeof ProtocolSchema>;
 
 export const VKTurnProxyForwardTypeSchema = z.string();
 export type VKTurnProxyForwardType = z.infer<typeof VKTurnProxyForwardTypeSchema>;
+
+export const clientResetPolicySchema = z.number().int();
+export type clientResetPolicy = z.infer<typeof clientResetPolicySchema>;
+
+export const nearbySNIProbeSchema = z.unknown();
+export type nearbySNIProbe = z.infer<typeof nearbySNIProbeSchema>;
+
+export const sniProgressSchema = z.unknown();
+export type sniProgress = z.infer<typeof sniProgressSchema>;
+
+export const sniScanFuncSchema = z.unknown();
+export type sniScanFunc = z.infer<typeof sniScanFuncSchema>;
 
 export const staticEgressResolverSchema = z.string();
 export type staticEgressResolver = z.infer<typeof staticEgressResolverSchema>;
@@ -24,19 +33,22 @@ export type trafficLocalApplyAction = z.infer<typeof trafficLocalApplyActionSche
 export const transportBitsSchema = z.number().int();
 export type transportBits = z.infer<typeof transportBitsSchema>;
 
+export const AWGClientOptionsSchema = z.object({
+  i1: z.string().nullable().optional(),
+  i2: z.string().nullable().optional(),
+  i3: z.string().nullable().optional(),
+  i4: z.string().nullable().optional(),
+  i5: z.string().nullable().optional(),
+  jc: z.number().int().nullable().optional(),
+  jmax: z.number().int().nullable().optional(),
+  jmin: z.number().int().nullable().optional(),
+  mtu: z.number().int().nullable().optional(),
+});
+export type AWGClientOptions = z.infer<typeof AWGClientOptionsSchema>;
+
 export const AllSettingSchema = z.object({
   coreType: z.string(),
   datepicker: z.string(),
-  discordAdminIds: z.string(),
-  discordBotBackup: z.boolean(),
-  discordBotEnable: z.boolean(),
-  discordBotToken: z.string(),
-  discordChannelId: z.string(),
-  discordCpu: z.number().int().min(0).max(100),
-  discordEnabledEvents: z.string(),
-  discordLang: z.string(),
-  discordMemory: z.number().int().min(0).max(100),
-  discordRunTime: z.string(),
   expireDiff: z.number().int().min(0),
   externalTrafficInformEnable: z.boolean(),
   externalTrafficInformURI: z.string(),
@@ -63,12 +75,15 @@ export const AllSettingSchema = z.object({
   ldapUserAttr: z.string(),
   ldapUserFilter: z.string(),
   ldapVlessField: z.string(),
+  nodeDownThreshold: z.number().int().min(1).max(100),
   outboundDownThreshold: z.number().int().min(1).max(100),
   pageSize: z.number().int().min(0).max(1000),
   panelOutbound: z.string(),
   realityScanCandidates: z.string(),
   remarkTemplate: z.string(),
   restartXrayOnClientDisable: z.boolean(),
+  rootRedirectEnable: z.boolean(),
+  rootRedirectURL: z.string(),
   sessionMaxAge: z.number().int().min(1).max(525600),
   smtpCpu: z.number().int().min(0).max(100),
   smtpEnable: z.boolean(),
@@ -82,21 +97,32 @@ export const AllSettingSchema = z.object({
   smtpPort: z.number().int().min(1).max(65535),
   smtpTo: z.string(),
   smtpUsername: z.string(),
+  subAllowedDomains: z.string(),
   subAnnounce: z.string(),
+  subAppearanceAccent: z.string(),
+  subAppearanceDescription: z.string(),
+  subAppearanceEnable: z.boolean(),
+  subAppearanceLogoURL: z.string(),
+  subAppearanceTheme: z.string(),
+  subAppearanceTitle: z.string(),
+  subCDNEnable: z.boolean(),
   subCalendarExpireInclusive: z.boolean(),
   subCertFile: z.string(),
   subClashAutoDetect: z.boolean(),
   subClashEnable: z.boolean(),
   subClashEnableRouting: z.boolean(),
   subClashPath: z.string(),
+  subClashRemoteDNS: z.boolean(),
   subClashRules: z.string(),
   subClashURI: z.string(),
   subClashUserAgentRegex: z.string(),
+  subDefaultFormat: z.string(),
   subDomain: z.string(),
   subEnable: z.boolean(),
   subEnableRouting: z.boolean(),
   subEncrypt: z.boolean(),
   subExpiredTemplate: z.string(),
+  subFormatMode: z.string(),
   subHappAlwaysHwid: z.boolean(),
   subHappAutoConnect: z.boolean(),
   subHappAutoConnectType: z.string(),
@@ -121,6 +147,7 @@ export const AllSettingSchema = z.object({
   subHappTunMode: z.string(),
   subHappTunType: z.string(),
   subHideSettings: z.boolean(),
+  subHostSortMode: z.string(),
   subIncyEnableRouting: z.boolean(),
   subIncyRoutingRules: z.string(),
   subInfoNodeEnable: z.boolean(),
@@ -142,9 +169,14 @@ export const AllSettingSchema = z.object({
   subPort: z.number().int().min(1).max(65535),
   subProfileMode: z.string(),
   subProfileUrl: z.string(),
+  subPublicURL: z.string(),
+  subRestrictDomains: z.boolean(),
   subRoutingRules: z.string(),
   subShowIdentityOnAllLinks: z.boolean(),
   subSupportUrl: z.string(),
+  subTelegramLocalEnable: z.boolean(),
+  subTelegramRemoteEnable: z.boolean(),
+  subTelegramWebEnable: z.boolean(),
   subThemeDir: z.string(),
   subTitle: z.string(),
   subTrafficDepletedTemplate: z.string(),
@@ -179,22 +211,11 @@ export type AllSetting = z.infer<typeof AllSettingSchema>;
 export const AllSettingViewSchema = z.object({
   coreType: z.string(),
   datepicker: z.string(),
-  discordAdminIds: z.string(),
-  discordBotBackup: z.boolean(),
-  discordBotEnable: z.boolean(),
-  discordBotToken: z.string(),
-  discordChannelId: z.string(),
-  discordCpu: z.number().int().min(0).max(100),
-  discordEnabledEvents: z.string(),
-  discordLang: z.string(),
-  discordMemory: z.number().int().min(0).max(100),
-  discordRunTime: z.string(),
   expireDiff: z.number().int().min(0),
   externalTrafficInformEnable: z.boolean(),
   externalTrafficInformURI: z.string(),
   happLinkEnable: z.boolean(),
   hasApiToken: z.boolean(),
-  hasDiscordBotToken: z.boolean(),
   hasLdapPassword: z.boolean(),
   hasNordSecret: z.boolean(),
   hasSmtpPassword: z.boolean(),
@@ -223,12 +244,15 @@ export const AllSettingViewSchema = z.object({
   ldapUserAttr: z.string(),
   ldapUserFilter: z.string(),
   ldapVlessField: z.string(),
+  nodeDownThreshold: z.number().int().min(1).max(100),
   outboundDownThreshold: z.number().int().min(1).max(100),
   pageSize: z.number().int().min(0).max(1000),
   panelOutbound: z.string(),
   realityScanCandidates: z.string(),
   remarkTemplate: z.string(),
   restartXrayOnClientDisable: z.boolean(),
+  rootRedirectEnable: z.boolean(),
+  rootRedirectURL: z.string(),
   sessionMaxAge: z.number().int().min(1).max(525600),
   smtpCpu: z.number().int().min(0).max(100),
   smtpEnable: z.boolean(),
@@ -242,21 +266,32 @@ export const AllSettingViewSchema = z.object({
   smtpPort: z.number().int().min(1).max(65535),
   smtpTo: z.string(),
   smtpUsername: z.string(),
+  subAllowedDomains: z.string(),
   subAnnounce: z.string(),
+  subAppearanceAccent: z.string(),
+  subAppearanceDescription: z.string(),
+  subAppearanceEnable: z.boolean(),
+  subAppearanceLogoURL: z.string(),
+  subAppearanceTheme: z.string(),
+  subAppearanceTitle: z.string(),
+  subCDNEnable: z.boolean(),
   subCalendarExpireInclusive: z.boolean(),
   subCertFile: z.string(),
   subClashAutoDetect: z.boolean(),
   subClashEnable: z.boolean(),
   subClashEnableRouting: z.boolean(),
   subClashPath: z.string(),
+  subClashRemoteDNS: z.boolean(),
   subClashRules: z.string(),
   subClashURI: z.string(),
   subClashUserAgentRegex: z.string(),
+  subDefaultFormat: z.string(),
   subDomain: z.string(),
   subEnable: z.boolean(),
   subEnableRouting: z.boolean(),
   subEncrypt: z.boolean(),
   subExpiredTemplate: z.string(),
+  subFormatMode: z.string(),
   subHappAlwaysHwid: z.boolean(),
   subHappAutoConnect: z.boolean(),
   subHappAutoConnectType: z.string(),
@@ -281,6 +316,7 @@ export const AllSettingViewSchema = z.object({
   subHappTunMode: z.string(),
   subHappTunType: z.string(),
   subHideSettings: z.boolean(),
+  subHostSortMode: z.string(),
   subIncyEnableRouting: z.boolean(),
   subIncyRoutingRules: z.string(),
   subInfoNodeEnable: z.boolean(),
@@ -302,9 +338,14 @@ export const AllSettingViewSchema = z.object({
   subPort: z.number().int().min(1).max(65535),
   subProfileMode: z.string(),
   subProfileUrl: z.string(),
+  subPublicURL: z.string(),
+  subRestrictDomains: z.boolean(),
   subRoutingRules: z.string(),
   subShowIdentityOnAllLinks: z.boolean(),
   subSupportUrl: z.string(),
+  subTelegramLocalEnable: z.boolean(),
+  subTelegramRemoteEnable: z.boolean(),
+  subTelegramWebEnable: z.boolean(),
   subThemeDir: z.string(),
   subTitle: z.string(),
   subTrafficDepletedTemplate: z.string(),
@@ -365,12 +406,27 @@ export const ApiTokenViewSchema = z.object({
 });
 export type ApiTokenView = z.infer<typeof ApiTokenViewSchema>;
 
+export const CapabilitiesSchema = z.object({
+  clashApi: z.boolean(),
+  connectionStats: z.boolean(),
+  geoIp: z.boolean(),
+  geoSite: z.boolean(),
+  hotInboundReload: z.boolean(),
+  outboundDelayProbe: z.boolean(),
+  ruleSets: z.boolean(),
+  shadowTls: z.boolean(),
+});
+export type Capabilities = z.infer<typeof CapabilitiesSchema>;
+
 export const ClientSchema = z.object({
   adTag: z.string().optional(),
   allowedIPs: z.array(z.string()).optional(),
   allowedIPsByInbound: z.record(z.number().int(), z.array(z.string())).optional(),
   auth: z.string().optional(),
+  awgClientOptions: z.lazy(() => AWGClientOptionsSchema).nullable().optional(),
+  clientHostRuleIds: z.array(z.number().int()).optional(),
   comment: z.string(),
+  connectionNameMode: z.string().nullable().optional(),
   created_at: z.number().int().optional(),
   email: z.string(),
   enable: z.boolean(),
@@ -379,7 +435,7 @@ export const ClientSchema = z.object({
   forwardedPorts: z.string().optional(),
   group: z.string().optional(),
   id: z.string().optional(),
-  keepAlive: z.number().int().nullable().optional(),
+  keepAlive: z.union([z.number().int(), z.string()]).optional(),
   limitIp: z.number().int(),
   password: z.string().optional(),
   preSharedKey: z.string().optional(),
@@ -391,6 +447,7 @@ export const ClientSchema = z.object({
   reverse: z.lazy(() => ClientReverseSchema).nullable().optional(),
   secret: z.string().optional(),
   security: z.string(),
+  speedLimit: z.lazy(() => ClientSpeedLimitSchema).nullable().optional(),
   subId: z.string(),
   sudokuPrivateKey: z.string().optional(),
   tgId: z.number().int(),
@@ -424,7 +481,10 @@ export const ClientRecordSchema = z.object({
   adTag: z.string(),
   allowedIPs: z.string(),
   auth: z.string(),
+  awgClientOptions: z.lazy(() => AWGClientOptionsSchema).nullable().optional(),
+  clientHostRuleIds: z.array(z.number().int()).optional(),
   comment: z.string(),
+  connectionNameMode: z.string().nullable().optional(),
   createdAt: z.number().int(),
   email: z.string(),
   enable: z.boolean(),
@@ -434,7 +494,7 @@ export const ClientRecordSchema = z.object({
   group: z.string(),
   hiddifySubURI: z.string().optional(),
   id: z.number().int(),
-  keepAlive: z.number().int(),
+  keepAlive: z.union([z.number().int(), z.string()]),
   limitHwid: z.number().int(),
   limitIp: z.number().int(),
   password: z.string(),
@@ -447,6 +507,7 @@ export const ClientRecordSchema = z.object({
   reverse: z.unknown(),
   secret: z.string(),
   security: z.string(),
+  speedLimit: z.lazy(() => ClientSpeedLimitSchema).nullable().optional(),
   subId: z.string(),
   tgId: z.number().int(),
   totalGB: z.number().int(),
@@ -464,6 +525,7 @@ export type ClientReverse = z.infer<typeof ClientReverseSchema>;
 
 export const ClientSlimSchema = z.object({
   comment: z.string().optional(),
+  connectionNameMode: z.string().nullable().optional(),
   createdAt: z.number().int(),
   email: z.string(),
   enable: z.boolean(),
@@ -475,12 +537,20 @@ export const ClientSlimSchema = z.object({
   reset: z.number().int(),
   resetDay: z.number().int(),
   resetMax: z.number().int(),
+  speedLimit: z.lazy(() => ClientSpeedLimitSchema).nullable().optional(),
   subId: z.string(),
   totalGB: z.number().int(),
   traffic: z.lazy(() => ClientTrafficSchema).nullable().optional(),
   updatedAt: z.number().int(),
 });
 export type ClientSlim = z.infer<typeof ClientSlimSchema>;
+
+export const ClientSpeedLimitSchema = z.object({
+  downloadMbps: z.number().int(),
+  enabled: z.boolean(),
+  uploadMbps: z.number().int(),
+});
+export type ClientSpeedLimit = z.infer<typeof ClientSpeedLimitSchema>;
 
 export const ClientTrafficSchema = z.object({
   down: z.number().int(),
@@ -515,6 +585,68 @@ export const ClientsSummarySchema = z.object({
   total: z.number().int(),
 });
 export type ClientsSummary = z.infer<typeof ClientsSummarySchema>;
+
+export const DomainFrontCertificateSchema = z.object({
+  autoRenew: z.boolean(),
+  certFile: z.string(),
+  daysLeft: z.number().int(),
+  error: z.string(),
+  expiresAt: z.number().int(),
+  issuer: z.string(),
+  mode: z.string(),
+  name: z.string(),
+  renewal: z.string(),
+  source: z.string(),
+  state: z.string(),
+});
+export type DomainFrontCertificate = z.infer<typeof DomainFrontCertificateSchema>;
+
+export const DomainFrontCheckSchema = z.object({
+  addresses: z.array(z.string()),
+  checkedAt: z.number().int(),
+  daysLeft: z.number().int(),
+  error: z.string(),
+  expiresAt: z.number().int(),
+  issuer: z.string(),
+  name: z.string(),
+});
+export type DomainFrontCheck = z.infer<typeof DomainFrontCheckSchema>;
+
+export const DomainFrontConfigSchema = z.object({
+  acceptTerms: z.boolean(),
+  domains: z.array(z.lazy(() => DomainFrontDomainSchema)),
+  email: z.string(),
+  enabled: z.boolean(),
+  httpPort: z.number().int(),
+  httpsPort: z.number().int(),
+  listen: z.string(),
+  publicPort: z.number().int(),
+  staging: z.boolean(),
+  subscriptionDomain: z.string(),
+});
+export type DomainFrontConfig = z.infer<typeof DomainFrontConfigSchema>;
+
+export const DomainFrontDomainSchema = z.object({
+  certFile: z.string(),
+  enabled: z.boolean(),
+  inboundIds: z.array(z.number().int()),
+  keyFile: z.string(),
+  mode: z.string(),
+  name: z.string(),
+  origin: z.string(),
+  panel: z.boolean(),
+  tls: z.string(),
+});
+export type DomainFrontDomain = z.infer<typeof DomainFrontDomainSchema>;
+
+export const DomainFrontStatusSchema = z.object({
+  certificates: z.array(z.lazy(() => DomainFrontCertificateSchema)),
+  config: z.lazy(() => DomainFrontConfigSchema),
+  error: z.string(),
+  existingCertificates: z.array(z.lazy(() => DomainFrontCertificateSchema)).optional(),
+  running: z.boolean(),
+});
+export type DomainFrontStatus = z.infer<typeof DomainFrontStatusSchema>;
 
 export const FallbackParentInfoSchema = z.object({
   masterId: z.number().int(),
@@ -601,11 +733,14 @@ export const HostSchema = z.object({
   path: z.string(),
   pinnedPeerCertSha256: z.array(z.string()),
   port: z.number().int().min(0).max(65535),
+  randomCount: z.number().int(),
   remark: z.string().max(256),
   security: z.enum(['same', 'tls', 'none', 'reality']),
   serverDescription: z.string().max(64),
   shuffleHost: z.boolean(),
   sni: z.string(),
+  sniSharedRandom: z.boolean(),
+  snis: z.array(z.string()).optional(),
   sockoptParams: z.unknown(),
   sortOrder: z.number().int(),
   tags: z.array(z.string()),
@@ -638,11 +773,14 @@ export const HostGroupSchema = z.object({
   path: z.string(),
   pinnedPeerCertSha256: z.array(z.string()),
   port: z.number().int().min(0).max(65535),
+  randomCount: z.number().int().min(1).max(100),
   remark: z.string().max(256),
   security: z.enum(['same', 'tls', 'none', 'reality']),
   serverDescription: z.string().max(64),
   shuffleHost: z.boolean(),
   sni: z.string(),
+  sniSharedRandom: z.boolean(),
+  snis: z.array(z.string()),
   sockoptParams: z.string(),
   sortOrder: z.number().int(),
   tags: z.array(z.string()),
@@ -673,7 +811,7 @@ export const InboundSchema = z.object({
   nodeId: z.number().int().nullable().optional(),
   originNodeGuid: z.string().optional(),
   port: z.number().int().min(0).max(65535),
-  protocol: z.enum(['vmess', 'vless', 'trojan', 'shadowsocks', 'wireguard', 'hysteria', 'http', 'mixed', 'tunnel', 'tun', 'mtproto', 'amneziawg', 'tuic', 'naive', 'anytls', 'shadowtls', 'mieru', 'vk-turn-proxy', 'sudoku', 'pingtunnel', 'trusttunnel']),
+  protocol: z.enum(['vmess', 'vless', 'trojan', 'shadowsocks', 'wireguard', 'hysteria', 'http', 'mixed', 'tunnel', 'tun', 'mtproto', 'amneziawg', 'tuic', 'naive', 'masque', 'snell', 'fptn', 'openflux', 'vetroff', 'anytls', 'shadowtls', 'mieru', 'vk-turn-proxy', 'sudoku', 'pingtunnel', 'trusttunnel']),
   remark: z.string(),
   settings: z.unknown(),
   shareAddr: z.string(),
@@ -767,6 +905,150 @@ export const MLKEM768ResponseSchema = z.object({
 });
 export type MLKEM768Response = z.infer<typeof MLKEM768ResponseSchema>;
 
+export const ManagerClientInfoSchema = z.object({
+  down: z.number().int(),
+  email: z.string(),
+  enabled: z.boolean(),
+  expiryTime: z.number().int(),
+  total: z.number().int(),
+  up: z.number().int(),
+});
+export type ManagerClientInfo = z.infer<typeof ManagerClientInfoSchema>;
+
+export const ManagerDomainSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+});
+export type ManagerDomain = z.infer<typeof ManagerDomainSchema>;
+
+export const ManagerEntrySchema = z.object({
+  activeInboundId: z.number().int(),
+  config: z.lazy(() => ManagerInboundConfigSchema).nullable().optional(),
+  customLink: z.string(),
+  flag: z.string(),
+  label: z.string(),
+  mode: z.string(),
+  nodeId: z.number().int().nullable().optional(),
+  port: z.string(),
+  preset: z.string().optional(),
+  relayId: z.number().int(),
+  sni: z.string(),
+  templateId: z.number().int(),
+});
+export type ManagerEntry = z.infer<typeof ManagerEntrySchema>;
+
+export const ManagerInboundConfigSchema = z.object({
+  disableFlow: z.boolean(),
+  listen: z.string(),
+  protocol: z.lazy(() => ProtocolSchema),
+  settings: z.string(),
+  shareAddr: z.string(),
+  shareAddrStrategy: z.string(),
+  sniffing: z.string(),
+  streamSettings: z.string(),
+  subSortIndex: z.number().int(),
+});
+export type ManagerInboundConfig = z.infer<typeof ManagerInboundConfigSchema>;
+
+export const ManagerListOptionsSchema = z.object({
+  compact: z.boolean(),
+  page: z.number().int(),
+  search: z.string(),
+});
+export type ManagerListOptions = z.infer<typeof ManagerListOptionsSchema>;
+
+export const ManagerOperationSchema = z.object({
+  attempts: z.number().int(),
+  completed: z.number().int(),
+  createdAt: z.number().int(),
+  finishedAt: z.number().int(),
+  id: z.number().int(),
+  kind: z.string(),
+  message: z.string(),
+  relayId: z.number().int(),
+  state: z.string(),
+  subscriptionId: z.number().int(),
+  total: z.number().int(),
+});
+export type ManagerOperation = z.infer<typeof ManagerOperationSchema>;
+
+export const ManagerPreflightSchema = z.object({
+  entries: z.array(z.lazy(() => ManagerPreflightEntrySchema)),
+  ready: z.boolean(),
+});
+export type ManagerPreflight = z.infer<typeof ManagerPreflightSchema>;
+
+export const ManagerPreflightEntrySchema = z.object({
+  index: z.number().int(),
+  message: z.string(),
+  ready: z.boolean(),
+});
+export type ManagerPreflightEntry = z.infer<typeof ManagerPreflightEntrySchema>;
+
+export const ManagerRelaySchema = z.object({
+  address: z.string(),
+  hostKey: z.string(),
+  id: z.number().int(),
+  installed: z.boolean(),
+  keyAuth: z.boolean(),
+  name: z.string(),
+  nodeId: z.number().int(),
+  sshPort: z.number().int(),
+  username: z.string(),
+});
+export type ManagerRelay = z.infer<typeof ManagerRelaySchema>;
+
+export const ManagerRelayInputSchema = z.object({
+  address: z.string(),
+  credential: z.string(),
+  hostKey: z.string(),
+  id: z.number().int(),
+  keyAuth: z.boolean(),
+  name: z.string(),
+  nodeId: z.number().int(),
+  sshPort: z.number().int(),
+  username: z.string(),
+});
+export type ManagerRelayInput = z.infer<typeof ManagerRelayInputSchema>;
+
+export const ManagerSnapshotSchema = z.object({
+  clients: z.record(z.string(), z.lazy(() => ManagerClientInfoSchema)),
+  domains: z.array(z.lazy(() => ManagerDomainSchema)),
+  operationTotal: z.number().int(),
+  operations: z.array(z.lazy(() => ManagerOperationSchema)),
+  pageSize: z.number().int(),
+  pendingOperations: z.number().int(),
+  relays: z.array(z.lazy(() => ManagerRelaySchema)),
+  subscriptionPage: z.number().int(),
+  subscriptionTotal: z.number().int(),
+  subscriptions: z.array(z.lazy(() => ManagerSubscriptionSchema)),
+});
+export type ManagerSnapshot = z.infer<typeof ManagerSnapshotSchema>;
+
+export const ManagerSubscriptionSchema = z.object({
+  autoRotate: z.boolean(),
+  clientId: z.number().int(),
+  createdAt: z.number().int(),
+  enabled: z.boolean(),
+  entries: z.array(z.lazy(() => ManagerEntrySchema)),
+  graceMinutes: z.number().int(),
+  happ: z.string(),
+  id: z.number().int(),
+  incy: z.string(),
+  intervalMinutes: z.number().int(),
+  lastRotation: z.number().int(),
+  name: z.string(),
+  nextRotation: z.number().int(),
+  note: z.string(),
+  ownClient: z.boolean(),
+  published: z.array(z.lazy(() => ManagerEntrySchema)),
+  supportUrl: z.string(),
+  token: z.string(),
+  updatedAt: z.number().int(),
+  websiteUrl: z.string(),
+});
+export type ManagerSubscription = z.infer<typeof ManagerSubscriptionSchema>;
+
 export const MsgSchema = z.object({
   msg: z.string(),
   obj: z.unknown(),
@@ -787,7 +1069,11 @@ export const NodeSchema = z.object({
   clientCount: z.number().int(),
   configDirty: z.boolean(),
   configDirtyAt: z.number().int(),
+  coreCapabilities: z.lazy(() => CapabilitiesSchema).nullable().optional(),
+  coreError: z.string(),
+  coreState: z.string(),
   coreType: z.string(),
+  coreVersion: z.string(),
   cpuPct: z.number(),
   createdAt: z.number().int(),
   depletedCount: z.number().int(),
@@ -807,10 +1093,13 @@ export const NodeSchema = z.object({
   netUp: z.number().int(),
   onlineCount: z.number().int(),
   outboundTag: z.string(),
+  panelEdition: z.string(),
   panelVersion: z.string(),
   parentGuid: z.string().optional(),
   pinnedCertSha256: z.string(),
   port: z.number().int().min(1).max(65535),
+  presenceRegistry: z.string(),
+  protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   remark: z.string(),
   runningCore: z.string(),
   scheme: z.enum(['http', 'https']),
@@ -823,10 +1112,10 @@ export const NodeSchema = z.object({
   status: z.string(),
   tlsVerifyMode: z.enum(['verify', 'skip', 'pin', 'mtls']),
   transitive: z.boolean().optional(),
+  unavailableMetrics: z.array(z.string()).optional(),
   updatedAt: z.number().int(),
   uptimeSecs: z.number().int(),
   xrayError: z.string(),
-  xrayState: z.string(),
   xrayVersion: z.string(),
 });
 export type Node = z.infer<typeof NodeSchema>;
@@ -859,7 +1148,11 @@ export const NodeViewSchema = z.object({
   clientCount: z.number().int(),
   configDirty: z.boolean(),
   configDirtyAt: z.number().int(),
+  coreCapabilities: z.lazy(() => CapabilitiesSchema).nullable().optional(),
+  coreError: z.string(),
+  coreState: z.string(),
   coreType: z.string(),
+  coreVersion: z.string(),
   cpuPct: z.number(),
   createdAt: z.number().int(),
   depletedCount: z.number().int(),
@@ -880,10 +1173,13 @@ export const NodeViewSchema = z.object({
   netUp: z.number().int(),
   onlineCount: z.number().int(),
   outboundTag: z.string(),
+  panelEdition: z.string(),
   panelVersion: z.string(),
   parentGuid: z.string().optional(),
   pinnedCertSha256: z.string(),
   port: z.number().int(),
+  presenceRegistry: z.string(),
+  protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   remark: z.string(),
   runningCore: z.string(),
   scheme: z.string(),
@@ -895,10 +1191,10 @@ export const NodeViewSchema = z.object({
   status: z.string(),
   tlsVerifyMode: z.string(),
   transitive: z.boolean().optional(),
+  unavailableMetrics: z.array(z.string()).optional(),
   updatedAt: z.number().int(),
   uptimeSecs: z.number().int(),
   xrayError: z.string(),
-  xrayState: z.string(),
   xrayVersion: z.string(),
 });
 export type NodeView = z.infer<typeof NodeViewSchema>;
@@ -937,12 +1233,19 @@ export const PeerActivitySchema = z.object({
 export type PeerActivity = z.infer<typeof PeerActivitySchema>;
 
 export const ProbeResultUISchema = z.object({
+  coreCapabilities: z.lazy(() => CapabilitiesSchema).nullable().optional(),
+  coreError: z.string(),
+  coreState: z.string(),
   coreType: z.string(),
+  coreVersion: z.string(),
   cpuPct: z.number(),
   error: z.string(),
   latencyMs: z.number().int(),
   memPct: z.number(),
+  panelEdition: z.string(),
   panelVersion: z.string(),
+  presenceRegistry: z.string(),
+  protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   runningCore: z.string(),
   singboxError: z.string(),
   singboxInstalled: z.boolean(),
@@ -950,37 +1253,64 @@ export const ProbeResultUISchema = z.object({
   singboxState: z.string(),
   singboxVersion: z.string(),
   status: z.string(),
+  unavailableMetrics: z.array(z.string()).optional(),
   uptimeSecs: z.number().int(),
   xrayError: z.string(),
-  xrayState: z.string(),
   xrayVersion: z.string(),
 });
 export type ProbeResultUI = z.infer<typeof ProbeResultUISchema>;
 
+export const ProtocolAvailabilitySchema = z.object({
+  component: z.string(),
+  ready: z.boolean(),
+  speedLimit: z.boolean(),
+  supported: z.boolean(),
+  version: z.string(),
+});
+export type ProtocolAvailability = z.infer<typeof ProtocolAvailabilitySchema>;
+
 export const RealityScanResultSchema = z.object({
   alpn: z.string(),
+  attempts: z.number().int().optional(),
   certChainBytes: z.number().int(),
   certChainValid: z.boolean(),
   certIssuer: z.string(),
   certSubject: z.string(),
   certValid: z.boolean(),
+  checkedAt: z.string().optional(),
   curveID: z.string(),
+  dnsLookupError: z.string().optional(),
+  dnsMatchesIP: z.boolean().nullable().optional(),
   feasible: z.boolean(),
   h2: z.boolean(),
   host: z.string(),
+  http2OK: z.boolean().nullable().optional(),
   ip: z.string(),
+  jitterMs: z.number().optional(),
   latencyMs: z.number().int(),
+  medianMs: z.number().optional(),
   notAfter: z.string(),
   port: z.number().int(),
   privateTarget: z.boolean(),
   reason: z.string(),
   serverNames: z.array(z.string()),
+  source: z.string().optional(),
+  successes: z.number().int().optional(),
   target: z.string(),
+  tcpMs: z.number().optional(),
   tls13: z.boolean(),
+  tlsMs: z.number().optional(),
   tlsVersion: z.string(),
   x25519: z.boolean(),
 });
 export type RealityScanResult = z.infer<typeof RealityScanResultSchema>;
+
+export const RemoteTelegramProxySchema = z.object({
+  nodeId: z.number().int(),
+  nodeName: z.string(),
+  profile: z.lazy(() => TelegramProxyProfileSchema),
+});
+export type RemoteTelegramProxy = z.infer<typeof RemoteTelegramProxySchema>;
 
 export const RoutingPresetDetailSchema = z.object({
   createdAt: z.number().int(),
@@ -1009,6 +1339,38 @@ export const RoutingPresetViewSchema = z.object({
   updatedAt: z.number().int(),
 });
 export type RoutingPresetView = z.infer<typeof RoutingPresetViewSchema>;
+
+export const SNIJobSnapshotSchema = z.object({
+  completed: z.number().int(),
+  createdAt: z.string(),
+  error: z.string().optional(),
+  finishedAt: z.string().optional(),
+  id: z.string(),
+  phase: z.string(),
+  results: z.array(z.lazy(() => RealityScanResultSchema).nullable()),
+  source: z.string(),
+  state: z.string(),
+  total: z.number().int(),
+  verified: z.number().int(),
+  verifyTotal: z.number().int(),
+});
+export type SNIJobSnapshot = z.infer<typeof SNIJobSnapshotSchema>;
+
+export const SNISavedTargetSchema = z.object({
+  host: z.string(),
+  ip: z.string(),
+  port: z.number().int(),
+});
+export type SNISavedTarget = z.infer<typeof SNISavedTargetSchema>;
+
+export const SNIScanRequestSchema = z.object({
+  mode: z.string().optional(),
+  nodeId: z.number().int().nullable().optional(),
+  purpose: z.string().optional(),
+  recheck: z.array(z.lazy(() => SNISavedTargetSchema).nullable()).optional(),
+  targets: z.string().optional(),
+});
+export type SNIScanRequest = z.infer<typeof SNIScanRequestSchema>;
 
 export const ServerSettingsSchema = z.object({
   contentPaddingAddition: z.string().optional(),
@@ -1081,6 +1443,45 @@ export const SubBalancerSchema = z.object({
   updatedAt: z.number().int(),
 });
 export type SubBalancer = z.infer<typeof SubBalancerSchema>;
+
+export const TelegramProxyProfileSchema = z.object({
+  host: z.string(),
+  link: z.string(),
+  name: z.string().optional(),
+  port: z.number().int(),
+  tls: z.boolean(),
+});
+export type TelegramProxyProfile = z.infer<typeof TelegramProxyProfileSchema>;
+
+export const TelegramSubscriptionSchema = z.object({
+  enabled: z.boolean(),
+  personal: z.lazy(() => TelegramProxyProfileSchema).nullable().optional(),
+  proxies: z.array(z.lazy(() => TelegramProxyProfileSchema)).optional(),
+  webProxy: z.string().optional(),
+  webProxyEnabled: z.boolean(),
+});
+export type TelegramSubscription = z.infer<typeof TelegramSubscriptionSchema>;
+
+export const TelemtWebSiteOptionsSchema = z.object({
+  catalog: z.string().optional(),
+  description: z.string().optional(),
+  html: z.string().optional(),
+  mode: z.string(),
+  origin: z.string().optional(),
+  originResolve: z.boolean().optional(),
+  template: z.string().optional(),
+  theme: z.string().optional(),
+  title: z.string().optional(),
+});
+export type TelemtWebSiteOptions = z.infer<typeof TelemtWebSiteOptionsSchema>;
+
+export const TgBotCapabilitiesSchema = z.object({
+  groupPrivacy: z.boolean(),
+  inlineEnabled: z.boolean(),
+  running: z.boolean(),
+  username: z.string(),
+});
+export type TgBotCapabilities = z.infer<typeof TgBotCapabilitiesSchema>;
 
 export const TrafficSchema = z.object({
   Down: z.number().int(),

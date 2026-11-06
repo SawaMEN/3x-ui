@@ -151,57 +151,6 @@ function makeBackendProxy(target) {
   };
 }
 
-// Deps only reachable through swagger-ui-react (verified via `npm ls`). The
-// catch-all `vendor` chunk would otherwise eager-load them on first paint,
-// although the api-docs page is the only lazy route importing them.
-const SWAGGER_ONLY_DEPS = [
-  '@babel/runtime-corejs3',
-  '@scarf/scarf',
-  '@swagger-api/apidom-',
-  '@swaggerexpert/',
-  'base64-js',
-  'buffer',
-  'classnames',
-  'css.escape',
-  'deep-extend',
-  'dompurify',
-  'fast-json-patch',
-  'highlight.js',
-  'highlightjs-vue',
-  'ieee754',
-  'immutable',
-  'js-file-download',
-  'js-yaml',
-  'lodash',
-  'lowlight',
-  'neotraverse',
-  'node-abort-controller',
-  'openapi-path-templating',
-  'openapi-server-url-templating',
-  'prismjs',
-  'prop-types',
-  'ramda',
-  'ramda-adjunct',
-  'randexp',
-  'react-copy-to-clipboard',
-  'react-debounce-input',
-  'react-immutable-proptypes',
-  'react-immutable-pure-component',
-  'react-inspector',
-  'react-redux',
-  'react-syntax-highlighter',
-  'redux',
-  'redux-immutable',
-  'remarkable',
-  'reselect',
-  'serialize-error',
-  'sha.js',
-  'url-parse',
-  'xml',
-  'xml-but-prettier',
-  'zenscroll',
-];
-
 export default defineConfig({
   plugins: [react(), injectBasePathPlugin(), rocketLoaderOptOutPlugin()],
   resolve: {
@@ -231,54 +180,15 @@ export default defineConfig({
     sourcemap: process.env.XUI_SOURCEMAP === 'true',
     target: 'es2020',
     chunkSizeWarningLimit: 1500,
+    // Let Vite/Rolldown keep transitive dependencies and their initialization
+    // order together. Manual vendor/AntD/React chunks can create circular
+    // imports and crash production while reading undefined.default.
+    // Route-level dynamic imports still split on demand.
     rollupOptions: {
       input: {
         index: path.resolve(import.meta.dirname, 'index.html'),
         login: path.resolve(import.meta.dirname, 'login.html'),
         subpage: path.resolve(import.meta.dirname, 'subpage.html'),
-      },
-      output: {
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined;
-          if (id.includes('/node_modules/antd/')) return 'vendor-antd';
-          if (id.includes('/@ant-design/icons/') || id.includes('/@ant-design/icons-svg/')) return 'vendor-icons';
-          if (
-            id.includes('/node_modules/@rc-component/')
-            || id.includes('/node_modules/rc-')
-            || id.includes('/@ant-design/cssinjs')
-            || id.includes('/@ant-design/colors')
-            || id.includes('/@ant-design/fast-color')
-            || id.includes('/@ant-design/react-slick')
-            || id.includes('/@ctrl/tinycolor')
-          ) return 'vendor-antd';
-          if (
-            id.includes('/node_modules/react-i18next/')
-            || id.includes('/node_modules/i18next/')
-          ) return 'vendor-i18next';
-          if (
-            id.includes('/node_modules/react/')
-            || id.includes('/node_modules/react-dom/')
-            || id.includes('/node_modules/scheduler/')
-          ) return 'vendor-react';
-          if (
-            id.includes('/node_modules/codemirror/')
-            || id.includes('/node_modules/@codemirror/')
-            || id.includes('/node_modules/@lezer/')
-          ) return 'vendor-codemirror';
-          if (id.includes('/node_modules/persian-calendar-suite/')) return 'vendor-jalali';
-          if (id.includes('/node_modules/otpauth/')) return 'vendor-otpauth';
-          if (id.includes('/node_modules/@tanstack/')) return 'vendor-tanstack';
-          if (id.includes('/node_modules/react-router')) return 'vendor-router';
-          if (
-            id.includes('/node_modules/swagger-ui-react/')
-            || id.includes('/node_modules/swagger-ui/')
-            || id.includes('/node_modules/swagger-client/')
-            || SWAGGER_ONLY_DEPS.some((dep) => id.includes(`/node_modules/${dep}/`))
-          ) return 'vendor-swagger';
-          if (id.includes('/node_modules/uplot/')) return 'vendor-uplot';
-          if (id.includes('dayjs')) return 'vendor-dayjs';
-          return 'vendor';
-        },
       },
     },
   },

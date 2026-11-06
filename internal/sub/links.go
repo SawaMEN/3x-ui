@@ -2,6 +2,7 @@ package sub
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -39,10 +40,13 @@ func (p *LinkProvider) LinksForClient(host string, inbound *model.Inbound, email
 		return nil
 	}
 	svc := p.build(host)
-	svc.refreshSudokuCredentials(inbound)
+	if !svc.refreshSudokuCredentials(inbound) {
+		return nil
+	}
 	svc.projectThroughFallbackMaster(inbound)
-	if endpoints := svc.hostEndpoints(inbound, "raw"); len(endpoints) > 0 {
-		if client, ok := svc.clientForLink(inbound, email); ok {
+	if client, ok := svc.clientForLink(inbound, email); ok {
+		endpoints, bound := svc.clientHostEndpoints(inbound, client, "raw", svc.hostEndpoints(inbound, "raw"))
+		if bound || endpoints != nil {
 			return splitLinkLines(svc.linkFromHosts(inbound, client, endpoints))
 		}
 	}
@@ -56,7 +60,9 @@ func (p *LinkProvider) LinksForInbounds(host string, inbounds []*model.Inbound) 
 		if !sudokuInboundUsable(inbound) {
 			continue
 		}
-		svc.refreshSudokuCredentials(inbound)
+		if !svc.refreshSudokuCredentials(inbound) {
+			continue
+		}
 		raw = append(raw, svc.inboundLinks(inbound)...)
 	}
 	return normalizeGeneratedLinks(raw)
@@ -157,8 +163,7 @@ func splitLinkLines(raw string) []string {
 			hasNativeMieru = true
 		}
 	}
-	preferNativeMieru :=
-		hasSimpleMieru && hasNativeMieru && mieruShareLinkFormat(simpleMieru) == "native"
+	preferNativeMieru := hasSimpleMieru && hasNativeMieru && mieruShareLinkFormat(simpleMieru) == "native"
 
 	out := make([]string, 0, len(parts))
 	seen := make(map[string]struct{}, len(parts))
@@ -182,4 +187,76 @@ func splitLinkLines(raw string) []string {
 		out = append(out, p)
 	}
 	return out
+}
+
+// ManagerLinksForClient applies per-entry names and relay endpoints through the native renderer.
+func (p *LinkProvider) ManagerLinksForClient(host string, ib *model.Inbound, email, label string, relay bool) []string {
+	var links []string
+	if relay {
+		svc := p.build(host)
+		copyInbound := *ib
+		svc.projectThroughFallbackMaster(&copyInbound)
+		copyInbound.ShareAddrStrategy, copyInbound.ShareAddr = "custom", ib.ShareAddr
+		links = splitLinkLines(svc.GetLink(&copyInbound, email))
+	} else {
+		links = p.LinksForClient(host, ib, email)
+	}
+	for i, raw := range links {
+		links[i] = applyRemarkToLink(raw, label)
+	}
+	return links
+}
+
+// ManagerFormat renders only the published selection and never adds other attachments of the same client.
+func (p *LinkProvider) ManagerFormat(host string, sub model.ManagerSubscription, client model.ClientRecord, format string) (string, string, error) {
+	svc := p.build(host)
+	svc.managerInbounds = []*model.Inbound{}
+	svc.managerExternal = []externalLinkEntry{}
+	db := database.GetDB()
+	for _, entry := range sub.Published {
+		if entry.CustomLink != "" {
+			svc.managerExternal = append(svc.managerExternal, externalLinkEntry{Kind: model.ExternalLinkKindLink, Value: entry.CustomLink, Remark: entry.Label, Email: client.Email, Enable: true, Active: true})
+			continue
+		}
+		var ib model.Inbound
+		if err := db.Where("id = ? AND user_id = ? AND enable = ?", entry.ActiveInboundID, sub.UserID, true).First(&ib).Error; err != nil {
+			return "", "", err
+		}
+		var n int64
+		if err := db.Model(&model.ClientInbound{}).Where("client_id = ? AND inbound_id = ?", client.Id, ib.Id).Count(&n).Error; err != nil {
+			return "", "", err
+		}
+		if n == 0 {
+			return "", "", fmt.Errorf("client no longer attached to selected inbound")
+		}
+		ib.Remark = strings.TrimSpace(entry.Flag + " " + entry.Label)
+		if ib.Remark == "" {
+			ib.Remark = sub.Name
+		}
+		if entry.RelayID > 0 {
+			var relay model.ManagerRelay
+			if err := db.Where("id = ? AND user_id = ? AND installed = ?", entry.RelayID, sub.UserID, true).First(&relay).Error; err != nil {
+				return "", "", err
+			}
+			ib.ShareAddrStrategy, ib.ShareAddr = "custom", relay.Address
+		}
+		svc.managerInbounds = append(svc.managerInbounds, &ib)
+	}
+	renderer := NewSubJsonService("", "", "", "", svc)
+	var body string
+	var err error
+	switch format {
+	case "singbox":
+		body, _, err = renderer.GetSingBoxJson(client.SubID, host, false)
+	case "hiddify":
+		body, _, err = renderer.GetHiddifySingBoxJson(client.SubID, host)
+	case "xray":
+		body, _, err = renderer.GetJson(client.SubID, host, true)
+	default:
+		return "", "", fmt.Errorf("unknown format")
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("selected protocols are incompatible with %s: %w", format, errSubscriptionFormatUnsupported)
+	}
+	return body, "application/json; charset=utf-8", nil
 }

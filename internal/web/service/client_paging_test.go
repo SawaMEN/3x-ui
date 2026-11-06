@@ -1,14 +1,15 @@
 package service
 
 import (
+	"math"
 	"slices"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const (
@@ -95,7 +96,7 @@ func seedPagingClients(t *testing.T) (int64, []pagingSeed) {
 				t.Fatalf("disable %s: %v", s.email, err)
 			}
 		}
-		traffic := xray.ClientTraffic{
+		traffic := coremodel.ClientTraffic{
 			Email:      s.email,
 			Enable:     s.enable,
 			Up:         s.used / 2,
@@ -135,6 +136,18 @@ func setupPagingServices(t *testing.T) (*ClientService, *InboundService, *Settin
 		t.Fatalf("set trafficDiff: %v", err)
 	}
 	return &ClientService{}, &InboundService{}, settingSvc
+}
+
+func TestListPagedHugePageIsEmpty(t *testing.T) {
+	svc, inbounds, settings := setupPagingServices(t)
+	seedPagingClients(t)
+	page, err := svc.ListPaged(inbounds, settings, ClientPageParams{Page: math.MaxInt, PageSize: 200})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 0 {
+		t.Fatalf("overflowed page returned %d clients", len(page.Items))
+	}
 }
 
 func TestListPagedFilters(t *testing.T) {
@@ -534,7 +547,7 @@ func TestListPagedGlobalTrafficOverlay(t *testing.T) {
 
 	// bravo has used 1GB of its 10GB locally; a master reporting 10GB of
 	// cross-panel usage has to move it into the depleted bucket.
-	if err := inboundSvc.AcceptGlobalTraffic("master-guid", []*xray.ClientTraffic{
+	if err := inboundSvc.AcceptGlobalTraffic("master-guid", []*coremodel.ClientTraffic{
 		{Email: "bravo@x", Up: 4 * pagingGB, Down: 6 * pagingGB},
 	}); err != nil {
 		t.Fatalf("AcceptGlobalTraffic: %v", err)
@@ -633,5 +646,38 @@ func TestListPagedEmptyPanel(t *testing.T) {
 	}
 	if resp.Groups == nil {
 		t.Fatal("groups = nil, want an empty list so the filter drawer renders")
+	}
+}
+
+// SQLite's LOWER() folds ASCII only, so non-ASCII capitals must still match.
+func TestListPagedNonASCIICase(t *testing.T) {
+	svc, inboundSvc, settingSvc := setupPagingServices(t)
+	rec := model.ClientRecord{Email: "lima@x", Comment: "Привет", Group: "Тест", Enable: true}
+	if err := database.GetDB().Create(&rec).Error; err != nil {
+		t.Fatalf("create client: %v", err)
+	}
+	for name, params := range map[string]ClientPageParams{
+		"group":             {PageSize: 50, Group: "Тест"},
+		"group other case":  {PageSize: 50, Group: "ТЕСТ"},
+		"search":            {PageSize: 50, Search: "Привет"},
+		"search lower case": {PageSize: 50, Search: "привет"},
+		"search upper case": {PageSize: 50, Search: "ПРИВЕТ"},
+	} {
+		resp, err := svc.ListPaged(inboundSvc, settingSvc, params)
+		if err != nil {
+			t.Fatalf("%s: ListPaged: %v", name, err)
+		}
+		if got := pagedEmails(resp.Items); !slices.Equal(got, []string{"lima@x"}) {
+			t.Fatalf("%s: emails = %v, want [lima@x]", name, got)
+		}
+	}
+}
+
+func TestCaseVariants(t *testing.T) {
+	if got, want := caseVariants("пРИвет"), []string{"привет", "пРИвет", "ПРИВЕТ", "Привет"}; !slices.Equal(got, want) {
+		t.Fatalf("caseVariants = %v, want %v", got, want)
+	}
+	if got := caseVariants("abc"); !slices.Equal(got, []string{"abc", "ABC", "Abc"}) {
+		t.Fatalf("ASCII variants = %v", got)
 	}
 }

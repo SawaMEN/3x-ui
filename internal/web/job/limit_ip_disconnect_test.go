@@ -36,8 +36,8 @@ func TestDisconnectClientTemporarilySkipsReverseClient(t *testing.T) {
 	if attempted {
 		t.Fatal("a reverse client must not be removed and re-added")
 	}
-	if !skipped {
-		t.Fatal("the skip must be reported, not silent")
+	if skipped {
+		t.Fatal("native disconnect must not use the legacy account cycle")
 	}
 }
 
@@ -69,7 +69,7 @@ func TestDisconnectClientTemporarilyAllowsHysteria(t *testing.T) {
 	if unsupported {
 		t.Fatal("hysteria was rejected by the protocol gate")
 	}
-	if !attempted {
-		t.Fatal("expected a remove attempt against the Xray API for hysteria")
+	if attempted {
+		t.Fatal("native disconnect must never remove a Hysteria account through Xray RPC")
 	}
 }

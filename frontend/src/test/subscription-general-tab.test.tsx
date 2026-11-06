@@ -37,6 +37,48 @@ function LocationProbe() {
 }
 
 describe('SubscriptionGeneralTab', () => {
+  it('saves the subscription theme while custom branding is disabled and loads legacy WhiteMax as Luna', () => {
+    const updateSetting = vi.fn();
+    const page = renderWithProviders(
+      <MemoryRouter>
+        <SubscriptionGeneralTab
+          allSetting={
+            new AllSetting({ subAppearanceTheme: 'whitemax', subAppearanceEnable: false })
+          }
+          updateSetting={updateSetting}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /Profile/ }));
+    expect(screen.getByText('Luna')).toBeTruthy();
+    chooseSelectOption('sub-appearance-theme', 'Light');
+    expect(updateSetting).toHaveBeenCalledWith({ subAppearanceTheme: 'light' });
+    chooseSelectOption('sub-appearance-theme', 'Underground');
+    expect(updateSetting).toHaveBeenCalledWith({ subAppearanceTheme: 'underground' });
+    page.unmount();
+  });
+
+  it('selects and reloads the saved subscription node ordering mode', () => {
+    const updateSetting = vi.fn();
+    const { unmount } = renderWithProviders(
+      <MemoryRouter>
+        <SubscriptionGeneralTab allSetting={new AllSetting()} updateSetting={updateSetting} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Inbound order (default)')).toBeTruthy();
+    chooseSelectOption('sub-host-sort-mode', 'Hosts order');
+    expect(updateSetting).toHaveBeenCalledWith({ subHostSortMode: 'hosts-first' });
+    unmount();
+    renderWithProviders(
+      <MemoryRouter>
+        <SubscriptionGeneralTab
+          allSetting={new AllSetting({ subHostSortMode: 'hosts-first' })}
+          updateSetting={updateSetting}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Hosts order')).toBeTruthy();
+  });
   it('switches profile modes without losing the custom URL and warns only for the built-in page', () => {
     const storedUrl = 'https://example.com/profile/{{SUB_ID}}';
     const editedUrl = 'https://example.com/account/{{SUB_ID}}';
@@ -57,7 +99,7 @@ describe('SubscriptionGeneralTab', () => {
 
     chooseSelectOption('sub-profile-mode', 'Built-in subscription page');
     expect(screen.getByTestId('profile-settings').textContent).toBe(`builtin|${storedUrl}`);
-    expect(screen.getByRole('alert').textContent).toContain(warning);
+    expect(screen.getByText(warning)).toBeTruthy();
     expect(screen.queryByDisplayValue(storedUrl)).toBeNull();
 
     chooseSelectOption('sub-profile-mode', 'Custom website');

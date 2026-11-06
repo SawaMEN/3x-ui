@@ -25,6 +25,7 @@ func TestMain(m *testing.M) {
 	// injectPanelEgress logs when it skips injection; the package logger must
 	// exist before any test exercises a skipped path.
 	xuilogger.InitLogger(logging.ERROR)
+	publicIPHTTPClient = offlinePublicIPTestClient()
 	os.Exit(m.Run())
 }
 

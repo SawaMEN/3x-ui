@@ -75,6 +75,41 @@ describe('http-init fetch wrapper', () => {
     expect(headersOf().get('content-type')).toBe('application/json');
   });
 
+  it.each(['preflight', 'enable'])(
+    'sends Gateway %s network settings as JSON under a custom panel path',
+    async (action) => {
+      window.X_UI_BASE_PATH = '/private-panel/';
+      document.head.innerHTML = '<meta name="csrf-token" content="tok">';
+      http.setupHttp();
+      fetchMock.mockResolvedValue(okEnvelope());
+      const payload = {
+        network: {
+          lanInterface: 'br-lan',
+          lanIP: '192.168.10.1',
+          lanPrefix: 24,
+          wanInterface: 'eth0',
+        },
+      };
+
+      await http.httpRequest('POST', `/panel/api/gateway/${action}`, payload);
+
+      expect(urlOf()).toBe(`/private-panel/panel/api/gateway/${action}`);
+      expect(headersOf().get('content-type')).toBe('application/json; charset=UTF-8');
+      expect(JSON.parse(initOf().body as string)).toEqual(payload);
+      expect(headersOf().get('X-CSRF-Token')).toBe('tok');
+    },
+  );
+
+  it.each(['oxidns', 'dnstt', 'olcrtc'])('sends %s setup settings as JSON', async (component) => {
+    document.head.innerHTML = '<meta name="csrf-token" content="tok">';
+    http.setupHttp();
+    fetchMock.mockResolvedValue(okEnvelope());
+    const payload = { domain: 't.example.com', enabled: true };
+    await http.httpRequest('POST', `/panel/api/${component}/setup`, payload);
+    expect(headersOf().get('content-type')).toBe('application/json; charset=UTF-8');
+    expect(JSON.parse(initOf().body as string)).toEqual(payload);
+  });
+
   it('passes FormData through without a Content-Type header', async () => {
     document.head.innerHTML = '<meta name="csrf-token" content="tok">';
     http.setupHttp();
@@ -149,27 +184,52 @@ describe('http-init fetch wrapper', () => {
     expect(dataCalls).toBe(2);
   });
 
-  it('redirects once on 401 and never settles', async () => {
+  it('redirects once on 401 and rejects so pending buttons can reset', async () => {
     window.X_UI_BASE_PATH = '/xui';
     document.head.innerHTML = '<meta name="csrf-token" content="tok">';
     http.setupHttp();
-    fetchMock.mockResolvedValue(new Response('', { status: 401 }));
+    fetchMock.mockImplementation(() => Promise.resolve(new Response('', { status: 401 })));
 
-    const pending = Symbol('pending');
-    const first = await Promise.race([
-      http.httpRequest('POST', '/p', { a: 1 }),
-      new Promise((resolve) => setTimeout(() => resolve(pending), 20)),
-    ]);
-    expect(first).toBe(pending);
+    await expect(http.httpRequest('POST', '/p', { a: 1 })).rejects.toMatchObject({ status: 401 });
+    await expect(http.httpRequest('POST', '/p', { a: 1 })).rejects.toMatchObject({ status: 401 });
     expect(replaceMock).toHaveBeenCalledTimes(1);
     expect(replaceMock).toHaveBeenCalledWith('/xui');
+  });
 
-    const second = await Promise.race([
-      http.httpRequest('POST', '/p', { a: 1 }),
-      new Promise((resolve) => setTimeout(() => resolve(pending), 20)),
-    ]);
-    expect(second).toBe(pending);
-    expect(replaceMock).toHaveBeenCalledTimes(1);
+  it('bounds requests and CSRF acquisition by default', async () => {
+    http.setupHttp();
+    fetchMock.mockResolvedValueOnce(csrfResponse('tok')).mockResolvedValueOnce(okEnvelope());
+    await http.httpRequest('POST', '/p', {});
+    expect(initOf(0).signal).toBeInstanceOf(AbortSignal);
+    expect(initOf(1).signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('cancels a request waiting for CSRF without blocking other requests', async () => {
+    let releaseToken!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          releaseToken = resolve;
+        }),
+    );
+    fetchMock.mockImplementation(() => Promise.resolve(okEnvelope()));
+    const short = http.httpRequest('POST', '/short', {}, { timeout: 20 });
+    const long = http.httpRequest('POST', '/long', {}, { timeout: 1000 });
+    await expect(short).rejects.toMatchObject({ name: 'TimeoutError' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    releaseToken(csrfResponse('tok'));
+    await expect(long).resolves.toMatchObject({ status: 200 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves an already aborted signal without AbortSignal.any', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    vi.stubGlobal('AbortSignal', { timeout });
+    fetchMock.mockResolvedValue(okEnvelope());
+    await http.httpRequest('GET', '/p', undefined, { signal: controller.signal, timeout: 1000 });
+    expect(initOf().signal?.aborted).toBe(true);
   });
 
   it('parses empty, 204, non-JSON, and malformed bodies tolerantly', async () => {

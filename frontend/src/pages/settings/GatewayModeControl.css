@@ -1,0 +1,195 @@
+/* Shared visual language with the sing-box editor. */
+.gateway-control {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.gateway-control .gateway-main-card,
+.gateway-control .gateway-settings-groups {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 12px;
+  background: var(--ant-color-bg-container);
+  box-shadow: none;
+}
+
+.gateway-control .gateway-main-card .ant-card-body {
+  padding: 20px;
+}
+
+.gateway-control .gateway-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.gateway-control .gateway-heading .ant-tag {
+  margin: 2px 0 0;
+  white-space: nowrap;
+}
+
+.gateway-control .gateway-important-alert {
+  margin-bottom: 12px;
+}
+
+.gateway-control .gateway-network-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.gateway-control .gateway-overview-line {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--ant-color-bg-layout);
+}
+
+.gateway-control .gateway-overview-label {
+  font-size: 12px;
+  color: var(--ant-color-text-secondary);
+}
+
+.gateway-control .gateway-overview-line strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  color: var(--ant-color-text);
+}
+
+.gateway-control .gateway-auto-summary {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.gateway-control .gateway-help {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ant-color-bg-layout);
+}
+
+.gateway-control .gateway-client-tip {
+  margin-top: 14px;
+}
+
+.gateway-control .gateway-readiness {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--ant-color-success-text, var(--ant-color-text-secondary));
+  font-size: 13px;
+}
+
+.gateway-control .gateway-primary-actions,
+.gateway-control .gateway-secondary-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gateway-control .gateway-primary-actions {
+  margin-top: 14px;
+}
+
+.gateway-control .gateway-full-width,
+.gateway-control .gateway-fields {
+  width: 100%;
+}
+
+.gateway-control .singbox-field-label {
+  display: block;
+  font-size: 12px;
+  color: var(--ant-color-text-secondary);
+  margin-bottom: 6px;
+}
+
+.gateway-control .gateway-settings-groups .ant-collapse-header {
+  font-weight: 600;
+}
+
+.gateway-control .gateway-settings-groups .ant-collapse-content-box {
+  padding: 16px;
+}
+
+.gateway-control .gateway-hint {
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.gateway-control .gateway-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 8px;
+}
+
+.gateway-control .gateway-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 9px;
+  font-size: 13px;
+}
+
+.gateway-control .gateway-check .ant-tag {
+  margin-inline-end: 0;
+}
+
+.gateway-control .gateway-preflight-list {
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+@media (max-width: 760px) {
+  .gateway-control .gateway-network-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .gateway-control .gateway-overview-line {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .gateway-control .gateway-main-card .ant-card-body,
+  .gateway-control .gateway-settings-groups .ant-collapse-content-box {
+    padding: 14px;
+  }
+
+  .gateway-control .gateway-heading {
+    flex-wrap: wrap;
+  }
+
+  .gateway-control .gateway-overview-line {
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .gateway-control .gateway-primary-actions > .ant-btn,
+  .gateway-control .gateway-secondary-actions > .ant-btn {
+    flex: 1 1 auto;
+  }
+
+  .gateway-control .gateway-primary-actions > .ant-btn-primary,
+  .gateway-control .gateway-primary-actions > .ant-btn-dangerous {
+    flex: 1 1 100%;
+  }
+}

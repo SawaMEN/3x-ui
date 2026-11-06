@@ -1,0 +1,150 @@
+name: Stage 12 concurrency, load and soak audit
+
+on:
+  push:
+    branches: [update]
+    paths:
+      - internal/web/websocket/**
+      - internal/web/service/**
+      - internal/web/runtime/**
+      - internal/sub/**
+      - internal/clientlimit/**
+      - tools/ci/race-package-shard.sh
+      - .github/workflows/stage12-race-load-soak.yml
+  pull_request:
+    paths:
+      - internal/web/websocket/**
+      - internal/web/service/**
+      - internal/web/runtime/**
+      - internal/sub/**
+      - internal/clientlimit/**
+      - tools/ci/race-package-shard.sh
+      - .github/workflows/stage12-race-load-soak.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage12-race-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOPROXY: https://proxy.golang.org|direct
+
+jobs:
+  websocket-fanout-race:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stress the WebSocket hub under the race detector
+        run: go test -race -vet=off -shuffle=on -count=8 -timeout=12m ./internal/web/websocket
+      - name: Confirm distinct stage 12 regression names exist
+        run: |
+          go test -list '^TestStage12' ./internal/web/websocket |
+            grep -qx 'TestStage12ConcurrentFanoutAndUnregister'
+          go test -list '^TestStage12' ./internal/web/websocket |
+            grep -qx 'TestStage12HubCancelPendingThrottleTimers'
+
+  traffic-writer-race:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Provide embedded web assets stub
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Stress writer restart, drain, single execution and exact counts
+        run: |
+          go test -race -vet=off -shuffle=on -count=8 -timeout=15m \
+            -run '^(TestStage12TrafficWriter|TestTrafficWriter)' ./internal/web/service
+
+  manager-node-concurrency:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Provide embedded web assets stub
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Race-check manager and multi-node operations
+        run: |
+          go test -race -vet=off -shuffle=on -count=2 -timeout=15m \
+            -run '^(TestManagerSlowNodeDoesNotHoldQueueLock|TestManagerFailedGenerationRemovesOnlyStagedListeners|TestNodeBulk_LargeAddFoldsToDirty|TestNodeBulk_LargeDeleteFoldsToDirty|TestGlobalTrafficHeartbeatConcurrentPairs|TestAddInboundClientConcurrentCrossInboundAddressSingleWinner)$' \
+            ./internal/web/service
+
+  postgres-contention:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: xui_stage12
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d xui_stage12"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 6
+    env:
+      XUI_DB_TYPE: postgres
+      XUI_DB_DSN: host=127.0.0.1 port=5432 user=postgres password=postgres dbname=xui_stage12 sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Provide embedded web assets stub
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Exercise real PostgreSQL traffic and client sync under races
+        run: |
+          go test -race -vet=off -count=2 -timeout=15m \
+            -run '^(TestGlobalTrafficHeartbeatPostgres|TestClientIpSyncPostgres)$' \
+            ./internal/web/service
+
+  bounded-soak-benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Provide embedded web assets stub
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Repeat lifecycle and backpressure tests under race detector
+        run: |
+          set -o pipefail
+          go test -race -vet=off -count=30 -timeout=18m \
+            -run '^TestStage12' ./internal/web/websocket ./internal/web/service |
+            tee stage12-soak.txt
+      - name: Capture parallel writer throughput and allocations
+        run: |
+          go test -vet=off -run '^$' -bench '^BenchmarkStage12TrafficWriterSubmission$' \
+            -benchmem -benchtime=2s -count=3 ./internal/web/service |
+            tee stage12-benchmark.txt
+      - name: Preserve soak and benchmark output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: stage12-soak-throughput
+          path: |
+            stage12-soak.txt
+            stage12-benchmark.txt

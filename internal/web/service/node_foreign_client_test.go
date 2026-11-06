@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -57,8 +57,8 @@ func TestNodeCannotClaimClientOfAnotherInbound(t *testing.T) {
 	hostile := fmt.Sprintf(`{"clients":[{"email":%q,"id":%q,"enable":true},{"email":%q,"id":%q,"enable":true}]}`,
 		victim, attackUUID, nodeLocal, attackUUID)
 	syncNodeWithSettings(t, svc, 1, "n1-in", hostile,
-		xray.ClientTraffic{Email: victim, Enable: true},
-		xray.ClientTraffic{Email: nodeLocal, Enable: true})
+		coremodel.ClientTraffic{Email: victim, Enable: true},
+		coremodel.ClientTraffic{Email: nodeLocal, Enable: true})
 
 	if got := readClientUUID(t, db, victim); got != legitUUID {
 		t.Fatalf("node overwrote a master client's uuid: got %q, want %q", got, legitUUID)

@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 )
 
 func validateMieruInbound(inbound *model.Inbound, clients []model.Client) error {
@@ -49,10 +51,14 @@ func (s *InboundService) DesiredMieruInstances() ([]mieru.Instance, error) {
 	for _, ib := range inbounds {
 		ids = append(ids, ib.Id)
 	}
-	var disabledRows []xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).
+	var disabledRows []coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).
 		Where("inbound_id IN ? AND enable = ?", ids, false).
 		Select("inbound_id", "email").Find(&disabledRows).Error; err != nil {
+		return nil, err
+	}
+	clientRows, err := s.clientService.ListForInbounds(nil, ids)
+	if err != nil {
 		return nil, err
 	}
 	disabled := make(map[int]map[string]struct{})
@@ -63,6 +69,9 @@ func (s *InboundService) DesiredMieruInstances() ([]mieru.Instance, error) {
 		disabled[row.InboundId][row.Email] = struct{}{}
 	}
 	for _, ib := range inbounds {
+		if !sidecaregress.Ready(ib.Id, ib.Tag, false) {
+			continue
+		}
 		if inst, ok := mieru.InstanceFromInbound(ib); ok {
 			if off := disabled[ib.Id]; len(off) > 0 {
 				users := inst.Users[:0]
@@ -74,6 +83,16 @@ func (s *InboundService) DesiredMieruInstances() ([]mieru.Instance, error) {
 				inst.Users = users
 			}
 			if len(inst.Users) == 0 {
+				continue
+			}
+			ready := true
+			for _, c := range clientRows[ib.Id] {
+				if c.Enable && c.SpeedLimit != nil && c.SpeedLimit.Enabled && !clientlimit.Default.HasAlias("mieru:"+strings.TrimSpace(c.Email)) {
+					ready = false
+					break
+				}
+			}
+			if !ready {
 				continue
 			}
 			out = append(out, inst)

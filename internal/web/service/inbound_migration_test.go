@@ -2,15 +2,16 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"gorm.io/gorm"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestMigrationRequirements_BackfillsClientTrafficsWithMultiDomainInbound guards the
@@ -63,7 +64,7 @@ func TestMigrationRequirements_BackfillsClientTrafficsWithMultiDomainInbound(t *
 	}
 
 	var before int64
-	if err := db.Model(xray.ClientTraffic{}).Count(&before).Error; err != nil {
+	if err := db.Model(coremodel.ClientTraffic{}).Count(&before).Error; err != nil {
 		t.Fatalf("count client_traffics before: %v", err)
 	}
 	if before != 0 {
@@ -77,8 +78,8 @@ func TestMigrationRequirements_BackfillsClientTrafficsWithMultiDomainInbound(t *
 	// Before the fix this was rolled back whenever the externalProxy detection query
 	// errored (it does on Postgres via json_extract), so the MultiDomain inbound below
 	// is deliberately present to make that query return rows and run to completion.
-	var ct xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", backfillEmail).First(&ct).Error; err != nil {
+	var ct coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", backfillEmail).First(&ct).Error; err != nil {
 		t.Fatalf("client_traffics row not backfilled for %s: %v", backfillEmail, err)
 	}
 
@@ -120,7 +121,7 @@ func TestMigrationRequirementsReturnsAddClientStatFailure(t *testing.T) {
 		t.Fatalf("MigrationRequirements error = %v, want %q", err, injected)
 	}
 	var count int64
-	if err := db.Model(&xray.ClientTraffic{}).Where("email = ?", "first@example.test").Count(&count).Error; err != nil {
+	if err := db.Model(&coremodel.ClientTraffic{}).Where("email = ?", "first@example.test").Count(&count).Error; err != nil {
 		t.Fatalf("count rolled-back traffic: %v", err)
 	}
 	if count != 0 {
@@ -128,11 +129,8 @@ func TestMigrationRequirementsReturnsAddClientStatFailure(t *testing.T) {
 	}
 }
 
-// TestMigrationRequirements_CleansLegacyZeroAddrTag guards the legacy tag cleanup that
-// strips the auto-generated "0.0.0.0:" prefix. The inbound is MultiDomain TLS so the
-// externalProxy detection query returns rows and the cleanup is reached (it early-returns
-// at len(externalProxy)==0 otherwise). The cleanup must use tx.Exec, not tx.Raw, which
-// only builds a non-SELECT statement without running it.
+// Legacy auto-generated tags must be cleaned by an executed UPDATE, rather
+// than a Raw query that builds the statement without applying it.
 func TestMigrationRequirements_CleansLegacyZeroAddrTag(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
@@ -216,7 +214,7 @@ func TestMigrationRemoveOrphanedTraffics(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			var got int64
-			if err := db.Model(xray.ClientTraffic{}).Where("email = ?", c.email).Count(&got).Error; err != nil {
+			if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", c.email).Count(&got).Error; err != nil {
 				t.Fatalf("count client_traffics for %s: %v", c.email, err)
 			}
 			if got != c.want {
@@ -310,5 +308,80 @@ func TestMigrationRequirements_NormalizesShareAddressFields(t *testing.T) {
 	}
 	if gotInvalidAddress.ShareAddrStrategy != "node" || gotInvalidAddress.ShareAddr != "" {
 		t.Fatalf("invalid address share fields = (%q, %q), want (node, empty)", gotInvalidAddress.ShareAddrStrategy, gotInvalidAddress.ShareAddr)
+	}
+}
+
+func TestMigrationRequirementsWithoutMultiDomainInbounds(t *testing.T) {
+	for _, withInbound := range []bool{false, true} {
+		t.Run(fmt.Sprintf("inbound=%t", withInbound), func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("XUI_DB_FOLDER", dir)
+			if err := database.InitDB(filepath.Join(dir, "x-ui.db")); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = database.CloseDB() })
+			db := database.GetDB()
+			inbound := model.Inbound{
+				UserId: 1, Tag: "inbound-0.0.0.0:30003", Port: 30003,
+				Protocol: model.VLESS, Settings: `{"clients":[]}`, StreamSettings: `{"security":"none"}`,
+			}
+			if withInbound {
+				if err := db.Create(&inbound).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := (&InboundService{}).MigrationRequirements(); err != nil {
+				t.Fatalf("migration failed: %v", err)
+			}
+			if withInbound {
+				var got model.Inbound
+				if err := db.First(&got, inbound.Id).Error; err != nil {
+					t.Fatal(err)
+				}
+				if got.Tag != "inbound-30003" {
+					t.Fatalf("legacy tag = %q, want inbound-30003", got.Tag)
+				}
+			}
+		})
+	}
+}
+
+func TestMigrateDBRejectsMalformedLegacyClientsWithoutWrites(t *testing.T) {
+	for _, clients := range []string{`[null]`, `[7]`, `["broken"]`} {
+		t.Run(clients, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("XUI_DB_FOLDER", dir)
+			if err := database.InitDB(filepath.Join(dir, "x-ui.db")); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = database.CloseDB() })
+			db := database.GetDB()
+			inbound := model.Inbound{
+				UserId: 1, Tag: "invalid", Port: 30003,
+				Protocol: model.VLESS, Settings: `{"clients":` + clients + `}`, StreamSettings: `{}`,
+			}
+			if err := db.Create(&inbound).Error; err != nil {
+				t.Fatal(err)
+			}
+			orphan := coremodel.ClientTraffic{InboundId: 0, Email: "retained-until-migration-succeeds"}
+			if err := db.Create(&orphan).Error; err != nil {
+				t.Fatal(err)
+			}
+			err := (&InboundService{}).MigrateDB()
+			want := fmt.Sprintf("inbound %d client 1 must be an object", inbound.Id)
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("migration error = %v, want %q", err, want)
+			}
+			var got model.Inbound
+			if err := db.First(&got, inbound.Id).Error; err != nil {
+				t.Fatal(err)
+			}
+			if got.Settings != inbound.Settings {
+				t.Fatalf("failed migration changed client data: %s", got.Settings)
+			}
+			if err := db.First(&coremodel.ClientTraffic{}, orphan.Id).Error; err != nil {
+				t.Fatalf("cleanup ran after failed migration: %v", err)
+			}
+		})
 	}
 }

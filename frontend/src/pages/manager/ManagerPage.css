@@ -1,0 +1,25 @@
+.manager-page {
+  min-height: 100vh;
+}
+.manager-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.manager-page .ant-typography {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .manager-toolbar {
+    align-items: stretch;
+  }
+  .manager-toolbar > * {
+    max-width: 100%;
+  }
+  .manager-page .ant-card-body {
+    padding: 12px;
+  }
+}

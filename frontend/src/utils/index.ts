@@ -3,6 +3,7 @@ import { httpRequest } from '@/api/http-init';
 import type { HttpResponse } from '@/api/http-init';
 import { getMessage } from './messageBus';
 import { corePortBindError } from '@/lib/core-port-error';
+import { readableMessage } from '@/lib/readable-message';
 
 type RespEnvelope = { success?: unknown; msg?: unknown; obj?: unknown };
 
@@ -13,7 +14,7 @@ export class Msg<T = unknown> {
 
   constructor(success: boolean = false, msg: string = '', obj: T | null = null) {
     this.success = success;
-    this.msg = msg;
+    this.msg = readableMessage(msg);
     this.obj = obj;
   }
 }
@@ -54,99 +55,77 @@ export class HttpUtil {
   }
 
   static _respToMsg(resp: HttpResponse | undefined): Msg {
-    if (!resp || !resp.data) {
-      return new Msg(false, 'No response data');
-    }
+    if (resp?.ok && (resp.status === 204 || resp.status === 205)) return new Msg(true);
+    if (!resp || !resp.data) return new Msg(false, 'No response data');
     const { data } = resp;
-    if (data == null) {
-      return new Msg(true);
-    }
     if (typeof data === 'object' && 'success' in (data as object)) {
       const d = data as RespEnvelope;
-      return new Msg(Boolean(d.success), typeof d.msg === 'string' ? d.msg : '', d.obj ?? null);
+      return new Msg(d.success === true, typeof d.msg === 'string' ? d.msg : '', d.obj ?? null);
     }
     return typeof data === 'object' ? (data as Msg) : new Msg(false, 'unknown data:', data);
   }
 
-  static async get<T = unknown>(
+  private static async request<T>(
+    method: 'GET' | 'POST' | 'DELETE',
+    url: string,
+    data: unknown,
+    options: HttpOptions,
+  ): Promise<Msg<T>> {
+    const { silent, silentSuccess, ...rest } = options;
+    try {
+      const resp = await httpRequest(method, url, data, rest);
+      const msg = this._respToMsg(resp) as Msg<T>;
+      if (!silent) this._handleMsg(msg, silentSuccess);
+      return msg;
+    } catch (error) {
+      if (rest.signal?.aborted) return new Msg<T>(false, '');
+      const err =
+        error && typeof error === 'object'
+          ? (error as {
+              response?: { data?: { msg?: unknown; message?: unknown } };
+              message?: unknown;
+            })
+          : undefined;
+      const candidates = [
+        err?.response?.data?.msg,
+        err?.response?.data?.message,
+        err?.message,
+        typeof error === 'string' ? error : undefined,
+      ];
+      const text =
+        candidates.find(
+          (value): value is string => typeof value === 'string' && value.length > 0,
+        ) || 'Request failed';
+      const msg = new Msg<T>(false, text);
+      if (!silent) {
+        console.error(`${method} request failed:`, error);
+        this._handleMsg(msg);
+      }
+      return msg;
+    }
+  }
+
+  static get<T = unknown>(
     url: string,
     params?: unknown,
     options: HttpOptions = {},
   ): Promise<Msg<T>> {
-    const { silent, silentSuccess, ...rest } = options;
-    try {
-      const resp = await httpRequest('GET', url, undefined, { ...rest, params });
-      const msg = this._respToMsg(resp) as Msg<T>;
-      if (!silent) this._handleMsg(msg, silentSuccess);
-      return msg;
-    } catch (error) {
-      const err = error as {
-        response?: { data?: { msg?: string; message?: string } };
-        message?: string;
-      };
-      const data = err.response?.data;
-      const errorMsg = new Msg<T>(
-        false,
-        data?.msg || data?.message || err.message || 'Request failed',
-      );
-      if (!silent) {
-        console.error('GET request failed:', error);
-        this._handleMsg(errorMsg);
-      }
-      return errorMsg;
-    }
+    return this.request<T>('GET', url, undefined, {
+      ...options,
+      ...(params === undefined ? {} : { params }),
+    });
   }
 
-  static async post<T = unknown>(
+  static post<T = unknown>(
     url: string,
     data?: unknown,
     options: HttpOptions = {},
   ): Promise<Msg<T>> {
-    const { silent, silentSuccess, ...rest } = options;
-    try {
-      const resp = await httpRequest('POST', url, data, rest);
-      const msg = this._respToMsg(resp) as Msg<T>;
-      if (!silent) this._handleMsg(msg, silentSuccess);
-      return msg;
-    } catch (error) {
-      const err = error as {
-        response?: { data?: { msg?: string; message?: string } };
-        message?: string;
-      };
-      const data = err.response?.data;
-      const errorMsg = new Msg<T>(
-        false,
-        data?.msg || data?.message || err.message || 'Request failed',
-      );
-      if (!silent) {
-        console.error('POST request failed:', error);
-        this._handleMsg(errorMsg);
-      }
-      return errorMsg;
-    }
+    return this.request<T>('POST', url, data, options);
   }
 
-  static async delete<T = unknown>(url: string, options: HttpOptions = {}): Promise<Msg<T>> {
-    const { silent, silentSuccess, ...rest } = options;
-    try {
-      const resp = await httpRequest('DELETE', url, undefined, rest);
-      const msg = this._respToMsg(resp) as Msg<T>;
-      if (!silent) this._handleMsg(msg, silentSuccess);
-      return msg;
-    } catch (error) {
-      console.error('DELETE request failed:', error);
-      const err = error as {
-        response?: { data?: { msg?: string; message?: string } };
-        message?: string;
-      };
-      const data = err.response?.data;
-      const errorMsg = new Msg<T>(
-        false,
-        data?.msg || data?.message || err.message || 'Request failed',
-      );
-      if (!silent) this._handleMsg(errorMsg);
-      return errorMsg;
-    }
+  static delete<T = unknown>(url: string, options: HttpOptions = {}): Promise<Msg<T>> {
+    return this.request<T>('DELETE', url, undefined, options);
   }
 
   static async postWithModal<T = unknown>(
@@ -692,7 +671,14 @@ export class Base64 {
     if (safe) {
       return Base64.encode(content).replace(/\+/g, '-').replace(/=/g, '').replace(/\//g, '_');
     }
-    return window.btoa(String.fromCharCode(...new TextEncoder().encode(content)));
+    const bytes = new TextEncoder().encode(content);
+    const chunks: string[] = [];
+    // Spreading the entire subscription/config exceeds the engine's argument
+    // limit for large inputs. Keep each call bounded without changing UTF-8.
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 0x8000)));
+    }
+    return window.btoa(chunks.join(''));
   }
 
   static alternativeEncode(content: string): string {
@@ -752,8 +738,9 @@ export class TimeFormatter {
     if (second < 60) return second.toFixed(0) + 's';
     if (second < 3600) return (second / 60).toFixed(0) + 'm';
     if (second < 3600 * 24) return (second / 3600).toFixed(0) + 'h';
-    const day = Math.floor(second / 3600 / 24);
-    const remain = Number((second / 3600 - day * 24).toFixed(0));
+    const hours = Math.round(second / 3600);
+    const day = Math.floor(hours / 24);
+    const remain = hours % 24;
     return day + 'd' + (remain > 0 ? ' ' + remain + 'h' : '');
   }
 }
@@ -776,7 +763,11 @@ export class CookieManager {
     for (let c of ca) {
       c = c.trim();
       if (c.indexOf(name) === 0) {
-        return decodeURIComponent(c.substring(name.length, c.length));
+        try {
+          return decodeURIComponent(c.substring(name.length));
+        } catch {
+          return '';
+        }
       }
     }
     return '';

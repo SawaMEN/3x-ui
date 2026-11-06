@@ -1,3 +1,5 @@
+import { migrateLegacyXhttp } from '@/schemas/protocols/stream/xhttp';
+
 // Shapes the streamSettings subtree that 3x-ui persists to match what
 // xray-core actually consumes. The panel's Zod defaults mirror the full
 // SplitHTTPConfig / SockoptObject schema, but many fields are mode-specific
@@ -222,7 +224,7 @@ export function normalizeXhttpForWire(
   raw: Record<string, unknown>,
   side: StreamWireSide,
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...raw };
+  const out = migrateLegacyXhttp(raw) as Record<string, unknown>;
   liftLegacyXhttpSessionKeys(out);
   const mode = typeof out.mode === 'string' && out.mode !== '' ? out.mode : 'auto';
   const enableXmux = out.enableXmux === true;
@@ -236,7 +238,7 @@ export function normalizeXhttpForWire(
     if (out.scMinPostsIntervalMs === '' || out.scMinPostsIntervalMs === '30') {
       delete out.scMinPostsIntervalMs;
     }
-    delete out.uplinkChunkSize;
+    // Client tuning is persisted on inbounds for subscription propagation.
   }
 
   if (isRecord(out.xmux)) {
@@ -323,17 +325,56 @@ export function normalizeSockoptForWire(
   return out;
 }
 
+const STREAM_TRANSPORT_KEYS = [
+  'tcpSettings',
+  'rawSettings',
+  'wsSettings',
+  'httpSettings',
+  'grpcSettings',
+  'httpupgradeSettings',
+  'xhttpSettings',
+  'xdriveSettings',
+  'kcpSettings',
+  'quicSettings',
+  'hysteriaSettings',
+];
+const STREAM_TRANSPORT_SETTINGS: Record<string, readonly string[]> = Object.fromEntries(
+  STREAM_TRANSPORT_KEYS.map((key) => [key.slice(0, -8), [key]]),
+);
+STREAM_TRANSPORT_SETTINGS.tcp = STREAM_TRANSPORT_SETTINGS.raw = ['tcpSettings', 'rawSettings'];
+
 export function normalizeStreamSettingsForWire(
   stream: Record<string, unknown>,
   opts: { side: StreamWireSide },
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...stream };
 
+  // The form retains old transport subforms when switching tabs. Only the
+  // selected transport belongs on the wire; preserve unknown future settings.
+  const network = String(out.method ?? out.network ?? '')
+    .trim()
+    .toLowerCase();
+  const active = STREAM_TRANSPORT_SETTINGS[network];
+  if (active) {
+    for (const key of STREAM_TRANSPORT_KEYS) if (!active.includes(key)) delete out[key];
+  }
+
   const xhttp = out.xhttpSettings;
   if (isRecord(xhttp)) {
     out.xhttpSettings = normalizeXhttpForWire(xhttp, opts.side);
   }
 
+  if (opts.side === 'outbound' && isRecord(out.hysteriaSettings)) {
+    const hy = { ...out.hysteriaSettings };
+    for (const key of [
+      'masquerade',
+      'udpIdleTimeout',
+      'ignoreClientBandwidth',
+      'ignore_client_bandwidth',
+    ])
+      delete hy[key];
+    out.hysteriaSettings = hy;
+  }
   const tls = out.tlsSettings;
   if (isRecord(tls)) {
     out.tlsSettings = normalizeTlsForWire(tls);

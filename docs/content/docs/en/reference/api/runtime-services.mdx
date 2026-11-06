@@ -26,14 +26,17 @@ _openapi:
       title: Return available VK TURN proxy versions.
       url: '#return-available-vk-turn-proxy-versions'
     - depth: 2
+      title: List upstream core releases with a binary compatible with this server.
+      url: '#list-upstream-core-releases-with-a-binary-compatible-with-this-server'
+    - depth: 2
       title: Return sing-box installation and runtime status.
       url: '#return-sing-box-installation-and-runtime-status'
     - depth: 2
+      title: Return Hiddify Core installation and runtime status.
+      url: '#return-hiddify-core-installation-and-runtime-status'
+    - depth: 2
       title: Return Sudoku installation status.
       url: '#return-sudoku-installation-status'
-    - depth: 2
-      title: Return available sing-box versions.
-      url: '#return-available-sing-box-versions'
     - depth: 2
       title: Enable or disable a VK TURN proxy client for an inbound.
       url: '#enable-or-disable-a-vk-turn-proxy-client-for-an-inbound'
@@ -62,23 +65,18 @@ _openapi:
       title: Upload a VK TURN proxy package.
       url: '#upload-a-vk-turn-proxy-package'
     - depth: 2
-      title: Install sing-box using the configured channel.
-      url: '#install-sing-box-using-the-configured-channel'
-    - depth: 2
       title: Install or update the managed Sudoku tunnel binary.
       url: '#install-or-update-the-managed-sudoku-tunnel-binary'
-    - depth: 2
-      title: Install a specific sing-box version.
-      url: '#install-a-specific-sing-box-version'
-    - depth: 2
-      title: Uninstall sing-box.
-      url: '#uninstall-sing-box'
     - depth: 2
       title: Return the editable sing-box configuration.
       url: '#return-the-editable-sing-box-configuration'
     - depth: 2
       title: Save the editable sing-box configuration.
       url: '#save-the-editable-sing-box-configuration'
+    - depth: 2
+      title: Decode a supported connection share link into a native outbound without
+        saving.
+      url: '#decode-a-supported-connection-share-link-into-a-native-outbound-without-saving'
     - depth: 2
       title: Reset the editable sing-box configuration to generated defaults.
       url: '#reset-the-editable-sing-box-configuration-to-generated-defaults'
@@ -122,8 +120,15 @@ _openapi:
       title: Return the Telemt Web Proxy and external port 443 status.
       url: '#return-the-telemt-web-proxy-and-external-port-443-status'
     - depth: 2
+      title: Check WEB Proxy domain, TLS, DNS, port and frontend prerequisites without
+        applying changes.
+      url: '#check-web-proxy-domain-tls-dns-port-and-frontend-prerequisites-without-applying-changes'
+    - depth: 2
       title: Enable the Telemt Web Proxy.
       url: '#enable-the-telemt-web-proxy'
+    - depth: 2
+      title: Read Telemt WEB runtime diagnostics.
+      url: '#read-telemt-web-runtime-diagnostics'
     - depth: 2
       title: Disable the Telemt Web Proxy.
       url: '#disable-the-telemt-web-proxy'
@@ -141,12 +146,14 @@ _openapi:
         id: return-vk-turn-proxy-runtime-status
       - content: Return available VK TURN proxy versions.
         id: return-available-vk-turn-proxy-versions
+      - content: List upstream core releases with a binary compatible with this server.
+        id: list-upstream-core-releases-with-a-binary-compatible-with-this-server
       - content: Return sing-box installation and runtime status.
         id: return-sing-box-installation-and-runtime-status
+      - content: Return Hiddify Core installation and runtime status.
+        id: return-hiddify-core-installation-and-runtime-status
       - content: Return Sudoku installation status.
         id: return-sudoku-installation-status
-      - content: Return available sing-box versions.
-        id: return-available-sing-box-versions
       - content: Enable or disable a VK TURN proxy client for an inbound.
         id: enable-or-disable-a-vk-turn-proxy-client-for-an-inbound
       - content: Restart the active core service.
@@ -165,18 +172,15 @@ _openapi:
         id: stop-the-vk-turn-proxy-service
       - content: Upload a VK TURN proxy package.
         id: upload-a-vk-turn-proxy-package
-      - content: Install sing-box using the configured channel.
-        id: install-sing-box-using-the-configured-channel
       - content: Install or update the managed Sudoku tunnel binary.
         id: install-or-update-the-managed-sudoku-tunnel-binary
-      - content: Install a specific sing-box version.
-        id: install-a-specific-sing-box-version
-      - content: Uninstall sing-box.
-        id: uninstall-sing-box
       - content: Return the editable sing-box configuration.
         id: return-the-editable-sing-box-configuration
       - content: Save the editable sing-box configuration.
         id: save-the-editable-sing-box-configuration
+      - content: Decode a supported connection share link into a native outbound without
+          saving.
+        id: decode-a-supported-connection-share-link-into-a-native-outbound-without-saving
       - content: Reset the editable sing-box configuration to generated defaults.
         id: reset-the-editable-sing-box-configuration-to-generated-defaults
       - content: Return current swap and ZRAM status.
@@ -205,23 +209,34 @@ _openapi:
         id: reboot-the-panel-host-after-system-updates
       - content: Return the Telemt Web Proxy and external port 443 status.
         id: return-the-telemt-web-proxy-and-external-port-443-status
+      - content: Check WEB Proxy domain, TLS, DNS, port and frontend prerequisites
+          without applying changes.
+        id: check-web-proxy-domain-tls-dns-port-and-frontend-prerequisites-without-applying-changes
       - content: Enable the Telemt Web Proxy.
         id: enable-the-telemt-web-proxy
+      - content: Read Telemt WEB runtime diagnostics.
+        id: read-telemt-web-runtime-diagnostics
       - content: Disable the Telemt Web Proxy.
         id: disable-the-telemt-web-proxy
-    contents: []
+    contents:
+      - content: Optional site selects automatic setup, a bundled catalog page or a
+          locally generated theme. Omit site to preserve the current selection;
+          use mode auto to restore the default. Previously saved HTML sites
+          remain supported for compatibility.
+        heading: enable-the-telemt-web-proxy
+      - content: Authenticated, bounded WEB availability, lifecycle and capacity
+          counters. No session secrets are returned.
+        heading: read-telemt-web-runtime-diagnostics
 ---
 
 {/* This file was generated by Fumadocs. Do not edit this file directly. Any changes should be made by running the generation command again. */}
 
 export default function Layout(props) {
-  const { APIPage, OpenAPIPage } = props.components ?? {};
-  // "APIPage" is the old name from v10, this allows both for backward compatibility
-  const Comp = OpenAPIPage ?? APIPage;
+  const { OpenAPIPage } = props.components ?? {};
   return (
     <>
       {props.children}
-      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/export-all","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/export/{clientId}","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/peer-options","method":"get"},{"path":"/panel/api/server/coreConfigJson","method":"get"},{"path":"/panel/api/server/vk-turn-proxy/status","method":"get"},{"path":"/panel/api/server/vk-turn-proxy/versions","method":"get"},{"path":"/panel/api/setting/singbox/status","method":"get"},{"path":"/panel/api/setting/sudoku/status","method":"get"},{"path":"/panel/api/setting/singbox/versions","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/clients/{clientId}/enable","method":"post"},{"path":"/panel/api/server/restartCoreService","method":"post"},{"path":"/panel/api/server/stopCoreService","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/install/{version}","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/logs/{count}","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/restart","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/start","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/stop","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/upload","method":"post"},{"path":"/panel/api/setting/singbox/install","method":"post"},{"path":"/panel/api/setting/sudoku/update","method":"post"},{"path":"/panel/api/setting/singbox/install/{version}","method":"post"},{"path":"/panel/api/setting/singbox/uninstall","method":"post"},{"path":"/panel/api/setting/singbox/config","method":"get"},{"path":"/panel/api/setting/singbox/config","method":"post"},{"path":"/panel/api/setting/singbox/config/reset","method":"post"},{"path":"/panel/api/setting/swap/status","method":"get"},{"path":"/panel/api/setting/swap/create","method":"post"},{"path":"/panel/api/setting/swap/delete","method":"post"},{"path":"/panel/api/setting/swap/swappiness","method":"post"},{"path":"/panel/api/setting/swap/zram/create","method":"post"},{"path":"/panel/api/setting/swap/zram/delete","method":"post"},{"path":"/panel/api/setting/swap/zram/install","method":"post"},{"path":"/panel/api/setting/swap/zram/reinstall","method":"post"},{"path":"/panel/api/setting/system/update/status","method":"get"},{"path":"/panel/api/setting/system/update/check","method":"post"},{"path":"/panel/api/setting/system/update/apply","method":"post"},{"path":"/panel/api/setting/system/update/reboot","method":"post"},{"path":"/panel/api/telemt/webproxy/status","method":"get"},{"path":"/panel/api/telemt/webproxy/enable","method":"post"},{"path":"/panel/api/telemt/webproxy/disable","method":"post"}]} showTitle />
+      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/export-all","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/export/{clientId}","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/peer-options","method":"get"},{"path":"/panel/api/server/coreConfigJson","method":"get"},{"path":"/panel/api/server/vk-turn-proxy/status","method":"get"},{"path":"/panel/api/server/vk-turn-proxy/versions","method":"get"},{"path":"/panel/api/setting/cores/{core}/versions","method":"get"},{"path":"/panel/api/setting/singbox/status","method":"get"},{"path":"/panel/api/setting/hiddify/status","method":"get"},{"path":"/panel/api/setting/sudoku/status","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/clients/{clientId}/enable","method":"post"},{"path":"/panel/api/server/restartCoreService","method":"post"},{"path":"/panel/api/server/stopCoreService","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/install/{version}","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/logs/{count}","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/restart","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/start","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/stop","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/upload","method":"post"},{"path":"/panel/api/setting/sudoku/update","method":"post"},{"path":"/panel/api/setting/singbox/config","method":"get"},{"path":"/panel/api/setting/singbox/config","method":"post"},{"path":"/panel/api/setting/singbox/import-link","method":"post"},{"path":"/panel/api/setting/singbox/config/reset","method":"post"},{"path":"/panel/api/setting/swap/status","method":"get"},{"path":"/panel/api/setting/swap/create","method":"post"},{"path":"/panel/api/setting/swap/delete","method":"post"},{"path":"/panel/api/setting/swap/swappiness","method":"post"},{"path":"/panel/api/setting/swap/zram/create","method":"post"},{"path":"/panel/api/setting/swap/zram/delete","method":"post"},{"path":"/panel/api/setting/swap/zram/install","method":"post"},{"path":"/panel/api/setting/swap/zram/reinstall","method":"post"},{"path":"/panel/api/setting/system/update/status","method":"get"},{"path":"/panel/api/setting/system/update/check","method":"post"},{"path":"/panel/api/setting/system/update/apply","method":"post"},{"path":"/panel/api/setting/system/update/reboot","method":"post"},{"path":"/panel/api/telemt/webproxy/status","method":"get"},{"path":"/panel/api/telemt/webproxy/preflight","method":"post"},{"path":"/panel/api/telemt/webproxy/enable","method":"post"},{"path":"/panel/api/telemt/webproxy/diagnostics","method":"get"},{"path":"/panel/api/telemt/webproxy/disable","method":"post"}]} showTitle />
     </>
   );
 }

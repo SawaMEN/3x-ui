@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestAutoRenewClients_UpdatesEveryInboundForSharedEmail(t *testing.T) {
@@ -26,7 +26,7 @@ func TestAutoRenewClients_UpdatesEveryInboundForSharedEmail(t *testing.T) {
 			t.Fatalf("SyncInbound %d: %v", ib.Id, err)
 		}
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib1.Id, Email: shared.Email, Enable: false,
 		Up: 100, Down: 200, Reset: 30, ExpiryTime: past,
 	}).Error; err != nil {
@@ -40,7 +40,7 @@ func TestAutoRenewClients_UpdatesEveryInboundForSharedEmail(t *testing.T) {
 		t.Fatalf("renewed count = %d, want 1 shared client", count)
 	}
 
-	var traffic xray.ClientTraffic
+	var traffic coremodel.ClientTraffic
 	if err := db.Where("email = ?", shared.Email).First(&traffic).Error; err != nil {
 		t.Fatalf("read client_traffics: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestAutoRenewClients_PreservesOperatorDisabledClient(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, []model.Client{disabled}); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: disabled.Email, Enable: true,
 		Up: 100, Down: 200, Reset: 30, ExpiryTime: past,
 	}).Error; err != nil {
@@ -112,7 +112,7 @@ func TestAutoRenewClients_PreservesOperatorDisabledClient(t *testing.T) {
 	} else if count != 1 {
 		t.Fatalf("renewed count = %d, want 1", count)
 	}
-	var traffic xray.ClientTraffic
+	var traffic coremodel.ClientTraffic
 	if err := db.Where("email = ?", disabled.Email).First(&traffic).Error; err != nil {
 		t.Fatalf("read client_traffics: %v", err)
 	}

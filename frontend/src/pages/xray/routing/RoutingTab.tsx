@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Button, Dropdown, Input, Modal, Select, Space, Table, Tabs, message } from 'antd';
 import {
@@ -8,6 +9,7 @@ import {
   ImportOutlined,
   MoreOutlined,
   PlusOutlined,
+  SafetyOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
 
@@ -16,13 +18,18 @@ import PromptModal from '@/components/feedback/PromptModal';
 import TextModal from '@/components/feedback/TextModal';
 import { isBalancerLoopbackTag } from '../balancers/balancer-loopback';
 import { HttpUtil } from '@/utils';
+import { useInboundOptions } from '@/api/queries/useInboundOptions';
+import AdBlockTab from '@/pages/adblock/AdBlockTab';
 import RoutingBasic from './RoutingBasic';
+import QuickRoutingPanel from './QuickRoutingPanel';
+import RoutingCatalogTab from './RoutingCatalogTab';
 import RouteTester from './RouteTester';
 import RuleFormModal from './RuleFormModal';
 import type { RoutingRule } from './RuleFormModal';
 import RuleCardList from './RuleCardList';
+import { usePointerRowReorder } from '@/hooks/usePointerRowReorder';
 import { useRoutingColumns } from './useRoutingColumns';
-import { arrJoin, originalRuleIndex } from './helpers';
+import { arrJoin, originalRuleIndex, uniqueSelectableInboundTags } from './helpers';
 import type { RuleRow } from './types';
 import type { XraySettingsValue, SetTemplate } from '@/hooks/useXraySetting';
 import type { RuleObject } from '@/schemas/routing';
@@ -46,12 +53,22 @@ export default function RoutingTab({
   isMobile,
 }: RoutingTabProps) {
   const { t } = useTranslation();
+  const { data: availableInbounds } = useInboundOptions();
+  const [messageApi, messageContextHolder] = message.useMessage();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchParams = new URLSearchParams(location.search);
+  const requestedTab = searchParams.get('routingTab');
+  const activeTab = ['quick', 'basic', 'rules', 'catalog', 'tester', 'adblock'].includes(
+    requestedTab || '',
+  )
+    ? requestedTab!
+    : 'quick';
   const [modal, modalContextHolder] = Modal.useModal();
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<RoutingRule | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+  const rulesContainerRef = useRef<HTMLDivElement>(null);
 
   const [routingPresets, setRoutingPresets] = useState<
     { id: number; name: string; description: string; ruleCount: number }[]
@@ -61,18 +78,6 @@ export default function RoutingTab({
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
   const [presetBusy, setPresetBusy] = useState(false);
-  const dragRef = useRef<{
-    from: number | null;
-    to: number | null;
-    startY: number;
-    moved: boolean;
-  }>({
-    from: null,
-    to: null,
-    startY: 0,
-    moved: false,
-  });
-
   const rules = useMemo(
     () => (templateSettings?.routing?.rules || []) as RoutingRule[],
     [templateSettings?.routing?.rules],
@@ -86,7 +91,10 @@ export default function RoutingTab({
         .map((rule, idx) => {
           const r: RuleRow = { key: idx };
           r.enabled = rule.enabled !== false;
-          r.domain = arrJoin(rule.domain);
+          r.domain =
+            typeof rule.routingListId === 'number'
+              ? t('pages.xray.routingCatalog.listReference', { id: rule.routingListId })
+              : arrJoin(rule.domain);
           r.ip = arrJoin(rule.ip);
           r.port = rule.port;
           r.sourcePort = rule.sourcePort;
@@ -108,7 +116,7 @@ export default function RoutingTab({
           const inboundTags = (rules[r.key]?.inboundTag || []) as string[];
           return !inboundTags.some(isBalancerLoopbackTag);
         }),
-    [rules],
+    [rules, t],
   );
 
   useEffect(() => {
@@ -159,7 +167,7 @@ export default function RoutingTab({
           rules: RuleObject[];
         }>('/panel/api/xray/routingPresets/get/' + id);
         if (!msg?.success || !msg.obj) {
-          message.error(msg?.msg || t('pages.xray.routingPresetLoadFailed'));
+          messageApi.error(msg?.msg || t('pages.xray.routingPresetLoadFailed'));
           return;
         }
         mutate((tt) => {
@@ -167,17 +175,17 @@ export default function RoutingTab({
           tt.routing.rules = JSON.parse(JSON.stringify(msg.obj!.rules)) as RuleObject[];
         });
         setPresetId(id);
-        message.success(t('pages.xray.routingPresetApplied'));
+        messageApi.success(t('pages.xray.routingPresetApplied'));
       } finally {
         setPresetBusy(false);
       }
     },
-    [mutate, t],
+    [messageApi, mutate, t],
   );
 
   const saveRoutingPreset = useCallback(async () => {
     if (!presetName.trim()) {
-      message.warning(t('pages.xray.routingPresetNameRequired'));
+      messageApi.warning(t('pages.xray.routingPresetNameRequired'));
       return;
     }
     setPresetBusy(true);
@@ -192,18 +200,18 @@ export default function RoutingTab({
         { headers: { 'Content-Type': 'application/json' } },
       );
       if (!msg?.success) {
-        message.error(msg?.msg || t('pages.xray.routingPresetSaveFailed'));
+        messageApi.error(msg?.msg || t('pages.xray.routingPresetSaveFailed'));
         return;
       }
       setPresetSaveOpen(false);
       setPresetName('');
       setPresetDescription('');
       await refreshRoutingPresets();
-      message.success(t('pages.xray.routingPresetSaved'));
+      messageApi.success(t('pages.xray.routingPresetSaved'));
     } finally {
       setPresetBusy(false);
     }
-  }, [presetDescription, presetName, refreshRoutingPresets, rules, t]);
+  }, [messageApi, presetDescription, presetName, refreshRoutingPresets, rules, t]);
 
   const deleteRoutingPreset = useCallback(
     async (id: number) => {
@@ -211,27 +219,27 @@ export default function RoutingTab({
       try {
         const msg = await HttpUtil.post('/panel/api/xray/routingPresets/del/' + id);
         if (!msg?.success) {
-          message.error(msg?.msg || t('pages.xray.routingPresetDeleteFailed'));
+          messageApi.error(msg?.msg || t('pages.xray.routingPresetDeleteFailed'));
           return;
         }
         if (presetId === id) setPresetId(null);
         await refreshRoutingPresets();
-        message.success(t('pages.xray.routingPresetDeleted'));
+        messageApi.success(t('pages.xray.routingPresetDeleted'));
       } finally {
         setPresetBusy(false);
       }
     },
-    [presetId, refreshRoutingPresets, t],
+    [messageApi, presetId, refreshRoutingPresets, t],
   );
 
   const inboundTagOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
+    const tags: Array<string | undefined> = [];
     const push = (tag?: string) => {
-      if (!tag || seen.has(tag) || isBalancerLoopbackTag(tag)) return;
-      seen.add(tag);
-      out.push(tag);
+      tags.push(tag);
     };
+    // Panel-created inbounds are stored in the database, not necessarily in the
+    // editable Xray template. Use the same authenticated list as the inbound picker.
+    for (const ib of availableInbounds || []) push(ib.tag);
     for (const ib of (templateSettings?.inbounds as Array<{ tag?: string }>) || []) push(ib?.tag);
     for (const tag of inboundTags || []) push(tag);
     for (const ob of templateSettings?.outbounds || []) {
@@ -246,8 +254,8 @@ export default function RoutingTab({
       ?.servers || []) {
       if (typeof s === 'object' && s?.tag) push(s.tag);
     }
-    return out;
-  }, [templateSettings, inboundTags]);
+    return uniqueSelectableInboundTags(tags);
+  }, [templateSettings, inboundTags, availableInbounds]);
 
   const outboundTagOptions = useMemo(() => {
     const out = new Set<string>(['']);
@@ -285,7 +293,7 @@ export default function RoutingTab({
     try {
       parsed = JSON.parse(value);
     } catch {
-      message.error(t('pages.xray.importInvalidJson'));
+      messageApi.error(t('pages.xray.importInvalidJson'));
       return;
     }
     const obj = parsed as { rules?: unknown; routing?: { rules?: unknown } };
@@ -297,7 +305,7 @@ export default function RoutingTab({
           ? obj.routing!.rules
           : null;
     if (!list) {
-      message.error(t('pages.xray.importInvalidJson'));
+      messageApi.error(t('pages.xray.importInvalidJson'));
       return;
     }
     mutate((tt) => {
@@ -377,43 +385,15 @@ export default function RoutingTab({
     });
   }
 
-  function onHandlePointerDown(idx: number, ev: React.PointerEvent) {
-    if (ev.button != null && ev.button !== 0) return;
-    ev.preventDefault();
-    try {
-      (ev.currentTarget as Element).setPointerCapture(ev.pointerId);
-    } catch {
-      /* ignore */
-    }
-    dragRef.current = { from: idx, to: idx, startY: ev.clientY, moved: false };
-    setDraggedIndex(idx);
-    setDropTargetIndex(idx);
-
-    const onMove = (e: PointerEvent) => {
-      const state = dragRef.current;
-      if (state.from == null) return;
-      if (!state.moved && Math.abs(e.clientY - state.startY) < 5) return;
-      state.moved = true;
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      if (!el) return;
-      const target = el.closest('[data-row-key]');
-      if (!target) return;
-      const newIdx = Number(target.getAttribute('data-row-key'));
-      if (Number.isFinite(newIdx) && newIdx !== state.to) {
-        state.to = newIdx;
-        setDropTargetIndex(newIdx);
-      }
-    };
-
-    const onUp = () => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      document.removeEventListener('pointercancel', onUp);
-      const { from, to, moved } = dragRef.current;
-      dragRef.current = { from: null, to: null, startY: 0, moved: false };
-      setDraggedIndex(null);
-      setDropTargetIndex(null);
-      if (!moved || from == null || to == null || from === to) return;
+  const { drag, onPointerDown: onHandlePointerDown } = usePointerRowReorder({
+    containerRef: rulesContainerRef,
+    getRowKey: (row) => {
+      const key = Number(row.dataset.rowKey);
+      // Desktop table keys are original rule indices; mobile cards use visible positions.
+      const index = isMobile ? key : rows.findIndex((rule) => rule.key === key);
+      return Number.isInteger(index) && index >= 0 && index < rows.length ? index : null;
+    },
+    onDrop: ({ from, to }) => {
       const fromOrig = originalRuleIndex(rowsRef.current, from);
       const toOrig = originalRuleIndex(rowsRef.current, to);
       mutate((tt) => {
@@ -422,12 +402,10 @@ export default function RoutingTab({
         const [movedItem] = list.splice(fromOrig, 1);
         list.splice(toOrig, 0, movedItem);
       });
-    };
-
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-    document.addEventListener('pointercancel', onUp);
-  }
+    },
+  });
+  const draggedIndex = drag?.from ?? null;
+  const dropTargetIndex = drag?.to ?? null;
 
   const hasSource = rows.some((r) => r.sourceIP || r.sourcePort || r.vlessRoute);
   const hasBalancer = rows.some((r) => r.balancerTag);
@@ -452,10 +430,37 @@ export default function RoutingTab({
 
   return (
     <>
+      {messageContextHolder}
       {modalContextHolder}
       <Tabs
-        defaultActiveKey="basic"
+        activeKey={activeTab}
+        onChange={(key) => {
+          const next = new URLSearchParams(location.search);
+          next.set('routingTab', key);
+          navigate(
+            { pathname: location.pathname, search: next.toString(), hash: location.hash },
+            { preventScrollReset: true },
+          );
+        }}
         items={[
+          {
+            key: 'quick',
+            label: catTabLabel(<ControlOutlined />, 'Быстрые маршруты', isMobile),
+            children: (
+              <QuickRoutingPanel
+                engine="xray"
+                rules={rules as Record<string, unknown>[]}
+                inboundTags={inboundTagOptions}
+                outboundTags={outboundTagOptions}
+                onChange={(nextRules) =>
+                  mutate((tt) => {
+                    if (!tt.routing) tt.routing = { rules: [] };
+                    tt.routing.rules = nextRules as RuleObject[];
+                  })
+                }
+              />
+            ),
+          },
           {
             key: 'basic',
             label: catTabLabel(<ControlOutlined />, t('pages.xray.basicRouting'), isMobile),
@@ -463,6 +468,8 @@ export default function RoutingTab({
               <RoutingBasic
                 templateSettings={templateSettings}
                 setTemplateSettings={setTemplateSettings}
+                inboundTags={inboundTagOptions}
+                outboundTags={outboundTagOptions}
               />
             ),
           },
@@ -488,7 +495,7 @@ export default function RoutingTab({
                     onChange={(value) => {
                       if (value != null) void applyRoutingPreset(Number(value));
                     }}
-                    dropdownRender={(menu) => (
+                    popupRender={(menu) => (
                       <>
                         {menu}
                         <div
@@ -536,42 +543,58 @@ export default function RoutingTab({
                   </Dropdown>
                 </Space>
 
-                {isMobile ? (
-                  <RuleCardList
-                    rows={rows}
-                    draggedIndex={draggedIndex}
-                    dropTargetIndex={dropTargetIndex}
-                    onHandlePointerDown={onHandlePointerDown}
-                    openEdit={openEdit}
-                    moveUp={moveUp}
-                    moveDown={moveDown}
-                    confirmDelete={confirmDelete}
-                    toggleRule={toggleRule}
-                  />
-                ) : (
-                  <Table
-                    columns={desktopColumns}
-                    dataSource={rows}
-                    rowKey={(r) => r.key}
-                    pagination={false}
-                    scroll={{ x: tableScrollX }}
-                    size="small"
-                    className="routing-table"
-                    onRow={(_record, index) => {
-                      const classes: string[] = [];
-                      const i = index ?? -1;
-                      if (draggedIndex === i) classes.push('row-dragging');
-                      if (dropTargetIndex === i && draggedIndex !== i && draggedIndex != null) {
-                        classes.push(i > draggedIndex ? 'drop-after' : 'drop-before');
-                      }
-                      return {
-                        className: classes.join(' '),
-                        'data-row-key': i,
-                      } as React.HTMLAttributes<HTMLElement>;
-                    }}
-                  />
-                )}
+                <div ref={rulesContainerRef}>
+                  {isMobile ? (
+                    <RuleCardList
+                      rows={rows}
+                      draggedIndex={draggedIndex}
+                      dropTargetIndex={dropTargetIndex}
+                      onHandlePointerDown={onHandlePointerDown}
+                      openEdit={openEdit}
+                      moveUp={moveUp}
+                      moveDown={moveDown}
+                      confirmDelete={confirmDelete}
+                      toggleRule={toggleRule}
+                    />
+                  ) : (
+                    <Table
+                      columns={desktopColumns}
+                      dataSource={rows}
+                      rowKey={(r) => r.key}
+                      pagination={false}
+                      scroll={{ x: tableScrollX }}
+                      size="small"
+                      className="routing-table"
+                      onRow={(_record, index) => {
+                        const classes: string[] = [];
+                        const i = index ?? -1;
+                        if (draggedIndex === i) classes.push('row-dragging');
+                        if (dropTargetIndex === i && draggedIndex !== i && draggedIndex != null) {
+                          classes.push(i > draggedIndex ? 'drop-after' : 'drop-before');
+                        }
+                        return {
+                          className: classes.join(' '),
+                        } as React.HTMLAttributes<HTMLElement>;
+                      }}
+                    />
+                  )}
+                </div>
               </Space>
+            ),
+          },
+          {
+            key: 'catalog',
+            label: catTabLabel(
+              <UnorderedListOutlined />,
+              t('pages.xray.routingCatalog.title'),
+              isMobile,
+            ),
+            children: (
+              <RoutingCatalogTab
+                templateSettings={templateSettings}
+                setTemplateSettings={setTemplateSettings}
+                outboundTags={outboundTagOptions}
+              />
             ),
           },
           {
@@ -579,29 +602,36 @@ export default function RoutingTab({
             label: catTabLabel(<AimOutlined />, t('pages.xray.routeTester'), isMobile),
             children: <RouteTester inboundTags={inboundTagOptions} isMobile={isMobile} />,
           },
+          {
+            key: 'adblock',
+            label: catTabLabel(<SafetyOutlined />, 'AdBlock', isMobile),
+            children: <AdBlockTab />,
+          },
         ]}
       />
 
-      {presetId != null && routingPresets.some((p) => p.id === presetId) && (
-        <Space style={{ marginTop: 8 }} wrap>
-          <Button
-            danger
-            size="small"
-            loading={presetBusy}
-            onClick={() =>
-              modal.confirm({
-                title: t('pages.xray.deleteRoutingPreset'),
-                okText: t('delete'),
-                okType: 'danger',
-                cancelText: t('cancel'),
-                onOk: () => deleteRoutingPreset(presetId),
-              })
-            }
-          >
-            {t('delete')}
-          </Button>
-        </Space>
-      )}
+      {activeTab === 'rules' &&
+        presetId != null &&
+        routingPresets.some((p) => p.id === presetId) && (
+          <Space style={{ marginTop: 8 }} wrap>
+            <Button
+              danger
+              size="small"
+              loading={presetBusy}
+              onClick={() =>
+                modal.confirm({
+                  title: t('pages.xray.deleteRoutingPreset'),
+                  okText: t('delete'),
+                  okType: 'danger',
+                  cancelText: t('cancel'),
+                  onOk: () => deleteRoutingPreset(presetId),
+                })
+              }
+            >
+              {t('delete')}
+            </Button>
+          </Space>
+        )}
       <RuleFormModal
         open={ruleModalOpen}
         rule={editingRule}

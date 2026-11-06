@@ -57,15 +57,38 @@ function formatLocation(location: TelemtIPLocation): string {
 
 export default function TelemtConnectionsCard() {
   const [rows, setRows] = useState<TelemtConnection[]>([]);
+  const [installed, setInstalled] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [ipSamples, setIpSamples] = useState<{ at: number; count: number }[]>([]);
+  const [uniqueIPCount, setUniqueIPCount] = useState<number | null>(null);
 
   useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const load = async () => {
-      setLoading(true);
       try {
+        const status = await HttpUtil.get<{
+          installed: boolean;
+          active: boolean;
+          configured: boolean;
+        }>('/panel/api/telemt/status', undefined, { silent: true });
+        if (disposed) return;
+        // The standard MTProto clients already appear in the panel's main lists.
+        // This legacy card belongs only to an active standalone Telemt service.
+        const available =
+          status?.success === true &&
+          status.obj?.installed === true &&
+          status.obj?.active === true &&
+          status.obj?.configured === true;
+        setInstalled(available);
+        if (!available) {
+          setRows([]);
+          setIpSamples([]);
+          setUniqueIPCount(null);
+          return;
+        }
+        setLoading(true);
         const msg = await HttpUtil.get<TelemtConnection[]>(
           '/panel/api/telemt/connections',
           undefined,
@@ -73,12 +96,31 @@ export default function TelemtConnectionsCard() {
         );
 
         if (!disposed && msg?.success && Array.isArray(msg.obj)) {
-          setRows(
-            msg.obj.map((row) => ({
-              ...row,
-              activeIPs: Array.isArray(row.activeIPs) ? row.activeIPs : [],
-            })),
+          const updated = msg.obj.map((row) => ({
+            ...row,
+            activeIPs: Array.isArray(row.activeIPs) ? row.activeIPs : [],
+          }));
+          setRows(updated);
+          // The same public IP may occur under multiple Telemt users; count it once.
+          // When an active connection has no source-IP information, display N/A
+          // rather than reporting a potentially misleading zero.
+          const complete = !updated.some(
+            (row) => row.active && row.currentConnections > 0 && row.activeIPs.length === 0,
           );
+          if (complete) {
+            const count = new Set(
+              updated
+                .filter((row) => row.active)
+                .flatMap((row) => row.activeIPs.map((item) => item.ip)),
+            ).size;
+            setUniqueIPCount(count);
+            setIpSamples((previous) => {
+              const at = Date.now();
+              return [...previous.filter((sample) => sample.at >= at - 15 * 60_000), { at, count }];
+            });
+          } else {
+            setUniqueIPCount(null);
+          }
         }
       } finally {
         if (!disposed) {
@@ -97,6 +139,7 @@ export default function TelemtConnectionsCard() {
   }, []);
 
   const activeCount = useMemo(() => rows.filter((row) => row.active).length, [rows]);
+  const ipPeak = ipSamples.length ? Math.max(...ipSamples.map((sample) => sample.count)) : null;
 
   const columns = useMemo(
     () => [
@@ -105,7 +148,7 @@ export default function TelemtConnectionsCard() {
         dataIndex: 'username',
         key: 'username',
         render: (username: string, row: TelemtConnection) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Typography.Text strong>{username}</Typography.Text>
             <Typography.Text type="secondary">
               {row.recentIPCount > 0
@@ -119,7 +162,7 @@ export default function TelemtConnectionsCard() {
         title: 'Состояние',
         key: 'connections',
         render: (_: unknown, row: TelemtConnection) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             {row.active ? (
               <Tag color="green">
                 {row.currentConnections > 0 ? `${row.currentConnections} соединений` : 'Сейчас'}
@@ -135,7 +178,7 @@ export default function TelemtConnectionsCard() {
         title: 'Активные IP',
         key: 'activeIPs',
         render: (_: unknown, row: TelemtConnection) => (
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             {row.activeIPs.length > 0 ? (
               row.activeIPs.map((location) => (
                 <Typography.Text key={location.ip} code copyable={{ text: location.ip }}>
@@ -152,11 +195,11 @@ export default function TelemtConnectionsCard() {
         title: 'Геолокация',
         key: 'geo',
         render: (_: unknown, row: TelemtConnection) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             {row.activeIPs.length > 0 ? (
               row.activeIPs.map((location) => (
                 <span key={location.ip}>
-                  {location.countryCode ? <Tag bordered={false}>{location.countryCode}</Tag> : null}
+                  {location.countryCode ? <Tag variant="filled">{location.countryCode}</Tag> : null}
                   {formatLocation(location) || 'Неизвестно'}
                 </span>
               ))
@@ -177,6 +220,8 @@ export default function TelemtConnectionsCard() {
     [],
   );
 
+  if (!installed) return null;
+
   return (
     <Card
       hoverable
@@ -189,6 +234,10 @@ export default function TelemtConnectionsCard() {
           </span>
           <span className="ov-telemt-count">
             {activeCount > 0 ? `${activeCount} активных / ${rows.length}` : rows.length}
+            {' · IP: '}
+            {uniqueIPCount ?? '—'}
+            {' · пик за 15 мин: '}
+            {ipPeak ?? '—'}
           </span>
         </div>
       }

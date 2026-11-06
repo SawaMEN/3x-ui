@@ -2,29 +2,14 @@ package singbox
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"syscall"
 	"testing"
+	"time"
 )
-
-func TestProcessSupportsNativeAPI(t *testing.T) {
-	cases := []struct {
-		version string
-		want    bool
-	}{
-		{"Unknown", false},
-		{"", false},
-		{"1.13.9", false},
-		{"1.14.0", true},
-		{"1.14.1", true},
-		{"2.0.0", true},
-	}
-	for _, tc := range cases {
-		p := &Process{version: tc.version}
-		if got := p.SupportsNativeAPI(); got != tc.want {
-			t.Fatalf("version %q: got %v, want %v", tc.version, got, tc.want)
-		}
-	}
-}
 
 func TestManagedPathsAreAbsolute(t *testing.T) {
 	old, had := os.LookupEnv("XUI_BIN_FOLDER")
@@ -45,5 +30,60 @@ func TestProcessGetUptimeWithoutStartTime(t *testing.T) {
 	p := &Process{}
 	if got := p.GetUptime(); got != 0 {
 		t.Fatalf("expected zero uptime for a process without start metadata, got %d", got)
+	}
+}
+
+func TestIsolatedProcessNeverAdoptsManagedProcess(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux process discovery regression")
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.ReadFile(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	binary := filepath.Join(dir, GetBinaryName())
+	if err := os.WriteFile(binary, executable, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	production := exec.Command(binary, "srun", "-c", filepath.Join(dir, "managed.json"))
+	production.Env = append(os.Environ(), "XUI_SINGBOX_TEST_PROCESS=1")
+	if err := production.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = production.Process.Kill(); _ = production.Wait() }()
+	if _, err := os.Readlink("/proc/" + strconv.Itoa(production.Process.Pid) + "/exe"); os.IsPermission(err) || os.IsNotExist(err) {
+		t.Skipf("child process identity inspection unavailable: %v", err)
+	}
+	if !NewProcess(filepath.Join(dir, "managed.json")).IsRunning() {
+		t.Fatal("managed process was not discovered")
+	}
+	if processMatchesConfig(production.Process.Pid, binary, filepath.Join(dir, "managed.json"), "run") {
+		t.Fatal("Hiddify raw runtime would adopt a client-mode run process")
+	}
+	isolated := NewTestProcess(filepath.Join(dir, "test.json"))
+	if isolated.IsRunning() || isolated.GetUptime() != 0 {
+		t.Fatal("test process adopted production state")
+	}
+	if err := isolated.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if err := production.Process.Signal(syscall.Signal(0)); err != nil {
+		t.Fatalf("test process stopped production: %v", err)
+	}
+}
+
+// The copied test executable accepts the real sing-box command shape without
+// passing run/-c to the Go test flag parser.
+func init() {
+	if os.Getenv("XUI_SINGBOX_TEST_PROCESS") == "1" {
+		for {
+			time.Sleep(time.Hour)
+		}
 	}
 }

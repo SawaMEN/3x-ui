@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 type hangingUpdateRuntime struct {
@@ -36,7 +36,7 @@ func seedDepletedNodeClient(t *testing.T, nodeID, port int) {
 	t.Helper()
 	client := model.Client{Email: fmt.Sprintf("spent-%d", port), Enable: true}
 	ib := nodeInbound(t, nodeID, port, []model.Client{client})
-	if err := database.GetDB().Create(&xray.ClientTraffic{
+	if err := database.GetDB().Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: client.Email, Enable: true, Up: 100, Total: 100,
 	}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)

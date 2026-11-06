@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestSubJson_InfoNode_Active(t *testing.T) {
@@ -43,7 +43,7 @@ func TestSubJson_InfoNode_Active(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{InboundId: 1, ClientId: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: 1,
 		Email:     "user1@test.com",
 		Up:        1073741824,
@@ -103,7 +103,7 @@ func TestSubJson_InfoNode_Expired(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{InboundId: 1, ClientId: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId:  1,
 		Email:      "exp@test.com",
 		ExpiryTime: expiredTime,
@@ -161,7 +161,7 @@ func TestSubJson_InfoNode_Depleted(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{InboundId: 1, ClientId: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: 1,
 		Email:     "dep@test.com",
 		Up:        3221225472,
@@ -221,7 +221,7 @@ func TestSubJson_InfoNode_StatusActive(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{InboundId: 1, ClientId: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: 1,
 		Email:     "user1@test.com",
 		Up:        100,

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -11,7 +12,10 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
+	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
+	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 
 	"gorm.io/gorm"
@@ -25,6 +29,15 @@ type listenerSpan struct {
 }
 
 func inboundListenerSpans(ib *model.Inbound) []listenerSpan {
+	if mtproto.WebProxyInbound(ib) {
+		return []listenerSpan{{443, 443, transportTCP}}
+	}
+	if ib.Protocol == model.VetroffProxy {
+		return []listenerSpan{{ib.Port, ib.Port, transportTCP}}
+	}
+	if ib.Protocol == model.Tun {
+		return nil
+	}
 	if ib.Protocol != model.Mieru {
 		return []listenerSpan{{ib.Port, ib.Port, inboundTransports(ib.Protocol, ib.StreamSettings, ib.Settings)}}
 	}
@@ -69,7 +82,33 @@ func inboundTransports(protocol model.Protocol, streamSettings, settings string)
 	// Native sidecars expose their transport choice in protocol settings rather
 	// than Xray streamSettings.
 	switch protocol {
-	case model.TrustTunnel:
+	case model.Snell:
+		var st struct {
+			Version   int  `json:"version"`
+			QuicProxy bool `json:"quicProxy"`
+		}
+		if json.Unmarshal([]byte(settings), &st) == nil && st.Version == 5 && st.QuicProxy {
+			return transportTCP | transportUDP
+		}
+		return transportTCP
+	case model.MASQUE:
+		var st struct {
+			Version []int `json:"version"`
+		}
+		_ = json.Unmarshal([]byte(settings), &st)
+		if len(st.Version) == 0 {
+			return transportTCP | transportUDP
+		}
+		var bits transportBits
+		for _, v := range st.Version {
+			if v == 3 {
+				bits |= transportUDP
+			} else {
+				bits |= transportTCP
+			}
+		}
+		return bits
+	case model.TrustTunnel, model.VetroffProxy:
 		return transportTCP | transportUDP
 	case model.Hysteria, model.WireGuard, model.AmneziaWG, model.TUIC:
 		return transportUDP
@@ -246,6 +285,18 @@ func (s *InboundService) checkPortConflict(inbound *model.Inbound, ignoreId int)
 }
 
 func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*portConflictDetail, error) {
+	if udp := vetroffH3Listener(inbound); udp != nil {
+		if detail, err := checkPortConflictTx(db, udp, ignoreId); err != nil || detail != nil {
+			return detail, err
+		}
+	}
+	// WEB frontends bind HTTPS independently of the legacy inbound listen/port.
+	if mtproto.WebProxyInbound(inbound) {
+		copy := *inbound
+		copy.Listen = ""
+		copy.Port = 443
+		inbound = &copy
+	}
 	if inbound.Protocol == model.Pingtunnel {
 		var other model.Inbound
 		err := db.Where("protocol = ? AND enable = ? AND id <> ? AND node_id IS NULL", model.Pingtunnel, true, ignoreId).First(&other).Error
@@ -255,6 +306,23 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
+		return nil, nil
+	}
+	if inbound.NodeID == nil {
+		reserved, err := gatewayTemplatePresent(db)
+		if err != nil {
+			return nil, err
+		}
+		if reserved {
+			if inbound.Tag == "in-tproxy" {
+				return nil, fmt.Errorf("inbound tag in-tproxy is reserved by Gateway Mode")
+			}
+			if port, _ := spansOverlap(inboundListenerSpans(inbound), []listenerSpan{{52345, 52345, transportTCP | transportUDP}}); port > 0 {
+				return &portConflictDetail{Tag: "in-tproxy", Listen: "0.0.0.0", Port: port, Transports: transportTCP | transportUDP}, nil
+			}
+		}
+	}
+	if inbound.Protocol == model.Tun {
 		return nil, nil
 	}
 	newBits := inboundTransports(inbound.Protocol, inbound.StreamSettings, inbound.Settings)
@@ -323,6 +391,13 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 		if conflict != nil {
 			return conflict, nil
 		}
+		conflict, err = checkTuicSocksConflict(db, inbound, ignoreId, newBits)
+		if err != nil {
+			return nil, err
+		}
+		if conflict != nil {
+			return conflict, nil
+		}
 	}
 
 	// The reverse direction, only meaningful once the id is known -- AddInbound
@@ -357,11 +432,30 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 		forwardedBy.Transports = newBits
 		return forwardedBy, nil
 	}
+	if inbound.NodeID == nil && inbound.Protocol == model.TUIC && ignoreId > 0 {
+		if self := tuicSocksSelfConflict(inbound, ignoreId); self != "" {
+			return nil, common.NewError(self)
+		}
+		conflict, err := checkTuicSocksRelayCollision(db, ignoreId)
+		if err != nil {
+			return nil, err
+		}
+		if conflict != nil {
+			return conflict, nil
+		}
+		conflict, err = checkTuicSocksReverseConflict(db, ignoreId)
+		if err != nil {
+			return nil, err
+		}
+		if conflict != nil {
+			return conflict, nil
+		}
+	}
 
 	var candidates []*model.Inbound
 	q := db.Model(model.Inbound{})
 	if inbound.Protocol != model.Mieru {
-		q = q.Where("port = ? OR protocol = ?", inbound.Port, model.Mieru)
+		q = q.Where("port = ? OR protocol IN ?", inbound.Port, []model.Protocol{model.Mieru, model.MTProto, model.VetroffProxy})
 	}
 	if ignoreId > 0 {
 		q = q.Where("id != ?", ignoreId)
@@ -370,25 +464,36 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 		return nil, err
 	}
 
-	for _, c := range candidates {
-		if !sameNode(c.NodeID, inbound.NodeID) {
-			continue
+	for _, candidate := range candidates {
+		listeners := []*model.Inbound{candidate}
+		if udp := vetroffH3Listener(candidate); udp != nil {
+			listeners = append(listeners, udp)
 		}
-		if !listenOverlaps(c.Listen, inbound.Listen) {
-			continue
+		for _, c := range listeners {
+			if !sameNode(c.NodeID, inbound.NodeID) {
+				continue
+			}
+			if mtproto.WebProxyInbound(c) {
+				copy := *c
+				copy.Listen = ""
+				c = &copy
+			}
+			if !listenOverlaps(c.Listen, inbound.Listen) {
+				continue
+			}
+			port, shared := spansOverlap(newSpans, inboundListenerSpans(c))
+			if shared == 0 {
+				continue
+			}
+			return &portConflictDetail{
+				InboundID:  c.Id,
+				Remark:     c.Remark,
+				Tag:        c.Tag,
+				Listen:     c.Listen,
+				Port:       port,
+				Transports: shared,
+			}, nil
 		}
-		port, shared := spansOverlap(newSpans, inboundListenerSpans(c))
-		if shared == 0 {
-			continue
-		}
-		return &portConflictDetail{
-			InboundID:  c.Id,
-			Remark:     c.Remark,
-			Tag:        c.Tag,
-			Listen:     c.Listen,
-			Port:       port,
-			Transports: shared,
-		}, nil
 	}
 	return nil, nil
 }
@@ -528,6 +633,96 @@ func checkAmneziawgnetSocksReverseConflict(db *gorm.DB, id int) (*portConflictDe
 	return nil, nil
 }
 
+func checkTuicSocksConflict(db *gorm.DB, inbound *model.Inbound, ignoreId int, newBits transportBits) (*portConflictDetail, error) {
+	var candidates []*model.Inbound
+	q := db.Model(model.Inbound{}).Where("protocol = ? AND node_id IS NULL", model.TUIC)
+	if ignoreId > 0 {
+		q = q.Where("id != ?", ignoreId)
+	}
+	if err := q.Find(&candidates).Error; err != nil {
+		return nil, err
+	}
+	for _, c := range candidates {
+		if _, ok := tuic.InstanceFromInbound(c); !ok {
+			continue
+		}
+		if tuic.SOCKSPortForInbound(c.Id) != inbound.Port {
+			continue
+		}
+		return &portConflictDetail{
+			InboundID:  c.Id,
+			Remark:     c.Remark,
+			Tag:        c.Tag,
+			Listen:     "127.0.0.1",
+			Port:       inbound.Port,
+			Transports: newBits,
+		}, nil
+	}
+	return nil, nil
+}
+
+func checkTuicSocksRelayCollision(db *gorm.DB, id int) (*portConflictDetail, error) {
+	relayPort := tuic.SOCKSPortForInbound(id)
+	var candidates []*model.Inbound
+	if err := db.Model(model.Inbound{}).
+		Where("protocol = ? AND node_id IS NULL AND id != ?", model.TUIC, id).
+		Find(&candidates).Error; err != nil {
+		return nil, err
+	}
+	for _, c := range candidates {
+		if tuic.SOCKSPortForInbound(c.Id) != relayPort {
+			continue
+		}
+		return &portConflictDetail{
+			InboundID:  c.Id,
+			Remark:     c.Remark,
+			Tag:        c.Tag,
+			Listen:     "127.0.0.1",
+			Port:       relayPort,
+			Relay:      true,
+			Transports: transportTCP,
+		}, nil
+	}
+	return nil, nil
+}
+
+func tuicSocksSelfConflict(inbound *model.Inbound, id int) string {
+	if id <= 0 || inbound.NodeID != nil || !listenOverlaps(loopbackBind, inboundBindAddr(inbound)) {
+		return ""
+	}
+	relayPort := tuic.SOCKSPortForInbound(id)
+	if inbound.Port != relayPort {
+		return ""
+	}
+	return fmt.Sprintf("TUIC port %d is inbound #%d's own SOCKS5 relay port on 127.0.0.1; choose a different TUIC port",
+		relayPort, id)
+}
+
+func checkTuicSocksReverseConflict(db *gorm.DB, id int) (*portConflictDetail, error) {
+	relayPort := tuic.SOCKSPortForInbound(id)
+	var candidates []*model.Inbound
+	if err := db.Model(model.Inbound{}).
+		Where("port = ? AND node_id IS NULL AND id != ?", relayPort, id).
+		Find(&candidates).Error; err != nil {
+		return nil, err
+	}
+	for _, c := range candidates {
+		if !listenOverlaps(loopbackBind, inboundBindAddr(c)) {
+			continue
+		}
+		return &portConflictDetail{
+			InboundID:  c.Id,
+			Remark:     c.Remark,
+			Tag:        c.Tag,
+			Listen:     c.Listen,
+			Port:       relayPort,
+			Relay:      true,
+			Transports: transportTCP,
+		}, nil
+	}
+	return nil, nil
+}
+
 func sameNode(a, b *int) bool {
 	if a == nil && b == nil {
 		return true
@@ -633,4 +828,52 @@ func (s *InboundService) tagExists(tag string, ignoreId int) (bool, error) {
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func gatewayTemplatePresent(db *gorm.DB) (bool, error) {
+	var rows []model.Setting
+	if err := db.Where("key IN ?", []string{"xrayTemplateConfig", "singBoxConfigTemplate", "singBoxUpstreamConfigTemplate"}).Find(&rows).Error; err != nil {
+		return false, err
+	}
+	for _, row := range rows {
+		var cfg struct {
+			Inbounds []map[string]any `json:"inbounds"`
+		}
+		if json.Unmarshal([]byte(row.Value), &cfg) != nil {
+			continue
+		}
+		for _, inbound := range cfg.Inbounds {
+			if inbound["tag"] == "in-tproxy" && (inbound["type"] == "tproxy" || inbound["protocol"] == "tunnel" || inbound["protocol"] == "dokodemo-door") {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func vetroffH3Listener(ib *model.Inbound) *model.Inbound {
+	if ib == nil || ib.Protocol != model.VetroffProxy {
+		return nil
+	}
+	var settings externalvpn.Settings
+	if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil {
+		return nil
+	}
+	if settings.Vetroff != nil && !settings.Vetroff.HTTP3 {
+		return nil
+	}
+	clone := *ib
+	clone.Protocol, clone.Settings = model.Hysteria, "{}"
+	if settings.Vetroff != nil && settings.Vetroff.H3Listen != "" {
+		host, port, err := net.SplitHostPort(settings.Vetroff.H3Listen)
+		if err != nil {
+			return nil
+		}
+		number, err := strconv.Atoi(port)
+		if err != nil {
+			return nil
+		}
+		clone.Listen, clone.Port = host, number
+	}
+	return &clone
 }

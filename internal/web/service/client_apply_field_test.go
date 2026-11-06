@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestResetClientExpiryTimeByEmail_MultiInbound reproduces #5039: a client
@@ -127,7 +127,7 @@ func TestSetClientEnableByEmail_MultiInbound(t *testing.T) {
 			t.Fatalf("SyncInbound(%s): %v", ib.Tag, err)
 		}
 	}
-	if err := db.Create(&xray.ClientTraffic{InboundId: first.Id, Email: email, Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: first.Id, Email: email, Enable: true}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
 	}
 

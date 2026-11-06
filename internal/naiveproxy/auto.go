@@ -6,50 +6,12 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sync"
-	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
-var automaticLifecycleOnce sync.Once
-
-// StartAutomaticLifecycle continuously converges standalone Naive state to the
-// panel database. The official Caddy-Naive binary is installed lazily only when
-// Xray is active and at least one local enabled Naive inbound exists.
-func StartAutomaticLifecycle() {
-	automaticLifecycleOnce.Do(func() {
-		go func() {
-			ticker := time.NewTicker(reconcileInterval)
-			defer ticker.Stop()
-			var lastError string
-			var lastErrorLog time.Time
-			for {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-				err := Ensure(ctx)
-				cancel()
-				if err != nil && database.GetDB() != nil {
-					now := time.Now()
-					message := err.Error()
-					if message != lastError || now.Sub(lastErrorLog) >= 5*time.Minute {
-						logger.Warning("NaiveProxy automatic lifecycle failed:", err)
-						lastError = message
-						lastErrorLog = now
-					}
-				} else {
-					lastError = ""
-					lastErrorLog = time.Time{}
-				}
-				<-ticker.C
-			}
-		}()
-	})
-}
-
-// Ensure is the synchronous form used after explicit updates and by the
-// background lifecycle. It installs the server only if it is actually needed.
+// Ensure synchronously installs and reconciles an explicitly requested standalone server.
 func Ensure(ctx context.Context) error {
 	needed, err := standaloneServerNeeded()
 	if err != nil {

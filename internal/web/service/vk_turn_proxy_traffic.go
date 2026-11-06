@@ -6,10 +6,10 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 type vkTurnProxyTrafficBinding struct {
@@ -69,11 +69,11 @@ func (s *InboundService) syncVKTurnProxyClientTrafficRows(tx *gorm.DB, inbounds 
 	for _, b := range bindings {
 		emails = append(emails, b.client.Email)
 	}
-	var rows []xray.ClientTraffic
+	var rows []coremodel.ClientTraffic
 	if err := tx.Where("email IN ?", emails).Find(&rows).Error; err != nil {
 		return false, err
 	}
-	existing := make(map[string]xray.ClientTraffic, len(rows))
+	existing := make(map[string]coremodel.ClientTraffic, len(rows))
 	for _, row := range rows {
 		existing[strings.ToLower(row.Email)] = row
 	}
@@ -97,7 +97,7 @@ func (s *InboundService) syncVKTurnProxyClientTrafficRows(tx *gorm.DB, inbounds 
 				updates["reset"] = b.client.Reset
 			}
 			if len(updates) > 0 {
-				if err := tx.Model(&xray.ClientTraffic{}).Where("email = ?", b.client.Email).Updates(updates).Error; err != nil {
+				if err := tx.Model(&coremodel.ClientTraffic{}).Where("email = ?", b.client.Email).Updates(updates).Error; err != nil {
 					return changed, err
 				}
 				changed = true
@@ -114,7 +114,7 @@ func (s *InboundService) syncVKTurnProxyClientTrafficRows(tx *gorm.DB, inbounds 
 
 // BuildVKTurnProxyInboundTraffics keeps VK TURN inbound totals visible in the existing traffic UI.
 // It deliberately does not consume or modify any WireGuard-specific statistics API.
-func (s *InboundService) BuildVKTurnProxyInboundTraffics(clientTraffics []*xray.ClientTraffic) ([]*xray.Traffic, error) {
+func (s *InboundService) BuildVKTurnProxyInboundTraffics(clientTraffics []*coremodel.ClientTraffic) ([]*coremodel.Traffic, error) {
 	if len(clientTraffics) == 0 {
 		return nil, nil
 	}
@@ -139,10 +139,10 @@ func (s *InboundService) BuildVKTurnProxyInboundTraffics(clientTraffics []*xray.
 	if err := database.GetDB().Select("id", "tag").Where("id IN ? AND protocol = ?", ids, model.VKTurnProxy).Find(&inbounds).Error; err != nil {
 		return nil, err
 	}
-	out := make([]*xray.Traffic, 0, len(inbounds))
+	out := make([]*coremodel.Traffic, 0, len(inbounds))
 	for _, ib := range inbounds {
 		if tag := strings.TrimSpace(ib.Tag); tag != "" {
-			out = append(out, &xray.Traffic{IsInbound: true, Tag: tag, Up: up[ib.Id], Down: down[ib.Id]})
+			out = append(out, &coremodel.Traffic{IsInbound: true, Tag: tag, Up: up[ib.Id], Down: down[ib.Id]})
 		}
 	}
 	return out, nil
@@ -166,13 +166,13 @@ func (s *InboundService) MigrationBackfillVKTurnProxyClientTraffics() {
 				continue
 			}
 			mc := vkTurnProxyClientToModelClient(&client)
-			var traffic xray.ClientTraffic
+			var traffic coremodel.ClientTraffic
 			err = db.Where("email = ?", mc.Email).First(&traffic).Error
 			switch {
 			case err == nil:
 				err = db.Model(&traffic).Updates(map[string]any{"inbound_id": ib.Id, "enable": mc.Enable, "total": mc.TotalGB, "expiry_time": mc.ExpiryTime, "reset": mc.Reset}).Error
 			case errors.Is(err, gorm.ErrRecordNotFound):
-				err = db.Create(&xray.ClientTraffic{InboundId: ib.Id, Email: mc.Email, Enable: mc.Enable, ExpiryTime: mc.ExpiryTime, Total: mc.TotalGB, Reset: mc.Reset}).Error
+				err = db.Create(&coremodel.ClientTraffic{InboundId: ib.Id, Email: mc.Email, Enable: mc.Enable, ExpiryTime: mc.ExpiryTime, Total: mc.TotalGB, Reset: mc.Reset}).Error
 			}
 			if err != nil {
 				logger.Warningf("vk-turn-proxy traffic backfill failed for client %s: %v", mc.Email, err)

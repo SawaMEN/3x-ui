@@ -1,9 +1,6 @@
 import { z } from 'zod';
 
-// Hysteria inbound. Each client supplies an `auth` token instead of a
-// UUID/password. xray-core builds version 2 only — it answers anything else
-// with "version != 2" and rejects the entire config, so a legacy row is
-// coerced rather than carried through.
+// Each client supplies a Hysteria auth token. The native core supports v1 and v2.
 export const HysteriaClientSchema = z.object({
   auth: z.string().min(1),
   email: z.string().min(1),
@@ -24,7 +21,7 @@ export const HysteriaClientSchema = z.object({
 export type HysteriaClient = z.infer<typeof HysteriaClientSchema>;
 
 export const HysteriaInboundSettingsSchema = z.object({
-  version: z.preprocess(() => 2, z.literal(2)).default(2),
+  version: z.union([z.literal(1), z.literal(2)]).default(2),
   clients: z.array(HysteriaClientSchema).default([]),
 });
 export type HysteriaInboundSettings = z.infer<typeof HysteriaInboundSettingsSchema>;

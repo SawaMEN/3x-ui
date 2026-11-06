@@ -1,13 +1,14 @@
 package service
 
 import (
-	"archive/zip"
-	"bufio"
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/ecdh"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -17,7 +18,6 @@ import (
 	"maps"
 	"math"
 	"mime/multipart"
-	stdnet "net"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,18 +30,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
-	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+
+	stdnet "net"
 
 	"github.com/google/uuid"
 	utls "github.com/refraction-networking/utls"
@@ -51,6 +45,19 @@ import (
 	"github.com/shirou/gopsutil/v4/load"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/net"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
+	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
 )
 
 // ProcessState represents the current state of a system process.
@@ -66,6 +73,9 @@ const (
 // Status represents comprehensive system and application status information.
 // It includes CPU, memory, disk, network statistics, and Xray process status.
 type Status struct {
+	ResourceScope      string   `json:"resourceScope,omitempty"`
+	UnavailableMetrics []string `json:"unavailableMetrics,omitempty"`
+
 	T           time.Time `json:"-"`
 	Cpu         float64   `json:"cpu"`
 	CpuCores    int       `json:"cpuCores"`
@@ -96,6 +106,11 @@ type Status struct {
 		ErrorMsg string       `json:"errorMsg"`
 		Version  string       `json:"version"`
 	} `json:"xray"`
+	SingBox struct {
+		State    ProcessState `json:"state"`
+		ErrorMsg string       `json:"errorMsg"`
+		Version  string       `json:"version"`
+	} `json:"singbox"`
 	VKTurnProxy VKTurnProxyRuntimeStatus `json:"vkTurnProxy"`
 	// AmneziaWG gates the overview's AmneziaWG log view: Configured stays true
 	// while an inbound exists but its embedded interface isn't up yet, which
@@ -145,13 +160,17 @@ type Release struct {
 // ServerService provides business logic for server monitoring and management.
 // It handles system status collection, IP detection, and application statistics.
 type ServerService struct {
-	xrayService        XrayService
+	lxcMetrics         sys.LXCReader
+	nextIPv4Lookup     time.Time
+	nextIPv6Lookup     time.Time
+	ipv6RetryInterval  time.Duration
+	publicIPLookupDone chan struct{}
+	xrayService        CoreService
 	inboundService     InboundService
 	settingService     SettingService
 	cachedIPv4         string
 	cachedIPv6         string
 	noIPv6             bool
-	resolvingIPs       bool
 	mu                 sync.Mutex
 	lastCPUTimes       cpu.TimesStat
 	hasLastCPUSample   bool
@@ -160,27 +179,16 @@ type ServerService struct {
 	cachedCpuSpeedMhz  float64
 	lastCpuInfoAttempt time.Time
 
-	lastStatusMu sync.RWMutex
-	lastStatus   *Status
-	coldStatusMu sync.Mutex
-
-	versionsCacheMu sync.Mutex
-	versionsCache   *cachedXrayVersions
+	lastStatusMu         sync.RWMutex
+	lastStatus           *Status
+	coldStatusMu         sync.Mutex
+	refreshStatusMu      sync.Mutex
+	statusRefreshPending atomic.Bool
 
 	fail2banMu        sync.Mutex
 	fail2banInstalled bool
 	fail2banCheckedAt time.Time
 }
-
-type cachedXrayVersions struct {
-	versions  []string
-	fetchedAt time.Time
-}
-
-// xrayVersionsCacheTTL bounds how often /getXrayVersion hits GitHub. The list
-// is purely informational (rendered in the "switch Xray version" picker) so a
-// quarter-hour staleness window is fine and saves the API budget.
-const xrayVersionsCacheTTL = 15 * time.Minute
 
 // allowedHistoryBuckets is the bucket-second whitelist for time-series
 // aggregation endpoints (server + node metrics). Restricting it prevents
@@ -219,9 +227,16 @@ func (s *ServerService) LastStatus() *Status {
 const statusFreshnessTTL = 5 * time.Second
 
 func (s *ServerService) CurrentStatus() *Status {
-	if status := s.LastStatus(); status != nil && time.Since(status.T) <= statusFreshnessTTL {
+	if status := s.LastStatus(); status != nil {
+		if time.Since(status.T) > statusFreshnessTTL && s.statusRefreshPending.CompareAndSwap(false, true) {
+			common.GoRecover("refresh stale server status", func() {
+				defer s.statusRefreshPending.Store(false)
+				s.RefreshStatus()
+			})
+		}
 		return status
 	}
+
 	s.coldStatusMu.Lock()
 	defer s.coldStatusMu.Unlock()
 	if status := s.LastStatus(); status != nil && time.Since(status.T) <= statusFreshnessTTL {
@@ -271,7 +286,9 @@ func (s *ServerService) isFail2banInstalled() bool {
 		return s.fail2banInstalled
 	}
 
-	err := exec.CommandContext(context.Background(), "fail2ban-client", "-h").Run()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := exec.CommandContext(ctx, "fail2ban-client", "-h").Run()
 	s.fail2banInstalled = err == nil
 	s.fail2banCheckedAt = time.Now()
 	return s.fail2banInstalled
@@ -282,6 +299,16 @@ func (s *ServerService) isFail2banInstalled() bool {
 // be nil if collection failed). Called by the background ticker; the caller is
 // responsible for any side effects (websocket broadcast, xray metrics sample).
 func (s *ServerService) RefreshStatus() *Status {
+	// Cron may fire again while a previous sample is blocked on disk or a
+	// core lock. Never accumulate collectors or race over CPU sampler state.
+	if !s.refreshStatusMu.TryLock() {
+		return s.LastStatus()
+	}
+	defer s.refreshStatusMu.Unlock()
+	watchdog := time.AfterFunc(statusFreshnessTTL, func() {
+		logger.Warning("server status collection exceeded 5s; serving the last successful snapshot")
+	})
+	defer watchdog.Stop()
 	next := s.GetStatus(s.LastStatus())
 	if next == nil {
 		return nil
@@ -291,31 +318,6 @@ func (s *ServerService) RefreshStatus() *Status {
 	s.lastStatusMu.Unlock()
 	s.AppendStatusSample(time.Now(), next)
 	return next
-}
-
-// GetXrayVersionsCached wraps GetXrayVersions with a TTL cache. On fetch
-// failure we serve the last successful list (if any) so the UI doesn't go
-// blank during a GitHub API hiccup; if there's no cache at all the underlying
-// error is surfaced.
-func (s *ServerService) GetXrayVersionsCached() ([]string, error) {
-	s.versionsCacheMu.Lock()
-	cache := s.versionsCache
-	s.versionsCacheMu.Unlock()
-	if cache != nil && time.Since(cache.fetchedAt) <= xrayVersionsCacheTTL {
-		return cache.versions, nil
-	}
-	versions, err := s.GetXrayVersions()
-	if err != nil {
-		if cache != nil {
-			logger.Warning("GetXrayVersionsCached: serving stale list:", err)
-			return cache.versions, nil
-		}
-		return nil, err
-	}
-	s.versionsCacheMu.Lock()
-	s.versionsCache = &cachedXrayVersions{versions: versions, fetchedAt: time.Now()}
-	s.versionsCacheMu.Unlock()
-	return versions, nil
 }
 
 // GetDefaultLogOutboundTags scans the default Xray config for freedom and
@@ -359,7 +361,7 @@ func (s *ServerService) GetDefaultLogOutboundTags() (freedoms, blackholes []stri
 // Kept for back-compat with the original /panel/api/server/cpuHistory/:bucket route;
 // the response key is "cpu" (not "v") so legacy consumers parse unchanged.
 func (s *ServerService) AggregateCpuHistory(bucketSeconds int, maxPoints int) []map[string]any {
-	out := systemMetrics.aggregate("cpu", bucketSeconds, maxPoints)
+	out := systemMetrics.aggregate(s.systemMetricKey("cpu"), bucketSeconds, maxPoints)
 	for _, p := range out {
 		p["cpu"] = p["v"]
 		delete(p, "v")
@@ -371,7 +373,7 @@ func (s *ServerService) AggregateCpuHistory(bucketSeconds int, maxPoints int) []
 // known system metric (see SystemMetricKeys). Output points have keys
 // {"t": unixSec, "v": value}; the caller decides how to format the value.
 func (s *ServerService) AggregateSystemMetric(metric string, bucketSeconds int, maxPoints int) []map[string]any {
-	return systemMetrics.aggregate(metric, bucketSeconds, maxPoints)
+	return systemMetrics.aggregate(s.systemMetricKey(metric), bucketSeconds, maxPoints)
 }
 
 type LogEntry struct {
@@ -398,16 +400,14 @@ type MLKEM768Response struct {
 	Client string `json:"client" example:"mlkem768-client"`
 }
 
-func getPublicIP(url string) string {
-	client := &http.Client{
-		Timeout: 3 * time.Second,
-	}
+var publicIPHTTPClient = &http.Client{Timeout: 3 * time.Second}
 
+func getPublicIP(url string) string {
 	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if reqErr != nil {
 		return "N/A"
 	}
-	resp, err := client.Do(req)
+	resp, err := publicIPHTTPClient.Do(req)
 	if err != nil {
 		return "N/A"
 	}
@@ -421,17 +421,20 @@ func getPublicIP(url string) string {
 		return "N/A"
 	}
 
-	ip, err := io.ReadAll(resp.Body)
+	ip, err := io.ReadAll(io.LimitReader(resp.Body, 129))
 	if err != nil {
 		return "N/A"
 	}
 
-	ipString := strings.TrimSpace(string(ip))
-	if ipString == "" {
+	if len(ip) > 128 {
 		return "N/A"
 	}
-
-	return ipString
+	ipString := strings.TrimSpace(string(ip))
+	parsed := stdnet.ParseIP(ipString)
+	if parsed == nil || !parsed.IsGlobalUnicast() || parsed.IsPrivate() || parsed.IsLoopback() {
+		return "N/A"
+	}
+	return parsed.String()
 }
 
 var publicIPv4Services = []string{
@@ -451,71 +454,76 @@ var publicIPv6Services = []string{
 	"https://6.ident.me",
 }
 
-// resolvePublicIPs caches the public IPv4/IPv6 addresses on first use. The
-// lookups run outside s.mu so a stalling service cannot block a status sample.
+// resolvePublicIPs waits for the initial lookup so cold backups can use it.
+// Warm callers use cached addresses while a refresh runs in the background.
 func (s *ServerService) resolvePublicIPs() {
-	s.mu.Lock()
-	wantIPv4 := s.cachedIPv4 == ""
-	wantIPv6 := s.cachedIPv6 == "" && !s.noIPv6
-	s.mu.Unlock()
-	if !wantIPv4 && !wantIPv6 {
-		return
-	}
-
-	var ipv4, ipv6 string
-	if wantIPv4 {
-		ipv4 = firstPublicIP(publicIPv4Services)
-	}
-	if wantIPv6 {
-		ipv6 = firstPublicIP(publicIPv6Services)
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if wantIPv4 && s.cachedIPv4 == "" {
-		s.cachedIPv4 = ipv4
-	}
-	if wantIPv6 && s.cachedIPv6 == "" {
-		s.cachedIPv6 = ipv6
-	}
-	if s.cachedIPv6 == "N/A" {
-		s.noIPv6 = true
+	ipv4, ipv6 := s.publicIPs()
+	if done := s.resolvePublicIPsInBackground(); done != nil && ipv4 == "" && ipv6 == "" {
+		<-done
 	}
 }
 
 // firstPublicIP returns the first service that answers, or "N/A" when every
 // one of them fails.
-func firstPublicIP(services []string) string {
+func firstPublicIP(services []string, ipv6 bool) string {
 	var ip string
 	for _, service := range services {
 		ip = getPublicIP(service)
-		if ip != "N/A" {
-			break
+		parsed := stdnet.ParseIP(ip)
+		if parsed != nil && (parsed.To4() == nil) == ipv6 {
+			return ip
 		}
 	}
-	return ip
+	return "N/A"
 }
 
-// resolvePublicIPsInBackground keeps a status sample off the lookup path: a box
-// with no IPv6 route spends 3s per service, and the sample is what nodes report.
-func (s *ServerService) resolvePublicIPsInBackground() {
+// resolvePublicIPsInBackground shares one lookup without blocking status samples.
+// Each address family has its own deadline; cached values stay readable.
+func (s *ServerService) resolvePublicIPsInBackground() <-chan struct{} {
 	s.mu.Lock()
-	settled := s.cachedIPv4 != "" && (s.cachedIPv6 != "" || s.noIPv6)
-	if s.resolvingIPs || settled {
+	if done := s.publicIPLookupDone; done != nil {
 		s.mu.Unlock()
-		return
+		return done
 	}
-	s.resolvingIPs = true
+	now := time.Now()
+	wantIPv4 := !now.Before(s.nextIPv4Lookup)
+	wantIPv6 := !now.Before(s.nextIPv6Lookup)
+	if !wantIPv4 && !wantIPv6 {
+		s.mu.Unlock()
+		return nil
+	}
+	done := make(chan struct{})
+	s.publicIPLookupDone = done
 	s.mu.Unlock()
 
 	go func() {
-		defer func() {
-			s.mu.Lock()
-			s.resolvingIPs = false
-			s.mu.Unlock()
-		}()
-		s.resolvePublicIPs()
+		var ipv4, ipv6 string
+		if wantIPv4 {
+			ipv4 = firstPublicIP(publicIPv4Services, false)
+		}
+		if wantIPv6 {
+			ipv6 = firstPublicIP(publicIPv6Services, true)
+		}
+
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		now := time.Now()
+		if wantIPv4 {
+			s.cachedIPv4, s.nextIPv4Lookup = refreshedPublicIP(s.cachedIPv4, ipv4, now)
+		}
+		if wantIPv6 {
+			s.cachedIPv6, s.nextIPv6Lookup = refreshedPublicIP(s.cachedIPv6, ipv6, now)
+			if ipv6 != "" && ipv6 != "N/A" {
+				s.ipv6RetryInterval = 0
+			} else {
+				s.ipv6RetryInterval = nextPublicIPv6RetryInterval(s.ipv6RetryInterval)
+				s.nextIPv6Lookup = now.Add(s.ipv6RetryInterval)
+			}
+		}
+		s.publicIPLookupDone = nil
+		close(done)
 	}()
+	return done
 }
 
 func (s *ServerService) publicIPs() (ipv4 string, ipv6 string) {
@@ -530,53 +538,51 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		T: now,
 	}
 
-	// CPU stats
-	util, err := s.sampleCPUUtilization()
-	if err != nil {
-		logger.Warning("get cpu percent failed:", err)
+	scoped, scopeErr := s.lxcMetrics.Read(now)
+	if scopeErr != nil {
+		logger.Warning("get scoped metrics failed:", scopeErr)
+	}
+	if scoped != nil {
+		applyLXCStats(status, scoped)
 	} else {
-		status.Cpu = util
-	}
+		// CPU stats
+		util, err := s.sampleCPUUtilization()
+		if err != nil {
+			logger.Warning("get cpu percent failed:", err)
+		} else {
+			status.Cpu = util
+		}
 
-	status.CpuCores, err = cpu.Counts(false)
-	if err != nil {
-		logger.Warning("get cpu cores count failed:", err)
-	}
+		status.CpuCores, err = cpu.Counts(false)
+		if err != nil {
+			logger.Warning("get cpu cores count failed:", err)
+		}
 
-	status.LogicalPro = runtime.NumCPU()
+		status.LogicalPro = runtime.NumCPU()
 
-	if status.CpuSpeedMhz = s.cachedCpuSpeedMhz; s.cachedCpuSpeedMhz == 0 && time.Since(s.lastCpuInfoAttempt) > 5*time.Minute {
-		s.lastCpuInfoAttempt = time.Now()
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			cpuInfos, err := cpu.Info()
+		if status.CpuSpeedMhz = s.cachedCpuSpeedMhz; s.cachedCpuSpeedMhz == 0 && time.Since(s.lastCpuInfoAttempt) > 5*time.Minute {
+			s.lastCpuInfoAttempt = time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+			cpuInfos, err := cpu.InfoWithContext(ctx)
+			cancel()
 			if err != nil {
 				logger.Warning("get cpu info failed:", err)
-				return
-			}
-			if len(cpuInfos) > 0 {
+			} else if len(cpuInfos) > 0 {
 				s.cachedCpuSpeedMhz = cpuInfos[0].Mhz
 				status.CpuSpeedMhz = s.cachedCpuSpeedMhz
-			} else {
-				logger.Warning("could not find cpu info")
 			}
-		}()
-		select {
-		case <-done:
-		case <-time.After(1500 * time.Millisecond):
-			logger.Warning("cpu info query timed out; will retry later")
+		} else if s.cachedCpuSpeedMhz != 0 {
+			status.CpuSpeedMhz = s.cachedCpuSpeedMhz
 		}
-	} else if s.cachedCpuSpeedMhz != 0 {
-		status.CpuSpeedMhz = s.cachedCpuSpeedMhz
-	}
 
-	// Uptime
-	upTime, err := host.Uptime()
-	if err != nil {
-		logger.Warning("get uptime failed:", err)
-	} else {
-		status.Uptime = upTime
+		// Uptime
+		upTime, err := host.Uptime()
+		if err != nil {
+			logger.Warning("get uptime failed:", err)
+		} else {
+			status.Uptime = upTime
+		}
+
 	}
 
 	// Memory stats
@@ -588,15 +594,17 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		status.Mem.Total = memInfo.Total
 	}
 
-	if total, used, swapErr := systemswap.Summary(); swapErr == nil {
-		// /proc/swaps is authoritative for Linux and includes zram swap devices.
-		status.Swap.Current = used
-		status.Swap.Total = total
-	} else if swapInfo, fallbackErr := mem.SwapMemory(); fallbackErr != nil {
-		logger.Warning("get swap memory failed:", fallbackErr)
-	} else {
-		status.Swap.Current = swapInfo.Used
-		status.Swap.Total = swapInfo.Total
+	if scoped == nil {
+		if total, used, swapErr := systemswap.Summary(); swapErr == nil {
+			// /proc/swaps is authoritative for Linux and includes zram swap devices.
+			status.Swap.Current = used
+			status.Swap.Total = total
+		} else if swapInfo, fallbackErr := mem.SwapMemory(); fallbackErr != nil {
+			logger.Warning("get swap memory failed:", fallbackErr)
+		} else {
+			status.Swap.Current = swapInfo.Used
+			status.Swap.Total = swapInfo.Total
+		}
 	}
 
 	// Disk stats
@@ -692,34 +700,24 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	status.PublicIP.IPv4, status.PublicIP.IPv6 = s.publicIPs()
 
 	// Active core uptime
-	coreType, err := s.settingService.GetCoreType()
-	if err != nil {
-		coreType = CoreTypeXray
+	if SelectedNativeCore().IsRunning() {
+		status.CoreUptime = SelectedNativeCore().process().GetUptime()
 	}
-	if coreType == CoreTypeSingBox {
-		if singBoxProcess.IsRunning() {
-			status.CoreUptime = singBoxProcess.GetUptime()
+	status.Xray.State = Stop
+	status.SingBox.State = Stop
+	if core, _ := s.settingService.GetCoreType(); core == CoreTypeXray {
+		status.Xray.State = (&CoreService{}).GetCoreState()
+		status.Xray.Version = (&CoreService{}).GetCoreVersion()
+		if err := SelectedNativeCore().LastError(); err != nil {
+			status.Xray.ErrorMsg = err.Error()
 		}
-	} else if process := currentXrayProcess(); process != nil && process.IsRunning() {
-		status.CoreUptime = process.GetUptime()
-	}
-
-	// Xray status
-	if s.xrayService.IsXrayRunning() {
-		status.Xray.State = Running
-		// A core that runs but was refused the new config is a fault the
-		// operator only ever sees here and in the node list.
-		status.Xray.ErrorMsg = s.xrayService.GetHeldBackConfig()
 	} else {
-		err := s.xrayService.GetXrayErr()
-		if err != nil {
-			status.Xray.State = Error
-		} else {
-			status.Xray.State = Stop
-		}
-		status.Xray.ErrorMsg = s.xrayService.GetXrayResult()
+		status.SingBox.State = (&CoreService{}).GetCoreState()
+		status.SingBox.Version = (&CoreService{}).GetCoreVersion()
 	}
-	status.Xray.Version = s.xrayService.GetXrayVersion()
+	if err := SelectedNativeCore().LastError(); err != nil {
+		status.SingBox.ErrorMsg = err.Error()
+	}
 	status.VKTurnProxy = VKTurnProxyRuntime().GetStatus()
 
 	var amneziawgCount int64
@@ -745,11 +743,7 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		status.AppStats.Mem = rtm.Sys
 	}
 	status.AppStats.Threads = uint32(runtime.NumGoroutine())
-	if process := currentXrayProcess(); process != nil && process.IsRunning() {
-		status.AppStats.Uptime = process.GetUptime()
-	} else {
-		status.AppStats.Uptime = 0
-	}
+	status.AppStats.Uptime = status.CoreUptime
 
 	return status
 }
@@ -757,7 +751,7 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 // AppendCpuSample is preserved for callers that only have the CPU number.
 // New callers should prefer AppendStatusSample which writes the full set.
 func (s *ServerService) AppendCpuSample(t time.Time, v float64) {
-	systemMetrics.append("cpu", t, v)
+	systemMetrics.append(s.systemMetricKey("cpu"), t, v)
 }
 
 // AppendStatusSample writes one tick of every metric we keep — CPU, memory
@@ -768,14 +762,14 @@ func (s *ServerService) AppendStatusSample(t time.Time, status *Status) {
 	if status == nil {
 		return
 	}
-	systemMetrics.append("cpu", t, status.Cpu)
+	appendScopedMetric(status, "cpu", t, status.Cpu)
 	if status.Mem.Total > 0 {
 		systemMetrics.append("mem", t, float64(status.Mem.Current)*100.0/float64(status.Mem.Total))
 	}
 	if status.Swap.Total > 0 {
-		systemMetrics.append("swap", t, float64(status.Swap.Current)*100.0/float64(status.Swap.Total))
+		appendScopedMetric(status, "swap", t, float64(status.Swap.Current)*100.0/float64(status.Swap.Total))
 	} else {
-		systemMetrics.append("swap", t, 0)
+		appendScopedMetric(status, "swap", t, 0)
 	}
 	systemMetrics.append("netUp", t, float64(status.NetIO.Up))
 	systemMetrics.append("netDown", t, float64(status.NetIO.Down))
@@ -789,7 +783,7 @@ func (s *ServerService) AppendStatusSample(t time.Time, status *Status) {
 	systemMetrics.append("tcpCount", t, float64(status.TcpCount))
 	systemMetrics.append("udpCount", t, float64(status.UdpCount))
 	online := 0
-	if process := currentXrayProcess(); process != nil && process.IsRunning() {
+	if process := currentOnlinePresence(); process != nil {
 		online = len(process.GetOnlineClients())
 	}
 	systemMetrics.append("online", t, float64(online))
@@ -886,73 +880,10 @@ func (s *ServerService) sampleCPUUtilization() (float64, error) {
 }
 
 const (
-	maxXrayArchiveBytes = 200 << 20
-	maxXrayBinaryBytes  = 200 << 20
 	// maxXrayDigestBytes caps the .dgst checksum sidecar read; it is a few
 	// hundred bytes in practice.
 	maxXrayDigestBytes = 64 << 10
 )
-
-func (s *ServerService) GetXrayVersions() ([]string, error) {
-	const (
-		XrayURL    = "https://api.github.com/repos/XTLS/Xray-core/releases"
-		bufferSize = 8192
-	)
-
-	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, XrayURL, nil)
-	if reqErr != nil {
-		return nil, reqErr
-	}
-	resp, err := s.settingService.NewProxiedHTTPClient(10 * time.Second).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Check HTTP status code - GitHub API returns object instead of array on error
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		var errorResponse struct {
-			Message string `json:"message"`
-		}
-		if json.Unmarshal(bodyBytes, &errorResponse) == nil && errorResponse.Message != "" {
-			return nil, fmt.Errorf("GitHub API error: %s", errorResponse.Message)
-		}
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, resp.Status)
-	}
-
-	buffer := bytes.NewBuffer(make([]byte, bufferSize))
-	buffer.Reset()
-	if _, err := buffer.ReadFrom(resp.Body); err != nil {
-		return nil, err
-	}
-
-	var releases []Release
-	if err := json.Unmarshal(buffer.Bytes(), &releases); err != nil {
-		return nil, err
-	}
-
-	var versions []string
-	for _, release := range releases {
-		tagVersion := strings.TrimPrefix(release.TagName, "v")
-		tagParts := strings.Split(tagVersion, ".")
-		if len(tagParts) != 3 {
-			continue
-		}
-
-		major, err1 := strconv.Atoi(tagParts[0])
-		minor, err2 := strconv.Atoi(tagParts[1])
-		patch, err3 := strconv.Atoi(tagParts[2])
-		if err1 != nil || err2 != nil || err3 != nil {
-			continue
-		}
-
-		if major > 26 || (major == 26 && minor > 6) || (major == 26 && minor == 6 && patch >= 27) {
-			versions = append(versions, release.TagName)
-		}
-	}
-	return versions, nil
-}
 
 func (s *ServerService) StopXrayService() error {
 	err := s.xrayService.StopXray()
@@ -972,239 +903,12 @@ func (s *ServerService) RestartXrayService() error {
 	return nil
 }
 
-func (s *ServerService) downloadXRay(version string) (string, error) {
-	osName := runtime.GOOS
-	arch := runtime.GOARCH
+// syslogTimeout keeps a stalled journalctl from hanging the Syslog request (#6629).
+var syslogTimeout = 15 * time.Second
 
-	switch osName {
-	case "darwin":
-		osName = "macos"
-	case "windows":
-		osName = "windows"
-	}
-
-	switch arch {
-	case "amd64":
-		arch = "64"
-	case "arm64":
-		arch = "arm64-v8a"
-	case "armv7":
-		arch = "arm32-v7a"
-	case "armv6":
-		arch = "arm32-v6"
-	case "armv5":
-		arch = "arm32-v5"
-	case "386":
-		arch = "32"
-	case "s390x":
-		arch = "s390x"
-	}
-
-	fileName := fmt.Sprintf("Xray-%s-%s.zip", osName, arch)
-	url := fmt.Sprintf("https://github.com/XTLS/Xray-core/releases/download/%s/%s", version, fileName)
-	client := s.settingService.NewProxiedHTTPClient(60 * time.Second)
-	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
-	if reqErr != nil {
-		return "", reqErr
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download xray: unexpected HTTP %d", resp.StatusCode)
-	}
-	if resp.ContentLength > maxXrayArchiveBytes {
-		return "", fmt.Errorf("download xray: archive exceeds %d bytes", maxXrayArchiveBytes)
-	}
-
-	file, err := os.CreateTemp("", "xray-*.zip")
-	if err != nil {
-		return "", err
-	}
-	path := file.Name()
-	ok := false
-	defer func() {
-		_ = file.Close()
-		if !ok {
-			_ = os.Remove(path)
-		}
-	}()
-
-	n, err := io.Copy(file, io.LimitReader(resp.Body, maxXrayArchiveBytes+1))
-	if err != nil {
-		return "", err
-	}
-	if n > maxXrayArchiveBytes {
-		return "", fmt.Errorf("download xray: archive exceeds %d bytes", maxXrayArchiveBytes)
-	}
-
-	// Verify the archive against the SHA2-256 published in the release's .dgst
-	// sidecar before installing it. TLS protects the transport, not the artifact;
-	// a corrupted or tampered asset must not be installed and run as xray.
-	want, err := s.fetchXrayDigestSHA256(client, url+".dgst")
-	if err != nil {
-		return "", err
-	}
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return "", err
-	}
-	hasher := sha256.New()
-	if _, err := io.Copy(hasher, file); err != nil {
-		return "", err
-	}
-	if got := hex.EncodeToString(hasher.Sum(nil)); !strings.EqualFold(got, want) {
-		// User-facing warning: the archive's SHA-256 does not match the official
-		// release checksum, so the download is corrupted or has been tampered
-		// with. Abort the install so a bad binary is never run, and tell the user
-		// to retry/re-download rather than proceed with a mismatched image.
-		return "", fmt.Errorf("Xray update aborted: the downloaded archive does not match the official SHA-256 checksum, so the image is corrupted or differs from the official release. Please exit and re-download the official image, then try again (expected %s, got %s)", want, got)
-	}
-
-	ok = true
-	return path, nil
-}
-
-// fetchXrayDigestSHA256 downloads the .dgst sidecar XTLS publishes next to each
-// release asset and returns the SHA2-256 hex digest it lists.
-func (s *ServerService) fetchXrayDigestSHA256(client *http.Client, dgstURL string) (string, error) {
-	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, dgstURL, nil)
-	if reqErr != nil {
-		return "", fmt.Errorf("download xray checksum: %w", reqErr)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("download xray checksum: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download xray checksum: unexpected HTTP %d", resp.StatusCode)
-	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxXrayDigestBytes))
-	if err != nil {
-		return "", fmt.Errorf("download xray checksum: %w", err)
-	}
-	return parseXrayDigestSHA256(raw)
-}
-
-// parseXrayDigestSHA256 extracts the lowercase SHA2-256 hex from an XTLS .dgst
-// file, whose lines are "ALGO= <hex>" (the relevant one being "SHA2-256= ...").
-func parseXrayDigestSHA256(dgst []byte) (string, error) {
-	for line := range strings.SplitSeq(string(dgst), "\n") {
-		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "SHA2-256=")
-		if !ok {
-			continue
-		}
-		h := strings.ToLower(strings.TrimSpace(rest))
-		if len(h) != 64 {
-			return "", fmt.Errorf("xray checksum: malformed SHA2-256 entry in digest")
-		}
-		return h, nil
-	}
-	return "", fmt.Errorf("xray checksum: no SHA2-256 entry in digest")
-}
-
-func (s *ServerService) UpdateXray(version string) error {
-	versions, err := s.GetXrayVersions()
-	if err != nil {
-		return err
-	}
-	if !slices.Contains(versions, version) {
-		return fmt.Errorf("xray version %q is not in the fetched release list", version)
-	}
-
-	// 1. Stop xray before doing anything
-	if err := s.StopXrayService(); err != nil {
-		logger.Warning("failed to stop xray before update:", err)
-	}
-
-	// 2. Download the zip
-	zipFileName, err := s.downloadXRay(version)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(zipFileName)
-
-	zipFile, err := os.Open(zipFileName)
-	if err != nil {
-		return err
-	}
-	defer zipFile.Close()
-
-	stat, err := zipFile.Stat()
-	if err != nil {
-		return err
-	}
-	reader, err := zip.NewReader(zipFile, stat.Size())
-	if err != nil {
-		return err
-	}
-
-	// 3. Helper to extract files
-	copyZipFile := func(zipName string, fileName string) error {
-		zipFile, err := reader.Open(zipName)
-		if err != nil {
-			return err
-		}
-		defer zipFile.Close()
-		if err := os.MkdirAll(filepath.Dir(fileName), 0o755); err != nil {
-			return err
-		}
-		tmpFile, err := os.CreateTemp(filepath.Dir(fileName), ".xray-*")
-		if err != nil {
-			return err
-		}
-		tmpPath := tmpFile.Name()
-		ok := false
-		defer func() {
-			_ = tmpFile.Close()
-			if !ok {
-				_ = os.Remove(tmpPath)
-			}
-		}()
-		n, err := io.Copy(tmpFile, io.LimitReader(zipFile, maxXrayBinaryBytes+1))
-		if err != nil {
-			return err
-		}
-		if n > maxXrayBinaryBytes {
-			return fmt.Errorf("xray binary exceeds %d bytes", maxXrayBinaryBytes)
-		}
-		if err := tmpFile.Chmod(0o755); err != nil {
-			return err
-		}
-		if err := tmpFile.Close(); err != nil {
-			return err
-		}
-		if runtime.GOOS == "windows" {
-			_ = os.Remove(fileName)
-		}
-		if err := os.Rename(tmpPath, fileName); err != nil {
-			return err
-		}
-		ok = true
-		return nil
-	}
-
-	// 4. Extract correct binary
-	if runtime.GOOS == "windows" {
-		targetBinary := filepath.Join(config.GetBinFolderPath(), "xray-windows-amd64.exe")
-		err = copyZipFile("xray.exe", targetBinary)
-	} else {
-		err = copyZipFile("xray", xray.GetBinaryPath())
-	}
-	if err != nil {
-		return err
-	}
-
-	// 5. Restart xray
-	if err := s.xrayService.RestartXray(true); err != nil {
-		logger.Error("start xray failed:", err)
-		return err
-	}
-
-	return nil
-}
+// Even after journalctl exits, a stray descendant may keep its stdout pipe
+// open. Limit that drain wait so a log request cannot hang indefinitely.
+var syslogWaitDelay = 2 * time.Second
 
 func (s *ServerService) GetLogs(count string, level string, syslog string) []string {
 	c, _ := strconv.Atoi(count)
@@ -1238,14 +942,32 @@ func (s *ServerService) GetLogs(count string, level string, syslog string) []str
 		}
 
 		// Use hardcoded command with validated parameters
-		cmd := exec.CommandContext(context.Background(), "journalctl", "-u", "x-ui", "--no-pager", "-n", strconv.Itoa(countInt), "-p", level)
-		var out bytes.Buffer
-		cmd.Stdout = &out
+		ctx, cancel := context.WithTimeout(context.Background(), syslogTimeout)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "journalctl", "-u", "x-ui", "--no-pager", "-n", strconv.Itoa(countInt), "-p", level)
+		cmd.WaitDelay = syslogWaitDelay
+		out := tail.NewRecentOutputBuffer(int(tail.DefaultTailBytes))
+		cmd.Stdout = out
 		err = cmd.Run()
-		if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return []string{"journalctl did not answer in time. Try a smaller line count or a less strict level."}
+		}
+		if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
 			return []string{"Failed to run journalctl command! Make sure systemd is available and x-ui service is registered."}
 		}
-		lines = strings.Split(out.String(), "\n")
+		// If a descendant kept stdout open past WaitDelay, preserve the
+		// complete lines journalctl already emitted instead of returning a
+		// generic command error and hiding those diagnostics.
+		// journalctl emits oldest-first, while the panel's file and buffer
+		// viewers return newest-first. Do not expose a trailing empty line.
+		output := strings.TrimRight(string(out.CompleteBytes()), "\r\n")
+		if output == "" {
+			return []string{}
+		}
+		lines = strings.Split(output, "\n")
+		for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
+			lines[i], lines[j] = lines[j], lines[i]
+		}
 	} else {
 		lines = logger.GetFileLogs(c, level)
 		if len(lines) == 0 {
@@ -1446,38 +1168,34 @@ func (s *ServerService) GetXrayLogs(
 		Blocked
 		Proxied
 	)
+	countInt, err := strconv.Atoi(count)
+	if err != nil || countInt < 1 {
+		countInt = 100
+	}
+	countInt = min(countInt, 2000)
 
-	countInt, _ := strconv.Atoi(count)
-	var entries []LogEntry
-
-	pathToAccessLog, err := xray.GetAccessLogPath()
-	if err != nil {
+	pathToAccessLog, err := selectedXrayAccessLogPath()
+	if err != nil || pathToAccessLog == "" || pathToAccessLog == "none" {
 		return nil
 	}
-
-	file, err := os.Open(pathToAccessLog)
+	// Newest-first tailing is bounded even for multi-GB access logs, and unlike
+	// bufio.Scanner it accepts large TLS/JSON diagnostic lines without dropping
+	// the *entire* result on a 64 KiB token limit.
+	lines, err := tail.ReadTailLines(pathToAccessLog, 0, tail.DefaultTailBytes)
 	if err != nil {
+		logger.Warningf("Cannot read Xray access log %s: %v", pathToAccessLog, err)
 		return nil
 	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
+	entries := make([]LogEntry, 0, min(countInt, len(lines)))
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
 		if line == "" || strings.Contains(line, "api -> api") {
-			// skipping empty lines and api calls
 			continue
 		}
-
-		if filter != "" && !strings.Contains(line, filter) {
-			// applying filter if it's not empty
+		if filter != "" && !strings.Contains(strings.ToLower(line), strings.ToLower(filter)) {
 			continue
 		}
-
 		entry := parseAccessLogFields(line)
-
 		if logEntryContains(line, freedoms) {
 			if showDirect == "false" {
 				continue
@@ -1494,18 +1212,13 @@ func (s *ServerService) GetXrayLogs(
 			}
 			entry.Event = Proxied
 		}
-
 		entries = append(entries, entry)
+		if len(entries) >= countInt {
+			break
+		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return nil
-	}
-
-	if len(entries) > countInt {
-		entries = entries[len(entries)-countInt:]
-	}
-
+	// The access-log modal historically expects chronological order.
+	slices.Reverse(entries)
 	return entries
 }
 
@@ -1547,7 +1260,10 @@ func logEntryContains(line string, suffixes []string) bool {
 }
 
 func (s *ServerService) GetConfigJson() (any, error) {
-	config, err := s.xrayService.GetXrayConfig()
+	if core, _ := s.settingService.GetCoreType(); core == CoreTypeXray {
+		return (&CoreService{}).GetXrayConfig()
+	}
+	config, err := SelectedNativeCore().GetConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -1707,7 +1423,9 @@ func (s *ServerService) GetMigration() ([]byte, string, error) {
 // uses towards its nodes. An import that overwrites them leaves the
 // destination unreachable on its own address, or impersonating the source.
 var hostBoundSettingKeys = []string{
+	"domainFrontConfig",
 	"webListen", "webDomain", "webPort", "webCertFile", "webKeyFile", "webBasePath",
+	"subPublicURL", "subAllowedDomains", "subCDNEnable", "subRestrictDomains",
 	"subListen", "subDomain", "subPort", "subCertFile", "subKeyFile", "subURI", "subJsonURI",
 	"secret", "panelGuid",
 	"nodeMtlsCaCertPem", "nodeMtlsCaKeyPem", "nodeMtlsClientCertPem",
@@ -1901,7 +1619,9 @@ func (s *ServerService) ImportDB(file multipart.File, keepHostSettings bool) err
 
 	restoreHostBoundSettings(keptSettings)
 
-	s.inboundService.MigrateDB()
+	if err := s.inboundService.MigrateDB(); err != nil {
+		return common.NewErrorf("Database migration failed after import: %v", err)
+	}
 
 	xrayStopped = false
 	if err = s.RestartXrayService(); err != nil {
@@ -2135,7 +1855,9 @@ func (s *ServerService) restorePostgresDump(file multipart.File, keepHostSetting
 	}
 	restoreHostBoundSettings(keptSettings)
 
-	s.inboundService.MigrateDB()
+	if err := s.inboundService.MigrateDB(); err != nil {
+		return common.NewErrorf("Database migration failed after import: %v", err)
+	}
 
 	if runErr != nil {
 		return common.NewErrorf("pg_restore failed (database left unchanged): %v: %s", runErr, strings.TrimSpace(stderr.String()))
@@ -2198,7 +1920,9 @@ func (s *ServerService) migrateSQLiteIntoPostgres(file multipart.File, isSQLDump
 	if errInit := database.InitDB(config.GetDBPath()); errInit != nil {
 		return common.NewErrorf("Restore finished but reopening the database failed: %v", errInit)
 	}
-	s.inboundService.MigrateDB()
+	if err := s.inboundService.MigrateDB(); err != nil {
+		return common.NewErrorf("Database migration failed after import: %v", err)
+	}
 
 	if migrateErr != nil {
 		return common.NewErrorf("Importing the SQLite data into PostgreSQL failed: %v; the import runs in a single transaction, so the database was left unchanged", migrateErr)
@@ -2319,19 +2043,56 @@ type stagedGeofile struct {
 
 // restartXrayAfterGeofileUpdate is a seam: tests assert that an update which
 // installed nothing also restarted nothing.
-var restartXrayAfterGeofileUpdate = (*ServerService).RestartXrayService
+var (
+	restartXrayAfterGeofileUpdate = (*ServerService).RestartXrayService
+	geofileUpdateMu               sync.Mutex
+	renameGeofile                 = os.Rename
+)
+
+// installGeofileRelease rolls back a partially installed upstream pair.
+func installGeofileRelease(files []stagedGeofile) error {
+	backups := make(map[string]string)
+	for _, file := range files {
+		backup := file.stagePath + ".previous"
+		if err := os.Link(file.destPath, backup); err == nil {
+			backups[file.destPath] = backup
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("backup Geofile %s: %w", file.destPath, err)
+		}
+	}
+	for i, file := range files {
+		if err := renameGeofile(file.stagePath, file.destPath); err != nil {
+			failures := []error{fmt.Errorf("install Geofile %s: %w", file.destPath, err)}
+			for _, previous := range files[:i] {
+				var restoreErr error
+				if backup, ok := backups[previous.destPath]; ok {
+					restoreErr = os.Rename(backup, previous.destPath)
+				} else {
+					restoreErr = os.Remove(previous.destPath)
+				}
+				if restoreErr != nil {
+					failures = append(failures, restoreErr)
+				}
+			}
+			return errors.Join(failures...)
+		}
+	}
+	return nil
+}
 
 // AutoUpdateGeofiles refreshes the standard geodata set only while Xray is
 // already running. The scheduled updater must never turn a deliberately stopped
 // core back on just because a new geosite/geoip release appeared.
 func (s *ServerService) AutoUpdateGeofiles() error {
-	if !s.xrayService.IsXrayRunning() {
+	if !s.xrayService.IsCoreRunning() {
 		return nil
 	}
 	return s.UpdateGeofile("")
 }
 
 func (s *ServerService) UpdateGeofile(fileName string) error {
+	geofileUpdateMu.Lock()
+	defer geofileUpdateMu.Unlock()
 	// Strict allowlist check to avoid writing uncontrolled files
 	if fileName != "" {
 		if _, ok := geofileAllowlist[fileName]; !ok {
@@ -2352,14 +2113,14 @@ func (s *ServerService) UpdateGeofile(fileName string) error {
 	}
 	repos := slices.Sorted(maps.Keys(byRepo))
 
-	binFolder := config.GetBinFolderPath()
+	binFolder := assetDir()
 	stageDir, err := os.MkdirTemp(binFolder, "geofile-")
 	if err != nil {
 		return common.NewErrorf("Failed to create staging folder for Geofiles: %v", err)
 	}
 	defer os.RemoveAll(stageDir)
 
-	client := s.settingService.NewProxiedHTTPClient(0)
+	client := s.settingService.NewProxiedHTTPClient(5 * time.Minute)
 
 	var errorMessages []string
 	installed := 0
@@ -2372,20 +2133,18 @@ func (s *ServerService) UpdateGeofile(fileName string) error {
 			errorMessages = append(errorMessages, err.Error())
 			continue
 		}
-		for _, file := range staged {
-			if err := os.Rename(file.stagePath, file.destPath); err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("Failed to install Geofile %s: %v", file.destPath, err))
-				continue
-			}
-			installed++
+		if err := installGeofileRelease(staged); err != nil {
+			errorMessages = append(errorMessages, err.Error())
+			continue
 		}
+		installed += len(staged)
 	}
 
 	// Nothing changed, so there is no reason to restart the core and drop every
 	// client connection.
 	if installed > 0 {
 		if err := restartXrayAfterGeofileUpdate(s); err != nil {
-			errorMessages = append(errorMessages, fmt.Sprintf("Updated Geofiles but Failed to start Xray: %v", err))
+			errorMessages = append(errorMessages, fmt.Sprintf("Updated Geofiles but failed to start Sing-box: %v", err))
 		}
 	}
 
@@ -2516,9 +2275,13 @@ func (s *ServerService) stageGeofile(client *http.Client, entry geofileEntry, ta
 		return false, common.NewErrorf("Failed to create Geofile %s: %v", stagePath, err)
 	}
 	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(file, hasher), resp.Body); err != nil {
+	size, copyErr := io.Copy(io.MultiWriter(file, hasher), io.LimitReader(resp.Body, geodata.MaxFileSize+1))
+	if copyErr != nil || size > geodata.MaxFileSize {
 		file.Close()
-		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, err)
+		if copyErr == nil {
+			copyErr = geodata.ErrFileTooLarge
+		}
+		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, copyErr)
 	}
 	if err := file.Close(); err != nil {
 		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, err)
@@ -2532,6 +2295,17 @@ func (s *ServerService) stageGeofile(client *http.Client, entry geofileEntry, ta
 	}
 	if got := hex.EncodeToString(hasher.Sum(nil)); !strings.EqualFold(got, want) {
 		return false, common.NewErrorf("does not match the published SHA-256 checksum, so the download is corrupted or has been tampered with (expected %s, got %s)", want, got)
+	}
+	kind, err := geodata.NewStore(filepath.Dir(stagePath)).Kind(filepath.Base(stagePath))
+	if err != nil {
+		return false, fmt.Errorf("invalid Geofile %s: %w", entry.FileName, err)
+	}
+	expected := geodata.KindSite
+	if strings.HasPrefix(entry.Asset, "geoip") {
+		expected = geodata.KindIP
+	}
+	if kind != expected {
+		return false, fmt.Errorf("Geofile %s has wrong database type", entry.FileName)
 	}
 
 	setModTime(stagePath)
@@ -2600,49 +2374,15 @@ func parseXrayKeyPairOutput(output string) (string, string, error) {
 }
 
 func (s *ServerService) GetNewX25519Cert() (any, error) {
-	// Run the command
-	cmd := exec.CommandContext(context.Background(), xray.GetBinaryPath(), "x25519")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
+	key, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, err
 	}
-
-	privateKey, publicKey, err := parseXrayKeyPairOutput(out.String())
-	if err != nil {
-		return nil, err
-	}
-
-	keyPair := map[string]any{
-		"privateKey": privateKey,
-		"publicKey":  publicKey,
-	}
-
-	return keyPair, nil
+	return map[string]any{"privateKey": base64.RawURLEncoding.EncodeToString(key.Bytes()), "publicKey": base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes())}, nil
 }
 
 func (s *ServerService) GetNewmldsa65() (*MLDSA65Response, error) {
-	// Run the command
-	cmd := exec.CommandContext(context.Background(), xray.GetBinaryPath(), "mldsa65")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return nil, err
-	}
-
-	seed, verify, err := parseXrayKeyPairOutput(out.String())
-	if err != nil {
-		return nil, err
-	}
-
-	keyPair := &MLDSA65Response{
-		Seed:   seed,
-		Verify: verify,
-	}
-
-	return keyPair, nil
+	return nil, fmt.Errorf("ML-DSA Reality is not supported by the pinned sing-box core")
 }
 
 // GetCertHash parses a certificate (from a file path or inline PEM/DER content)
@@ -2784,7 +2524,8 @@ func walkCertFiles(node any, out []string) []string {
 // proxy). A native handshake replaces the old `xray tls ping` subprocess so the
 // real dial/handshake failure (connection refused, timeout, …) surfaces
 // verbatim. `server` may be host or host:port; the port defaults to 443.
-func (s *ServerService) GetRemoteCertHash(server string) ([]string, error) {
+// allowPrivate lifts the SSRF guard for this one probe (the panel's confirmed opt-in).
+func (s *ServerService) GetRemoteCertHash(server string, allowPrivate bool) ([]string, error) {
 	server = strings.TrimSpace(server)
 	if server == "" {
 		return nil, common.NewError("no server provided")
@@ -2795,10 +2536,11 @@ func (s *ServerService) GetRemoteCertHash(server string) ([]string, error) {
 		host, port = h, p
 	}
 
-	dialer := stdnet.Dialer{Timeout: 10 * time.Second}
-	tcpConn, err := dialer.Dial("tcp", stdnet.JoinHostPort(host, port))
+	ctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(context.Background(), allowPrivate), 10*time.Second)
+	defer cancel()
+	tcpConn, err := netsafe.SSRFGuardedDialContext(ctx, "tcp", stdnet.JoinHostPort(host, port))
 	if err != nil {
-		return nil, common.NewErrorf("failed to dial %s: %s", stdnet.JoinHostPort(host, port), err)
+		return nil, fmt.Errorf("failed to dial %s: %w", stdnet.JoinHostPort(host, port), err)
 	}
 	defer tcpConn.Close()
 	_ = tcpConn.SetDeadline(time.Now().Add(15 * time.Second))
@@ -2824,43 +2566,27 @@ func (s *ServerService) GetRemoteCertHash(server string) ([]string, error) {
 }
 
 func (s *ServerService) GetNewEchCert(sni string) (any, error) {
-	// Run the command
-	cmd := exec.CommandContext(context.Background(), xray.GetBinaryPath(), "tls", "ech", "--serverName", sni)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return nil, err
-	}
-
-	lines := strings.Split(out.String(), "\n")
-	if len(lines) < 4 {
-		return nil, common.NewError("invalid ech cert")
-	}
-
-	configList := lines[1]
-	serverKeys := lines[3]
-
-	return map[string]any{
-		"echServerKeys": serverKeys,
-		"echConfigList": configList,
-	}, nil
+	return generateECHKeyPair(sni)
 }
 
 func (s *ServerService) GetNewVlessEnc() (any, error) {
-	cmd := exec.CommandContext(context.Background(), xray.GetBinaryPath(), "vlessenc")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	data, err := exec.CommandContext(ctx, hiddify.GetBinaryPath(), "vlessenc", "--json").Output()
+	if err != nil {
 		return nil, err
 	}
-
-	auths := parseVlessEncAuths(out.String())
-	auths = append(auths, deriveVlessEncModes(auths)...)
-
-	return map[string]any{
-		"auths": auths,
-	}, nil
+	var pair struct {
+		Encryption string `json:"encryption"`
+		Decryption string `json:"decryption"`
+	}
+	if err := json.Unmarshal(data, &pair); err != nil {
+		return nil, err
+	}
+	if pair.Encryption == "" || pair.Decryption == "" {
+		return nil, fmt.Errorf("invalid Sing-box VLESS key generator output")
+	}
+	return map[string]any{"auths": []map[string]string{{"id": "x25519", "label": "X25519", "encryption": pair.Encryption, "decryption": pair.Decryption}}}, nil
 }
 
 func deriveVlessEncModes(auths []map[string]string) []map[string]string {
@@ -2942,24 +2668,34 @@ func (s *ServerService) GetNewUUID() (*NewUUIDResponse, error) {
 }
 
 func (s *ServerService) GetNewmlkem768() (*MLKEM768Response, error) {
-	// Run the command
-	cmd := exec.CommandContext(context.Background(), xray.GetBinaryPath(), "mlkem768")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return nil, err
-	}
+	return nil, fmt.Errorf("ML-KEM VLESS is not supported by the pinned sing-box core")
+}
 
-	seed, client, err := parseXrayKeyPairOutput(out.String())
-	if err != nil {
-		return nil, err
-	}
+const (
+	publicIPRefreshInterval = 5 * time.Minute
+	publicIPRetryInterval   = time.Minute
+)
 
-	keyPair := &MLKEM768Response{
-		Seed:   seed,
-		Client: client,
+// refreshedPublicIP retains a known address through temporary lookup failures.
+func refreshedPublicIP(cached, fetched string, now time.Time) (string, time.Time) {
+	if fetched != "" && fetched != "N/A" {
+		return fetched, now.Add(publicIPRefreshInterval)
 	}
+	if cached == "" {
+		cached = "N/A"
+	}
+	return cached, now.Add(publicIPRetryInterval)
+}
 
-	return keyPair, nil
+func nextPublicIPv6RetryInterval(previous time.Duration) time.Duration {
+	switch {
+	case previous < time.Minute:
+		return time.Minute
+	case previous < 2*time.Minute:
+		return 2 * time.Minute
+	case previous < 5*time.Minute:
+		return 5 * time.Minute
+	default:
+		return 15 * time.Minute
+	}
 }

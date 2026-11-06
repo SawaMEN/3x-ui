@@ -29,6 +29,7 @@ echo "== non-interactive install smoke test (image: $IMAGE, version: ${XUI_SMOKE
 
 docker run --rm \
     -v "${REPO_ROOT}/install.sh:/root/install.sh:ro" \
+    -v "${REPO_ROOT}/deploy/test/systemctl-smoke.sh:/usr/local/bin/systemctl:ro" \
     -e XUI_NONINTERACTIVE=1 \
     -e XUI_SSL_MODE=none \
     -e XUI_SMOKE_VERSION="$XUI_SMOKE_VERSION" \
@@ -48,8 +49,16 @@ docker run --rm \
         echo "--- assertions ---"
         if [ -n "${XUI_SMOKE_VERSION:-}" ]; then
             installed=$(/usr/local/x-ui/x-ui -v)
-            [ "$installed" = "${XUI_SMOKE_VERSION#v}" ] \
-                || { echo "FAIL: installed version $installed, want ${XUI_SMOKE_VERSION#v}"; exit 1; }
+            expected="${XUI_SMOKE_VERSION#v}"
+            if [[ "$XUI_SMOKE_VERSION" == dev-latest ]]; then
+                [[ "$installed" =~ ^dev\+[0-9a-f]{8}$ ]] \
+                    || { echo "FAIL: invalid dev version $installed"; exit 1; }
+                expected="$installed"
+            elif [[ "$XUI_SMOKE_VERSION" =~ ^dev-([0-9a-f]{40})$ ]]; then
+                expected="dev+${BASH_REMATCH[1]:0:8}"
+            fi
+            [ "$installed" = "$expected" ] \
+                || { echo "FAIL: installed version $installed, want $expected"; exit 1; }
         fi
 
         RESULT=/etc/x-ui/install-result.env
@@ -71,16 +80,13 @@ docker run --rm \
             || { echo "FAIL: hasDefaultCredential is not false"; exit 1; }
 
         echo "--- verifying the panel serves HTTP ---"
-        cd /usr/local/x-ui
-        ./x-ui > /tmp/xui.log 2>&1 &
-        xpid=$!
+        systemctl is-active --quiet x-ui
         for _ in $(seq 1 15); do
             code=$(curl -s -o /dev/null -w "%{http_code}" \
                 "http://127.0.0.1:${XUI_PANEL_PORT}/${XUI_WEB_BASE_PATH}/" 2>/dev/null || true)
             case "$code" in 200|301|302|307|308) break ;; esac
             sleep 1
         done
-        kill "$xpid" 2>/dev/null || true
         echo "panel HTTP status: ${code:-none}"
         case "${code:-}" in
             200|301|302|307|308) : ;;

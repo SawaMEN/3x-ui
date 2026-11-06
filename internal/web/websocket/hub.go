@@ -24,12 +24,12 @@ const (
 	MessageTypeClientStats  MessageType = "client_stats"
 	MessageTypeClients      MessageType = "clients"
 	MessageTypeInvalidate   MessageType = "invalidate"
-	maxMessageSize                      = 4 * 1024 * 1024 // 4MB; larger payloads fall back to REST invalidation.
+	maxMessageSize                      = 2 * 1024 * 1024 // 2 MiB; oversized state uses REST invalidation.
 
 	enqueueTimeout       = 100 * time.Millisecond
-	clientSendQueue      = 64  // Slow clients are evicted sooner to cap retained payloads.
-	hubBroadcastQueue    = 256 // Bounded burst buffer; REST invalidation handles oversized state pushes.
-	hubOpsQueue          = 32  // Small lifecycle backlog is enough for page/disconnect bursts.
+	clientSendQueue      = 16 // Slow browsers must not retain dozens of multi-MiB snapshots.
+	hubBroadcastQueue    = 32 // Prevent burst fanout from retaining hundreds of MiB.
+	hubOpsQueue          = 32 // Small lifecycle backlog is enough for page/disconnect bursts.
 	minBroadcastInterval = 250 * time.Millisecond
 	hubRestartAttempts   = 3
 )
@@ -79,6 +79,9 @@ type Hub struct {
 
 	throttleMu    sync.Mutex
 	lastBroadcast map[MessageType]time.Time
+	// Only one trailing REST invalidation is retained per throttled topic.
+	// Dropping the final update entirely leaves an open browser stale.
+	pendingInvalidations map[MessageType]*time.Timer
 }
 
 // NewHub creates a hub. Call Run in a goroutine to start its event loop.
@@ -91,6 +94,7 @@ func NewHub() *Hub {
 		ctx:           ctx,
 		cancel:        cancel,
 		lastBroadcast: make(map[MessageType]time.Time),
+		pendingInvalidations: make(map[MessageType]*time.Timer),
 	}
 }
 
@@ -109,6 +113,17 @@ func (h *Hub) shouldThrottle(msgType MessageType) bool {
 	defer h.throttleMu.Unlock()
 	now := time.Now()
 	if last, ok := h.lastBroadcast[msgType]; ok && now.Sub(last) < minBroadcastInterval {
+		if h.pendingInvalidations[msgType] == nil {
+			remaining := minBroadcastInterval - now.Sub(last)
+			h.pendingInvalidations[msgType] = time.AfterFunc(remaining, func() {
+				h.throttleMu.Lock()
+				delete(h.pendingInvalidations, msgType)
+				h.throttleMu.Unlock()
+				if h.ctx.Err() == nil {
+					h.broadcastInvalidate(msgType)
+				}
+			})
+		}
 		return true
 	}
 	h.lastBroadcast[msgType] = now
@@ -136,6 +151,11 @@ func (h *Hub) Run() {
 		}
 	}
 	logger.Error("WebSocket hub stopped after exhausting restart attempts")
+	// Release read-pump waiters and their buffers if the hub can no longer
+	// consume lifecycle events. Leaving ctx open would strand connections in
+	// Register/Unregister after a terminal hub failure.
+	h.Stop()
+	h.shutdown()
 }
 
 // runOnce drives the event loop once and returns true if the hub stopped
@@ -208,23 +228,22 @@ func (h *Hub) fanout(msg []byte) {
 	if msg == nil {
 		return
 	}
+	// Keep the read lock across non-blocking sends. Unregister and Stop
+	// close Send under the write lock; releasing it before send allowed
+	// send/close to race even when trySend recovered from the panic.
+	// Avoid allocating a targets slice on every broadcast.
 	h.mu.RLock()
 	if len(h.clients) == 0 {
 		h.mu.RUnlock()
 		return
 	}
-	targets := make([]*Client, 0, len(h.clients))
-	for c := range h.clients {
-		targets = append(targets, c)
-	}
-	h.mu.RUnlock()
-
 	var dead []*Client
-	for _, c := range targets {
+	for c := range h.clients {
 		if !trySend(c, msg) {
 			dead = append(dead, c)
 		}
 	}
+	h.mu.RUnlock()
 
 	if len(dead) == 0 {
 		return
@@ -340,25 +359,33 @@ func (h *Hub) Register(c *Client) {
 // goroutine is processed in program order — otherwise an unregister could
 // land in the map before its register and silently no-op, leaking the entry.
 //
-// On a saturated ops channel (disconnect storm) we fall back to a bounded
-// timeout drop rather than direct removal: a direct delete on a not-yet-
-// registered client is precisely the ordering bug we fix here. Stragglers
-// get evicted by fanout when their Send buffer fills.
+// Never drop unregister on a busy ops queue. Doing so leaks clients that
+// already disconnected, along with their buffered messages, until a later
+// broadcast happens to evict them. Waiting here only parks this connection's
+// read-pump goroutine; the hub continues processing operations in FIFO order.
+// Shutdown unblocks waiters via h.ctx.Done().
 func (h *Hub) Unregister(c *Client) {
 	if h == nil || c == nil {
 		return
 	}
 	select {
 	case h.ops <- clientOp{kind: opUnregister, c: c}:
-	case <-time.After(enqueueTimeout):
-		logger.Warningf("WebSocket ops channel full, dropping unregister for %s", c.ID)
 	case <-h.ctx.Done():
 	}
 }
 
 // Stop signals the hub to shut down and close all client connections.
 func (h *Hub) Stop() {
-	if h != nil && h.cancel != nil {
+	if h == nil {
+		return
+	}
+	if h.cancel != nil {
 		h.cancel()
 	}
+	h.throttleMu.Lock()
+	for _, timer := range h.pendingInvalidations {
+		timer.Stop()
+	}
+	clear(h.pendingInvalidations)
+	h.throttleMu.Unlock()
 }

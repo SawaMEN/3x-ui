@@ -1,0 +1,71 @@
+name: Native Docker audit
+on:
+  push:
+    branches: [update]
+    paths:
+      - Dockerfile
+      - DockerInit.sh
+      - .dockerignore
+      - .github/workflows/build-audit.yml
+      - tools/ci/check-container.sh
+      - tools/build-hiddify-core.sh
+      - deploy/hiddify/**
+      - docs/hiddify-core-target.json
+      - frontend/package-lock.json
+      - docs/pnpm-lock.yaml
+      - tools/ci/require-go-tests.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-docker-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  docker:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the production image natively
+        run: docker buildx build --load --build-arg HIDDIFY_VULNCHECK=1 --platform linux/${{ matrix.arch }} --build-arg BUILD_COMMIT=${{ github.sha }} -t x-ui-audit:${{ matrix.arch }} .
+      - name: Verify packaged core, musl linkage and panel startup
+        run: bash tools/ci/check-container.sh x-ui-audit:${{ matrix.arch }} ${{ matrix.arch }}
+
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install pinned Go linter
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+      - name: Install locked frontend and browser
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium
+      - name: Complete canonical verification and vet
+        run: make verify && go vet ./...
+      - name: Verify lockfiles remained unchanged
+        run: git diff --exit-code -- go.mod go.sum frontend/package.json frontend/package-lock.json docs/package.json docs/pnpm-lock.yaml
+      - name: Verify required-test gate regressions
+        run: python3 -m unittest discover -s tools/ci -p 'test_*.py'

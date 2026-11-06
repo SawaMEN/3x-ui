@@ -2,9 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -13,12 +13,34 @@ import (
 const (
 	firewallControlInitializedKey = "firewallControlInitialized"
 	firewallSafetyPortKey         = "firewallSafetyPort"
+	firewallSyncIntervalKey       = "firewallSyncInterval"
 )
 
-var firewallAutoSyncOnce sync.Once
+func ValidateFirewallSyncInterval(seconds int) error {
+	if seconds < 5 || seconds > 3600 {
+		return fmt.Errorf("firewall sync interval must be 5..3600 seconds")
+	}
+	return nil
+}
+
+func firewallSyncInterval() time.Duration {
+	raw, err := firewallSetting(firewallSyncIntervalKey, "60")
+	seconds, parseErr := strconv.Atoi(raw)
+	if err != nil || parseErr != nil || ValidateFirewallSyncInterval(seconds) != nil {
+		seconds = 60
+	}
+	return time.Duration(seconds) * time.Second
+}
 
 func (s *FirewallService) MarkControlInitialized() error {
-	return (&SettingService{}).setBool(firewallControlInitializedKey, true)
+	if firewallControlInitialized() {
+		return nil
+	}
+	if err := (&SettingService{}).setBool(firewallControlInitializedKey, true); err != nil {
+		return err
+	}
+	TriggerFirewallSync()
+	return nil
 }
 
 // RememberSafetyPort persists the externally visible panel port discovered on
@@ -32,6 +54,9 @@ func (s *FirewallService) RememberSafetyPort(port int) error {
 	settings := &SettingService{}
 	panelPort, _ := settings.GetPort()
 	previous := rememberedFirewallSafetyPort()
+	if previous == port {
+		return nil
+	}
 	if previous > 0 && previous != panelPort && port == panelPort {
 		return nil
 	}
@@ -92,93 +117,101 @@ func (s *FirewallService) SetAutoSyncPreference(ctx context.Context, enabled boo
 	return s.status(ctx, safetyPort)
 }
 
-// StartAutoSync keeps firewall rules aligned with enabled local inbounds even
+// RunAutoSync keeps firewall rules aligned with enabled local inbounds even
 // when changes arrive through imports, API calls, or node synchronization.
 // Inbound API mutations trigger an immediate coalesced reconcile; a periodic
-// five-second pass remains as drift repair for imports and future mutation
+// configurable pass remains as drift repair for imports and future mutation
 // paths and keeps the managed iptables jump behind newly added admin rules.
-func (s *FirewallService) StartAutoSync() {
-	firewallAutoSyncOnce.Do(func() {
-		go func() {
-			syncNow := func() {
-				if !firewallControlInitialized() {
-					return
-				}
+func (s *FirewallService) RunAutoSync(parent context.Context) {
+	syncNow := func() {
+		if parent.Err() != nil {
+			return
+		}
+		if !firewallControlInitialized() {
+			return
+		}
 
-				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-				defer cancel()
+		ctx, cancel := context.WithTimeout(parent, 15*time.Second)
+		defer cancel()
 
-				firewallMu.Lock()
-				defer firewallMu.Unlock()
+		firewallMu.Lock()
+		defer firewallMu.Unlock()
 
-				if err := migrateManagedBackendIfNeededLocked(ctx); err != nil {
-					logger.Debug("firewall backend migration failed:", err)
-					return
-				}
-				backend, err := detectManagedFirewallBackend(ctx)
-				if err != nil {
-					return
-				}
-				desiredEnabled, configured, err := firewallManagedEnabledPreference()
-				if err != nil {
-					logger.Debug("firewall desired state read failed:", err)
-					return
-				}
-				on, err := backend.enabled(ctx)
-				if err != nil {
-					return
-				}
-				if !configured && on && isManagedNativeFirewall(backend.name) {
-					if err := setFirewallManagedEnabledPreference(true); err != nil {
-						logger.Debug("firewall desired state migration failed:", err)
-						return
-					}
-					desiredEnabled = true
-					configured = true
-				}
-
-				// Once the panel toggle has an explicit value, a disabled managed
-				// firewall must stay disabled even if UFW/firewalld themselves are
-				// still running for administrator-owned rules.
-				if configured && !desiredEnabled {
-					if err := s.reconcileManagedPingStateLocked(false); err != nil {
-						logger.Debug("firewall ping reconcile failed:", err)
-					}
-					return
-				}
-
-				if shouldRestoreManagedNativeFirewall(backend.name, on, desiredEnabled) {
-					if err := s.syncManagedSafeLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
-						logger.Debug("firewall native restore failed:", err)
-						return
-					}
-					on = true
-				}
-				if err := s.reconcileManagedPingStateLocked(on); err != nil {
-					logger.Debug("firewall ping reconcile failed:", err)
-				}
-				if !on {
-					return
-				}
-				auto, err := firewallAutoSync()
-				if err != nil || !auto {
-					return
-				}
-				if err := s.syncManagedSafeLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
-					logger.Debug("firewall auto-sync failed:", err)
-				}
+		if err := migrateManagedBackendIfNeededLocked(ctx); err != nil {
+			logger.Debug("firewall backend migration failed:", err)
+			return
+		}
+		backend, err := detectManagedFirewallBackend(ctx)
+		if err != nil {
+			return
+		}
+		desiredEnabled, configured, err := firewallManagedEnabledPreference()
+		if err != nil {
+			logger.Debug("firewall desired state read failed:", err)
+			return
+		}
+		on, err := backend.enabled(ctx)
+		if err != nil {
+			return
+		}
+		if !configured && on && isManagedNativeFirewall(backend.name) {
+			if err := setFirewallManagedEnabledPreference(true); err != nil {
+				logger.Debug("firewall desired state migration failed:", err)
+				return
 			}
+			desiredEnabled = true
+			configured = true
+		}
 
-			syncNow()
-			ticker := time.NewTicker(5 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ticker.C:
-				case <-firewallSyncTrigger:
-				}
-				syncNow()
+		// Once the panel toggle has an explicit value, a disabled managed
+		// firewall must stay disabled even if UFW/firewalld themselves are
+		// still running for administrator-owned rules.
+		if configured && !desiredEnabled {
+			if err := s.reconcileManagedPingStateLocked(false); err != nil {
+				logger.Debug("firewall ping reconcile failed:", err)
 			}
-		}()
-	})
+			return
+		}
+
+		if shouldRestoreManagedNativeFirewall(backend.name, on, desiredEnabled) {
+			if err := s.syncManagedSafeLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
+				logger.Debug("firewall native restore failed:", err)
+				return
+			}
+			on = true
+		}
+		if err := s.reconcileManagedPingStateLocked(on); err != nil {
+			logger.Debug("firewall ping reconcile failed:", err)
+		}
+		if !on {
+			return
+		}
+		auto, err := firewallAutoSync()
+		if err != nil || !auto {
+			return
+		}
+		if err := s.syncManagedSafeLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
+			logger.Debug("firewall auto-sync failed:", err)
+		}
+	}
+
+	syncNow()
+	timer := time.NewTimer(firewallSyncInterval())
+	defer timer.Stop()
+	for {
+		select {
+		case <-parent.Done():
+			return
+		case <-timer.C:
+		case <-firewallSyncTrigger:
+		}
+		syncNow()
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer.Reset(firewallSyncInterval())
+	}
 }

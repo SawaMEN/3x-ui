@@ -1,23 +1,23 @@
 package database
 
 import (
-	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 // migrationModels is the FK-aware order in which tables are created and copied
@@ -44,8 +44,9 @@ func migrationModels() []any {
 		&model.Node{},
 		&model.ApiToken{},
 		&model.RoutingPreset{},
+		&model.RoutingList{},
 		&model.Inbound{},
-		&xray.ClientTraffic{},
+		&coremodel.ClientTraffic{},
 		&model.OutboundTraffics{},
 		&model.InboundClientIps{},
 		&model.ClientRecord{},
@@ -55,6 +56,7 @@ func migrationModels() []any {
 		&model.ClientGroup{},
 		&model.InboundFallback{},
 		&model.Host{},
+		&model.HostTombstone{},
 		&model.NodeClientTraffic{},
 		&model.NodeClientIp{},
 		&model.ClientGlobalTraffic{},
@@ -63,8 +65,9 @@ func migrationModels() []any {
 		&model.TelemtIPGeo{},
 		&model.OutboundSubscription{},
 		&model.SubBalancer{},
-		&model.RoutingPreset{},
-		&model.UserSession{},
+		&model.TuicTrafficReceipt{},
+		&model.CoreTrafficCheckpoint{},
+		&model.ManagerSubscription{}, &model.ManagerOperation{}, &model.ManagerRelay{}, &model.ManagerDomain{},
 	}
 }
 
@@ -79,10 +82,6 @@ func MigrateData(srcPath, dstDSN string) error {
 	}
 	if dstDSN == "" {
 		return errors.New("destination DSN is required")
-	}
-
-	if err := os.MkdirAll(path.Dir(srcPath), 0o755); err != nil {
-		return err
 	}
 
 	srcDSN := srcPath + "?_journal_mode=WAL&_busy_timeout=10000"
@@ -107,50 +106,46 @@ func MigrateData(srcPath, dstDSN string) error {
 	defer dstSQL.Close()
 	dstSQL.SetConnMaxLifetime(time.Hour)
 
-	log.Println("Creating destination schema...")
-	for _, m := range migrationModels() {
-		if err := dst.AutoMigrate(m); err != nil {
-			return fmt.Errorf("AutoMigrate %T: %w", m, err)
-		}
-	}
-
 	totalRows := 0
-	txErr := dst.Transaction(func(tx *gorm.DB) error {
-		// AutoMigrate re-creates the legacy client_traffics -> inbounds foreign key,
-		// but the running panel drops it (see dropLegacyForeignKeys) and tolerates
-		// client_traffics rows whose inbound was deleted. Drop it here too so copying
-		// such orphaned rows can't fail with an fk_inbounds_client_stats violation.
-		if err := tx.Exec("ALTER TABLE client_traffics DROP CONSTRAINT IF EXISTS fk_inbounds_client_stats").Error; err != nil {
-			return fmt.Errorf("drop legacy foreign key: %w", err)
-		}
-
-		// Empty the destination tables before copying: a fresh PostgreSQL DB
-		// already holds an auto-seeded admin (id=1) from any prior panel start,
-		// so a plain INSERT with explicit ids would collide on users_pkey. Only
-		// the panel's own tables are cleared, and a failure anywhere in this
-		// transaction rolls the clear back with everything else.
-		if err := truncatePostgresTables(tx, migrationModels()); err != nil {
-			return fmt.Errorf("clear destination tables: %w", err)
-		}
-
-		for _, m := range migrationModels() {
-			n, err := copyTable(src, tx, m)
-			if err != nil {
-				return fmt.Errorf("copy %T: %w", m, err)
+	txErr := src.Transaction(func(snapshot *gorm.DB) error {
+		return dst.Transaction(func(tx *gorm.DB) error {
+			log.Println("Creating destination schema...")
+			for _, m := range migrationModels() {
+				if err := tx.AutoMigrate(m); err != nil {
+					return fmt.Errorf("AutoMigrate %T: %w", m, err)
+				}
 			}
-			totalRows += n
-			log.Printf("  %-32s %d rows", reflect.TypeOf(m).Elem().Name(), n)
-		}
-		return nil
-	})
+
+			// AutoMigrate re-creates the legacy client_traffics -> inbounds foreign key,
+			// but the running panel drops it (see dropLegacyForeignKeys) and tolerates
+			// client_traffics rows whose inbound was deleted. Drop it here too so copying
+			// such orphaned rows can't fail with an fk_inbounds_client_stats violation.
+			if err := tx.Exec("ALTER TABLE client_traffics DROP CONSTRAINT IF EXISTS fk_inbounds_client_stats").Error; err != nil {
+				return fmt.Errorf("drop legacy foreign key: %w", err)
+			}
+
+			// Empty the destination tables before copying: a fresh PostgreSQL DB
+			// already holds an auto-seeded admin (id=1) from any prior panel start,
+			// so a plain INSERT with explicit ids would collide on users_pkey. Only
+			// the panel's own tables are cleared, and a failure anywhere in this
+			// transaction rolls the clear back with everything else.
+			if err := truncatePostgresTables(tx, migrationModels()); err != nil {
+				return fmt.Errorf("clear destination tables: %w", err)
+			}
+
+			for _, m := range migrationModels() {
+				n, err := copyTable(snapshot, tx, m)
+				if err != nil {
+					return fmt.Errorf("copy %T: %w", m, err)
+				}
+				totalRows += n
+				log.Printf("  %-32s %d rows", reflect.TypeOf(m).Elem().Name(), n)
+			}
+			return resetPostgresSequences(tx)
+		})
+	}, &sql.TxOptions{ReadOnly: true})
 	if txErr != nil {
 		return txErr
-	}
-
-	// setval is never rolled back by PostgreSQL, so sequences are resynced only
-	// after the transaction has committed.
-	if err := resetPostgresSequences(dst); err != nil {
-		log.Printf("warning: failed to reset some postgres sequences: %v", err)
 	}
 
 	log.Printf("Migration complete: %d rows across %d tables.", totalRows, len(migrationModels()))
@@ -158,19 +153,61 @@ func MigrateData(srcPath, dstDSN string) error {
 	return nil
 }
 
-// ExportPostgresToSQLite copies every row from the PostgreSQL database described
-// by srcDSN into a fresh SQLite file at dstPath. It is the reverse of
-// MigrateData and is used to hand a PostgreSQL-backed panel a portable .db file.
-// dstPath is created/overwritten; the PostgreSQL source is left untouched.
+// MigrateLegacyData imports an older SQLite panel into PostgreSQL without
+// altering the user's source file. Unlike a regular import, older panels may
+// lack entire tables or columns that today's migrationModels enumerates.
+// Snapshot the live SQLite database (including its WAL) first, upgrade only
+// that private snapshot, then use the strict transactional row copier.
+func MigrateLegacyData(srcPath, dstDSN string) error {
+	if dstDSN == "" {
+		return errors.New("destination DSN is required")
+	}
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		return fmt.Errorf("source sqlite not found at %s: %w", srcPath, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("source sqlite %q is not a regular file", srcPath)
+	}
+	stage, err := os.MkdirTemp("", "3x-ui-legacy-migration-*")
+	if err != nil {
+		return fmt.Errorf("create migration snapshot directory: %w", err)
+	}
+	defer os.RemoveAll(stage)
+	snapshot := filepath.Join(stage, "source.db")
+
+	src, err := gorm.Open(sqlite.Open(srcPath+"?_busy_timeout=10000"), &gorm.Config{Logger: logger.Discard})
+	if err != nil {
+		return fmt.Errorf("open legacy sqlite: %w", err)
+	}
+	sqlDB, err := src.DB()
+	if err != nil {
+		return err
+	}
+	// VACUUM INTO takes a transactionally consistent snapshot, unlike a raw
+	// file copy that could omit uncheckpointed SQLite WAL transactions.
+	backupErr := src.Exec("VACUUM INTO ?", snapshot).Error
+	closeErr := sqlDB.Close()
+	if backupErr != nil {
+		return fmt.Errorf("snapshot legacy sqlite: %w", backupErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close legacy sqlite: %w", closeErr)
+	}
+	if err := PrepareSQLiteForMigration(snapshot); err != nil {
+		return fmt.Errorf("prepare legacy sqlite snapshot: %w", err)
+	}
+	return MigrateData(snapshot, dstDSN)
+}
+
+// ExportPostgresToSQLite copies every row from PostgreSQL into a portable
+// SQLite file. Publish the finished backup atomically: failure to reach the
+// source or copy a table must never destroy a previous valid export.
 func ExportPostgresToSQLite(srcDSN, dstPath string) error {
 	if srcDSN == "" {
 		return errors.New("source DSN is required")
 	}
-	if err := os.MkdirAll(path.Dir(dstPath), 0o755); err != nil {
-		return err
-	}
-	// Start from an empty file so AutoMigrate creates the canonical schema.
-	if err := os.Remove(dstPath); err != nil && !os.IsNotExist(err) {
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
 		return err
 	}
 
@@ -184,8 +221,18 @@ func ExportPostgresToSQLite(srcDSN, dstPath string) error {
 	}
 	defer srcSQL.Close()
 
-	// No WAL: keep all data in the main file so it is complete once closed.
-	dst, err := gorm.Open(sqlite.Open(dstPath+"?_busy_timeout=10000"), &gorm.Config{Logger: logger.Discard})
+	// Build beside the destination and publish only after a complete snapshot.
+	// A failed connection/copy must not destroy an existing backup.
+	file, err := os.CreateTemp(filepath.Dir(dstPath), ".x-ui-export-*.db")
+	if err != nil {
+		return err
+	}
+	tempPath := file.Name()
+	defer os.Remove(tempPath)
+	if err := file.Close(); err != nil {
+		return err
+	}
+	dst, err := gorm.Open(sqlite.Open(tempPath+"?_busy_timeout=10000&_journal_mode=DELETE"), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
 		return fmt.Errorf("open sqlite destination: %w", err)
 	}
@@ -194,30 +241,41 @@ func ExportPostgresToSQLite(srcDSN, dstPath string) error {
 		return err
 	}
 	defer dstSQL.Close()
-
-	return copyAllModels(src, dst)
+	if err := copyAllModels(src, dst); err != nil {
+		return err
+	}
+	if err := dstSQL.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tempPath, dstPath)
 }
 
 // copyAllModels (re)creates the schema on dst and copies every migrated table
 // from src to dst in FK-safe order. src/dst may be any gorm backend.
 func copyAllModels(src, dst *gorm.DB) error {
-	for _, m := range migrationModels() {
-		if err := dst.AutoMigrate(m); err != nil {
-			return fmt.Errorf("AutoMigrate %T: %w", m, err)
-		}
+	options := &sql.TxOptions{ReadOnly: true}
+	if src.Name() == DialectPostgres {
+		options.Isolation = sql.LevelRepeatableRead
 	}
-	for _, m := range migrationModels() {
-		if _, err := copyTable(src, dst, m); err != nil {
-			return fmt.Errorf("copy %T: %w", m, err)
-		}
-	}
-	return nil
+	return src.Transaction(func(snapshot *gorm.DB) error {
+		return dst.Transaction(func(tx *gorm.DB) error {
+			for _, m := range migrationModels() {
+				if err := tx.AutoMigrate(m); err != nil {
+					return fmt.Errorf("AutoMigrate %T: %w", m, err)
+				}
+			}
+			for _, m := range migrationModels() {
+				if _, err := copyTable(snapshot, tx, m); err != nil {
+					return fmt.Errorf("copy %T: %w", m, err)
+				}
+			}
+			return nil
+		})
+	}, options)
 }
 
 func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 	const batchSize = 500
-
-	sliceType := reflect.SliceOf(reflect.PointerTo(reflect.TypeOf(mdl).Elem()))
 
 	stmt := &gorm.Statement{DB: src}
 	if err := stmt.Parse(mdl); err != nil {
@@ -226,39 +284,51 @@ func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 	order := strings.Join(stmt.Schema.PrimaryFieldDBNames, ", ")
 	table := stmt.Schema.Table
 	columns := stmt.Schema.DBNames
+	variableBudget := 999 // Portable SQLite floor, including lowered connection limits.
+	if dst.Name() == DialectPostgres {
+		variableBudget = 65535
+	}
+	insertBatchSize := min(batchSize, max(1, variableBudget/len(columns)))
 
-	ctx := context.Background()
 	total := 0
+	var cursor []any
+	primary := stmt.Schema.PrimaryFields
+	quotedPrimary := make([]string, len(primary))
+	placeholders := make([]string, len(primary))
+	for i, f := range primary {
+		quotedPrimary[i] = stmt.Quote(f.DBName)
+		placeholders[i] = "?"
+	}
 	for offset := 0; ; offset += batchSize {
-		batchPtr := reflect.New(sliceType)
-		q := src.Model(mdl).Limit(batchSize).Offset(offset)
+		var rows []map[string]any
+		q := src.Model(mdl).Select(columns).Limit(batchSize)
+		if len(primary) == 0 {
+			q = q.Offset(offset)
+		} else if len(cursor) > 0 {
+			q = q.Where("("+strings.Join(quotedPrimary, ",")+") > ("+strings.Join(placeholders, ",")+")", cursor...)
+		}
 		if order != "" {
 			q = q.Order(order)
 		}
-		if err := q.Find(batchPtr.Interface()).Error; err != nil {
+		if err := q.Find(&rows).Error; err != nil {
 			return total, err
 		}
-		slice := batchPtr.Elem()
-		n := slice.Len()
+		n := len(rows)
 		if n == 0 {
 			break
 		}
 
-		rows := make([]map[string]any, n)
-		for i := range n {
-			rv := reflect.Indirect(slice.Index(i))
-			row := make(map[string]any, len(columns))
-			for _, name := range columns {
-				value, _ := stmt.Schema.FieldsByDBName[name].ValueOf(ctx, rv)
-				row[name] = value
-			}
-			rows[i] = row
-		}
-
-		if err := dst.Table(table).CreateInBatches(rows, 200).Error; err != nil {
+		if err := dst.Table(table).CreateInBatches(rows, insertBatchSize).Error; err != nil {
 			return total, err
 		}
 		total += n
+		if len(primary) > 0 {
+			cursor = make([]any, len(primary))
+			last := rows[n-1]
+			for i, f := range primary {
+				cursor[i] = last[f.DBName]
+			}
+		}
 		if n < batchSize {
 			break
 		}
@@ -267,9 +337,9 @@ func copyTable(src, dst *gorm.DB, mdl any) (int, error) {
 }
 
 // truncatePostgresTables empties every migrated table on dst in a single
-// statement, resetting identity sequences. CASCADE covers the inbound/client
-// foreign keys regardless of insertion order. Only the panel's own tables are
-// touched, never the rest of the schema.
+// statement, resetting identity sequences. All panel FK targets are included.
+// RESTRICT (the default) refuses external references instead of truncating
+// another application's tables through CASCADE.
 func truncatePostgresTables(dst *gorm.DB, models []any) error {
 	tables := make([]string, 0, len(models))
 	for _, m := range models {
@@ -283,13 +353,30 @@ func truncatePostgresTables(dst *gorm.DB, models []any) error {
 		return nil
 	}
 	log.Println("Clearing destination tables...")
-	return dst.Exec("TRUNCATE TABLE " + strings.Join(tables, ", ") + " RESTART IDENTITY CASCADE").Error
+	return dst.Exec("TRUNCATE TABLE " + strings.Join(tables, ", ") + " RESTART IDENTITY").Error
 }
 
 // resetPostgresSequences advances each migrated table's id sequence past MAX(id),
 // otherwise the next INSERT-without-id would clash with copied rows.
 func resetPostgresSequences(dst *gorm.DB) error {
-	return resyncPostgresSequences(dst, migrationModels())
+	// ALTER SEQUENCE RESTART is transactional; setval is not. Keep copied rows
+	// and their next IDs behind the same commit (and table/sequence locks).
+	for _, m := range migrationModels() {
+		table, ok := tableWithIdColumn(dst, m)
+		if !ok {
+			continue
+		}
+		var command string
+		if err := dst.Raw(`SELECT CASE WHEN pg_get_serial_sequence(?, 'id') IS NULL THEN '' ELSE format('ALTER SEQUENCE %s RESTART WITH %s', pg_get_serial_sequence(?, 'id'), COALESCE(MAX(id),0)+1) END FROM "`+table+`"`, table, table).Scan(&command).Error; err != nil {
+			return err
+		}
+		if command != "" {
+			if err := dst.Exec(command).Error; err != nil {
+				return fmt.Errorf("reset sequence %s: %w", table, err)
+			}
+		}
+	}
+	return nil
 }
 
 // resyncPostgresSequences sets each model's id sequence to MAX(id); idempotent. Id-less
@@ -301,24 +388,30 @@ func resyncPostgresSequences(db *gorm.DB, models []any) error {
 			continue
 		}
 		// t comes from the trusted model set parsed by GORM, not user input, so
-		// interpolating it as an identifier is safe. We ignore errors per-table.
-		_ = db.Exec(
+		// interpolating it as an identifier is safe. Propagate failures to callers.
+		if err := db.Exec(
 			`SELECT setval(pg_get_serial_sequence(?, 'id'), COALESCE((SELECT MAX(id) FROM "`+t+`"), 1), true)
 			 WHERE pg_get_serial_sequence(?, 'id') IS NOT NULL`,
 			t, t,
-		).Error
+		).Error; err != nil {
+			return fmt.Errorf("reset sequence %s: %w", t, err)
+		}
 	}
 	return nil
 }
 
 // tableWithIdColumn resolves a model's table name and reports whether its GORM
-// schema maps an "id" database column.
+// schema maps an automatically generated numeric "id" database column.
 func tableWithIdColumn(db *gorm.DB, m any) (string, bool) {
 	stmt := &gorm.Statement{DB: db}
 	if err := stmt.Parse(m); err != nil {
 		return "", false
 	}
-	if stmt.Schema == nil || stmt.Schema.LookUpField("id") == nil {
+	if stmt.Schema == nil {
+		return "", false
+	}
+	field := stmt.Schema.LookUpField("id")
+	if field == nil || !field.AutoIncrement {
 		return "", false
 	}
 	return stmt.Table, true

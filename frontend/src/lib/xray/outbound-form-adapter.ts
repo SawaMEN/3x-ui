@@ -1,4 +1,4 @@
-import { XHttpXmuxSchema } from '@/schemas/protocols/stream/xhttp';
+import { migrateLegacyXhttp, XHttpXmuxSchema } from '@/schemas/protocols/stream/xhttp';
 import { OutboundDomainStrategySchema } from '@/schemas/protocols/outbound';
 import { AmneziaWGOutboundSettingsSchema } from '@/schemas/protocols/outbound';
 import { normalizeStreamSettingsForWire } from '@/lib/xray/stream-wire-normalize';
@@ -120,8 +120,8 @@ function sniffingFromWire(raw: unknown): Sniffing {
 
 function vmessFromWire(raw: Raw): VmessOutboundFormSettings {
   const vnext = asArray(raw.vnext);
-  const v = asObject(vnext[0]);
-  const u = asObject(asArray(v.users)[0]);
+  const v = vnext.length > 0 ? asObject(vnext[0]) : raw;
+  const u = vnext.length > 0 ? asObject(asArray(v.users)[0]) : raw;
   return {
     address: asString(v.address),
     port: asPort(v.port, 443),
@@ -154,10 +154,7 @@ function vlessFromWire(raw: Raw): VlessOutboundFormSettings {
   const reverseTag = asString(reverse.tag);
   const reverseSniffing = reverseTag ? sniffingFromWire(reverse.sniffing) : SNIFFING_DEFAULT;
   const savedSeed = asArray(raw.testseed);
-  const testseed =
-    savedSeed.length === 4 && savedSeed.every((n) => Number.isInteger(n) && (n as number) > 0)
-      ? (savedSeed as number[])
-      : [900, 500, 900, 256];
+  const testseed = savedSeed as number[];
   return {
     address,
     port,
@@ -517,6 +514,7 @@ export interface RawOutboundRow {
   settings?: unknown;
   streamSettings?: unknown;
   mux?: unknown;
+  proxySettings?: unknown;
 }
 
 const XMUX_DEFAULTS = XHttpXmuxSchema.parse({});
@@ -529,7 +527,7 @@ function hydrateStreamForm(stream: Raw): OutboundStreamFormValues {
   delete next.method;
   const xh = next.xhttpSettings;
   if (xh && typeof xh === 'object' && !Array.isArray(xh)) {
-    const xhttp = { ...(xh as Raw) };
+    const xhttp = migrateLegacyXhttp(xh) as Raw;
     const xmux = xhttp.xmux;
     if (xmux && typeof xmux === 'object' && !Array.isArray(xmux)) {
       xhttp.enableXmux = true;
@@ -613,6 +611,11 @@ export function rawOutboundToFormValues(raw: RawOutboundRow): OutboundFormValues
     targetStrategy: protocol === 'freedom' ? '' : targetStrategy,
     mux,
     streamSettings,
+    ...(raw.proxySettings &&
+    typeof raw.proxySettings === 'object' &&
+    !Array.isArray(raw.proxySettings)
+      ? { proxySettings: { ...asObject(raw.proxySettings) } }
+      : {}),
   };
 }
 
@@ -659,7 +662,7 @@ function vlessToWire(s: VlessOutboundFormSettings) {
   }
   if (s.flow === 'xtls-rprx-vision') {
     if (s.testpre > 0) result.testpre = s.testpre;
-    if (s.testseed.length === 4 && s.testseed.every((v) => Number.isInteger(v) && v > 0)) {
+    if (s.testseed.length > 0) {
       result.testseed = s.testseed;
     }
   }
@@ -908,6 +911,7 @@ export function formValuesToWirePayload(values: OutboundFormValues): WireOutboun
     settings,
   };
   if (values.tag) result.tag = values.tag;
+  if (values.proxySettings) result.proxySettings = { ...values.proxySettings };
   if (values.targetStrategy && values.protocol !== 'freedom') {
     result.targetStrategy = values.targetStrategy;
   }

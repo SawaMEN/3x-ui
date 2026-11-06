@@ -5,9 +5,9 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -198,11 +198,11 @@ func (s *ClientService) List() ([]ClientWithAttachments, error) {
 		}
 	}
 
-	trafficByEmail := make(map[string]*xray.ClientTraffic, len(emails))
+	trafficByEmail := make(map[string]*coremodel.ClientTraffic, len(emails))
 	if len(emails) > 0 {
-		var stats []xray.ClientTraffic
+		var stats []coremodel.ClientTraffic
 		for _, batch := range chunkStrings(emails, sqlInChunk) {
-			var batchStats []xray.ClientTraffic
+			var batchStats []coremodel.ClientTraffic
 			if err := db.Where("email IN ?", batch).Find(&batchStats).Error; err != nil {
 				return nil, err
 			}
@@ -291,4 +291,15 @@ func clientRecordsByEmail(tx *gorm.DB, emails []string) (map[string]*model.Clien
 		byEmail[records[i].Email] = &records[i]
 	}
 	return byEmail, nil
+}
+
+// sub_id carries a plain index, not a unique one: one subscription can cover
+// several clients, so callers acting on a subId must handle all of them.
+func (s *ClientService) GetRecordsBySubID(subId string) ([]*model.ClientRecord, error) {
+	if subId == "" {
+		return nil, errors.New("sub_id must not be empty")
+	}
+	var rows []*model.ClientRecord
+	err := database.GetDB().Where("sub_id = ?", subId).Order("id ASC").Find(&rows).Error
+	return rows, err
 }

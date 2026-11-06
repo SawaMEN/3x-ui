@@ -7,7 +7,6 @@
     "outbounds-routing",
     "backup-restore",
     "telegram-bot",
-    "discord-bot",
     "security"
   ]
 }
