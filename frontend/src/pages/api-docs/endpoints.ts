@@ -3657,6 +3657,16 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/server/domainActivity',
+        summary: 'Read domain activity statistics for authenticated operators.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/domainActivity/config',
+        summary: 'Update domain activity collection settings.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/telemt/webproxy/status',
         summary: 'Return the Telemt Web Proxy and external port 443 status.',
       },
