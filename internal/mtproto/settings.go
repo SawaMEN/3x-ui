@@ -57,8 +57,17 @@ func ValidateSettings(settings string) error {
 	if s.Domain != "" && !ValidDomain(s.Domain) {
 		return fmt.Errorf("MTProto FakeTLS SNI must be a DNS hostname")
 	}
-	if s.MaskHost != "" && !ValidDomain(s.MaskHost) && net.ParseIP(strings.Trim(s.MaskHost, "[]")) == nil {
-		return fmt.Errorf("MTProto mask host must be a hostname or IP without a port")
+	if s.MaskHost != "" {
+		// Brackets are permitted only as one matching pair around an IP
+		// literal. strings.Trim(host, "[]") silently accepts malformed
+		// values such as "[[::1]]" or "127.0.0.1]".
+		maskIP := s.MaskHost
+		if strings.HasPrefix(maskIP, "[") && strings.HasSuffix(maskIP, "]") {
+			maskIP = maskIP[1 : len(maskIP)-1]
+		}
+		if !ValidDomain(s.MaskHost) && net.ParseIP(maskIP) == nil {
+			return fmt.Errorf("MTProto mask host must be a hostname or IP without a port")
+		}
 	}
 	if s.MaskPort < 0 || s.MaskPort > 65535 {
 		return fmt.Errorf("MTProto mask port must be 1–65535 or 0 for automatic")

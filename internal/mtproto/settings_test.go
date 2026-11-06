@@ -6,12 +6,12 @@ import (
 )
 
 func TestValidateNativeSettings(t *testing.T) {
-	for _, settings := range []string{`{}`, `{"fakeTlsDomain":"www.cloudflare.com","maskHost":"127.0.0.1","maskPort":8443,"maskProxyProtocol":2,"proxyProtocolTrustedCidrs":["10.0.0.0/8","::1/128"],"allowLegacyModes":false}`} {
+	for _, settings := range []string{`{}`, `{"fakeTlsDomain":"www.cloudflare.com","maskHost":"127.0.0.1","maskPort":8443,"maskProxyProtocol":2,"proxyProtocolTrustedCidrs":["10.0.0.0/8","::1/128"],"allowLegacyModes":false}`, `{"maskHost":"[2001:db8::1]"}`, `{"maskHost":"::1"}`} {
 		if err := ValidateSettings(settings); err != nil {
 			t.Errorf("%s: %v", settings, err)
 		}
 	}
-	for _, settings := range []string{`{"fakeTlsDomain":"bad\\hostname"}`, `{"maskHost":"host:443"}`, `{"maskPort":65536}`, `{"maskProxyProtocol":3}`, `{"proxyProtocolTrustedCidrs":["0.0.0.0"]}`, `{"unknownSniAction":"foo"}`, `{"preferIp":"foo"}`, `{"publicIpv4":"::1"}`, `{"tlsMask":"true"}`, `{"throttleMaxConnections":-1}`} {
+	for _, settings := range []string{`{"fakeTlsDomain":"bad\\hostname"}`, `{"maskHost":"host:443"}`, `{"maskHost":"127.0.0.1]"}`, `{"maskHost":"[::1"}`, `{"maskHost":"[[::1]]"}`, `{"maskPort":65536}`, `{"maskProxyProtocol":3}`, `{"proxyProtocolTrustedCidrs":["0.0.0.0"]}`, `{"unknownSniAction":"foo"}`, `{"preferIp":"foo"}`, `{"publicIpv4":"::1"}`, `{"tlsMask":"true"}`, `{"throttleMaxConnections":-1}`} {
 		if err := ValidateSettings(settings); err == nil {
 			t.Errorf("accepted %s", settings)
 		}

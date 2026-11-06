@@ -20,9 +20,9 @@ var ErrPrivateAddressBlocked = errors.New("blocked private/internal address")
 // mechanisms here are deprecated (RFC 7526) or local-use, so none carry public traffic.
 var blockedPrefixes = []netip.Prefix{
 	// Not globally routable even though Go considers some globally unicast.
-	netip.MustParsePrefix("0.0.0.0/8"),    // IPv4 current-network addresses
-	netip.MustParsePrefix("198.18.0.0/15"), // Benchmarking networks (RFC 2544)
-	netip.MustParsePrefix("240.0.0.0/4"),   // Reserved/class E IPv4
+	netip.MustParsePrefix("0.0.0.0/8"),      // IPv4 current-network addresses
+	netip.MustParsePrefix("198.18.0.0/15"),  // Benchmarking networks (RFC 2544)
+	netip.MustParsePrefix("240.0.0.0/4"),    // Reserved/class E IPv4
 	netip.MustParsePrefix("100.64.0.0/10"),  // CGNAT (RFC 6598)
 	netip.MustParsePrefix("2002::/16"),      // 6to4 (RFC 3056)
 	netip.MustParsePrefix("2001::/32"),      // Teredo (RFC 4380)

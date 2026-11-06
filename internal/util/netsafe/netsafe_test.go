@@ -20,14 +20,14 @@ func TestIsBlockedIP(t *testing.T) {
 		{"192.168.1.1", true},
 		{"169.254.0.1", true},
 		{"0.0.0.0", true},
-		{"0.0.0.1", true},               // Current-network address
-		{"239.255.0.1", true},           // Multicast beyond link-local
-		{"ff05::1", true},               // IPv6 site-local multicast
-		{"255.255.255.255", true},       // Broadcast
-		{"::ffff:239.255.0.1", true},    // IPv4-mapped multicast
-		{"198.18.0.1", true},            // Benchmarking network
-		{"240.0.0.1", true},             // Reserved address
-		{"::ffff:240.0.0.1", true},      // IPv4-mapped reserved address
+		{"0.0.0.1", true},            // Current-network address
+		{"239.255.0.1", true},        // Multicast beyond link-local
+		{"ff05::1", true},            // IPv6 site-local multicast
+		{"255.255.255.255", true},    // Broadcast
+		{"::ffff:239.255.0.1", true}, // IPv4-mapped multicast
+		{"198.18.0.1", true},         // Benchmarking network
+		{"240.0.0.1", true},          // Reserved address
+		{"::ffff:240.0.0.1", true},   // IPv4-mapped reserved address
 		{"::", true},
 		{"8.8.8.8", false},
 		{"1.1.1.1", false},
