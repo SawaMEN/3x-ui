@@ -41,7 +41,7 @@ func TestStage3DumpPreservesStorageClasses(t *testing.T) {
 		t.Fatalf("storage changed: %q %q %q %q", b, n, z, types)
 	}
 	info, err := os.Stat(dst)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("restore permissions: %v %v", info, err)
 	}
 }
@@ -50,7 +50,7 @@ func TestStage3RestoreRejectsUncommittedDump(t *testing.T) {
 	dir := t.TempDir()
 	dump := filepath.Join(dir, "bad.sql")
 	dst := filepath.Join(dir, "dst.db")
-	if err := os.WriteFile(dump, []byte("BEGIN; CREATE TABLE t(x); INSERT INTO t VALUES(1);"), 0600); err != nil {
+	if err := os.WriteFile(dump, []byte("BEGIN; CREATE TABLE t(x); INSERT INTO t VALUES(1);"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := RestoreSQLite(dump, dst); err == nil || !strings.Contains(err.Error(), "not committed") {
@@ -63,7 +63,7 @@ func TestStage3RestoreRejectsUncommittedDump(t *testing.T) {
 
 func TestStage3ExportFailurePreservesDestination(t *testing.T) {
 	dst := filepath.Join(t.TempDir(), "existing.db")
-	if err := os.WriteFile(dst, []byte("previous-backup"), 0600); err != nil {
+	if err := os.WriteFile(dst, []byte("previous-backup"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := ExportPostgresToSQLite("host=127.0.0.1 port=1 user=unused dbname=unused connect_timeout=1 sslmode=disable", dst); err == nil {
@@ -98,7 +98,7 @@ func BenchmarkDumpTableData(b *testing.B) {
 func TestStage3ValidateRejectsIncompleteFiles(t *testing.T) {
 	for _, data := range [][]byte{nil, []byte("SQLite format 3\x00"), []byte("not a database")} {
 		p := filepath.Join(t.TempDir(), "bad.db")
-		if err := os.WriteFile(p, data, 0600); err != nil {
+		if err := os.WriteFile(p, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := ValidateSQLiteDB(p); err == nil {
@@ -119,14 +119,14 @@ func TestStage3DumpReplacesInsecureDestination(t *testing.T) {
 	if _, err := raw.Exec("CREATE TABLE t(value TEXT); INSERT INTO t VALUES('synthetic-secret')"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(out, []byte("old"), 0644); err != nil {
+	if err := os.WriteFile(out, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := DumpSQLite(src, out); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(out)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("dump readable by other users: %v %v", info, err)
 	}
 }

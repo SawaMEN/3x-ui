@@ -169,11 +169,10 @@ func TestStage8FPTNNativePayload(t *testing.T) {
 
 }
 
-
- // stage8RemoteEcho serves TCP and UDP from a separate network namespace instead
- // of the runner host. Docker's host-to-container UDP hairpin would otherwise
- // rewrite the source to the bridge gateway, which the FPTN client deliberately
- // excludes from its tunnel to keep the transport connection alive.
+// stage8RemoteEcho serves TCP and UDP from a separate network namespace instead
+// of the runner host. Docker's host-to-container UDP hairpin would otherwise
+// rewrite the source to the bridge gateway, which the FPTN client deliberately
+// excludes from its tunnel to keep the transport connection alive.
 func stage8RemoteEcho(t *testing.T) (string, int, int) {
 	t.Helper()
 	suffix := strconv.Itoa(os.Getpid())

@@ -49,7 +49,7 @@ func TestStage3PostgresNativeBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	bad := filepath.Join(t.TempDir(), "truncated.dump")
-	if err := os.WriteFile(bad, data[:len(data)/2], 0600); err != nil {
+	if err := os.WriteFile(bad, data[:len(data)/2], 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := run("pg_restore", "--dbname="+cfg.Database, "--single-transaction", "--exit-on-error", bad); err == nil {
