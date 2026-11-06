@@ -239,6 +239,9 @@ func parseCertificateBundlePEM(bundle []byte) ([]*x509.Certificate, error) {
 		if err != nil {
 			return nil, errors.New("certificate bundle contains an invalid certificate")
 		}
+		if !cert.IsCA || cert.KeyUsage&x509.KeyUsageCertSign == 0 {
+			return nil, errors.New("client trust bundle must contain only CA certificates with certificate-signing usage")
+		}
 		certs = append(certs, cert)
 		rest = bytes.TrimSpace(next)
 	}
