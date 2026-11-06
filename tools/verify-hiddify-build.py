@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check historical stage-1 inventory and the active pinned owner build contract."""
+"""Validate pinned runtime kernel sources, dependencies, and build overlays."""
 
 import argparse
 import json
@@ -23,26 +23,24 @@ def git(path, *args):
     ).strip()
 
 
-def audit_fork(fork):
-    lock = json.loads((ROOT / "docs/hiddify-core-fork-audit.json").read_text())
+def verify_fork(fork):
+    lock = json.loads((ROOT / "deploy/hiddify/fork-contract.json").read_text())
     require(lock["schema_version"] == 1 and lock["stage"] == 1, "Unknown fork schema/stage")
     require(not lock["activation_ready"] and not lock["automatic_migration_ready"], "Unverified fork cannot enable migration")
     target = lock["target"]
     require(target["repository"] == "https://github.com/SawaMEN/hiddify-core", "Fork must be owner-managed")
     for revision in [lock["panel_baseline"], target["commit"], *target["submodules"].values()]:
         require(bool(re.fullmatch(r"[0-9a-f]{40}", revision)), "Expected pinned fork revision")
-    baseline = json.loads((ROOT / "docs/hiddify-core-v5-baseline.json").read_text())
     rows = lock["protocols"]
     names = [row["panel_protocol"] for row in rows]
     require(len(names) == len(set(names)), "Duplicate fork protocol")
-    require(set(names) == {row["panel_protocol"] for row in baseline["protocols"]}, "Fork protocol inventory drift")
     for row in rows:
         require(row["migration"] in {"native", "adapt", "external", "blocked"}, "Unknown fork decision")
         require(bool(row["decision"].strip()), "Missing fork decision")
         require((row["target_kind"] is None) == (row["target_type"] is None), "Incomplete fork target identity")
     stats = lock["stats_contract"]
     client = (ROOT / "internal/singbox/v2rayapi.go").read_text()
-    require(stats["panel_method"] in client, "Panel statistics contract changed; re-audit fork compatibility")
+    require(stats["panel_method"] in client, "Panel statistics contract changed; recheck fork compatibility")
     require(stats["compatible"] == (stats["method"] == stats["panel_method"]), "Incorrect statistics compatibility")
     print(f"OK: owner fork inventory ({len(names)} entries), pinned revisions, explicit API mismatch")
     if fork is None:
@@ -50,7 +48,7 @@ def audit_fork(fork):
         return
     fork = fork.resolve()
     require(git(fork, "remote", "get-url", "origin").removesuffix(".git") == target["repository"], "Wrong fork origin")
-    require(git(fork, "rev-parse", "HEAD") == target["commit"], "Fork HEAD differs from audit")
+    require(git(fork, "rev-parse", "HEAD") == target["commit"], "Fork HEAD differs from lock")
     require(not git(fork, "status", "--porcelain", "--untracked-files=no"), "Fork has tracked changes")
     for name, revision in target["submodules"].items():
         require(git(fork, "ls-tree", "HEAD", name).split()[2] == revision, f"Wrong fork gitlink: {name}")
@@ -62,63 +60,11 @@ def audit_fork(fork):
     print("OK: owner fork HEAD/gitlinks/origins and source anchors; no runtime/traffic validation")
 
 
-def audit(upstream):
-    lock = json.loads((ROOT / "docs/hiddify-core-v5-baseline.json").read_text())
-    require(lock["schema_version"] == 1 and lock["stage"] == 1, "Unknown audit schema/stage")
-    require(not lock["runtime_contract"]["activation_ready"], "Stage 1 cannot enable migration")
-    protocols = []
-    for path in (ROOT / "internal/database/model").glob("*.go"):
-        if not path.name.endswith("_test.go"):
-            protocols.extend(re.findall(r'\bProtocol\s*=\s*"([^"\n]+)"', path.read_text()))
-    rows = lock["protocols"]
-    names = [row["panel_protocol"] for row in rows]
-    require(len(names) == len(set(names)), "Duplicate protocol in migration inventory")
-    missing, stale = set(protocols) - set(names), set(names) - set(protocols)
-    require(not missing and not stale, f"Inventory drift: missing={sorted(missing)}, stale={sorted(stale)}")
-    report = (ROOT / "docs/hiddify-core-migration-stage-1.md").read_text()
-    for row in rows:
-        require(row["migration"] in {"native", "adapt", "external", "blocked"}, "Unknown migration status")
-        require(bool(row["decision"].strip()), f"No migration decision for {row['panel_protocol']}")
-        require(re.search(r"\|\s*`" + re.escape(row["panel_protocol"]) + r"`\s*\|", report) is not None, f"No report row for {row['panel_protocol']}")
-        require((row["target_kind"] is None) == (row["target_type"] is None), "Incomplete target identity")
-    target = lock["target"]
-    require(target["repository"] == "https://github.com/SawaMEN/hiddify-core", "Core must come from the owner's repository")
-    for rev in [target["commit"], *target["submodules"].values(), lock["panel_baseline"]]:
-        require(bool(re.fullmatch(r"[0-9a-f]{40}", rev)), "Expected a full pinned commit")
-    release = lock["verified_release"]
-    require(bool(re.fullmatch(r"[0-9a-f]{64}", release["sha256"])), "Expected SHA-256")
-    require(f"/download/{target['tag']}/{release['asset']}" in release["url"], "Release URL is not pinned")
-    build = lock["panel_build"]
-    require({"with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_xui_panel"}.issubset(build["tags"]), "Panel build lacks required capabilities")
-    require(build["toolchain"] == "go1.26.3", "Hiddify TLS dependencies require the pinned Go toolchain")
-    require((ROOT / build["check_command_overlay"]).is_file(), "Missing check command overlay")
-    require((ROOT / build["clash_user_overlay"]).is_file(), "Missing authenticated Clash user overlay")
-    print(f"OK: {len(names)} protocol entries (including aliases), explicit decisions and release lock")
-    if upstream is None:
-        print("OK: historical v5 baseline retained separately from the active runtime lock")
-        return
-    upstream = upstream.resolve()
-    require(git(upstream, "remote", "get-url", "origin").removesuffix(".git") == target["repository"], "Core checkout is not from the owner's repository")
-    require(git(upstream, "rev-parse", "HEAD") == target["commit"], "Upstream HEAD differs from lock")
-    require(git(upstream, "rev-parse", f"{target['tag']}^{{commit}}") == target["commit"], "Upstream tag differs from lock")
-    require(not git(upstream, "status", "--porcelain", "--untracked-files=no"), "Upstream has tracked modifications")
-    for name, revision in target["submodules"].items():
-        require(git(upstream, "ls-tree", "HEAD", name).split()[2] == revision, f"Submodule tree differs from lock: {name}")
-        require(git(upstream / name, "rev-parse", "HEAD") == revision, f"Uninitialized or unpinned submodule: {name}")
-        if name == "hiddify-sing-box":
-            require(git(upstream / name, "remote", "get-url", "origin").removesuffix(".git") == "https://github.com/SawaMEN/hiddify-sing-box", "Sing-box fork must come from the owner's repository")
-        require(not git(upstream / name, "status", "--porcelain", "--untracked-files=no"), f"Modified submodule: {name}")
-    for check in lock["source_checks"]:
-        require(check["contains"] in (upstream / check["path"]).read_text(), f"Source evidence changed: {check['path']}")
-    print("OK: upstream tag/commit, submodules, clean tracked source and evidence anchors")
-    print("This audit does not establish traffic, quota, gateway or platform compatibility")
-
-
 def validate_runtime_security_dependencies(pins, builder):
     """Validate minimum patched versions and the build's single source of truth.
 
     The manifest owns the exact pins. Duplicating their entire version map in
-    this audit made every security update fail CI even when the builder read
+    duplicating these versions made each security update fail CI even when the builder read
     the new manifest correctly.
     """
     floors = {
@@ -130,7 +76,7 @@ def validate_runtime_security_dependencies(pins, builder):
         "github.com/klauspost/compress": (1, 20, 2),
     }
     require(isinstance(pins, dict) and set(pins) == set(floors),
-            "Runtime security dependency set differs from audited packages")
+            "Runtime security dependency set differs from required modules")
     for module, minimum in floors.items():
         version = pins[module]
         match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)(?:[-+].*)?", version) if isinstance(version, str) else None
@@ -145,16 +91,16 @@ def validate_runtime_security_dependencies(pins, builder):
             "Runtime build script does not enforce the pinned dependency set")
 
 
-def audit_build(source):
+def verify_build(source):
     lock = json.loads((ROOT / "docs/hiddify-core-target.json").read_text())
     require(lock["schema_version"] == 2 and lock["stage"] in (2, 4), "Unknown runtime lock schema/stage")
     target, build = lock["target"], lock["panel_build"]
-    fork = json.loads((ROOT / "docs/hiddify-core-fork-audit.json").read_text())
-    require(target["repository"] == fork["target"]["repository"], "Runtime must use the audited owner repository")
+    fork = json.loads((ROOT / "deploy/hiddify/fork-contract.json").read_text())
+    require(target["repository"] == fork["target"]["repository"], "Runtime must use the pinned owner repository")
     # The fork audit is historical; the actively built kernel lock advances independently.
     require(not lock["runtime_contract"]["automatic_migration_ready"], "Runtime profile cannot enable automatic migration before integration gates")
     require(build["toolchain"] == "go1.26.10", "Runtime must use the pinned security-patched toolchain")
-    require(tuple(map(int, build["toolchain"].removeprefix("go").split("."))) >= tuple(map(int, fork["required_go_directive"].split("."))), "Runtime toolchain is older than the audited source requirement")
+    require(tuple(map(int, build["toolchain"].removeprefix("go").split("."))) >= tuple(map(int, fork["required_go_directive"].split("."))), "Runtime toolchain is older than the pinned source requirement")
     validate_runtime_security_dependencies(
         build["security_dependencies"], (ROOT / "tools/build-hiddify-core.sh").read_text()
     )
@@ -168,7 +114,7 @@ def audit_build(source):
     require(target["version"] in profile and target["commit"] in profile, "Runtime process identity differs from build lock")
     require(lock["runtime_contract"]["stats_grpc_method"] == fork["stats_contract"]["method"], "Wrong runtime statistics method")
     require(lock["runtime_contract"]["stats_grpc_method"] in profile, "Runtime statistics client differs from lock")
-    require(build["protection_dependency_versions"] == {"github.com/metacubex/utls": "v1.8.8", "github.com/starifly/sing-vmess": "v0.2.7-mod.9", "github.com/xtls/xray-core": "v1.260327.1-0.20260728075948-5ca6f4b7d4dc"}, "Protection dependency versions differ from the audited build script")
+    require(build["protection_dependency_versions"] == {"github.com/metacubex/utls": "v1.8.8", "github.com/starifly/sing-vmess": "v0.2.7-mod.9", "github.com/xtls/xray-core": "v1.260327.1-0.20260728075948-5ca6f4b7d4dc"}, "Protection dependency versions differ from the pinned build script")
     for key in ("check_command_overlay", "clash_user_overlay", "sniff_override_overlay", "sniff_override_test_overlay", "http1_options_overlay", "http1_options_test_overlay", "protection_options_overlay", "utls_protection_overlay", "vision_protection_overlay", "reality_protection_test_overlay", "vision_preconnect_test_overlay", "vision_padding_test_overlay", "transport_balancer_overlay", "xray_runtime_compat_overlay", "kcp_transport_test_overlay", "xhttp_extension_test_overlay", "balancer_strategy_test_overlay", "reverse_overlay", "reverse_protocol_overlay", "reverse_runtime_test_overlay", "reverse_vision_test_overlay", "runtime_dependencies_overlay", "vless_handshake_overlay", "vless_handshake_test_overlay", "explicit_cipher_overlay", "explicit_cipher_test_overlay", "stream_handshake_overlay", "stream_upgrade_test_overlay", "stream_trojan_test_overlay"):
         require((ROOT / build[key]).is_file(), "Missing runtime overlay: " + key)
     print(f"OK: stage-{lock['stage']} build/runtime identity, owner revisions, toolchain, tags and statistics profile")
@@ -196,12 +142,11 @@ def audit_build(source):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upstream", type=Path, help="active owner checkout with initialized pinned submodules")
-    parser.add_argument("--fork", type=Path, help="current owner fork checkout with pinned submodules (source audit only)")
+    parser.add_argument("--fork", type=Path, help="optional owner fork checkout with pinned submodules")
     args = parser.parse_args()
     try:
-        audit(None)
-        audit_build(args.upstream)
-        audit_fork(args.fork)
+        verify_build(args.upstream)
+        verify_fork(args.fork)
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1

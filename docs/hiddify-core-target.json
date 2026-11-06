@@ -1,8 +1,6 @@
 {
   "schema_version": 2,
   "stage": 4,
-  "audit_date": "2026-10-12",
-  "previous_baseline": "hiddify-core-v5-baseline.json",
   "target": {
     "repository": "https://github.com/SawaMEN/hiddify-core",
     "commit": "b310097c8e7a2655e1ab7ca61b7d66c4b77ebe0c",
@@ -162,7 +160,6 @@
     "stream_trojan_test_overlay": "deploy/hiddify/stream_trojan_test.go.in"
   },
   "verification": {
-    "report": "hiddify-core-stage-4-verification.md",
     "platform": "linux/amd64",
     "build": "passed",
     "config_check": "passed",

@@ -36,7 +36,7 @@ git -C "$task_source/core" submodule update --init --depth=1
 git -C "$task_source/core/hiddify-sing-box" fetch --depth=1 origin "${target[6]}"
 git -C "$task_source/core/hiddify-sing-box" checkout -q --detach FETCH_HEAD
 git -C "$task_source/core/hiddify-sing-box" submodule update --init --recursive --depth=1
-python3 "$task_root/tools/audit-hiddify-migration.py" --upstream "$task_source/core"
+python3 "$task_root/tools/verify-hiddify-build.py" --upstream "$task_source/core"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/speed/masque.patch"
 mkdir -p "$task_source/core/hiddify-sing-box/internal/xuispeed"
 cp "$task_root/internal/clientlimit/brokerclient/client.go" "$task_source/core/hiddify-sing-box/internal/xuispeed/client.go"
