@@ -39,7 +39,7 @@ func TestStage8KernelMeko(t *testing.T) {
 	helper := filepath.Join(dir, "meko.sh")
 	source := strings.ReplaceAll(string(data), "/run/lock/x-ui-telemt-meko.lock", filepath.Join(dir, "lock"))
 	source = strings.ReplaceAll(source, "/etc/x-ui/telemt-meko-fix.env", filepath.Join(dir, "settings"))
-	if err := os.WriteFile(helper, []byte(source), 0700); err != nil {
+	if err := os.WriteFile(helper, []byte(source), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("TELEMT_PORTS", "24443,24444")
