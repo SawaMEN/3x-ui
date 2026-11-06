@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"runtime"
@@ -185,15 +186,36 @@ func TestAudit3UDPAssociationMustRecoverAfterBridgeReadFailure(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("restarted bridge did not receive the retained association request")
 			}
-			_, payload, oldErr := audit3ReceivePacket(c, mode, 300*time.Millisecond)
-			// A different association proves QUIC, the restarted SOCKS bridge, and both transport modes remain functional.
+			// An old stream can be canceled when its bridge fails. Its canceled
+			// read can arrive before the restarted association's response, so
+			// reading exactly once for each association is not a valid invariant.
+			// Require both actual echoed payloads within one bounded deadline.
 			audit3SendPacket(t, c, mode, 42132, 4, "fresh")
-			h, p, newErr := audit3ReceivePacket(c, mode, time.Second)
-			if newErr != nil || h.AssocID != 42132 || string(p) != "fresh" {
-				t.Fatalf("fresh association probe %v %q %v", h, p, newErr)
-			}
-			if oldErr != nil || string(payload) != "after" {
-				t.Fatalf("retained association became receive blackhole after read failure: response %q err=%v; fresh association works; user up=%d down=%d", payload, oldErr, user.Traffic.BytesUp.Load(), user.Traffic.BytesDown.Load())
+			seen := make(map[uint16]bool, 2)
+			deadline := time.Now().Add(5 * time.Second)
+			for len(seen) < 2 {
+				remaining := time.Until(deadline)
+				if remaining <= 0 {
+					t.Fatalf("UDP recovery missing responses: got %v; user up=%d down=%d", seen, user.Traffic.BytesUp.Load(), user.Traffic.BytesDown.Load())
+				}
+				h, payload, err := audit3ReceivePacket(c, mode, remaining)
+				if err != nil {
+					var canceled *clientquic.StreamError
+					if mode == packetTransportStream && errors.As(err, &canceled) {
+						continue // stale read from the intentionally terminated bridge
+					}
+					t.Fatalf("UDP recovery read failed after receiving %v: %v", seen, err)
+				}
+				switch {
+				case h.AssocID == 42131 && string(payload) == "while-down":
+					// A queued failure-trigger packet may legitimately be replayed.
+				case h.AssocID == 42131 && string(payload) == "after":
+					seen[42131] = true
+				case h.AssocID == 42132 && string(payload) == "fresh":
+					seen[42132] = true
+				default:
+					t.Fatalf("unexpected UDP response after bridge recovery: association=%d packet=%d payload=%q", h.AssocID, h.PacketID, payload)
+				}
 			}
 		})
 	}
