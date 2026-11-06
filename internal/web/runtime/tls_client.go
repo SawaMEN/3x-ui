@@ -152,7 +152,17 @@ func newNodeTransport(tlsCfg *tls.Config) *http.Transport {
 
 // defaultNodeHTTPClient reaches nodes trusting the system CA store ("verify"
 // mode or plain http); shared so connections pool across nodes.
-var defaultNodeHTTPClient = &http.Client{Transport: newNodeTransport(nil)}
+// A node API endpoint must never redirect a request containing a node token,
+// client certificate or mutable configuration to a different HTTP endpoint.
+// Redirect responses are handled as non-200 errors by Remote.doWithTimeout.
+func rejectNodeRedirect(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
+}
+
+var defaultNodeHTTPClient = &http.Client{
+	Transport: newNodeTransport(nil),
+	CheckRedirect: rejectNodeRedirect,
+}
 
 // nodeClients caches one client per node: heartbeat and traffic sync reach it
 // every few seconds, and a rebuilt client would open its own empty pool.
@@ -187,9 +197,21 @@ func dropNodeClients(nodeID int, keep string) {
 // HTTPClientForNode returns the pooled client for n, building it on first use
 // and whenever the node's identity or TLS material changes.
 func HTTPClientForNode(n *model.Node, proxyURL string) (*http.Client, error) {
+	if n == nil {
+		return nil, common.NewError("node is required")
+	}
 	mode := n.TlsVerifyMode
 	if mode == "" {
 		mode = "verify"
+	}
+	switch mode {
+	case "verify", "skip", "pin", "mtls":
+	default:
+		// A damaged DB row must not silently turn into InsecureSkipVerify.
+		return nil, common.NewError("unsupported node TLS verification mode")
+	}
+	if (mode == "pin" || mode == "mtls") && n.Scheme != "https" {
+		return nil, common.NewError("certificate pinning and mtls require https")
 	}
 	if mode == "verify" || n.Scheme == "http" {
 		// Shared across nodes and not node-specific: nothing to key on.
@@ -214,6 +236,7 @@ func HTTPClientForNode(n *model.Node, proxyURL string) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	client.CheckRedirect = rejectNodeRedirect
 
 	nodeClientsMu.Lock()
 	if entry, ok := nodeClientsCache[key]; ok {
