@@ -1,0 +1,48 @@
+name: One-shot stage 10 API contract regeneration
+on:
+  push:
+    branches: [update]
+    paths:
+      - '.github/workflows/stage10-generate-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    if: "github.event.head_commit.message == 'chore(stage10): regenerate API contracts once'"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Generate types and OpenAPI from current backend
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run gen
+      - name: Commit generated contracts without unrelated files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/generated frontend/public/openapi.json docs/public/openapi.json
+          if git diff --cached --quiet; then
+            echo 'Generated API artifacts are already current'
+            exit 0
+          fi
+          git -c core.hooksPath=/dev/null commit -m 'fix(stage10): synchronize generated API types and OpenAPI contracts'
+          git pull --rebase origin update
+          git push origin HEAD:update
