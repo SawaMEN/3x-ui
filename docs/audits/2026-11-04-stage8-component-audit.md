@@ -42,6 +42,10 @@ Workflow `.github/workflows/component-audit.yml`: contracts, native AMD64/ARM64,
 
 Предварительный прогон [41848972032](https://github.com/SawaMEN/3x-ui/actions/runs/41848972032) подтвердил contracts, native AMD64, MEKO и OlcRTC на обеих архитектурах. FPTN installer действительно собрал образ; payload fixture остановился на слишком коротком ключе метрик. Fixture исправлен. Этот предварительный run не считается итоговым PASS.
 
+Полный прогон [42177240822](https://github.com/SawaMEN/3x-ui/actions/runs/42177240822) на commit `ca073adc5ae52c33062299b93b53d471ccda96b4` подтвердил **8/8 jobs PASS**: contracts, native AMD64/ARM64, MEKO AMD64/ARM64, OlcRTC AMD64/ARM64, FPTN AMD64. Это свидетельство относится именно к указанному SHA, а не автоматически к следующим коммитам.
+
+В последующих изменениях независимый FPTN TCP/UDP echo вынесен в отдельный Linux network namespace с адресом из RFC 2544, чтобы NAT Docker gateway не подменял источник ответов host-local UDP echo. [Прогон 42179787927](https://github.com/SawaMEN/3x-ui/actions/runs/42179787927) подтвердил обязательный native FPTN test **PASS** на коде с этим исправлением. Остальные jobs нового прогона должны завершиться прежде, чем этап будет объявлен завершённым на актуальной ветке.
+
 ## Границы результата
 
 Linux Ubuntu 24.04; native AMD64/ARM64, кроме полного Docker FPTN, который проверяется на AMD64. FPTN ARM64 не объявляется проверенным. OpenFlux закреплён на используемой интеграцией версии 0.3.0; новые версии не подставляются молча. Его реальный TCP payload направляется на IPv4 не loopback: userspace exit stack этой версии не предоставляет обычный host loopback.
