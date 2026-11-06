@@ -863,6 +863,16 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/server/domainActivity',
+        summary: 'Get the current domain activity monitor status and recent domain activity.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/domainActivity/config',
+        summary: 'Update domain activity monitoring configuration.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/server/fail2banStatus',
         summary:
           'Reports whether per-client IP limits can be enforced on this host. The panel uses it to gate the "IP Limit" field, since enforcement depends on Fail2ban being installed.',
