@@ -1601,29 +1601,28 @@ resolve_latest_tag() {
 # sidecar) is tolerated with a warning.
 verify_release_checksum() {
     local url="$1" file="$2" sums="$2.sha256" code expected actual
-    rm -f "${sums}"
-    code=$(release_curl -sL --retry 3 --retry-delay 3 --connect-timeout 15 --max-time 60 -o "${sums}" -w '%{http_code}' "${url}.sha256")
-    if [[ "${code}" == "404" && "${url}" != */dev-*/* ]]; then
-        rm -f "${sums}"
-        echo -e "${yellow}No checksum published for this release, skipping verification${plain}"
-        return 0
+    rm -f -- "$sums"
+    # Missing or unreachable checksums are not evidence that an archive is
+    # authentic. Never execute a release payload without a verified digest.
+    if ! code=$(release_curl -sL --retry 3 --retry-delay 3 --connect-timeout 15 --max-time 60 -o "$sums" -w '%{http_code}' "$url.sha256"); then
+        rm -f -- "$sums"
+        echo "Cannot retrieve release SHA-256; installation unchanged." >&2
+        return 1
     fi
-    if [[ "${code}" != "200" ]]; then
-        rm -f "${sums}" "${file}"
-        echo -e "${red}Failed to download the checksum for $(basename "${file}") (HTTP ${code})${plain}"
-        exit 1
+    if [[ "$code" != 200 || ! -s "$sums" ]]; then
+        rm -f -- "$sums"
+        echo "Release SHA-256 is unavailable or invalid (HTTP $code); installation unchanged." >&2
+        return 1
     fi
-    expected=$(awk 'NR == 1 {print $1}' "${sums}")
-    actual=$(sha256sum "${file}" | awk '{print $1}')
-    rm -f "${sums}"
-    if [[ ! "${expected}" =~ ^[0-9a-f]{64}$ || "${expected}" != "${actual}" ]]; then
-        rm -f "${file}"
-        echo -e "${red}Checksum mismatch for $(basename "${file}"): expected ${expected:-<none>}, got ${actual}${plain}"
-        exit 1
+    expected=$(awk 'NR == 1 {print $1}' "$sums") || { rm -f -- "$sums"; return 1; }
+    actual=$(sha256sum -- "$file" | awk '{print $1}') || { rm -f -- "$sums"; return 1; }
+    rm -f -- "$sums"
+    if [[ ! "$expected" =~ ^[0-9a-f]{64}$ || "$expected" != "$actual" ]]; then
+        echo "Release checksum mismatch or malformed checksum sidecar; installation unchanged." >&2
+        return 1
     fi
-    echo -e "${green}Checksum verified: ${actual}${plain}"
+    echo "Release archive SHA-256 verified: $actual"
 }
-
 # Older tags predate some of these files (x-ui.rc arrived in v2.8.4). Serving
 # main's copy against an old binary is the mismatch this pinning exists to
 # prevent, so probe before anything is stopped or removed and refuse the tag.
@@ -1814,7 +1813,7 @@ install_x-ui() {
             echo -e "${red}Downloaded x-ui release archive is empty${plain}"
             exit 1
         fi
-        verify_release_checksum "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${archive}"
+        verify_release_checksum "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${archive}" || exit 1
     else
         tag_version=$(select_release_tag "$1") || exit 1
         # The rolling dev channel ships under a fixed, non-semver tag that is
@@ -1844,7 +1843,7 @@ install_x-ui() {
             echo -e "${red}Downloaded x-ui release archive is empty${plain}"
             exit 1
         fi
-        verify_release_checksum "${url}" "${archive}"
+        verify_release_checksum "${url}" "${archive}" || exit 1
     fi
     # Pin helpers to the release tag, including the rolling dev build.
     # main can advance while the corresponding release is still building.
