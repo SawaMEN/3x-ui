@@ -1330,7 +1330,7 @@ update_x-ui() {
             if [ -f "/etc/init.d/x-ui" ]; then
                 rc-service x-ui stop > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
                 core_migration_begin || _fail "Cannot snapshot installation; no release files replaced"
-                rc-update del x-ui > /dev/null 2>&1 || _fail "Cannot disable old x-ui service before replacement"
+                if [[ "${cm_was_enabled:-0}" == 1 ]]; then rc-update del x-ui > /dev/null 2>&1 || _fail "Cannot disable old x-ui service before replacement"; fi
                 echo -e "${green}Removing old service unit version...${plain}"
                 rm -f /etc/init.d/x-ui > /dev/null 2>&1
             else
@@ -1346,7 +1346,7 @@ update_x-ui() {
                     systemctl stop x-ui.service > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
                 fi
                 core_migration_begin || _fail "Cannot snapshot installation; no release files replaced"
-                systemctl disable x-ui > /dev/null 2>&1 || _fail "Cannot disable old x-ui service before replacement"
+                if [[ "${cm_was_enabled:-0}" == 1 ]]; then systemctl disable x-ui > /dev/null 2>&1 || _fail "Cannot disable old x-ui service before replacement"; fi
                 echo -e "${green}Removing old systemd unit version...${plain}"
                 rm "${xui_service}/x-ui.service" -f > /dev/null 2>&1
                 systemctl daemon-reload > /dev/null 2>&1 || _fail "Cannot reload service definitions before replacement"
