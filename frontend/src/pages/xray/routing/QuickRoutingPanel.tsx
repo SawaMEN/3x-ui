@@ -224,8 +224,10 @@ export default function QuickRoutingPanel({
     setError('');
     setNotice('');
     try {
-      await provisionNodeTarget(draft.target);
+      // Validate the route before provisioning a remote service credential.
+      // Invalid form input must never mutate the node.
       const compiled = compileQuickRoute(draft, engine, tags, inTags);
+      await provisionNodeTarget(draft.target);
       const result = putQuickRoute(rules, compiled, engine);
       onChange(result.rules);
       const text = result.replaced
