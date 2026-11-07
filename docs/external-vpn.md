@@ -72,3 +72,36 @@ restarts them using the new bundle; uninstalling stops clients and removes their
 restart plans. Existing inbound settings and outbound templates are not deleted.
 Client/server compatibility and end-to-end networking require the matching
 VetroffProxy release. See [upstream setup](https://github.com/SawaMEN/VetroffProxy/blob/main/docs/START.md).
+
+## Sudoku as a remote node routing destination
+
+A remote Sudoku inbound can be selected as an outbound destination in the
+routing editor on either Xray or sing-box. The panel provisions a dedicated
+node-route client, obtains its private `sudoku://` link without sending that
+secret to the browser, and runs an official Sudoku client in a restricted
+Docker container. The container's mixed HTTP/SOCKS listener is **not exposed
+on the host network**. Docker publishes only `127.0.0.1:<allocated-port>`
+to the selected core; the sidecar is monitored as a managed outbound.
+
+On the **panel host that initiates the route**, install the Sudoku component,
+install and start Docker, and prepare the runtime image:
+
+```sh
+docker pull debian:bookworm-slim
+```
+
+The official Sudoku CLI listens on a wildcard address, so running the
+managed route directly on the host would expose an unauthenticated proxy.
+The container isolation is mandatory. Routes use TCP only, and their
+Sudoku client config always sets `proxy_mode: global` with empty rule URLs,
+so the selected route cannot silently bypass its remote node via direct/PAC
+rules. An unavailable runtime is an error (or a blocked managed node route),
+never a direct fallback. The remote Sudoku server still uses its own direct
+egress; this feature does **not** reroute traffic received by a *local*
+Sudoku inbound through the panel's routing engine.
+
+VetroffProxy managed outbounds allow up to 60 seconds for the Necko/NSS
+engine to initialize before reporting a SOCKS listener startup timeout.
+For persistent startup errors, inspect the VetroffProxy process output in
+panel/system logs: startup can also fail because of missing native runtime
+libraries, malformed connection profiles, or engine initialization errors.
