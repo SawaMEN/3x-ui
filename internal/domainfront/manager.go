@@ -484,11 +484,10 @@ func pathWithin(path, prefix string) bool {
 	return path == prefix || strings.HasPrefix(path, prefix+"/")
 }
 
-// panelRequestPath protects actual panel endpoints, including SPA routes
-// that are intentionally dispatched by the panel's NoRoute handler.
+// panelRequestPath protects panel URLs from publication by the public gateway.
+// Even legacy domains with Panel=true must never forward these endpoints.
 func (r *frontRuntime) panelRequestPath(path string) bool {
 	// Reserve panel URLs on every domain, including subscription-only hosts.
-	// Whether the panel is actually exposed is checked at dispatch time.
 	if base := r.backend.PanelPath; base != "" && base != "/" {
 		return pathWithin(path, base)
 	}
@@ -555,21 +554,6 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 	if r.backend.SubscriptionHandler != nil && d.Mode != "relay" {
 		subscription = localHandler(r.backend.SubscriptionHandler, d.Name, true)
 	}
-	var panel http.Handler
-	if d.Panel && d.Mode != "sub_link_only" {
-		target, host := r.backend.PanelTarget, r.backend.PanelHost
-		if d.Mode == "relay" {
-			target = d.Origin
-			host = ""
-		}
-		panel, err = proxy(target, host, false)
-		if err != nil {
-			return nil, err
-		}
-		if r.backend.PanelHandler != nil && d.Mode != "relay" {
-			panel = localHandler(r.backend.PanelHandler, host, false)
-		}
-	}
 	type routeHandler struct {
 		path    string
 		handler http.Handler
@@ -605,10 +589,6 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 				return
 			}
 		}
-		if panel != nil && r.panelRequestPath(req.URL.Path) {
-			panel.ServeHTTP(w, req)
-			return
-		}
 		if r.protectedRedirectPath(d, req.URL.Path) {
 			// An unmatched legacy/application endpoint must never fall
 			// through to the public decoy. Its former behavior was 404.
@@ -623,10 +603,6 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Referrer-Policy", "no-referrer")
 			http.Redirect(w, req, target, http.StatusFound)
-			return
-		}
-		if panel != nil && req.URL.Path == "/" {
-			panel.ServeHTTP(w, req)
 			return
 		}
 		http.NotFound(w, req)

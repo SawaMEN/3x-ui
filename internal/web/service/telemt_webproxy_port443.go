@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
@@ -49,6 +50,14 @@ func telemtWebPanelPort443Owner(state TelemtWebProxyState) (string, error) {
 	panelPort, err := settings.GetPort()
 	if err != nil {
 		return "", err
+	}
+	// The runtime listener honours XUI_PORT before the persisted webPort.
+	// Use its effective value when checking whether Telemt can own TCP 443.
+	if override, configured, overrideErr := config.GetPortOverride(); configured && overrideErr == nil {
+		if override == 443 {
+			return "веб-панель 3x-ui (XUI_PORT=443 в окружении службы)", nil
+		}
+		panelPort = override
 	}
 	if panelPort == 443 {
 		return "веб-панель 3x-ui (Настройки → Панель, TCP 443)", nil

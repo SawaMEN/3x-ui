@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
@@ -111,7 +112,7 @@ func TestGatewaySharesPanelListenerWithoutProxyLoop(t *testing.T) {
 	}
 	raw, _ := io.ReadAll(response.Body)
 	_ = response.Body.Close()
-	if response.StatusCode != http.StatusOK || response.ProtoMajor != 2 || string(raw) != "existing:private.example.com" {
+	if response.StatusCode != http.StatusNotFound || response.ProtoMajor != 2 || strings.Contains(string(raw), "existing:") {
 		t.Fatalf("shared response = %d %q", response.StatusCode, raw)
 	}
 	backend.PanelHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "updated-route") })
@@ -124,8 +125,8 @@ func TestGatewaySharesPanelListenerWithoutProxyLoop(t *testing.T) {
 	}
 	raw, _ = io.ReadAll(response.Body)
 	_ = response.Body.Close()
-	if string(raw) != "updated-route" {
-		t.Fatalf("route update did not reach the shared listener: %q", raw)
+	if response.StatusCode != http.StatusNotFound || strings.Contains(string(raw), "updated-route") {
+		t.Fatalf("refreshed routes exposed panel: %d %q", response.StatusCode, raw)
 	}
 	occupied, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -143,8 +144,8 @@ func TestGatewaySharesPanelListenerWithoutProxyLoop(t *testing.T) {
 	}
 	raw, _ = io.ReadAll(response.Body)
 	_ = response.Body.Close()
-	if string(raw) != "updated-route" {
-		t.Fatalf("rollback lost refreshed routes: %q", raw)
+	if response.StatusCode != http.StatusNotFound || strings.Contains(string(raw), "updated-route") {
+		t.Fatalf("rollback exposed panel: %d %q", response.StatusCode, raw)
 	}
 }
 

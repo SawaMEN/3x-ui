@@ -99,3 +99,27 @@ func TestDomainGatewayCanonicalURLsAndHostRoles(t *testing.T) {
 		t.Fatalf("allowed subscription hosts = %#v", allowed)
 	}
 }
+
+func TestDomainGatewayDropsLegacyPanelFlags(t *testing.T) {
+	setupConflictDB(t)
+	s := &SettingService{}
+	cfg := domainfront.DefaultConfig()
+	cfg.Domains = []domainfront.DomainFrontDomain{{Name: "panel.example.com", Mode: "direct", Enabled: true, TLS: "auto", Panel: true}}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.setString("domainFrontConfig", string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := s.GetDomainFrontConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Domains) != 1 || loaded.Domains[0].Panel {
+		t.Fatalf("legacy gateway still exposes panel: %#v", loaded.Domains)
+	}
+	if privateDomainFrontConfig(cfg).Domains[0].Panel {
+		t.Fatal("incoming gateway config still exposes the panel")
+	}
+}

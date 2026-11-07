@@ -312,7 +312,7 @@ func seedDomainFront(settings *entity.AllSetting) domainfront.DomainFrontConfig 
 		}
 		cfg.Domains = append(cfg.Domains, domainfront.DomainFrontDomain{Name: name, Mode: mode, TLS: "auto", Enabled: true, Panel: panel, InboundIDs: []int{}})
 	}
-	add(certificateHost(settings.WebCertFile, settings.WebDomain), true)
+	add(certificateHost(settings.WebCertFile, settings.WebDomain), false)
 	add(certificateHost(settings.SubCertFile, settings.SubDomain), false)
 	if u, err := url.Parse(settings.SubPublicURL); err == nil && u.Scheme == "https" && u.Hostname() != "" {
 		add(u.Hostname(), false)
