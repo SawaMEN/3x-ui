@@ -540,6 +540,17 @@ func (a *SUBController) subs(c *gin.Context) {
 	if !a.enforceHwid(c) {
 		return
 	}
+	// MASQUE has no portable URI scheme. Serve the whole selected subscription
+	// as native JSON by default so unknown User-Agents do not silently lose it.
+	if format == "" && a.hasEnabledMASQUESubscription(c.Param("subid")) {
+		if a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", false, true) {
+			a.recordSubscriptionFetch(c)
+			logSubscriptionRoute(userAgent, "masque-native-sing-box")
+		} else {
+			writeMASQUEFormatError(c)
+		}
+		return
+	}
 	if format == "" {
 		format = a.defaultBodyFormat(c)
 		c.Set("subscriptionFormat", format)
@@ -595,6 +606,10 @@ func (a *SUBController) subs(c *gin.Context) {
 func (a *SUBController) serveRawSubscription(c *gin.Context) {
 	userAgent := c.GetHeader("User-Agent")
 	subId := c.Param("subid")
+	if a.hasEnabledMASQUESubscription(subId) {
+		writeMASQUEFormatError(c)
+		return
+	}
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	subReq := a.subService.ForRequest(host)
 	subReq.subscriptionBody = true
@@ -655,6 +670,31 @@ func (a *SUBController) hasHiddifyNativeSubscription(subID string) bool {
 		}
 	}
 	return false
+}
+
+// hasEnabledMASQUESubscription checks the actual subscriber assignments, not
+// just whether a MASQUE inbound happens to exist in the panel.
+func (a *SUBController) hasEnabledMASQUESubscription(subID string) bool {
+	req := a.subService.ForRequest("")
+	inbounds, err := req.getInboundsBySubId(subID)
+	if err != nil {
+		return false
+	}
+	for _, inbound := range inbounds {
+		if inbound.Protocol != model.MASQUE {
+			continue
+		}
+		for _, client := range req.matchingClients(inbound, subID) {
+			if client.Enable {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func writeMASQUEFormatError(c *gin.Context) {
+	c.String(http.StatusNotAcceptable, "MASQUE requires a native sing-box subscription; use ?format=sing-box or ?format=hiddify. Raw links, Xray and Clash cannot encode masque-client.")
 }
 
 func (a *SUBController) hasNativeSingBoxSubscription(subID string) bool {
@@ -973,6 +1013,10 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 	// cannot encode either protocol. An explicit format also works when the
 	// importing app does not identify itself in User-Agent.
 	native := forceSingBox || format == "sing-box" || format == "hiddify" || (format != "xray" && (isHiddify && a.hasHiddifyNativeSubscription(subId) || wantsNativeSingBox(c.Request.UserAgent()) && a.hasNativeSingBoxSubscription(subId)))
+	if !native && a.hasEnabledMASQUESubscription(subId) {
+		writeMASQUEFormatError(c)
+		return true
+	}
 	if native && !a.formatAllowed(c, "sing-box") || !native && !a.formatAllowed(c, "xray") {
 		return false
 	}
@@ -1042,6 +1086,10 @@ func (a *SUBController) subClash(c *gin.Context, legacy bool) {
 
 func (a *SUBController) serveClashBody(c *gin.Context, rawDownload bool, legacy bool) bool {
 	subId := c.Param("subid")
+	if a.hasEnabledMASQUESubscription(subId) {
+		writeMASQUEFormatError(c)
+		return true
+	}
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	var clashSub, header string
 	var err error
