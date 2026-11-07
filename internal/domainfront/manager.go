@@ -486,10 +486,9 @@ func pathWithin(path, prefix string) bool {
 
 // panelRequestPath protects actual panel endpoints, including SPA routes
 // that are intentionally dispatched by the panel's NoRoute handler.
-func (r *frontRuntime) panelRequestPath(d DomainFrontDomain, path string) bool {
-	if !d.Panel || d.Mode == "sub_link_only" {
-		return false
-	}
+func (r *frontRuntime) panelRequestPath(path string) bool {
+	// Reserve panel URLs on every domain, including subscription-only hosts.
+	// Whether the panel is actually exposed is checked at dispatch time.
 	if base := r.backend.PanelPath; base != "" && base != "/" {
 		return pathWithin(path, base)
 	}
@@ -511,11 +510,9 @@ func (r *frontRuntime) protectedRedirectPath(d DomainFrontDomain, path string) b
 	if strings.HasPrefix(path, "/.well-known/acme-challenge/") {
 		return true
 	}
-	if d.Mode != "sub_link_only" {
-		for _, route := range r.backend.Routes[d.Name] {
-			if pathWithin(path, route.Path) {
-				return true
-			}
+	for _, route := range r.backend.Routes[d.Name] {
+		if pathWithin(path, route.Path) {
+			return true
 		}
 	}
 	for _, prefix := range r.backend.SubscriptionPaths {
@@ -528,7 +525,7 @@ func (r *frontRuntime) protectedRedirectPath(d DomainFrontDomain, path string) b
 			return true
 		}
 	}
-	return r.panelRequestPath(d, path)
+	return r.panelRequestPath(path)
 }
 
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
@@ -608,7 +605,7 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 				return
 			}
 		}
-		if panel != nil && r.panelRequestPath(d, req.URL.Path) {
+		if panel != nil && r.panelRequestPath(req.URL.Path) {
 			panel.ServeHTTP(w, req)
 			return
 		}
