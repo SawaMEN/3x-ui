@@ -120,7 +120,6 @@ func TestMASQUEFullSubscription(t *testing.T) {
 	}
 }
 
-
 func TestMASQUEMixedSubscriptionDefaultAndFormats(t *testing.T) {
 	setupInfoNodeTestDB(t)
 	db := database.GetDB()
@@ -158,6 +157,7 @@ func TestMASQUEMixedSubscriptionDefaultAndFormats(t *testing.T) {
 	for _, path := range []string{
 		"/sub/" + subID,
 		"/sub/" + subID + "?format=sing-box",
+		"/sub/" + subID + "?format=all",
 	} {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, path, nil)
