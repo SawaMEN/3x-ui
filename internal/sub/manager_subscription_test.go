@@ -119,7 +119,12 @@ func TestManagerJSONKeepsMASQUEAndExcludesOtherClientAttachments(t *testing.T) {
 	}
 	w = httptest.NewRecorder()
 	service.ServeManagerSubscription(w, httptest.NewRequest(http.MethodGet, "https://panel.example/bus/"+sub.Token, nil), sub.Token)
-	if w.Code != 406 {
-		t.Fatalf("raw format silently discarded MASQUE: %d %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "masque-client") || !strings.Contains(w.Body.String(), "current-secret") || strings.Contains(w.Body.String(), "unselected.example.com") {
+		t.Fatalf("default manager subscription must include MASQUE: %d %s", w.Code, w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	service.ServeManagerSubscription(w, httptest.NewRequest(http.MethodGet, "https://panel.example/bus/"+sub.Token+"?format=raw", nil), sub.Token)
+	if w.Code != http.StatusNotAcceptable {
+		t.Fatalf("explicit raw format silently discarded MASQUE: %d %s", w.Code, w.Body.String())
 	}
 }
