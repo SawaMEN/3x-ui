@@ -2,6 +2,7 @@ package sub
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -256,7 +257,13 @@ func (p *LinkProvider) ManagerFormat(host string, sub model.ManagerSubscription,
 		return "", "", fmt.Errorf("unknown format")
 	}
 	if err != nil {
-		return "", "", fmt.Errorf("selected protocols are incompatible with %s: %w", format, errSubscriptionFormatUnsupported)
+		if errors.Is(err, errSubscriptionFormatUnsupported) {
+			// A native JSON document cannot represent every selected protocol
+			// (notably VetroffProxy). Tell the manager to render the same
+			// published selection as lossless URI links instead.
+			return "", "", nil
+		}
+		return "", "", fmt.Errorf("manager %s format: %w", format, err)
 	}
 	return body, "application/json; charset=utf-8", nil
 }
