@@ -474,7 +474,8 @@ func startOutbound(tag string, proc *managedOutbound) error {
 			cancel()
 			return fmt.Errorf("Sudoku node routing requires the installed official Sudoku component")
 		}
-		const image = "alpine:3.20"
+		// Debian supports both statically and dynamically linked official Go releases.
+		const image = "debian:bookworm-slim"
 		checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
 		checkErr := exec.CommandContext(checkCtx, "docker", "image", "inspect", image).Run()
 		checkCancel()
