@@ -78,7 +78,13 @@ func DomainFrontStatus() (domainfront.DomainFrontStatus, error) {
 }
 
 func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (domainfront.DomainFrontStatus, error) {
-	cfg = privateDomainFrontConfig(cfg)
+	// Reject new gateway panel routes, but keep the legacy flag readable in
+	// stored configurations and ignored by the gateway manager.
+	for _, domain := range cfg.Domains {
+		if domain.Panel {
+			return domainfront.DomainFrontStatus{}, fmt.Errorf("domain %q cannot expose the admin panel; use the configured web port", domain.Name)
+		}
+	}
 	domainFrontState.Lock()
 	defer domainFrontState.Unlock()
 	s := &SettingService{}

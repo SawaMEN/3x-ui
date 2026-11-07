@@ -530,6 +530,30 @@ func (s *ManagerService) pushGenerated(ctx context.Context, ib *model.Inbound) e
 	return rt.UpdateInbound(c, payload, payload)
 }
 
+// A remote node may begin or finish a native configuration batch while the
+// manager is preparing a core restart. This is a transient snapshot conflict,
+// not an invalid generation. Retry only that specific conflict; all other
+// failures must still abort publication and trigger the normal rollback.
+func retryManagerNativeBatchConflict(ctx context.Context, apply func(context.Context) error) error {
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := apply(ctx)
+		if err == nil || !strings.Contains(err.Error(), errNativeConfigBatchChanged.Error()) || attempt == 2 {
+			return err
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 250 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil
+}
+
 func (s *ManagerService) applyGeneration(ctx context.Context, entries []model.ManagerEntry) error {
 	local := false
 	nodes := map[int]*model.Inbound{}
@@ -556,7 +580,7 @@ func (s *ManagerService) applyGeneration(ctx context.Context, entries []model.Ma
 			return err
 		}
 		c, cancel := context.WithTimeout(ctx, time.Minute)
-		err = rt.RestartXray(c)
+		err = retryManagerNativeBatchConflict(c, rt.RestartXray)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("node %d core apply: %w", *ib.NodeID, err)
