@@ -547,7 +547,7 @@ func (a *SUBController) subs(c *gin.Context) {
 	}
 	// MASQUE has no portable URI scheme. Serve the whole selected subscription
 	// as native JSON by default so unknown User-Agents do not silently lose it.
-	if format == "" && a.hasEnabledMASQUESubscription(c.Param("subid")) {
+	if (format == "" || format == "all") && a.hasEnabledMASQUESubscription(c.Param("subid")) {
 		if a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", false, true) {
 			a.recordSubscriptionFetch(c)
 			logSubscriptionRoute(userAgent, "masque-native-sing-box")
