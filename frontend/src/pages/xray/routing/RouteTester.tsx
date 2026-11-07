@@ -53,14 +53,18 @@ export default function RouteTester({ inboundTags, isMobile }: RouteTesterProps)
       const checked = await Promise.all(
         networks.map(async (selected): Promise<NetworkRouteResult> => {
           try {
-            const msg = await HttpUtil.post<RouteTestResult>('/panel/api/xray/routeTest', {
-              domain: isIp ? '' : value,
-              ip: isIp ? value : '',
-              port: port ?? 0,
-              network: selected,
-              inboundTag: inboundTag || '',
-              protocol: protocol || '',
-            }, { headers: { 'Content-Type': 'application/json' }, silent: true });
+            const msg = await HttpUtil.post<RouteTestResult>(
+              '/panel/api/xray/routeTest',
+              {
+                domain: isIp ? '' : value,
+                ip: isIp ? value : '',
+                port: port ?? 0,
+                network: selected,
+                inboundTag: inboundTag || '',
+                protocol: protocol || '',
+              },
+              { headers: { 'Content-Type': 'application/json' }, silent: true },
+            );
             if (!msg?.success || !msg.obj) {
               return { network: selected, error: msg?.msg || 'Routing API unavailable' };
             }
@@ -170,14 +174,14 @@ export default function RouteTester({ inboundTags, isMobile }: RouteTesterProps)
                 : entry.result?.matched
                   ? t('pages.xray.routeTesterMatchedOutbound')
                   : t('pages.xray.routeTesterDefaultOutbound')}
-              {entry.result?.matched && (
-                <Tag color="blue">{entry.result.outboundTag || '—'}</Tag>
-              )}
+              {entry.result?.matched && <Tag color="blue">{entry.result.outboundTag || '—'}</Tag>}
               {(entry.result?.groupTags || []).length > 0 && (
                 <>
                   <span>{t('pages.xray.routeTesterViaBalancer')}:</span>
                   {(entry.result?.groupTags || []).map((tag) => (
-                    <Tag key={tag} color="orange">{tag}</Tag>
+                    <Tag key={tag} color="orange">
+                      {tag}
+                    </Tag>
                   ))}
                 </>
               )}
