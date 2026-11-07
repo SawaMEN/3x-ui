@@ -28,19 +28,19 @@ type ManagerListOptions struct {
 }
 
 type ManagerSnapshot struct {
-	SubscriptionTotal     int64                         `json:"subscriptionTotal"`
-	AllSubscriptionsTotal int64                         `json:"allSubscriptionsTotal"`
-	AutoRotateTotal       int64                         `json:"autoRotateTotal"`
-	PendingOperations     int64                         `json:"pendingOperations"`
-	SubscriptionPage      int                           `json:"subscriptionPage"`
-	PageSize              int                           `json:"pageSize"`
-	Subscriptions         []model.ManagerSubscription   `json:"subscriptions"`
-	Relays                []model.ManagerRelay          `json:"relays"`
-	Domains               []model.ManagerDomain         `json:"domains"`
-	Operations            []model.ManagerOperation      `json:"operations"`
-	ActiveOperations      []model.ManagerOperation      `json:"activeOperations"`
-	OperationTotal        int64                         `json:"operationTotal"`
-	Clients               map[string]ManagerClientInfo  `json:"clients"`
+	SubscriptionTotal     int64                        `json:"subscriptionTotal"`
+	AllSubscriptionsTotal int64                        `json:"allSubscriptionsTotal"`
+	AutoRotateTotal       int64                        `json:"autoRotateTotal"`
+	PendingOperations     int64                        `json:"pendingOperations"`
+	SubscriptionPage      int                          `json:"subscriptionPage"`
+	PageSize              int                          `json:"pageSize"`
+	Subscriptions         []model.ManagerSubscription  `json:"subscriptions"`
+	Relays                []model.ManagerRelay         `json:"relays"`
+	Domains               []model.ManagerDomain        `json:"domains"`
+	Operations            []model.ManagerOperation     `json:"operations"`
+	ActiveOperations      []model.ManagerOperation     `json:"activeOperations"`
+	OperationTotal        int64                        `json:"operationTotal"`
+	Clients               map[string]ManagerClientInfo `json:"clients"`
 }
 
 func (s *ManagerService) Snapshot(owner, page int, state, kind string, options ...ManagerListOptions) (ManagerSnapshot, error) {
