@@ -188,16 +188,15 @@ func TestVetroffConfigurationAndLink(t *testing.T) {
 	}
 }
 
-
 func TestVetroffRemoteCertificateAutoPinKeepsSubscriptionLink(t *testing.T) {
 	options := DefaultVetroffSettings()
 	options.AutoTLS = false
 	inst := Instance{Protocol: model.VetroffProxy, Port: 443, Settings: Settings{
-		Hostname:   "vpn.example.com",
+		Hostname:    "vpn.example.com",
 		Certificate: filepath.Join(t.TempDir(), "remote-fullchain.pem"),
 		PrivateKey:  filepath.Join(t.TempDir(), "remote-privkey.pem"),
-		Vetroff:    &options,
-		Clients:    []Client{{Email: "alice", Password: strings.Repeat("v", 48), Enable: true}},
+		Vetroff:     &options,
+		Clients:     []Client{{Email: "alice", Password: strings.Repeat("v", 48), Enable: true}},
 	}}
 	link, err := exportVetroffLink(inst, "alice", "vpn.example.com", 443)
 	if err != nil {
