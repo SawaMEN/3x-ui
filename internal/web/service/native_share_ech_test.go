@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -120,6 +121,48 @@ func TestNodeRouteHysteriaECHNormalizesRawBase64(t *testing.T) {
 		if output, err := exec.Command(binary, "check", "-c", path).CombinedOutput(); err != nil {
 			t.Fatalf("Hiddify core rejected normalized Hysteria2 node route: %v: %s", err, output)
 		}
+	}
+}
+
+func TestNodeRouteHysteriaECHURIWithKernel(t *testing.T) {
+	binary := os.Getenv("HIDDIFY_CONFIG_CHECK_BINARY")
+	if binary == "" {
+		t.Skip("requires the pinned Hiddify core")
+	}
+	encoded := echTestConfigList(t)
+	uri := "hy2://password@node.example:443?sni=real.example&ech=" + url.QueryEscape(encoded)
+	parsed, err := parseShareWithKernel(context.Background(), uri, binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parsed.Outbounds) != 1 {
+		t.Fatalf("unexpected Hysteria URI parse: %#v", parsed)
+	}
+	out := parsed.Outbounds[0]
+	if out["type"] != "hysteria2" {
+		t.Fatalf("Hysteria2 type lost: %#v", out)
+	}
+	tls := out["tls"].(map[string]any)
+	ech := tls["ech"].(map[string]any)
+	if ech["enabled"] != true {
+		t.Fatal("ECH was disabled")
+	}
+	config, ok := ech["config"].([]string)
+	if !ok || len(config) != 1 || !strings.HasPrefix(config[0], "-----BEGIN ECH CONFIGS-----") {
+		t.Fatalf("ECH must be PEM before applying config: %#v", ech)
+	}
+	out["tag"] = "node-route-1"
+	fullConfig := map[string]any{"outbounds": []any{out}}
+	raw, err := json.Marshal(fullConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "node-route.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command(binary, "check", "-c", path).CombinedOutput(); err != nil {
+		t.Fatalf("Hiddify core rejected Hysteria2 URL route with ECH: %v: %s", err, output)
 	}
 }
 
