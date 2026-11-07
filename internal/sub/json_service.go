@@ -444,6 +444,13 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		}
 		return !active
 	})
+	// MASQUE has no portable URI fallback: explicit sing-box requests must
+	// reject unsupported sibling protocols rather than export partial profiles.
+	// Set this before compatibility filtering, otherwise unsupported siblings
+	// disappear before the completeness check below can see them.
+	if containsSubscriptionProtocol(inbounds, model.MASQUE) {
+		compatible = false
+	}
 	if compatible {
 		// VetroffProxy has no native sing-box outbound; retaining only the
 		// other entries would silently break a mixed subscription.
