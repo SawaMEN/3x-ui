@@ -31,6 +31,10 @@ func tryRecoverManagedFirewallKernel(ctx context.Context, failures []error) bool
 		if failure == nil {
 			continue
 		}
+		message := strings.ToLower(failure.Error())
+		if strings.Contains(message, "permission denied") || strings.Contains(message, "operation not permitted") {
+			return false
+		}
 		// Never hide permission, syntax, or unexpected failures by trying a
 		// different backend or modifying the host.
 		if !isFirewallKernelCompatibilityError(failure) {
