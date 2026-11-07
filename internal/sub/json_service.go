@@ -648,7 +648,13 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	if !hiddify && slices.ContainsFunc(inbounds, usesXDriveTransport) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
-	nativeTLSForHiddify := hiddify && containsNativeTLSSubscription(inbounds)
+	// Unlike URI-only subscriptions, a native MASQUE document must be complete:
+	// never let compatibility mode silently omit other selected connections.
+	masqueInSubscription := containsSubscriptionProtocol(inbounds, model.MASQUE)
+	if masqueInSubscription {
+		compatible = false
+	}
+	nativeTLSForHiddify := hiddify && containsNativeTLSSubscription(inbounds) && !masqueInSubscription
 	if (!hiddify && !compatible && containsSubscriptionProtocol(inbounds, model.WireGuard)) ||
 		(!nativeTLSForHiddify && slices.ContainsFunc(inbounds, func(ib *model.Inbound) bool {
 			return singBoxUnsupportedProtocol(ib.Protocol) && (!hiddify || !hiddifyExtendedProtocol(ib.Protocol))
