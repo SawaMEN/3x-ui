@@ -78,7 +78,9 @@ func redirectSNITargets(configured []string, history []SNIJobSnapshot) []string 
 		add(configured[i*len(configured)/remaining])
 	}
 	for _, candidate := range configured {
-		if len(out) >= redirectMaxSNICandidates { break }
+		if len(out) >= redirectMaxSNICandidates {
+			break
+		}
 		add(candidate)
 	}
 	return out
@@ -128,22 +130,28 @@ func ScanRedirectSites(ctx context.Context) (domainfront.DecoySiteScan, error) {
 			continue
 		}
 		candidates = append(candidates, domainfront.DecoyCandidate{
-			URL: "https://" + row.Host + "/",
+			URL:          "https://" + row.Host + "/",
 			SNILatencyMS: int64(row.LatencyMs),
-			TLS13: row.TLS13,
-			HTTP2: row.H2,
-			SNIStable: stable[strings.ToLower(row.Host)],
+			TLS13:        row.TLS13,
+			HTTP2:        row.H2,
+			SNIStable:    stable[strings.ToLower(row.Host)],
 		})
 	}
 	// Prefer TLS-compatible candidates, but do not require REALITY-specific
 	// X25519 or HTTP/2 behavior: this is a website redirect, not REALITY.
 	slices.SortStableFunc(candidates, func(a, b domainfront.DecoyCandidate) int {
 		if a.SNIStable != b.SNIStable {
-			if a.SNIStable { return -1 }
+			if a.SNIStable {
+				return -1
+			}
 			return 1
 		}
-		if a.SNILatencyMS < b.SNILatencyMS { return -1 }
-		if a.SNILatencyMS > b.SNILatencyMS { return 1 }
+		if a.SNILatencyMS < b.SNILatencyMS {
+			return -1
+		}
+		if a.SNILatencyMS > b.SNILatencyMS {
+			return 1
+		}
 		return strings.Compare(a.URL, b.URL)
 	})
 	if len(candidates) > redirectMaxHTTPFinalists {
