@@ -15,6 +15,9 @@ import (
 )
 
 func TestMASQUEFullSubscription(t *testing.T) {
+	oldDistFS := distFS
+	SetDistFS(testDistFS)
+	t.Cleanup(func() { SetDistFS(oldDistFS) })
 	setupInfoNodeTestDB(t)
 	db := database.GetDB()
 	inbound := &model.Inbound{Id: 1, UserId: 1, Enable: true, Protocol: model.MASQUE, Port: 18443, Settings: `{"version":[1,2],"path":"/tunnel{?target,ipproto}","tls":{"serverName":"tls.example"},"clients":[{"email":"alice","password":"stale","subId":"masque-sub","enable":true}]}`}
