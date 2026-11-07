@@ -6,6 +6,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 func (s *SubService) genAdditionalVPNLink(ib *model.Inbound, email string) string {
@@ -15,6 +16,7 @@ func (s *SubService) genAdditionalVPNLink(ib *model.Inbound, email string) strin
 	}
 	inst, err := externalvpn.FromInbound(ib)
 	if err != nil {
+		logger.Warningf("Subscription %s inbound %d skipped: %v", ib.Protocol, ib.Id, err)
 		return ""
 	}
 	var links []string
@@ -22,6 +24,8 @@ func (s *SubService) genAdditionalVPNLink(ib *model.Inbound, email string) strin
 		link, err := externalvpn.ExportAdditionalLink(inst, email, ep.Address, ep.Port, s.endpointRemark(ib, email, ep.ep, ""))
 		if err == nil {
 			links = append(links, link)
+		} else {
+			logger.Warningf("Subscription %s inbound %d link generation failed: %v", ib.Protocol, ib.Id, err)
 		}
 	}
 	return strings.Join(links, "\n")
