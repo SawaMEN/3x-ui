@@ -320,3 +320,35 @@ func TestManagerNativeSNIUsesCertificateDomain(t *testing.T) {
 		t.Fatal("SNI list leaked across owners")
 	}
 }
+
+func TestManagerRetriesTransientNativeBatchConflict(t *testing.T) {
+	attempts := 0
+	err := retryManagerNativeBatchConflict(context.Background(), func(context.Context) error {
+		attempts++
+		if attempts < 3 {
+			return fmt.Errorf("remote: %w", errNativeConfigBatchChanged)
+		}
+		return nil
+	})
+	if err != nil || attempts != 3 {
+		t.Fatalf("transient conflict: attempts=%d, err=%v", attempts, err)
+	}
+
+	attempts = 0
+	err = retryManagerNativeBatchConflict(context.Background(), func(context.Context) error {
+		attempts++
+		return fmt.Errorf("permanent core validation failure")
+	})
+	if err == nil || attempts != 1 {
+		t.Fatalf("permanent error must not retry: attempts=%d, err=%v", attempts, err)
+	}
+
+	attempts = 0
+	err = retryManagerNativeBatchConflict(context.Background(), func(context.Context) error {
+		attempts++
+		return errNativeConfigBatchChanged
+	})
+	if err == nil || attempts != 3 {
+		t.Fatalf("persistent conflict must be returned: attempts=%d, err=%v", attempts, err)
+	}
+}
