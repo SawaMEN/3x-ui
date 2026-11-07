@@ -7,10 +7,7 @@ export interface ManagedNodeRoute {
 
 // Only reference live, canonical node-route tags. Their credentials are created
 // server-side at runtime and must never be copied into the editable template.
-export function managedNodeRoutes(
-  rules: RouteRecord[],
-  engine: RoutingEngine,
-): ManagedNodeRoute[] {
+export function managedNodeRoutes(rules: RouteRecord[], engine: RoutingEngine): ManagedNodeRoute[] {
   const references = new Map<string, number>();
   const field = engine === 'xray' ? 'outboundTag' : 'outbound';
   for (const rule of rules) {
