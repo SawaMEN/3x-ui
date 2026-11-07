@@ -60,3 +60,14 @@ func TestNodeRouteProtocolCompatibility(t *testing.T) {
         t.Fatal("unknown protocol must be disabled")
     }
 }
+
+func TestNodeRouteMissingDestinationBlocksInsteadOfDirect(t *testing.T) {
+    xray := blockedNodeRouteOutbound(42, "xray")
+    if xray["tag"] != "node-route-42" || xray["protocol"] != "blackhole" {
+        t.Fatalf("xray fallback must block traffic: %v", xray)
+    }
+    native := blockedNodeRouteOutbound(42, "sing-box")
+    if native["tag"] != "node-route-42" || native["type"] != "block" {
+        t.Fatalf("sing-box fallback must block traffic: %v", native)
+    }
+}
