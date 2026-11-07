@@ -97,7 +97,7 @@ Sudoku client config always sets `proxy_mode: global` with empty rule URLs,
 so the selected route cannot silently bypass its remote node via direct/PAC
 rules. An unavailable runtime is an error (or a blocked managed node route),
 never a direct fallback. The remote Sudoku server still uses its own direct
-egress; this feature does **not** reroute traffic received by a *local*
+egress; this feature does **not** reroute traffic received by a _local_
 Sudoku inbound through the panel's routing engine.
 
 VetroffProxy managed outbounds allow up to 60 seconds for the Necko/NSS
