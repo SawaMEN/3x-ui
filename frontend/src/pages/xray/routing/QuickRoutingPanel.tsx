@@ -106,7 +106,6 @@ export default function QuickRoutingPanel({
   const remarkByTag = useMemo(() => buildRemarkByTag(inboundOptions || []), [inboundOptions]);
   useEffect(() => {
     let active = true;
-    setNodeTargetsLoading(true);
     void HttpUtil.get<NodeRouteTarget[]>(
       '/panel/api/xray/node-route/targets?core=' + encodeURIComponent(engine),
       undefined,
