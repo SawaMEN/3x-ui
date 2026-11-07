@@ -878,8 +878,7 @@ export default function DomainFrontTab({
           >
             <Select
               onChange={(value) => {
-                if (value === 'sub_link_only')
-                  form.setFieldsValue({ inboundIds: [], origin: '' });
+                if (value === 'sub_link_only') form.setFieldsValue({ inboundIds: [], origin: '' });
                 else if (value !== 'relay') form.setFieldsValue({ origin: '' });
               }}
               options={['direct', 'cdn', 'relay', 'sub_link_only'].map((value) => ({
