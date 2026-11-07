@@ -9,8 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"reflect"
+	"strings"
 	"testing"
 )
 
