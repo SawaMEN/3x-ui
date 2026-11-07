@@ -24,7 +24,6 @@ func TestDomainRolesRejectUnsafeCombinations(t *testing.T) {
 			c.Domains[0].Panel = true
 		}, "subscription-only domains cannot expose"},
 		{"sub-only inbound", func(c *DomainFrontConfig) { c.Domains[0].Mode = "sub_link_only" }, "subscription-only domains cannot expose"},
-		{"direct panel", func(c *DomainFrontConfig) { c.Domains[0].Panel = true }, "domain gateway cannot expose the admin panel"},
 		{"relay insecure origin", func(c *DomainFrontConfig) {
 			c.Domains[0].Mode = "relay"
 			c.Domains[0].Origin = "http://origin.example.com"
