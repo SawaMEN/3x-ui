@@ -296,8 +296,7 @@ describe('domain and TLS dashboard', () => {
 
   it('searches neighboring websites without enabling redirects or changing settings', async () => {
     fixture();
-    // UI behavior is tested independently of MSW's fetch interception,
-    // which can drop a request under parallel CI worker contention.
+    // Isolate the result-rendering behavior from HTTP transport details.
     const recommend = vi.spyOn(HttpUtil, 'post').mockResolvedValueOnce(
       new Msg(true, '', {
         checkedAt: 123,
@@ -380,7 +379,7 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
-    expect((await screen.findAllByText(/No reachable website was found/)).length).toBeGreaterThan(
+    expect((await screen.findAllByText(/No suitable neighboring websites were found/)).length).toBeGreaterThan(
       0,
     );
     expect(update).not.toHaveBeenCalled();
