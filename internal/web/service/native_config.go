@@ -664,6 +664,9 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			return nil, err
 		}
 	}
+	if err := injectSingBoxNodeRoutes(cfg); err != nil {
+		return nil, err
+	}
 	{
 		if err := configureHiddifyGatewayDNS(cfg); err != nil {
 			return nil, err
