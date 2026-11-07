@@ -165,7 +165,7 @@ export default function SubscriptionEditor({
       width={960}
       style={{ top: 12 }}
       styles={{ body: { maxHeight: 'calc(100dvh - 190px)', overflowY: 'auto' } }}
-      maskClosable={false}
+      mask={{ closable: false }}
       onCancel={() => { if (!saving) onClose(); }}
       footer={
         <Space wrap>
