@@ -219,7 +219,38 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine.Use(middleware.RootRedirect(s.settingService.GetRootRedirectURL))
+	engine.Use(middleware.RootRedirect(s.settingService.GetRootRedirectURL, func(c *gin.Context) bool {
+		path := c.Request.URL.Path
+		if basePath != "/" {
+			if path == strings.TrimRight(basePath, "/") || strings.HasPrefix(path, basePath) {
+				return true
+			}
+		} else {
+			// SPA document URLs can be handled by NoRoute rather than a
+			// registered Gin route. Do not redirect them to the decoy.
+			for _, prefix := range []string{
+				"/panel", "/login", "/logout", "/api", "/csrf-token",
+				"/getTwoFactorEnable", "/bus", "/ws", "/assets",
+			} {
+				if path == prefix || strings.HasPrefix(path, prefix+"/") {
+					return true
+				}
+			}
+		}
+		// Imported Hiddify subscriptions also use the panel's NoRoute.
+		// Read the current aliases so changing them needs no panel restart.
+		aliases, err := s.settingService.GetHiddifyLegacySubscriptionAliases()
+		if err != nil {
+			return true // Fail closed: never leak a subscription URL.
+		}
+		for _, alias := range aliases {
+			prefix := "/" + strings.Trim(alias.Path, "/")
+			if prefix != "/" && (path == prefix || strings.HasPrefix(path, prefix+"/")) {
+				return true
+			}
+		}
+		return false
+	}))
 	// Set the deadline before gzip wraps the response writer: its wrapper does
 	// not expose the underlying writer to http.ResponseController.
 	engine.Use(middleware.SniScanDeadline(basePath + "panel/api/server/scanRealityTargets"))
