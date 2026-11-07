@@ -10,7 +10,7 @@ import (
 )
 
 type nodeRouteEnsureRequest struct {
-	InboundID int    `json:"inboundId"`
+	InboundID	int	`json:"inboundId"`
 	Core	string	`json:"core"`
 }
 
