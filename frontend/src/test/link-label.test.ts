@@ -87,6 +87,36 @@ describe('link-label parseLinkParts', () => {
     expect(parts && linkMetaText(parts)).toBe('wg-Майфун:36541');
   });
 
+  it('displays VetroffProxy native links without exposing the embedded credentials', () => {
+    const profile = {
+      v: 1,
+      servers: ['https://edge.example.com:9443'],
+      sni: 'vpn.example.com',
+      transport: 'xhttp-stream-up',
+      username: 'secret-user',
+      password: 'secret-password',
+    };
+    const encoded = btoa(JSON.stringify(profile))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    const parts = parseLinkParts(`vetroff://${encoded}`);
+    expect(parts?.protocol).toBe('VetroffProxy');
+    expect(parts?.network).toBe('XHTTP-STREAM-UP');
+    expect(parts?.security).toBe('TLS');
+    expect(parts?.remark).toBe('vpn.example.com');
+    expect(parts?.port).toBe('9443');
+    expect(JSON.stringify(parts)).not.toContain('secret');
+
+    const withoutSNI = { ...profile, sni: '' };
+    const fallback = btoa(JSON.stringify(withoutSNI))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    expect(parseLinkParts(`vetroff://${fallback}`)?.remark).toBe('edge.example.com');
+    expect(parseLinkParts('vetroff://invalid')?.protocol).toBe('VetroffProxy');
+  });
+
   it('labels a tuic link with QUIC network and TLS security', () => {
     const link = 'tuic://uuid:pass@tuic.example.com:8443?congestion_control=bbr#tuic-remark';
     const parts = parseLinkParts(link);

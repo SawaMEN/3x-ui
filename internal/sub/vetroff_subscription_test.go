@@ -113,6 +113,34 @@ func TestVetroffHTTPSubscriptionAndNativeBinary(t *testing.T) {
 	}
 }
 
+// The browser page must carry the strict native URI in its injected link
+// data, not only in the raw subscription body.
+func TestVetroffHTMLPageListsNativeLink(t *testing.T) {
+	ib, subID, _ := seedVetroffSubscription(t)
+	seedHost(t, &model.Host{InboundId: ib.Id, Remark: "Public", Address: "edge.example.com", Port: 9443, Security: "tls"})
+	oldDistFS := distFS
+	distFS = testDistFS
+	t.Cleanup(func() { distFS = oldDistFS })
+
+	router := gin.New()
+	NewSUBController(router.Group("/"), WithSUBPath("/sub/"))
+	req := httptest.NewRequest(http.MethodGet, "/sub/"+subID, nil)
+	req.Host = "sub.example.com"
+	req.Header.Set("Accept", "text/html")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HTML subscription: status %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("expected HTML response, got %q", rec.Header().Get("Content-Type"))
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "vetroff://") || !strings.Contains(body, "__SUB_PAGE_DATA__") {
+		t.Fatal("HTML subscription page omitted the VetroffProxy profile")
+	}
+}
+
 func TestVetroffMixedNativeSubscriptionCannotSilentlyLoseProtocol(t *testing.T) {
 	_, subID, _ := seedVetroffSubscription(t)
 	client := model.Client{Email: "route@example.com", Password: strings.Repeat("a", 48), Enable: true, SubID: subID}

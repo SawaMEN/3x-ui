@@ -224,8 +224,10 @@ export default function QuickRoutingPanel({
     setError('');
     setNotice('');
     try {
-      await provisionNodeTarget(draft.target);
+      // Validate the route before provisioning a remote service credential.
+      // Invalid form input must never mutate the node.
       const compiled = compileQuickRoute(draft, engine, tags, inTags);
+      await provisionNodeTarget(draft.target);
       const result = putQuickRoute(rules, compiled, engine);
       onChange(result.rules);
       const text = result.replaced
@@ -468,6 +470,7 @@ export default function QuickRoutingPanel({
                         <Space size={5}>
                           <Switch
                             size="small"
+                            disabled={creating}
                             aria-label={'Включить маршрут #' + (index + 1)}
                             checked={rule.enabled !== false}
                             onChange={(enabled) =>
@@ -479,12 +482,15 @@ export default function QuickRoutingPanel({
                             description="Остальные правила останутся без изменений."
                             okText="Удалить"
                             cancelText="Отмена"
-                            onConfirm={() => onChange(removeQuickRoute(rules, marker, engine))}
+                            onConfirm={() => {
+                              if (!creating) onChange(removeQuickRoute(rules, marker, engine));
+                            }}
                           >
                             <Button
                               size="small"
                               type="text"
                               danger
+                              disabled={creating}
                               aria-label={'Удалить маршрут #' + (index + 1)}
                               icon={<DeleteOutlined aria-hidden="true" />}
                             />
