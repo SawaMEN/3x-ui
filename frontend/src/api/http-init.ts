@@ -8,6 +8,7 @@ const CSRF_TIMEOUT_MS = 10_000;
 // accidentally send bracket-encoded form data to a JSON decoder.
 const JSON_ONLY_API_PREFIXES = [
   '/panel/api/manager/',
+  '/panel/api/xray/node-route/',
   '/panel/api/telemt/',
   '/panel/api/adblock/',
   '/panel/api/gateway/',
