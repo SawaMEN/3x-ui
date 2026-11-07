@@ -88,6 +88,22 @@ redirects cannot be served on a port already owned by such a transport.
 For a panel installed at `/`, sign in at `/?panel=1`. With a custom base path,
 continue using that path. Same-origin redirects are checked to prevent loops.
 
+### Automatic destination discovery
+
+Click **Find the best website automatically** in **Settings → Domains and TLS**.
+The finder reuses the existing SNI/REALITY candidate catalogue (including
+administrator-customized domains) and recently saved verified/stable SNI results.
+It samples at most 32 DNS hostnames on HTTPS/443 using the existing shared
+rate-limited TLS probe, requires trusted certificates, then checks at most 16
+finalists over actual HTTPS for the homepage and `/123`. Candidates are ranked
+by HTTP outcome, request latency and SNI/TLS compatibility; saved stability is
+a small bonus. Failed/private endpoints and non-HTTPS destinations are excluded.
+
+The top result is staged in the domain redirect settings. Click
+**Save and apply** to commit, or pick another verified candidate/manual URL.
+No VPN configuration changes occur. Checks run from the panel's server, so they
+cannot prove client-side reachability or special treatment by an ISP.
+
 In **Settings → Subscription → Profile**, enable custom appearance to use the
 minimal style inspired by WhiteMAX: neutral light/dark background, a subtle grid,
 centered brand and rounded buttons. Edit the title, description, logo URL and accent
