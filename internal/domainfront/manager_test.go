@@ -70,8 +70,8 @@ func TestDomainRolesRouteOnlyTheirPermittedPaths(t *testing.T) {
 		{"only.example.com", "/vpn", 404, "404 page not found\n"},
 		{"direct.example.com", "/LegacySecret/token", 404, "404 page not found\n"},
 		{"only.example.com", "/LegacySecret/token", 404, "404 page not found\n"},
-		{"direct.example.com", "/secret/panel/", 200, "panel:private.example.com"},
-		{"direct.example.com", "/secret/unknown/spa/page", 200, "panel:private.example.com"},
+		{"direct.example.com", "/secret/panel/", 404, "404 page not found\n"},
+		{"direct.example.com", "/secret/unknown/spa/page", 404, "404 page not found\n"},
 		{"direct.example.com", "/vpn/session", 200, "vpn"},
 		{"relay.example.com", "/sub/token?format=sing-box", 200, "relay:/sub/token?format=sing-box"},
 		{"cdn.example.com", "/secret/panel/", 404, "404 page not found\n"},
@@ -341,46 +341,45 @@ func TestWebSocketGatewayPreservesUpgrade(t *testing.T) {
 	}
 }
 
-func TestReconfigureThroughGatewayKeepsApplyResponseAlive(t *testing.T) {
+func TestGatewayNeverProxiesLegacyPanelPaths(t *testing.T) {
 	cert, key, roots := testCertificate(t, "panel.example.com", 45)
 	cfg := DefaultConfig()
-	cfg.Enabled = true
-	cfg.Listen = "127.0.0.1"
-	cfg.HTTPPort = unusedPort(t)
-	cfg.HTTPSPort = unusedPort(t)
+	cfg.Enabled, cfg.Listen = true, "127.0.0.1"
+	cfg.HTTPPort, cfg.HTTPSPort = unusedPort(t), unusedPort(t)
 	cfg.PublicPort = cfg.HTTPSPort
 	cfg.Domains = []DomainFrontDomain{{Name: "panel.example.com", Mode: "direct", Enabled: true, Panel: true, TLS: "manual", CertFile: cert, KeyFile: key}}
 	manager := NewManager(t.TempDir())
-	t.Cleanup(manager.Stop)
-	var backend Backend
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := manager.Apply(r.Context(), cfg, backend); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		_, _ = io.WriteString(w, "applied")
+	defer manager.Stop()
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "private-admin-panel")
 	}))
 	defer origin.Close()
-	backend = Backend{PanelTarget: origin.URL, PanelPath: "/panel/", SubscriptionTarget: origin.URL, SubscriptionPaths: []string{"/sub/"}}
+	backend := Backend{PanelTarget: origin.URL, PanelPath: "/panel/", SubscriptionTarget: origin.URL, SubscriptionPaths: []string{"/sub/"}}
 	if err := manager.Apply(context.Background(), cfg, backend); err != nil {
 		t.Fatal(err)
 	}
-	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "panel.example.com", MinVersion: tls.VersionTLS12}, ForceAttemptHTTP2: true}
+	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "panel.example.com", MinVersion: tls.VersionTLS12}}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, fmt.Sprintf("https://127.0.0.1:%d/panel/apply", cfg.HTTPSPort), nil)
-	if err != nil {
-		t.Fatal(err)
+	for _, path := range []string{"/", "/panel/", "/panel/api/server/status", "/login", "/logout", "/api"} {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d%s", cfg.HTTPSPort, path), nil)
+		if err != nil { t.Fatal(err) }
+		req.Host = "panel.example.com"
+		resp, err := client.Do(req)
+		if err != nil { t.Fatal(err) }
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound || strings.Contains(string(body), "private-admin-panel") {
+			t.Fatalf("%s exposed admin panel: %d %q", path, resp.StatusCode, body)
+		}
 	}
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d/sub/token", cfg.HTTPSPort), nil)
 	req.Host = "panel.example.com"
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("apply response was interrupted: %v", err)
-	}
+	if err != nil { t.Fatal(err) }
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil || resp.StatusCode != http.StatusOK || string(body) != "applied" {
-		t.Fatalf("apply response = %d %q %v", resp.StatusCode, body, err)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("subscription gateway unavailable: %d", resp.StatusCode)
 	}
 }
 

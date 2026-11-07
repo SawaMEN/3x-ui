@@ -40,7 +40,7 @@ func (s *SettingService) GetDomainFrontConfig() (domainfront.DomainFrontConfig, 
 		if err != nil {
 			return cfg, err
 		}
-		return rootRedirectDomainConfig(seedDomainFront(settings), settings), nil
+		return privateDomainFrontConfig(rootRedirectDomainConfig(seedDomainFront(settings), settings)), nil
 	}
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		return cfg, fmt.Errorf("domain configuration: %w", err)
@@ -49,7 +49,15 @@ func (s *SettingService) GetDomainFrontConfig() (domainfront.DomainFrontConfig, 
 	if err != nil {
 		return cfg, err
 	}
-	return rootRedirectDomainConfig(cfg, settings), nil
+	return privateDomainFrontConfig(rootRedirectDomainConfig(cfg, settings)), nil
+}
+
+// Legacy gateway panel flags are ignored: the admin UI has a dedicated listener.
+func privateDomainFrontConfig(cfg domainfront.DomainFrontConfig) domainfront.DomainFrontConfig {
+	for i := range cfg.Domains {
+		cfg.Domains[i].Panel = false
+	}
+	return cfg
 }
 
 func DomainFrontStatus() (domainfront.DomainFrontStatus, error) {
@@ -70,6 +78,7 @@ func DomainFrontStatus() (domainfront.DomainFrontStatus, error) {
 }
 
 func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (domainfront.DomainFrontStatus, error) {
+	cfg = privateDomainFrontConfig(cfg)
 	domainFrontState.Lock()
 	defer domainFrontState.Unlock()
 	s := &SettingService{}
@@ -171,20 +180,15 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 	}
 	backend := domainfront.Backend{
 		SubscriptionTarget: localDomainTarget(settings.SubListen, settings.SubPort, settings.SubCertFile != "" && settings.SubKeyFile != ""),
-		PanelTarget:        localDomainTarget(settings.WebListen, settings.WebPort, settings.WebCertFile != "" && settings.WebKeyFile != ""),
-		PanelHost:          certificateHost(settings.WebCertFile, settings.WebDomain), PanelPath: settings.WebBasePath,
+		PanelPath:          settings.WebBasePath,
 		SubscriptionPaths: []string{settings.SubPath, settings.SubJsonPath, settings.SubClashPath, "/assets/"},
 		Routes:            map[string][]domainfront.Route{},
 	}
 	panelPort := settings.WebPort
 	if override, configured, err := config.GetPortOverride(); configured && err == nil {
 		panelPort = override
-		backend.PanelTarget = localDomainTarget(settings.WebListen, panelPort, settings.WebCertFile != "" && settings.WebKeyFile != "")
 	}
 	backend.SharedHTTP, backend.SharedHTTPS = domainSharesListener(cfg, settings.WebListen, panelPort, settings.WebCertFile != "" && settings.WebKeyFile != "")
-	if backend.SharedHTTP || backend.SharedHTTPS {
-		backend.PanelHandler = registeredDomainHandler(settings.WebListen, panelPort, settings.WebCertFile != "" && settings.WebKeyFile != "")
-	}
 	if settings.SubEnable {
 		sharedHTTP, sharedHTTPS := domainSharesListener(cfg, settings.SubListen, settings.SubPort, settings.SubCertFile != "" && settings.SubKeyFile != "")
 		if sharedHTTP || sharedHTTPS {
@@ -225,12 +229,6 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 				if domainPathOverlap(route.Path, prefix) {
 					return backend, fmt.Errorf("inbound %d path conflicts with subscription/assets paths", id)
 				}
-			}
-			if settings.WebBasePath != "/" && domainPathOverlap(route.Path, settings.WebBasePath) && d.Panel {
-				return backend, fmt.Errorf("inbound %d path conflicts with the panel path", id)
-			}
-			if d.Panel && settings.WebBasePath == "/" && (domainPathOverlap(route.Path, "/panel/") || domainPathOverlap(route.Path, "/login") || domainPathOverlap(route.Path, "/logout")) {
-				return backend, fmt.Errorf("inbound %d path conflicts with panel routes", id)
 			}
 			for _, existing := range backend.Routes[d.Name] {
 				if domainPathOverlap(existing.Path, route.Path) {
