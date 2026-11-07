@@ -35,8 +35,12 @@ func cleanupDeletedInboundReferencesTx(tx *gorm.DB, inbound *model.Inbound) (boo
 		if strings.TrimSpace(setting.Value) == "" {
 			continue
 		}
+		value := setting.Value
+		if key == "xrayTemplateConfig" {
+			value = UnwrapXrayTemplateConfig(value)
+		}
 		var cfg map[string]any
-		if err := json.Unmarshal([]byte(setting.Value), &cfg); err != nil {
+		if err := json.Unmarshal([]byte(value), &cfg); err != nil {
 			return false, fmt.Errorf("cleanup deleted inbound: invalid %s: %w", key, err)
 		}
 		if cfg == nil {
@@ -173,6 +177,7 @@ func cleanupNativeRule(rule map[string]any, inboundTag, target string) (bool, bo
 	if target != "" && rule["outbound"] == target {
 		return false, true
 	}
+	changed := false
 	tags := readInboundTags(rule["inbound"])
 	if inboundTag != "" && len(tags) > 0 {
 		next := make([]string, 0, len(tags))
@@ -186,10 +191,31 @@ func cleanupNativeRule(rule map[string]any, inboundTag, target string) (bool, bo
 				return false, true
 			}
 			rule["inbound"] = next
-			return true, false
+			changed = true
 		}
 	}
-	return false, false
+	if nested, ok := rule["rules"].([]any); ok && len(nested) > 0 {
+		kept := make([]any, 0, len(nested))
+		for _, item := range nested {
+			child, ok := item.(map[string]any)
+			if !ok {
+				kept = append(kept, item)
+				continue
+			}
+			updated, remove := cleanupNativeRule(child, inboundTag, target)
+			changed = changed || updated || remove
+			if !remove {
+				kept = append(kept, child)
+			}
+		}
+		if len(kept) == 0 {
+			return true, true
+		}
+		if len(kept) != len(nested) || changed {
+			rule["rules"] = kept
+		}
+	}
+	return changed, false
 }
 
 func cleanupDeletedNativeReferences(cfg map[string]any, inboundTag, target string) bool {
