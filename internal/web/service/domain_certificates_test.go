@@ -111,7 +111,7 @@ func TestDomainSettingsSeedExistingListenerAndPublicAddress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Enabled || cfg.PublicPort != 8443 || cfg.SubscriptionDomain != "sub.example.com" || len(cfg.Domains) != 2 || !cfg.Domains[0].Panel || cfg.Domains[1].Mode != "cdn" {
+	if cfg.Enabled || cfg.PublicPort != 8443 || cfg.SubscriptionDomain != "sub.example.com" || len(cfg.Domains) != 2 || cfg.Domains[0].Panel || cfg.Domains[1].Mode != "cdn" {
 		t.Fatalf("seed = %#v", cfg)
 	}
 	status, err := DomainFrontStatus()
