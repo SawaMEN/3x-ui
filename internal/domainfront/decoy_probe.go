@@ -14,27 +14,20 @@ import (
 	"time"
 )
 
-// The candidate list comes from the existing SNI scan catalogue and its
-// verified history, never from the HTTP request that starts the scan.
+// Candidates are discovered by the existing nearby-IP SNI search.
+// Only the URL and measured SNI latency are needed for website selection.
 type DecoyCandidate struct {
 	URL          string
 	SNILatencyMS int64
-	TLS13        bool
-	HTTP2        bool
-	SNIStable    bool
 }
 
 type DecoySiteCheck struct {
 	URL          string `json:"url"`
 	SNILatencyMS int64  `json:"sniLatencyMs"`
-	TLS13        bool   `json:"tls13"`
-	HTTP2        bool   `json:"http2"`
-	SNIStable    bool   `json:"sniStable"`
 	Available    bool   `json:"available"`
 	Status       int    `json:"status"`
 	PathStatus   int    `json:"pathStatus"`
 	LatencyMS    int64  `json:"latencyMs"`
-	Score        int    `json:"score"`
 	Error        string `json:"error,omitempty"`
 }
 
@@ -135,47 +128,30 @@ func decoyHTTPStatus(ctx context.Context, client *http.Client, raw string) (int,
 	return resp.StatusCode, elapsed, nil
 }
 
-func scoreDecoySite(site *DecoySiteCheck) {
-	site.Available = site.Status >= 200 && site.Status < 400
-	if !site.Available {
-		site.Score = 0
-		return
-	}
-	// HTTPS response success, server-side latency and unknown-path behavior.
-	score := 70
-	switch {
-	case site.PathStatus >= 200 && site.PathStatus < 400:
-		score += 20
-	case site.PathStatus == http.StatusNotFound:
-		score += 5 // A real website can legitimately return 404.
-	case site.PathStatus > 0:
-		score -= 5
-	}
-	score -= int(min(site.LatencyMS/50, 20))
-	// Favor the stable verified entries already measured by the SNI tool,
-	// without making REALITY-specific capabilities mandatory for websites.
-	if site.TLS13 {
-		score += 2
-	}
-	if site.HTTP2 {
-		score += 2
-	}
-	if site.SNIStable {
-		score += 4
-	}
-	if score < 1 {
-		score = 1
-	}
-	site.Score = score
+// A suitable website must respond on HTTPS. Sort by observed HTTP latency,
+// using the neighboring-IP SNI handshake time only to break ties.
+func rankDecoySites(sites []DecoySiteCheck) {
+	sort.SliceStable(sites, func(i, j int) bool {
+		a, b := sites[i], sites[j]
+		if a.Available != b.Available {
+			return a.Available
+		}
+		if a.Available {
+			if a.LatencyMS != b.LatencyMS {
+				return a.LatencyMS < b.LatencyMS
+			}
+			if a.SNILatencyMS != b.SNILatencyMS {
+				return a.SNILatencyMS < b.SNILatencyMS
+			}
+		}
+		return strings.Compare(a.URL, b.URL) < 0
+	})
 }
 
 func probeDecoySite(ctx context.Context, client *http.Client, candidate DecoyCandidate) DecoySiteCheck {
 	result := DecoySiteCheck{
 		URL:          candidate.URL,
 		SNILatencyMS: candidate.SNILatencyMS,
-		TLS13:        candidate.TLS13,
-		HTTP2:        candidate.HTTP2,
-		SNIStable:    candidate.SNIStable,
 	}
 	status, latency, err := decoyHTTPStatus(ctx, client, candidate.URL)
 	result.Status, result.LatencyMS = status, latency.Milliseconds()
@@ -191,13 +167,13 @@ func probeDecoySite(ctx context.Context, client *http.Client, candidate DecoyCan
 			result.PathStatus, _, _ = decoyHTTPStatus(ctx, client, base.String())
 		}
 	}
-	scoreDecoySite(&result)
+	result.Available = result.Status >= 200 && result.Status < 400
 	return result
 }
 
-// ScanDecoySites makes a second, HTTP-level assessment of SNI-verified
-// candidates. Reject any URL with custom path/port, credentials or non-HTTPS
-// scheme; never use this API as a generic remote URL fetcher.
+// ScanDecoySites measures real HTTPS latency for neighboring-IP SNI results.
+// Reject custom paths, ports, credentials and non-HTTPS schemes. The HTTP API
+// does not accept destination URLs, preventing arbitrary server-side fetches.
 func ScanDecoySites(ctx context.Context, candidates []DecoyCandidate) DecoySiteScan {
 	ctx, cancel := context.WithTimeout(ctx, 18*time.Second)
 	defer cancel()
@@ -242,16 +218,7 @@ func ScanDecoySites(ctx context.Context, candidates []DecoyCandidate) DecoySiteS
 		}(i, candidate)
 	}
 	wg.Wait()
-	sort.SliceStable(out.Sites, func(i, j int) bool {
-		a, b := out.Sites[i], out.Sites[j]
-		if a.Score != b.Score {
-			return a.Score > b.Score
-		}
-		if a.LatencyMS != b.LatencyMS {
-			return a.LatencyMS < b.LatencyMS
-		}
-		return strings.Compare(a.URL, b.URL) < 0
-	})
+	rankDecoySites(out.Sites)
 	if len(out.Sites) > 0 && out.Sites[0].Available {
 		out.Recommended = out.Sites[0].URL
 	}
