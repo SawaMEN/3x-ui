@@ -51,6 +51,17 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
     expect(original.rules[0]).toEqual(first.rule);
   });
 
+  it('moves a previously shadowed managed rule before the catch-all on update', () => {
+    const compiled = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
+    const fallback: RouteRecord =
+      engine === 'xray'
+        ? { type: 'field', outboundTag: 'direct' }
+        : { action: 'route', outbound: 'direct' };
+    const repaired = putQuickRoute([fallback, compiled.rule], compiled, engine);
+    expect(repaired.replaced).toBe(true);
+    expect(repaired.rules).toEqual([compiled.rule, fallback]);
+  });
+
   it('keeps service rules and catch-all in place while inserting an exception', () => {
     const apiRule: RouteRecord =
       engine === 'xray'
