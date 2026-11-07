@@ -2383,7 +2383,7 @@
       "redirectScanError": "Could not read the website scan results.",
       "redirectScanSelected": "Address selected. To enable redirection, use the separate switch and save the settings.",
       "redirectScanEmpty": "No suitable neighboring websites were found. Search again or enter a URL manually.",
-      "redirectScanFound": "Fastest website: {{url}}",
+      "redirectScanFound": "Fastest website: {url}",
       "redirectScanNote": "Checks IPs near this server, certificate domain names and actual HTTPS responses. Results are ranked by latency. Searching never changes settings: choose an address manually. Neighboring IPs are not necessarily geographically close and server reachability does not guarantee ISP availability.",
       "redirectScanWebsite": "Website",
       "redirectScanBest": "Fastest",
