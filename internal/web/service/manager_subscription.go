@@ -87,6 +87,12 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 			http.Error(w, err.Error(), http.StatusNotAcceptable)
 			return
 		}
+		// When a selected sidecar cannot be encoded in native JSON,
+		// render all the published connections as lossless URI links.
+		// Never return a partial JSON subscription that hides VetroffProxy.
+		if configBody == "" && configType == "" {
+			config = false
+		}
 	}
 
 	for _, e := range sub.Published {

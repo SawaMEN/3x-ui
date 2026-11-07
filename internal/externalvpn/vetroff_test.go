@@ -188,6 +188,57 @@ func TestVetroffConfigurationAndLink(t *testing.T) {
 	}
 }
 
+func TestVetroffRemoteCertificateAutoPinKeepsSubscriptionLink(t *testing.T) {
+	options := DefaultVetroffSettings()
+	options.AutoTLS = false
+	inst := Instance{Protocol: model.VetroffProxy, Port: 443, Settings: Settings{
+		Hostname:    "vpn.example.com",
+		Certificate: filepath.Join(t.TempDir(), "remote-fullchain.pem"),
+		PrivateKey:  filepath.Join(t.TempDir(), "remote-privkey.pem"),
+		Vetroff:     &options,
+		Clients:     []Client{{Email: "alice", Password: strings.Repeat("v", 48), Enable: true}},
+	}}
+	link, err := exportVetroffLink(inst, "alice", "vpn.example.com", 443)
+	if err != nil {
+		t.Fatalf("unavailable remote-node certificate suppressed subscription link: %v", err)
+	}
+	if !strings.HasPrefix(link, "vetroff://") {
+		t.Fatalf("not a VetroffProxy URI: %q", link)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(link, "vetroff://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var profile map[string]any
+	if err := json.Unmarshal(raw, &profile); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := profile["pin_sha256"]; found {
+		t.Fatal("inaccessible auto-pin unexpectedly added to profile")
+	}
+	if profile["password"] != strings.Repeat("v", 48) {
+		t.Fatal("client credentials lost")
+	}
+
+	// An explicit pin must still be honored without accessing the remote
+	// certificate; the fallback only applies to automatic pin derivation.
+	options.Pin = "sha256/" + base64.StdEncoding.EncodeToString(make([]byte, 32))
+	link, err = exportVetroffLink(inst, "alice", "vpn.example.com", 443)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err = base64.RawURLEncoding.DecodeString(strings.TrimPrefix(link, "vetroff://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &profile); err != nil {
+		t.Fatal(err)
+	}
+	if profile["pin_sha256"] != options.Pin {
+		t.Fatalf("explicit pin lost: %v", profile["pin_sha256"])
+	}
+}
+
 func TestVetroffBundleExtraction(t *testing.T) {
 	for _, attack := range []string{"", "vetroff-necko/../../escape", "/tmp/escape", "vetroff-necko/link", "foxtunnel-necko/vetroff"} {
 		t.Run(attack, func(t *testing.T) {

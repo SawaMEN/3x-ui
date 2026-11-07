@@ -179,10 +179,12 @@ func exportVetroffLink(inst Instance, email, address string, port int) (string, 
 			}
 			pin := v.Pin
 			if v.AutoPin && pin == "" {
-				var err error
-				pin, err = vetroffCertificatePin(inst.Settings.Certificate)
-				if err != nil {
-					return "", err
+				// On a managed remote node the TLS certificate path belongs to
+				// that node; the panel generating subscriptions cannot read it.
+				// Omitting the optional auto-pin preserves regular trusted-CA
+				// certificate verification rather than dropping the whole link.
+				if computed, err := vetroffCertificatePin(inst.Settings.Certificate); err == nil {
+					pin = computed
 				}
 			}
 			servers, err := vetroffServers(origin, v.FallbackServers)

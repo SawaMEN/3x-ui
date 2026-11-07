@@ -54,7 +54,14 @@ Example saved outbound (replace the placeholder with a complete link):
 sing-box and Clash JSON/YAML cannot model its external runtime. If a mixed
 subscription is requested in a native JSON format, the subscription endpoint
 falls back to the raw links format when link exports are allowed rather than
-dropping the VetroffProxy connection. Client applications must still support
+dropping the VetroffProxy connection. The manager's `/bus/<UUID>` endpoint
+uses the same lossless fallback (base64 encoded by default) for incompatible
+`?format=singbox`, `?format=hiddify` and `?format=xray` requests.
+When an inbound is hosted on another node and the panel cannot read that
+node's TLS certificate, auto-generated SPKI pinning is omitted from the
+exported link; normal trusted-CA TLS verification still applies. Supply an
+explicit pin if the client must trust a private certificate.
+Client applications must still support
 the `vetroff://` scheme and run the VetroffProxy client binary to use it;
 regular Xray, sing-box and Hiddify imports cannot execute the sidecar.
 
