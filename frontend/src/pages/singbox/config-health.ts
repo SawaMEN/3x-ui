@@ -85,11 +85,7 @@ export function singBoxHealthIssues(config: ConfigMap, subscriptionTags: string[
     const destination = asString(rule.outbound);
     if (destination && !tagSet.has(destination) && !isRuntimeNodeRouteTag(destination)) {
       issues.push(
-        'Route rule #' +
-          (index + 1) +
-          ' ссылается на отсутствующий outbound "' +
-          destination +
-          '"',
+        'Route rule #' + (index + 1) + ' ссылается на отсутствующий outbound "' + destination + '"',
       );
     }
   });

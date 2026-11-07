@@ -33,7 +33,10 @@ describe('sing-box outbound health checks', () => {
     const issues = singBoxHealthIssues(config);
     expect(issues).toHaveLength(5);
     for (const tag of [
-      'missing-proxy', 'node-route-0', 'node-route-036', 'node-route-36x',
+      'missing-proxy',
+      'node-route-0',
+      'node-route-036',
+      'node-route-36x',
       'node-route-9999999999999999999999999',
     ]) {
       expect(issues.some((issue) => issue.includes('"' + tag + '"'))).toBe(true);
