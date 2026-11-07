@@ -88,21 +88,28 @@ redirects cannot be served on a port already owned by such a transport.
 For a panel installed at `/`, sign in at `/?panel=1`. With a custom base path,
 continue using that path. Same-origin redirects are checked to prevent loops.
 
-### Automatic destination discovery
+### Search for neighboring websites
 
-Click **Find the best website automatically** in **Settings → Domains and TLS**.
-The finder reuses the existing SNI/REALITY candidate catalogue (including
-administrator-customized domains) and recently saved verified/stable SNI results.
-It samples at most 32 DNS hostnames on HTTPS/443 using the existing shared
-rate-limited TLS probe, requires trusted certificates, then checks at most 16
-finalists over actual HTTPS for the homepage and `/123`. Candidates are ranked
-by HTTP outcome, request latency and SNI/TLS compatibility; saved stability is
-a small bonus. Failed/private endpoints and non-HTTPS destinations are excluded.
+Click **Find neighboring websites** in **Settings → Domains and TLS**.
+The finder reuses the **nearby-IP SNI discovery algorithm**, not the
+preconfigured 800-entry SNI catalog and not SNI history. Starting from the
+panel server's detected public IP, it checks up to 32 immediately adjacent
+public IP addresses (alternating lower and higher addresses). It reads valid
+TLS certificate names, verifies them with SNI, then checks at most 16 unique
+websites over HTTPS (homepage and `/123`).
 
-The top result is staged in the domain redirect settings. Click
-**Save and apply** to commit, or pick another verified candidate/manual URL.
-No VPN configuration changes occur. Checks run from the panel's server, so they
-cannot prove client-side reachability or special treatment by an ISP.
+Working sites are sorted primarily by **measured HTTPS response latency**;
+SNI/TLS handshake time breaks ties. Unreachable sites are listed last.
+IP adjacency is *not* geographical proximity. The selected hostname is
+retested through ordinary DNS because its real website can resolve to a
+different IP than the IP that exposed its certificate.
+
+**Searching is read-only:** it does not turn on redirection, choose an address
+automatically, save configuration, or change VPN endpoints. An administrator
+may click **Choose address** to populate the destination field; enabling
+redirection and saving remain separate explicit actions. The scan measures
+reachability from the panel server and cannot guarantee client-side access
+or any particular network operator's behavior.
 
 In **Settings → Subscription → Profile**, enable custom appearance to use the
 minimal style inspired by WhiteMAX: neutral light/dark background, a subtle grid,
