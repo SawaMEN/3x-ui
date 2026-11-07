@@ -257,7 +257,8 @@ export function putQuickRoute(
     const replacement = updated[existing];
     updated.splice(existing, 1);
     const catchAll = updated.findIndex((rule) => isUnconditional(rule, engine));
-    const position = catchAll >= 0 ? Math.min(existing, catchAll) : Math.min(existing, updated.length);
+    const position =
+      catchAll >= 0 ? Math.min(existing, catchAll) : Math.min(existing, updated.length);
     updated.splice(position, 0, replacement);
     return { rules: updated, replaced: true, shadowed: false };
   }
