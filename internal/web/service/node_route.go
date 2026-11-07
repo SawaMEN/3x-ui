@@ -207,7 +207,7 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
             parsed, lastErr = link.ParseLink(raw)
             if lastErr == nil && parsed != nil {
                 outbound = map[string]any(parsed.Outbound)
-                if outbound["protocol"] != inbound.Protocol {
+                if outbound["protocol"] != string(inbound.Protocol) {
                     lastErr = fmt.Errorf("link protocol mismatch")
                     continue
                 }
@@ -219,7 +219,7 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
                 }
             }
         } else {
-            outbound, lastErr = parseLegacyNativeOutboundShareLink(raw)
+            outbound, lastErr = ParseNativeOutboundShareLink(raw)
             if lastErr == nil {
                 outbound["tag"] = nodeRouteTag(inboundID)
             }
