@@ -19,6 +19,13 @@ interface RouteTestResult {
   groupTags?: string[];
 }
 
+type TestNetwork = 'tcp' | 'udp';
+interface NetworkRouteResult {
+  network: TestNetwork;
+  result?: RouteTestResult;
+  error?: string;
+}
+
 const PROTOCOL_OPTIONS = ['http', 'tls', 'quic', 'bittorrent'].map((p) => ({ label: p, value: p }));
 
 export default function RouteTester({ inboundTags, isMobile }: RouteTesterProps) {
@@ -27,32 +34,50 @@ export default function RouteTester({ inboundTags, isMobile }: RouteTesterProps)
   const remarkByTag = useMemo(() => buildRemarkByTag(inboundOptions || []), [inboundOptions]);
   const [dest, setDest] = useState('');
   const [port, setPort] = useState<number | null>(443);
-  const [network, setNetwork] = useState('tcp');
+  const [network, setNetwork] = useState<'both' | TestNetwork>('both');
   const [inboundTag, setInboundTag] = useState<string | undefined>(undefined);
   const [protocol, setProtocol] = useState<string | undefined>(undefined);
   const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState<RouteTestResult | null>(null);
+  const [results, setResults] = useState<NetworkRouteResult[]>([]);
 
   async function run() {
     const value = dest.trim();
     if (!value) return;
-    // Domains never contain ':' and a pure dotted-quad is an IPv4 address;
-    // everything else is treated as a domain.
+    // IPv6 contains ':'. IPv4 detection here only selects the field;
+    // the server validates the actual address before querying Xray.
     const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(value) || value.includes(':');
+    const networks: TestNetwork[] = network === 'both' ? ['tcp', 'udp'] : [network];
     setTesting(true);
-    setResult(null);
+    setResults([]);
     try {
-      const msg = await HttpUtil.post('/panel/api/xray/routeTest', {
-        domain: isIp ? '' : value,
-        ip: isIp ? value : '',
-        port: port ?? 0,
-        network,
-        inboundTag: inboundTag || '',
-        protocol: protocol || '',
-      });
-      if (msg?.success && msg.obj && typeof msg.obj === 'object') {
-        setResult(msg.obj as RouteTestResult);
-      }
+      const checked = await Promise.all(
+        networks.map(async (selected): Promise<NetworkRouteResult> => {
+          try {
+            const msg = await HttpUtil.post<RouteTestResult>(
+              '/panel/api/xray/routeTest',
+              {
+                domain: isIp ? '' : value,
+                ip: isIp ? value : '',
+                port: port ?? 0,
+                network: selected,
+                inboundTag: inboundTag || '',
+                protocol: protocol || '',
+              },
+              { headers: { 'Content-Type': 'application/json' }, silent: true },
+            );
+            if (!msg?.success || !msg.obj) {
+              return { network: selected, error: msg?.msg || 'Routing API unavailable' };
+            }
+            return { network: selected, result: msg.obj };
+          } catch (err) {
+            return {
+              network: selected,
+              error: err instanceof Error ? err.message : String(err),
+            };
+          }
+        }),
+      );
+      setResults(checked);
     } finally {
       setTesting(false);
     }
@@ -92,6 +117,7 @@ export default function RouteTester({ inboundTags, isMobile }: RouteTesterProps)
             value={network}
             onChange={setNetwork}
             options={[
+              { label: 'TCP + UDP', value: 'both' },
               { label: 'TCP', value: 'tcp' },
               { label: 'UDP', value: 'udp' },
             ]}
@@ -135,31 +161,34 @@ export default function RouteTester({ inboundTags, isMobile }: RouteTesterProps)
         </Col>
       </Row>
 
-      {result &&
-        (result.matched ? (
-          <Alert
-            type="success"
-            showIcon
-            title={
-              <Space wrap>
-                <span>{t('pages.xray.routeTesterMatchedOutbound')}:</span>
-                <Tag color="blue">{result.outboundTag || '—'}</Tag>
-                {(result.groupTags || []).length > 0 && (
-                  <>
-                    <span>{t('pages.xray.routeTesterViaBalancer')}:</span>
-                    {(result.groupTags || []).map((tag) => (
-                      <Tag key={tag} color="orange">
-                        {tag}
-                      </Tag>
-                    ))}
-                  </>
-                )}
-              </Space>
-            }
-          />
-        ) : (
-          <Alert type="warning" showIcon title={t('pages.xray.routeTesterDefaultOutbound')} />
-        ))}
+      {results.map((entry) => (
+        <Alert
+          key={entry.network}
+          type={entry.error ? 'error' : entry.result?.matched ? 'success' : 'warning'}
+          showIcon
+          title={
+            <Space wrap>
+              <Tag>{entry.network.toUpperCase()}</Tag>
+              {entry.error
+                ? entry.error
+                : entry.result?.matched
+                  ? t('pages.xray.routeTesterMatchedOutbound')
+                  : t('pages.xray.routeTesterDefaultOutbound')}
+              {entry.result?.matched && <Tag color="blue">{entry.result.outboundTag || '—'}</Tag>}
+              {(entry.result?.groupTags || []).length > 0 && (
+                <>
+                  <span>{t('pages.xray.routeTesterViaBalancer')}:</span>
+                  {(entry.result?.groupTags || []).map((tag) => (
+                    <Tag key={tag} color="orange">
+                      {tag}
+                    </Tag>
+                  ))}
+                </>
+              )}
+            </Space>
+          }
+        />
+      ))}
     </Space>
   );
 }

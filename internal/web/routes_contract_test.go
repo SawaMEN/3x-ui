@@ -34,6 +34,8 @@ func isInternalUIAPI(path string) bool {
 		// Managed node-route provisioning is an authenticated UI-only operation,
 		// not a stable external automation API.
 		strings.HasPrefix(path, "/panel/api/xray/node-route/") ||
+		// Live synthetic routing tests are authenticated UI-only diagnostics.
+		path == "/panel/api/xray/routeTest" ||
 		strings.HasPrefix(path, "/panel/api/adblock/") ||
 		// Core selection/installation are administrative UI actions, not stable
 		// public endpoints for third-party automation.

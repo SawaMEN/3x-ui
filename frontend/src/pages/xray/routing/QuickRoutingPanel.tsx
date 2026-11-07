@@ -207,19 +207,20 @@ export default function QuickRoutingPanel({
 
   function probeAlert(tag: string) {
     if (!probeResult || probeResult.tag !== tag) return null;
-    const status = probeResult.checkedTarget
-      ? probeResult.reachable
-        ? 'success'
-        : 'error'
-      : probeResult.reachable
-        ? 'info'
-        : 'warning';
+    const isUdp = probeResult.transport === 'udp';
+    const status = probeResult.reachable ? 'success' : isUdp ? 'warning' : 'error';
     return (
       <Alert
         type={status}
         showIcon
         title={
-          (probeResult.reachable ? 'TCP доступен' : 'TCP недоступен') +
+          (isUdp
+            ? probeResult.reachable
+              ? 'UDP/QUIC отвечает'
+              : 'UDP/QUIC не подтверждён'
+            : probeResult.reachable
+              ? 'TCP доступен'
+              : 'TCP недоступен') +
           (probeResult.latencyMs ? ' · ' + probeResult.latencyMs + ' мс' : '')
         }
         description={probeResult.detail}

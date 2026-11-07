@@ -1,7 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -12,8 +15,8 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
-// NodeRouteProbeResult distinguishes the target TCP listener from the node's
-// control-plane TCP port. A successful dial does not authenticate a VPN client.
+// NodeRouteProbeResult identifies the actual target transport. A TCP dial or
+// QUIC version-negotiation response does not authenticate a VPN client.
 type NodeRouteProbeResult struct {
 	Tag           string `json:"tag"`
 	Reachable     bool   `json:"reachable"`
@@ -56,9 +59,64 @@ func probeNodeRouteTCP(ctx context.Context, address string, port int) (time.Dura
 	return time.Since(start), nil
 }
 
-// ProbeNodeRoute performs an active network probe from the panel server to a
-// configured node destination, without exposing its stored API credentials.
-// UDP-only protocols probe the node API's TCP port, clearly not the VPN port.
+// probeNodeRouteQUIC checks a QUIC listener with a version-negotiation packet.
+// Unlike a UDP dial, a matching response proves that packets can return from
+// the target UDP port. This is NOT a VPN handshake or an authentication check.
+// Some QUIC servers decline version negotiation, so timeout is inconclusive.
+func probeNodeRouteQUIC(ctx context.Context, address string, port int) (time.Duration, error) {
+	if address == "" || port < 1 || port > 65535 {
+		return 0, fmt.Errorf("invalid UDP probe endpoint")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "udp", net.JoinHostPort(strings.Trim(address, "[]"), strconv.Itoa(port)))
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := conn.SetDeadline(deadline); err != nil {
+			return 0, err
+		}
+	}
+
+	// Long-header Initial with an unsupported reserved version. A compliant
+	// QUIC server replies with version=0 and the connection IDs swapped.
+	packet := make([]byte, 1200)
+	packet[0] = 0xc0
+	binary.BigEndian.PutUint32(packet[1:5], 0x0a0a0a0a)
+	packet[5] = 8
+	packet[14] = 8
+	if _, err := rand.Read(packet[6:14]); err != nil {
+		return 0, err
+	}
+	if _, err := rand.Read(packet[15:23]); err != nil {
+		return 0, err
+	}
+	start := time.Now()
+	if _, err := conn.Write(packet); err != nil {
+		return 0, err
+	}
+	response := make([]byte, 1500)
+	for {
+		n, err := conn.Read(response)
+		if err != nil {
+			return 0, err
+		}
+		if n < 27 || response[0]&0x80 == 0 || binary.BigEndian.Uint32(response[1:5]) != 0 {
+			continue
+		}
+		if response[5] != 8 || !bytes.Equal(response[6:14], packet[15:23]) || response[14] != 8 || !bytes.Equal(response[15:23], packet[6:14]) {
+			continue
+		}
+		return time.Since(start), nil
+	}
+}
+
+// ProbeNodeRoute actively checks the destination port from the panel server.
+// QUIC UDP probes require a matching version-negotiation response; a timeout
+// cannot be interpreted as proof that the service is unreachable.
 func ProbeNodeRoute(ctx context.Context, userID, inboundID int) (NodeRouteProbeResult, error) {
 	inbound, node, err := nodeRouteSource(inboundID)
 	if err != nil {
@@ -70,30 +128,28 @@ func ProbeNodeRoute(ctx context.Context, userID, inboundID int) (NodeRouteProbeR
 	result := NodeRouteProbeResult{
 		Tag: nodeRouteTag(inboundID), CheckedTarget: true, Transport: "tcp",
 	}
-	port := inbound.Port
+	result.CheckedTarget = true
+	var duration time.Duration
 	if nodeRouteIsUDP(inbound) {
-		result.CheckedTarget = false
 		result.Transport = "udp"
-		port = node.Port
-	}
-	duration, err := probeNodeRouteTCP(ctx, node.Address, port)
-	if err != nil {
-		if result.CheckedTarget {
-			result.Detail = "Не удалось установить TCP-соединение с портом входящего подключения: " + err.Error()
-		} else {
-			result.Detail = "Не удалось установить TCP-соединение с API ноды; доступность UDP-подключения не определена: " + err.Error()
+		duration, err = probeNodeRouteQUIC(ctx, node.Address, inbound.Port)
+		if err != nil {
+			result.Detail = "UDP/QUIC-ответ не получен: доступность UDP-порта не подтверждена (сервер может не отвечать на version negotiation). " + err.Error()
+			return result, nil
 		}
-		return result, nil
+		result.Detail = "Получен корректный ответ QUIC от UDP-порта ноды. Авторизация и передача VPN-трафика не проверялись."
+	} else {
+		duration, err = probeNodeRouteTCP(ctx, node.Address, inbound.Port)
+		if err != nil {
+			result.Detail = "Не удалось установить TCP-соединение с портом входящего подключения: " + err.Error()
+			return result, nil
+		}
+		result.Detail = "TCP-порт входящего подключения отвечает. VPN-авторизация и передача трафика не проверялись."
 	}
 	result.Reachable = true
 	result.LatencyMs = duration.Milliseconds()
 	if result.LatencyMs == 0 {
 		result.LatencyMs = 1
-	}
-	if result.CheckedTarget {
-		result.Detail = "TCP-порт входящего подключения отвечает. VPN-авторизация и передача трафика не проверялись."
-	} else {
-		result.Detail = "API ноды доступен по TCP. Это не подтверждает доступность UDP-порта или VPN-соединения."
 	}
 	return result, nil
 }
