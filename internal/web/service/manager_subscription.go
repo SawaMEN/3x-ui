@@ -62,8 +62,40 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 		return
 	}
 	format := r.URL.Query().Get("format")
+	// A default manager subscription can contain MASQUE alongside standard
+	// proxy inbounds. Raw links have no MASQUE representation, so select native
+	// JSON before rendering, preserving all published compatible connections.
+	if (format == "" || format == "all") && sub.ClientID > 0 {
+		var selected []int
+		for _, entry := range sub.Published {
+			if entry.ActiveInboundID > 0 {
+				selected = append(selected, entry.ActiveInboundID)
+			}
+		}
+		if len(selected) > 0 {
+			var candidates []model.Inbound
+			if err := db.Select("id").Where("id IN ? AND user_id = ? AND enable = ? AND protocol = ?", selected, sub.UserID, true, model.MASQUE).Find(&candidates).Error; err != nil {
+				http.Error(w, "subscription lookup unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			for _, inbound := range candidates {
+				var count int64
+				if err := db.Model(&model.ClientInbound{}).Where("client_id = ? AND inbound_id = ?", client.Id, inbound.Id).Count(&count).Error; err != nil {
+					http.Error(w, "subscription lookup unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				if count > 0 {
+					format = "singbox"
+					if strings.Contains(strings.ToLower(r.UserAgent()), "hiddify") {
+						format = "hiddify"
+					}
+					break
+				}
+			}
+		}
+	}
 	config := format == "singbox" || format == "hiddify" || format == "xray"
-	if format != "" && format != "raw" && format != "base64" && !config {
+	if format != "" && format != "raw" && format != "base64" && format != "all" && !config {
 		http.Error(w, "unknown format", http.StatusBadRequest)
 		return
 	}
