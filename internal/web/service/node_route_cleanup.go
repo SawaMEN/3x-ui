@@ -63,14 +63,18 @@ func cleanupDeletedInboundReferencesTx(tx *gorm.DB, inbound *model.Inbound) (boo
 	if target != "" {
 		// These are infrastructure references, not routing rules. Preserve
 		// fail-closed behavior when the destination no longer exists.
-		if err := tx.Model(&model.Setting{}).Where("key = ? AND value = ?", "panelOutbound", target).
-			Update("value", "blocked").Error; err != nil {
-			return false, err
+		panel := tx.Model(&model.Setting{}).Where("key = ? AND value = ?", "panelOutbound", target).
+			Update("value", "blocked")
+		if panel.Error != nil {
+			return false, panel.Error
 		}
-		if err := tx.Model(&model.Node{}).Where("outbound_tag = ?", target).
-			Update("outbound_tag", "blocked").Error; err != nil {
-			return false, err
+		changed = changed || panel.RowsAffected > 0
+		nodes := tx.Model(&model.Node{}).Where("outbound_tag = ?", target).
+			Update("outbound_tag", "blocked")
+		if nodes.Error != nil {
+			return false, nodes.Error
 		}
+		changed = changed || nodes.RowsAffected > 0
 	}
 	return changed, nil
 }
