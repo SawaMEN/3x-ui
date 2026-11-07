@@ -130,7 +130,7 @@ func decoyHTTPStatus(ctx context.Context, client *http.Client, raw string) (int,
 		return 0, 0, err
 	}
 	req.Header.Set("Accept", "text/html,*/*;q=0.8")
-	req.Header.Set("User-Agent", "3x-ui-decoy-check/1.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	start := time.Now()
 	resp, err := client.Do(req)
 	elapsed := time.Since(start)
