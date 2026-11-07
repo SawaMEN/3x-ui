@@ -1,4 +1,5 @@
 import OutboundPingButton from './OutboundPingButton';
+import { singBoxHealthIssues } from './config-health';
 import { prepareRouteRule, routePorts, routeRuleSummary } from './route-rule';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -386,69 +387,6 @@ function CommonListItem({
       {children && <div className="singbox-item-actions">{children}</div>}
     </Card>
   );
-}
-
-function singBoxHealthIssues(config: ConfigMap, subscriptionTags: string[] = []) {
-  const issues: string[] = [];
-  const outbounds = asObjectArray(config.outbounds);
-  const tags = [...outbounds, ...asObjectArray(config.endpoints)]
-    .map((item) => asString(item.tag))
-    .filter(Boolean);
-  const seen = new Set<string>();
-
-  tags.forEach((tag) => {
-    if (seen.has(tag)) issues.push('Дублирующийся outbound tag: ' + tag);
-    seen.add(tag);
-  });
-
-  const tagSet = new Set([...tags, ...subscriptionTags]);
-  outbounds.forEach((item) => {
-    const type = asString(item.type);
-    const name = asString(item.tag) || 'без tag';
-    if (
-      ['vless', 'vmess', 'trojan', 'shadowsocks', 'http', 'socks', 'hysteria2', 'tuic'].includes(
-        type,
-      )
-    ) {
-      if (!asString(item.server)) issues.push(type + ' "' + name + '": не указан сервер');
-      if (
-        !asNumber(item.server_port) &&
-        !(type === 'hysteria2' && asStringArray(item.server_ports).length)
-      )
-        issues.push(type + ' "' + name + '": не указан порт');
-    }
-    if (['vless', 'vmess'].includes(type) && !asString(item.uuid)) {
-      issues.push(type + ' "' + name + '": не указан UUID');
-    }
-    if (['selector', 'urltest', 'balancer'].includes(type)) {
-      asStringArray(item.outbounds).forEach((target) => {
-        if (!tagSet.has(target))
-          issues.push(type + ' "' + name + '": отсутствует outbound "' + target + '"');
-      });
-    }
-  });
-
-  const route = asObject(config.route);
-  if (asString(route.final) && !tagSet.has(asString(route.final))) {
-    issues.push('route.final ссылается на отсутствующий outbound "' + asString(route.final) + '"');
-  }
-
-  const rules = Array.isArray(route.rules) ? route.rules : [];
-  rules.forEach((raw, index) => {
-    const rule = asObject(raw);
-    if (rule.enabled === false) return;
-    if (asString(rule.outbound) && !tagSet.has(asString(rule.outbound))) {
-      issues.push(
-        'Route rule #' +
-          (index + 1) +
-          ' ссылается на отсутствующий outbound "' +
-          asString(rule.outbound) +
-          '"',
-      );
-    }
-  });
-
-  return Array.from(new Set(issues));
 }
 
 function SingBoxRouteRuleModal({
