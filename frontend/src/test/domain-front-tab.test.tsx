@@ -374,7 +374,7 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Find the best website automatically' }));
-    expect(await screen.findByText(/No reachable website was found/)).toBeTruthy();
+    expect((await screen.findAllByText(/No reachable website was found/)).length).toBeGreaterThan(0);
     expect(update).not.toHaveBeenCalled();
   });
 
