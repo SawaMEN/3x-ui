@@ -1,5 +1,6 @@
 import { MemoryRouter } from 'react-router';
 import { AllSetting } from '@/models/setting';
+import { HttpUtil, Msg } from '@/utils';
 import SubscriptionDomains from '@/pages/settings/SubscriptionDomains';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
@@ -291,6 +292,102 @@ describe('domain and TLS dashboard', () => {
     expect(screen.getByDisplayValue('draft@example.com')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
     await waitFor(() => expect(f.applied?.email).toBe('draft@example.com'));
+  });
+
+  it('searches neighboring websites without enabling redirects or changing settings', async () => {
+    fixture();
+    // Isolate the result-rendering behavior from HTTP transport details.
+    const recommend = vi.spyOn(HttpUtil, 'post').mockResolvedValueOnce(
+      new Msg(true, '', {
+        checkedAt: 123,
+        recommended: 'https://ya.ru/',
+        sites: [
+          {
+            url: 'https://ya.ru/',
+            available: true,
+            status: 200,
+            pathStatus: 200,
+            latencyMs: 42,
+            sniLatencyMs: 19,
+          },
+          {
+            url: 'https://www.wikipedia.org/',
+            available: false,
+            status: 0,
+            pathStatus: 0,
+            latencyMs: 0,
+            sniLatencyMs: 0,
+            error: 'unreachable',
+          },
+        ],
+      }),
+    );
+    const update = vi.fn();
+    const save = vi.fn().mockResolvedValue(true);
+    renderWithProviders(
+      <MemoryRouter>
+        <DomainFrontTab
+          allSetting={new AllSetting({ rootRedirectEnable: false, rootRedirectURL: '' })}
+          updateSetting={update}
+          saveSettings={save}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
+    expect(await screen.findByText(/Fastest website: https:\/\/ya.ru\//)).toBeTruthy();
+    expect(update).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    const choose = screen.getAllByRole('button', { name: 'Choose' });
+    expect((choose[0] as HTMLButtonElement).disabled).toBe(false);
+    expect((choose[1] as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(choose[0]);
+    expect(update).toHaveBeenCalledWith({ rootRedirectURL: 'https://ya.ru/' });
+    expect(update).not.toHaveBeenCalledWith(expect.objectContaining({ rootRedirectEnable: true }));
+    expect(save).not.toHaveBeenCalled();
+    expect(recommend).toHaveBeenCalledWith(
+      '/panel/api/domains/recommend',
+      {},
+      expect.objectContaining({ silent: true, timeout: 75_000 }),
+    );
+  });
+
+  it('does not enable redirect if no destination is reachable', async () => {
+    fixture();
+    const recommend = vi.spyOn(HttpUtil, 'post').mockResolvedValueOnce(
+      new Msg(true, '', {
+        checkedAt: 123,
+        recommended: '',
+        sites: [
+          {
+            url: 'https://ya.ru/',
+            available: false,
+            status: 0,
+            pathStatus: 0,
+            latencyMs: 0,
+            sniLatencyMs: 0,
+          },
+        ],
+      }),
+    );
+    const update = vi.fn();
+    renderWithProviders(
+      <MemoryRouter>
+        <DomainFrontTab
+          allSetting={new AllSetting({ rootRedirectEnable: false, rootRedirectURL: '' })}
+          updateSetting={update}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
+    expect(
+      (await screen.findAllByText(/No suitable neighboring websites were found/)).length,
+    ).toBeGreaterThan(0);
+    expect(update).not.toHaveBeenCalled();
+    expect(recommend).toHaveBeenCalledWith(
+      '/panel/api/domains/recommend',
+      {},
+      expect.objectContaining({ silent: true, timeout: 75_000 }),
+    );
   });
 
   it('saves root redirect settings from the top of the domain panel', async () => {

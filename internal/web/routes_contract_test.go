@@ -42,6 +42,9 @@ func isInternalUIAPI(path string) bool {
 		path == "/panel/api/setting/cores/:core/select" ||
 		path == "/panel/api/setting/cores/:core/delete" ||
 		path == "/panel/api/setting/cores/:core/update" ||
+		// Site recommendation is an internal UI-only diagnostic. No public
+		// automation contract is offered for the bounded network scan.
+		path == "/panel/api/domains/recommend" ||
 		path == "/panel/api/telemt/subscription-proxy" ||
 		path == "/panel/api/xray/outbound-subs/:id/probe"
 }

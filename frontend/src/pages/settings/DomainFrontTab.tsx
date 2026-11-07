@@ -44,6 +44,22 @@ import { useInboundOptions } from '@/api/queries/useInboundOptions';
 import { redirectSiteOptions } from './redirect-sites';
 import { rootRedirectError } from './root-redirect';
 
+type RedirectSiteCheck = {
+  url: string;
+  available: boolean;
+  status: number;
+  pathStatus: number;
+  latencyMs: number;
+  sniLatencyMs?: number;
+  error?: string;
+};
+
+type RedirectSiteScan = {
+  recommended: string;
+  checkedAt: number;
+  sites: RedirectSiteCheck[];
+};
+
 export default function DomainFrontTab({
   allSetting,
   updateSetting,
@@ -82,6 +98,8 @@ export default function DomainFrontTab({
   const [checking, setChecking] = useState<string>();
   const [expanded, setExpanded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [scanningRedirect, setScanningRedirect] = useState(false);
+  const [redirectScan, setRedirectScan] = useState<RedirectSiteScan>();
   const [separatePublicPort, setSeparatePublicPort] = useState(false);
   const [editing, setEditing] = useState<number>();
   const [primaryDomain, setPrimaryDomain] = useState(false);
@@ -164,6 +182,32 @@ export default function DomainFrontTab({
       setBusy(false);
     }
   }
+  async function findRedirectSite() {
+    if (!updateSetting) return;
+    setScanningRedirect(true);
+    try {
+      const response = await HttpUtil.post(
+        '/panel/api/domains/recommend',
+        {},
+        { silent: true, timeout: 75_000 },
+      );
+      if (!response?.success) throw new Error(response?.msg || t('somethingWentWrong'));
+      const scan = response.obj as RedirectSiteScan;
+      if (!scan || !Array.isArray(scan.sites) || typeof scan.recommended !== 'string')
+        throw new Error(t('pages.settings.redirectScanError'));
+      // Discovery is read-only. The operator chooses a destination and
+      // explicitly enables/saves redirection separately, if desired.
+      setRedirectScan(scan);
+      if (!scan.recommended) {
+        messageApi.warning(t('pages.settings.redirectScanEmpty'));
+      }
+    } catch (e) {
+      messageApi.error(e instanceof Error ? e.message : t('somethingWentWrong'));
+    } finally {
+      setScanningRedirect(false);
+    }
+  }
+
   async function check(name: string) {
     setChecking(name);
     try {
@@ -269,26 +313,107 @@ export default function DomainFrontTab({
               }
             />
           </SettingListItem>
-          {allSetting.rootRedirectEnable && (
-            <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
-              <AutoComplete
-                status={redirectError ? 'error' : undefined}
-                maxLength={2048}
-                aria-label={t('pages.settings.rootRedirectURL')}
-                style={{ width: '100%' }}
-                value={allSetting.rootRedirectURL}
-                options={redirectSiteOptions}
-                showSearch={{
-                  filterOption: (input, option) =>
-                    (option?.value ?? '').toLowerCase().includes(input.toLowerCase()),
-                }}
-                defaultActiveFirstOption={false}
-                allowClear
-                onChange={(value) => updateSetting({ rootRedirectURL: value })}
-                placeholder="https://example.com/"
-              />
-            </SettingListItem>
-          )}
+          <Space orientation="vertical" style={{ width: '100%', padding: '8px 0 12px' }}>
+            <Space wrap>
+              <Button
+                loading={scanningRedirect}
+                disabled={busy}
+                onClick={() => void findRedirectSite()}
+                aria-label={t('pages.settings.redirectScanAction')}
+              >
+                {t('pages.settings.redirectScanAction')}
+              </Button>
+              <Typography.Text type="secondary">
+                {t('pages.settings.redirectScanHint')}
+              </Typography.Text>
+            </Space>
+            {redirectScan && (
+              <>
+                <Alert
+                  type={redirectScan.recommended ? 'success' : 'warning'}
+                  showIcon
+                  title={
+                    redirectScan.recommended
+                      ? t('pages.settings.redirectScanFound', { url: redirectScan.recommended })
+                      : t('pages.settings.redirectScanEmpty')
+                  }
+                  description={t('pages.settings.redirectScanNote')}
+                />
+                <Table<RedirectSiteCheck>
+                  size="small"
+                  rowKey="url"
+                  pagination={{ pageSize: 6, hideOnSinglePage: true }}
+                  dataSource={redirectScan.sites}
+                  scroll={{ x: 650 }}
+                  columns={[
+                    {
+                      title: t('pages.settings.redirectScanWebsite'),
+                      dataIndex: 'url',
+                      key: 'url',
+                      render: (value: string, site) => (
+                        <Space>
+                          <Typography.Text ellipsis style={{ maxWidth: 240 }} title={value}>
+                            {value}
+                          </Typography.Text>
+                          {site.url === redirectScan.recommended && (
+                            <Tag color="green">{t('pages.settings.redirectScanBest')}</Tag>
+                          )}
+                        </Space>
+                      ),
+                    },
+                    {
+                      title: t('pages.settings.redirectScanResponse'),
+                      key: 'response',
+                      render: (_, site) => site.status || '—',
+                    },
+                    {
+                      title: t('pages.settings.redirectScanLatency'),
+                      key: 'latency',
+                      render: (_, site) => (site.available ? `${site.latencyMs} ms` : '—'),
+                    },
+                    {
+                      title: t('pages.settings.redirectScanSNI'),
+                      key: 'sni',
+                      render: (_, site) => (site.sniLatencyMs ? `${site.sniLatencyMs} ms` : '—'),
+                    },
+                    {
+                      title: '',
+                      key: 'choose',
+                      render: (_, site) => (
+                        <Button
+                          size="small"
+                          disabled={
+                            !site.available || !!rootRedirectError(site.url, redirectDomains)
+                          }
+                          onClick={() => updateSetting({ rootRedirectURL: site.url })}
+                        >
+                          {t('pages.settings.redirectScanChoose')}
+                        </Button>
+                      ),
+                    },
+                  ]}
+                />
+              </>
+            )}
+          </Space>
+          <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
+            <AutoComplete
+              status={redirectError ? 'error' : undefined}
+              maxLength={2048}
+              aria-label={t('pages.settings.rootRedirectURL')}
+              style={{ width: '100%' }}
+              value={allSetting.rootRedirectURL}
+              options={redirectSiteOptions}
+              showSearch={{
+                filterOption: (input, option) =>
+                  (option?.value ?? '').toLowerCase().includes(input.toLowerCase()),
+              }}
+              defaultActiveFirstOption={false}
+              allowClear
+              onChange={(value) => updateSetting({ rootRedirectURL: value })}
+              placeholder="https://example.com/"
+            />
+          </SettingListItem>
           {allSetting.rootRedirectEnable && (
             <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
               <Alert
@@ -310,7 +435,7 @@ export default function DomainFrontTab({
                       ? 'Доменный шлюз работает'
                       : 'Доменный шлюз не запущен')
                 }
-                description="Перенаправляются только GET/HEAD-запросы к корню. Подписки, пути панели и ACME остаются доступны. Используется временный ответ 302 без кеширования и передачи Referer; параметры исходного запроса не передаются."
+                description={t('pages.settings.redirectScanRedirectDescription')}
               />
               {!redirectDomains.length && (
                 <Alert

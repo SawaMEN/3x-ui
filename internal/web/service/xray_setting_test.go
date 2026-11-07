@@ -205,6 +205,9 @@ func TestEnsureStatsRouting_AcceptsInboundTagAsString(t *testing.T) {
 }
 
 func TestOutboundTemplateNativeInputAndDuplicateIdentity(t *testing.T) {
+	// CheckXrayConfig consults the selected core setting. Do not depend on
+	// another test having initialized the process-wide database first.
+	setupSettingTestDB(t)
 	svc := &XraySettingService{}
 	if err := svc.CheckXrayConfig(`{"outbounds":[{"type":"direct","tag":"direct"}]}`); err != nil {
 		t.Fatal(err)

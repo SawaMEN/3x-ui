@@ -23,6 +23,7 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.GET("/status", a.status)
 	g.POST("/apply", a.apply)
 	g.POST("/check", a.check)
+	g.POST("/recommend", a.recommend)
 }
 
 func (a *DomainController) status(c *gin.Context) {
@@ -88,4 +89,13 @@ func (a *DomainController) check(c *gin.Context) {
 	result.DaysLeft = int(math.Ceil(time.Until(cert.NotAfter).Hours() / 24))
 	result.Issuer = cert.Issuer.CommonName
 	jsonObj(c, result, nil)
+}
+
+// recommend searches websites near the panel's public IP with the existing
+// nearby-SNI discovery method. No input URL is accepted and no settings change.
+func (a *DomainController) recommend(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 65*time.Second)
+	defer cancel()
+	result, err := service.ScanRedirectSites(ctx)
+	jsonObj(c, result, err)
 }

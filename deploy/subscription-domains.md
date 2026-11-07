@@ -64,13 +64,52 @@ it does not create provider DNS records or change the provider account. The CDN
 here carries subscription HTTP traffic. VPN transport through a CDN still requires
 an appropriate inbound transport and its separate configuration.
 
-## Domain root redirect and appearance
+## Domain website redirect and appearance
 
-In **Settings → General**, enable the domain root redirect and choose a destination
-or enter your own HTTP/HTTPS URL. Only GET/HEAD `/` requests are redirected (302),
-without forwarding the original query string. Other paths retain their behavior.
+In **Settings → General**, enable domain website redirect and choose an HTTP/HTTPS
+destination. Ordinary GET/HEAD browser requests are redirected with **302**:
+
+- `https://example.com/123` → `https://destination.com/123`
+- `https://example.com/a/b?q=1` → `https://destination.com/a/b?q=1`
+- `https://example.com:2345/123` → `https://destination.com:2345/123`,
+  **only if port 2345 actually accepts an HTTP(S) request**.
+- A configured destination base path (e.g. `https://destination.com/site`) is
+  prepended to non-root requests. Destination query parameters are retained.
+  An explicitly configured destination port overrides the incoming port.
+
+Root `/` requests still drop the original query string for privacy. Paths
+registered for the panel, subscription formats, SPA, imported Hiddify subscriptions,
+VPN-over-HTTP transports and ACME HTTP-01 validation take priority and are **not**
+redirected to the decoy. HTTP requests for those paths still upgrade to HTTPS
+normally on the integrated domain gateway. Non-HTTP VPN transports (TCP/UDP)
+on their own dedicated ports are not intercepted or modified; arbitrary HTTP
+redirects cannot be served on a port already owned by such a transport.
+
 For a panel installed at `/`, sign in at `/?panel=1`. With a custom base path,
-continue using that base path. Same-origin destinations are ignored to avoid loops.
+continue using that path. Same-origin redirects are checked to prevent loops.
+
+### Search for neighboring websites
+
+Click **Find neighboring websites** in **Settings → Domains and TLS**.
+The finder reuses the **nearby-IP SNI discovery algorithm**, not the
+preconfigured 800-entry SNI catalog and not SNI history. Starting from the
+panel server's detected public IP, it checks up to 32 immediately adjacent
+public IP addresses (alternating lower and higher addresses). It reads valid
+TLS certificate names, verifies them with SNI, then checks at most 16 unique
+websites over HTTPS (homepage and `/123`).
+
+Working sites are sorted primarily by **measured HTTPS response latency**;
+SNI/TLS handshake time breaks ties. Unreachable sites are listed last.
+IP adjacency is *not* geographical proximity. The selected hostname is
+retested through ordinary DNS because its real website can resolve to a
+different IP than the IP that exposed its certificate.
+
+**Searching is read-only:** it does not turn on redirection, choose an address
+automatically, save configuration, or change VPN endpoints. An administrator
+may click **Choose address** to populate the destination field; enabling
+redirection and saving remain separate explicit actions. The scan measures
+reachability from the panel server and cannot guarantee client-side access
+or any particular network operator's behavior.
 
 In **Settings → Subscription → Profile**, enable custom appearance to use the
 minimal style inspired by WhiteMAX: neutral light/dark background, a subtle grid,
