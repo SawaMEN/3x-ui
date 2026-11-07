@@ -15,6 +15,9 @@ import (
 )
 
 func TestMASQUEFullSubscription(t *testing.T) {
+	oldDistFS := distFS
+	SetDistFS(testDistFS)
+	t.Cleanup(func() { SetDistFS(oldDistFS) })
 	setupInfoNodeTestDB(t)
 	db := database.GetDB()
 	inbound := &model.Inbound{Id: 1, UserId: 1, Enable: true, Protocol: model.MASQUE, Port: 18443, Settings: `{"version":[1,2],"path":"/tunnel{?target,ipproto}","tls":{"serverName":"tls.example"},"clients":[{"email":"alice","password":"stale","subId":"masque-sub","enable":true}]}`}
@@ -138,7 +141,7 @@ func TestMASQUEMixedSubscriptionDefaultAndFormats(t *testing.T) {
 		{
 			UserId: 1, Tag: "mixed-vless", Enable: true, Protocol: model.VLESS, Port: 18444,
 			ShareAddrStrategy: "custom", ShareAddr: "vless.example.com",
-			Settings: `{"decryption":"none","clients":[{"email":"alice","id":"11111111-2222-4333-8444-555555555555","subId":"masque-mixed","enable":true}]}`,
+			Settings:       `{"decryption":"none","clients":[{"email":"alice","id":"11111111-2222-4333-8444-555555555555","subId":"masque-mixed","enable":true}]}`,
 			StreamSettings: `{"network":"tcp","security":"none"}`,
 		},
 	}
