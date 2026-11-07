@@ -25,10 +25,7 @@ export function buildManagerSubscriptionUrl(
   basePath: string,
   origin: string,
 ): string {
-  const url = new URL(
-    basePath.replace(/\/+$/, '') + '/bus/' + encodeURIComponent(token),
-    origin,
-  );
+  const url = new URL(basePath.replace(/\/+$/, '') + '/bus/' + encodeURIComponent(token), origin);
   if (format && format !== 'base64') url.searchParams.set('format', format);
   return url.toString();
 }
