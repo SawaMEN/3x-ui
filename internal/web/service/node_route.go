@@ -98,7 +98,7 @@ func NodeRouteTargets(userID int, core string) ([]NodeRouteTarget, error) {
             target.Available, target.Reason = false, "Подключение выключено"
         case !n.Enable:
             target.Available, target.Reason = false, "Нода выключена"
-        case !nodeRouteProtocolSupported(inbound.Protocol, core):
+        case !nodeRouteProtocolSupported(string(inbound.Protocol), core):
             target.Available, target.Reason = false, "Протокол не поддерживается выбранным ядром"
         case n.Status != "online":
             target.Available, target.Reason = false, "Нода не в сети"
@@ -144,7 +144,7 @@ func EnsureNodeRoute(userID, inboundID int, core string) (string, error) {
     if node.Status != "online" {
         return "", fmt.Errorf("node is offline")
     }
-    if !nodeRouteProtocolSupported(inbound.Protocol, core) {
+    if !nodeRouteProtocolSupported(string(inbound.Protocol), core) {
         return "", fmt.Errorf("inbound protocol %s is not supported by %s", inbound.Protocol, core)
     }
     email := nodeRouteClientEmail(inboundID)
@@ -185,7 +185,7 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
     if err != nil {
         return nil, err
     }
-    if !nodeRouteProtocolSupported(inbound.Protocol, core) {
+    if !nodeRouteProtocolSupported(string(inbound.Protocol), core) {
         return nil, fmt.Errorf("node route %d: %s is unsupported by %s", inboundID, inbound.Protocol, core)
     }
     var client model.ClientRecord
