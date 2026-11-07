@@ -193,6 +193,17 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		backend.SharedHTTP = backend.SharedHTTP || sharedHTTP
 		backend.SharedHTTPS = backend.SharedHTTPS || sharedHTTPS
 	}
+	// Imported Hiddify URLs are dispatched through NoRoute. Never send
+	// their secret paths to a public decoy, even if no explicit route matches.
+	legacyAliases, err := s.GetHiddifyLegacySubscriptionAliases()
+	if err != nil {
+		return backend, err
+	}
+	for _, alias := range legacyAliases {
+		if alias.Path != "" {
+			backend.ProtectedPaths = append(backend.ProtectedPaths, "/"+strings.Trim(alias.Path, "/"))
+		}
+	}
 	backend.GetRedirect = s.GetRootRedirectURL
 	if settings.SubCertFile != "" && settings.SubKeyFile != "" {
 		backend.SubscriptionHost = certificateHost(settings.SubCertFile, settings.SubDomain)
