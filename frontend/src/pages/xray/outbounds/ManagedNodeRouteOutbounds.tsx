@@ -62,10 +62,9 @@ export default function ManagedNodeRouteOutbounds({ engine, rules }: Props) {
   return (
     <Card title="Каскадные исходящие подключения" size="small">
       <Typography.Paragraph type="secondary">
-        Эти подключения автоматически создаются в рабочей конфигурации ядра по активным
-        правилам маршрутизации. Вручную редактировать их не требуется. После изменения
-        маршрутов сохраните настройки. Доступность ноды не означает, что трафик уже
-        проходит через каскад.
+        Эти подключения автоматически создаются в рабочей конфигурации ядра по активным правилам
+        маршрутизации. Вручную редактировать их не требуется. После изменения маршрутов сохраните
+        настройки. Доступность ноды не означает, что трафик уже проходит через каскад.
       </Typography.Paragraph>
       <Table<ManagedNodeRoute>
         size="small"
@@ -91,8 +90,7 @@ export default function ManagedNodeRouteOutbounds({ engine, rules }: Props) {
           },
           {
             title: 'Протокол',
-            render: (_: unknown, row: ManagedNodeRoute) =>
-              byTag.get(row.tag)?.protocol || '—',
+            render: (_: unknown, row: ManagedNodeRoute) => byTag.get(row.tag)?.protocol || '—',
           },
           { title: 'Правил', dataIndex: 'ruleCount', width: 90 },
           {
