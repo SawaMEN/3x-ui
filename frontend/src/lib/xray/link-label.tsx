@@ -133,16 +133,20 @@ export function parseLinkParts(link: string): LinkParts | null {
         sni?: string;
         transport?: string;
       };
-      const server = profile.v === 1 && Array.isArray(profile.servers)
-        ? profile.servers.find((value) => typeof value === 'string' && value.startsWith('https://'))
-        : undefined;
+      const server =
+        profile.v === 1 && Array.isArray(profile.servers)
+          ? profile.servers.find(
+              (value) => typeof value === 'string' && value.startsWith('https://'),
+            )
+          : undefined;
       if (server) {
         const endpoint = new URL(server);
         network = typeof profile.transport === 'string' ? profile.transport : '';
         security = 'tls';
-        remark = typeof profile.sni === 'string' && profile.sni.trim()
-          ? profile.sni.trim()
-          : endpoint.hostname;
+        remark =
+          typeof profile.sni === 'string' && profile.sni.trim()
+            ? profile.sni.trim()
+            : endpoint.hostname;
         port = endpoint.port || '443';
       }
     } catch {
