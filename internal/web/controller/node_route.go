@@ -10,8 +10,8 @@ import (
 )
 
 type nodeRouteEnsureRequest struct {
-	InboundID	int	`json:"inboundId"`
-	Core	string	`json:"core"`
+	InboundID int    `json:"inboundId"`
+	Core      string `json:"core"`
 }
 
 func (a *XraySettingController) getNodeRouteTargets(c *gin.Context) {
