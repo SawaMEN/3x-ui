@@ -1,78 +1,58 @@
 package service
 
 import (
-	"net"
+	"context"
 	"strings"
 	"testing"
-	"time"
 )
 
-func TestRedirectSNITargetsReuseVerifiedHistoryAndConfiguredList(t *testing.T) {
-	dnsMatch := true
-	certified := &RealityScanResult{
-		Host:         "verified.example.com",
-		IP:           "8.8.8.8",
-		Port:         443,
-		CertValid:    true,
-		Attempts:     5,
-		Successes:    5,
-		DNSMatchesIP: &dnsMatch,
-		CheckedAt:    time.Now().UTC().Format(time.RFC3339),
+func TestNearbyRedirectCandidatesOnlyPublicVerifiedWebsites(t *testing.T) {
+	rows := []*RealityScanResult{
+		{Host: "slow.example.com", IP: "8.8.8.7", Port: 443, CertValid: true, LatencyMs: 140},
+		{Host: "FAST.example.com", IP: "8.8.8.9", Port: 443, CertValid: true, LatencyMs: 30},
+		{Host: "fast.example.com", IP: "8.8.8.11", Port: 443, CertValid: true, LatencyMs: 31},
+		{Host: "private.example.com", IP: "10.0.0.1", Port: 443, CertValid: true, LatencyMs: 1},
+		{Host: "unverified.example.com", IP: "8.8.8.12", Port: 443},
+		{Host: "wrongport.example.com", IP: "8.8.8.13", Port: 8443, CertValid: true},
+		{Host: "8.8.8.14", IP: "8.8.8.14", Port: 443, CertValid: true},
+		{Host: "wildcard.*.example.com", IP: "8.8.8.15", Port: 443, CertValid: true},
+		{Host: "blocked.example.com", IP: "8.8.8.16", Port: 443, CertValid: true, PrivateTarget: true},
+		nil,
 	}
-	unstable := *certified
-	unstable.Host, unstable.Successes = "unstable.example.com", 3
-	private := *certified
-	private.Host, private.PrivateTarget = "private.example.com", true
-	otherPort := *certified
-	otherPort.Host, otherPort.Port = "alt.example.com", 8443
-	dnsMismatch := false
-	mismatch := *certified
-	mismatch.Host = "mismatch.example.com"
-	mismatch.DNSMatchesIP = &dnsMismatch
-
-	list := redirectSNITargets([]string{
-		"another.example.com:443",
-		"10.0.0.1:443",
-		"internal.example.com:8443",
-		"verified.example.com:443",
-		"192.0.2.0/30",
-		"example.org:443",
-	}, []SNIJobSnapshot{{
-		State:   "done",
-		Results: []*RealityScanResult{certified, &unstable, &private, &otherPort, &mismatch},
-	}})
-	got := strings.Join(list, ",")
-	if len(list) != 3 || list[0] != "verified.example.com:443" ||
-		!strings.Contains(got, "another.example.com:443") ||
-		!strings.Contains(got, "example.org:443") {
-		t.Fatalf("unexpected SNI shortlist: %v", list)
+	got := nearbyRedirectCandidates(rows)
+	if len(got) != 2 {
+		t.Fatalf("expected two real neighboring websites: %+v", got)
 	}
-	for _, value := range list {
-		if strings.Contains(value, "internal") || strings.Contains(value, "private") ||
-			strings.Contains(value, "unstable") || strings.Contains(value, "mismatch") ||
-			net.ParseIP(strings.TrimSuffix(value, ":443")) != nil {
-			t.Fatalf("invalid historical or configured candidate %q", value)
-		}
-	}
-	if !trustedRedirectHistory([]SNIJobSnapshot{{Results: []*RealityScanResult{certified}}})["verified.example.com"] {
-		t.Fatal("recent stable SNI result not recognized")
+	if got[0].URL != "https://fast.example.com/" || got[0].SNILatencyMS != 30 ||
+		got[1].URL != "https://slow.example.com/" {
+		t.Fatalf("should rank usable names by measured SNI time: %+v", got)
 	}
 }
 
-func TestRedirectSNITargetsBoundedSampleOfSharedCatalog(t *testing.T) {
-	var configured []string
-	for i := 0; i < 200; i++ {
-		configured = append(configured, "host"+strings.Repeat("x", i%12)+string(rune('a'+i%26))+".example.com:443")
+func TestNearbyRedirectCandidatesBoundedAndFastestFirst(t *testing.T) {
+	var rows []*RealityScanResult
+	for i := 0; i < 30; i++ {
+		host := strings.Repeat("a", i%20+1) + "b.example.com"
+		rows = append(rows, &RealityScanResult{
+			Host: host, IP: "8.8.8.9", Port: 443, CertValid: true,
+			LatencyMs: 30 - i,
+		})
 	}
-	got := redirectSNITargets(configured, nil)
-	if len(got) > redirectMaxSNICandidates || len(got) < 10 {
-		t.Fatalf("unexpected shortlist size %d: %v", len(got), got)
+	got := nearbyRedirectCandidates(rows)
+	if len(got) != redirectHTTPFinalists {
+		t.Fatalf("HTTP shortlist not bounded: %d", len(got))
 	}
-	seen := map[string]bool{}
-	for _, row := range got {
-		if seen[row] {
-			t.Fatalf("duplicate %q", row)
+	for i := 1; i < len(got); i++ {
+		if got[i-1].SNILatencyMS > got[i].SNILatencyMS {
+			t.Fatalf("incorrect latency ordering: %+v", got)
 		}
-		seen[row] = true
+	}
+}
+
+func TestNearbyRedirectScanRejectsInvalidRange(t *testing.T) {
+	for _, limit := range []int{-1, 0, realityDiscoverMaxIPs + 1} {
+		if _, err := (&ServerService{}).ScanNearbySNIsLimited(context.Background(), "8.8.8.8", limit); err == nil {
+			t.Fatalf("accepted invalid scan limit %d", limit)
+		}
 	}
 }
