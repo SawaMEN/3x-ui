@@ -52,6 +52,9 @@ func ParseNativeOutboundImportContext(ctx context.Context, raw string) (*NativeS
 	if err != nil {
 		return nil, err
 	}
+	if err := normalizeShareOutboundECH(out); err != nil {
+		return nil, err
+	}
 	return &NativeShareImport{Outbounds: []map[string]any{out}, Endpoints: []map[string]any{}}, nil
 }
 
@@ -63,10 +66,18 @@ func ParseNativeOutboundShareLink(raw string) (map[string]any, error) {
 	if len(parsed.Outbounds)+len(parsed.Endpoints) != 1 {
 		return nil, fmt.Errorf("share contains multiple connections; use batch import")
 	}
+	var outbound map[string]any
 	if len(parsed.Endpoints) == 1 {
-		return parsed.Endpoints[0], nil
+		outbound = parsed.Endpoints[0]
+	} else {
+		outbound = parsed.Outbounds[0]
 	}
-	return parsed.Outbounds[0], nil
+	// Managed node routes also accept native JSON links. Normalize them
+	// before validation so ECH never reaches sing-box as naked base64.
+	if err := normalizeShareOutboundECH(outbound); err != nil {
+		return nil, err
+	}
+	return outbound, nil
 }
 
 func isNativeImportEndpoint(kind string) bool {
@@ -263,6 +274,19 @@ func parseShareWithKernel(parent context.Context, raw, binary string) (*NativeSh
 					target[0]["type"], target[0]["tag"] = kind, tag
 				}
 			}
+		}
+	}
+	// The official URI parser can emit a base64 ECH config from ?ech=...
+	// although the native TLS adapter requires an ECH CONFIGS PEM block.
+	// Normalize after every option overlay, including options={} and native={}.
+	for _, outbound := range parsed.Outbounds {
+		if err := normalizeShareOutboundECH(outbound); err != nil {
+			return nil, err
+		}
+	}
+	for _, endpoint := range parsed.Endpoints {
+		if err := normalizeShareOutboundECH(endpoint); err != nil {
+			return nil, err
 		}
 	}
 	return parsed, nil
