@@ -72,8 +72,6 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		}
 	})
 
-	engine.Use(middleware.RootRedirect(s.settingService.GetRootRedirectURL))
-
 	LinksPath, err := s.settingService.GetSubPath()
 	if err != nil {
 		return nil, err
@@ -88,6 +86,23 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Registered subscription routes are excluded by RootRedirect itself.
+	// Also protect configured prefixes (including invalid/expired IDs) and
+	// in-process forwarding of imported Hiddify URLs through NoRoute.
+	engine.Use(middleware.RootRedirect(s.settingService.GetRootRedirectURL, func(c *gin.Context) bool {
+		path := c.Request.URL.Path
+		if isLegacyHiddifyPanelForward(c.Request) {
+			return true
+		}
+		for _, prefix := range []string{LinksPath, JsonPath, ClashPath, "/assets", "/bus"} {
+			prefix = strings.TrimRight(prefix, "/")
+			if prefix != "" && (path == prefix || strings.HasPrefix(path, prefix+"/")) {
+				return true
+			}
+		}
+		return false
+	}))
 
 	subFormatMode, err := s.settingService.GetSubFormatMode()
 	if err != nil {
