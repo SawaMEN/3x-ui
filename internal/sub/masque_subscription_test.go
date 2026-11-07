@@ -100,6 +100,13 @@ func TestMASQUEFullSubscription(t *testing.T) {
 			}
 		}
 	}
+	// A MASQUE-only subscriber must still be able to open the subscription
+	// page, even though there is no portable raw share URI for the protocol.
+	page := httptest.NewRecorder()
+	router.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/sub/masque-sub?html=1", nil))
+	if page.Code != http.StatusOK {
+		t.Fatalf("MASQUE-only subscription page HTTP %d: %s", page.Code, page.Body.String())
+	}
 	// A disabled shared identity must not retain a CONNECT-IP profile.
 	if err := db.Model(record).Update("enable", false).Error; err != nil {
 		t.Fatal(err)
@@ -110,5 +117,128 @@ func TestMASQUEFullSubscription(t *testing.T) {
 	}
 	if data != "" {
 		t.Fatalf("disabled identity still exported: %s", data)
+	}
+}
+
+func TestMASQUEMixedSubscriptionDefaultAndFormats(t *testing.T) {
+	setupInfoNodeTestDB(t)
+	db := database.GetDB()
+	const subID = "masque-mixed"
+	const uuid = "11111111-2222-4333-8444-555555555555"
+	client := &model.ClientRecord{Email: "alice", SubID: subID, UUID: uuid, Password: "shared-secret", Enable: true}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatal(err)
+	}
+	inbounds := []*model.Inbound{
+		{
+			UserId: 1, Tag: "mixed-masque", Enable: true, Protocol: model.MASQUE, Port: 18443,
+			ShareAddrStrategy: "custom", ShareAddr: "masque.example.com",
+			Settings: `{"version":[1,2],"path":"/tunnel{?target,ipproto}","tls":{"serverName":"masque.example.com"},"clients":[{"email":"alice","password":"shared-secret","subId":"masque-mixed","enable":true}]}`,
+		},
+		{
+			UserId: 1, Tag: "mixed-vless", Enable: true, Protocol: model.VLESS, Port: 18444,
+			ShareAddrStrategy: "custom", ShareAddr: "vless.example.com",
+			Settings: `{"decryption":"none","clients":[{"email":"alice","id":"11111111-2222-4333-8444-555555555555","subId":"masque-mixed","enable":true}]}`,
+			StreamSettings: `{"network":"tcp","security":"none"}`,
+		},
+	}
+	for _, inbound := range inbounds {
+		if err := db.Create(inbound).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: inbounds[0].Id, Email: client.Email, Enable: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{})
+	for _, path := range []string{
+		"/sub/" + subID,
+		"/sub/" + subID + "?format=sing-box",
+		"/sub/" + subID + "?format=all",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("User-Agent", "curl/8.0")
+			resp := httptest.NewRecorder()
+			router.ServeHTTP(resp, req)
+			if resp.Code != http.StatusOK {
+				t.Fatalf("HTTP %d: %s", resp.Code, resp.Body.String())
+			}
+			var docs []map[string]any
+			if err := json.Unmarshal(resp.Body.Bytes(), &docs); err != nil {
+				t.Fatalf("expected native multi-profile JSON: %v: %s", err, resp.Body.String())
+			}
+			if len(docs) != 2 {
+				t.Fatalf("expected MASQUE and VLESS, got %d: %s", len(docs), resp.Body.String())
+			}
+			masque, vless := false, false
+			for _, doc := range docs {
+				endpoints, _ := doc["endpoints"].([]any)
+				for _, raw := range endpoints {
+					if raw.(map[string]any)["type"] == "masque-client" {
+						masque = true
+					}
+				}
+				for _, raw := range doc["outbounds"].([]any) {
+					if raw.(map[string]any)["type"] == "vless" {
+						vless = true
+					}
+				}
+			}
+			if !masque || !vless {
+				t.Fatalf("native subscription lost a selected protocol: %s", resp.Body.String())
+			}
+		})
+	}
+	req := httptest.NewRequest(http.MethodGet, "/sub/"+subID+"?format=hiddify", nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Hiddify HTTP %d: %s", resp.Code, resp.Body.String())
+	}
+	var merged map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &merged); err != nil {
+		t.Fatalf("Hiddify requires a single native JSON object: %v: %s", err, resp.Body.String())
+	}
+	endpoints, _ := merged["endpoints"].([]any)
+	outbounds, _ := merged["outbounds"].([]any)
+	if len(endpoints) != 1 || endpoints[0].(map[string]any)["type"] != "masque-client" {
+		t.Fatalf("Hiddify lost MASQUE: %s", resp.Body.String())
+	}
+	hasVLESS := false
+	for _, raw := range outbounds {
+		if raw.(map[string]any)["type"] == "vless" {
+			hasVLESS = true
+		}
+	}
+	if !hasVLESS {
+		t.Fatalf("Hiddify lost VLESS: %s", resp.Body.String())
+	}
+	for _, path := range []string{"/sub/" + subID + "?format=links", "/sub/" + subID + "?format=xray"} {
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, path, nil))
+		if resp.Code != http.StatusNotAcceptable {
+			t.Fatalf("%s returned HTTP %d instead of 406: %s", path, resp.Code, resp.Body.String())
+		}
+	}
+
+	// A non-native sidecar must not be silently omitted when MASQUE is selected.
+	unsupported := &model.Inbound{
+		UserId: 1, Tag: "mixed-mtproto", Enable: true, Protocol: model.MTProto, Port: 18445,
+		Settings: `{"clients":[{"email":"alice","subId":"masque-mixed","enable":true}]}`,
+	}
+	if err := db.Create(unsupported).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: unsupported.Id}).Error; err != nil {
+		t.Fatal(err)
+	}
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/sub/"+subID+"?format=sing-box", nil))
+	if resp.Code != http.StatusNotAcceptable {
+		t.Fatalf("mixed unsupported format must fail closed, got HTTP %d: %s", resp.Code, resp.Body.String())
 	}
 }
