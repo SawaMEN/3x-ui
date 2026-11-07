@@ -33,6 +33,7 @@ type NodeRouteTarget struct {
 	Remark    string `json:"remark"`
 	Protocol  string `json:"protocol"`
 	Port      int    `json:"port"`
+	PortLabel string `json:"portLabel,omitempty"`
 	Available bool   `json:"available"`
 	Reason    string `json:"reason,omitempty"`
 }
@@ -80,6 +81,25 @@ func NodeRouteTargets(userID int, core string) ([]NodeRouteTarget, error) {
 	for _, n := range nodes {
 		byID[n.Id] = n
 	}
+	// InboundOptions deliberately omits credentials/settings. Read only the
+	// Mieru port settings here so the routing picker shows actual listeners.
+	var mieruRows []struct {
+		Id       int
+		Port     int
+		Settings string
+	}
+	if err := database.GetDB().Table("inbounds").
+		Select("id, port, settings").
+		Where("user_id = ? AND protocol = ? AND node_id IS NOT NULL", userID, model.Mieru).
+		Scan(&mieruRows).Error; err != nil {
+		return nil, err
+	}
+	mieruPlans := make(map[int]mieruProbePlan, len(mieruRows))
+	for _, row := range mieruRows {
+		mieruPlans[row.Id] = nodeRouteMieruProbePlan(&model.Inbound{
+			Protocol: model.Mieru, Port: row.Port, Settings: row.Settings,
+		})
+	}
 	result := make([]NodeRouteTarget, 0)
 	for _, inbound := range inbounds {
 		if inbound.NodeId == nil {
@@ -95,11 +115,16 @@ func NodeRouteTargets(userID int, core string) ([]NodeRouteTarget, error) {
 			Protocol: inbound.Protocol, Port: inbound.Port,
 			Available: true,
 		}
+		if inbound.Protocol == string(model.Mieru) {
+			target.PortLabel = strings.Join(mieruPlans[inbound.Id].portLabels, ", ")
+		}
 		switch {
 		case !inbound.Enable:
 			target.Available, target.Reason = false, "Подключение выключено"
 		case !n.Enable:
 			target.Available, target.Reason = false, "Нода выключена"
+		case inbound.Protocol == string(model.Mieru) && target.PortLabel == "":
+			target.Available, target.Reason = false, "У Mieru нет настроенных TCP/UDP-портов"
 		case !nodeRouteProtocolSupported(inbound.Protocol, core):
 			target.Available, target.Reason = false, "Протокол не поддерживается выбранным ядром"
 		case n.Status != "online":
@@ -145,6 +170,9 @@ func EnsureNodeRoute(userID, inboundID int, core string) (string, bool, error) {
 	}
 	if node.Status != "online" {
 		return "", false, fmt.Errorf("node is offline")
+	}
+	if inbound.Protocol == model.Mieru && len(nodeRouteMieruProbePlan(inbound).portLabels) == 0 {
+		return "", false, fmt.Errorf("node route %d: Mieru has no configured TCP/UDP listeners", inboundID)
 	}
 	if !nodeRouteProtocolSupported(string(inbound.Protocol), core) {
 		return "", false, fmt.Errorf("inbound protocol %s is not supported by %s", inbound.Protocol, core)
