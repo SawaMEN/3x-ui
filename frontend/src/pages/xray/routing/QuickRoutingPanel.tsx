@@ -56,6 +56,15 @@ interface NodeRouteTarget {
   reason?: string;
 }
 
+interface NodeRouteProbe {
+  tag: string;
+  reachable: boolean;
+  checkedTarget: boolean;
+  transport: string;
+  latencyMs?: number;
+  detail: string;
+}
+
 interface Props {
   engine: RoutingEngine;
   rules: RouteRecord[];
@@ -97,6 +106,8 @@ export default function QuickRoutingPanel({
   const [nodeTargets, setNodeTargets] = useState<NodeRouteTarget[]>([]);
   const [nodeTargetsLoading, setNodeTargetsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [probing, setProbing] = useState<string | null>(null);
+  const [probeResult, setProbeResult] = useState<NodeRouteProbe | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const {
     data: inboundOptions,
@@ -173,6 +184,48 @@ export default function QuickRoutingPanel({
       };
     }),
   ];
+
+  async function probeNodeTarget(tag: string): Promise<void> {
+    const target = nodeTargets.find((node) => node.tag === tag);
+    if (!target || probing) return;
+    setProbing(tag);
+    setProbeResult(null);
+    try {
+      const response = await HttpUtil.post<NodeRouteProbe>('/panel/api/xray/node-route/probe', {
+        inboundId: target.inboundId,
+      });
+      if (!response?.success || !response.obj) {
+        throw new Error(response?.msg || 'Ошибка проверки соединения с нодой.');
+      }
+      setProbeResult(response.obj);
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProbing(null);
+    }
+  }
+
+  function probeAlert(tag: string) {
+    if (!probeResult || probeResult.tag !== tag) return null;
+    const status = probeResult.checkedTarget
+      ? probeResult.reachable
+        ? 'success'
+        : 'error'
+      : probeResult.reachable
+        ? 'info'
+        : 'warning';
+    return (
+      <Alert
+        type={status}
+        showIcon
+        title={
+          (probeResult.reachable ? 'TCP доступен' : 'TCP недоступен') +
+          (probeResult.latencyMs ? ' · ' + probeResult.latencyMs + ' мс' : '')
+        }
+        description={probeResult.detail}
+      />
+    );
+  }
 
   async function provisionNodeTarget(tag: string): Promise<void> {
     if (!tag.startsWith('node-route-')) return;
@@ -385,6 +438,19 @@ export default function QuickRoutingPanel({
             onChange={(target) => setDraft((current) => ({ ...current, target: target || '' }))}
             options={targetOptions}
           />
+          {nodeTargets.some((node) => node.tag === draft.target) && (
+            <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+              <Button
+                icon={<ThunderboltOutlined aria-hidden />}
+                loading={probing === draft.target}
+                disabled={Boolean(probing) && probing !== draft.target}
+                onClick={() => void probeNodeTarget(draft.target)}
+              >
+                Проверить соединение с нодой
+              </Button>
+              {probeAlert(draft.target)}
+            </Space>
+          )}
           <div className="quick-routing-flow-preview">
             <Tag variant="filled">
               {draft.match === 'inbound'
@@ -468,6 +534,17 @@ export default function QuickRoutingPanel({
                           onChange={(target) => void changeManagedTarget(marker, target)}
                         />
                         <Space size={5}>
+                          {nodeTargets.some((node) => node.tag === destination) && (
+                            <Button
+                              size="small"
+                              type="text"
+                              icon={<ThunderboltOutlined aria-hidden />}
+                              aria-label={'Проверить ноду маршрута #' + (index + 1)}
+                              loading={probing === destination}
+                              disabled={Boolean(probing) && probing !== destination}
+                              onClick={() => void probeNodeTarget(String(destination))}
+                            />
+                          )}
                           <Switch
                             size="small"
                             disabled={creating}
@@ -497,6 +574,7 @@ export default function QuickRoutingPanel({
                           </Popconfirm>
                         </Space>
                       </div>
+                      {probeAlert(String(destination))}
                       <Typography.Paragraph
                         className="quick-routing-criteria"
                         ellipsis={{ rows: 2, expandable: true, symbol: 'Ещё' }}

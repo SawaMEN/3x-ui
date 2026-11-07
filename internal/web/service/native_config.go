@@ -664,7 +664,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			return nil, err
 		}
 	}
-	if err := injectSingBoxNodeRoutes(cfg); err != nil {
+	if err := injectSingBoxNodeRoutes(cfg, s); err != nil {
 		return nil, err
 	}
 	{

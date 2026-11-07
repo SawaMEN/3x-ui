@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
@@ -70,7 +71,7 @@ func injectXrayNodeRoutes(cfg *xray.Config) error {
 
 // injectSingBoxNodeRoutes is called after the native template and subscription
 // overlays are merged. It supports outbound + endpoint destination namespaces.
-func injectSingBoxNodeRoutes(cfg *singbox.Config) error {
+func injectSingBoxNodeRoutes(cfg *singbox.Config, native *SingBoxService) error {
 	if cfg == nil {
 		return nil
 	}
@@ -102,6 +103,20 @@ func injectSingBoxNodeRoutes(cfg *singbox.Config) error {
 			return fmt.Errorf("managed node route tag %q conflicts with an existing outbound", tag)
 		}
 		outbound, err := resolveNodeRouteOutbound(id, "sing-box")
+		if err == nil && externalvpn.IsAdditionalOutbound(outbound) {
+			// VetroffProxy is not a native sing-box protocol. Plan the same
+			// managed SOCKS sidecar used for ordinary VetroffProxy outbounds.
+			var bridge map[string]any
+			bridge, err = externalvpn.PlanOutbound(outbound)
+			if err == nil {
+				var translated map[string]any
+				translated, err = native.translateOutbound(bridge)
+				if err == nil {
+					cfg.ManagedOutbounds = append(cfg.ManagedOutbounds, outbound)
+					outbound = translated
+				}
+			}
+		}
 		if err != nil {
 			logger.Warningf("node route %d: outbound unavailable, blocking traffic: %v", id, err)
 			outbound = blockedNodeRouteOutbound(id, "sing-box")

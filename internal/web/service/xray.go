@@ -418,10 +418,12 @@ func (s *CoreService) getXrayConfigWithTemplate(templateConfig string) (*xray.Co
 	if err := s.settingService.applyXrayYouTubeServer(xrayConfig); err != nil {
 		return nil, err
 	}
-	if err := transformAdditionalOutbounds(xrayConfig); err != nil {
+	if err := injectXrayNodeRoutes(xrayConfig); err != nil {
 		return nil, err
 	}
-	if err := injectXrayNodeRoutes(xrayConfig); err != nil {
+	// Inject managed node destinations first so the same sidecar bridge
+	// transformation is applied to their outbound configs as local ones.
+	if err := transformAdditionalOutbounds(xrayConfig); err != nil {
 		return nil, err
 	}
 	return xrayConfig, nil

@@ -58,8 +58,16 @@ export function setInboundRouteTarget(
   const next = rules.filter((rule) => rule.comment !== marker);
   if (!outboundTag) return next;
   const fallback = next.findIndex(isCatchAll);
+  // A stale managed rule may already sit after a catch-all. Reposition it
+  // before that fallback on every edit, otherwise Xray never reaches it.
   const index =
-    previous >= 0 ? Math.min(previous, next.length) : fallback >= 0 ? fallback : next.length;
+    fallback >= 0
+      ? previous >= 0
+        ? Math.min(previous, fallback)
+        : fallback
+      : previous >= 0
+        ? Math.min(previous, next.length)
+        : next.length;
   next.splice(index, 0, {
     type: 'field',
     comment: marker,

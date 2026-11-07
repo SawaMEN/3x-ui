@@ -14,6 +14,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/link"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
@@ -55,7 +56,8 @@ func nodeRouteClientEmail(inboundID int) string {
 
 func nodeRouteProtocolSupported(protocol, core string) bool {
 	switch strings.ToLower(strings.TrimSpace(protocol)) {
-	case "vless", "vmess", "trojan", "shadowsocks":
+	case "vless", "vmess", "trojan", "shadowsocks", "vetroff":
+		// VetroffProxy uses a managed, loopback-only SOCKS sidecar on both cores.
 		return true
 	case "hysteria", "tuic", "anytls", "naive", "snell", "shadowtls", "mieru":
 		return core != "xray"
@@ -203,7 +205,17 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
 	var lastErr error
 	for _, raw := range links {
 		var outbound map[string]any
-		if core == "xray" {
+		if inbound.Protocol == model.VetroffProxy {
+			if !strings.HasPrefix(raw, "vetroff://") {
+				lastErr = fmt.Errorf("not a VetroffProxy connection link")
+				continue
+			}
+			outbound = map[string]any{
+				"tag": nodeRouteTag(inboundID), "protocol": "vetroff",
+				"settings": map[string]any{"link": raw},
+			}
+			lastErr = externalvpn.ValidateAdditionalOutbound(outbound)
+		} else if core == "xray" {
 			var parsed *link.ParseResult
 			parsed, lastErr = link.ParseLink(raw)
 			if lastErr == nil && parsed != nil {
