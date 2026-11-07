@@ -148,7 +148,7 @@ func TestManagerDefaultCombinesMASQUEWithVLESS(t *testing.T) {
 		{
 			UserId: 1, Tag: "manager-vless", Protocol: model.VLESS, Enable: true, Port: 18444,
 			ShareAddrStrategy: "custom", ShareAddr: "vless.example.com",
-			Settings: `{"decryption":"none","clients":[{"email":"manager-mixed","id":"11111111-2222-4333-8444-555555555555","subId":"manager-mixed-origin","enable":true}]}`,
+			Settings:       `{"decryption":"none","clients":[{"email":"manager-mixed","id":"11111111-2222-4333-8444-555555555555","subId":"manager-mixed-origin","enable":true}]}`,
 			StreamSettings: `{"network":"tcp","security":"none"}`,
 		},
 	}
