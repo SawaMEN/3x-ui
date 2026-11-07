@@ -4,9 +4,20 @@ import (
     "encoding/json"
     "fmt"
 
+    "github.com/SawaMEN/3x-ui/v3/internal/logger"
     "github.com/SawaMEN/3x-ui/v3/internal/singbox"
     "github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
+
+// A missing, disabled or incompatible destination must not prevent the whole
+// VPN core from starting. Keep its tag resolvable and drop traffic instead of
+// ever falling back to a direct connection.
+func blockedNodeRouteOutbound(id int, core string) map[string]any {
+    if core == "xray" {
+        return map[string]any{"protocol": "blackhole", "tag": nodeRouteTag(id), "settings": map[string]any{}}
+    }
+    return map[string]any{"type": "block", "tag": nodeRouteTag(id)}
+}
 
 // injectXrayNodeRoutes materializes only destinations referenced by saved
 // rules. No configuration secret is stored in the editor or sent to browsers.
@@ -43,7 +54,8 @@ func injectXrayNodeRoutes(cfg *xray.Config) error {
         }
         ob, err := resolveNodeRouteOutbound(id, "xray")
         if err != nil {
-            return err
+            logger.Warningf("node route %d: outbound unavailable, blocking traffic: %v", id, err)
+            ob = blockedNodeRouteOutbound(id, "xray")
         }
         outbounds = append(outbounds, ob)
         used[tag] = true
@@ -91,7 +103,8 @@ func injectSingBoxNodeRoutes(cfg *singbox.Config) error {
         }
         outbound, err := resolveNodeRouteOutbound(id, "sing-box")
         if err != nil {
-            return err
+            logger.Warningf("node route %d: outbound unavailable, blocking traffic: %v", id, err)
+            outbound = blockedNodeRouteOutbound(id, "sing-box")
         }
         if outbound["type"] == "wireguard" || outbound["type"] == "awg" {
             cfg.Endpoints = append(cfg.Endpoints, outbound)
