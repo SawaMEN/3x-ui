@@ -474,8 +474,12 @@ describe('domain and TLS dashboard', () => {
     await screen.findByRole('dialog');
     expect(screen.queryByRole('checkbox', { name: 'Allow admin panel access' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.change(await screen.findByDisplayValue('old@example.com'), {
+      target: { value: 'private@example.com' },
+    });
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
-    await waitFor(() => expect(f.applied?.domains[0].panel).toBe(false));
+    await waitFor(() => expect(f.applied?.email).toBe('private@example.com'));
+    expect(f.applied?.domains[0].panel).not.toBe(true);
   });
 
   it('shows external CDN TLS separately from the local origin certificate', async () => {
