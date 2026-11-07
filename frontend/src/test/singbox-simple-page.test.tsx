@@ -60,13 +60,18 @@ function mount(path = '/singbox') {
 
 describe('simple sing-box page', () => {
   it('does not flag a generated node-route destination as missing in the page health banner', async () => {
-    const saved = structuredClone(config);
-    saved.route.rules = [
-      { action: 'reject', domain: ['ads.test'] },
-      { action: 'route', outbound: 'direct', domain_suffix: ['one.test'] },
-      { action: 'route', outbound: 'direct', domain_suffix: ['two.test'] },
-      { action: 'route', outbound: 'node-route-36', domain_suffix: ['three.test'] },
-    ];
+    const saved = {
+      ...structuredClone(config),
+      route: {
+        final: 'direct',
+        rules: [
+          { action: 'reject', domain: ['ads.test'] },
+          { action: 'route', outbound: 'direct', domain_suffix: ['one.test'] },
+          { action: 'route', outbound: 'direct', domain_suffix: ['two.test'] },
+          { action: 'route', outbound: 'node-route-36', domain_suffix: ['three.test'] },
+        ],
+      },
+    };
     vi.mocked(HttpUtil.get).mockResolvedValue({
       success: true,
       msg: '',
@@ -84,8 +89,13 @@ describe('simple sing-box page', () => {
   });
 
   it('still warns when a route refers to a missing ordinary outbound', async () => {
-    const saved = structuredClone(config);
-    saved.route.rules = [{ action: 'route', outbound: 'missing-proxy' }];
+    const saved = {
+      ...structuredClone(config),
+      route: {
+        final: 'direct',
+        rules: [{ action: 'route', outbound: 'missing-proxy' }],
+      },
+    };
     vi.mocked(HttpUtil.get).mockResolvedValue({
       success: true,
       msg: '',
