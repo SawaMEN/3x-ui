@@ -73,12 +73,12 @@ func publicDecoyIP(ip net.IP) bool {
 func decoyHTTPClient() *http.Client {
 	transport := &http.Transport{
 		// Never use a system proxy: probe the server's direct path.
-		Proxy: nil,
-		DisableKeepAlives: true,
-		MaxIdleConns: 0,
-		TLSHandshakeTimeout: 2500 * time.Millisecond,
+		Proxy:                 nil,
+		DisableKeepAlives:     true,
+		MaxIdleConns:          0,
+		TLSHandshakeTimeout:   2500 * time.Millisecond,
 		ResponseHeaderTimeout: 2500 * time.Millisecond,
-		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+		DialContext:           func(ctx context.Context, network, address string) (net.Conn, error) {
 			host, port, err := net.SplitHostPort(address)
 			if err != nil || port != "443" {
 				return nil, errors.New("decoy probe requires HTTPS/443")
