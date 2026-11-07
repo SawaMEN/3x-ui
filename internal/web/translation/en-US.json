@@ -2373,8 +2373,8 @@
         "partialUpdate": "System packages were updated, but these components could not be updated: {components}.",
         "rebootFailed": "Could not start the server reboot."
       },
-      "rootRedirectEnable": "Domain root redirect",
-      "rootRedirectDesc": "Redirects the domain root over HTTP/80 and HTTPS/443, independently of the panel port. Uses the configured domain and its TLS certificate. Panel and subscription paths remain available. For a panel at /, use /?panel=1.",
+      "rootRedirectEnable": "Domain website redirect",
+      "rootRedirectDesc": "Redirects ordinary HTTP(S) domain requests to the chosen website, preserving paths, query parameters and non-default ports. Panel, subscription, VPN and ACME routes are excluded. HTTP redirects cannot run on a port owned by a raw VPN protocol. For a panel at /, use /?panel=1.",
       "rootRedirectURL": "Destination website",
       "subAppearanceEnable": "Custom subscription appearance",
       "subAppearanceDesc": "Subscription page title, logo and theme. Classic appearance is kept by default.",
