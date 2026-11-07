@@ -100,6 +100,13 @@ func TestMASQUEFullSubscription(t *testing.T) {
 			}
 		}
 	}
+	// A MASQUE-only subscriber must still be able to open the subscription
+	// page, even though there is no portable raw share URI for the protocol.
+	page := httptest.NewRecorder()
+	router.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/sub/masque-sub?html=1", nil))
+	if page.Code != http.StatusOK {
+		t.Fatalf("MASQUE-only subscription page HTTP %d: %s", page.Code, page.Body.String())
+	}
 	// A disabled shared identity must not retain a CONNECT-IP profile.
 	if err := db.Model(record).Update("enable", false).Error; err != nil {
 		t.Fatal(err)
