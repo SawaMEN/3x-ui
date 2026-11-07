@@ -33,6 +33,8 @@ type FirewallManualRuleView struct {
 type FirewallManagedStatus struct {
 	ExternalRules   []FirewallExternalRule   `json:"externalRules"`
 	InspectionError string                   `json:"inspectionError,omitempty"`
+	RecoveryCode    string                   `json:"recoveryCode,omitempty"`
+	KernelRelease   string                   `json:"kernelRelease,omitempty"`
 	Supported       bool                     `json:"supported"`
 	Backend         string                   `json:"backend"`
 	Enabled         bool                     `json:"enabled"`
@@ -221,6 +223,10 @@ func probeManagedIPTablesBackend(ctx context.Context, binary string) error {
 }
 
 func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) {
+	return detectManagedFirewallBackendWithRecovery(ctx, true)
+}
+
+func detectManagedFirewallBackendWithRecovery(ctx context.Context, allowRecovery bool) (firewallBackend, error) {
 	legacy, legacyErr := detectFirewallBackend(ctx)
 	if legacyErr != nil && tryLoadLegacyIPTablesModules(ctx, legacyErr) {
 		// Re-check UFW/firewalld after loading available kernel modules.
@@ -234,6 +240,9 @@ func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) 
 	// UFW with enabled persistent policy must be repaired by the host operator;
 	// silently bypassing it with another filtering layer can block panel access.
 	if legacyErr != nil && isFirewallKernelCompatibilityError(legacyErr) && ufwConfiguredEnabled() {
+		if allowRecovery && tryRecoverManagedFirewallKernel(ctx, []error{legacyErr}) {
+			return detectManagedFirewallBackendWithRecovery(ctx, false)
+		}
 		return firewallBackend{}, fmt.Errorf("UFW is configured enabled but its firewall backend cannot read the kernel ruleset. 3x-ui will not bypass UFW or change active firewall alternatives automatically: restore matching kernel modules or configure supported nft/iptables alternatives for both IPv4 and IPv6, then reload UFW using provider console access: %w", legacyErr)
 	}
 	if legacyErr != nil && !isFirewallKernelCompatibilityError(legacyErr) && !strings.Contains(legacyErr.Error(), "no supported firewall") {
@@ -284,6 +293,9 @@ func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) 
 		}), nil
 	}
 	if len(probeErrors) > 0 {
+		if allowRecovery && tryRecoverManagedFirewallKernel(ctx, probeErrors) {
+			return detectManagedFirewallBackendWithRecovery(ctx, false)
+		}
 		return firewallBackend{}, fmt.Errorf("no usable firewall backend (the installed firewall tools cannot access kernel rulesets; install a compatible nftables backend or matching kernel modules): %w", errors.Join(probeErrors...))
 	}
 	if legacyErr != nil && !strings.Contains(legacyErr.Error(), "no supported firewall") {
@@ -348,6 +360,7 @@ func (s *FirewallService) managedStatusLocked(ctx context.Context, safetyPort in
 	backend, err := detectManagedFirewallBackend(ctx)
 	if err != nil {
 		status.Message = err.Error()
+		status.RecoveryCode, status.KernelRelease = firewallRecoveryDiagnosis(err)
 		return status, nil
 	}
 	status.Supported = true
