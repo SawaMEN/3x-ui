@@ -52,6 +52,7 @@ interface NodeRouteTarget {
   remark: string;
   protocol: string;
   port: number;
+  portLabel?: string;
   available: boolean;
   reason?: string;
 }
@@ -177,7 +178,7 @@ export default function QuickRoutingPanel({
             ' · ' +
             node.protocol +
             ':' +
-            node.port +
+            (node.portLabel || node.port) +
             (node.available ? '' : ' · ' + (node.reason || 'Недоступно')),
           disabled: !node.available,
         })),
@@ -208,19 +209,30 @@ export default function QuickRoutingPanel({
   function probeAlert(tag: string) {
     if (!probeResult || probeResult.tag !== tag) return null;
     const isUdp = probeResult.transport === 'udp';
-    const status = probeResult.reachable ? 'success' : isUdp ? 'warning' : 'error';
+    const isMieru = nodeTargets.find((node) => node.tag === tag)?.protocol?.toLowerCase() === 'mieru';
+    const status = probeResult.reachable
+      ? 'success'
+      : probeResult.inconclusive || isUdp
+        ? 'warning'
+        : 'error';
     return (
       <Alert
         type={status}
         showIcon
         title={
-          (isUdp
+          (isMieru
             ? probeResult.reachable
-              ? 'UDP/QUIC отвечает'
-              : 'UDP/QUIC не подтверждён'
-            : probeResult.reachable
-              ? 'TCP доступен'
-              : 'TCP недоступен') +
+              ? 'Mieru TCP отвечает'
+              : probeResult.inconclusive
+                ? 'Mieru · доступность не подтверждена'
+                : 'Mieru TCP недоступен'
+            : isUdp
+              ? probeResult.reachable
+                ? 'UDP/QUIC отвечает'
+                : 'UDP/QUIC не подтверждён'
+              : probeResult.reachable
+                ? 'TCP доступен'
+                : 'TCP недоступен') +
           (probeResult.latencyMs ? ' · ' + probeResult.latencyMs + ' мс' : '')
         }
         description={probeResult.detail}
