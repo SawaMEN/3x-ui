@@ -129,7 +129,6 @@ func TestManagerJSONKeepsMASQUEAndExcludesOtherClientAttachments(t *testing.T) {
 	}
 }
 
-
 func TestManagerDefaultCombinesMASQUEWithVLESS(t *testing.T) {
 	seedSubDB(t)
 	service.RegisterSubLinkProvider(NewLinkProvider())
