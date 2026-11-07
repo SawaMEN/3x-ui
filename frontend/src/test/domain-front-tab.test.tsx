@@ -293,6 +293,91 @@ describe('domain and TLS dashboard', () => {
     await waitFor(() => expect(f.applied?.email).toBe('draft@example.com'));
   });
 
+  it('recommends a measured HTTPS website without directly saving the settings', async () => {
+    fixture();
+    server.use(
+      http.post('*/panel/api/domains/recommend', () =>
+        HttpResponse.json({
+          success: true,
+          obj: {
+            checkedAt: 123,
+            recommended: 'https://ya.ru/',
+            sites: [
+              {
+                url: 'https://ya.ru/',
+                available: true,
+                status: 200,
+                pathStatus: 200,
+                latencyMs: 42,
+                score: 90,
+              },
+              {
+                url: 'https://www.wikipedia.org/',
+                available: false,
+                status: 0,
+                pathStatus: 0,
+                latencyMs: 0,
+                score: 0,
+                error: 'unreachable',
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    const update = vi.fn();
+    const save = vi.fn().mockResolvedValue(true);
+    renderWithProviders(
+      <MemoryRouter>
+        <DomainFrontTab
+          allSetting={new AllSetting({ rootRedirectEnable: false, rootRedirectURL: '' })}
+          updateSetting={update}
+          saveSettings={save}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Find the best website automatically' }));
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith({
+        rootRedirectEnable: true,
+        rootRedirectURL: 'https://ya.ru/',
+      }),
+    );
+    expect(await screen.findByText(/Recommended website: https:\/\/ya.ru\//)).toBeTruthy();
+    expect(save).not.toHaveBeenCalled();
+    const choose = screen.getAllByRole('button', { name: 'Choose' });
+    expect((choose[0] as HTMLButtonElement).disabled).toBe(false);
+    expect((choose[1] as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('does not enable redirect if no destination is reachable', async () => {
+    fixture();
+    server.use(
+      http.post('*/panel/api/domains/recommend', () =>
+        HttpResponse.json({
+          success: true,
+          obj: {
+            checkedAt: 123,
+            recommended: '',
+            sites: [{ url: 'https://ya.ru/', available: false, status: 0, pathStatus: 0, latencyMs: 0, score: 0 }],
+          },
+        }),
+      ),
+    );
+    const update = vi.fn();
+    renderWithProviders(
+      <MemoryRouter>
+        <DomainFrontTab
+          allSetting={new AllSetting({ rootRedirectEnable: false, rootRedirectURL: '' })}
+          updateSetting={update}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Find the best website automatically' }));
+    expect(await screen.findByText(/No reachable website was found/)).toBeTruthy();
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('saves root redirect settings from the top of the domain panel', async () => {
     fixture();
     const save = vi.fn().mockResolvedValue(true);
