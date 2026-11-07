@@ -939,6 +939,9 @@ export interface ManagerRelayInput {
 }
 
 export interface ManagerSnapshot {
+  activeOperations: ManagerOperation[];
+  allSubscriptionsTotal: number;
+  autoRotateTotal: number;
   clients: Record<string, ManagerClientInfo>;
   domains: ManagerDomain[];
   operationTotal: number;

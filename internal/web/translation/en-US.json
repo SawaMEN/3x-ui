@@ -3190,7 +3190,7 @@
       "deleteHint": "Only manager-owned resources are deleted. Templates and selected clients remain.",
       "subscriptions": "Subscriptions",
       "nodes": "Nodes",
-      "pending": "Operations on this page",
+      "pending": "Pending operations",
       "search": "Search subscriptions",
       "rotateAll": "Rotate automatic subscriptions",
       "addSubscription": "Create subscription",
@@ -3249,7 +3249,14 @@
       "graceHint": "Previous connections remain available while devices update their subscriptions. Minimum: 60 minutes.",
       "cleanup_pending": "Cleanup required",
       "recovered": "Recovered",
-      "cleanup": "Cleanup"
+      "cleanup": "Cleanup",
+      "active": "Active",
+      "expired": "Client expired",
+      "clientDisabled": "Client disabled",
+      "clientUnavailable": "Client unavailable",
+      "trafficExhausted": "Traffic limit reached",
+      "savedNoGeneration": "Subscription saved, but generation was not queued",
+      "formChangedDuringCheck": "Settings changed during the check. Run the check again."
     }
   },
   "tgbot": {

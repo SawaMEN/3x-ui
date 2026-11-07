@@ -28,22 +28,28 @@ type ManagerListOptions struct {
 }
 
 type ManagerSnapshot struct {
-	SubscriptionTotal int64                        `json:"subscriptionTotal"`
-	PendingOperations int64                        `json:"pendingOperations"`
-	SubscriptionPage  int                          `json:"subscriptionPage"`
-	PageSize          int                          `json:"pageSize"`
-	Subscriptions     []model.ManagerSubscription  `json:"subscriptions"`
-	Relays            []model.ManagerRelay         `json:"relays"`
-	Domains           []model.ManagerDomain        `json:"domains"`
-	Operations        []model.ManagerOperation     `json:"operations"`
-	OperationTotal    int64                        `json:"operationTotal"`
-	Clients           map[string]ManagerClientInfo `json:"clients"`
+	SubscriptionTotal     int64                        `json:"subscriptionTotal"`
+	AllSubscriptionsTotal int64                        `json:"allSubscriptionsTotal"`
+	AutoRotateTotal       int64                        `json:"autoRotateTotal"`
+	PendingOperations     int64                        `json:"pendingOperations"`
+	SubscriptionPage      int                          `json:"subscriptionPage"`
+	PageSize              int                          `json:"pageSize"`
+	Subscriptions         []model.ManagerSubscription  `json:"subscriptions"`
+	Relays                []model.ManagerRelay         `json:"relays"`
+	Domains               []model.ManagerDomain        `json:"domains"`
+	Operations            []model.ManagerOperation     `json:"operations"`
+	ActiveOperations      []model.ManagerOperation     `json:"activeOperations"`
+	OperationTotal        int64                        `json:"operationTotal"`
+	Clients               map[string]ManagerClientInfo `json:"clients"`
 }
 
 func (s *ManagerService) Snapshot(owner, page int, state, kind string, options ...ManagerListOptions) (ManagerSnapshot, error) {
 	db := database.GetDB()
-	v := ManagerSnapshot{Subscriptions: []model.ManagerSubscription{}, Relays: []model.ManagerRelay{}, Domains: []model.ManagerDomain{}, Operations: []model.ManagerOperation{}, Clients: map[string]ManagerClientInfo{}}
+	v := ManagerSnapshot{Subscriptions: []model.ManagerSubscription{}, Relays: []model.ManagerRelay{}, Domains: []model.ManagerDomain{}, Operations: []model.ManagerOperation{}, ActiveOperations: []model.ManagerOperation{}, Clients: map[string]ManagerClientInfo{}}
 	query := db.Model(&model.ManagerSubscription{}).Where("user_id = ?", owner)
+	if err := db.Model(&model.ManagerSubscription{}).Where("user_id = ?", owner).Count(&v.AllSubscriptionsTotal).Error; err != nil {
+		return v, err
+	}
 	v.SubscriptionPage, v.PageSize = 1, 25
 	if len(options) > 0 {
 		v.SubscriptionPage = max(1, options[0].Page)
@@ -74,8 +80,22 @@ func (s *ManagerService) Snapshot(owner, page int, state, kind string, options .
 			}
 		}
 	}
+	if err := db.Model(&model.ManagerSubscription{}).Where("user_id = ? AND enabled = ? AND auto_rotate = ?", owner, true, true).Count(&v.AutoRotateTotal).Error; err != nil {
+		return v, err
+	}
 	if err := db.Model(&model.ManagerOperation{}).Where("user_id = ? AND state IN ?", owner, []string{"queued", "running"}).Count(&v.PendingOperations).Error; err != nil {
 		return v, err
+	}
+	// Active jobs on the visible subscription page must not depend on
+	// journal pagination or its independently selected status filters.
+	if len(v.Subscriptions) > 0 {
+		subscriptionIDs := make([]int, 0, len(v.Subscriptions))
+		for _, sub := range v.Subscriptions {
+			subscriptionIDs = append(subscriptionIDs, sub.ID)
+		}
+		if err := db.Where("user_id = ? AND subscription_id IN ? AND state IN ?", owner, subscriptionIDs, []string{"queued", "running"}).Order("id DESC").Find(&v.ActiveOperations).Error; err != nil {
+			return v, err
+		}
 	}
 	if err := db.Where("user_id = ?", owner).Find(&v.Relays).Error; err != nil {
 		return v, err

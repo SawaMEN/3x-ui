@@ -3993,6 +3993,20 @@ export const SCHEMAS: Record<string, unknown> = {
   },
   "ManagerSnapshot": {
     "properties": {
+      "activeOperations": {
+        "items": {
+          "$ref": "#/components/schemas/ManagerOperation"
+        },
+        "type": "array"
+      },
+      "allSubscriptionsTotal": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "autoRotateTotal": {
+        "format": "int64",
+        "type": "integer"
+      },
       "clients": {
         "additionalProperties": {
           "$ref": "#/components/schemas/ManagerClientInfo"
@@ -4043,6 +4057,9 @@ export const SCHEMAS: Record<string, unknown> = {
       }
     },
     "required": [
+      "activeOperations",
+      "allSubscriptionsTotal",
+      "autoRotateTotal",
       "clients",
       "domains",
       "operationTotal",
