@@ -147,6 +147,11 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		if d.Mode == "sub_link_only" && (d.Panel || len(d.InboundIDs) > 0) {
 			return fmt.Errorf("subscription-only domains cannot expose the panel or VPN inbounds")
 		}
+		// The admin UI must only be reachable through its dedicated web listener.
+		// Reject new panel routes instead of silently accepting a deprecated flag.
+		if d.Panel {
+			return fmt.Errorf("domain gateway cannot expose the admin panel; use the configured web port")
+		}
 		d.Origin = strings.TrimSpace(d.Origin)
 		if d.Mode == "relay" {
 			u, err := url.Parse(d.Origin)
