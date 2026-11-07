@@ -7,17 +7,21 @@ import {
 
 describe('manager subscription helpers', () => {
   it('respects a configured panel base path and subscription formats', () => {
-    expect(buildManagerSubscriptionUrl('abc', 'base64', '/secret/', 'https://panel.test'))
-      .toBe('https://panel.test/secret/bus/abc');
-    expect(buildManagerSubscriptionUrl('abc', 'singbox', '/secret', 'https://panel.test'))
-      .toBe('https://panel.test/secret/bus/abc?format=singbox');
-    expect(buildManagerSubscriptionUrl('abc', 'raw', '/', 'https://panel.test'))
-      .toBe('https://panel.test/bus/abc?format=raw');
+    expect(buildManagerSubscriptionUrl('abc', 'base64', '/secret/', 'https://panel.test')).toBe(
+      'https://panel.test/secret/bus/abc',
+    );
+    expect(buildManagerSubscriptionUrl('abc', 'singbox', '/secret', 'https://panel.test')).toBe(
+      'https://panel.test/secret/bus/abc?format=singbox',
+    );
+    expect(buildManagerSubscriptionUrl('abc', 'raw', '/', 'https://panel.test')).toBe(
+      'https://panel.test/bus/abc?format=raw',
+    );
   });
 
   it('encodes tokens rather than allowing URL path injection', () => {
-    expect(buildManagerSubscriptionUrl('x/y z', 'base64', '/', 'https://panel.test'))
-      .toBe('https://panel.test/bus/x%2Fy%20z');
+    expect(buildManagerSubscriptionUrl('x/y z', 'base64', '/', 'https://panel.test')).toBe(
+      'https://panel.test/bus/x%2Fy%20z',
+    );
   });
 
   it('marks a disabled, expired and quota-exhausted client correctly', () => {
@@ -25,8 +29,7 @@ describe('manager subscription helpers', () => {
     expect(getManagerClientState(undefined, 1_000)).toBe('active');
     expect(getManagerClientState(base, 1_000)).toBe('quota');
     expect(getManagerClientState({ ...base, total: 0 }, 1_000)).toBe('active');
-    expect(getManagerClientState({ ...base, expiryTime: 1_000, total: 0 }, 1_000))
-      .toBe('expired');
+    expect(getManagerClientState({ ...base, expiryTime: 1_000, total: 0 }, 1_000)).toBe('expired');
     expect(getManagerClientState({ ...base, enabled: false }, 1_000)).toBe('disabled');
   });
 
