@@ -69,6 +69,7 @@ func TestDomainRolesRouteOnlyTheirPermittedPaths(t *testing.T) {
 		{"only.example.com", "/secret/panel/", 404, "404 page not found\n"},
 		{"only.example.com", "/vpn", 404, "404 page not found\n"},
 		{"direct.example.com", "/secret/panel/", 200, "panel:private.example.com"},
+		{"direct.example.com", "/secret/unknown/spa/page", 200, "panel:private.example.com"},
 		{"direct.example.com", "/vpn/session", 200, "vpn"},
 		{"relay.example.com", "/sub/token?format=sing-box", 200, "relay:/sub/token?format=sing-box"},
 		{"cdn.example.com", "/secret/panel/", 404, "404 page not found\n"},
@@ -92,6 +93,21 @@ func TestDomainRolesRouteOnlyTheirPermittedPaths(t *testing.T) {
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://only.example.com/?private=secret", nil))
 	if w.Code != 302 || w.Header().Get("Location") != "https://destination.example.com/" {
 		t.Fatalf("redirect = %d %q", w.Code, w.Header().Get("Location"))
+	}
+	for _, tc := range []struct {
+		host, requestPath, location string
+	}{
+		{"direct.example.com", "/123", "https://destination.example.com/123"},
+		{"only.example.com", "/a/b?x=1", "https://destination.example.com/a/b?x=1"},
+		{"cdn.example.com", "/anything/else", "https://destination.example.com/anything/else"},
+	} {
+		t.Run("decoy/"+tc.host+tc.requestPath, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://"+tc.host+tc.requestPath, nil))
+			if w.Code != http.StatusFound || w.Header().Get("Location") != tc.location {
+				t.Fatalf("redirect = %d %q, want %q", w.Code, w.Header().Get("Location"), tc.location)
+			}
+		})
 	}
 }
 
