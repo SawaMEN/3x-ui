@@ -397,7 +397,9 @@ export default function DomainFrontTab({
                       render: (_, site) => (
                         <Button
                           size="small"
-                          disabled={!site.available || !!rootRedirectError(site.url, redirectDomains)}
+                          disabled={
+                            !site.available || !!rootRedirectError(site.url, redirectDomains)
+                          }
                           onClick={() =>
                             updateSetting({
                               rootRedirectEnable: true,
