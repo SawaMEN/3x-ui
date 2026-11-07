@@ -336,9 +336,7 @@ describe('domain and TLS dashboard', () => {
         />
       </MemoryRouter>,
     );
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Find neighboring websites' }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
     expect(await screen.findByText(/Fastest website: https:\/\/ya.ru\//)).toBeTruthy();
     expect(update).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
@@ -347,9 +345,7 @@ describe('domain and TLS dashboard', () => {
     expect((choose[1] as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(choose[0]);
     expect(update).toHaveBeenCalledWith({ rootRedirectURL: 'https://ya.ru/' });
-    expect(update).not.toHaveBeenCalledWith(
-      expect.objectContaining({ rootRedirectEnable: true }),
-    );
+    expect(update).not.toHaveBeenCalledWith(expect.objectContaining({ rootRedirectEnable: true }));
     expect(save).not.toHaveBeenCalled();
   });
 
@@ -385,9 +381,7 @@ describe('domain and TLS dashboard', () => {
         />
       </MemoryRouter>,
     );
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Find neighboring websites' }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
     expect((await screen.findAllByText(/No reachable website was found/)).length).toBeGreaterThan(
       0,
     );
