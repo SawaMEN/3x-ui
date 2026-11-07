@@ -252,7 +252,13 @@ export function putQuickRoute(
     if (engine === 'sing-box' && next.rule.action === 'reject') {
       delete updated[existing].outbound;
     }
-    // An existing managed rule keeps its current priority and extra fields.
+    // Keep the rule's relative priority unless it was previously placed
+    // after a terminal catch-all, where it could never be evaluated.
+    const replacement = updated[existing];
+    updated.splice(existing, 1);
+    const catchAll = updated.findIndex((rule) => isUnconditional(rule, engine));
+    const position = catchAll >= 0 ? Math.min(existing, catchAll) : Math.min(existing, updated.length);
+    updated.splice(position, 0, replacement);
     return { rules: updated, replaced: true, shadowed: false };
   }
   // Never move API, DNS, existing overrides, user rules or auto-generated
