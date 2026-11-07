@@ -20,6 +20,6 @@ func (a *XraySettingController) testRoute(c *gin.Context) {
 		jsonObj(c, nil, err)
 		return
 	}
-	result, err := service.TestXrayRoute(c.Request.Context(), request)
+	result, err := service.EvaluateXrayRoute(c.Request.Context(), request)
 	jsonObj(c, result, err)
 }
