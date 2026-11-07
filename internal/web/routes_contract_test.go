@@ -31,6 +31,9 @@ func isInternalUIAPI(path string) bool {
 	return strings.HasPrefix(path, "/panel/api/server/firewall/") ||
 		strings.HasPrefix(path, "/panel/api/gateway/") ||
 		strings.HasPrefix(path, "/panel/api/telemt/meko/") ||
+		// Managed node-route provisioning is an authenticated UI-only operation,
+		// not a stable external automation API.
+		strings.HasPrefix(path, "/panel/api/xray/node-route/") ||
 		strings.HasPrefix(path, "/panel/api/adblock/") ||
 		// Core selection/installation are administrative UI actions, not stable
 		// public endpoints for third-party automation.
