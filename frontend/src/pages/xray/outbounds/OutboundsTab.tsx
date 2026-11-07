@@ -49,6 +49,7 @@ import { originalOutboundIndex } from './outbounds-tab-helpers';
 import { useOutboundColumns } from './useOutboundColumns';
 import OutboundCardList from './OutboundCardList';
 import SubscriptionOutbounds from './SubscriptionOutbounds';
+import ManagedNodeRouteOutbounds from './ManagedNodeRouteOutbounds';
 
 interface OutboundsTabProps {
   templateSettings: XraySettingsValue | null;
@@ -416,6 +417,11 @@ export default function OutboundsTab({
             }}
           />
         )}
+
+        <ManagedNodeRouteOutbounds
+          engine="xray"
+          rules={(templateSettings?.routing?.rules || []) as Record<string, unknown>[]}
+        />
 
         <OutboundFormModal
           open={modalOpen}
