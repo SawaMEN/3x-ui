@@ -336,7 +336,9 @@ describe('domain and TLS dashboard', () => {
         />
       </MemoryRouter>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Find the best website automatically' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Find the best website automatically' }),
+    );
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith({
         rootRedirectEnable: true,
@@ -359,7 +361,16 @@ describe('domain and TLS dashboard', () => {
           obj: {
             checkedAt: 123,
             recommended: '',
-            sites: [{ url: 'https://ya.ru/', available: false, status: 0, pathStatus: 0, latencyMs: 0, score: 0 }],
+            sites: [
+              {
+                url: 'https://ya.ru/',
+                available: false,
+                status: 0,
+                pathStatus: 0,
+                latencyMs: 0,
+                score: 0,
+              },
+            ],
           },
         }),
       ),
@@ -373,8 +384,12 @@ describe('domain and TLS dashboard', () => {
         />
       </MemoryRouter>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Find the best website automatically' }));
-    expect((await screen.findAllByText(/No reachable website was found/)).length).toBeGreaterThan(0);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Find the best website automatically' }),
+    );
+    expect((await screen.findAllByText(/No reachable website was found/)).length).toBeGreaterThan(
+      0,
+    );
     expect(update).not.toHaveBeenCalled();
   });
 
