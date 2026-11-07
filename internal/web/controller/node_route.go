@@ -15,6 +15,10 @@ type nodeRouteEnsureRequest struct {
 	Core      string `json:"core"`
 }
 
+type nodeRouteProbeRequest struct {
+	InboundID int `json:"inboundId" binding:"required,gt=0"`
+}
+
 func (a *XraySettingController) getNodeRouteTargets(c *gin.Context) {
 	user := session.GetLoginUser(c)
 	if user == nil {
@@ -28,6 +32,21 @@ func (a *XraySettingController) getNodeRouteTargets(c *gin.Context) {
 	}
 	targets, err := service.NodeRouteTargets(user.Id, core)
 	jsonObj(c, targets, err)
+}
+
+func (a *XraySettingController) probeNodeRoute(c *gin.Context) {
+	user := session.GetLoginUser(c)
+	if user == nil {
+		jsonObj(c, nil, fmt.Errorf("not authenticated"))
+		return
+	}
+	var payload nodeRouteProbeRequest
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.ProbeNodeRoute(c.Request.Context(), user.Id, payload.InboundID)
+	jsonObj(c, result, err)
 }
 
 func (a *XraySettingController) ensureNodeRoute(c *gin.Context) {
