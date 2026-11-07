@@ -38,23 +38,20 @@ func TestPublicDecoyIPRejectsLocalAndReservedNetworks(t *testing.T) {
 	}
 }
 
-func TestScoreDecoySite(t *testing.T) {
-	for _, tc := range []struct {
-		status, pathStatus int
-		latency            int64
-		available          bool
-		score              int
-	}{
-		{200, 200, 50, true, 89},
-		{302, 404, 100, true, 73},
-		{200, 403, 50, true, 64},
-		{403, 200, 10, false, 0},
-		{0, 0, 10, false, 0},
+func TestRankDecoySitesFastestWorkingHTTPSFirst(t *testing.T) {
+	sites := []DecoySiteCheck{
+		{URL: "https://down.example/", Available: false, LatencyMS: 0},
+		{URL: "https://slow.example/", Available: true, LatencyMS: 180, SNILatencyMS: 20},
+		{URL: "https://fast.example/", Available: true, LatencyMS: 40, SNILatencyMS: 30},
+		{URL: "https://tie.example/", Available: true, LatencyMS: 40, SNILatencyMS: 80},
+	}
+	rankDecoySites(sites)
+	for i, want := range []string{
+		"https://fast.example/", "https://tie.example/",
+		"https://slow.example/", "https://down.example/",
 	} {
-		site := &DecoySiteCheck{Status: tc.status, PathStatus: tc.pathStatus, LatencyMS: tc.latency}
-		scoreDecoySite(site)
-		if site.Available != tc.available || site.Score != tc.score {
-			t.Errorf("%+v: got available %v, score %d", tc, site.Available, site.Score)
+		if sites[i].URL != want {
+			t.Fatalf("ranking at %d: got %+v, want %q", i, sites, want)
 		}
 	}
 }
@@ -71,8 +68,8 @@ func TestProbeDecoySiteChecksRootAndNestedPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	probe := probeDecoySite(context.Background(), srv.Client(), DecoyCandidate{URL: srv.URL+"/", TLS13: true, HTTP2: true, SNIStable: true})
-	if !probe.Available || probe.Status != 200 || probe.PathStatus != 404 || probe.Score < 65 {
+	probe := probeDecoySite(context.Background(), srv.Client(), DecoyCandidate{URL: srv.URL + "/", SNILatencyMS: 33})
+	if !probe.Available || probe.Status != 200 || probe.PathStatus != 404 || probe.SNILatencyMS != 33 {
 		t.Fatalf("unexpected scan: %+v", probe)
 	}
 	if strings.Join(requested, ",") != "/,/123" {
