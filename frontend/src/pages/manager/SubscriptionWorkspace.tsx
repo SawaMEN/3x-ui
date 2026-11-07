@@ -1,4 +1,17 @@
-import { Button, Card, Col, Dropdown, Empty, Input, Pagination, Progress, Row, Space, Tag, Typography } from 'antd';
+import {
+  Button,
+  Card,
+  Col,
+  Dropdown,
+  Empty,
+  Input,
+  Pagination,
+  Progress,
+  Row,
+  Space,
+  Tag,
+  Typography,
+} from 'antd';
 import {
   DeleteOutlined,
   EditOutlined,
@@ -56,9 +69,8 @@ export default function SubscriptionWorkspace({
   const m = (key: string) => t('pages.manager.' + key);
   const basePath = window.X_UI_BASE_PATH || '/';
   const origin = window.location.origin;
-  const running = data?.activeOperations.filter(
-    (op) => op.state === 'queued' || op.state === 'running',
-  ) ?? [];
+  const running =
+    data?.activeOperations.filter((op) => op.state === 'queued' || op.state === 'running') ?? [];
 
   const status = (sub: Subscription) => {
     if (!sub.enabled) return { color: 'default', text: m('disabled') };
@@ -134,7 +146,9 @@ export default function SubscriptionWorkspace({
               >
                 <div className="manager-subscription-content">
                   <div className="manager-subscription-meta">
-                    <Tag variant="filled">{m('connections')}: {sub.entries.length}/20</Tag>
+                    <Tag variant="filled">
+                      {m('connections')}: {sub.entries.length}/20
+                    </Tag>
                     <Tag color={sub.autoRotate ? 'processing' : 'default'} variant="filled">
                       {sub.autoRotate
                         ? m('autoRotate') + ' · ' + sub.intervalMinutes + ' ' + m('minutes')
@@ -167,9 +181,8 @@ export default function SubscriptionWorkspace({
                       <div className="manager-subscription-detail">
                         <Typography.Text type="secondary">{m('traffic')}</Typography.Text>
                         <Typography.Text>
-                          {SizeFormatter.sizeFormat(used)} / {client.total > 0
-                            ? SizeFormatter.sizeFormat(client.total)
-                            : '∞'}
+                          {SizeFormatter.sizeFormat(used)} /{' '}
+                          {client.total > 0 ? SizeFormatter.sizeFormat(client.total) : '∞'}
                         </Typography.Text>
                       </div>
                       {client.total > 0 && (
@@ -190,7 +203,10 @@ export default function SubscriptionWorkspace({
                   )}
                   <div className="manager-subscription-link">
                     <Typography.Text type="secondary">{m('subscriptionUrl')}</Typography.Text>
-                    <Typography.Paragraph copyable={{ text: url }} ellipsis={{ rows: 2, expandable: true }}>
+                    <Typography.Paragraph
+                      copyable={{ text: url }}
+                      ellipsis={{ rows: 2, expandable: true }}
+                    >
                       {url}
                     </Typography.Paragraph>
                   </div>
@@ -201,9 +217,10 @@ export default function SubscriptionWorkspace({
                       </Typography.Text>
                       <Progress
                         size="small"
-                        percent={Math.max(0, Math.min(100, Math.round(
-                          (100 * job.completed) / Math.max(1, job.total),
-                        )))}
+                        percent={Math.max(
+                          0,
+                          Math.min(100, Math.round((100 * job.completed) / Math.max(1, job.total))),
+                        )}
                         status="active"
                       />
                     </div>
@@ -239,14 +256,16 @@ export default function SubscriptionWorkspace({
                   </Space>
                   <Dropdown
                     menu={{
-                      items: [{
-                        key: 'delete',
-                        icon: <DeleteOutlined />,
-                        label: t('delete'),
-                        danger: true,
-                        disabled: pending || !!job,
-                        onClick: () => onDelete(sub.id),
-                      }],
+                      items: [
+                        {
+                          key: 'delete',
+                          icon: <DeleteOutlined />,
+                          label: t('delete'),
+                          danger: true,
+                          disabled: pending || !!job,
+                          onClick: () => onDelete(sub.id),
+                        },
+                      ],
                     }}
                     trigger={['click']}
                   >
