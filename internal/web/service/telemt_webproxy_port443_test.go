@@ -77,3 +77,16 @@ func TestTelemtWebInboundTCP443Owner(t *testing.T) {
 		}
 	})
 }
+
+func TestTelemtWebPort443HonorsPanelEnvironmentOverride(t *testing.T) {
+	setupConflictDB(t)
+	s := &SettingService{}
+	if err := s.setString("webPort", "2053"); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XUI_PORT", "443")
+	owner, err := telemtWebPanelPort443Owner(TelemtWebProxyState{})
+	if err != nil || !strings.Contains(owner, "XUI_PORT=443") {
+		t.Fatalf("effective panel listener was missed: owner=%q err=%v", owner, err)
+	}
+}
