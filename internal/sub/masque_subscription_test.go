@@ -169,7 +169,8 @@ func TestMASQUEMixedSubscriptionDefaultAndFormats(t *testing.T) {
 			}
 			masque, vless := false, false
 			for _, doc := range docs {
-				for _, raw := range doc["endpoints"].([]any) {
+				endpoints, _ := doc["endpoints"].([]any)
+				for _, raw := range endpoints {
 					if raw.(map[string]any)["type"] == "masque-client" {
 						masque = true
 					}
