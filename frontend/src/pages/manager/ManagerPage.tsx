@@ -206,7 +206,7 @@ export default function ManagerPage() {
               <Spin spinning={q.isPending}>
                 <Row gutter={[12, 12]}>
                   {[
-                    [m('subscriptions'), q.data?.subscriptionTotal ?? 0],
+                    [m('subscriptions'), q.data?.allSubscriptionsTotal ?? 0],
                     [
                       m('autoRotate'),
                       q.data?.autoRotateTotal ?? 0,
