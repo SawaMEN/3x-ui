@@ -97,33 +97,37 @@ export default function SubscriptionEditor({
   const [checked, setChecked] = useState<{ ready: boolean; signature: string } | null>(null);
   const watchedValues = useWatch({ control: form.control });
   const check = async () => {
-    const signature = JSON.stringify(form.getValues());
-    const parsed = SubscriptionSchema.safeParse(form.getValues());
+    const current = form.getValues();
+    const signature = JSON.stringify(current);
+    const parsed = SubscriptionSchema.safeParse(current);
+    setChecked(null);
     if (!parsed.success) {
-      setError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'));
+      setError(parsed.error.issues.map((issue) => issue.path.join('.') + ': ' + issue.message).join('\n'));
       return false;
     }
     setSaving(true);
     setError('');
-    setChecked(null);
     try {
       const response = await HttpUtil.post('/panel/api/manager/preflight', parsed.data, {
         headers: { 'Content-Type': 'application/json' },
         silent: true,
       });
+      // The user may edit fields while a slow preflight request is in flight.
+      // Never approve a newer draft using the old server result.
+      if (JSON.stringify(form.getValues()) !== signature) {
+        setError(m('formChangedDuringCheck'));
+        return false;
+      }
       if (!response.success) {
         setError(response.msg);
         return false;
       }
       const result = PreflightSchema.parse(response.obj);
       setChecked({ ready: result.ready, signature });
-      if (!result.ready)
-        setError(
-          result.entries
-            .filter((e) => !e.ready)
-            .map((e) => `${e.index}: ${e.message}`)
-            .join('\n'),
-        );
+      if (!result.ready) {
+        setError(result.entries.filter((entry) => !entry.ready)
+          .map((entry) => entry.index + ': ' + entry.message).join('\n'));
+      }
       return result.ready;
     } catch (e) {
       setError(String(e));
@@ -133,12 +137,16 @@ export default function SubscriptionEditor({
     }
   };
   const submit = async (generate: boolean) => {
+    if (saving) return;
+    if (generate && !(await check())) return;
+    // Parse only after preflight, so the submitted draft is exactly the
+    // version that passed readiness checks.
     const parsed = SubscriptionSchema.safeParse(form.getValues());
     if (!parsed.success) {
-      setError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'));
+      setChecked(null);
+      setError(parsed.error.issues.map((issue) => issue.path.join('.') + ': ' + issue.message).join('\n'));
       return;
     }
-    if (generate && !(await check())) return;
     setSaving(true);
     setError('');
     try {
@@ -153,18 +161,27 @@ export default function SubscriptionEditor({
     <Modal
       open
       title={m('editSubscription')}
-      width={900}
-      onCancel={onClose}
+      className="manager-editor"
+      width={960}
+      style={{ top: 12 }}
+      styles={{ body: { maxHeight: 'calc(100dvh - 190px)', overflowY: 'auto' } }}
+      maskClosable={false}
+      onCancel={() => { if (!saving) onClose(); }}
       footer={
         <Space wrap>
-          <Button onClick={onClose}>{t('cancel')}</Button>
-          <Button loading={saving} onClick={() => void check()}>
+          <Button disabled={saving} onClick={onClose}>{t('cancel')}</Button>
+          <Button loading={saving} disabled={saving} onClick={() => void check()}>
             {m('preflight')}
           </Button>
-          <Button loading={saving} onClick={() => void submit(false)}>
+          <Button loading={saving} disabled={saving} onClick={() => void submit(false)}>
             {t('save')}
           </Button>
-          <Button type="primary" loading={saving} onClick={() => void submit(true)}>
+          <Button
+            type="primary"
+            loading={saving}
+            disabled={saving || watchedValues?.enabled === false}
+            onClick={() => void submit(true)}
+          >
             {m('saveGenerate')}
           </Button>
         </Space>
@@ -202,6 +219,9 @@ export default function SubscriptionEditor({
                         loading={clients.isFetching}
                         options={[
                           { value: 0, label: m('autoClient') },
+                          ...(value.clientId > 0 && !(clients.data ?? []).some((c) => c.id === value.clientId)
+                            ? [{ value: value.clientId, label: m('client') + ' #' + value.clientId }]
+                            : []),
                           ...(clients.data ?? []).map((c) => ({
                             value: c.id,
                             label: `${c.email} · #${c.id}`,
@@ -526,8 +546,16 @@ export default function SubscriptionEditor({
                 disableFlow: payload.disableFlow ?? false,
               });
               form.setValue(`entries.${index}.nodeId`, payload.nodeId ?? 0);
-              if (JSON.parse(payload.streamSettings || '{}').security !== 'reality')
-                form.setValue(`entries.${index}.sni`, '');
+              // A malformed draft must not crash the entire subscription editor.
+              try {
+                const stream = typeof payload.streamSettings === 'string'
+                  ? JSON.parse(payload.streamSettings || '{}')
+                  : payload.streamSettings;
+                if (stream?.security !== 'reality')
+                  form.setValue(`entries.${index}.sni`, '');
+              } catch {
+                // Preserve SNI until the malformed settings are corrected.
+              }
             }}
           />
         )}
