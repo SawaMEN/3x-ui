@@ -8,11 +8,16 @@ import (
 )
 
 func TestRedirectSNITargetsReuseVerifiedHistoryAndConfiguredList(t *testing.T) {
+	dnsMatch := true
 	certified := &RealityScanResult{
-		Host: "verified.example.com", IP: "8.8.8.8", Port: 443,
-		CertValid: true, Attempts: 5, Successes: 5,
-		DNSMatchesIP: func() *bool { v := true; return &v }(),
-		CheckedAt: time.Now().UTC().Format(time.RFC3339),
+		Host:         "verified.example.com",
+		IP:           "8.8.8.8",
+		Port:         443,
+		CertValid:    true,
+		Attempts:     5,
+		Successes:    5,
+		DNSMatchesIP: &dnsMatch,
+		CheckedAt:    time.Now().UTC().Format(time.RFC3339),
 	}
 	unstable := *certified
 	unstable.Host, unstable.Successes = "unstable.example.com", 3
@@ -20,14 +25,21 @@ func TestRedirectSNITargetsReuseVerifiedHistoryAndConfiguredList(t *testing.T) {
 	private.Host, private.PrivateTarget = "private.example.com", true
 	otherPort := *certified
 	otherPort.Host, otherPort.Port = "alt.example.com", 8443
+	dnsMismatch := false
 	mismatch := *certified
 	mismatch.Host = "mismatch.example.com"
-	mismatch.DNSMatchesIP = func() *bool { v := false; return &v }()
+	mismatch.DNSMatchesIP = &dnsMismatch
+
 	list := redirectSNITargets([]string{
-		"another.example.com:443", "10.0.0.1:443", "internal.example.com:8443",
-		"verified.example.com:443", "192.0.2.0/30", "example.org:443",
+		"another.example.com:443",
+		"10.0.0.1:443",
+		"internal.example.com:8443",
+		"verified.example.com:443",
+		"192.0.2.0/30",
+		"example.org:443",
 	}, []SNIJobSnapshot{{
-		State: "done", Results: []*RealityScanResult{certified, &unstable, &private, &otherPort, &mismatch},
+		State:   "done",
+		Results: []*RealityScanResult{certified, &unstable, &private, &otherPort, &mismatch},
 	}})
 	got := strings.Join(list, ",")
 	if len(list) != 3 || list[0] != "verified.example.com:443" ||
@@ -58,7 +70,9 @@ func TestRedirectSNITargetsBoundedSampleOfSharedCatalog(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, row := range got {
-		if seen[row] { t.Fatalf("duplicate %q", row) }
+		if seen[row] {
+			t.Fatalf("duplicate %q", row)
+		}
 		seen[row] = true
 	}
 }
