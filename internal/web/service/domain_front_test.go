@@ -106,10 +106,16 @@ func TestDomainGatewayDropsLegacyPanelFlags(t *testing.T) {
 	cfg := domainfront.DefaultConfig()
 	cfg.Domains = []domainfront.DomainFrontDomain{{Name: "panel.example.com", Mode: "direct", Enabled: true, TLS: "auto", Panel: true}}
 	raw, err := json.Marshal(cfg)
-	if err != nil { t.Fatal(err) }
-	if err := s.setString("domainFrontConfig", string(raw)); err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.setString("domainFrontConfig", string(raw)); err != nil {
+		t.Fatal(err)
+	}
 	loaded, err := s.GetDomainFrontConfig()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(loaded.Domains) != 1 || loaded.Domains[0].Panel {
 		t.Fatalf("legacy gateway still exposes panel: %#v", loaded.Domains)
 	}
