@@ -30,6 +30,16 @@ describe('Xray inbound to outbound routing', () => {
       'direct',
     ]);
   });
+  it('repairs an existing inbound binding that was shadowed by a catch-all', () => {
+    const stale: RuleObject[] = [
+      { type: 'field', outboundTag: 'direct' },
+      { type: 'field', comment: 'panel-inbound:in-a', inboundTag: ['in-a'], outboundTag: 'warp' },
+    ];
+    const repaired = setInboundRouteTarget(stale, 'in-a', 'vetroff-out');
+    expect(repaired.map((rule) => rule.outboundTag)).toEqual(['vetroff-out', 'direct']);
+    expect(repaired[0].inboundTag).toEqual(['in-a']);
+  });
+
   it('appends fallback when no generic catch-all exists', () => {
     const next = setInboundRouteTarget([rules[0]], 'a', 'warp');
     expect(next[1]).toMatchObject({ inboundTag: ['a'], outboundTag: 'warp' });
