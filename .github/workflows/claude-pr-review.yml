@@ -151,8 +151,9 @@ jobs:
             --model claude-opus-5-5
             --effort high
             --max-turns 300
+            --permission-mode dontAsk
             --allowedTools "Bash(gh api:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh search:*),Bash(gh pr diff:*),Bash(grep:*),Bash(rg:*),Bash(ls:*),Bash(find:*),Bash(sed:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(git blame:*),Bash(go doc:*),Bash(go env:*),Read,Glob,Grep,WebFetch,WebSearch,Edit(//tmp/review.md)"
-            --disallowedTools "Agent,Bash(go build:*),Bash(go run:*),Bash(go test:*),Bash(go generate:*),Bash(go install:*),Bash(make:*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Bash(yarn:*),Bash(node:*),Bash(bash:*),Bash(sh:*),Bash(docker:*),Bash(chmod:*),Edit,NotebookEdit,Edit(//home/**),Edit(//opt/**)"
+            --disallowedTools "Agent,Bash(go build:*),Bash(go run:*),Bash(go test:*),Bash(go generate:*),Bash(go install:*),Bash(make:*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Bash(yarn:*),Bash(node:*),Bash(bash:*),Bash(sh:*),Bash(docker:*),Bash(chmod:*),NotebookEdit,Edit(//home/**),Edit(//opt/**)"
           prompt: |
             You are a Senior Software Engineer performing a production-grade code
             review of pull request #${{ env.PR }} in ${{ env.REPO }}. You are the
