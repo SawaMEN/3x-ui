@@ -51,10 +51,6 @@ type RedirectSiteCheck = {
   pathStatus: number;
   latencyMs: number;
   sniLatencyMs?: number;
-  sniStable?: boolean;
-  tls13?: boolean;
-  http2?: boolean;
-  score: number;
   error?: string;
 };
 
@@ -193,19 +189,16 @@ export default function DomainFrontTab({
       const response = await HttpUtil.post(
         '/panel/api/domains/recommend',
         {},
-        { silent: true, timeout: 40_000 },
+        { silent: true, timeout: 75_000 },
       );
       if (!response?.success) throw new Error(response?.msg || t('somethingWentWrong'));
       const scan = response.obj as RedirectSiteScan;
       if (!scan || !Array.isArray(scan.sites) || typeof scan.recommended !== 'string')
         throw new Error(t('pages.settings.redirectScanError'));
+      // Discovery is read-only. The operator chooses a destination and
+      // explicitly enables/saves redirection separately, if desired.
       setRedirectScan(scan);
-      if (scan.recommended && !rootRedirectError(scan.recommended, redirectDomains)) {
-        // Stage the recommendation; the existing Save and apply action
-        // handles TLS validation and rolls back failed configuration changes.
-        updateSetting({ rootRedirectEnable: true, rootRedirectURL: scan.recommended });
-        messageApi.success(t('pages.settings.redirectScanSelected'));
-      } else {
+      if (!scan.recommended) {
         messageApi.warning(t('pages.settings.redirectScanEmpty'));
       }
     } catch (e) {
@@ -381,19 +374,8 @@ export default function DomainFrontTab({
                     {
                       title: t('pages.settings.redirectScanSNI'),
                       key: 'sni',
-                      render: (_, site) => (
-                        <Space size={4}>
-                          {site.sniLatencyMs ? `${site.sniLatencyMs} ms` : '—'}
-                          {site.sniStable && (
-                            <Tag color="green">{t('pages.settings.redirectScanStable')}</Tag>
-                          )}
-                        </Space>
-                      ),
-                    },
-                    {
-                      title: t('pages.settings.redirectScanScore'),
-                      key: 'score',
-                      dataIndex: 'score',
+                      render: (_, site) =>
+                        site.sniLatencyMs ? `${site.sniLatencyMs} ms` : '—',
                     },
                     {
                       title: '',
@@ -405,10 +387,7 @@ export default function DomainFrontTab({
                             !site.available || !!rootRedirectError(site.url, redirectDomains)
                           }
                           onClick={() =>
-                            updateSetting({
-                              rootRedirectEnable: true,
-                              rootRedirectURL: site.url,
-                            })
+                            updateSetting({ rootRedirectURL: site.url })
                           }
                         >
                           {t('pages.settings.redirectScanChoose')}
@@ -420,8 +399,7 @@ export default function DomainFrontTab({
               </>
             )}
           </Space>
-          {allSetting.rootRedirectEnable && (
-            <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
+          <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
               <AutoComplete
                 status={redirectError ? 'error' : undefined}
                 maxLength={2048}
@@ -439,7 +417,6 @@ export default function DomainFrontTab({
                 placeholder="https://example.com/"
               />
             </SettingListItem>
-          )}
           {allSetting.rootRedirectEnable && (
             <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
               <Alert
