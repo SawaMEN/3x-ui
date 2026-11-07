@@ -18,22 +18,22 @@ import (
 // Run it only in an isolated container and publish the bridge on host loopback.
 // Never load the short link's local port or PAC rules for a managed node route.
 type sudokuLinkPayload struct {
-	Host string `json:"h"`
-	Port int `json:"p"`
-	Key string `json:"k"`
-	ASCII string `json:"a"`
-	AEAD string `json:"e"`
-	MixedPort int `json:"m"`
-	Packed bool `json:"x"`
-	CustomTable string `json:"t"`
-	CustomTables []string `json:"ts"`
-	DisableHTTPMask bool `json:"hd"`
-	HTTPMaskMode string `json:"hm"`
-	HTTPMaskTLS bool `json:"ht"`
-	HTTPMaskHost string `json:"hh"`
-	HTTPMaskMux string `json:"hx"`
-	HTTPMaskPath string `json:"hy"`
-	Name string `json:"n"`
+	Host            string   `json:"h"`
+	Port            int      `json:"p"`
+	Key             string   `json:"k"`
+	ASCII           string   `json:"a"`
+	AEAD            string   `json:"e"`
+	MixedPort       int      `json:"m"`
+	Packed          bool     `json:"x"`
+	CustomTable     string   `json:"t"`
+	CustomTables    []string `json:"ts"`
+	DisableHTTPMask bool     `json:"hd"`
+	HTTPMaskMode    string   `json:"hm"`
+	HTTPMaskTLS     bool     `json:"ht"`
+	HTTPMaskHost    string   `json:"hh"`
+	HTTPMaskMux     string   `json:"hx"`
+	HTTPMaskPath    string   `json:"hy"`
+	Name            string   `json:"n"`
 }
 
 func validSudokuHost(host string) bool {
@@ -140,8 +140,8 @@ func sudokuOutboundConfig(link string) ([]byte, error) {
 	// routes must have no bypass of the selected node, even for private IPs.
 	return json.Marshal(struct {
 		sudoku.Config
-		ProxyMode string `json:"proxy_mode"`
-		RuleURLs []string `json:"rule_urls"`
+		ProxyMode string   `json:"proxy_mode"`
+		RuleURLs  []string `json:"rule_urls"`
 	}{Config: cfg, ProxyMode: "global", RuleURLs: []string{}})
 }
 
