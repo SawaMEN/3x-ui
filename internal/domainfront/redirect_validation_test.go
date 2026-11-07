@@ -30,7 +30,12 @@ func TestRedirectTargetValidation(t *testing.T) {
 }
 
 func TestHTTPRootRedirectAvoidsHTTPSHopAndDropsQuery(t *testing.T) {
-	r := &frontRuntime{cfg: DomainFrontConfig{PublicPort: 443, Domains: []DomainFrontDomain{{Name: "panel.example", Enabled: true}}}, backend: Backend{RedirectURL: "https://target.example/welcome?fixed=1"}}
+	r := &frontRuntime{cfg: DomainFrontConfig{PublicPort: 443, Domains: []DomainFrontDomain{{Name: "panel.example", Enabled: true, Panel: true}}}, backend: Backend{
+		RedirectURL: "https://target.example/welcome?fixed=1",
+		PanelPath: "/secret/",
+		SubscriptionPaths: []string{"/sub/"},
+		Routes: map[string][]Route{"panel.example": {{Path: "/vpn"}}},
+	}}
 	for _, method := range []string{http.MethodGet, http.MethodHead} {
 		response := httptest.NewRecorder()
 		req := httptest.NewRequest(method, "http://panel.example/?secret=do-not-forward", nil)
@@ -42,11 +47,21 @@ func TestHTTPRootRedirectAvoidsHTTPSHopAndDropsQuery(t *testing.T) {
 			t.Fatal("redirect lacks privacy headers")
 		}
 	}
-	for _, path := range []string{"/sub/token", "/.well-known/acme-challenge/token", "/?panel=1"} {
+	for _, path := range []string{"/sub/token", "/secret/panel/", "/vpn/ws", "/.well-known/acme-challenge/token", "/?panel=1"} {
 		response := httptest.NewRecorder()
 		r.redirectHTTPS(response, httptest.NewRequest(http.MethodGet, "http://panel.example"+path, nil))
 		if response.Code != http.StatusPermanentRedirect || !strings.HasPrefix(response.Header().Get("Location"), "https://panel.example/") {
 			t.Fatal("panel/subscription route was captured", path, response.Header())
+		}
+	}
+	for _, tc := range []struct{ request, location string }{
+		{"http://panel.example/a/123?x=1", "https://target.example/welcome/a/123?fixed=1&x=1"},
+		{"http://panel.example:2345/123", "https://target.example:2345/welcome/123?fixed=1"},
+	} {
+		response := httptest.NewRecorder()
+		r.redirectHTTPS(response, httptest.NewRequest(http.MethodGet, tc.request, nil))
+		if response.Code != http.StatusFound || response.Header().Get("Location") != tc.location {
+			t.Fatalf("redirect = %d %q, want %q", response.Code, response.Header().Get("Location"), tc.location)
 		}
 	}
 	response := httptest.NewRecorder()
