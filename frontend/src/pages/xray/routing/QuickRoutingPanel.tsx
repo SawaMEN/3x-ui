@@ -470,6 +470,7 @@ export default function QuickRoutingPanel({
                         <Space size={5}>
                           <Switch
                             size="small"
+                            disabled={creating}
                             aria-label={'Включить маршрут #' + (index + 1)}
                             checked={rule.enabled !== false}
                             onChange={(enabled) =>
@@ -481,12 +482,15 @@ export default function QuickRoutingPanel({
                             description="Остальные правила останутся без изменений."
                             okText="Удалить"
                             cancelText="Отмена"
-                            onConfirm={() => onChange(removeQuickRoute(rules, marker, engine))}
+                            onConfirm={() => {
+                              if (!creating) onChange(removeQuickRoute(rules, marker, engine));
+                            }}
                           >
                             <Button
                               size="small"
                               type="text"
                               danger
+                              disabled={creating}
                               aria-label={'Удалить маршрут #' + (index + 1)}
                               icon={<DeleteOutlined aria-hidden="true" />}
                             />
