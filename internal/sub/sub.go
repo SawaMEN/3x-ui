@@ -101,6 +101,18 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 				return true
 			}
 		}
+		// Direct requests to imported Hiddify paths must keep their former
+		// 404, rather than leaking secret subscription URLs via Location.
+		aliases, err := s.settingService.GetHiddifyLegacySubscriptionAliases()
+		if err != nil {
+			return true
+		}
+		for _, alias := range aliases {
+			prefix := "/" + strings.Trim(alias.Path, "/")
+			if prefix != "/" && (path == prefix || strings.HasPrefix(path, prefix+"/")) {
+				return true
+			}
+		}
 		return false
 	}))
 
