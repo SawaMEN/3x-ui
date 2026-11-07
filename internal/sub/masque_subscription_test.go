@@ -138,7 +138,7 @@ func TestMASQUEMixedSubscriptionDefaultAndFormats(t *testing.T) {
 		{
 			UserId: 1, Tag: "mixed-vless", Enable: true, Protocol: model.VLESS, Port: 18444,
 			ShareAddrStrategy: "custom", ShareAddr: "vless.example.com",
-			Settings: `{"decryption":"none","clients":[{"email":"alice","id":"11111111-2222-4333-8444-555555555555","subId":"masque-mixed","enable":true}]}`,
+			Settings:       `{"decryption":"none","clients":[{"email":"alice","id":"11111111-2222-4333-8444-555555555555","subId":"masque-mixed","enable":true}]}`,
 			StreamSettings: `{"network":"tcp","security":"none"}`,
 		},
 	}
