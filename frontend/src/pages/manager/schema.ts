@@ -59,18 +59,17 @@ export const RelaySchema = z.object({
   installed: z.boolean().default(false),
 });
 export const ManagerOperationSchema = z.object({
-      id: z.number(),
-      subscriptionId: z.number(),
-      relayId: z.number(),
-      kind: z.string(),
-      state: z.string(),
-      completed: z.number(),
-      total: z.number(),
-      attempts: z.number(),
-      message: z.string(),
-      createdAt: z.number(),
-      finishedAt: z.number(),
-    
+  id: z.number(),
+  subscriptionId: z.number(),
+  relayId: z.number(),
+  kind: z.string(),
+  state: z.string(),
+  completed: z.number(),
+  total: z.number(),
+  attempts: z.number(),
+  message: z.string(),
+  createdAt: z.number(),
+  finishedAt: z.number(),
 });
 export const SnapshotSchema = z.object({
   subscriptions: z.array(SubscriptionSchema),
