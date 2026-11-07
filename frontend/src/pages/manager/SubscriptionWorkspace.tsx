@@ -56,7 +56,7 @@ export default function SubscriptionWorkspace({
   const m = (key: string) => t('pages.manager.' + key);
   const basePath = window.X_UI_BASE_PATH || '/';
   const origin = window.location.origin;
-  const running = data?.operations.filter(
+  const running = data?.activeOperations.filter(
     (op) => op.state === 'queued' || op.state === 'running',
   ) ?? [];
 
