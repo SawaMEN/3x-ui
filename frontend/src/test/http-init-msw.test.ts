@@ -73,21 +73,21 @@ describe('httpRequest against the MSW-mocked network', () => {
   it.each(['xray', 'sing-box'])(
     'provides a JSON body to the node-route provision handler for %s',
     async (core) => {
-    const payload = { inboundId: 42, core };
-    let received: unknown;
-    let contentType: string | null = null;
-    server.use(
-      http.post(`${ORIGIN}/panel/api/xray/node-route/ensure`, async ({ request }) => {
-        contentType = request.headers.get('Content-Type');
-        received = await request.json();
-        return HttpResponse.json({ success: true, obj: { tag: 'node-route-42' } });
-      }),
-    );
+      const payload = { inboundId: 42, core };
+      let received: unknown;
+      let contentType: string | null = null;
+      server.use(
+        http.post(`${ORIGIN}/panel/api/xray/node-route/ensure`, async ({ request }) => {
+          contentType = request.headers.get('Content-Type');
+          received = await request.json();
+          return HttpResponse.json({ success: true, obj: { tag: 'node-route-42' } });
+        }),
+      );
 
-    const response = await httpRequest('POST', '/panel/api/xray/node-route/ensure', payload);
-    expect(response.status).toBe(200);
-    expect(received).toEqual(payload);
-    expect(contentType).toBe('application/json; charset=UTF-8');
+      const response = await httpRequest('POST', '/panel/api/xray/node-route/ensure', payload);
+      expect(response.status).toBe(200);
+      expect(received).toEqual(payload);
+      expect(contentType).toBe('application/json; charset=UTF-8');
     },
   );
 
