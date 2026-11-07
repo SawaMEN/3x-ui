@@ -210,7 +210,8 @@ export default function QuickRoutingPanel({
   function probeAlert(tag: string) {
     if (!probeResult || probeResult.tag !== tag) return null;
     const isUdp = probeResult.transport === 'udp';
-    const isMieru = nodeTargets.find((node) => node.tag === tag)?.protocol?.toLowerCase() === 'mieru';
+    const isMieru =
+      nodeTargets.find((node) => node.tag === tag)?.protocol?.toLowerCase() === 'mieru';
     const status = probeResult.reachable
       ? 'success'
       : probeResult.inconclusive || isUdp
