@@ -122,6 +122,8 @@ describe('http-init fetch wrapper', () => {
     expect(headersOf().get('X-CSRF-Token')).toBe('tok');
 
     fetchMock.mockClear();
+    // Response bodies are single-use; the second request needs a new response.
+    fetchMock.mockResolvedValue(okEnvelope());
     await http.httpRequest('POST', '/panel/api/xray/update', { xraySetting: '{}' });
     expect(headersOf().get('content-type')).toBe(
       'application/x-www-form-urlencoded; charset=UTF-8',
