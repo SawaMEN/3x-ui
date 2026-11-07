@@ -26,13 +26,13 @@ var nodeRouteProvisionMu sync.Mutex
 
 type NodeRouteTarget struct {
 	Tag	string	`json:"tag"`
-	InboundID int    `json:"inboundId"`
+	InboundID	int	`json:"inboundId"`
 	NodeID	int	`json:"nodeId"`
 	NodeName	string	`json:"nodeName"`
 	Remark	string	`json:"remark"`
 	Protocol	string	`json:"protocol"`
 	Port	int	`json:"port"`
-	Available bool   `json:"available"`
+	Available	bool	`json:"available"`
 	Reason	string	`json:"reason,omitempty"`
 }
 
