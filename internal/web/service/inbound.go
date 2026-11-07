@@ -1597,6 +1597,20 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 		if err := s.clientService.DetachInbound(tx, id); err != nil {
 			return err
 		}
+		if loadErr == nil {
+			// Delete all route references in the same transaction as the inbound,
+			// including its generated node-route destination on either core.
+			changed, err := cleanupDeletedInboundReferencesTx(tx, &ib)
+			if err != nil {
+				return err
+			}
+			if changed {
+				needRestart = true
+			}
+			if err := cleanupManagedNodeRouteClientTx(tx, &ib); err != nil {
+				return err
+			}
+		}
 		if err := tx.Delete(model.Inbound{}, id).Error; err != nil {
 			return err
 		}
@@ -1629,13 +1643,8 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 	if postCommitApply != nil {
 		postCommitApply()
 	}
-	if loadErr == nil && ib.Tag != "" {
-		if routingChanged, syncErr := (&XraySettingService{}).RemoveInboundTagReferences(ib.Tag); syncErr != nil {
-			logger.Warning("DelInbound: sync routing on inbound delete failed:", syncErr)
-		} else if routingChanged {
-			needRestart = true
-		}
-	}
+	// Routing cleanup was committed with the deleted inbound above, so there
+	// cannot be an intermediate state pointing to its removed cascade.
 	if !database.IsPostgres() {
 		var count int64
 		if err := db.Model(&model.Inbound{}).Count(&count).Error; err != nil {
