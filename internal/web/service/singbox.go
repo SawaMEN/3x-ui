@@ -82,10 +82,22 @@ func mustJSON(value map[string]any) []byte {
 // singBoxTUICInbound uses the same credentials and TLS certificate as the
 // external TUIC server. The native listener exposes authenticated user names
 // to the sing-box traffic API, so client quotas receive real byte deltas.
-func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error) {
+func singBoxTUICInbound(ib *model.Inbound, clients []any, lookups ...func(string) (string, error)) (map[string]any, error) {
 	inst, ok := tuic.InstanceFromInbound(ib)
 	if !ok {
 		return nil, fmt.Errorf("invalid TUIC inbound %q settings", ib.Tag)
+	}
+	// An inbound without its own TLS pair can reuse the panel HTTPS identity,
+	// just like MASQUE, NaiveProxy and AnyTLS. Do not replace partial or
+	// explicitly configured credentials with an unrelated certificate.
+	if len(lookups) > 0 && lookups[0] != nil &&
+		strings.TrimSpace(inst.Certificate) == "" && strings.TrimSpace(inst.PrivateKey) == "" {
+		resolved, err := ResolveNativeTLSSettings(nil, lookups[0])
+		if err != nil {
+			return nil, fmt.Errorf("TUIC inbound %q: %w", ib.Tag, err)
+		}
+		inst.Certificate = resolved["certificatePath"].(string)
+		inst.PrivateKey = resolved["keyPath"].(string)
 	}
 	if strings.TrimSpace(inst.Certificate) == "" || strings.TrimSpace(inst.PrivateKey) == "" {
 		return nil, fmt.Errorf("TUIC inbound %q requires a TLS certificate and private key", ib.Tag)
