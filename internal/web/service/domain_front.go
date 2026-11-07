@@ -181,8 +181,8 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 	backend := domainfront.Backend{
 		SubscriptionTarget: localDomainTarget(settings.SubListen, settings.SubPort, settings.SubCertFile != "" && settings.SubKeyFile != ""),
 		PanelPath:          settings.WebBasePath,
-		SubscriptionPaths: []string{settings.SubPath, settings.SubJsonPath, settings.SubClashPath, "/assets/"},
-		Routes:            map[string][]domainfront.Route{},
+		SubscriptionPaths:  []string{settings.SubPath, settings.SubJsonPath, settings.SubClashPath, "/assets/"},
+		Routes:             map[string][]domainfront.Route{},
 	}
 	panelPort := settings.WebPort
 	if override, configured, err := config.GetPortOverride(); configured && err == nil {
