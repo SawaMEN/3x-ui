@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"gorm.io/gorm"
 )
 
 // Delete the destination and all of its route references together with the
