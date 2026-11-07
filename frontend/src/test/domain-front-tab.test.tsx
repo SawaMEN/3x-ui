@@ -461,6 +461,23 @@ describe('domain and TLS dashboard', () => {
     );
   });
 
+  it('does not offer panel access through public gateway domains', async () => {
+    const f = fixture();
+    f.config.domains[0] = {
+      ...defaultDomain,
+      name: 'sub.example.com',
+      mode: 'direct',
+      panel: true, // legacy API payload
+    };
+    renderWithProviders(<DomainFrontTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await screen.findByRole('dialog');
+    expect(screen.queryByRole('checkbox', { name: 'Allow admin panel access' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(screen.getByText('Save and apply').closest('button')!);
+    await waitFor(() => expect(f.applied?.domains[0].panel).toBe(false));
+  });
+
   it('shows external CDN TLS separately from the local origin certificate', async () => {
     fixture();
     renderWithProviders(<DomainFrontTab />);

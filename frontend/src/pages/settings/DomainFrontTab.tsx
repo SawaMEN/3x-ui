@@ -149,7 +149,7 @@ export default function DomainFrontTab({
       if (!dirty) {
         await load();
         messageApi.success(
-          'Перенаправление применено. Для доступа без перенаправления используйте ?panel=1.',
+          'Перенаправление применено. Панель доступна только по порту из её настроек.',
         );
         return;
       }
@@ -240,7 +240,7 @@ export default function DomainFrontTab({
     const domain = DomainFormSchema.parse({
       ...defaultDomain,
       ...value,
-      panel: value.mode === 'sub_link_only' ? false : !!value.panel,
+      panel: false,
       inboundIds: value.mode === 'sub_link_only' ? [] : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
       certFile: value.tls === 'manual' ? value.certFile : '',
@@ -453,13 +453,6 @@ export default function DomainFrontTab({
                     <Typography.Text ellipsis style={{ maxWidth: 320 }}>
                       {allSetting.rootRedirectURL}
                     </Typography.Text>
-                    <Typography.Link
-                      href={`https://${name}/?panel=1`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Открыть без перенаправления
-                    </Typography.Link>
                   </Space>
                 ))}
               <Typography.Text type="secondary">
@@ -696,7 +689,6 @@ export default function DomainFrontTab({
                 <Space orientation="vertical" size={2}>
                   <Typography.Text strong>{name}</Typography.Text>
                   {!d.enabled && <Tag>{label('disabled')}</Tag>}
-                  {d.panel && <Tag>{label('panelAllowed')}</Tag>}
                 </Space>
               ),
             },
@@ -887,7 +879,7 @@ export default function DomainFrontTab({
             <Select
               onChange={(value) => {
                 if (value === 'sub_link_only')
-                  form.setFieldsValue({ panel: false, inboundIds: [], origin: '' });
+                  form.setFieldsValue({ inboundIds: [], origin: '' });
                 else if (value !== 'relay') form.setFieldsValue({ origin: '' });
               }}
               options={['direct', 'cdn', 'relay', 'sub_link_only'].map((value) => ({
@@ -912,14 +904,6 @@ export default function DomainFrontTab({
           )}
           {mode !== 'sub_link_only' && (
             <>
-              <Form.Item
-                name="panel"
-                label={label('panelAllowed')}
-                tooltip={label('panelHelp')}
-                valuePropName="checked"
-              >
-                <Checkbox />
-              </Form.Item>
               <Form.Item
                 name="inboundIds"
                 label={label('inbounds')}
