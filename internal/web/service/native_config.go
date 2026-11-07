@@ -474,8 +474,20 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		// Preserve sniffing before its specialized credential/TLS translation,
 		// so domain and protocol rules choose the same cascade for every inbound.
 		if inbound.Protocol == model.TUIC {
-			translated, err := singBoxTUICInbound(inbound, clients)
+			translated, err := singBoxTUICInbound(inbound, clients, func(key string) (string, error) {
+				return nativeConfigSetting(snapshot, key, func() (string, error) { return NativeTLSSetting(key) })
+			})
 			if err != nil {
+				if len(editorOnly) > 0 && editorOnly[0] {
+					// The source editor must stay usable while an operator repairs
+					// a broken TUIC certificate. Runtime generation remains strict
+					// and will not publish a partial listener configuration.
+					if snapshot != nil {
+						snapshot.connectionWarnings = append(snapshot.connectionWarnings,
+							fmt.Sprintf("TUIC inbound %q is excluded from the routing preview: %v", inbound.Tag, err))
+					}
+					continue
+				}
 				unsupported = append(unsupported, fmt.Sprintf("%s: %v", inbound.Tag, err))
 				continue
 			}

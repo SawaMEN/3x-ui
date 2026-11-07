@@ -547,3 +547,53 @@ func TestHiddifyNativeTemplateTLSCipherCompatibility(t *testing.T) {
 		t.Fatalf("saved template was rewritten: %v", err)
 	}
 }
+
+func TestSingBoxUnconfiguredTUICAllowsEditorAndPanelTLSFallback(t *testing.T) {
+	setupBulkDB(t)
+	ib := seedHiddifyConfigInbound(t, model.TUIC, `{"server":{"congestion_control":"bbr"}}`, `{}`)
+	snapshot, err := loadNativeConfigSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"webCertFile", "webKeyFile", "subCertFile", "subKeyFile"} {
+		snapshot.settings[key] = ""
+	}
+	core := NativeCore(CoreTypeSingBox)
+	if _, err := core.generateNativeConfig(snapshot); err == nil || !strings.Contains(err.Error(), "TUIC") {
+		t.Fatalf("runtime accepted TUIC without TLS: %v", err)
+	}
+	editor, err := core.generateNativeConfig(snapshot, true)
+	if err != nil {
+		t.Fatalf("incomplete TUIC prevented reading routing parameters: %v", err)
+	}
+	for _, inbound := range editor.Inbounds {
+		if inbound["tag"] == ib.Tag {
+			t.Fatalf("invalid TUIC listener included in routing preview: %v", inbound)
+		}
+	}
+	if len(snapshot.connectionWarnings) == 0 || !strings.Contains(strings.Join(snapshot.connectionWarnings, "; "), ib.Tag) {
+		t.Fatalf("missing warning for invalid TUIC listener: %v", snapshot.connectionWarnings)
+	}
+
+	cert, key := writeTestCertificate(t)
+	snapshot.settings["webCertFile"] = cert
+	snapshot.settings["webKeyFile"] = key
+	cfg, err := core.generateNativeConfig(snapshot)
+	if err != nil {
+		t.Fatalf("TUIC failed to reuse panel HTTPS TLS: %v", err)
+	}
+	found := false
+	for _, inbound := range cfg.Inbounds {
+		if inbound["tag"] != ib.Tag {
+			continue
+		}
+		found = true
+		tls := inbound["tls"].(map[string]any)
+		if tls["certificate_path"] != cert || tls["key_path"] != key {
+			t.Fatalf("unexpected TUIC TLS identity: %v", tls)
+		}
+	}
+	if !found {
+		t.Fatal("TUIC listener missing after resolving panel TLS")
+	}
+}
