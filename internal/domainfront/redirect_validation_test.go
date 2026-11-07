@@ -30,12 +30,22 @@ func TestRedirectTargetValidation(t *testing.T) {
 }
 
 func TestHTTPRootRedirectAvoidsHTTPSHopAndDropsQuery(t *testing.T) {
-	r := &frontRuntime{cfg: DomainFrontConfig{PublicPort: 443, Domains: []DomainFrontDomain{{Name: "panel.example", Enabled: true, Panel: true}}}, backend: Backend{
-		RedirectURL: "https://target.example/welcome?fixed=1",
-		PanelPath: "/secret/",
-		SubscriptionPaths: []string{"/sub/"},
-		Routes: map[string][]Route{"panel.example": {{Path: "/vpn"}}},
-	}}
+	r := &frontRuntime{
+		cfg: DomainFrontConfig{
+			PublicPort: 443,
+			Domains: []DomainFrontDomain{
+				{Name: "panel.example", Enabled: true, Panel: true},
+			},
+		},
+		backend: Backend{
+			RedirectURL:       "https://target.example/welcome?fixed=1",
+			PanelPath:         "/secret/",
+			SubscriptionPaths: []string{"/sub/"},
+			Routes: map[string][]Route{
+				"panel.example": {{Path: "/vpn"}},
+			},
+		},
+	}
 	for _, method := range []string{http.MethodGet, http.MethodHead} {
 		response := httptest.NewRecorder()
 		req := httptest.NewRequest(method, "http://panel.example/?secret=do-not-forward", nil)
