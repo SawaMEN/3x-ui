@@ -61,6 +61,7 @@ interface NodeRouteProbe {
   tag: string;
   reachable: boolean;
   checkedTarget: boolean;
+  inconclusive?: boolean;
   transport: string;
   latencyMs?: number;
   detail: string;
