@@ -439,9 +439,14 @@ func (a *SUBController) buildSubPageData(c *gin.Context) (PageData, bool) {
 	subReq := a.subService.ForRequest(host)
 	subReq.subscriptionBody = false
 	subs, emails, lastOnline, traffic, err := subReq.getSubs(subId)
-	if err != nil || subs == nil {
+	if err != nil || (subs == nil && !a.hasEnabledMASQUESubscription(subId)) {
 		writeSubError(c, err)
 		return PageData{}, false
+	}
+	// MASQUE has no raw share URI; keep its subscription page accessible even
+	// when it is the subscriber's only enabled inbound.
+	if subs == nil {
+		subs = []string{}
 	}
 	subURL, subJsonURL, subClashURL := subReq.BuildURLs(a.subPath, a.subJsonPath, a.subClashPath, subId)
 	if !a.jsonEnabled {
