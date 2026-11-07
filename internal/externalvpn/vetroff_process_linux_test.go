@@ -3,12 +3,14 @@
 package externalvpn
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -67,7 +69,7 @@ time.sleep(60)
 	deadline = time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		raw, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
-		if os.IsNotExist(err) {
+		if os.IsNotExist(err) || errors.Is(err, syscall.ESRCH) {
 			return
 		}
 		if err != nil {
