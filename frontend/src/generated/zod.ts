@@ -1012,6 +1012,9 @@ export const ManagerRelayInputSchema = z.object({
 export type ManagerRelayInput = z.infer<typeof ManagerRelayInputSchema>;
 
 export const ManagerSnapshotSchema = z.object({
+  activeOperations: z.array(z.lazy(() => ManagerOperationSchema)),
+  allSubscriptionsTotal: z.number().int(),
+  autoRotateTotal: z.number().int(),
   clients: z.record(z.string(), z.lazy(() => ManagerClientInfoSchema)),
   domains: z.array(z.lazy(() => ManagerDomainSchema)),
   operationTotal: z.number().int(),
