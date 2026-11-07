@@ -161,7 +161,12 @@ export default function QuickRoutingPanel({
         label: 'Нода · ' + (selected[0]?.nodeName || String(nodeId)),
         options: selected.map((node) => ({
           value: node.tag,
-          label: (node.remark || node.protocol) + ' · ' + node.protocol + ':' + node.port +
+          label:
+            (node.remark || node.protocol) +
+            ' · ' +
+            node.protocol +
+            ':' +
+            node.port +
             (node.available ? '' : ' · ' + (node.reason || 'Недоступно')),
           disabled: !node.available,
         })),
@@ -175,10 +180,10 @@ export default function QuickRoutingPanel({
     if (!target || !target.available) {
       throw new Error(target?.reason || 'Выбранное подключение ноды недоступно.');
     }
-    const response = await HttpUtil.post<{ tag: string }>(
-      '/panel/api/xray/node-route/ensure',
-      { inboundId: target.inboundId, core: engine },
-    );
+    const response = await HttpUtil.post<{ tag: string }>('/panel/api/xray/node-route/ensure', {
+      inboundId: target.inboundId,
+      core: engine,
+    });
     if (!response?.success || response.obj?.tag !== tag) {
       throw new Error(response?.msg || 'Не удалось подготовить подключение ноды.');
     }
@@ -388,7 +393,9 @@ export default function QuickRoutingPanel({
             </Tag>
             <ArrowRightOutlined aria-hidden="true" />
             <Tag color={draft.target === '@reject' || draft.target === 'blocked' ? 'red' : 'blue'}>
-              {nodeTargets.find((node) => node.tag === draft.target)?.remark || draft.target || 'Исходящий'}
+              {nodeTargets.find((node) => node.tag === draft.target)?.remark ||
+                draft.target ||
+                'Исходящий'}
             </Tag>
           </div>
           {error && <Alert type="error" showIcon title={error} />}
@@ -399,7 +406,8 @@ export default function QuickRoutingPanel({
               icon={<PlusOutlined aria-hidden="true" />}
               loading={creating}
               disabled={
-                creating || (draft.match === 'inbound'
+                creating ||
+                (draft.match === 'inbound'
                   ? draft.inboundTags.length === 0 || !draft.target
                   : !draft.values.trim() || !draft.target)
               }
