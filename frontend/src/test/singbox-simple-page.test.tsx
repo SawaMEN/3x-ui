@@ -59,6 +59,50 @@ function mount(path = '/singbox') {
 }
 
 describe('simple sing-box page', () => {
+  it('does not flag a generated node-route destination as missing in the page health banner', async () => {
+    const saved = structuredClone(config);
+    saved.route.rules = [
+      { action: 'reject', domain: ['ads.test'] },
+      { action: 'route', outbound: 'direct', domain_suffix: ['one.test'] },
+      { action: 'route', outbound: 'direct', domain_suffix: ['two.test'] },
+      { action: 'route', outbound: 'node-route-36', domain_suffix: ['three.test'] },
+    ];
+    vi.mocked(HttpUtil.get).mockResolvedValue({
+      success: true,
+      msg: '',
+      obj: {
+        config: saved,
+        running: true,
+        version: '1.14.0',
+        managedSections: ['inbounds'],
+      },
+    });
+    mount();
+    await screen.findByText('Логирование');
+    expect(screen.queryByText(/Проверка конфигурации: [1-9]/)).toBeNull();
+    expect(screen.queryByText(/отсутствующий outbound "node-route-36"/)).toBeNull();
+  });
+
+  it('still warns when a route refers to a missing ordinary outbound', async () => {
+    const saved = structuredClone(config);
+    saved.route.rules = [{ action: 'route', outbound: 'missing-proxy' }];
+    vi.mocked(HttpUtil.get).mockResolvedValue({
+      success: true,
+      msg: '',
+      obj: {
+        config: saved,
+        running: true,
+        version: '1.14.0',
+        managedSections: ['inbounds'],
+      },
+    });
+    mount();
+    expect(await screen.findByText('Проверка конфигурации: 1 предупреждений')).toBeTruthy();
+    expect(
+      screen.getByText('Route rule #1 ссылается на отсутствующий outbound "missing-proxy"'),
+    ).toBeTruthy();
+  });
+
   it('exposes the catalog in current core settings and saves a managed native rule', async () => {
     vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
       success: true,
