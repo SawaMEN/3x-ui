@@ -131,30 +131,30 @@ func nodeRouteSource(inboundID int) (*model.Inbound, *model.Node, error) {
 
 // EnsureNodeRoute provisions one dedicated, unlimited service credential on the
 // node's existing inbound. Never borrow a user's password or reveal it to UI.
-func EnsureNodeRoute(userID, inboundID int, core string) (string, error) {
+func EnsureNodeRoute(userID, inboundID int, core string) (string, bool, error) {
     nodeRouteProvisionMu.Lock()
     defer nodeRouteProvisionMu.Unlock()
     inbound, node, err := nodeRouteSource(inboundID)
     if err != nil {
-        return "", err
+        return "", false, err
     }
     if inbound.UserId != userID {
-        return "", fmt.Errorf("inbound is not available to this user")
+        return "", false, fmt.Errorf("inbound is not available to this user")
     }
     if node.Status != "online" {
-        return "", fmt.Errorf("node is offline")
+        return "", false, fmt.Errorf("node is offline")
     }
     if !nodeRouteProtocolSupported(string(inbound.Protocol), core) {
-        return "", fmt.Errorf("inbound protocol %s is not supported by %s", inbound.Protocol, core)
+        return "", false, fmt.Errorf("inbound protocol %s is not supported by %s", inbound.Protocol, core)
     }
     email := nodeRouteClientEmail(inboundID)
     var existing model.ClientRecord
     err = database.GetDB().Where("email = ?", email).First(&existing).Error
     if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-        return "", err
+        return "", false, err
     }
     if err == nil && !existing.Enable {
-        return "", fmt.Errorf("node route service client is disabled")
+        return "", false, fmt.Errorf("node route service client is disabled")
     }
     client := model.Client{
         Email: email, Enable: true, SubID: uuid.NewString(),
@@ -163,18 +163,18 @@ func EnsureNodeRoute(userID, inboundID int, core string) (string, error) {
     if err == nil {
         client.SubID = existing.SubID
         if client.SubID == "" {
-            return "", fmt.Errorf("node route service client is missing subId")
+            return "", false, fmt.Errorf("node route service client is missing subId")
         }
     }
-    if _, err := (&ClientService{}).Create(&InboundService{}, &ClientCreatePayload{
+    needRestart, err := (&ClientService{}).Create(&InboundService{}, &ClientCreatePayload{
         Client: client, InboundIds: []int{inboundID},
     }); err != nil {
-        return "", fmt.Errorf("provision node route client: %w", err)
+        return "", needRestart, fmt.Errorf("provision node route client: %w", err)
     }
     if _, err := resolveNodeRouteOutbound(inboundID, core); err != nil {
-        return "", err
+        return "", needRestart, err
     }
-    return nodeRouteTag(inboundID), nil
+    return nodeRouteTag(inboundID), needRestart, nil
 }
 
 // resolveNodeRouteOutbound derives the wire client from the same share links
