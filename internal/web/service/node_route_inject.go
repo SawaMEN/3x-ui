@@ -85,7 +85,7 @@ func injectSingBoxNodeRoutes(cfg *singbox.Config) error {
     if len(ids) == 0 {
         return nil
     }
-    used := make(map[string]bool, len(cfg.Outbounds)+len(cfg.Endpoints))
+    used := make(map[string]bool)
     for _, outbound := range cfg.Outbounds {
         if tag, ok := outbound["tag"].(string); ok {
             used[tag] = true
