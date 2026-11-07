@@ -22,6 +22,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 )
 
 type OutboundSettings struct {
@@ -60,7 +61,7 @@ var (
 
 func IsAdditionalOutbound(raw map[string]any) bool {
 	p, _ := raw["protocol"].(string)
-	return strings.EqualFold(p, "fptn") || strings.EqualFold(p, "openflux") || strings.EqualFold(p, "vetroff")
+	return strings.EqualFold(p, "fptn") || strings.EqualFold(p, "openflux") || strings.EqualFold(p, "vetroff") || strings.EqualFold(p, "sudoku")
 }
 
 func ValidateAdditionalOutbound(raw map[string]any) error {
@@ -75,6 +76,9 @@ func ValidateAdditionalOutbound(raw map[string]any) error {
 	p, _ := raw["protocol"].(string)
 	if strings.EqualFold(p, "vetroff") {
 		return validateVetroffOutbound(s)
+	}
+	if strings.EqualFold(p, "sudoku") {
+		return validateSudokuOutbound(s)
 	}
 	if strings.EqualFold(p, "fptn") {
 		if !strings.HasPrefix(s.Token, "fptn:") {
@@ -282,7 +286,7 @@ func waitOutboundStartup(tag string, proc *managedOutbound) error {
 			return fptnExecReady(proc.container, `ip -4 -o addr show dev fptn0 | grep -q ' inet ' && [ -n "$(ss -H -lnt 'sport = :1080')" ]`)
 		})
 	}
-	if !strings.EqualFold(protocol, "vetroff") {
+	if !strings.EqualFold(protocol, "vetroff") && !strings.EqualFold(protocol, "sudoku") {
 		timer := time.NewTimer(500 * time.Millisecond)
 		defer timer.Stop()
 		select {
@@ -292,18 +296,24 @@ func waitOutboundStartup(tag string, proc *managedOutbound) error {
 			return nil
 		}
 	}
-	// Vetroff prepares its TLS/Necko runtime before binding the local SOCKS
-	// listener. Being alive for 500 ms does not mean the outbound is usable.
-	deadline := time.NewTimer(10 * time.Second)
+	// Vetroff prepares its TLS/Necko runtime before listening, and a Sudoku
+	// container needs time to initialize. A live process is not yet a usable
+	// SOCKS bridge. The old 10s budget spuriously failed slow Necko starts.
+	label := "VetroffProxy"
+	if strings.EqualFold(protocol, "sudoku") {
+		label = "Sudoku"
+	}
+	const startupTimeout = 60 * time.Second
+	deadline := time.NewTimer(startupTimeout)
 	defer deadline.Stop()
 	poll := time.NewTicker(100 * time.Millisecond)
 	defer poll.Stop()
 	for {
 		select {
 		case <-proc.done:
-			return fmt.Errorf("VetroffProxy outbound %q exited before SOCKS was ready: %s", tag, proc.cmd.ProcessState)
+			return fmt.Errorf("%s outbound %q exited before SOCKS was ready: %s (inspect sidecar logs)", label, tag, proc.cmd.ProcessState)
 		case <-deadline.C:
-			return fmt.Errorf("VetroffProxy outbound %q did not start its loopback SOCKS listener", tag)
+			return fmt.Errorf("%s outbound %q did not start its loopback SOCKS listener within %s (inspect sidecar logs for initialization errors)", label, tag, startupTimeout)
 		case <-poll.C:
 			if vetroffSocksReady(proc.port) {
 				return nil
@@ -442,7 +452,49 @@ func startOutbound(tag string, proc *managedOutbound) error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	proc.cancel = cancel
-	if strings.EqualFold(p, "vetroff") {
+	if strings.EqualFold(p, "sudoku") {
+		// Upstream Sudoku listens on every interface. Never launch it on the
+		// host: Docker publishes just the selected loopback SOCKS bridge.
+		cfg, err := sudokuOutboundConfig(s.Link)
+		if err != nil {
+			cancel()
+			return err
+		}
+		path := filepath.Join(folder, "sudoku.json")
+		if err := writePrivate(path, cfg); err != nil {
+			cancel()
+			return err
+		}
+		executable, err := filepath.Abs(sudoku.GetBinaryPath(config.GetBinFolderPath()))
+		if err != nil {
+			cancel()
+			return err
+		}
+		if !sudoku.IsInstalled(config.GetBinFolderPath()) {
+			cancel()
+			return fmt.Errorf("Sudoku node routing requires the installed official Sudoku component")
+		}
+		// Debian supports both statically and dynamically linked official Go releases.
+		const image = "debian:bookworm-slim"
+		checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
+		checkErr := exec.CommandContext(checkCtx, "docker", "image", "inspect", image).Run()
+		checkCancel()
+		if checkErr != nil {
+			cancel()
+			return fmt.Errorf("Sudoku node routing needs a running Docker daemon and the local %s image (docker pull %s): %w", image, image, checkErr)
+		}
+		proc.container = containerName(0) + "-out-" + suffix
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = exec.CommandContext(cleanupCtx, "docker", "rm", "-f", proc.container).Run()
+		cleanupCancel()
+		proc.cmd = exec.CommandContext(ctx, "docker", "run", "--rm",
+			"--name", proc.container, "--read-only", "--cap-drop=ALL",
+			"--security-opt=no-new-privileges", "--pids-limit=128",
+			"--publish", fmt.Sprintf("127.0.0.1:%d:1080/tcp", proc.port),
+			"--mount", "type=bind,src="+executable+",dst=/usr/local/bin/sudoku-tunnel,readonly",
+			"--mount", "type=bind,src="+path+",dst=/run/sudoku.json,readonly",
+			image, "/usr/local/bin/sudoku-tunnel", "-c", "/run/sudoku.json")
+	} else if strings.EqualFold(p, "vetroff") {
 		connection := filepath.Join(folder, "connection.txt")
 		if err := writePrivate(connection, []byte(s.Link+"\n")); err != nil {
 			cancel()

@@ -57,8 +57,8 @@ func nodeRouteClientEmail(inboundID int) string {
 
 func nodeRouteProtocolSupported(protocol, core string) bool {
 	switch strings.ToLower(strings.TrimSpace(protocol)) {
-	case "vless", "vmess", "trojan", "shadowsocks", "vetroff":
-		// VetroffProxy uses a managed, loopback-only SOCKS sidecar on both cores.
+	case "vless", "vmess", "trojan", "shadowsocks", "vetroff", "sudoku":
+		// VetroffProxy and Sudoku use managed SOCKS sidecars on both cores.
 		return true
 	case "hysteria", "tuic", "anytls", "naive", "snell", "shadowtls", "mieru":
 		return core != "xray"
@@ -233,13 +233,14 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
 	var lastErr error
 	for _, raw := range links {
 		var outbound map[string]any
-		if inbound.Protocol == model.VetroffProxy {
-			if !strings.HasPrefix(raw, "vetroff://") {
-				lastErr = fmt.Errorf("not a VetroffProxy connection link")
+		if inbound.Protocol == model.VetroffProxy || inbound.Protocol == model.Sudoku {
+			scheme := string(inbound.Protocol) + "://"
+			if !strings.HasPrefix(raw, scheme) {
+				lastErr = fmt.Errorf("not a %s connection link", inbound.Protocol)
 				continue
 			}
 			outbound = map[string]any{
-				"tag": nodeRouteTag(inboundID), "protocol": "vetroff",
+				"tag": nodeRouteTag(inboundID), "protocol": string(inbound.Protocol),
 				"settings": map[string]any{"link": raw},
 			}
 			lastErr = externalvpn.ValidateAdditionalOutbound(outbound)
