@@ -293,7 +293,7 @@ describe('domain and TLS dashboard', () => {
     await waitFor(() => expect(f.applied?.email).toBe('draft@example.com'));
   });
 
-  it('recommends a measured HTTPS website without directly saving the settings', async () => {
+  it('searches neighboring websites without enabling redirects or changing settings', async () => {
     fixture();
     server.use(
       http.post('*/panel/api/domains/recommend', () =>
@@ -309,7 +309,7 @@ describe('domain and TLS dashboard', () => {
                 status: 200,
                 pathStatus: 200,
                 latencyMs: 42,
-                score: 90,
+                sniLatencyMs: 19,
               },
               {
                 url: 'https://www.wikipedia.org/',
@@ -317,7 +317,7 @@ describe('domain and TLS dashboard', () => {
                 status: 0,
                 pathStatus: 0,
                 latencyMs: 0,
-                score: 0,
+                sniLatencyMs: 0,
                 error: 'unreachable',
               },
             ],
@@ -337,19 +337,20 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Find the best website automatically' }),
+      await screen.findByRole('button', { name: 'Find neighboring websites' }),
     );
-    await waitFor(() =>
-      expect(update).toHaveBeenCalledWith({
-        rootRedirectEnable: true,
-        rootRedirectURL: 'https://ya.ru/',
-      }),
-    );
-    expect(await screen.findByText(/Recommended website: https:\/\/ya.ru\//)).toBeTruthy();
+    expect(await screen.findByText(/Fastest website: https:\/\/ya.ru\//)).toBeTruthy();
+    expect(update).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
     const choose = screen.getAllByRole('button', { name: 'Choose' });
     expect((choose[0] as HTMLButtonElement).disabled).toBe(false);
     expect((choose[1] as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(choose[0]);
+    expect(update).toHaveBeenCalledWith({ rootRedirectURL: 'https://ya.ru/' });
+    expect(update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ rootRedirectEnable: true }),
+    );
+    expect(save).not.toHaveBeenCalled();
   });
 
   it('does not enable redirect if no destination is reachable', async () => {
@@ -368,7 +369,7 @@ describe('domain and TLS dashboard', () => {
                 status: 0,
                 pathStatus: 0,
                 latencyMs: 0,
-                score: 0,
+                sniLatencyMs: 0,
               },
             ],
           },
@@ -385,7 +386,7 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Find the best website automatically' }),
+      await screen.findByRole('button', { name: 'Find neighboring websites' }),
     );
     expect((await screen.findAllByText(/No reachable website was found/)).length).toBeGreaterThan(
       0,
