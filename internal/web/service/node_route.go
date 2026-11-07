@@ -168,7 +168,8 @@ func EnsureNodeRoute(userID, inboundID int, core string) (string, bool, error) {
     }
     needRestart, err := (&ClientService{}).Create(&InboundService{}, &ClientCreatePayload{
         Client: client, InboundIds: []int{inboundID},
-    }); err != nil {
+    })
+    if err != nil {
         return "", needRestart, fmt.Errorf("provision node route client: %w", err)
     }
     if _, err := resolveNodeRouteOutbound(inboundID, core); err != nil {
