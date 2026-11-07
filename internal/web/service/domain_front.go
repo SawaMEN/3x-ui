@@ -78,7 +78,8 @@ func DomainFrontStatus() (domainfront.DomainFrontStatus, error) {
 }
 
 func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (domainfront.DomainFrontStatus, error) {
-	cfg = privateDomainFrontConfig(cfg)
+	// Validate the submitted configuration as-is. Legacy stored panel flags are
+	// stripped when loaded, but explicit new requests must be rejected.
 	domainFrontState.Lock()
 	defer domainFrontState.Unlock()
 	s := &SettingService{}
