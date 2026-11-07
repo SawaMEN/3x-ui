@@ -102,7 +102,9 @@ export default function SubscriptionEditor({
     const parsed = SubscriptionSchema.safeParse(current);
     setChecked(null);
     if (!parsed.success) {
-      setError(parsed.error.issues.map((issue) => issue.path.join('.') + ': ' + issue.message).join('\n'));
+      setError(
+        parsed.error.issues.map((issue) => issue.path.join('.') + ': ' + issue.message).join('\n'),
+      );
       return false;
     }
     setSaving(true);
@@ -125,8 +127,12 @@ export default function SubscriptionEditor({
       const result = PreflightSchema.parse(response.obj);
       setChecked({ ready: result.ready, signature });
       if (!result.ready) {
-        setError(result.entries.filter((entry) => !entry.ready)
-          .map((entry) => entry.index + ': ' + entry.message).join('\n'));
+        setError(
+          result.entries
+            .filter((entry) => !entry.ready)
+            .map((entry) => entry.index + ': ' + entry.message)
+            .join('\n'),
+        );
       }
       return result.ready;
     } catch (e) {
@@ -144,7 +150,9 @@ export default function SubscriptionEditor({
     const parsed = SubscriptionSchema.safeParse(form.getValues());
     if (!parsed.success) {
       setChecked(null);
-      setError(parsed.error.issues.map((issue) => issue.path.join('.') + ': ' + issue.message).join('\n'));
+      setError(
+        parsed.error.issues.map((issue) => issue.path.join('.') + ': ' + issue.message).join('\n'),
+      );
       return;
     }
     setSaving(true);
@@ -166,10 +174,14 @@ export default function SubscriptionEditor({
       style={{ top: 12 }}
       styles={{ body: { maxHeight: 'calc(100dvh - 190px)', overflowY: 'auto' } }}
       mask={{ closable: false }}
-      onCancel={() => { if (!saving) onClose(); }}
+      onCancel={() => {
+        if (!saving) onClose();
+      }}
       footer={
         <Space wrap>
-          <Button disabled={saving} onClick={onClose}>{t('cancel')}</Button>
+          <Button disabled={saving} onClick={onClose}>
+            {t('cancel')}
+          </Button>
           <Button loading={saving} disabled={saving} onClick={() => void check()}>
             {m('preflight')}
           </Button>
@@ -219,8 +231,14 @@ export default function SubscriptionEditor({
                         loading={clients.isFetching}
                         options={[
                           { value: 0, label: m('autoClient') },
-                          ...(value.clientId > 0 && !(clients.data ?? []).some((c) => c.id === value.clientId)
-                            ? [{ value: value.clientId, label: m('client') + ' #' + value.clientId }]
+                          ...(value.clientId > 0 &&
+                          !(clients.data ?? []).some((c) => c.id === value.clientId)
+                            ? [
+                                {
+                                  value: value.clientId,
+                                  label: m('client') + ' #' + value.clientId,
+                                },
+                              ]
                             : []),
                           ...(clients.data ?? []).map((c) => ({
                             value: c.id,
@@ -548,11 +566,11 @@ export default function SubscriptionEditor({
               form.setValue(`entries.${index}.nodeId`, payload.nodeId ?? 0);
               // A malformed draft must not crash the entire subscription editor.
               try {
-                const stream = typeof payload.streamSettings === 'string'
-                  ? JSON.parse(payload.streamSettings || '{}')
-                  : payload.streamSettings;
-                if (stream?.security !== 'reality')
-                  form.setValue(`entries.${index}.sni`, '');
+                const stream =
+                  typeof payload.streamSettings === 'string'
+                    ? JSON.parse(payload.streamSettings || '{}')
+                    : payload.streamSettings;
+                if (stream?.security !== 'reality') form.setValue(`entries.${index}.sni`, '');
               } catch {
                 // Preserve SNI until the malformed settings are corrected.
               }
