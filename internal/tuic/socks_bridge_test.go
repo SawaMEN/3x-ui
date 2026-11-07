@@ -414,3 +414,39 @@ func TestSOCKSPortForInboundKeepsEverySlotInsideTheWindow(t *testing.T) {
 		t.Fatalf("expected 64001 for id 0, got %d", got)
 	}
 }
+
+func TestSocksUDPSessionReceiveRejectsMalformedDomain(t *testing.T) {
+	server, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	client, err := net.DialUDP("udp4", nil, server.LocalAddr().(*net.UDPAddr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	session := &SocksUDPSession{udpConn: client}
+	for _, tc := range []struct {
+		name   string
+		packet []byte
+	}{
+		{name: "missing domain length", packet: []byte{0, 0, 0, 3}},
+		{name: "empty domain", packet: []byte{0, 0, 0, 3, 0, 0, 53}},
+		{name: "truncated domain", packet: []byte{0, 0, 0, 3, 4, 't', 'e'}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := server.WriteToUDP(tc.packet, client.LocalAddr().(*net.UDPAddr)); err != nil {
+				t.Fatal(err)
+			}
+			if err := client.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			addr, payload, err := session.Receive(make([]byte, 32))
+			if err == nil || err.Error() != "tuic socks: truncated domain UDP reply" {
+				t.Fatalf("Receive(%x) = (%v, %x, %v), want truncated domain error", tc.packet, addr, payload, err)
+			}
+		})
+	}
+}
