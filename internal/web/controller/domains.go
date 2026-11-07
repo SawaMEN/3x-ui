@@ -94,5 +94,8 @@ func (a *DomainController) check(c *gin.Context) {
 // recommend probes a fixed allowlist of HTTPS decoy websites.
 // The endpoint never accepts external URLs, avoiding an open SSRF primitive.
 func (a *DomainController) recommend(c *gin.Context) {
-	jsonObj(c, domainfront.ScanDecoySites(c.Request.Context()), nil)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 35*time.Second)
+	defer cancel()
+	result, err := service.ScanRedirectSites(ctx)
+	jsonObj(c, result, err)
 }
