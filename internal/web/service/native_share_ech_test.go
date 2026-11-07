@@ -173,8 +173,8 @@ func TestHysteriaECHNativeURIOptions(t *testing.T) {
 		{"tls.ech": {encoded}},
 		{"tls.ech.config": {encoded}, "tls.ech.enabled": {"true"}},
 	} {
-		ech := map[string]any{"enabled": true}
-		tls := map[string]any{"enabled": true, "ech": ech}
+		echSettings := map[string]any{"enabled": true}
+		tls := map[string]any{"enabled": true, "ech": echSettings}
 		out := map[string]any{"type": "hysteria2", "tls": tls}
 		if err := applyNativeShareOptions(out, query); err != nil {
 			t.Fatal(err)
