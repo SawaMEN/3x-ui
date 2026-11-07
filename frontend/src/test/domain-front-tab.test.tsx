@@ -379,9 +379,9 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
-    expect((await screen.findAllByText(/No suitable neighboring websites were found/)).length).toBeGreaterThan(
-      0,
-    );
+    expect(
+      (await screen.findAllByText(/No suitable neighboring websites were found/)).length,
+    ).toBeGreaterThan(0);
     expect(update).not.toHaveBeenCalled();
     expect(recommend).toHaveBeenCalledWith(
       '/panel/api/domains/recommend',
