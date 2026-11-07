@@ -60,8 +60,21 @@ func TestIsolatedProcessNeverAdoptsManagedProcess(t *testing.T) {
 	if _, err := os.Readlink("/proc/" + strconv.Itoa(production.Process.Pid) + "/exe"); os.IsPermission(err) || os.IsNotExist(err) {
 		t.Skipf("child process identity inspection unavailable: %v", err)
 	}
-	if !NewProcess(filepath.Join(dir, "managed.json")).IsRunning() {
-		t.Fatal("managed process was not discovered")
+	managed := NewProcess(filepath.Join(dir, "managed.json"))
+	// On busy CI runners the child may be alive before all of its procfs
+	// identity information is visible. Give discovery a bounded startup window.
+	deadline := time.Now().Add(5 * time.Second)
+	for !managed.IsRunning() {
+		if time.Now().After(deadline) {
+			t.Fatalf("managed process was not discovered: pid=%d binary=%q binaryMatch=%t configMatch=%t",
+				production.Process.Pid, managed.binaryPath(),
+				processMatchesBinary(production.Process.Pid, managed.binaryPath()),
+				processMatchesConfig(production.Process.Pid, managed.binaryPath(), managed.config, managed.runCommand()))
+		}
+		if err := production.Process.Signal(syscall.Signal(0)); err != nil {
+			t.Fatalf("managed process exited before discovery: %v", err)
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
 	if processMatchesConfig(production.Process.Pid, binary, filepath.Join(dir, "managed.json"), "run") {
 		t.Fatal("Hiddify raw runtime would adopt a client-mode run process")
