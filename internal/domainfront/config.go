@@ -68,6 +68,7 @@ type Backend struct {
 	PanelHost          string
 	PanelPath          string
 	SubscriptionPaths  []string
+	ProtectedPaths     []string // Legacy application paths served by NoRoute.
 	Routes             map[string][]Route
 	RedirectURL        string
 }
