@@ -46,7 +46,7 @@ func TestNodeRouteReferencedDestinationsOnly(t *testing.T) {
 }
 
 func TestNodeRouteProtocolCompatibility(t *testing.T) {
-	for _, protocol := range []string{"vless", "vmess", "trojan", "shadowsocks"} {
+	for _, protocol := range []string{"vless", "vmess", "trojan", "shadowsocks", "vetroff"} {
 		if !nodeRouteProtocolSupported(protocol, "xray") || !nodeRouteProtocolSupported(protocol, "sing-box") {
 			t.Errorf("%q must be supported by both routing engines", protocol)
 		}
