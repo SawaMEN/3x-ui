@@ -26,7 +26,7 @@ func injectXrayNodeRoutes(cfg *xray.Config) error {
 		return nil
 	}
 	var routing struct {
-		Rules []map[string]any `json:"rules"`
+		Rules	[]map[string]any	`json:"rules"`
 	}
 	if err := json.Unmarshal(cfg.RouterConfig, &routing); err != nil {
 		return err
