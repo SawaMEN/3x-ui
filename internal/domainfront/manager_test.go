@@ -49,7 +49,7 @@ func TestDomainRolesRouteOnlyTheirPermittedPaths(t *testing.T) {
 		{Name: "relay.example.com", Mode: "relay", Enabled: true, Origin: relay.URL},
 		{Name: "off.example.com", Mode: "direct", Enabled: false},
 	}
-	backend := Backend{SubscriptionTarget: sub.URL, PanelTarget: panel.URL, PanelHost: "private.example.com", PanelPath: "/secret/", SubscriptionPaths: []string{"/sub/", "/json/", "/clash/", "/assets/"}, Routes: map[string][]Route{}, RedirectURL: "https://destination.example.com/"}
+	backend := Backend{SubscriptionTarget: sub.URL, PanelTarget: panel.URL, PanelHost: "private.example.com", PanelPath: "/secret/", SubscriptionPaths: []string{"/sub/", "/json/", "/clash/", "/assets/"}, ProtectedPaths: []string{"/LegacySecret"}, Routes: map[string][]Route{}, RedirectURL: "https://destination.example.com/"}
 	for _, d := range cfg.Domains {
 		backend.Routes[d.Name] = []Route{{Path: "/vpn", Target: vpn.URL}}
 	}
@@ -68,6 +68,8 @@ func TestDomainRolesRouteOnlyTheirPermittedPaths(t *testing.T) {
 		{"only.example.com", "/assets/app.js", 200, "subscription:only.example.com:/assets/app.js?"},
 		{"only.example.com", "/secret/panel/", 404, "404 page not found\n"},
 		{"only.example.com", "/vpn", 404, "404 page not found\n"},
+		{"direct.example.com", "/LegacySecret/token", 404, "404 page not found\n"},
+		{"only.example.com", "/LegacySecret/token", 404, "404 page not found\n"},
 		{"direct.example.com", "/secret/panel/", 200, "panel:private.example.com"},
 		{"direct.example.com", "/secret/unknown/spa/page", 200, "panel:private.example.com"},
 		{"direct.example.com", "/vpn/session", 200, "vpn"},
