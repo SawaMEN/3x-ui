@@ -27,7 +27,7 @@ func TestNodeRouteIsUDP(t *testing.T) {
 	tests := []struct {
 		protocol model.Protocol
 		settings string
-		want bool
+		want     bool
 	}{
 		{model.VLESS, "{}", false},
 		{model.Hysteria, "{}", true},
