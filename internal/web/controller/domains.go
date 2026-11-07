@@ -23,6 +23,7 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.GET("/status", a.status)
 	g.POST("/apply", a.apply)
 	g.POST("/check", a.check)
+	g.POST("/recommend", a.recommend)
 }
 
 func (a *DomainController) status(c *gin.Context) {
@@ -88,4 +89,10 @@ func (a *DomainController) check(c *gin.Context) {
 	result.DaysLeft = int(math.Ceil(time.Until(cert.NotAfter).Hours() / 24))
 	result.Issuer = cert.Issuer.CommonName
 	jsonObj(c, result, nil)
+}
+
+// recommend probes a fixed allowlist of HTTPS decoy websites.
+// The endpoint never accepts external URLs, avoiding an open SSRF primitive.
+func (a *DomainController) recommend(c *gin.Context) {
+	jsonObj(c, domainfront.ScanDecoySites(c.Request.Context()), nil)
 }
