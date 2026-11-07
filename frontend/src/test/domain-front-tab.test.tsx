@@ -1,5 +1,6 @@
 import { MemoryRouter } from 'react-router';
 import { AllSetting } from '@/models/setting';
+import { HttpUtil, Msg } from '@/utils';
 import SubscriptionDomains from '@/pages/settings/SubscriptionDomains';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
@@ -295,35 +296,32 @@ describe('domain and TLS dashboard', () => {
 
   it('searches neighboring websites without enabling redirects or changing settings', async () => {
     fixture();
-    server.use(
-      http.post('*/panel/api/domains/recommend', () =>
-        HttpResponse.json({
-          success: true,
-          obj: {
-            checkedAt: 123,
-            recommended: 'https://ya.ru/',
-            sites: [
-              {
-                url: 'https://ya.ru/',
-                available: true,
-                status: 200,
-                pathStatus: 200,
-                latencyMs: 42,
-                sniLatencyMs: 19,
-              },
-              {
-                url: 'https://www.wikipedia.org/',
-                available: false,
-                status: 0,
-                pathStatus: 0,
-                latencyMs: 0,
-                sniLatencyMs: 0,
-                error: 'unreachable',
-              },
-            ],
+    // UI behavior is tested independently of MSW's fetch interception,
+    // which can drop a request under parallel CI worker contention.
+    const recommend = vi.spyOn(HttpUtil, 'post').mockResolvedValueOnce(
+      new Msg(true, '', {
+        checkedAt: 123,
+        recommended: 'https://ya.ru/',
+        sites: [
+          {
+            url: 'https://ya.ru/',
+            available: true,
+            status: 200,
+            pathStatus: 200,
+            latencyMs: 42,
+            sniLatencyMs: 19,
           },
-        }),
-      ),
+          {
+            url: 'https://www.wikipedia.org/',
+            available: false,
+            status: 0,
+            pathStatus: 0,
+            latencyMs: 0,
+            sniLatencyMs: 0,
+            error: 'unreachable',
+          },
+        ],
+      }),
     );
     const update = vi.fn();
     const save = vi.fn().mockResolvedValue(true);
@@ -347,30 +345,30 @@ describe('domain and TLS dashboard', () => {
     expect(update).toHaveBeenCalledWith({ rootRedirectURL: 'https://ya.ru/' });
     expect(update).not.toHaveBeenCalledWith(expect.objectContaining({ rootRedirectEnable: true }));
     expect(save).not.toHaveBeenCalled();
+    expect(recommend).toHaveBeenCalledWith(
+      '/panel/api/domains/recommend',
+      {},
+      expect.objectContaining({ silent: true, timeout: 75_000 }),
+    );
   });
 
   it('does not enable redirect if no destination is reachable', async () => {
     fixture();
-    server.use(
-      http.post('*/panel/api/domains/recommend', () =>
-        HttpResponse.json({
-          success: true,
-          obj: {
-            checkedAt: 123,
-            recommended: '',
-            sites: [
-              {
-                url: 'https://ya.ru/',
-                available: false,
-                status: 0,
-                pathStatus: 0,
-                latencyMs: 0,
-                sniLatencyMs: 0,
-              },
-            ],
+    const recommend = vi.spyOn(HttpUtil, 'post').mockResolvedValueOnce(
+      new Msg(true, '', {
+        checkedAt: 123,
+        recommended: '',
+        sites: [
+          {
+            url: 'https://ya.ru/',
+            available: false,
+            status: 0,
+            pathStatus: 0,
+            latencyMs: 0,
+            sniLatencyMs: 0,
           },
-        }),
-      ),
+        ],
+      }),
     );
     const update = vi.fn();
     renderWithProviders(
@@ -386,6 +384,11 @@ describe('domain and TLS dashboard', () => {
       0,
     );
     expect(update).not.toHaveBeenCalled();
+    expect(recommend).toHaveBeenCalledWith(
+      '/panel/api/domains/recommend',
+      {},
+      expect.objectContaining({ silent: true, timeout: 75_000 }),
+    );
   });
 
   it('saves root redirect settings from the top of the domain panel', async () => {
