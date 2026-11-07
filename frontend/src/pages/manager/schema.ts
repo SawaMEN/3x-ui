@@ -79,6 +79,7 @@ export const SnapshotSchema = z.object({
   ),
   operationTotal: z.number(),
   subscriptionTotal: z.number().default(0),
+  autoRotateTotal: z.number().default(0),
   pendingOperations: z.number().default(0),
   subscriptionPage: z.number().default(1),
   pageSize: z.number().default(25),
@@ -97,6 +98,7 @@ export const SnapshotSchema = z.object({
 export const ClientOptionsSchema = z.object({
   items: z.array(z.object({ id: z.number(), email: z.string() })),
 });
+export type ManagerSnapshot = z.infer<typeof SnapshotSchema>;
 export type Subscription = z.infer<typeof SubscriptionSchema>;
 export type Relay = z.infer<typeof RelaySchema>;
 export const newEntry = () =>
