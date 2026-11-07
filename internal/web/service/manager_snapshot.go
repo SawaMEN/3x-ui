@@ -29,6 +29,7 @@ type ManagerListOptions struct {
 
 type ManagerSnapshot struct {
 	SubscriptionTotal int64                        `json:"subscriptionTotal"`
+	AutoRotateTotal   int64                        `json:"autoRotateTotal"`
 	PendingOperations int64                        `json:"pendingOperations"`
 	SubscriptionPage  int                          `json:"subscriptionPage"`
 	PageSize          int                          `json:"pageSize"`
@@ -73,6 +74,9 @@ func (s *ManagerService) Snapshot(owner, page int, state, kind string, options .
 				sub.Entries[j].CustomLink = ""
 			}
 		}
+	}
+	if err := db.Model(&model.ManagerSubscription{}).Where("user_id = ? AND enabled = ? AND auto_rotate = ?", owner, true, true).Count(&v.AutoRotateTotal).Error; err != nil {
+		return v, err
 	}
 	if err := db.Model(&model.ManagerOperation{}).Where("user_id = ? AND state IN ?", owner, []string{"queued", "running"}).Count(&v.PendingOperations).Error; err != nil {
 		return v, err
