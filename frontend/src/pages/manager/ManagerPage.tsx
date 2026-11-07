@@ -207,15 +207,9 @@ export default function ManagerPage() {
                 <Row gutter={[12, 12]}>
                   {[
                     [m('subscriptions'), q.data?.allSubscriptionsTotal ?? 0],
-                    [
-                      m('autoRotate'),
-                      q.data?.autoRotateTotal ?? 0,
-                    ],
+                    [m('autoRotate'), q.data?.autoRotateTotal ?? 0],
                     [m('nodes'), nodes.length],
-                    [
-                      m('pending'),
-                      q.data?.pendingOperations ?? 0,
-                    ],
+                    [m('pending'), q.data?.pendingOperations ?? 0],
                   ].map(([label, value]) => (
                     <Col xs={12} md={6} key={String(label)}>
                       <Card size="small" className="summary-card">
