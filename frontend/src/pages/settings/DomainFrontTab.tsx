@@ -374,8 +374,7 @@ export default function DomainFrontTab({
                     {
                       title: t('pages.settings.redirectScanSNI'),
                       key: 'sni',
-                      render: (_, site) =>
-                        site.sniLatencyMs ? `${site.sniLatencyMs} ms` : '—',
+                      render: (_, site) => (site.sniLatencyMs ? `${site.sniLatencyMs} ms` : '—'),
                     },
                     {
                       title: '',
@@ -386,9 +385,7 @@ export default function DomainFrontTab({
                           disabled={
                             !site.available || !!rootRedirectError(site.url, redirectDomains)
                           }
-                          onClick={() =>
-                            updateSetting({ rootRedirectURL: site.url })
-                          }
+                          onClick={() => updateSetting({ rootRedirectURL: site.url })}
                         >
                           {t('pages.settings.redirectScanChoose')}
                         </Button>
@@ -400,23 +397,23 @@ export default function DomainFrontTab({
             )}
           </Space>
           <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
-              <AutoComplete
-                status={redirectError ? 'error' : undefined}
-                maxLength={2048}
-                aria-label={t('pages.settings.rootRedirectURL')}
-                style={{ width: '100%' }}
-                value={allSetting.rootRedirectURL}
-                options={redirectSiteOptions}
-                showSearch={{
-                  filterOption: (input, option) =>
-                    (option?.value ?? '').toLowerCase().includes(input.toLowerCase()),
-                }}
-                defaultActiveFirstOption={false}
-                allowClear
-                onChange={(value) => updateSetting({ rootRedirectURL: value })}
-                placeholder="https://example.com/"
-              />
-            </SettingListItem>
+            <AutoComplete
+              status={redirectError ? 'error' : undefined}
+              maxLength={2048}
+              aria-label={t('pages.settings.rootRedirectURL')}
+              style={{ width: '100%' }}
+              value={allSetting.rootRedirectURL}
+              options={redirectSiteOptions}
+              showSearch={{
+                filterOption: (input, option) =>
+                  (option?.value ?? '').toLowerCase().includes(input.toLowerCase()),
+              }}
+              defaultActiveFirstOption={false}
+              allowClear
+              onChange={(value) => updateSetting({ rootRedirectURL: value })}
+              placeholder="https://example.com/"
+            />
+          </SettingListItem>
           {allSetting.rootRedirectEnable && (
             <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
               <Alert
