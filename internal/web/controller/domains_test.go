@@ -64,6 +64,10 @@ func TestDomainAPIApplyPersistsConfigurationAndRejectsRoleViolations(t *testing.
 	if invalid := post(cfg); invalid.Success {
 		t.Fatal("subscription-only panel access was accepted")
 	}
+	cfg.Domains[0].Mode = "direct"
+	if invalid := post(cfg); invalid.Success {
+		t.Fatal("direct domain panel access was accepted")
+	}
 	var after model.Setting
 	if err := database.GetDB().Where("key = ?", "domainFrontConfig").First(&after).Error; err != nil {
 		t.Fatal(err)
