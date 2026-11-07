@@ -2,6 +2,7 @@ package domainfront
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -81,7 +82,7 @@ func TestProbeDecoySiteChecksRootAndNestedPath(t *testing.T) {
 
 func TestDecoyClientDoesNotFollowRedirects(t *testing.T) {
 	client := decoyHTTPClient()
-	if err := client.CheckRedirect(nil, nil); err != http.ErrUseLastResponse {
+	if err := client.CheckRedirect(nil, nil); !errors.Is(err, http.ErrUseLastResponse) {
 		t.Fatalf("redirect policy = %v", err)
 	}
 }
