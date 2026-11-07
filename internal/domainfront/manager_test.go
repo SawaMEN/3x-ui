@@ -363,10 +363,14 @@ func TestGatewayNeverProxiesLegacyPanelPaths(t *testing.T) {
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
 	for _, path := range []string{"/", "/panel/", "/panel/api/server/status", "/login", "/logout", "/api"} {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d%s", cfg.HTTPSPort, path), nil)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		req.Host = "panel.example.com"
 		resp, err := client.Do(req)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		body, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusNotFound || strings.Contains(string(body), "private-admin-panel") {
@@ -376,7 +380,9 @@ func TestGatewayNeverProxiesLegacyPanelPaths(t *testing.T) {
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d/sub/token", cfg.HTTPSPort), nil)
 	req.Host = "panel.example.com"
 	resp, err := client.Do(req)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("subscription gateway unavailable: %d", resp.StatusCode)
