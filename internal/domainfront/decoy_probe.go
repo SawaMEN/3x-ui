@@ -25,17 +25,17 @@ type DecoyCandidate struct {
 }
 
 type DecoySiteCheck struct {
-	URL        string `json:"url"`
-	SNILatencyMS int64 `json:"sniLatencyMs"`
-	TLS13       bool `json:"tls13"`
-	HTTP2       bool `json:"http2"`
-	SNIStable   bool `json:"sniStable"`
-	Available  bool   `json:"available"`
-	Status     int    `json:"status"`
-	PathStatus int    `json:"pathStatus"`
-	LatencyMS  int64  `json:"latencyMs"`
-	Score      int    `json:"score"`
-	Error      string `json:"error,omitempty"`
+	URL          string `json:"url"`
+	SNILatencyMS int64  `json:"sniLatencyMs"`
+	TLS13        bool   `json:"tls13"`
+	HTTP2        bool   `json:"http2"`
+	SNIStable    bool   `json:"sniStable"`
+	Available    bool   `json:"available"`
+	Status       int    `json:"status"`
+	PathStatus   int    `json:"pathStatus"`
+	LatencyMS    int64  `json:"latencyMs"`
+	Score        int    `json:"score"`
+	Error        string `json:"error,omitempty"`
 }
 
 type DecoySiteScan struct {
@@ -79,7 +79,8 @@ func publicDecoyIP(ip net.IP) bool {
 
 func decoyHTTPClient() *http.Client {
 	transport := &http.Transport{
-		Proxy: nil, // Probe the server's direct path, not a system proxy.
+		// Never use a system proxy: probe the server's direct path.
+		Proxy: nil,
 		DisableKeepAlives: true,
 		MaxIdleConns: 0,
 		TLSHandshakeTimeout: 2500 * time.Millisecond,
@@ -153,9 +154,15 @@ func scoreDecoySite(site *DecoySiteCheck) {
 	score -= int(min(site.LatencyMS/50, 20))
 	// Favor the stable verified entries already measured by the SNI tool,
 	// without making REALITY-specific capabilities mandatory for websites.
-	if site.TLS13 { score += 2 }
-	if site.HTTP2 { score += 2 }
-	if site.SNIStable { score += 4 }
+	if site.TLS13 {
+		score += 2
+	}
+	if site.HTTP2 {
+		score += 2
+	}
+	if site.SNIStable {
+		score += 4
+	}
 	if score < 1 {
 		score = 1
 	}
@@ -164,8 +171,11 @@ func scoreDecoySite(site *DecoySiteCheck) {
 
 func probeDecoySite(ctx context.Context, client *http.Client, candidate DecoyCandidate) DecoySiteCheck {
 	result := DecoySiteCheck{
-		URL: candidate.URL, SNILatencyMS: candidate.SNILatencyMS,
-		TLS13: candidate.TLS13, HTTP2: candidate.HTTP2, SNIStable: candidate.SNIStable,
+		URL:          candidate.URL,
+		SNILatencyMS: candidate.SNILatencyMS,
+		TLS13:        candidate.TLS13,
+		HTTP2:        candidate.HTTP2,
+		SNIStable:    candidate.SNIStable,
 	}
 	status, latency, err := decoyHTTPStatus(ctx, client, candidate.URL)
 	result.Status, result.LatencyMS = status, latency.Milliseconds()
