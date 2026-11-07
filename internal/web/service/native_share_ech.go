@@ -52,7 +52,7 @@ func normalizeShareOutboundECH(out map[string]any) error {
 	var configList []byte
 	if strings.HasPrefix(raw, "-----BEGIN ") {
 		block, rest := pem.Decode([]byte(raw))
-		if block == nil || block.Type != "ECH CONFIGS" || strings.TrimSpace(string(rest)) != "" {
+		if block == nil || (block.Type != "ECH CONFIGS" && block.Type != "ECHCONFIG") || strings.TrimSpace(string(rest)) != "" {
 			return fmt.Errorf("outbound ECH config must contain exactly one ECH CONFIGS public PEM block")
 		}
 		configList = block.Bytes
@@ -84,7 +84,8 @@ func normalizeShareOutboundECH(out map[string]any) error {
 		return fmt.Errorf("outbound ECH config is not a valid ECHConfigList")
 	}
 	ech["config"] = []string{strings.TrimSuffix(string(pem.EncodeToMemory(&pem.Block{
-		Type: "ECH CONFIGS", Bytes: configList,
+		Type:  "ECH CONFIGS",
+		Bytes: configList,
 	})), "\n")}
 	return nil
 }
