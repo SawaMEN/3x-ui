@@ -55,11 +55,11 @@ func cleanupDeletedInboundReferencesTx(tx *gorm.DB, inbound *model.Inbound) (boo
 		if !modified {
 			continue
 		}
-		value, err := json.MarshalIndent(cfg, "", "  ")
+		encoded, err := json.MarshalIndent(cfg, "", "  ")
 		if err != nil {
 			return false, err
 		}
-		if err := tx.Model(&model.Setting{}).Where("key = ?", key).Update("value", string(value)).Error; err != nil {
+		if err := tx.Model(&model.Setting{}).Where("key = ?", key).Update("value", string(encoded)).Error; err != nil {
 			return false, err
 		}
 		changed = true
