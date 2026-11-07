@@ -1306,8 +1306,7 @@ export default function SingBoxPage() {
       );
 
     return (
-      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-        <Card>
+      <Card>
         <div className="singbox-section-header">
           <div>
             <div className="singbox-section-title">Исходящие подключения</div>
@@ -1551,12 +1550,11 @@ export default function SingBoxPage() {
             buttonText="Массовый JSON"
           />
         </div>{' '}
-        </Card>
         <ManagedNodeRouteOutbounds
           engine="sing-box"
           rules={asObjectArray(asObject(config.route).rules)}
         />
-      </Space>
+      </Card>
     );
   };
 
