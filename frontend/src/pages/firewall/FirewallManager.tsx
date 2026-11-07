@@ -45,6 +45,8 @@ type FirewallStatus = {
   syncInterval?: number;
   pingEnabled: boolean;
   canInstallUfw?: boolean;
+  recoveryCode?: string;
+  kernelRelease?: string;
   rules: FirewallRule[];
   manualRules: FirewallManualRule[];
   message?: string;
@@ -74,6 +76,12 @@ function useFirewallText() {
             unsupported:
               '3x-ui не может безопасно управлять обнаруженным файрволлом. Проверьте его конфигурацию и сообщение выше.',
             noFirewall: 'Поддерживаемый файрволл не найден.',
+            kernelModulesMissing:
+              'Панель попыталась восстановить поддержку файрволла, но модули запущенного ядра отсутствуют. На обычном сервере проверьте установленное ядро и перезагрузите его через консоль провайдера. В контейнере исправлять поддержку Netfilter нужно на хосте.',
+            kernelUnavailable:
+              'Панель автоматически проверила доступные backend и попыталась загрузить совместимые модули. Ядро по-прежнему не предоставляет доступ к правилам. Проверьте поддержку Netfilter в ядре или ограничения контейнера.',
+            permissionDenied:
+              'Недостаточно прав для доступа к правилам файрволла. Панель не будет автоматически обходить ограничения безопасности; проверьте права процесса или контейнера.',
             installUfw: 'Установить UFW',
             installUfwHint:
               'UFW будет установлен через пакетный менеджер системы, но не будет включён автоматически. После установки включите его переключателем выше, когда будете готовы.',
@@ -120,6 +128,12 @@ function useFirewallText() {
             unsupported:
               '3x-ui cannot safely manage the detected firewall. Check its configuration and the message above.',
             noFirewall: 'No supported firewall was found.',
+            kernelModulesMissing:
+              'The panel attempted to recover firewall support, but modules for the running kernel are missing. On a regular server, check the installed kernel and reboot through the provider console. In a container, Netfilter support must be fixed on the host.',
+            kernelUnavailable:
+              'The panel automatically checked the available backends and attempted to load compatible modules. The kernel still cannot access firewall rules. Check kernel Netfilter support or container restrictions.',
+            permissionDenied:
+              'The process cannot access firewall rules. The panel will not bypass security restrictions automatically; check process or container privileges.',
             installUfw: 'Install UFW',
             installUfwHint:
               'UFW will be installed with the system package manager, but it will not be enabled automatically. Enable it with the switch above when you are ready.',
@@ -337,11 +351,19 @@ export function FirewallManager() {
 
   if (!supported) {
     const canInstallUfw = Boolean(status.canInstallUfw);
+    const recoveryHint =
+      status.recoveryCode === 'kernel-modules-missing'
+        ? text.kernelModulesMissing
+        : status.recoveryCode === 'kernel-netfilter-unavailable'
+          ? text.kernelUnavailable
+          : status.recoveryCode === 'permission-denied'
+            ? text.permissionDenied
+            : '';
     return (
       <Alert
         type="warning"
         showIcon
-        title={canInstallUfw ? text.noFirewall : status.message || text.unsupported}
+        title={canInstallUfw ? text.noFirewall : text.unsupported}
         description={
           canInstallUfw ? (
             <Space orientation="vertical" size="small">
@@ -357,7 +379,21 @@ export function FirewallManager() {
               </Button>
             </Space>
           ) : (
-            text.unsupported
+            <Space orientation="vertical" size="small">
+              {recoveryHint && <Typography.Text>{recoveryHint}</Typography.Text>}
+              {status.kernelRelease && (
+                <Typography.Text type="secondary">Linux: {status.kernelRelease}</Typography.Text>
+              )}
+              {status.message && (
+                <Typography.Text
+                  type="secondary"
+                  copyable
+                  style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                >
+                  {status.message}
+                </Typography.Text>
+              )}
+            </Space>
           )
         }
       />
