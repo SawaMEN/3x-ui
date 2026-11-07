@@ -1090,6 +1090,23 @@ export const EXAMPLES: Record<string, unknown> = {
     "username": ""
   },
   "ManagerSnapshot": {
+    "activeOperations": [
+      {
+        "attempts": 0,
+        "completed": 0,
+        "createdAt": 0,
+        "finishedAt": 0,
+        "id": 0,
+        "kind": "",
+        "message": "",
+        "relayId": 0,
+        "state": "",
+        "subscriptionId": 0,
+        "total": 0
+      }
+    ],
+    "allSubscriptionsTotal": 0,
+    "autoRotateTotal": 0,
     "clients": {},
     "domains": [
       {
