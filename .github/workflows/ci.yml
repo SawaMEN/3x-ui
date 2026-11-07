@@ -131,6 +131,10 @@ jobs:
         env:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
         run: go test ./internal/web/service -run '^TestNativeAWG' -count=1
+      - name: Verify Hysteria2 node-route ECH with release core
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/web/service -run '^TestNodeRouteHysteriaECH' -count=1 -v
 
   postgres-durable-first:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
