@@ -110,6 +110,25 @@ describe('http-init fetch wrapper', () => {
     expect(JSON.parse(initOf().body as string)).toEqual(payload);
   });
 
+  it('JSON-encodes node-route provisioning without changing legacy Xray form posts', async () => {
+    document.head.innerHTML = '<meta name="csrf-token" content="tok">';
+    http.setupHttp();
+    fetchMock.mockResolvedValue(okEnvelope());
+
+    const payload = { inboundId: 42, core: 'xray' };
+    await http.httpRequest('POST', '/panel/api/xray/node-route/ensure', payload);
+    expect(headersOf().get('content-type')).toBe('application/json; charset=UTF-8');
+    expect(JSON.parse(initOf().body as string)).toEqual(payload);
+    expect(headersOf().get('X-CSRF-Token')).toBe('tok');
+
+    fetchMock.mockClear();
+    await http.httpRequest('POST', '/panel/api/xray/update', { xraySetting: '{}' });
+    expect(headersOf().get('content-type')).toBe(
+      'application/x-www-form-urlencoded; charset=UTF-8',
+    );
+    expect(initOf().body).toBe('xraySetting=%7B%7D');
+  });
+
   it('passes FormData through without a Content-Type header', async () => {
     document.head.innerHTML = '<meta name="csrf-token" content="tok">';
     http.setupHttp();
