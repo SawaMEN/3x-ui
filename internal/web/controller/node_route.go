@@ -44,6 +44,12 @@ func (a *XraySettingController) ensureNodeRoute(c *gin.Context) {
         jsonObj(c, nil, fmt.Errorf("invalid route core"))
         return
     }
-    tag, err := service.EnsureNodeRoute(user.Id, payload.InboundID, payload.Core)
+    tag, needRestart, err := service.EnsureNodeRoute(user.Id, payload.InboundID, payload.Core)
+    if needRestart {
+        markSelectedCoreNeedRestart(&a.SettingService, &a.CoreService, &service.SingBoxService{})
+    }
+    if needRestart || err == nil {
+        notifyClientsChanged()
+    }
     jsonObj(c, map[string]string{"tag": tag}, err)
 }
