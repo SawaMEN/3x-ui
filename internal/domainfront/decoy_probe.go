@@ -70,38 +70,41 @@ func publicDecoyIP(ip net.IP) bool {
 	return true
 }
 
+// dialPublicDecoy prevents proxy use and DNS rebinding to local or reserved
+// networks. The transport still authenticates the requested HTTPS hostname.
+func dialPublicDecoy(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || port != "443" {
+		return nil, errors.New("decoy probe requires HTTPS/443")
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	dialer := net.Dialer{Timeout: 2500 * time.Millisecond}
+	for _, entry := range ips {
+		if !publicDecoyIP(entry.IP) {
+			continue
+		}
+		conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(entry.IP.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+	}
+	return nil, fmt.Errorf("no reachable public address for %s", host)
+}
+
 func decoyHTTPClient() *http.Client {
 	transport := &http.Transport{
 		// Never use a system proxy: probe the server's direct path.
 		Proxy:                 nil,
 		DisableKeepAlives:     true,
-		MaxIdleConns:          0,
 		TLSHandshakeTimeout:   2500 * time.Millisecond,
 		ResponseHeaderTimeout: 2500 * time.Millisecond,
-		DialContext:           func(ctx context.Context, network, address string) (net.Conn, error) {
-			host, port, err := net.SplitHostPort(address)
-			if err != nil || port != "443" {
-				return nil, errors.New("decoy probe requires HTTPS/443")
-			}
-			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-			if err != nil {
-				return nil, err
-			}
-			dialer := net.Dialer{Timeout: 2500 * time.Millisecond}
-			for _, entry := range ips {
-				if !publicDecoyIP(entry.IP) {
-					continue
-				}
-				conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(entry.IP.String(), port))
-				if err == nil {
-					return conn, nil
-				}
-			}
-			return nil, fmt.Errorf("no reachable public address for %s", host)
-		},
+		DialContext:           dialPublicDecoy,
 	}
 	return &http.Client{
-		Timeout: 4 * time.Second,
+		Timeout:   4 * time.Second,
 		Transport: transport,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			// A redirect can point at internal networks. Observe only the
