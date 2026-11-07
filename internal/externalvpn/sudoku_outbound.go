@@ -48,7 +48,7 @@ func validSudokuHost(host string) bool {
 			return false
 		}
 		for _, r := range part {
-			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-') {
+			if !strings.ContainsRune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-", r) {
 				return false
 			}
 		}
@@ -124,15 +124,25 @@ func sudokuOutboundConfig(link string) ([]byte, error) {
 		}
 	}
 	cfg := sudoku.Config{
-		Mode: "client", Transport: "tcp", LocalPort: 1080,
-		ServerAddress: net.JoinHostPort(p.Host, fmt.Sprint(p.Port)),
-		Key: p.Key, AEAD: p.AEAD, ASCII: p.ASCII,
-		PaddingMin: 5, PaddingMax: 15,
-		CustomTable: p.CustomTable, CustomTables: p.CustomTables,
-		EnablePureDownlink: !p.Packed, Multiplex: p.HTTPMaskMux,
+		Mode:               "client",
+		Transport:          "tcp",
+		LocalPort:          1080,
+		ServerAddress:      net.JoinHostPort(p.Host, fmt.Sprint(p.Port)),
+		Key:                p.Key,
+		AEAD:               p.AEAD,
+		ASCII:              p.ASCII,
+		PaddingMin:         5,
+		PaddingMax:         15,
+		CustomTable:        p.CustomTable,
+		CustomTables:       p.CustomTables,
+		EnablePureDownlink: !p.Packed,
+		Multiplex:          p.HTTPMaskMux,
 		HTTPMask: sudoku.HTTPMaskConfig{
-			Disable: p.DisableHTTPMask, Mode: p.HTTPMaskMode,
-			TLS: p.HTTPMaskTLS, Host: p.HTTPMaskHost, PathRoot: p.HTTPMaskPath,
+			Disable:   p.DisableHTTPMask,
+			Mode:      p.HTTPMaskMode,
+			TLS:       p.HTTPMaskTLS,
+			Host:      p.HTTPMaskHost,
+			PathRoot:  p.HTTPMaskPath,
 			Multiplex: p.HTTPMaskMux,
 		},
 	}
