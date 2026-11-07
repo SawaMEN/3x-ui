@@ -115,6 +115,11 @@ func ScanRedirectSites(ctx context.Context) (domainfront.DecoySiteScan, error) {
 	svc := &ServerService{}
 	history, _ := SNIScanHistory()
 	targets := redirectSNITargets(svc.realityScanCandidateTokens(), history)
+	if len(targets) == 0 {
+		// The SNI scanner treats an empty targets CSV as "scan all 800".
+		// Never let a decoy lookup accidentally start that full scan.
+		return domainfront.ScanDecoySites(ctx, nil), nil
+	}
 	stable := trustedRedirectHistory(history)
 	// Allow time for the site's actual HTTP/path check after the TLS stage.
 	tlsCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
