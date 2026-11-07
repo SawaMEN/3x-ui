@@ -523,6 +523,11 @@ func (r *frontRuntime) protectedRedirectPath(d DomainFrontDomain, path string) b
 			return true
 		}
 	}
+	for _, prefix := range r.backend.ProtectedPaths {
+		if prefix != "" && pathWithin(path, prefix) {
+			return true
+		}
+	}
 	return r.panelRequestPath(d, path)
 }
 
@@ -605,6 +610,12 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 		}
 		if panel != nil && r.panelRequestPath(d, req.URL.Path) {
 			panel.ServeHTTP(w, req)
+			return
+		}
+		if r.protectedRedirectPath(d, req.URL.Path) {
+			// An unmatched legacy/application endpoint must never fall
+			// through to the public decoy. Its former behavior was 404.
+			http.NotFound(w, req)
 			return
 		}
 		redirectURL := r.backend.RedirectURL
