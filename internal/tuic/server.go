@@ -903,10 +903,12 @@ func (s *Server) relayUDPResponses(
 
 		nextPktID++
 		if err := s.sendUDPPacketFragments(ctx, conn, assocID, nextPktID, srcAddr, respPayload, sess.responseTransport); err != nil {
-			if ctx.Err() == nil {
-				s.logLimited(tuicLogWarn, "udp-response", 30*time.Second, "UDP relay response failed: %v", err)
+			if ctx.Err() != nil || conn.Context().Err() != nil {
+				return
 			}
-			return
+			// Canceling one response stream must not terminate the whole UDP association.
+			s.logLimited(tuicLogWarn, "udp-response", 30*time.Second, "UDP relay response failed: %v", err)
+			continue
 		}
 		associations.touch(assocID, association, time.Now())
 	}

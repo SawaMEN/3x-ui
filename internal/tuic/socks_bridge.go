@@ -256,8 +256,11 @@ func (s *SocksUDPSession) Receive(buf []byte) (*Address, []byte, error) {
 		offset = 22
 
 	case 0x03: // Domain
+		if n < 5 {
+			return nil, nil, fmt.Errorf("tuic socks: truncated domain UDP reply")
+		}
 		dLen := int(buf[4])
-		if n < 5+dLen+2 {
+		if dLen == 0 || n < 5+dLen+2 {
 			return nil, nil, fmt.Errorf("tuic socks: truncated domain UDP reply")
 		}
 		host := string(buf[5 : 5+dLen])
