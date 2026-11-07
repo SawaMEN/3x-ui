@@ -23,11 +23,12 @@ interface Props {
 // generated outbound (both are intentionally absent from the editor template).
 export default function ManagedNodeRouteOutbounds({ engine, rules }: Props) {
   const routes = useMemo(() => managedNodeRoutes(rules, engine), [rules, engine]);
+  const routeKey = routes.map((route) => route.tag).join(',');
   const [targets, setTargets] = useState<NodeRouteTarget[] | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
-    if (routes.length === 0) return;
+    if (!routeKey) return;
     let active = true;
     setStatus('loading');
     void HttpUtil.get<NodeRouteTarget[]>(
@@ -50,7 +51,7 @@ export default function ManagedNodeRouteOutbounds({ engine, rules }: Props) {
     return () => {
       active = false;
     };
-  }, [engine, routes.length]);
+  }, [engine, routeKey]);
 
   if (routes.length === 0) return null;
 
