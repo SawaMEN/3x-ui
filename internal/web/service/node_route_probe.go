@@ -23,6 +23,7 @@ type NodeRouteProbeResult struct {
 	CheckedTarget bool   `json:"checkedTarget"`
 	Transport     string `json:"transport"`
 	LatencyMs     int64  `json:"latencyMs,omitempty"`
+	Inconclusive  bool   `json:"inconclusive,omitempty"`
 	Detail        string `json:"detail"`
 }
 
@@ -130,7 +131,9 @@ func ProbeNodeRoute(ctx context.Context, userID, inboundID int) (NodeRouteProbeR
 	}
 	result.CheckedTarget = true
 	var duration time.Duration
-	if nodeRouteIsUDP(inbound) {
+	if inbound.Protocol == model.Mieru {
+		return probeNodeRouteMieru(ctx, inbound, node.Address), nil
+	} else if nodeRouteIsUDP(inbound) {
 		result.Transport = "udp"
 		duration, err = probeNodeRouteQUIC(ctx, node.Address, inbound.Port)
 		if err != nil {
