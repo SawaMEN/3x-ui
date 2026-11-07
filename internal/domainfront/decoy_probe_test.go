@@ -74,7 +74,7 @@ func TestProbeDecoySiteChecksRootAndNestedPath(t *testing.T) {
 	if !probe.Available || probe.Status != 200 || probe.PathStatus != 404 || probe.Score < 65 {
 		t.Fatalf("unexpected scan: %+v", probe)
 	}
-	if strings.Join(requested, ",") != "/,/robots.txt" {
+	if strings.Join(requested, ",") != "/,/123" {
 		t.Fatalf("unexpected probe paths: %v", requested)
 	}
 }
