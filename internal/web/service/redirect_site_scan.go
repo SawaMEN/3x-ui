@@ -38,8 +38,6 @@ func nearbyRedirectCandidates(rows []*RealityScanResult) []domainfront.DecoyCand
 		out = append(out, domainfront.DecoyCandidate{
 			URL:          "https://" + host + "/",
 			SNILatencyMS: int64(row.LatencyMs),
-			TLS13:        row.TLS13,
-			HTTP2:        row.H2,
 		})
 	}
 	// Pick the fastest TLS-confirmed neighboring websites for the HTTP
