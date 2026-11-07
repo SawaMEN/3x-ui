@@ -54,7 +54,7 @@ export default function ManagedNodeRouteOutbounds({ engine, rules }: Props) {
     return () => {
       active = false;
     };
-  }, [routeKey, routes.length]);
+  }, [engine, routeKey, routes.length]);
 
   if (routes.length === 0) return null;
 
