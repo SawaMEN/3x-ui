@@ -72,13 +72,14 @@ func redirectSNITargets(configured []string, history []SNIJobSnapshot) []string 
 		}
 		return out
 	}
-	// Prefer a broad but predictable subset, retaining extra slots for
-	// skipped IP/CIDR/port entries and duplicates from saved history.
-	for i := 0; i < len(configured) && len(out) < redirectMaxSNICandidates; i++ {
-		index := (i * len(configured) / remaining) % len(configured)
-		// If the sample wraps, move forward through the catalogue to find
-		// unused valid names without expanding the network scan size.
-		add(configured[index])
+	// Sample across the full configured catalog (including the 800-entry
+	// default); fill invalid/duplicate gaps in a second bounded pass.
+	for i := 0; i < remaining && len(out) < redirectMaxSNICandidates; i++ {
+		add(configured[i*len(configured)/remaining])
+	}
+	for _, candidate := range configured {
+		if len(out) >= redirectMaxSNICandidates { break }
+		add(candidate)
 	}
 	return out
 }
@@ -110,11 +111,8 @@ func trustedRedirectHistory(history []SNIJobSnapshot) map[string]bool {
 // This is deliberately not a full 800-host scan on every button press.
 func ScanRedirectSites(ctx context.Context) (domainfront.DecoySiteScan, error) {
 	svc := &ServerService{}
-	targets := redirectSNITargets(svc.realityScanCandidateTokens(), nil)
-	history, historyErr := SNIScanHistory()
-	if historyErr == nil {
-		targets = redirectSNITargets(svc.realityScanCandidateTokens(), history)
-	}
+	history, _ := SNIScanHistory()
+	targets := redirectSNITargets(svc.realityScanCandidateTokens(), history)
 	stable := trustedRedirectHistory(history)
 	// Allow time for the site's actual HTTP/path check after the TLS stage.
 	tlsCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
@@ -136,9 +134,6 @@ func ScanRedirectSites(ctx context.Context) (domainfront.DecoySiteScan, error) {
 			HTTP2: row.H2,
 			SNIStable: stable[strings.ToLower(row.Host)],
 		})
-		if len(candidates) >= redirectMaxHTTPFinalists {
-			break
-		}
 	}
 	// Prefer TLS-compatible candidates, but do not require REALITY-specific
 	// X25519 or HTTP/2 behavior: this is a website redirect, not REALITY.
@@ -151,5 +146,8 @@ func ScanRedirectSites(ctx context.Context) (domainfront.DecoySiteScan, error) {
 		if a.SNILatencyMS > b.SNILatencyMS { return 1 }
 		return strings.Compare(a.URL, b.URL)
 	})
+	if len(candidates) > redirectMaxHTTPFinalists {
+		candidates = candidates[:redirectMaxHTTPFinalists]
+	}
 	return domainfront.ScanDecoySites(ctx, candidates), nil
 }
