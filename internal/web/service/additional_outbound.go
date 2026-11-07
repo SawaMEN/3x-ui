@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
@@ -20,11 +21,18 @@ func transformAdditionalOutbounds(cfg *xray.Config) error {
 			continue
 		}
 		tag, _ := row["tag"].(string)
-		desired[tag] = true
 		bridge, err := externalvpn.EnsureOutbound(row)
 		if err != nil {
+			if id, managed := nodeRouteInboundID(tag); managed {
+				// A missing VetroffProxy runtime must not prevent Xray from
+				// starting or leak node-routed traffic through direct.
+				logger.Warningf("node route %d unavailable: %v", id, err)
+				rows[i] = blockedNodeRouteOutbound(id, "xray")
+				continue
+			}
 			return fmt.Errorf("outbound %q: %w", tag, err)
 		}
+		desired[tag] = true
 		rows[i] = bridge
 	}
 	raw, err := json.Marshal(rows)
