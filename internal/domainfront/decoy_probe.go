@@ -175,7 +175,7 @@ func probeDecoySite(ctx context.Context, client *http.Client, raw string) DecoyS
 	if status >= 200 && status < 400 {
 		base, err := url.Parse(raw)
 		if err == nil {
-			base.Path = "/robots.txt"
+			base.Path = "/123"
 			base.RawQuery = ""
 			result.PathStatus, _, _ = decoyHTTPStatus(ctx, client, base.String())
 		}
