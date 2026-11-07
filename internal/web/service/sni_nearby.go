@@ -46,6 +46,16 @@ func nearbySNIAddresses(origin netip.Addr, limit int) []string {
 // name against the same IP with SNI. Keep the IP target to avoid DNS moving the
 // selected REALITY destination away from the verified neighboring endpoint.
 func (s *ServerService) ScanNearbySNIs(ctx context.Context, reference string) ([]*RealityScanResult, error) {
+	return s.ScanNearbySNIsLimited(ctx, reference, realityDiscoverMaxIPs)
+}
+
+// ScanNearbySNIsLimited uses the same verified neighboring-IP discovery but
+// bounds its range for lightweight site recommendations. The full SNI scanner
+// retains its existing 256-address behavior.
+func (s *ServerService) ScanNearbySNIsLimited(ctx context.Context, reference string, limit int) ([]*RealityScanResult, error) {
+	if limit <= 0 || limit > realityDiscoverMaxIPs {
+		return nil, fmt.Errorf("nearby SNI scan limit must be between 1 and %d", realityDiscoverMaxIPs)
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -86,7 +96,7 @@ func (s *ServerService) ScanNearbySNIs(ctx context.Context, reference string) ([
 			origin = ip
 		}
 	}
-	addresses := nearbySNIAddresses(origin, realityDiscoverMaxIPs)
+	addresses := nearbySNIAddresses(origin, limit)
 	if len(addresses) == 0 {
 		return nil, fmt.Errorf("no public server address available")
 	}
