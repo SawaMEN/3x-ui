@@ -45,7 +45,7 @@ export default function RouteTester({ inboundTags, isMobile }: RouteTesterProps)
     if (!value) return;
     // IPv6 contains ':'. IPv4 detection here only selects the field;
     // the server validates the actual address before querying Xray.
-    const isIp = /^(\\d{1,3}\\.){3}\\d{1,3}$/.test(value) || value.includes(':');
+    const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(value) || value.includes(':');
     const networks: TestNetwork[] = network === 'both' ? ['tcp', 'udp'] : [network];
     setTesting(true);
     setResults([]);
@@ -185,7 +185,6 @@ export default function RouteTester({ inboundTags, isMobile }: RouteTesterProps)
           }
         />
       ))}
-
     </Space>
   );
 }
