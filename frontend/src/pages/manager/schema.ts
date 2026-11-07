@@ -58,12 +58,7 @@ export const RelaySchema = z.object({
   nodeId: z.number().min(1),
   installed: z.boolean().default(false),
 });
-export const SnapshotSchema = z.object({
-  subscriptions: z.array(SubscriptionSchema),
-  relays: z.array(RelaySchema),
-  domains: z.array(z.object({ id: z.number(), name: z.string() })),
-  operations: z.array(
-    z.object({
+export const ManagerOperationSchema = z.object({
       id: z.number(),
       subscriptionId: z.number(),
       relayId: z.number(),
@@ -75,10 +70,17 @@ export const SnapshotSchema = z.object({
       message: z.string(),
       createdAt: z.number(),
       finishedAt: z.number(),
-    }),
-  ),
+    
+});
+export const SnapshotSchema = z.object({
+  subscriptions: z.array(SubscriptionSchema),
+  relays: z.array(RelaySchema),
+  domains: z.array(z.object({ id: z.number(), name: z.string() })),
+  operations: z.array(ManagerOperationSchema),
+  activeOperations: z.array(ManagerOperationSchema).default([]),
   operationTotal: z.number(),
   subscriptionTotal: z.number().default(0),
+  allSubscriptionsTotal: z.number().default(0),
   autoRotateTotal: z.number().default(0),
   pendingOperations: z.number().default(0),
   subscriptionPage: z.number().default(1),
