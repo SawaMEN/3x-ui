@@ -51,6 +51,7 @@ import './SingBoxPage.css';
 import DnsWorkspace from './DnsWorkspace';
 import NativeRoutingBasic from './NativeRoutingBasic';
 import QuickRoutingPanel from '@/pages/xray/routing/QuickRoutingPanel';
+import ManagedNodeRouteOutbounds from '@/pages/xray/outbounds/ManagedNodeRouteOutbounds';
 import { basicRuleTitle } from './native-routing-basic';
 import { putConnection, removeConnection } from './config-references';
 import { setDefaultDomainResolver } from './simple-settings';
@@ -1305,7 +1306,8 @@ export default function SingBoxPage() {
       );
 
     return (
-      <Card>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+        <Card>
         <div className="singbox-section-header">
           <div>
             <div className="singbox-section-title">Исходящие подключения</div>
@@ -1549,7 +1551,12 @@ export default function SingBoxPage() {
             buttonText="Массовый JSON"
           />
         </div>{' '}
-      </Card>
+        </Card>
+        <ManagedNodeRouteOutbounds
+          engine="sing-box"
+          rules={asObjectArray(asObject(config.route).rules)}
+        />
+      </Space>
     );
   };
 
