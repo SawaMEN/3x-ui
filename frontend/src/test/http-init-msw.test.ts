@@ -70,8 +70,10 @@ describe('httpRequest against the MSW-mocked network', () => {
     expect(res.status).toBe(200);
   });
 
-  it('provides a JSON body to the node-route provision handler', async () => {
-    const payload = { inboundId: 42, core: 'xray' };
+  it.each(['xray', 'sing-box'])(
+    'provides a JSON body to the node-route provision handler for %s',
+    async (core) => {
+    const payload = { inboundId: 42, core };
     let received: unknown;
     let contentType: string | null = null;
     server.use(
@@ -86,7 +88,8 @@ describe('httpRequest against the MSW-mocked network', () => {
     expect(response.status).toBe(200);
     expect(received).toEqual(payload);
     expect(contentType).toBe('application/json; charset=UTF-8');
-  });
+    },
+  );
 
   it('resolves a safe GET without requesting a CSRF token', async () => {
     let csrfHits = 0;
