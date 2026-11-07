@@ -128,3 +128,72 @@ func TestManagerJSONKeepsMASQUEAndExcludesOtherClientAttachments(t *testing.T) {
 		t.Fatalf("explicit raw format silently discarded MASQUE: %d %s", w.Code, w.Body.String())
 	}
 }
+
+
+func TestManagerDefaultCombinesMASQUEWithVLESS(t *testing.T) {
+	seedSubDB(t)
+	service.RegisterSubLinkProvider(NewLinkProvider())
+	t.Cleanup(func() { service.RegisterSubLinkProvider(nil) })
+	db := database.GetDB()
+	const id = "11111111-2222-4333-8444-555555555555"
+	client := &model.ClientRecord{Email: "manager-mixed", SubID: "manager-mixed-origin", UUID: id, Password: "masque-password", Enable: true}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatal(err)
+	}
+	inbounds := []*model.Inbound{
+		{
+			UserId: 1, Tag: "manager-masque", Protocol: model.MASQUE, Enable: true, Port: 18443,
+			ShareAddrStrategy: "custom", ShareAddr: "masque.example.com",
+			Settings: `{"version":[1,2],"path":"/tunnel{?target,ipproto}","tls":{"serverName":"masque.example.com"},"clients":[{"email":"manager-mixed","password":"masque-password","subId":"manager-mixed-origin","enable":true}]}`,
+		},
+		{
+			UserId: 1, Tag: "manager-vless", Protocol: model.VLESS, Enable: true, Port: 18444,
+			ShareAddrStrategy: "custom", ShareAddr: "vless.example.com",
+			Settings: `{"decryption":"none","clients":[{"email":"manager-mixed","id":"11111111-2222-4333-8444-555555555555","subId":"manager-mixed-origin","enable":true}]}`,
+			StreamSettings: `{"network":"tcp","security":"none"}`,
+		},
+	}
+	sub := &model.ManagerSubscription{UserID: 1, Token: uuid.NewString(), Name: "All native", Enabled: true, ClientID: client.Id, IntervalMinutes: 60}
+	for _, inbound := range inbounds {
+		if err := db.Create(inbound).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+			t.Fatal(err)
+		}
+		sub.Published = append(sub.Published, model.ManagerEntry{Mode: "existing", ActiveInboundID: inbound.Id, Label: inbound.Tag})
+	}
+	if err := db.Create(sub).Error; err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	service.ServeManagerSubscription(w, httptest.NewRequest(http.MethodGet, "https://panel.example/bus/"+sub.Token, nil), sub.Token)
+	if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
+		t.Fatalf("manager default format: HTTP %d content-type %q body %s", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+	}
+	var docs []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &docs); err != nil {
+		t.Fatalf("manager default must return native JSON: %v: %s", err, w.Body.String())
+	}
+	if len(docs) != 2 {
+		t.Fatalf("expected both MASQUE and VLESS profiles: %s", w.Body.String())
+	}
+	masque, vless := false, false
+	for _, doc := range docs {
+		endpoints, _ := doc["endpoints"].([]any)
+		for _, value := range endpoints {
+			if value.(map[string]any)["type"] == "masque-client" {
+				masque = true
+			}
+		}
+		outbounds, _ := doc["outbounds"].([]any)
+		for _, value := range outbounds {
+			if value.(map[string]any)["type"] == "vless" {
+				vless = true
+			}
+		}
+	}
+	if !masque || !vless {
+		t.Fatalf("manager lost MASQUE or VLESS: %s", w.Body.String())
+	}
+}
