@@ -13,7 +13,7 @@ import (
 const (
 	// The ordinary nearby SNI search scans 256 IPs. A website lookup is a
 	// deliberately smaller operation: no configured catalog or SNI history.
-	redirectNearbyMaxIPs = 32
+	redirectNearbyMaxIPs  = 32
 	redirectHTTPFinalists = 16
 )
 
