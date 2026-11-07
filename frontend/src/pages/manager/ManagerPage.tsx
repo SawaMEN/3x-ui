@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
@@ -8,12 +8,9 @@ import {
   Card,
   Col,
   ConfigProvider,
-  Empty,
   Input,
   Layout,
   Modal,
-  Progress,
-  Pagination,
   QRCode,
   Row,
   Select,
@@ -27,16 +24,17 @@ import {
   Upload,
   message,
 } from 'antd';
-import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import AppSidebar from '@/layouts/AppSidebar';
 import { useTheme } from '@/hooks/useTheme';
 import { useNodesQuery } from '@/api/queries/useNodesQuery';
 import { useNodeMutations } from '@/api/queries/useNodeMutations';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
-import { HttpUtil, SizeFormatter } from '@/utils';
+import { HttpUtil } from '@/utils';
 import { SnapshotSchema, SubscriptionSchema, newSubscription } from './schema';
 import type { Relay, Subscription } from './schema';
 import SubscriptionEditor from './SubscriptionEditor';
+import SubscriptionWorkspace from './SubscriptionWorkspace';
 import RelayEditor from './RelayEditor';
 import { runSNIScan } from '@/pages/inbounds/form/security/sni-scanner';
 import { scannedServerName } from '@/pages/inbounds/form/security/RealityTargetScannerModal';
@@ -64,8 +62,13 @@ export default function ManagerPage() {
   const [domains, setDomains] = useState('');
   const [qr, setQr] = useState('');
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [pending, setPending] = useState(false);
   const [format, setFormat] = useState('base64');
+  useEffect(() => {
+    const id = window.setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [searchInput]);
   const { nodes, refetch: refetchNodes } = useNodesQuery();
   const nodeActions = useNodeMutations();
   const options = useInboundOptions();
@@ -119,11 +122,26 @@ export default function ManagerPage() {
     const saved = SubscriptionSchema.parse(r.obj);
     refresh();
     if (generate) {
-      setSub(saved);
-      if (!(await action(`/subscriptions/${saved.id}/rotate`))) return false;
-      msg.success(m('queued'));
+      // Saving and queueing are separate operations: do not report a saved
+      // subscription as unsaved if the follow-up queue request fails.
+      if (await action(`/subscriptions/${saved.id}/rotate`)) msg.success(m('queued'));
+      else msg.warning(m('savedNoGeneration'));
     }
     return true;
+  };
+  const openSubscription = async (id: number) => {
+    try {
+      const r = await HttpUtil.get(`/panel/api/manager/subscriptions/${id}`, undefined, {
+        silent: true,
+      });
+      if (!r.success) {
+        msg.error(r.msg);
+        return;
+      }
+      setSub(SubscriptionSchema.parse(r.obj));
+    } catch (e) {
+      msg.error(String(e));
+    }
   };
   const confirm = (path: string) =>
     modal.confirm({
@@ -135,12 +153,6 @@ export default function ManagerPage() {
         if (!(await action(path))) throw new Error('Failed');
       },
     });
-  const publicURL = (v: Subscription) =>
-    new URL(
-      (window.X_UI_BASE_PATH || '/').replace(/\/?$/, '/') +
-        `bus/${v.token}${format === 'base64' ? '' : '?format=' + format}`,
-      window.location.origin,
-    ).toString();
   const exportDomains = () => {
     const url = URL.createObjectURL(
       new Blob([(q.data?.domains ?? []).map((d) => d.name).join('\n')], { type: 'text/plain' }),
@@ -160,26 +172,28 @@ export default function ManagerPage() {
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
             <Space orientation="vertical" style={{ width: '100%' }} size="middle">
-              <div className="manager-toolbar">
-                <Select
-                  aria-label={m('format')}
-                  value={format}
-                  onChange={setFormat}
-                  options={['base64', 'raw', 'singbox', 'hiddify', 'xray'].map((value) => ({
-                    value,
-                    label: value,
-                  }))}
-                  style={{ minWidth: 140 }}
-                />
-                <div>
+              <div className="manager-page-header">
+                <div className="manager-page-heading">
                   <Typography.Title level={3} style={{ margin: 0 }}>
                     {m('title')}
                   </Typography.Title>
                   <Typography.Text type="secondary">{m('subtitle')}</Typography.Text>
                 </div>
-                <Button icon={<ReloadOutlined />} loading={q.isFetching} onClick={refresh}>
-                  {t('refresh')}
-                </Button>
+                <div className="manager-page-tools">
+                  <Select
+                    aria-label={m('format')}
+                    value={format}
+                    onChange={setFormat}
+                    options={['base64', 'raw', 'singbox', 'hiddify', 'xray'].map((value) => ({
+                      value,
+                      label: value,
+                    }))}
+                    style={{ minWidth: 140 }}
+                  />
+                  <Button icon={<ReloadOutlined />} loading={q.isFetching} onClick={refresh}>
+                    {t('refresh')}
+                  </Button>
+                </div>
               </div>
               {q.error && (
                 <Alert
@@ -195,13 +209,12 @@ export default function ManagerPage() {
                     [m('subscriptions'), q.data?.subscriptionTotal ?? 0],
                     [
                       m('autoRotate'),
-                      q.data?.subscriptions.filter((v) => v.enabled && v.autoRotate).length ?? 0,
+                      q.data?.autoRotateTotal ?? 0,
                     ],
                     [m('nodes'), nodes.length],
                     [
                       m('pending'),
-                      q.data?.operations.filter((v) => ['queued', 'running'].includes(v.state))
-                        .length ?? 0,
+                      q.data?.pendingOperations ?? 0,
                     ],
                   ].map(([label, value]) => (
                     <Col xs={12} md={6} key={String(label)}>
@@ -218,151 +231,26 @@ export default function ManagerPage() {
                     key: 'subscriptions',
                     label: m('subscriptions'),
                     children: (
-                      <>
-                        <div className="manager-toolbar">
-                          <Input
-                            aria-label={m('search')}
-                            placeholder={m('search')}
-                            value={search}
-                            onChange={(e) => {
-                              setSubscriptionPage(1);
-                              setSearch(e.target.value);
-                            }}
-                            style={{ maxWidth: 300 }}
-                          />
-                          <Space wrap>
-                            <Button disabled={pending} onClick={() => void action('/rotate')}>
-                              {m('rotateAll')}
-                            </Button>
-                            <Button
-                              type="primary"
-                              icon={<PlusOutlined />}
-                              onClick={() => setSub(newSubscription())}
-                            >
-                              {m('addSubscription')}
-                            </Button>
-                          </Space>
-                        </div>
-                        {q.data?.subscriptions.length === 0 && <Empty description={m('empty')} />}
-                        <Row gutter={[16, 16]}>
-                          {q.data?.subscriptions.map((v) => {
-                            const job = q.data.operations.find(
-                              (op) =>
-                                op.subscriptionId === v.id &&
-                                ['queued', 'running'].includes(op.state),
-                            );
-                            const client = q.data.clients[String(v.clientId)];
-                            return (
-                              <Col xs={24} xl={12} key={v.id}>
-                                <Card
-                                  title={v.name}
-                                  extra={
-                                    <Tag color={v.enabled ? 'green' : 'default'}>
-                                      {m(v.enabled ? 'enabled' : 'disabled')}
-                                    </Tag>
-                                  }
-                                >
-                                  <Space orientation="vertical" style={{ width: '100%' }}>
-                                    <Typography.Text type="secondary">{v.note}</Typography.Text>
-                                    <Typography.Text>
-                                      {v.entries.length}/20 ·{' '}
-                                      {v.autoRotate
-                                        ? `${m('autoRotate')} · ${v.intervalMinutes} ${m('minutes')}`
-                                        : m('manual')}
-                                    </Typography.Text>
-                                    <Typography.Text type="secondary">
-                                      {m('lastRotation')}:{' '}
-                                      {v.lastRotation
-                                        ? new Date(v.lastRotation).toLocaleString()
-                                        : '—'}
-                                    </Typography.Text>
-                                    {client && (
-                                      <>
-                                        <Typography.Text>
-                                          {client.email} · {m('traffic')}:{' '}
-                                          {SizeFormatter.sizeFormat(client.up + client.down)} /{' '}
-                                          {client.total
-                                            ? SizeFormatter.sizeFormat(client.total)
-                                            : '∞'}{' '}
-                                          · {m('expiry')}:{' '}
-                                          {client.expiryTime > 0
-                                            ? new Date(client.expiryTime).toLocaleString()
-                                            : '∞'}
-                                        </Typography.Text>
-                                        <Button size="small" onClick={() => navigate('/clients')}>
-                                          {m('manageClient')}
-                                        </Button>
-                                      </>
-                                    )}
-                                    <Typography.Paragraph
-                                      copyable={{ text: publicURL(v) }}
-                                      style={{ marginBottom: 0, overflowWrap: 'anywhere' }}
-                                    >
-                                      {publicURL(v)}
-                                    </Typography.Paragraph>
-                                    <Space wrap>
-                                      <Button
-                                        size="small"
-                                        disabled={!!job || !v.enabled || pending}
-                                        onClick={() => void action(`/subscriptions/${v.id}/rotate`)}
-                                      >
-                                        {m('generate')}
-                                      </Button>
-                                      <Button
-                                        size="small"
-                                        disabled={!!job}
-                                        onClick={() =>
-                                          void (async () => {
-                                            try {
-                                              const r = await HttpUtil.get(
-                                                `/panel/api/manager/subscriptions/${v.id}`,
-                                              );
-                                              if (r.success)
-                                                setSub(SubscriptionSchema.parse(r.obj));
-                                              else msg.error(r.msg);
-                                            } catch (e) {
-                                              msg.error(String(e));
-                                            }
-                                          })()
-                                        }
-                                      >
-                                        {t('edit')}
-                                      </Button>
-                                      <Button size="small" onClick={() => setQr(publicURL(v))}>
-                                        QR
-                                      </Button>
-                                      <Button
-                                        size="small"
-                                        danger
-                                        disabled={!!job || pending}
-                                        onClick={() => confirm(`/subscriptions/${v.id}/delete`)}
-                                      >
-                                        {t('delete')}
-                                      </Button>
-                                    </Space>
-                                    {job && (
-                                      <Progress
-                                        status="active"
-                                        percent={Math.round(
-                                          (100 * job.completed) / Math.max(1, job.total),
-                                        )}
-                                      />
-                                    )}
-                                  </Space>
-                                </Card>
-                              </Col>
-                            );
-                          })}
-                        </Row>
-                        <Pagination
-                          current={subscriptionPage}
-                          pageSize={q.data?.pageSize ?? 25}
-                          total={q.data?.subscriptionTotal ?? 0}
-                          showSizeChanger={false}
-                          onChange={setSubscriptionPage}
-                          style={{ marginTop: 16 }}
-                        />
-                      </>
+                      <SubscriptionWorkspace
+                        data={q.data}
+                        loading={q.isPending}
+                        pending={pending}
+                        search={searchInput}
+                        page={subscriptionPage}
+                        format={format}
+                        onSearch={(value) => {
+                          setSubscriptionPage(1);
+                          setSearchInput(value);
+                        }}
+                        onPage={setSubscriptionPage}
+                        onAdd={() => setSub(newSubscription())}
+                        onRotateAll={() => void action('/rotate')}
+                        onRotate={(id) => void action(`/subscriptions/${id}/rotate`)}
+                        onEdit={(id) => void openSubscription(id)}
+                        onDelete={(id) => confirm(`/subscriptions/${id}/delete`)}
+                        onQR={setQr}
+                        onManageClient={() => navigate('/clients')}
+                      />
                     ),
                   },
                   {
