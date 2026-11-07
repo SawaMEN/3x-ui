@@ -50,6 +50,10 @@ type RedirectSiteCheck = {
   status: number;
   pathStatus: number;
   latencyMs: number;
+  sniLatencyMs?: number;
+  sniStable?: boolean;
+  tls13?: boolean;
+  http2?: boolean;
   score: number;
   error?: string;
 };
@@ -186,7 +190,7 @@ export default function DomainFrontTab({
     if (!updateSetting) return;
     setScanningRedirect(true);
     try {
-      const response = await HttpUtil.post('/panel/api/domains/recommend', {}, { silent: true });
+      const response = await HttpUtil.post('/panel/api/domains/recommend', {}, { silent: true, timeout: 40_000 });
       if (!response?.success) throw new Error(response?.msg || t('somethingWentWrong'));
       const scan = response.obj as RedirectSiteScan;
       if (!scan || !Array.isArray(scan.sites) || typeof scan.recommended !== 'string')
@@ -369,6 +373,18 @@ export default function DomainFrontTab({
                       title: t('pages.settings.redirectScanLatency'),
                       key: 'latency',
                       render: (_, site) => (site.available ? `${site.latencyMs} ms` : '—'),
+                    },
+                    {
+                      title: t('pages.settings.redirectScanSNI'),
+                      key: 'sni',
+                      render: (_, site) => (
+                        <Space size={4}>
+                          {site.sniLatencyMs ? `${site.sniLatencyMs} ms` : '—'}
+                          {site.sniStable && (
+                            <Tag color="green">{t('pages.settings.redirectScanStable')}</Tag>
+                          )}
+                        </Space>
+                      ),
                     },
                     {
                       title: t('pages.settings.redirectScanScore'),
