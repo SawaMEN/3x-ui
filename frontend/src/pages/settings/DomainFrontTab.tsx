@@ -190,7 +190,11 @@ export default function DomainFrontTab({
     if (!updateSetting) return;
     setScanningRedirect(true);
     try {
-      const response = await HttpUtil.post('/panel/api/domains/recommend', {}, { silent: true, timeout: 40_000 });
+      const response = await HttpUtil.post(
+        '/panel/api/domains/recommend',
+        {},
+        { silent: true, timeout: 40_000 },
+      );
       if (!response?.success) throw new Error(response?.msg || t('somethingWentWrong'));
       const scan = response.obj as RedirectSiteScan;
       if (!scan || !Array.isArray(scan.sites) || typeof scan.recommended !== 'string')
