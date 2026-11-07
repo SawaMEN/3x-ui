@@ -421,6 +421,9 @@ func (s *CoreService) getXrayConfigWithTemplate(templateConfig string) (*xray.Co
 	if err := transformAdditionalOutbounds(xrayConfig); err != nil {
 		return nil, err
 	}
+	if err := injectXrayNodeRoutes(xrayConfig); err != nil {
+		return nil, err
+	}
 	return xrayConfig, nil
 }
 

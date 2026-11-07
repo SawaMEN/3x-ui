@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -25,6 +25,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
+import { HttpUtil } from '@/utils';
 import { buildRemarkByTag, formatInboundTag } from './helpers';
 import { selectableRoutingInboundTags } from './inbound-options';
 import {
@@ -42,6 +43,18 @@ import {
   type RoutingEngine,
 } from './quick-routing';
 import './QuickRoutingPanel.css';
+
+interface NodeRouteTarget {
+  tag: string;
+  inboundId: number;
+  nodeId: number;
+  nodeName: string;
+  remark: string;
+  protocol: string;
+  port: number;
+  available: boolean;
+  reason?: string;
+}
 
 interface Props {
   engine: RoutingEngine;
@@ -81,6 +94,9 @@ export default function QuickRoutingPanel({
   const [draft, setDraft] = useState<QuickRouteDraft>(blankDraft);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [nodeTargets, setNodeTargets] = useState<NodeRouteTarget[]>([]);
+  const [nodeTargetsLoading, setNodeTargetsLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const {
     data: inboundOptions,
@@ -88,7 +104,30 @@ export default function QuickRoutingPanel({
     isError: inboundOptionsError,
   } = useInboundOptions();
   const remarkByTag = useMemo(() => buildRemarkByTag(inboundOptions || []), [inboundOptions]);
-  const tags = useMemo(() => [...new Set(outboundTags.filter(Boolean))], [outboundTags]);
+  useEffect(() => {
+    let active = true;
+    void HttpUtil.get<NodeRouteTarget[]>(
+      '/panel/api/xray/node-route/targets?core=' + encodeURIComponent(engine),
+      undefined,
+      { silent: true },
+    )
+      .then((result) => {
+        if (active) setNodeTargets(result?.success && Array.isArray(result.obj) ? result.obj : []);
+      })
+      .catch(() => {
+        if (active) setNodeTargets([]);
+      })
+      .finally(() => {
+        if (active) setNodeTargetsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [engine]);
+  const tags = useMemo(
+    () => [...new Set([...outboundTags.filter(Boolean), ...nodeTargets.map((node) => node.tag)])],
+    [outboundTags, nodeTargets],
+  );
   const inTags = useMemo(
     () => selectableRoutingInboundTags(engine, inboundTags, inboundOptions || []),
     [engine, inboundTags, inboundOptions],
@@ -101,17 +140,67 @@ export default function QuickRoutingPanel({
   const warnings = useMemo(() => diagnoseRouting(rules, engine, tags), [rules, engine, tags]);
 
   const targetOptions = [
-    ...(engine === 'sing-box' ? [{ value: '@reject', label: 'Блокировать соединение' }] : []),
-    ...tags.map((value) => ({
-      value,
-      label:
-        value === 'direct'
-          ? 'direct · Напрямую'
-          : value === 'blocked'
-            ? 'blocked · Заблокировать'
-            : value,
-    })),
+    {
+      label: 'Локальные исходящие подключения',
+      options: [
+        ...(engine === 'sing-box' ? [{ value: '@reject', label: 'Блокировать соединение' }] : []),
+        ...outboundTags.filter(Boolean).map((value) => ({
+          value,
+          label:
+            value === 'direct'
+              ? 'direct · Напрямую'
+              : value === 'blocked'
+                ? 'blocked · Заблокировать'
+                : value,
+        })),
+      ],
+    },
+    ...Array.from(new Set(nodeTargets.map((node) => node.nodeId))).map((nodeId) => {
+      const selected = nodeTargets.filter((node) => node.nodeId === nodeId);
+      return {
+        label: 'Нода · ' + (selected[0]?.nodeName || String(nodeId)),
+        options: selected.map((node) => ({
+          value: node.tag,
+          label:
+            (node.remark || node.protocol) +
+            ' · ' +
+            node.protocol +
+            ':' +
+            node.port +
+            (node.available ? '' : ' · ' + (node.reason || 'Недоступно')),
+          disabled: !node.available,
+        })),
+      };
+    }),
   ];
+
+  async function provisionNodeTarget(tag: string): Promise<void> {
+    if (!tag.startsWith('node-route-')) return;
+    const target = nodeTargets.find((node) => node.tag === tag);
+    if (!target || !target.available) {
+      throw new Error(target?.reason || 'Выбранное подключение ноды недоступно.');
+    }
+    const response = await HttpUtil.post<{ tag: string }>('/panel/api/xray/node-route/ensure', {
+      inboundId: target.inboundId,
+      core: engine,
+    });
+    if (!response?.success || response.obj?.tag !== tag) {
+      throw new Error(response?.msg || 'Не удалось подготовить подключение ноды.');
+    }
+  }
+
+  async function changeManagedTarget(marker: string, tag: string) {
+    if (creating) return;
+    setCreating(true);
+    try {
+      await provisionNodeTarget(tag);
+      onChange(setQuickRouteTarget(rules, marker, tag, engine, tags));
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreating(false);
+    }
+  }
   const modes: { value: QuickMatch; label: string; caption: string }[] = [
     {
       value: 'inbound',
@@ -129,10 +218,13 @@ export default function QuickRoutingPanel({
   const activeMode = modes.find((mode) => mode.value === draft.match) ?? modes[0];
   const activeRoutes = rules.filter((rule) => rule.enabled !== false).length;
 
-  function create() {
+  async function create() {
+    if (creating) return;
+    setCreating(true);
     setError('');
     setNotice('');
     try {
+      await provisionNodeTarget(draft.target);
       const compiled = compileQuickRoute(draft, engine, tags, inTags);
       const result = putQuickRoute(rules, compiled, engine);
       onChange(result.rules);
@@ -144,6 +236,8 @@ export default function QuickRoutingPanel({
       if (!result.replaced) setDraft((current) => ({ ...current, values: '' }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -284,6 +378,7 @@ export default function QuickRoutingPanel({
             className="quick-routing-select"
             aria-label="Исходящее подключение"
             placeholder="Выберите исходящее подключение"
+            loading={nodeTargetsLoading}
             value={draft.target || undefined}
             onChange={(target) => setDraft((current) => ({ ...current, target: target || '' }))}
             options={targetOptions}
@@ -298,7 +393,9 @@ export default function QuickRoutingPanel({
             </Tag>
             <ArrowRightOutlined aria-hidden="true" />
             <Tag color={draft.target === '@reject' || draft.target === 'blocked' ? 'red' : 'blue'}>
-              {draft.target || 'Исходящий'}
+              {nodeTargets.find((node) => node.tag === draft.target)?.remark ||
+                draft.target ||
+                'Исходящий'}
             </Tag>
           </div>
           {error && <Alert type="error" showIcon title={error} />}
@@ -307,10 +404,12 @@ export default function QuickRoutingPanel({
             <Button
               type="primary"
               icon={<PlusOutlined aria-hidden="true" />}
+              loading={creating}
               disabled={
-                draft.match === 'inbound'
+                creating ||
+                (draft.match === 'inbound'
                   ? draft.inboundTags.length === 0 || !draft.target
-                  : !draft.values.trim() || !draft.target
+                  : !draft.values.trim() || !draft.target)
               }
               onClick={create}
             >
@@ -363,9 +462,8 @@ export default function QuickRoutingPanel({
                           }
                           style={{ minWidth: 105, flex: 1, maxWidth: 230 }}
                           options={targetOptions}
-                          onChange={(target) =>
-                            onChange(setQuickRouteTarget(rules, marker, target, engine, tags))
-                          }
+                          disabled={creating}
+                          onChange={(target) => void changeManagedTarget(marker, target)}
                         />
                         <Space size={5}>
                           <Switch
