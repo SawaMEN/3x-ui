@@ -305,11 +305,13 @@ func (r *frontRuntime) redirectHTTPS(w http.ResponseWriter, req *http.Request) {
 	if r.backend.GetRedirect != nil {
 		redirectURL, _ = r.backend.GetRedirect()
 	}
-	if target := RootRedirectTarget(req, redirectURL); target != "" {
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		http.Redirect(w, req, target, http.StatusFound)
-		return
+	if !r.protectedRedirectPath(d, req.URL.Path) {
+		if target := RootRedirectTarget(req, redirectURL); target != "" {
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			http.Redirect(w, req, target, http.StatusFound)
+			return
+		}
 	}
 	host := d.Name
 	if r.cfg.PublicPort != 443 {
@@ -482,6 +484,48 @@ func pathWithin(path, prefix string) bool {
 	return path == prefix || strings.HasPrefix(path, prefix+"/")
 }
 
+// panelRequestPath protects actual panel endpoints, including SPA routes
+// that are intentionally dispatched by the panel's NoRoute handler.
+func (r *frontRuntime) panelRequestPath(d DomainFrontDomain, path string) bool {
+	if !d.Panel || d.Mode == "sub_link_only" {
+		return false
+	}
+	if base := r.backend.PanelPath; base != "" && base != "/" {
+		return pathWithin(path, base)
+	}
+	for _, prefix := range []string{
+		"/panel", "/login", "/logout", "/csrf-token", "/getTwoFactorEnable",
+		"/ws", "/bus", "/api", "/assets", "/manifest.webmanifest",
+		"/pwa-register.js", "/service-worker.js", "/icons",
+	} {
+		if pathWithin(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// Protected paths never reach an external decoy redirect, on either HTTP
+// (where they must upgrade to HTTPS) or HTTPS (where they are dispatched).
+func (r *frontRuntime) protectedRedirectPath(d DomainFrontDomain, path string) bool {
+	if strings.HasPrefix(path, "/.well-known/acme-challenge/") {
+		return true
+	}
+	if d.Mode != "sub_link_only" {
+		for _, route := range r.backend.Routes[d.Name] {
+			if pathWithin(path, route.Path) {
+				return true
+			}
+		}
+	}
+	for _, prefix := range r.backend.SubscriptionPaths {
+		if prefix != "" && pathWithin(path, prefix) {
+			return true
+		}
+	}
+	return r.panelRequestPath(d, path)
+}
+
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
 	subTarget := r.backend.SubscriptionTarget
 	subHost := d.Name
@@ -559,6 +603,10 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 				return
 			}
 		}
+		if panel != nil && r.panelRequestPath(d, req.URL.Path) {
+			panel.ServeHTTP(w, req)
+			return
+		}
 		redirectURL := r.backend.RedirectURL
 		if r.backend.GetRedirect != nil {
 			redirectURL, _ = r.backend.GetRedirect()
@@ -569,8 +617,7 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 			http.Redirect(w, req, target, http.StatusFound)
 			return
 		}
-
-		if panel != nil && (pathWithin(req.URL.Path, r.backend.PanelPath) || req.URL.Path == "/") {
+		if panel != nil && req.URL.Path == "/" {
 			panel.ServeHTTP(w, req)
 			return
 		}
