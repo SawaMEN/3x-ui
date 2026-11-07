@@ -17,19 +17,25 @@ func TestBuildXrayRouteContext(t *testing.T) {
 		wantPort uint32
 	}{
 		{
-			name: "TCP domain",
-			request: RouteTestRequest{Domain: "example.org", Port: 443, Network: "tcp", InboundTag: "in", Protocol: "tls"},
-			network: xraynet.Network_TCP, domain: "example.org", wantPort: 443,
+			name:     "TCP domain",
+			request:  RouteTestRequest{Domain: "example.org", Port: 443, Network: "tcp", InboundTag: "in", Protocol: "tls"},
+			network:  xraynet.Network_TCP,
+			domain:   "example.org",
+			wantPort: 443,
 		},
 		{
-			name: "UDP IPv4",
-			request: RouteTestRequest{IP: "203.0.113.5", Port: 53, Network: "udp"},
-			network: xraynet.Network_UDP, wantIP: net.ParseIP("203.0.113.5"), wantPort: 53,
+			name:     "UDP IPv4",
+			request:  RouteTestRequest{IP: "203.0.113.5", Port: 53, Network: "udp"},
+			network:  xraynet.Network_UDP,
+			wantIP:   net.ParseIP("203.0.113.5"),
+			wantPort: 53,
 		},
 		{
-			name: "UDP IPv6",
-			request: RouteTestRequest{IP: "2001:db8::3", Port: 443, Network: "udp"},
-			network: xraynet.Network_UDP, wantIP: net.ParseIP("2001:db8::3"), wantPort: 443,
+			name:     "UDP IPv6",
+			request:  RouteTestRequest{IP: "2001:db8::3", Port: 443, Network: "udp"},
+			network:  xraynet.Network_UDP,
+			wantIP:   net.ParseIP("2001:db8::3"),
+			wantPort: 443,
 		},
 	}
 	for _, tt := range tests {
