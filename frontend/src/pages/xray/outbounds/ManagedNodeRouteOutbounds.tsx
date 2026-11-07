@@ -23,14 +23,18 @@ interface Props {
 // generated outbound (both are intentionally absent from the editor template).
 export default function ManagedNodeRouteOutbounds({ engine, rules }: Props) {
   const routes = useMemo(() => managedNodeRoutes(rules, engine), [rules, engine]);
-  const routeKey = routes.map((route) => route.tag).join(',');
-  const [targets, setTargets] = useState<NodeRouteTarget[] | null>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const routeKey = engine + ':' + routes.map((route) => route.tag).join(',');
+  const [result, setResult] = useState<{
+    key: string;
+    targets: NodeRouteTarget[];
+    success: boolean;
+  } | null>(null);
+  const status = result?.key !== routeKey ? 'loading' : result.success ? 'ready' : 'error';
+  const targets = status === 'ready' ? result?.targets : null;
 
   useEffect(() => {
-    if (!routeKey) return;
+    if (routes.length === 0) return;
     let active = true;
-    setStatus('loading');
     void HttpUtil.get<NodeRouteTarget[]>(
       '/panel/api/xray/node-route/targets?core=' + encodeURIComponent(engine),
       undefined,
@@ -39,19 +43,18 @@ export default function ManagedNodeRouteOutbounds({ engine, rules }: Props) {
       .then((response) => {
         if (!active) return;
         if (response?.success && Array.isArray(response.obj)) {
-          setTargets(response.obj);
-          setStatus('ready');
+          setResult({ key: routeKey, targets: response.obj, success: true });
         } else {
-          setStatus('error');
+          setResult({ key: routeKey, targets: [], success: false });
         }
       })
       .catch(() => {
-        if (active) setStatus('error');
+        if (active) setResult({ key: routeKey, targets: [], success: false });
       });
     return () => {
       active = false;
     };
-  }, [engine, routeKey]);
+  }, [routeKey, routes.length]);
 
   if (routes.length === 0) return null;
 
