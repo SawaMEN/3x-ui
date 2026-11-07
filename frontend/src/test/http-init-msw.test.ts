@@ -70,6 +70,24 @@ describe('httpRequest against the MSW-mocked network', () => {
     expect(res.status).toBe(200);
   });
 
+  it('provides a JSON body to the node-route provision handler', async () => {
+    const payload = { inboundId: 42, core: 'xray' };
+    let received: unknown;
+    let contentType: string | null = null;
+    server.use(
+      http.post(`${ORIGIN}/panel/api/xray/node-route/ensure`, async ({ request }) => {
+        contentType = request.headers.get('Content-Type');
+        received = await request.json();
+        return HttpResponse.json({ success: true, obj: { tag: 'node-route-42' } });
+      }),
+    );
+
+    const response = await httpRequest('POST', '/panel/api/xray/node-route/ensure', payload);
+    expect(response.status).toBe(200);
+    expect(received).toEqual(payload);
+    expect(contentType).toBe('application/json; charset=UTF-8');
+  });
+
   it('resolves a safe GET without requesting a CSRF token', async () => {
     let csrfHits = 0;
     server.use(
