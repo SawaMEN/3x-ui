@@ -134,8 +134,8 @@ export default function SubscriptionWorkspace({
               >
                 <div className="manager-subscription-content">
                   <div className="manager-subscription-meta">
-                    <Tag bordered={false}>{m('connections')}: {sub.entries.length}/20</Tag>
-                    <Tag color={sub.autoRotate ? 'processing' : 'default'} bordered={false}>
+                    <Tag variant="filled">{m('connections')}: {sub.entries.length}/20</Tag>
+                    <Tag color={sub.autoRotate ? 'processing' : 'default'} variant="filled">
                       {sub.autoRotate
                         ? m('autoRotate') + ' · ' + sub.intervalMinutes + ' ' + m('minutes')
                         : m('manual')}
