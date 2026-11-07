@@ -62,6 +62,31 @@ func TestManagerKeepsNativeProtocolLinks(t *testing.T) {
 	if !strings.Contains(string(data), "Office%20anytls") {
 		t.Fatalf("label lost: %s", data)
 	}
+	// Native-format consumers cannot represent the external VetroffProxy
+	// process. They must receive the complete published link selection rather
+	// than an incomplete JSON profile or an HTTP 406.
+	for _, format := range []string{"singbox", "hiddify", "xray"} {
+		t.Run("fallback-"+format, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			url := "https://panel.example/bus/" + sub.Token + "?format=" + format
+			service.ServeManagerSubscription(response, httptest.NewRequest(http.MethodGet, url, nil), sub.Token)
+			if response.Code != http.StatusOK {
+				t.Fatalf("missing manager fallback: HTTP %d: %s", response.Code, response.Body.String())
+			}
+			if contentType := response.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/plain") {
+				t.Fatalf("expected lossless link format, got %q", contentType)
+			}
+			links, err := base64.StdEncoding.DecodeString(response.Body.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, scheme := range []string{"vless://", "anytls://", "vetroff://"} {
+				if !strings.Contains(string(links), scheme) {
+					t.Fatalf("%s lost %s: %s", format, scheme, links)
+				}
+			}
+		})
+	}
 }
 
 func TestManagerJSONKeepsMASQUEAndExcludesOtherClientAttachments(t *testing.T) {
