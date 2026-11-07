@@ -14,29 +14,22 @@ import (
 	"time"
 )
 
-// Decoy sites are deliberately server-maintained. Never dial user-supplied URLs:
-// a public admin API that fetches arbitrary URLs is an SSRF risk.
-var decoyCandidates = []string{
-	"https://ya.ru/",
-	"https://www.wikipedia.org/",
-	"https://www.mozilla.org/",
-	"https://github.com/",
-	"https://habr.com/",
-	"https://www.cloudflare.com/",
-	"https://www.google.com/",
-	"https://www.bing.com/",
-	"https://www.microsoft.com/",
-	"https://www.debian.org/",
-	"https://hh.ru/",
-	"https://www.ozon.ru/",
-	"https://www.avito.ru/",
-	"https://www.rbc.ru/",
-	"https://www.2gis.ru/",
-	"https://www.vk.com/",
+// The candidate list comes from the existing SNI scan catalogue and its
+// verified history, never from the HTTP request that starts the scan.
+type DecoyCandidate struct {
+	URL          string
+	SNILatencyMS int64
+	TLS13        bool
+	HTTP2        bool
+	SNIStable    bool
 }
 
 type DecoySiteCheck struct {
 	URL        string `json:"url"`
+	SNILatencyMS int64 `json:"sniLatencyMs"`
+	TLS13       bool `json:"tls13"`
+	HTTP2       bool `json:"http2"`
+	SNIStable   bool `json:"sniStable"`
 	Available  bool   `json:"available"`
 	Status     int    `json:"status"`
 	PathStatus int    `json:"pathStatus"`
@@ -158,22 +151,30 @@ func scoreDecoySite(site *DecoySiteCheck) {
 		score -= 5
 	}
 	score -= int(min(site.LatencyMS/50, 20))
+	// Favor the stable verified entries already measured by the SNI tool,
+	// without making REALITY-specific capabilities mandatory for websites.
+	if site.TLS13 { score += 2 }
+	if site.HTTP2 { score += 2 }
+	if site.SNIStable { score += 4 }
 	if score < 1 {
 		score = 1
 	}
 	site.Score = score
 }
 
-func probeDecoySite(ctx context.Context, client *http.Client, raw string) DecoySiteCheck {
-	result := DecoySiteCheck{URL: raw}
-	status, latency, err := decoyHTTPStatus(ctx, client, raw)
+func probeDecoySite(ctx context.Context, client *http.Client, candidate DecoyCandidate) DecoySiteCheck {
+	result := DecoySiteCheck{
+		URL: candidate.URL, SNILatencyMS: candidate.SNILatencyMS,
+		TLS13: candidate.TLS13, HTTP2: candidate.HTTP2, SNIStable: candidate.SNIStable,
+	}
+	status, latency, err := decoyHTTPStatus(ctx, client, candidate.URL)
 	result.Status, result.LatencyMS = status, latency.Milliseconds()
 	if err != nil {
 		result.Error = err.Error()
 		return result
 	}
 	if status >= 200 && status < 400 {
-		base, err := url.Parse(raw)
+		base, err := url.Parse(candidate.URL)
 		if err == nil {
 			base.Path = "/123"
 			base.RawQuery = ""
@@ -184,29 +185,50 @@ func probeDecoySite(ctx context.Context, client *http.Client, raw string) DecoyS
 	return result
 }
 
-// ScanDecoySites checks only a finite allowlisted set. Scores reflect
-// reachability from THIS server, not accessibility from clients' networks,
-// blocklist status or any guarantee of censorship circumvention.
-func ScanDecoySites(ctx context.Context) DecoySiteScan {
+// ScanDecoySites makes a second, HTTP-level assessment of SNI-verified
+// candidates. Reject any URL with custom path/port, credentials or non-HTTPS
+// scheme; never use this API as a generic remote URL fetcher.
+func ScanDecoySites(ctx context.Context, candidates []DecoyCandidate) DecoySiteScan {
 	ctx, cancel := context.WithTimeout(ctx, 18*time.Second)
 	defer cancel()
-	out := DecoySiteScan{CheckedAt: time.Now().Unix(), Sites: make([]DecoySiteCheck, len(decoyCandidates))}
+	out := DecoySiteScan{CheckedAt: time.Now().Unix(), Sites: []DecoySiteCheck{}}
+	validated := make([]DecoyCandidate, 0, len(candidates))
+	seen := make(map[string]bool)
+	for _, candidate := range candidates {
+		u, err := ValidateRootRedirectURL(candidate.URL)
+		if err != nil || u.Scheme != "https" || u.Port() != "" ||
+			u.RawQuery != "" || u.Fragment != "" ||
+			(u.Path != "" && u.Path != "/") || net.ParseIP(u.Hostname()) != nil ||
+			!strings.Contains(u.Hostname(), ".") {
+			continue
+		}
+		candidate.URL = "https://" + u.Hostname() + "/"
+		if seen[candidate.URL] {
+			continue
+		}
+		seen[candidate.URL] = true
+		validated = append(validated, candidate)
+		if len(validated) == 16 {
+			break
+		}
+	}
+	out.Sites = make([]DecoySiteCheck, len(validated))
 	client := decoyHTTPClient()
 	defer client.CloseIdleConnections()
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 4)
-	for i, candidate := range decoyCandidates {
+	for i, candidate := range validated {
 		wg.Add(1)
-		go func(i int, raw string) {
+		go func(i int, candidate DecoyCandidate) {
 			defer wg.Done()
 			select {
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
 			case <-ctx.Done():
-				out.Sites[i] = DecoySiteCheck{URL: raw, Error: "scan timeout"}
+				out.Sites[i] = DecoySiteCheck{URL: candidate.URL, Error: "scan timeout"}
 				return
 			}
-			out.Sites[i] = probeDecoySite(ctx, client, raw)
+			out.Sites[i] = probeDecoySite(ctx, client, candidate)
 		}(i, candidate)
 	}
 	wg.Wait()
