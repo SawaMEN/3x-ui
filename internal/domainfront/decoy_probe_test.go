@@ -70,7 +70,7 @@ func TestProbeDecoySiteChecksRootAndNestedPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	probe := probeDecoySite(context.Background(), srv.Client(), srv.URL+"/")
+	probe := probeDecoySite(context.Background(), srv.Client(), DecoyCandidate{URL: srv.URL+"/", TLS13: true, HTTP2: true, SNIStable: true})
 	if !probe.Available || probe.Status != 200 || probe.PathStatus != 404 || probe.Score < 65 {
 		t.Fatalf("unexpected scan: %+v", probe)
 	}
@@ -83,5 +83,19 @@ func TestDecoyClientDoesNotFollowRedirects(t *testing.T) {
 	client := decoyHTTPClient()
 	if err := client.CheckRedirect(nil, nil); err != http.ErrUseLastResponse {
 		t.Fatalf("redirect policy = %v", err)
+	}
+}
+
+func TestSiteCandidatesRejectUnsafeURLs(t *testing.T) {
+	result := ScanDecoySites(context.Background(), []DecoyCandidate{
+		{URL: "http://example.com/"},
+		{URL: "https://example.com:8443/"},
+		{URL: "https://127.0.0.1/"},
+		{URL: "https://example.com/private"},
+		{URL: "https://alice:secret@example.com/"},
+		{URL: "file:///etc/passwd"},
+	})
+	if len(result.Sites) != 0 || result.Recommended != "" {
+		t.Fatalf("accepted unsafe sites: %+v", result)
 	}
 }
