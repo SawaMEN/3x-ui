@@ -34,7 +34,21 @@ jobs:
     outputs:
       sha: ${{ steps.pinned-sha.outputs.sha }}
       done: ${{ steps.reviewed.outputs.done }}
+      credentials: ${{ steps.credentials.outputs.available }}
     steps:
+      # Unavailable credentials are not a code-review failure. Skip the model
+      # and let the post job tell the maintainer that no review took place.
+      - name: Check Claude review credentials
+        id: credentials
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Claude review unavailable: configure repository Actions secret CLAUDE_CODE_OAUTH_TOKEN."
+          fi
       # A custom prompt puts the action in agent mode, which never reacts on its
       # own, so the requester gets no sign the run started.
       - name: Acknowledge the request
@@ -89,7 +103,7 @@ jobs:
   # /tmp/review.md and the `post` job, which runs no model, publishes it.
   review:
     needs: prepare
-    if: needs.prepare.outputs.done != 'true'
+    if: needs.prepare.outputs.done != 'true' && needs.prepare.outputs.credentials == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -327,15 +341,24 @@ jobs:
       PR: ${{ github.event.pull_request.number || github.event.issue.number }}
     steps:
       - uses: actions/download-artifact@v8
+        if: needs.prepare.outputs.credentials == 'true'
         continue-on-error: true
         with:
           name: claude-review-body-${{ env.PR }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/review
       - uses: actions/download-artifact@v8
+        if: needs.prepare.outputs.credentials == 'true'
         continue-on-error: true
         with:
           name: claude-review-${{ env.PR }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/transcript
+      - name: Report review skipped because credentials are missing
+        if: needs.prepare.outputs.credentials != 'true'
+        env:
+          HEAD_SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          echo "::warning::No Claude code review was performed: CLAUDE_CODE_OAUTH_TOKEN is not configured."
+          gh pr comment "$PR" --repo "$REPO" --body "No Claude review ran on head ${HEAD_SHA}: the repository Actions secret CLAUDE_CODE_OAUTH_TOKEN is not configured. Add the secret, then request a review with \`@claude review\`."
       # An exhausted usage window or an overloaded API is not a broken workflow.
       # Say so where the maintainer will see it, and leave the job green.
       - name: Report a review the API refused to run
@@ -374,7 +397,7 @@ jobs:
       # A body without its own Reviewed head line is unfinished (run 38188509693
       # posted a "placeholder"), and posting it would mark the PR as reviewed.
       - name: Post the review
-        if: ${{ !cancelled() && steps.throttled.outputs.skipped != 'true' && steps.refused.outputs.skipped != 'true' }}
+        if: ${{ !cancelled() && needs.prepare.outputs.credentials == 'true' && steps.throttled.outputs.skipped != 'true' && steps.refused.outputs.skipped != 'true' }}
         env:
           HEAD_SHA: ${{ needs.prepare.outputs.sha }}
           BODY: ${{ runner.temp }}/review/review.md
