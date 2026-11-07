@@ -30,7 +30,8 @@ Use `?format=sing-box` or `?format=hiddify` to request a specific native format.
 An explicit raw-links, Xray or Clash request returns HTTP 406 rather than
 silently hiding MASQUE. A mixed selection that includes protocols unsupported
 by the chosen native format also fails closed; separate those into another
-subscription rather than inventing a nonstandard `masque://` link. The profile contains `masque-client` under `endpoints` and routes
+subscription rather than inventing a nonstandard `masque://` link.
+The native profile contains `masque-client` under `endpoints` and routes
 to its tag. The highest enabled HTTP version is preferred regardless of form
 selection order, with automatic fallback to lower versions. Host TLS overrides
 (SNI, explicit blank SNI, insecure and ALPN) are retained. Standalone profiles
