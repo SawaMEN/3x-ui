@@ -64,13 +64,29 @@ it does not create provider DNS records or change the provider account. The CDN
 here carries subscription HTTP traffic. VPN transport through a CDN still requires
 an appropriate inbound transport and its separate configuration.
 
-## Domain root redirect and appearance
+## Domain website redirect and appearance
 
-In **Settings → General**, enable the domain root redirect and choose a destination
-or enter your own HTTP/HTTPS URL. Only GET/HEAD `/` requests are redirected (302),
-without forwarding the original query string. Other paths retain their behavior.
+In **Settings → General**, enable domain website redirect and choose an HTTP/HTTPS
+destination. Ordinary GET/HEAD browser requests are redirected with **302**:
+
+- `https://example.com/123` → `https://destination.com/123`
+- `https://example.com/a/b?q=1` → `https://destination.com/a/b?q=1`
+- `https://example.com:2345/123` → `https://destination.com:2345/123`,
+  **only if port 2345 actually accepts an HTTP(S) request**.
+- A configured destination base path (e.g. `https://destination.com/site`) is
+  prepended to non-root requests. Destination query parameters are retained.
+  An explicitly configured destination port overrides the incoming port.
+
+Root `/` requests still drop the original query string for privacy. Paths
+registered for the panel, subscription formats, SPA, imported Hiddify subscriptions,
+VPN-over-HTTP transports and ACME HTTP-01 validation take priority and are **not**
+redirected to the decoy. HTTP requests for those paths still upgrade to HTTPS
+normally on the integrated domain gateway. Non-HTTP VPN transports (TCP/UDP)
+on their own dedicated ports are not intercepted or modified; arbitrary HTTP
+redirects cannot be served on a port already owned by such a transport.
+
 For a panel installed at `/`, sign in at `/?panel=1`. With a custom base path,
-continue using that base path. Same-origin destinations are ignored to avoid loops.
+continue using that path. Same-origin redirects are checked to prevent loops.
 
 In **Settings → Subscription → Profile**, enable custom appearance to use the
 minimal style inspired by WhiteMAX: neutral light/dark background, a subtle grid,
