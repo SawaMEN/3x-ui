@@ -1045,10 +1045,10 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 		if err := s.clientService.DetachInbound(tx, c.Id); err != nil {
 			return false, err
 		}
-		if _, err := cleanupDeletedInboundReferencesTx(tx, c); err != nil {
+		if _, err := cleanupDeletedInboundReferencesTx(tx, &c); err != nil {
 			return false, err
 		}
-		if err := cleanupManagedNodeRouteClientTx(tx, c); err != nil {
+		if err := cleanupManagedNodeRouteClientTx(tx, &c); err != nil {
 			return false, err
 		}
 		if err := tx.Where("id = ?", c.Id).
