@@ -75,9 +75,9 @@ func buildXrayRouteContext(in RouteTestRequest) (*routercommand.RoutingContext, 
 	return request, nil
 }
 
-// TestXrayRoute queries the live Xray RoutingService; it does not perform a
+// EvaluateXrayRoute queries the live Xray RoutingService; it does not perform a
 // network reachability probe and does not start another Xray instance.
-func TestXrayRoute(ctx context.Context, input RouteTestRequest) (*RouteTestResult, error) {
+func EvaluateXrayRoute(ctx context.Context, input RouteTestRequest) (*RouteTestResult, error) {
 	routingContext, err := buildXrayRouteContext(input)
 	if err != nil {
 		return nil, err
