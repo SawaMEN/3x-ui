@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"time"
 	"testing"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
