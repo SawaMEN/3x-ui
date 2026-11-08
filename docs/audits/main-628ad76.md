@@ -20,16 +20,20 @@ GitHub REST API просмотрен постранично, `page=1..22` (100 �
 
 5. **MEDIUM — гонка интеграционного теста Sudoku.** `internal/sudoku/traffic_integration_test.go`: после запуска клиента попытка подключения иногда опережала открытие SOCKS-порта, давая `connection refused`. Добавлен ограниченный повтор при `ECONNREFUSED`. Проверка Sidecar egress проходила на `617af8ad`, до последующих изменений.
 
+6. **HIGH — отсутствие ограничения размера входной конфигурации envelope.** `internal/web/middleware/config_envelope.go` полностью считывал входной поток через `io.ReadAll` до распаковки и проверки SHA. Для маршрута `/panel/api/server/importDB` общий лимит запроса отключён, поэтому при включённых envelope-заголовках проверка размера не срабатывала. Теперь размер ограничен 16 МиБ для сжатых и 8 МиБ для несжатых конфигураций; переполнение возвращает 413 до передачи обработчику. `TestConfigEnvelope_LimitsRawBodiesBeforeDecompression` проверяет границу чтения (`limit+1`) и отсутствие вызова downstream.
+
+7. **HIGH — HTML-страница подписки обходила ограничение выдачи конфигураций по HWID.** `internal/sub/controller.go`: `maybeServeSubPage` намеренно не регистрирует устройство и не проверяет HWID, однако в HTML инжектировался `page.Result` с прямыми протокольными URL и пользовательскими реквизитами. Исправлено без расходования слота при просмотре: при активном HWID-лимите `links` и `emails` удаляются из встраиваемых данных страницы. Для подписок без лимита HTML ведёт себя как прежде. Добавлен `TestSubscriptionHwidHTMLRedactsConnectionCredentials`. Важное ограничение: HWID-контроль только выдачи подписки, а не криптографическая привязка протокольного ключа к устройству.
+
 ## Миграции БД
 
 Подтверждены определения и порядок вызовов в `internal/database/db.go`, `migrations.go`, `seeders.go`: `repairOverflowedTrafficCounters`, `migrateLegacySocksInboundsToMixed`, `migrateShadowsocksRemovedCiphers`, `migrateVmessRemovedSecurities`, `seedWireguardPeersToClients`, `seedMtprotoSecretsToClients`, `stripMtprotoInboundSecrets`. Проверка присутствия функций **не подтверждает** сохранность всех данных при обновлении/откате конкретной базы.
 
 ## CI и статический анализ
 
-- `.github/workflows/ci.yml`: в `up` общий Go unit suite перенесён до загрузки Hiddify-core, чтобы ошибки GitHub Releases (наблюдался HTTP 504) не отменяли тесты кода.
+- `.github/workflows/ci.yml`: Go unit suite отделён от интеграционных испытаний, требующих внешнее ядро, в независимые задания `go-test` и `native-core-integration`. Добавлен независимый `go-vet`. Ошибки GitHub Releases HTTP 504 больше не скрывают результаты обычных Go-тестов.
 - `.github/workflows/sidecar-egress.yml`: активирован на `up`.
 - `.github/workflows/codeql.yml`: активирован на `up` для Go, JS/TS и Actions.
-- Ранее наблюдались успешные `golangci`, `govulncheck`, `codegen`, `postgres-durable-first`, `shell-tests` и Sidecar E2E. Результат относится к указанным в GitHub Actions SHA; успешность предыдущего SHA нельзя автоматически переносить на обновлённый HEAD.
+- CI для `6e95148`: `go test -p 12 -vet=off -shuffle=on -count=1 ./...` успешно завершил 80 тестовых пакетов. Также прошли frontend, `race`, `race-service`, `race-sub`, `govulncheck`, `codegen`, `postgres-durable-first`, firewall, shell-tests и `native-client-speed`. Итоговый статус CI «failure» из-за HTTP 504 при скачивании релизных бинарников и action-бандлов (`golangci-lint`). CodeQL на `6e95148` — success для Go, JS/TS и Actions. Эти результаты **не гарантируют** успеха на более позднем HEAD; после последних исправлений нужна повторная проверка.
 
 ## Оставшиеся критерии допуска к слиянию
 
