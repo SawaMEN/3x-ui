@@ -1070,32 +1070,32 @@ export default function DomainFrontTab({
             </Form.Item>
           )}
           {mode !== 'shared_sni' && (
-          <Form.Item
-            name="tls"
-            label={label('tlsLabel')}
-            tooltip={label('tlsHelp')}
-            rules={[antdRule(DomainFormSchema.shape.tls, t)]}
-          >
-            <Select
-              options={['auto', 'certmagic', 'existing', 'manual'].map((value) => ({
-                value,
-                label: label(`tls.${value}`),
-              }))}
-            />
-          </Form.Item>
-          {mode !== 'shared_sni' && (
-          <Typography.Paragraph type="secondary">
-            {label(
-              tls === 'manual'
-                ? 'manualDesc'
-                : tls === 'certmagic'
-                  ? 'certmagicDesc'
-                  : tls === 'existing'
-                    ? 'existingTLSDesc'
-                    : 'autoDesc',
-            )}
-          </Typography.Paragraph>
-          )}
+            <>
+              <Form.Item
+                name="tls"
+                label={label('tlsLabel')}
+                tooltip={label('tlsHelp')}
+                rules={[antdRule(DomainFormSchema.shape.tls, t)]}
+              >
+                <Select
+                  options={['auto', 'certmagic', 'existing', 'manual'].map((value) => ({
+                    value,
+                    label: label(`tls.${value}`),
+                  }))}
+                />
+              </Form.Item>
+              <Typography.Paragraph type="secondary">
+                {label(
+                  tls === 'manual'
+                    ? 'manualDesc'
+                    : tls === 'certmagic'
+                      ? 'certmagicDesc'
+                      : tls === 'existing'
+                        ? 'existingTLSDesc'
+                        : 'autoDesc',
+                )}
+              </Typography.Paragraph>
+            </>
           )}
           {mode !== 'shared_sni' && tls === 'manual' && (
             <>
