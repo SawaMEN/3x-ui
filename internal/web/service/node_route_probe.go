@@ -20,18 +20,18 @@ import (
 // NodeRouteProbeResult identifies the actual target transport. A TCP dial or
 // QUIC version-negotiation response does not authenticate a VPN client.
 type NodeRouteProbeResult struct {
-	Tag           string `json:"tag"`
-	Reachable     bool   `json:"reachable"`
-	CheckedTarget bool   `json:"checkedTarget"`
-	Transport     string `json:"transport"`
-	LatencyMs     int64  `json:"latencyMs,omitempty"`
-	Inconclusive  bool   `json:"inconclusive,omitempty"`
-	TunnelChecked      bool   `json:"tunnelChecked,omitempty"`
-	ProbeSource        string `json:"probeSource,omitempty"`
-	FailureStage       string `json:"failureStage,omitempty"`
-	TransportReachable bool   `json:"transportReachable,omitempty"`
-	TransportDetail    string `json:"transportDetail,omitempty"`
-	Detail             string `json:"detail"`
+	Tag                string  `json:"tag"`
+	Reachable          bool    `json:"reachable"`
+	CheckedTarget      bool    `json:"checkedTarget"`
+	Transport          string  `json:"transport"`
+	LatencyMs          int64   `json:"latencyMs,omitempty"`
+	Inconclusive       bool    `json:"inconclusive,omitempty"`
+	TunnelChecked      bool    `json:"tunnelChecked,omitempty"`
+	ProbeSource        string  `json:"probeSource,omitempty"`
+	FailureStage       string  `json:"failureStage,omitempty"`
+	TransportReachable bool    `json:"transportReachable,omitempty"`
+	TransportDetail    string  `json:"transportDetail,omitempty"`
+	Detail             string  `json:"detail"`
 }
 
 func nodeRouteIsUDP(inbound *model.Inbound) bool {
