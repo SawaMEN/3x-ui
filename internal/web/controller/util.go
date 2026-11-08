@@ -51,20 +51,27 @@ func isTrustedProxy(ip string) bool {
 	if err != nil {
 		return false
 	}
+	return proxyAddrInCIDRs(addr, trustedProxyCIDRs())
+}
 
-	trusted := trustedProxyCIDRs()
-	for value := range strings.SplitSeq(trusted, ",") {
+func proxyAddrInCIDRs(addr netip.Addr, cidrs string) bool {
+	addr = addr.Unmap()
+	for value := range strings.SplitSeq(cidrs, ",") {
 		value = strings.TrimSpace(value)
 		if value == "" {
 			continue
 		}
 		if prefix, err := netip.ParsePrefix(value); err == nil {
+			// Handle IPv4-mapped prefixes consistently with unmapped peers.
+			if prefix.Addr().Is4In6() && prefix.Bits() >= 96 {
+				prefix = netip.PrefixFrom(prefix.Addr().Unmap(), prefix.Bits()-96)
+			}
 			if prefix.Contains(addr) {
 				return true
 			}
 			continue
 		}
-		if proxyIP, err := netip.ParseAddr(value); err == nil && proxyIP.Unmap() == addr.Unmap() {
+		if proxyIP, err := netip.ParseAddr(value); err == nil && proxyIP.Unmap() == addr {
 			return true
 		}
 	}

@@ -789,6 +789,9 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 	if err := translateUsers(out, singProtocol, settings); err != nil {
 		return nil, err
 	}
+	if err := validateHysteria2InboundUsers(out, singProtocol); err != nil {
+		return nil, err
+	}
 	if protocol != "snell" && protocol != "naive" && protocol != "anytls" && protocol != "shadowtls" {
 		if err := translateStream(out, singProtocol, stream, true); err != nil {
 			return nil, err
@@ -993,6 +996,15 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 }
 
 func translateStream(out map[string]any, protocol string, stream map[string]any, inbound bool) error {
+	if protocol == "hysteria" || protocol == "hysteria2" {
+		network := strings.ToLower(strings.TrimSpace(rawString(stream, "network")))
+		// The panel historically saves "tcp" as the placeholder network
+		// for inbound protocols, including Hysteria2. It does not select a
+		// TCP transport for this UDP/QUIC listener.
+		if network != "" && network != "hysteria" && (!inbound || network != "tcp") {
+			return fmt.Errorf("%s %q: Hysteria does not support transport %q", map[bool]string{true: "inbound", false: "outbound"}[inbound], rawString(out, "tag"), network)
+		}
+	}
 	if rawString(stream, "network") == "xdrive" {
 		return translateXDrive(out, protocol, stream, inbound)
 	}
@@ -1334,6 +1346,14 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 		return fmt.Errorf("%s %q has inconsistent Hysteria version %d", direction, rawString(out, "tag"), version)
 	}
 	if protocol == "hysteria" {
+		if raw, exists := settings["obfs"]; exists && raw != nil {
+			if _, ok := raw.(string); !ok {
+				return fmt.Errorf("%s %q Hysteria v1 obfs must be a string", direction, rawString(out, "tag"))
+			}
+		}
+		if masquerade := rawObject(settings, "masquerade"); strings.TrimSpace(rawString(masquerade, "type")) != "" {
+			return fmt.Errorf("%s %q Hysteria v1 does not support masquerade", direction, rawString(out, "tag"))
+		}
 		up := hysteriaBandwidth(settings, "up_mbps", "upMbps", "up")
 		if up <= 0 {
 			up = rawInt(settings, "up")
@@ -1352,6 +1372,11 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 		}
 	}
 	if protocol == "hysteria2" {
+		if raw, exists := settings["obfs"]; exists && raw != nil && raw != "" {
+			if _, ok := raw.(map[string]any); !ok {
+				return fmt.Errorf("%s %q Hysteria2 obfs must be an object", direction, rawString(out, "tag"))
+			}
+		}
 		up := hysteriaBandwidth(settings, "up_mbps", "upMbps", "up")
 		if up <= 0 {
 			up = rawInt(settings, "up")
@@ -1392,16 +1417,17 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 				if strings.TrimSpace(rawString(obfs, "password")) == "" {
 					return fmt.Errorf("%s %q Hysteria2 %s obfs requires a password", direction, rawString(out, "tag"), kind)
 				}
+				if err := validateHysteria2Obfs(obfs, rawString(out, "tag")); err != nil {
+					return err
+				}
 				normalized := maps.Clone(obfs)
 				normalized["type"] = kind
-				if kind == "gecko" {
-					if value := rawInt(obfs, "minPacketSize"); value > 0 {
-						normalized["min_packet_size"] = value
-						delete(normalized, "minPacketSize")
-					}
-					if value := rawInt(obfs, "maxPacketSize"); value > 0 {
-						normalized["max_packet_size"] = value
-						delete(normalized, "maxPacketSize")
+				for _, pair := range [][2]string{{"min_packet_size", "minPacketSize"}, {"max_packet_size", "maxPacketSize"}} {
+					if value, exists := normalized[pair[1]]; exists {
+						if _, canonical := normalized[pair[0]]; !canonical {
+							normalized[pair[0]] = value
+						}
+						delete(normalized, pair[1])
 					}
 				}
 				out["obfs"] = normalized
@@ -1423,6 +1449,9 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 		}
 	}
 	if masquerade := rawObject(settings, "masquerade"); inbound && len(masquerade) > 0 && protocol == "hysteria2" {
+		if err := validateHysteria2Masquerade(masquerade, rawString(out, "tag")); err != nil {
+			return err
+		}
 		for _, key := range []string{"insecure", "xForwarded", "x_forwarded"} {
 			if isMeaningfulCompatValue(masquerade[key]) {
 				return fmt.Errorf("inbound %q Hysteria2 masquerade %s cannot be represented by sing-box", rawString(out, "tag"), key)
@@ -1459,8 +1488,14 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 			} else if status := rawInt(masquerade, "status_code"); status > 0 {
 				m["status_code"] = status
 			}
-			if headers, ok := masquerade["headers"].(map[string]any); ok && len(headers) > 0 {
-				m["headers"] = headers
+			if headers, present := masquerade["headers"]; present {
+				normalized, err := normalizeHysteria2MasqueradeHeaders(headers, rawString(out, "tag"))
+				if err != nil {
+					return err
+				}
+				if len(normalized) > 0 {
+					m["headers"] = normalized
+				}
 			}
 		case "":
 		default:
@@ -1470,7 +1505,7 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 			out["masquerade"] = m
 		}
 	}
-	return nil
+	return translateHysteriaQUICOptions(out, settings, protocol, inbound)
 }
 
 func normalizeListen(value string) string {

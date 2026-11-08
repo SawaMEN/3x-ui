@@ -305,9 +305,14 @@ func (a *TelemtController) connections(c *gin.Context) {
 }
 
 func publicHostFromRequest(c *gin.Context) string {
-	host := strings.TrimSpace(c.GetHeader("X-Forwarded-Host"))
-	if i := strings.IndexByte(host, ','); i >= 0 {
-		host = strings.TrimSpace(host[:i])
+	// Forwarded host names are controlled by the HTTP client unless the
+	// immediate peer is a configured trusted reverse proxy.
+	host := ""
+	if isTrustedForwardedRequest(c) {
+		host = strings.TrimSpace(c.GetHeader("X-Forwarded-Host"))
+		if i := strings.IndexByte(host, ','); i >= 0 {
+			host = strings.TrimSpace(host[:i])
+		}
 	}
 	if host == "" {
 		host = strings.TrimSpace(c.Request.Host)

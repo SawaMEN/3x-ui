@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	configTestTimeout = 10 * time.Second
-	startupGrace      = 100 * time.Millisecond
+	configTestTimeout     = 10 * time.Second
+	startupGrace          = 100 * time.Millisecond
+	maxSudokuLogLineBytes = 64 << 10
 )
 
 type Process struct {
@@ -206,21 +207,21 @@ func (w *logWriter) Write(p []byte) (int, error) {
 	defer w.mu.Unlock()
 	w.buf += string(p)
 	for {
-		idx := len(w.buf)
-		for i, ch := range w.buf {
-			if ch == '\n' {
-				idx = i
-				break
-			}
-		}
-		if idx == len(w.buf) {
+		idx := strings.IndexByte(w.buf, '\n')
+		if idx < 0 {
 			break
 		}
 		line := w.buf[:idx]
 		w.buf = w.buf[idx+1:]
+		if len(line) > maxSudokuLogLineBytes {
+			line = line[len(line)-maxSudokuLogLineBytes:]
+		}
 		if line != "" {
 			logger.Infof("sudoku: %s | %s", w.label, line)
 		}
+	}
+	if len(w.buf) > maxSudokuLogLineBytes {
+		w.buf = w.buf[len(w.buf)-maxSudokuLogLineBytes:]
 	}
 	return len(p), nil
 }

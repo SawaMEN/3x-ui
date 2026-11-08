@@ -21,18 +21,19 @@ func (s *SubService) forwardedHeadersTrusted(c *gin.Context) (trusted bool) {
 		return true
 	}
 
-	trusted = true
 	defer func() {
-		_ = recover()
+		if recover() != nil {
+			trusted = false
+		}
 	}()
 
 	configured, err := s.settingService.GetTrustedProxyCIDRs()
 	if err != nil {
-		return true
+		return false
 	}
 	configured = strings.TrimSpace(configured)
-	if configured == "" || configured == service.DefaultTrustedProxyCIDRs {
-		return true
+	if configured == "" {
+		configured = service.DefaultTrustedProxyCIDRs
 	}
 	return remoteAddrInCIDRs(c.Request.RemoteAddr, configured)
 }
@@ -79,6 +80,12 @@ func remoteAddrInCIDRs(remoteAddr, cidrs string) bool {
 			continue
 		}
 		if prefix, err := netip.ParsePrefix(value); err == nil {
+			// Both mapped and native IPv4 peers are normalized to IPv4 above.
+			// Normalize IPv4-mapped CIDRs as well or a configured trusted
+			// proxy like ::ffff:10.0.0.0/104 can never match them.
+			if prefix.Addr().Is4In6() && prefix.Bits() >= 96 {
+				prefix = netip.PrefixFrom(prefix.Addr().Unmap(), prefix.Bits()-96)
+			}
 			if prefix.Contains(addr) {
 				return true
 			}

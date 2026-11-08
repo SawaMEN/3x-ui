@@ -80,3 +80,54 @@ func TestConfigEnvelope_PlainPassesThrough(t *testing.T) {
 		t.Fatalf("a request with no envelope headers must pass through unchanged: code=%d body=%q", w.Code, w.Body.String())
 	}
 }
+
+type envelopeCountingReader struct {
+	read      int
+	remaining int
+}
+
+func (r *envelopeCountingReader) Read(buf []byte) (int, error) {
+	if r.remaining == 0 {
+		return 0, io.EOF
+	}
+	n := min(len(buf), r.remaining)
+	for i := range buf[:n] {
+		buf[i] = 'x'
+	}
+	r.read += n
+	r.remaining -= n
+	return n, nil
+}
+
+func TestConfigEnvelope_LimitsRawBodiesBeforeDecompression(t *testing.T) {
+	cases := []struct {
+		name     string
+		encoding string
+		hash     string
+		limit    int
+	}{
+		{name: "plain-with-hash", hash: "test-sha256", limit: maxDecodedConfigBytes},
+		{name: "zstd-before-decode", encoding: wirecodec.EncodingZstd, limit: maxEncodedConfigBytes},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			called := false
+			engine := envelopeTestEngine(t, func() { called = true })
+			source := &envelopeCountingReader{remaining: tc.limit + 1024}
+			req := httptest.NewRequest(http.MethodPost, "/echo", io.NopCloser(source))
+			req.Header.Set("Content-Encoding", tc.encoding)
+			req.Header.Set(wirecodec.HashHeader, tc.hash)
+			recorder := httptest.NewRecorder()
+			engine.ServeHTTP(recorder, req)
+			if recorder.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("oversized envelope returned %d; want 413", recorder.Code)
+			}
+			if called {
+				t.Fatal("oversized envelope reached the request handler")
+			}
+			if source.read != tc.limit+1 {
+				t.Fatalf("envelope read %d bytes; want exactly %d", source.read, tc.limit+1)
+			}
+		})
+	}
+}

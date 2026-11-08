@@ -414,6 +414,16 @@ func (a *SUBController) maybeServeSubPage(c *gin.Context) bool {
 	if !ok {
 		return true
 	}
+	// HTML previews do not consume HWID slots; never expose download credentials.
+	hwid, found, err := a.clientService.HwidSlotStatusForSubID(c.Param("subid"))
+	if err != nil {
+		c.AbortWithStatus(http.StatusServiceUnavailable)
+		return true
+	}
+	if !found || hwid.Active {
+		page.Result = []string{}
+		page.Emails = []string{}
+	}
 	a.serveSubPage(c, page.BasePath, page)
 	return true
 }

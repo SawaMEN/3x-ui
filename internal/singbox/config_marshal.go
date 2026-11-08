@@ -92,7 +92,7 @@ func validateHysteria2Realm(outbound map[string]any, tag string) error {
 	if stringSliceLength(realm["stun_servers"]) == 0 {
 		return fmt.Errorf("sing-box outbound %q Hysteria2 Realm requires at least one STUN server", tag)
 	}
-	return nil
+	return validateHysteria2RealmOptions(realm, tag)
 }
 
 func validateSingBoxServer(outbound map[string]any, protocol, tag string) error {
@@ -271,6 +271,9 @@ func validateSingBoxOutbound(outbound map[string]any) error {
 		return err
 	}
 	if err := validateSingBoxRequiredFields(outbound, protocol, tag); err != nil {
+		return err
+	}
+	if err := validateHysteriaOutboundOptions(outbound, protocol, tag); err != nil {
 		return err
 	}
 

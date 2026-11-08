@@ -415,6 +415,13 @@ func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, 
 				return err
 			}
 			ib.Port = 10000 + int(n.Int64())
+			if ib.NodeID == nil {
+				if err := managerPreflightPorts(ctx, ib); err != nil {
+					return err
+				}
+			} else if err := s.preflightTarget(ctx, ib); err != nil {
+				return err
+			}
 		} else {
 			ib.Port, _ = strconv.Atoi(e.Port)
 		}

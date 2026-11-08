@@ -59,6 +59,7 @@ PYDEPS
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/clash-user.patch"
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/sniff-override.patch"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/http1-options.patch"
+git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/hysteria-safety.patch"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/inbound-finalmask.patch"
 cp -- "$task_root/deploy/hiddify/inbound_finalmask_test.go.in" "$task_source/core/hiddify-sing-box/xui_inbound_finalmask_test.go"
 cp -- "$task_root/deploy/hiddify/http1_options_test.go.in" "$task_source/core/hiddify-sing-box/option/xui_panel_http1_test.go"

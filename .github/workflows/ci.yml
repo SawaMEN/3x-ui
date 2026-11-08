@@ -27,6 +27,7 @@ on:
   push:
     branches:
       - main
+      - up
       - update
       - sub
       - dns
@@ -110,6 +111,43 @@ jobs:
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Download Go dependencies
         run: bash tools/ci/download-go-modules.sh
+      - name: Test
+        run: |
+          go test -p 12 -vet=off -shuffle=on -count=1 ./...
+
+  go-vet:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    env:
+      GOPROXY: "https://proxy.golang.org|direct"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
+      - name: Vet Go packages
+        run: go vet -p 12 ./...
+
+  native-core-integration:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    env:
+      GOPROXY: "https://proxy.golang.org|direct"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
       - name: Fetch verified release core for AWG integration
         env:
           GH_TOKEN: ${{ github.token }}
@@ -122,10 +160,6 @@ jobs:
         env:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
         run: go test ./internal/web/service -run '^TestClientSpeedLimitLiveCore$' -count=1 -v
-
-      - name: Test
-        run: |
-          go test -p 12 -vet=off -shuffle=on -count=1 ./...
 
       - name: Verify native AWG configuration and TCP/UDP tunnel
         env:
@@ -307,10 +341,22 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
-      - name: golangci-lint
+      # A transient GitHub Releases 504 must not prevent linting the code.
+      # Keep the fast binary path, but compile the pinned linter via the Go
+      # module proxy when release-asset downloads (or binary setup) fail.
+      - name: golangci-lint (binary)
+        id: golangci_binary
+        continue-on-error: true
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.15.0
+          args: --timeout=5m
+      - name: golangci-lint (Go install fallback)
+        if: steps.golangci_binary.outcome == 'failure'
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          install-mode: goinstall
           args: --timeout=5m
 
   arch-linux:

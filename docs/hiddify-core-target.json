@@ -156,6 +156,7 @@
     "explicit_cipher_overlay": "deploy/hiddify/explicit-cipher-suites.patch",
     "explicit_cipher_test_overlay": "deploy/hiddify/explicit_cipher_suites_test.go.in",
     "stream_handshake_overlay": "deploy/hiddify/stream-handshake.patch",
+    "hysteria_safety_overlay": "deploy/hiddify/hysteria-safety.patch",
     "stream_upgrade_test_overlay": "deploy/hiddify/stream_upgrade_test.go.in",
     "stream_trojan_test_overlay": "deploy/hiddify/stream_trojan_test.go.in"
   },

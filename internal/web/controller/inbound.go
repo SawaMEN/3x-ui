@@ -468,8 +468,9 @@ func (a *InboundController) importInbound(c *gin.Context) {
 }
 
 // resolveHost mirrors what sub.SubService.ResolveRequest does for the host
-// field: prefers X-Forwarded-Host (first entry of any list, port stripped),
-// then X-Real-IP, then the host portion of c.Request.Host. Keeping it in the
+// field: prefers a trusted X-Forwarded-Host (first entry of any list,
+// port stripped), then the host portion of c.Request.Host. X-Real-IP is a
+// visitor address and must never become the server address. Keeping it in the
 // controller layer means the service interface stays HTTP-agnostic — service
 // methods receive a plain host string instead of a *gin.Context.
 func resolveHost(c *gin.Context) string {
@@ -481,10 +482,7 @@ func resolveHost(c *gin.Context) string {
 			if hp, _, err := net.SplitHostPort(h); err == nil {
 				return hp
 			}
-			return h
-		}
-		if h := c.GetHeader("X-Real-IP"); h != "" {
-			return h
+			return strings.Trim(h, "[]")
 		}
 	}
 	if h, _, err := net.SplitHostPort(c.Request.Host); err == nil {

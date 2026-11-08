@@ -1,0 +1,333 @@
+name: Hysteria compatibility
+on:
+  push:
+    branches: [main, update]
+    paths:
+      - "internal/singbox/**"
+      - "deploy/hiddify/hysteria-safety.patch"
+      - "tools/build-hiddify-core.sh"
+      - "docs/hiddify-core-target.json"
+      - ".github/workflows/hysteria-compat.yml"
+  pull_request:
+    paths:
+      - "internal/singbox/**"
+      - "deploy/hiddify/hysteria-safety.patch"
+      - "tools/build-hiddify-core.sh"
+      - "docs/hiddify-core-target.json"
+      - ".github/workflows/hysteria-compat.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hysteria-compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hysteria-tests:
+    name: Hysteria compatibility and panic regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub embedded frontend for Go builds
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Run Hysteria regressions
+        run: go test -p 4 ./internal/singbox -run 'Hysteria' -shuffle=on -count=1 -v
+      - name: Race-check Hysteria regressions
+        run: go test -race -p 4 ./internal/singbox -run 'Hysteria' -count=1 -timeout=10m
+
+  hysteria-core-overlay:
+    name: Verify pinned Hysteria2 core safety patch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: SawaMEN/hiddify-sing-box
+          ref: 338f0c9457a41c99c7b73d929763dd7fc6b80e23
+          path: pinned-sing-box
+          submodules: recursive
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: pinned-sing-box/go.mod
+          cache-dependency-path: pinned-sing-box/go.sum
+      - name: Verify Hysteria1/2 safety patch matches pinned kernel
+        run: |
+          git -C pinned-sing-box apply --check ../deploy/hiddify/hysteria-safety.patch
+          git -C pinned-sing-box apply ../deploy/hiddify/hysteria-safety.patch
+          git -C pinned-sing-box diff --check
+      - name: Compile patched Hysteria1 and Hysteria2 core packages
+        working-directory: pinned-sing-box
+        run: go test -tags with_quic -run '^$' ./protocol/hysteria ./protocol/hysteria2
+
+  hysteria2-loopback:
+    name: Hysteria2 pinned-kernel TCP/UDP loopback and port hopping
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: SawaMEN/hiddify-sing-box
+          ref: 338f0c9457a41c99c7b73d929763dd7fc6b80e23
+          path: pinned-sing-box
+          submodules: recursive
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: pinned-sing-box/go.mod
+          cache-dependency-path: |
+            pinned-sing-box/go.sum
+            pinned-sing-box/test/go.sum
+          cache: true
+      - name: Apply the production Hysteria2 safety overlay
+        run: |
+          git -C pinned-sing-box apply --check ../deploy/hiddify/hysteria-safety.patch
+          git -C pinned-sing-box apply ../deploy/hiddify/hysteria-safety.patch
+      # The upstream test package eagerly pulls unrelated Docker images from
+      # init(), even when running only the pure loopback Hysteria2 test.
+      - name: Keep loopback tests independent of external Docker images
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("pinned-sing-box/test/clash_test.go")
+          source = p.read_text()
+          source = source.replace('"net/netip"\n', '"net/netip"\n\t"os"\n', 1)
+          source = source.replace(
+              'func init() {\n',
+              'func init() {\n\tif os.Getenv("XUI_HYSTERIA2_LOOPBACK_ONLY") == "1" {\n\t\treturn\n\t}\n',
+              1,
+          )
+          p.write_text(source)
+          # The upstream UDP burst assumes that all 50 connectionless datagrams
+          # arrive. In a busy GitHub runner, a single loss leaves the test
+          # waiting forever. Keep full payload-integrity checks for both 1500
+          # and 4096 bytes, with bounded retransmission for loopback only.
+          p = Path("pinned-sing-box/test/clash_test.go")
+          source = p.read_text()
+          udp_helper = 'func testLargeDataWithPacketConnSize(t *testing.T, port uint16, chunkSize int, pcc func() (net.PacketConn, error)) error {\n'
+          if source.count(udp_helper) != 1:
+              raise SystemExit("pinned UDP test fixture changed")
+          source = source.replace(
+              udp_helper,
+              udp_helper + '\tif os.Getenv("XUI_HYSTERIA2_LOOPBACK_ONLY") == "1" {\n\t\treturn xuiTestUDPLossTolerant(t, port, chunkSize, pcc)\n\t}\n',
+              1,
+          )
+          # The pinned TCP test streams 100 x 64 KiB in both directions
+          # while Hysteria2 may reconnect every five seconds. Bound runner
+          # load without removing duplex integrity or post-hop checks.
+          tcp_volume = '\ttimes := 100\n\tchunkSize := int64(64 * 1024)'
+          if source.count(tcp_volume) != 1:
+              raise SystemExit("pinned TCP stress fixture changed")
+          source = source.replace(
+              tcp_volume,
+              '\ttimes := 100\n\tif os.Getenv("XUI_HYSTERIA2_LOOPBACK_ONLY") == "1" {\n\t\ttimes = 32\n\t}\n\tchunkSize := int64(64 * 1024)',
+              1,
+          )
+          start = source.index('func newLargeDataPair()')
+          end = source.index('func testPingPongWithConn(', start)
+          large_pair = source[start:end]
+          timeout_case = 'case <-time.After(10 * time.Second):'
+          if large_pair.count(timeout_case) != 1:
+              raise SystemExit("pinned TCP/UDP large-data timeout fixture changed")
+          large_pair = large_pair.replace(
+              timeout_case,
+              'case <-time.After(xuiLargeDataTimeout()):',
+              1,
+          )
+          source = source[:start] + large_pair + source[end:]
+          p.write_text(source)
+          from textwrap import dedent
+          Path("pinned-sing-box/test/xui_udp_integrity_test.go").write_text(dedent('''
+          package main
+          
+          import (
+              "bytes"
+              "crypto/rand"
+              "encoding/binary"
+              "errors"
+              "fmt"
+              "net"
+              "os"
+              "testing"
+              "time"
+          )
+          
+          // xuiLargeDataTimeout allows the loaded CI runner to complete duplex QUIC
+          // streaming during port hopping without abandoning checksum validation.
+          func xuiLargeDataTimeout() time.Duration {
+              if os.Getenv("XUI_HYSTERIA2_LOOPBACK_ONLY") == "1" {
+                  return 30 * time.Second
+              }
+              return 10 * time.Second
+          }
+
+          // xuiTestUDPLossTolerant checks intact end-to-end UDP payloads. Since UDP
+          // is unreliable, missing datagrams are retransmitted within a hard limit.
+          // Unlike the upstream 50-packet burst, a single lost datagram cannot cause
+          // the entire test to block on an unrelated timeout.
+          func xuiTestUDPLossTolerant(t *testing.T, port uint16, size int, open func() (net.PacketConn, error)) error {
+              t.Helper()
+              if size < 4 {
+                  return fmt.Errorf("UDP test packet too small: %d", size)
+              }
+              echo, err := net.ListenPacket("udp4", fmt.Sprintf("127.0.0.1:%d", port))
+              if err != nil {
+                  return err
+              }
+              serverDone := make(chan struct{})
+              go func() {
+                  defer close(serverDone)
+                  buf := make([]byte, 65535)
+                  for {
+                      n, from, err := echo.ReadFrom(buf)
+                      if err != nil {
+                          return
+                      }
+                      if _, err := echo.WriteTo(buf[:n], from); err != nil {
+                          return
+                      }
+                  }
+              }()
+              defer func() {
+                  _ = echo.Close()
+                  <-serverDone
+              }()
+          
+              conn, err := open()
+              if err != nil {
+                  return err
+              }
+              defer conn.Close()
+              target := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: int(port)}
+              received := make([]byte, 65535)
+              samples := 16
+              if size > 1500 {
+                  samples = 8
+              }
+              for sample := 0; sample < samples; sample++ {
+                  payload := make([]byte, size)
+                  if _, err := rand.Read(payload); err != nil {
+                      return err
+                  }
+                  binary.BigEndian.PutUint32(payload[:4], uint32(sample))
+                  delivered := false
+                  for attempt := 0; attempt < 8 && !delivered; attempt++ {
+                      if _, err := conn.WriteTo(payload, target); err != nil {
+                          return err
+                      }
+                      if err := conn.SetReadDeadline(time.Now().Add(750 * time.Millisecond)); err != nil {
+                          return err
+                      }
+                      for {
+                          n, _, err := conn.ReadFrom(received)
+                          if err != nil {
+                              var netErr net.Error
+                              if !errors.As(err, &netErr) || !netErr.Timeout() {
+                                  return err
+                              }
+                              break
+                          }
+                          if n < 4 || binary.BigEndian.Uint32(received[:4]) != uint32(sample) {
+                              continue // Response to an earlier retransmission.
+                          }
+                          if n != len(payload) || !bytes.Equal(received[:n], payload) {
+                              return fmt.Errorf("UDP %d-byte sample %d was corrupted", size, sample)
+                          }
+                          delivered = true
+                          break
+                      }
+                  }
+                  if !delivered {
+                      return fmt.Errorf("UDP %d-byte sample %d not delivered after 8 attempts", size, sample)
+                  }
+              }
+              return nil
+          }
+          ''').lstrip())
+          # An unrelated upstream dependency starts a permanent timer at init.
+          # Exclude this one timer from goleak without disabling leak detection
+          # for any Hysteria2 or QUIC goroutine.
+          p = Path("pinned-sing-box/test/box_test.go")
+          source = p.read_text()
+          marker = 'goleak.VerifyTestMain(m,'
+          if source.count(marker) != 1:
+              raise SystemExit("pinned goleak fixture changed")
+          source = source.replace(
+              marker,
+              marker + '\n\t\tgoleak.IgnoreAnyFunction("github.com/esrrhs/gohome/common.updateNowInSecond"),',
+              1,
+          )
+          p.write_text(source)
+          # This must be a loopback-only transport test. The pinned Hiddify
+          # monitoring service otherwise starts external URL/IP-geolocation
+          # probes while Hysteria2 is exercised. Do not alter the production
+          # kernel: disable only those background probes in this test checkout.
+          p = Path("pinned-sing-box/common/monitoring/outbound_monitoring.go")
+          source = p.read_text()
+          import_marker = '\t"fmt"\n'
+          touch_marker = 'func (m *OutboundMonitoring) Touch() {\n'
+          if source.count(import_marker) != 1 or source.count(touch_marker) != 1:
+              raise SystemExit("pinned monitoring fixture changed")
+          source = source.replace(import_marker, import_marker + '\t"os"\n', 1)
+          source = source.replace(
+              touch_marker,
+              touch_marker + '\tif os.Getenv("XUI_HYSTERIA2_LOOPBACK_ONLY") == "1" {\n\t\treturn\n\t}\n',
+              1,
+          )
+          p.write_text(source)
+          PY
+          gofmt -w pinned-sing-box/test/clash_test.go pinned-sing-box/test/xui_udp_integrity_test.go pinned-sing-box/common/monitoring/outbound_monitoring.go
+      - name: Extend pinned Hysteria2 loopback fixture with Gecko tests
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("pinned-sing-box/test/hysteria2_test.go")
+          source = p.read_text()
+          anchor = 'func TestHysteria2Hop(t *testing.T) {\n\ttestHysteria2Self(t, "password", true)\n}\n'
+          if source.count(anchor) != 1:
+              raise SystemExit("pinned Hysteria2 Hop fixture changed")
+          extra = '''
+          func TestXUIHysteria2Gecko(t *testing.T) {
+              t.Run("gecko-tcp-udp", func(t *testing.T) {
+                  testHysteria2Self(t, "xui-gecko", false)
+              })
+              t.Run("gecko-hop-and-reconnect", func(t *testing.T) {
+                  testHysteria2Self(t, "xui-gecko", true)
+              })
+          }
+          '''.replace('          ', '')
+          source = source.replace(anchor, anchor + extra, 1)
+          target = '\tif salamanderPassword != "" {'
+          if source.count(target) != 1:
+              raise SystemExit("pinned Hysteria2 obfs fixture changed")
+          gecko = '''
+          if salamanderPassword == "xui-gecko" {
+              obfs = &option.Hysteria2Obfs{
+                  Type: hysteria2.ObfsTypeGecko,
+                  Password: "gecko-regression-secret",
+                  GeckoOptions: option.Hysteria2ObfsGecko{
+                      MinPacketSize: 600,
+                      MaxPacketSize: 1200,
+                  },
+              }
+          } else if salamanderPassword != "" {'''.replace('          ', '')
+          source = source.replace(target, gecko, 1)
+          p.write_text(source)
+          PY
+          gofmt -w pinned-sing-box/test/hysteria2_test.go
+      - name: Exercise Hysteria2 TCP, UDP, Salamander, Gecko and port hopping on loopback
+        working-directory: pinned-sing-box/test
+        env:
+          XUI_HYSTERIA2_LOOPBACK_ONLY: "1"
+        # The fork's independent test/go.mod lags the pinned library module.
+        # Resolve any test-only dependency changes in this disposable checkout.
+        run: |
+          # This nested upstream test module uses Docker SDK v27; newer
+          # go-connections removes sockets.DialPipe and breaks compilation.
+          go mod edit -replace=github.com/docker/go-connections=github.com/docker/go-connections@v0.5.0
+          go test -mod=mod -tags with_quic -run 'Test(Hysteria2Self|XUIHysteria2Gecko)' -count=1 -timeout=15m -v .
