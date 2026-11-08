@@ -1,5 +1,7 @@
 # Перенос Hiddify overlay-патчей в исходники ядер
 
+**Текущий порядок действий:** [CORE_RELEASE_PIPELINE.md](CORE_RELEASE_PIPELINE.md) — sing-box/main сливается и исправляется первым; после полного зелёного CI закрепляется проверенный SHA в core; только после успешной сборки и релиза 3x-ui забирает готовые бинарники без пересборки.
+
 **Срез состояния: 2026-11-09.** Репозитории: [hiddify-sing-box](https://github.com/SawaMEN/hiddify-sing-box), [hiddify-core](https://github.com/SawaMEN/hiddify-core), [3x-ui](https://github.com/SawaMEN/3x-ui).
 
 > **Не переключать production на незавершённые ветки.** Сейчас `3x-ui/main` собирает Hiddify с 16 overlay-патчами из `deploy/hiddify`. Ядра в рабочих PR ещё не совместимы с этим сборщиком: повторное применение `clash-user.patch` вызывает ошибку `patch does not apply`. Перенос выполняется атомарно, без потери функций.
@@ -9,14 +11,14 @@
 - **Всего:** 16 групп patch-файлов.
 - **Сделано на уровне исходников в черновой ветке:** 9/16 реализовано либо заменено нативно; это **не** означает успешный релиз.
 - **Осталось:** 7/16 групп, включая частично реализованные, плюс интеграционные проверки.
-- **Слияния рабочих веток в `main`:** 0/3 по состоянию этого среза; все три PR открыты и помечены draft.
+- **Слияния и консолидация:** sing-box PR #23 уже слит в `main` (`411bf2c`), пересекающийся PR #22 закрыт как включённый в #23, core PR #20 пока в работе; production 3x-ui не переключён.
 
 ## Выполнено в текущем продолжении (без переключения production)
 
 - [x] Исправлена межтестовая гонка staged monitoring в sing-box PR #23: ожидание завершения предыдущей пробы перед новой. Коммит [b09bfaf](https://github.com/SawaMEN/hiddify-sing-box/commit/b09bfaf80ae161f1545dd9af65190dad8945edea).
 - [x] Отформатированы изменения VLESS для исправления CI PR #22. Коммиты [7d56509](https://github.com/SawaMEN/hiddify-sing-box/commit/7d56509257a3ca497716e3b8b7ebd6711434aec8) и [791b026](https://github.com/SawaMEN/hiddify-sing-box/commit/791b0267fb41b223ab54119d71cb566864b7e0fc).
 - [x] Перенесена защита от повторного закрытия VLESS-сокета с TCP/UDP/packet тестами из PR #22 в рабочую ветку PR #23: [c496406](https://github.com/SawaMEN/hiddify-sing-box/commit/c4964069d8816d84d865cf20ea34c238ba7c9e74), [bcb876d](https://github.com/SawaMEN/hiddify-sing-box/commit/bcb876d82236498c439e1e2c358931d34eeae519).
-- [ ] **Требуется подтверждение CI** этих HEAD-коммитов перед любым merge.
+- [ ] **Требуется подтверждение CI** актуального `hiddify-sing-box/main` перед обновлением gitlink в `hiddify-core`.
 - [ ] Рабочие ветки и core/main по-прежнему требуют всех проверок и переноса 7 остальных патчей.
 
 ## Дополнительные исправления от 2026-11-09
@@ -25,7 +27,7 @@
 - [x] Для XHTTP исправлен безопасный приём nil-ответа `WaitReadCloser.Set(nil)`, добавлены тесты одновременного `Set/Close` и освобождения сокета; [sing-box PR #23](https://github.com/SawaMEN/hiddify-sing-box/pull/23).
 - [x] В **изолированном** [core PR #20](https://github.com/SawaMEN/hiddify-core/pull/20) добавлен проверочный режим для восьми полностью нативных overlay-групп: они не применяются повторно, вместо этого проверяется наличие нативного исходника/регрессии. Семь незавершённых групп, security verifier, release/CI gates оставлены обязательными.
 - [ ] Дождаться итогов новых CI на последних HEAD (а не переносить результаты старых коммитов).
-- [ ] Подтвердить оставшиеся семь групп и доступные для записи зависимости, затем выполнять слияние в порядке sing-box → core → 3x-ui.
+- [ ] Подтвердить оставшиеся семь групп и зависимости, затем довести `hiddify-sing-box/main` до зелёного CI, только после этого обновить pin в `hiddify-core`.
 
 ## Итог текущего прогона интеграции
 
@@ -59,8 +61,8 @@
 
 ## Открытые ветки/PR и зависимости
 
-1. [sing-box #23](https://github.com/SawaMEN/hiddify-sing-box/pull/23), `refactor/native-panel-overlays-20261108`: 46 коммитов, 63 файла, кандидат переноса. **Не сливать до закрытия остатка функциональности и CI.**
-2. [sing-box #22](https://github.com/SawaMEN/hiddify-sing-box/pull/22), `fix/vless-handshake-close-once-20261105`: 2 коммита. Пересекается с изменениями `protocol/vless/outbound.go` в #23; перед интеграцией разрешить пересечение, сохранить тест `h_handshake_close_once_test.go` либо заменить его эквивалентным. Не сливать обе версии исправления вслепую.
+1. [sing-box #23](https://github.com/SawaMEN/hiddify-sing-box/pull/23), `refactor/native-panel-overlays-20261108`: **слит** в `sing-box/main`, merge commit `411bf2c`; до полной готовности 16/16 и зелёного CI это только рабочая база, не production.
+2. [sing-box #22](https://github.com/SawaMEN/hiddify-sing-box/pull/22), `fix/vless-handshake-close-once-20261105`: **закрыт как поглощённый PR #23**, сохранены `handshakeOnceConn` и тест `h_handshake_close_once_test.go`. Повторный merge не нужен.
 3. [core #20](https://github.com/SawaMEN/hiddify-core/pull/20), `integration/native-panel-overlays-20261109`: 7 коммитов, тестовое закрепление sing-box ревизии `9ae53f5` (старее последнего кандидата `340d941`). **Не сливать в core/main, пока release builder применяет конфликтующие патчи.**
 
 ## Зафиксированные проверки и проблемы
@@ -77,7 +79,7 @@
 - [ ] **4. Подготовить core.** Обновить submodule pin на *проверенный* HEAD sing-box (не на старый `9ae53f5`); проверить парсер, profile import, ABI и security/toolchain pins.
 - [ ] **5. Атомарно переключить 3x-ui builder.** В `tools/build-hiddify-core.sh` одновременно обновить lock `deploy/hiddify/hiddify-core-target.json`, убрать только те `deploy/hiddify/*.patch`, функционал которых перенесён, и переместить нужные `.go.in` проверки в исходники. Не удалять самостоятельный `deploy/speed/masque.patch` без отдельной миграции лимитера скорости.
 - [ ] **6. Полный release gate.** Реальная сборка amd64/arm64, `check`, запуск/остановка/перезапуск, обновление и откат, TCP/UDP, VLESS Reverse, REALITY+ML-DSA, Vision, XHTTP, mKCP, TUIC, balancer, регрессии счётчиков пользователей, интеграция 3x-ui, кросс-платформенные тесты.
-- [ ] **7. Слияние.** При зелёных gate последовательно: sing-box → core → 3x-ui. Перепроверить статусы и SHA перед каждым merge, затем закрыть либо слить #22 без дублирования логики. Удалять устаревшие ветки только после подтверждённого включения их содержимого.
+- [ ] **7. Последовательный выпуск.** Sing-box/main уже консолидирован и проходит исправления. После 16/16 и зелёного CI зафиксировать SHA в core; после зелёного core CI и готовых бинарников зафиксировать release tag в 3x-ui. Использовать существующий загрузчик и не пересобирать ядро в CI панели. Ветку `backup/pre-native-main-20261109` сохранять до проверки отката.
 
 ### Критерий готовности
 
