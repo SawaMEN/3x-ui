@@ -10,7 +10,8 @@ import { runSNIScan } from './sni-scanner';
 import type { SNIScanCallback } from './sni-scanner';
 import type { RealityScanResult } from '@/generated/types';
 import RealityTargetScannerModal, { scannedServerName } from './RealityTargetScannerModal';
-import { useDomainFrontStatus } from '@/api/queries/useDomainFrontStatus';
+import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
+import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import type { SniScanPurpose } from './RealityTargetScannerModal';
 
 interface SniSearchInputProps extends Omit<InputProps, 'value' | 'onChange'> {
@@ -19,7 +20,7 @@ interface SniSearchInputProps extends Omit<InputProps, 'value' | 'onChange'> {
   ref?: Ref<InputRef>;
   purpose?: Exclude<SniScanPurpose, 'reality'>;
   onPickTarget?: (result: RealityScanResult) => void;
-  onPickManagedDomain?: (domain: { name: string; certFile: string; keyFile: string }) => void;
+  onPickManagedDomain?: (domain: ManagedSniDomain) => void;
 }
 
 // String-valued control works with FormField and keeps protocol-specific SNI
@@ -37,26 +38,10 @@ export default function SniSearchInput({
 }: SniSearchInputProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const { data: domainStatus } = useDomainFrontStatus();
+  const { data: managedDomains = [] } = useManagedSniDomains();
   const [messageApi, contextHolder] = message.useMessage();
   const { control } = useFormContext();
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
-  const managedDomains =
-    nodeId == null && domainStatus?.running && domainStatus.config.enabled
-      ? domainStatus.config.domains
-          .filter((domain) => domain.enabled && domain.mode === 'sni_only')
-          .flatMap((domain) => {
-            const cert = domainStatus.certificates.find((item) => item.name === domain.name);
-            if (
-              !cert ||
-              !['valid', 'renewal_due'].includes(cert.state) ||
-              !cert.certFile ||
-              !cert.keyFile
-            )
-              return [];
-            return [{ name: domain.name, certFile: cert.certFile, keyFile: cert.keyFile }];
-          })
-      : [];
   const scan: SNIScanCallback = async (targets, mode, signal, progress, recheck) => {
     try {
       return await runSNIScan(nodeId, purpose, targets, mode, signal, progress, recheck);
@@ -92,7 +77,10 @@ export default function SniSearchInput({
             disabled={disabled}
             showSearch
             optionFilterProp="label"
-            options={managedDomains.map((domain) => ({ label: domain.name, value: domain.name }))}
+            options={managedDomains.map((domain) => ({
+              label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : 'TLS'}`,
+              value: domain.name,
+            }))}
             onChange={(name) => {
               const domain = managedDomains.find((item) => item.name === name);
               if (!domain) return;

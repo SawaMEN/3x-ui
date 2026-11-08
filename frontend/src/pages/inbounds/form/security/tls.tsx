@@ -24,6 +24,7 @@ import { CipherSuitesSelect } from '@/components/form';
 import DynamicEchHelper from '@/components/form/DynamicEchHelper';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from './SniSearchInput';
+import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import {
   ALPN_OPTION,
   DOMAIN_STRATEGY_OPTION,
@@ -321,7 +322,8 @@ export default function TlsForm({
 }: TlsFormProps) {
   const { t } = useTranslation();
   const uid = useId();
-  const { control } = useFormContext();
+  const { control, setValue } = useFormContext();
+  const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
   const { fields, append, remove } = useFieldArray({
     control,
     name: 'streamSettings.tlsSettings.certificates',
@@ -331,13 +333,37 @@ export default function TlsForm({
     control,
     name: 'streamSettings.tlsSettings.settings.fingerprint',
   });
+  const onManagedSni = (domain: ManagedSniDomain) => {
+    if (nodeId != null) return;
+    // Server-side TLS files can only be applied on the node that stores them.
+    const opts = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
+    const row = {
+      useFile: true,
+      certificateFile: domain.certFile,
+      keyFile: domain.keyFile,
+      certificate: [],
+      key: [],
+      ocspStapling: 0,
+      oneTimeLoading: false,
+      usage: 'encipherment',
+      buildChain: false,
+    };
+    if (fields.length === 0) append(row);
+    else {
+      for (const [key, value] of Object.entries(row))
+        setValue(`streamSettings.tlsSettings.certificates.0.${key}`, value, opts);
+    }
+  };
   // An empty fingerprint is fine: share links pin it to unsafe whenever cs is set.
   const cipherSuitesIgnoredByClients =
     Boolean(cipherSuites) && Boolean(fingerprint) && fingerprint !== UTLS_FINGERPRINT.UTLS_UNSAFE;
   return (
     <>
       <FormField name={['streamSettings', 'tlsSettings', 'serverName']} label="SNI">
-        <SniSearchInput placeholder={t('pages.inbounds.form.serverNameIndication')} />
+        <SniSearchInput
+          placeholder={t('pages.inbounds.form.serverNameIndication')}
+          onPickManagedDomain={onManagedSni}
+        />
       </FormField>
       <FormField
         name={['streamSettings', 'tlsSettings', 'cipherSuites']}

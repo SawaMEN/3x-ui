@@ -17,7 +17,8 @@ import { useFormContext, useWatch } from 'react-hook-form';
 
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
-import { useDomainFrontStatus } from '@/api/queries/useDomainFrontStatus';
+import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
+import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import { HttpUtil } from '@/utils';
 
 export default function TuicFields() {
@@ -25,7 +26,7 @@ export default function TuicFields() {
   const uid = useId();
   const [messageApi, messageContextHolder] = message.useMessage();
   const { control, setValue, getValues } = useFormContext();
-  const { data: domainStatus } = useDomainFrontStatus();
+  const { data: managedDomains = [] } = useManagedSniDomains();
   const [loadingPanelCert, setLoadingPanelCert] = useState(false);
 
   const sni = (useWatch({ control, name: 'settings.server.sni' }) ?? '') as string;
@@ -41,25 +42,15 @@ export default function TuicFields() {
     });
   };
 
-  const managedDomain = (name: string) => {
-    if (nodeId != null || !domainStatus?.running || !domainStatus.config.enabled) return undefined;
-    const matched = domainStatus.config.domains.find(
-      (domain) => domain.enabled && domain.mode === 'sni_only' && domain.name === name,
-    );
-    if (!matched) return undefined;
-    const cert = domainStatus.certificates.find((entry) => entry.name === matched.name);
-    return cert &&
-      ['valid', 'renewal_due'].includes(cert.state) &&
-      cert.certFile &&
-      cert.keyFile
-      ? { name: matched.name, certFile: cert.certFile, keyFile: cert.keyFile }
-      : undefined;
-  };
+  const managedDomain = (name: string) =>
+    managedDomains.find((domain) => domain.name === name);
 
-  const useManagedDomain = (domain: { name: string; certFile: string; keyFile: string }) => {
+  const useManagedDomain = (domain: ManagedSniDomain) => {
     updateServerValue('sni', domain.name);
-    updateServerValue('certificate', domain.certFile);
-    updateServerValue('private_key', domain.keyFile);
+    if (nodeId == null) {
+      updateServerValue('certificate', domain.certFile);
+      updateServerValue('private_key', domain.keyFile);
+    }
   };
 
   const handleSniChange = (newSni: string) => {
@@ -75,13 +66,13 @@ export default function TuicFields() {
     const currentCert = String(getValues('settings.server.certificate') || '');
     const currentKey = String(getValues('settings.server.private_key') || '');
 
-    const usedManagedCert = domainStatus?.certificates.some(
+    const usedManagedCert = managedDomains.some(
       (entry) => entry.certFile !== '' && entry.certFile === currentCert,
     );
     if (!currentCert || currentCert.startsWith('/root/cert/') || usedManagedCert) {
       updateServerValue('certificate', `/root/cert/${cleanSni}/fullchain.pem`);
     }
-    const usedManagedKey = domainStatus?.certificates.some(
+    const usedManagedKey = managedDomains.some(
       (entry) => entry.keyFile !== '' && entry.keyFile === currentKey,
     );
     if (!currentKey || currentKey.startsWith('/root/cert/') || usedManagedKey) {
