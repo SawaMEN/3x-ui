@@ -15,9 +15,7 @@ import (
 // top of wirecodec's own ceiling).
 const (
 	maxDecodedConfigBytes = 8 << 20
-	// A zstd payload can be slightly larger than its decoded form. Limit the
-	// encoded bytes too: database-import routes skip the global body limit,
-	// and GET requests bypass it entirely.
+	// Import routes bypass the global body limit, so cap encoded envelopes too.
 	maxEncodedConfigBytes = 16 << 20
 )
 
