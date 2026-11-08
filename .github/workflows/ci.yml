@@ -27,6 +27,7 @@ on:
   push:
     branches:
       - main
+      - up
       - update
       - sub
       - dns
