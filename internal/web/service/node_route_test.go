@@ -45,6 +45,36 @@ func TestNodeRouteReferencedDestinationsOnly(t *testing.T) {
 	}
 }
 
+func TestNodeRouteNestedAndFinalDestinations(t *testing.T) {
+	rules := []map[string]any{
+		{"outbound": "node-route-2"},
+		{"type": "logical", "mode": "or", "rules": []any{
+			map[string]any{"outbound": "node-route-7"},
+			map[string]any{"outbound": "node-route-8", "enabled": false},
+			map[string]any{"outbound": "node-route-9", "action": "reject"},
+		}},
+		{"outbound": "node-route-4", "enabled": false, "rules": []any{
+			map[string]any{"outbound": "node-route-5"},
+		}},
+		{"outbound": "node-route-2"},
+	}
+	if got := nodeRouteIDs(rules, "outbound"); !reflect.DeepEqual(got, []int{2, 7}) {
+		t.Fatalf("nested routes are missing or disabled rules included: %v", got)
+	}
+	if got := nativeNodeRouteIDs(rules, "node-route-12"); !reflect.DeepEqual(got, []int{2, 7, 12}) {
+		t.Fatalf("native final route not included: %v", got)
+	}
+	if got := nativeNodeRouteIDs(rules, "node-route-7"); !reflect.DeepEqual(got, []int{2, 7}) {
+		t.Fatalf("native final route duplicated: %v", got)
+	}
+	if got := nativeNodeRouteIDs(nil, "node-route-21"); !reflect.DeepEqual(got, []int{21}) {
+		t.Fatalf("final-only route not generated: %v", got)
+	}
+	if got := nativeNodeRouteIDs(nil, "direct"); len(got) != 0 {
+		t.Fatalf("unexpected managed route for direct final: %v", got)
+	}
+}
+
 func TestNodeRouteProtocolCompatibility(t *testing.T) {
 	for _, protocol := range []string{"vless", "vmess", "trojan", "shadowsocks", "vetroff", "sudoku"} {
 		if !nodeRouteProtocolSupported(protocol, "xray") || !nodeRouteProtocolSupported(protocol, "sing-box") {
