@@ -164,7 +164,9 @@ jobs:
       - name: Verify real panel ingress -> remote node cascades
         env:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
-        run: go test ./internal/web/service -run '^TestNodeRouteLiveLocalInboundToRemoteCore        env:
+        run: go test ./internal/web/service -run '^TestNodeRouteLiveLocalInboundToRemoteCore$' -count=1 -v
+      - name: Verify native AWG configuration and TCP/UDP tunnel
+        env:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
         run: go test ./internal/web/service -run '^TestNativeAWG' -count=1
       - name: Verify Hysteria2 node-route ECH with release core
