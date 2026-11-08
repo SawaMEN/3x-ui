@@ -4,14 +4,29 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/masque"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
+	"github.com/SawaMEN/3x-ui/v3/internal/snell"
 )
 
 func prepareExternalVPN(ib *model.Inbound, previous string) error {
-	if ib.Protocol != model.Pingtunnel && ib.Protocol != model.TrustTunnel {
+	if err := masque.Prepare(ib, previous); err != nil {
+		return err
+	}
+	if err := snell.Prepare(ib, previous); err != nil {
+		return err
+	}
+	if ib.Protocol == model.VetroffProxy {
+		return prepareVetroff(ib, previous)
+	}
+	if ib.Protocol == model.FPTN || ib.Protocol == model.OpenFlux {
+		return externalvpn.PrepareAdditional(ib, previous)
+	}
+	if !externalvpn.IsManaged(ib.Protocol) {
 		return nil
 	}
 	var raw map[string]any
@@ -82,7 +97,7 @@ func prepareExternalVPN(ib *model.Inbound, previous string) error {
 
 func (s *InboundService) DesiredExternalVPNInstances() ([]externalvpn.Instance, error) {
 	var rows []*model.Inbound
-	err := database.GetDB().Where("protocol IN ? AND enable = ? AND node_id IS NULL", []model.Protocol{model.Pingtunnel, model.TrustTunnel}, true).Find(&rows).Error
+	err := database.GetDB().Where("protocol IN ? AND enable = ? AND node_id IS NULL", []model.Protocol{model.Pingtunnel, model.TrustTunnel, model.FPTN, model.VetroffProxy, model.OpenFlux}, true).Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +107,7 @@ func (s *InboundService) DesiredExternalVPNInstances() ([]externalvpn.Instance, 
 	}
 	disabled := map[int]map[string]bool{}
 	if len(ids) > 0 {
-		var stats []xray.ClientTraffic
+		var stats []coremodel.ClientTraffic
 		if err := database.GetDB().Where("inbound_id IN ? AND enable = ?", ids, false).Find(&stats).Error; err != nil {
 			return nil, err
 		}
@@ -105,6 +120,9 @@ func (s *InboundService) DesiredExternalVPNInstances() ([]externalvpn.Instance, 
 	}
 	out := make([]externalvpn.Instance, 0, len(rows))
 	for _, row := range rows {
+		if routedSidecar(row.Protocol) && !sidecaregress.Ready(row.Id, row.Tag, false) {
+			continue
+		}
 		inst, err := externalvpn.FromInbound(row)
 		if err != nil {
 			return nil, fmt.Errorf("inbound %d: %w", row.Id, err)
@@ -117,4 +135,12 @@ func (s *InboundService) DesiredExternalVPNInstances() ([]externalvpn.Instance, 
 		out = append(out, inst)
 	}
 	return out, nil
+}
+
+func validateAdditionalVPNClients(ib *model.Inbound) error {
+	if ib.Protocol != model.FPTN && ib.Protocol != model.VetroffProxy && ib.Protocol != model.OpenFlux {
+		return nil
+	}
+	_, err := externalvpn.FromInbound(ib)
+	return err
 }

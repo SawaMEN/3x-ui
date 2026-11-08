@@ -61,9 +61,6 @@ _openapi:
       url: >-
         #time-series-of-observatory-probe-results-for-one-outbound-tag-same-t-v-shape-as-the-other-history-endpoints
     - depth: 2
-      title: List Xray binary versions available for install on this host.
-      url: '#list-xray-binary-versions-available-for-install-on-this-host'
-    - depth: 2
       title: Check whether a newer 3x-ui release is available on GitHub.
       url: '#check-whether-a-newer-3x-ui-release-is-available-on-github'
     - depth: 2
@@ -130,12 +127,6 @@ _openapi:
         inbound or routing changes.
       url: >-
         #reload-xray-with-the-current-config-typically-required-after-structural-inbound-or-routing-changes
-    - depth: 2
-      title: >-
-        Download and install the specified Xray version. Pass "latest" for the
-        newest release.
-      url: >-
-        #download-and-install-the-specified-xray-version-pass-latest-for-the-newest-release
     - depth: 2
       title: >-
         Self-update the panel to the latest version. The server restarts on
@@ -375,7 +366,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/server/status","method":"get"},{"path":"/panel/api/server/fail2banStatus","method":"get"},{"path":"/panel/api/server/cpuHistory/{bucket}","method":"get"},{"path":"/panel/api/server/history/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayMetricsState","method":"get"},{"path":"/panel/api/server/xrayMetricsHistory/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayObservatory","method":"get"},{"path":"/panel/api/server/xrayObservatoryHistory/{tag}/{bucket}","method":"get"},{"path":"/panel/api/server/getXrayVersion","method":"get"},{"path":"/panel/api/server/getPanelUpdateInfo","method":"get"},{"path":"/panel/api/server/getConfigJson","method":"get"},{"path":"/panel/api/server/getDb","method":"get"},{"path":"/panel/api/server/getMigration","method":"get"},{"path":"/panel/api/server/getNewUUID","method":"get"},{"path":"/panel/api/server/getWebCertFiles","method":"get"},{"path":"/panel/api/server/descendants","method":"get"},{"path":"/panel/api/server/getNewX25519Cert","method":"get"},{"path":"/panel/api/server/getNewmldsa65","method":"get"},{"path":"/panel/api/server/getNewmlkem768","method":"get"},{"path":"/panel/api/server/getNewVlessEnc","method":"get"},{"path":"/panel/api/server/stopXrayService","method":"post"},{"path":"/panel/api/server/restartXrayService","method":"post"},{"path":"/panel/api/server/installXray/{version}","method":"post"},{"path":"/panel/api/server/updatePanel","method":"post"},{"path":"/panel/api/server/setUpdateChannel","method":"post"},{"path":"/panel/api/server/updateGeofile","method":"post"},{"path":"/panel/api/server/updateGeofile/{fileName}","method":"post"},{"path":"/panel/api/server/logs/{count}","method":"post"},{"path":"/panel/api/server/xraylogs/{count}","method":"post"},{"path":"/panel/api/server/importDB","method":"post"},{"path":"/panel/api/server/getNewEchCert","method":"post"},{"path":"/panel/api/server/getCertHash","method":"post"},{"path":"/panel/api/server/getRemoteCertHash","method":"post"},{"path":"/panel/api/server/clientIps","method":"get"},{"path":"/panel/api/server/clientIps","method":"post"}]} showTitle />
+      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/server/status","method":"get"},{"path":"/panel/api/server/fail2banStatus","method":"get"},{"path":"/panel/api/server/cpuHistory/{bucket}","method":"get"},{"path":"/panel/api/server/history/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayMetricsState","method":"get"},{"path":"/panel/api/server/xrayMetricsHistory/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayObservatory","method":"get"},{"path":"/panel/api/server/xrayObservatoryHistory/{tag}/{bucket}","method":"get"},{"path":"/panel/api/server/getPanelUpdateInfo","method":"get"},{"path":"/panel/api/server/getConfigJson","method":"get"},{"path":"/panel/api/server/getDb","method":"get"},{"path":"/panel/api/server/getMigration","method":"get"},{"path":"/panel/api/server/getNewUUID","method":"get"},{"path":"/panel/api/server/getWebCertFiles","method":"get"},{"path":"/panel/api/server/descendants","method":"get"},{"path":"/panel/api/server/getNewX25519Cert","method":"get"},{"path":"/panel/api/server/getNewmldsa65","method":"get"},{"path":"/panel/api/server/getNewmlkem768","method":"get"},{"path":"/panel/api/server/getNewVlessEnc","method":"get"},{"path":"/panel/api/server/stopXrayService","method":"post"},{"path":"/panel/api/server/restartXrayService","method":"post"},{"path":"/panel/api/server/updatePanel","method":"post"},{"path":"/panel/api/server/setUpdateChannel","method":"post"},{"path":"/panel/api/server/updateGeofile","method":"post"},{"path":"/panel/api/server/updateGeofile/{fileName}","method":"post"},{"path":"/panel/api/server/logs/{count}","method":"post"},{"path":"/panel/api/server/xraylogs/{count}","method":"post"},{"path":"/panel/api/server/importDB","method":"post"},{"path":"/panel/api/server/getNewEchCert","method":"post"},{"path":"/panel/api/server/getCertHash","method":"post"},{"path":"/panel/api/server/getRemoteCertHash","method":"post"},{"path":"/panel/api/server/clientIps","method":"get"},{"path":"/panel/api/server/clientIps","method":"post"}]} showTitle />
     </>
   );
 }

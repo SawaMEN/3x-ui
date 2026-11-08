@@ -14,7 +14,7 @@ function defaultCertificate(): Record<string, unknown> {
   };
 }
 
-export function createTlsSettingsWithDefaultCert(): Record<string, unknown> {
+export function createTlsSettingsWithDefaultCert(network?: string): Record<string, unknown> {
   const tls = TlsStreamSettingsSchema.parse({}) as Record<string, unknown>;
   tls.certificates = [defaultCertificate()];
   const settings =
@@ -23,6 +23,7 @@ export function createTlsSettingsWithDefaultCert(): Record<string, unknown> {
       : {};
   settings.fingerprint = 'chrome';
   tls.settings = settings;
+  if (network === 'ws') tls.alpn = ['http/1.1'];
   return tls;
 }
 

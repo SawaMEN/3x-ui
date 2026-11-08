@@ -76,22 +76,48 @@ export function peak(values: number[]): number {
   return max;
 }
 
-/* The history endpoint accepts only backend-whitelisted bucket values. */
+/* the seed bucket must be in the backend's allowedHistoryBuckets whitelist;
+   2s is the smallest and matches the status poll cadence */
 export function useOverviewHistory(
   status: Status,
   hasData: boolean,
-  lowPower: boolean,
+  lowPower = false,
 ): OverviewHistory {
   const [trend, setTrend] = useState<HistoryWindow>(emptyWindow);
-  const refreshGeneration = useRef(0);
 
+  const seededUnscoped = useRef(false);
+  const [refreshGeneration, setRefreshGeneration] = useState(0);
   const refreshHistory = useCallback(() => {
-    const generation = ++refreshGeneration.current;
+    setTrend(emptyWindow());
+    setRefreshGeneration((v) => v + 1);
+  }, []);
+  const seededGeneration = useRef(0);
+  const seedState = useRef<{ scope: string; complete: boolean } | null>(null);
+
+  useEffect(() => {
+    if (seededGeneration.current !== refreshGeneration) {
+      seededGeneration.current = refreshGeneration;
+      seededUnscoped.current = false;
+      seedState.current = null;
+    }
+    // The placeholder has no resource scope. Wait for the first real status,
+    // then seed each scope once even if polling temporarily loses data.
+    if (
+      lowPower ||
+      !hasData ||
+      (seedState.current?.scope === status.resourceScope && seedState.current.complete)
+    ) {
+      return;
+    }
+    seedState.current = { scope: status.resourceScope, complete: false };
+    let cancelled = false;
+    const seedUnscoped = !seededUnscoped.current;
+    const keys = seedUnscoped ? SERIES_KEYS : (['cpu', 'swap'] as const);
 
     const seed = async () => {
       const responses = new Map<OverviewSeriesKey, HistoryPoint[]>();
       await Promise.all(
-        SERIES_KEYS.map(async (key) => {
+        keys.map(async (key) => {
           const msg = await HttpUtil.get<HistoryPoint[]>(
             `/panel/api/server/history/${key}/${SEED_BUCKET_SECONDS}`,
             undefined,
@@ -100,7 +126,9 @@ export function useOverviewHistory(
           if (msg?.success && Array.isArray(msg.obj)) responses.set(key, msg.obj);
         }),
       );
-      if (generation !== refreshGeneration.current || responses.size === 0) return;
+      if (cancelled || responses.size === 0) return;
+      seedState.current = { scope: status.resourceScope, complete: true };
+      seededUnscoped.current = true;
 
       let axis: HistoryPoint[] = [];
       for (const points of responses.values()) {
@@ -113,57 +141,53 @@ export function useOverviewHistory(
       const seedSeries = emptySeries();
       for (const key of SERIES_KEYS) {
         const byTs = new Map<number, number>();
-        for (const p of responses.get(key) ?? []) {
-          byTs.set(Number(p.t) || 0, Number(p.v) || 0);
-        }
-        seedSeries[key] = seedTimes.map((ts) => byTs.get(ts) ?? 0);
+        for (const p of responses.get(key) ?? []) byTs.set(Number(p.t) || 0, Number(p.v) || 0);
+        seedSeries[key] =
+          status.resourceScope && (key === 'cpu' || key === 'swap')
+            ? seedTimes.flatMap((ts) => (byTs.has(ts) ? [byTs.get(ts)!] : []))
+            : seedTimes.map((ts) => byTs.get(ts) ?? 0);
       }
 
       setTrend((prev) => {
-        if (generation !== refreshGeneration.current) return prev;
         const merged = emptyWindow();
-        merged.times = tailWindow(seedTimes.concat(prev.times));
+        merged.times = seedUnscoped ? tailWindow(seedTimes.concat(prev.times)) : prev.times;
         for (const key of SERIES_KEYS) {
-          merged.series[key] = tailWindow(seedSeries[key].concat(prev.series[key]));
+          merged.series[key] =
+            seedUnscoped || key === 'cpu' || key === 'swap'
+              ? tailWindow(seedSeries[key].concat(prev.series[key]))
+              : prev.series[key];
         }
         return merged;
       });
     };
 
-    void seed().catch(() => undefined);
-  }, []);
+    seed().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [hasData, status.resourceScope, lowPower, refreshGeneration]);
 
-  useEffect(() => {
-    refreshHistory();
-  }, [refreshHistory, lowPower]);
-
-  const lastSampleRef = useRef<{ status: Status | null; at: number }>({
-    status: null,
-    at: 0,
-  });
-
-  useEffect(() => {
-    if (lowPower || !hasData || lastSampleRef.current.status === status) return;
-
-    const now = Date.now();
-    // The status poll can occasionally fire twice in the same task. Keep one
-    // chart sample per refreshed status object so the history window stays
-    // stable and does not grow from duplicate renders.
-    if (now - lastSampleRef.current.at < 100) return;
-
-    lastSampleRef.current = { status, at: now };
-    // Build the next window once. Keeping the state update as a single
-    // immutable operation avoids eight separate array updates per status tick.
-    const point = sampleOf(status);
+  // Each polled status is appended during render; an effect would show the
+  // chart one sample behind the numbers beside it.
+  const [sampledStatus, setSampledStatus] = useState<Status | null>(null);
+  if (hasData && status !== sampledStatus) {
+    setSampledStatus(status);
     setTrend((prev) => {
+      const scopeChanged = sampledStatus && sampledStatus.resourceScope !== status.resourceScope;
+      const point = sampleOf(status);
       const next = emptyWindow();
-      next.times = tailWindow(prev.times.concat(Math.floor(now / 1000)));
+      next.times = tailWindow(prev.times.concat(Math.floor(Date.now() / 1000)));
       for (const key of SERIES_KEYS) {
-        next.series[key] = tailWindow(prev.series[key].concat(point[key]));
+        const scoped = key === 'cpu' || key === 'swap';
+        const previous = scoped && scopeChanged ? [] : prev.series[key];
+        next.series[key] =
+          !scoped || status.metricAvailable(key)
+            ? tailWindow(previous.concat(point[key]))
+            : previous;
       }
       return next;
     });
-  }, [status, hasData, lowPower]);
+  }
 
   const labels = useMemo(() => trend.times.map(TimeFormatter.formatClock), [trend.times]);
 

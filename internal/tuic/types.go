@@ -1,6 +1,7 @@
 package tuic
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -26,9 +27,10 @@ type TuicServerSettings struct {
 }
 
 type TuicClientSettings struct {
-	UUID     string `json:"uuid"`
-	Password string `json:"password"`
-	Email    string `json:"email"`
+	TrafficID int    `json:"-"`
+	UUID      string `json:"uuid"`
+	Password  string `json:"password"`
+	Email     string `json:"email"`
 }
 
 type Instance struct {
@@ -38,48 +40,51 @@ type Instance struct {
 	Port                  int
 	Certificate           string
 	PrivateKey            string
-	CongestionControl     string
+	CongestionControl     string // Applied to new native QUIC connections and exported to client profiles.
 	ALPN                  []string
-	UDPRelayMode          string
+	UDPRelayMode          string // Default mode exported to client links; the listener accepts both modes.
 	ZeroRTTHandshake      bool
 	LogLevel              string
 	MaxIdleTime           int
 	AuthenticationTimeout int
 	MaxUdpRelayPacketSize int
-	SNI                   string
+	SNI                   string // Exported to client links; it doesn't change the native listener certificate.
 	Clients               []TuicClientSettings
 }
 
 func (inst Instance) BindTo() string {
-	listen := inst.Listen
-	if listen == "" {
-		listen = "0.0.0.0"
-	}
-	return net.JoinHostPort(listen, strconv.Itoa(inst.Port))
+	return net.JoinHostPort(inst.Listen, strconv.Itoa(inst.Port))
 }
 
 func (inst Instance) StructuralFingerprint() string {
 	parts := []string{
 		inst.BindTo(),
-		inst.Certificate,
-		inst.PrivateKey,
-		inst.CongestionControl,
+		inst.certificateFingerprint(),
 		strings.Join(inst.ALPN, ","),
-		inst.UDPRelayMode,
 		strconv.FormatBool(inst.ZeroRTTHandshake),
-		inst.LogLevel,
 		strconv.Itoa(inst.MaxIdleTime),
 		strconv.Itoa(inst.AuthenticationTimeout),
 		strconv.Itoa(inst.MaxUdpRelayPacketSize),
-		inst.SNI,
 	}
 	return strings.Join(parts, "|")
+}
+
+func (inst Instance) certificateFingerprint() string {
+	pair, err := loadCertificate(inst.Certificate, inst.PrivateKey)
+	if err != nil {
+		return "invalid-certificate"
+	}
+	hash := sha256.New()
+	for _, der := range pair.Certificate {
+		_, _ = hash.Write(der)
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil))
 }
 
 func (inst Instance) UsersFingerprint() string {
 	pairs := make([]string, 0, len(inst.Clients))
 	for _, c := range inst.Clients {
-		pairs = append(pairs, fmt.Sprintf("%s=%s:%s", c.Email, c.UUID, c.Password))
+		pairs = append(pairs, fmt.Sprintf("%d:%s=%s:%s", c.TrafficID, c.Email, c.UUID, c.Password))
 	}
 	slices.Sort(pairs)
 	return strings.Join(pairs, "|")
@@ -120,6 +125,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 			SNI                   string   `json:"sni"`
 		} `json:"server"`
 		Clients []struct {
+			TrafficID  int    `json:"traffic_id"`
 			UUID       string `json:"uuid"`
 			ID         string `json:"id"`
 			Password   string `json:"password"`
@@ -190,8 +196,10 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		}
 	}
 
-	if cc == "" {
-		cc = "bbr"
+	if normalized, err := NormalizeCongestionControl(cc); err == nil {
+		cc = normalized
+	} else {
+		cc = "new_reno"
 	}
 	if len(alpn) == 0 {
 		alpn = []string{"h3", "spdy/3.1"}
@@ -210,6 +218,8 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	}
 	if maxPacketSize <= 0 {
 		maxPacketSize = 1500
+	} else if maxPacketSize > maxSafeUdpRelayPacketSize && maxPacketSize <= maxLegacyUdpRelayPacketSize {
+		maxPacketSize = maxSafeUdpRelayPacketSize
 	}
 
 	clients := make([]TuicClientSettings, 0, len(parsed.Clients))
@@ -225,9 +235,10 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 			continue
 		}
 		clients = append(clients, TuicClientSettings{
-			UUID:     uuidVal,
-			Password: c.Password,
-			Email:    c.Email,
+			TrafficID: c.TrafficID,
+			UUID:      uuidVal,
+			Password:  c.Password,
+			Email:     c.Email,
 		})
 	}
 
@@ -249,4 +260,17 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		SNI:                   sni,
 		Clients:               clients,
 	}, true
+}
+
+func NormalizeCongestionControl(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "bbr":
+		return "bbr", nil
+	case "cubic":
+		return "cubic", nil
+	case "new_reno", "reno":
+		return "new_reno", nil
+	default:
+		return "", fmt.Errorf("tuic: unsupported congestion controller %q", value)
+	}
 }

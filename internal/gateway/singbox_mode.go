@@ -4,13 +4,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
-const singBoxBackupPath = "/etc/x-ui/gateway-singbox-backup.json"
+const (
+	singBoxBackupPath  = "/etc/x-ui/gateway-singbox-backup.json"
+	upstreamBackupPath = "/etc/x-ui/gateway-singbox-upstream-backup.json"
+)
+
+type singBoxGatewayStore struct{ core string }
+
+func selectedSingBoxStore() singBoxGatewayStore {
+	core, _ := (&service.SettingService{}).GetCoreType()
+	if core != service.CoreTypeSingBoxUpstream {
+		core = service.CoreTypeSingBox
+	}
+	return singBoxGatewayStore{core: core}
+}
+
+func (s singBoxGatewayStore) backupPath() string {
+	if s.core == service.CoreTypeSingBoxUpstream {
+		return upstreamBackupPath
+	}
+	return singBoxBackupPath
+}
 
 func decodeSingBoxTemplate(raw string) (map[string]any, error) {
 	var cfg map[string]any
@@ -23,21 +42,21 @@ func decodeSingBoxTemplate(raw string) (map[string]any, error) {
 	return cfg, nil
 }
 
-func loadSingBoxTemplateRaw() (string, error) {
-	if err := database.InitDB(config.GetDBPath()); err != nil {
+func (s singBoxGatewayStore) loadSingBoxTemplateRaw() (string, error) {
+	if err := ensureDatabase(); err != nil {
 		return "", fmt.Errorf("initialize database: %w", err)
 	}
 
 	settings := &service.SettingService{}
-	raw, err := settings.GetSingBoxConfigTemplate()
+	raw, err := settings.GetNativeCoreConfigTemplate(s.core)
 	if err != nil {
 		return "", fmt.Errorf("get sing-box template: %w", err)
 	}
 	return raw, nil
 }
 
-func loadSingBoxTemplate() (map[string]any, string, error) {
-	raw, err := loadSingBoxTemplateRaw()
+func (s singBoxGatewayStore) loadSingBoxTemplate() (map[string]any, string, error) {
+	raw, err := s.loadSingBoxTemplateRaw()
 	if err != nil {
 		return nil, "", err
 	}
@@ -52,24 +71,24 @@ func loadSingBoxTemplate() (map[string]any, string, error) {
 	return cfg, raw, nil
 }
 
-func saveSingBoxTemplateRaw(raw string) error {
+func (s singBoxGatewayStore) saveSingBoxTemplateRaw(raw string) error {
 	settings := &service.SettingService{}
-	if err := settings.SetSingBoxConfigTemplate(raw); err != nil {
+	if err := settings.SetNativeCoreConfigTemplate(s.core, raw); err != nil {
 		return fmt.Errorf("save sing-box template: %w", err)
 	}
 	return nil
 }
 
-func saveSingBoxTemplate(cfg map[string]any) error {
+func (s singBoxGatewayStore) saveSingBoxTemplate(cfg map[string]any) error {
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal sing-box template: %w", err)
 	}
-	return saveSingBoxTemplateRaw(string(data))
+	return s.saveSingBoxTemplateRaw(string(data))
 }
 
-func singBoxBackupExists() (bool, error) {
-	_, err := os.Stat(singBoxBackupPath)
+func (s singBoxGatewayStore) singBoxBackupExists() (bool, error) {
+	_, err := os.Stat(s.backupPath())
 	if err == nil {
 		return true, nil
 	}
@@ -79,26 +98,29 @@ func singBoxBackupExists() (bool, error) {
 	return false, fmt.Errorf("check sing-box gateway backup: %w", err)
 }
 
-func readSingBoxBackup() (string, error) {
-	data, err := os.ReadFile(singBoxBackupPath)
+func (s singBoxGatewayStore) readSingBoxBackup() (string, error) {
+	data, err := os.ReadFile(s.backupPath())
 	if err != nil {
 		return "", fmt.Errorf("read sing-box gateway backup: %w", err)
 	}
 	return string(data), nil
 }
 
-func createSingBoxBackup(raw string) error {
-	file, err := os.OpenFile(singBoxBackupPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+func (s singBoxGatewayStore) createSingBoxBackup(raw string) error {
+	if err := os.MkdirAll(filepath.Dir(s.backupPath()), 0o700); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(s.backupPath(), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		if os.IsExist(err) {
-			return fmt.Errorf("sing-box gateway backup already exists at %s; disable Gateway Mode first", singBoxBackupPath)
+			return fmt.Errorf("sing-box gateway backup already exists at %s; disable Gateway Mode first", s.backupPath())
 		}
 		return fmt.Errorf("create sing-box gateway backup: %w", err)
 	}
 
 	cleanup := func() {
 		_ = file.Close()
-		_ = os.Remove(singBoxBackupPath)
+		_ = os.Remove(s.backupPath())
 	}
 	if _, err := file.WriteString(raw); err != nil {
 		cleanup()
@@ -109,25 +131,25 @@ func createSingBoxBackup(raw string) error {
 		return fmt.Errorf("sync sing-box gateway backup: %w", err)
 	}
 	if err := file.Close(); err != nil {
-		_ = os.Remove(singBoxBackupPath)
+		_ = os.Remove(s.backupPath())
 		return fmt.Errorf("close sing-box gateway backup: %w", err)
 	}
 	return nil
 }
 
-func removeSingBoxBackup() error {
-	if err := os.Remove(singBoxBackupPath); err != nil && !os.IsNotExist(err) {
+func (s singBoxGatewayStore) removeSingBoxBackup() error {
+	if err := os.Remove(s.backupPath()); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove sing-box gateway backup: %w", err)
 	}
 	return nil
 }
 
-func getSingBoxStateUnlocked() (State, error) {
-	raw, err := loadSingBoxTemplateRaw()
+func (s singBoxGatewayStore) getSingBoxStateUnlocked() (State, error) {
+	raw, err := s.loadSingBoxTemplateRaw()
 	if err != nil {
 		return State{}, err
 	}
-	backup, err := singBoxBackupExists()
+	backup, err := s.singBoxBackupExists()
 	if err != nil {
 		return State{}, err
 	}
@@ -159,21 +181,21 @@ func getSingBoxStateUnlocked() (State, error) {
 	}, nil
 }
 
-func GetSingBoxState() (State, error) {
+func (s singBoxGatewayStore) GetSingBoxState() (State, error) {
 	operationMu.Lock()
 	defer operationMu.Unlock()
-	return getSingBoxStateUnlocked()
+	return s.getSingBoxStateUnlocked()
 }
 
-func EnableSingBox() error {
+func (s singBoxGatewayStore) EnableSingBox() error {
 	operationMu.Lock()
 	defer operationMu.Unlock()
 
-	cfg, raw, err := loadSingBoxTemplate()
+	cfg, raw, err := s.loadSingBoxTemplate()
 	if err != nil {
 		return err
 	}
-	backup, err := singBoxBackupExists()
+	backup, err := s.singBoxBackupExists()
 	if err != nil {
 		return err
 	}
@@ -181,15 +203,18 @@ func EnableSingBox() error {
 		return fmt.Errorf("Gateway Mode is already enabled or requires cleanup")
 	}
 
+	if err := validateManagedGatewayConflicts(); err != nil {
+		return err
+	}
 	if err := applySingBoxGatewayConfig(cfg); err != nil {
 		return err
 	}
-	if err := createSingBoxBackup(raw); err != nil {
+	if err := s.createSingBoxBackup(raw); err != nil {
 		return err
 	}
-	if err := saveSingBoxTemplate(cfg); err != nil {
-		if cleanupErr := removeSingBoxBackup(); cleanupErr != nil {
-			return fmt.Errorf("%w; cleanup failed: %v", err, cleanupErr)
+	if err := s.saveSingBoxTemplate(cfg); err != nil {
+		if cleanupErr := s.removeSingBoxBackup(); cleanupErr != nil {
+			return fmt.Errorf("%w; cleanup failed: %w", err, cleanupErr)
 		}
 		return err
 	}
@@ -198,15 +223,15 @@ func EnableSingBox() error {
 	return nil
 }
 
-func DisableSingBox() error {
+func (s singBoxGatewayStore) DisableSingBox() error {
 	operationMu.Lock()
 	defer operationMu.Unlock()
 
-	cfg, _, err := loadSingBoxTemplate()
+	cfg, _, err := s.loadSingBoxTemplate()
 	if err != nil {
 		return err
 	}
-	backup, err := singBoxBackupExists()
+	backup, err := s.singBoxBackupExists()
 	if err != nil {
 		return err
 	}
@@ -215,24 +240,13 @@ func DisableSingBox() error {
 		return fmt.Errorf("Gateway Mode is not enabled")
 	}
 
+	backupWasEmpty := false
 	if backup {
-		backupRaw, err := readSingBoxBackup()
+		backupRaw, err := s.readSingBoxBackup()
 		if err != nil {
 			return err
 		}
-		// Restore the exact original value when Gateway started from an empty
-		// template, or when the current config no longer contains Gateway-owned
-		// objects and the backup is the only recoverable state left.
-		if backupRaw == "" || !artifacts {
-			if err := saveSingBoxTemplateRaw(backupRaw); err != nil {
-				return err
-			}
-			if err := removeSingBoxBackup(); err != nil {
-				return err
-			}
-			fmt.Println("sing-box Gateway configuration disabled.")
-			return nil
-		}
+		backupWasEmpty = backupRaw == ""
 	}
 
 	if artifacts {
@@ -241,14 +255,18 @@ func DisableSingBox() error {
 			return err
 		}
 		if changed {
-			if err := saveSingBoxTemplate(cfg); err != nil {
+			if backupWasEmpty && isEmptySingBoxGatewayRemainder(cfg) {
+				if err := s.saveSingBoxTemplateRaw(""); err != nil {
+					return err
+				}
+			} else if err := s.saveSingBoxTemplate(cfg); err != nil {
 				return err
 			}
 		}
 	}
 
 	if backup {
-		if err := removeSingBoxBackup(); err != nil {
+		if err := s.removeSingBoxBackup(); err != nil {
 			return err
 		}
 	}
@@ -256,3 +274,28 @@ func DisableSingBox() error {
 	fmt.Println("sing-box Gateway configuration disabled.")
 	return nil
 }
+
+// Restore the original empty template only when no operator edits remain.
+func isEmptySingBoxGatewayRemainder(cfg map[string]any) bool {
+	for key, value := range cfg {
+		switch key {
+		case "inbounds":
+			items, ok := value.([]any)
+			if !ok || len(items) != 0 {
+				return false
+			}
+		case "route":
+			obj, ok := value.(map[string]any)
+			if !ok || len(obj) != 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func GetSingBoxState() (State, error) { return selectedSingBoxStore().GetSingBoxState() }
+func EnableSingBox() error            { return selectedSingBoxStore().EnableSingBox() }
+func DisableSingBox() error           { return selectedSingBoxStore().DisableSingBox() }

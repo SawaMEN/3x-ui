@@ -223,20 +223,24 @@ function InboundList({
 
   const generalActionsMenu: MenuProps = {
     items: [
-      { key: 'import', icon: <ImportOutlined />, label: t('pages.inbounds.importInbound') },
-      { key: 'export', icon: <ExportOutlined />, label: t('pages.inbounds.export') },
+      {
+        key: 'import',
+        icon: <ImportOutlined aria-hidden />,
+        label: t('pages.inbounds.importInbound'),
+      },
+      { key: 'export', icon: <ExportOutlined aria-hidden />, label: t('pages.inbounds.export') },
       ...(subEnable
         ? [
             {
               key: 'subs',
-              icon: <ExportOutlined />,
+              icon: <ExportOutlined aria-hidden />,
               label: `${t('pages.inbounds.export')} — ${t('pages.settings.subSettings')}`,
             },
           ]
         : []),
       {
         key: 'resetInbounds',
-        icon: <ReloadOutlined />,
+        icon: <ReloadOutlined aria-hidden />,
         label: t('pages.inbounds.resetAllTraffic'),
       },
     ],
@@ -251,7 +255,7 @@ function InboundList({
           <Button
             type="primary"
             onClick={onAddInbound}
-            icon={<PlusOutlined />}
+            icon={<PlusOutlined aria-hidden />}
             aria-label={t('pages.inbounds.addInbound')}
           >
             {!isMobile && t('pages.inbounds.addInbound')}
@@ -259,7 +263,7 @@ function InboundList({
           <Dropdown trigger={['click']} menu={generalActionsMenu}>
             <Button
               type="primary"
-              icon={<MenuOutlined />}
+              icon={<MenuOutlined aria-hidden />}
               aria-label={t('pages.inbounds.generalActions')}
             >
               {!isMobile && t('pages.inbounds.generalActions')}
@@ -281,7 +285,7 @@ function InboundList({
             onChange={(e) => setSearchKey(e.target.value)}
             placeholder={t('search')}
             allowClear
-            prefix={<SearchOutlined />}
+            prefix={<SearchOutlined aria-hidden />}
             style={{ maxWidth: isMobile ? 110 : 200 }}
             aria-label={t('search')}
           />
@@ -297,7 +301,7 @@ function InboundList({
               </Tag>
               <Button
                 danger
-                icon={<DeleteOutlined />}
+                icon={<DeleteOutlined aria-hidden />}
                 onClick={handleBulkDelete}
                 aria-label={t('delete')}
               >
@@ -313,7 +317,7 @@ function InboundList({
           <div className="inbound-cards">
             {visibleInbounds.length === 0 ? (
               <div className="card-empty">
-                <ImportOutlined style={{ fontSize: 28, opacity: 0.5 }} />
+                <ImportOutlined aria-hidden style={{ fontSize: 28, opacity: 0.5 }} />
                 <div>{t('noData')}</div>
               </div>
             ) : (
@@ -381,6 +385,7 @@ function InboundList({
                           />
                         </Tooltip>
                         <Switch
+                          aria-label={t('pages.inbounds.enable')}
                           checked={record.enable}
                           size="small"
                           onChange={(next) => onSwitchEnable(record, next)}
@@ -404,7 +409,7 @@ function InboundList({
                             type="text"
                             size="small"
                             className="row-action-trigger"
-                            icon={<MoreOutlined />}
+                            icon={<MoreOutlined aria-hidden />}
                             aria-label={t('more')}
                           />
                         </Dropdown>
@@ -452,7 +457,7 @@ function InboundList({
             locale={{
               emptyText: (
                 <div className="card-empty">
-                  <ImportOutlined style={{ fontSize: 32, marginBottom: 8 }} />
+                  <ImportOutlined aria-hidden style={{ fontSize: 32, marginBottom: 8 }} />
                   <div>{t('noData')}</div>
                 </div>
               ),

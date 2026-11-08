@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -18,17 +19,16 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-
-	"gorm.io/gorm"
 )
 
 type HeartbeatPatch struct {
@@ -39,13 +39,22 @@ type HeartbeatPatch struct {
 	SingBoxVersion   string
 	SingBoxInstalled bool
 	SingBoxKnown     bool
-	CoreType         string
-	RunningCore      string
-	PanelVersion     string
-	Guid             string
-	CpuPct           float64
-	MemPct           float64
-	UptimeSecs       uint64
+	// CoreInfoKnown distinguishes a valid legacy response from a failed probe.
+	CoreInfoKnown        bool
+	CoreVersion          string
+	CoreState            string
+	CoreError            string
+	CoreCapabilities     *core.Capabilities
+	ProtocolAvailability map[string]model.ProtocolAvailability
+	CoreType             string
+	RunningCore          string
+	PanelVersion         string
+	PanelEdition         string
+	Guid                 string
+	CpuPct               float64
+	MemPct               float64
+	UptimeSecs           uint64
+	UnavailableMetrics   []string
 	// NetUp/NetDown are the node's current interface throughput (bytes/sec),
 	// summed over non-virtual interfaces, read from its status response.
 	NetUp     uint64
@@ -66,6 +75,10 @@ func normalizeNodeCoreType(value string) string {
 	switch value {
 	case "xray":
 		return CoreTypeXray
+	case "singboxupstream":
+		return CoreTypeSingBoxUpstream
+	case "hiddifycore":
+		return CoreTypeSingBox
 	case "singbox":
 		return CoreTypeSingBox
 	default:
@@ -75,9 +88,8 @@ func normalizeNodeCoreType(value string) string {
 
 type NodeService struct{}
 
-// FetchCertFingerprint connects to the node over HTTPS without verifying the
-// certificate and returns the leaf certificate's SHA-256 as base64, so the UI
-// can offer a "fetch and pin current certificate" action.
+// FetchCertFingerprint reads the peer certificate from verified TLS or its
+// verification error; an untrusted peer never receives an HTTP request.
 func (s *NodeService) FetchCertFingerprint(ctx context.Context, n *model.Node) (string, error) {
 	addr, err := netsafe.NormalizeHost(n.Address)
 	if err != nil {
@@ -104,21 +116,30 @@ func (s *NodeService) FetchCertFingerprint(ctx context.Context, n *model.Node) (
 	if err != nil {
 		return "", err
 	}
+	transport := &http.Transport{DialContext: netsafe.SSRFGuardedDialContext}
+	defer transport.CloseIdleConnections()
 	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext:     netsafe.SSRFGuardedDialContext,
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // lgtm[go/disabled-certificate-check]
-		},
+		Transport: transport, Timeout: 10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
+	var certificates []*x509.Certificate
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		var verificationError *tls.CertificateVerificationError
+		if !errors.As(err, &verificationError) {
+			return "", err
+		}
+		certificates = verificationError.UnverifiedCertificates
+	} else {
+		defer resp.Body.Close()
+		if resp.TLS != nil {
+			certificates = resp.TLS.PeerCertificates
+		}
 	}
-	defer resp.Body.Close()
-	if resp.TLS == nil || len(resp.TLS.PeerCertificates) == 0 {
+	if len(certificates) == 0 {
 		return "", common.NewError("node did not present a TLS certificate")
 	}
-	sum := sha256.Sum256(resp.TLS.PeerCertificates[0].Raw)
+	sum := sha256.Sum256(certificates[0].Raw)
 	return base64.StdEncoding.EncodeToString(sum[:]), nil
 }
 
@@ -278,7 +299,7 @@ func (s *NodeService) nodeClientStatuses() ([]nodeClientStatus, error) {
 	for _, r := range rows {
 		st := nodeClientStatus{InboundID: r.InboundID, NodeID: r.NodeID, ClientID: r.ClientID}
 		expired := r.ExpiryTime > 0 && r.ExpiryTime <= now
-		exhausted := r.Total > 0 && r.Up+r.Down >= r.Total
+		exhausted := common.TrafficQuotaReached(r.Total, r.Up, r.Down)
 		switch {
 		case expired || exhausted:
 			st.Depleted = true
@@ -406,9 +427,7 @@ func normalizeBasePath(p string) string {
 	if p == "" {
 		return "/"
 	}
-	if !strings.HasPrefix(p, "/") {
-		p = "/" + p
-	}
+	p = "/" + strings.TrimLeft(p, "/\\")
 	if !strings.HasSuffix(p, "/") {
 		p = p + "/"
 	}
@@ -435,8 +454,8 @@ func (s *NodeService) normalize(n *model.Node) error {
 	if n.TlsVerifyMode != "skip" && n.TlsVerifyMode != "pin" && n.TlsVerifyMode != "mtls" {
 		n.TlsVerifyMode = "verify"
 	}
-	if n.TlsVerifyMode == "mtls" && n.Scheme != "https" {
-		return common.NewError("mtls requires the node scheme to be https")
+	if (n.TlsVerifyMode == "mtls" || n.TlsVerifyMode == "pin") && n.Scheme != "https" {
+		return common.NewError("mtls and certificate pinning require the node scheme to be https")
 	}
 	n.PinnedCertSha256 = strings.TrimSpace(n.PinnedCertSha256)
 	if n.InboundSyncMode != "selected" {
@@ -949,6 +968,7 @@ type NodeUpdateResult struct {
 	Id    int    `json:"id"`
 	Name  string `json:"name"`
 	OK    bool   `json:"ok"`
+	RunID string `json:"runId,omitempty"`
 	Error string `json:"error,omitempty"`
 }
 
@@ -978,12 +998,15 @@ func (s *NodeService) UpdatePanels(ids []int, dev bool) ([]NodeUpdateResult, err
 				res.Error = remoteErr.Error()
 				break
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			updErr := remote.UpdatePanel(ctx, dev)
+			// The remote first downloads its updater script (up to 15 s).
+			// Give that launch time to complete without a false timeout.
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+			runID, updErr := remote.StartPanelUpdate(ctx, dev)
 			cancel()
 			if updErr != nil {
 				res.Error = updErr.Error()
 			} else {
+				res.RunID = runID
 				res.OK = true
 			}
 		}
@@ -997,24 +1020,78 @@ func (s *NodeService) UpdatePanels(ids []int, dev bool) ([]NodeUpdateResult, err
 	return results, nil
 }
 
+// PanelUpdateStatus checks the actual installation result on one remote node.
+// The caller must match the returned RunID against the launched operation.
+func (s *NodeService) PanelUpdateStatus(id int) (*runtime.RemotePanelUpdateStatus, error) {
+	n, err := s.GetById(id)
+	if err != nil {
+		return nil, err
+	}
+	if n == nil {
+		return nil, fmt.Errorf("node not found")
+	}
+	mgr := runtime.GetManager()
+	if mgr == nil {
+		return nil, fmt.Errorf("runtime manager unavailable")
+	}
+	remote, err := mgr.RemoteFor(n)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return remote.GetPanelUpdateStatus(ctx)
+}
+
 func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 	db := database.GetDB()
-	updates := map[string]any{
-		"status":         p.Status,
-		"last_heartbeat": p.LastHeartbeat,
-		"latency_ms":     p.LatencyMs,
-		"panel_version":  p.PanelVersion,
-		"core_type":      p.CoreType,
-		"running_core":   p.RunningCore,
-		"cpu_pct":        p.CpuPct,
-		"mem_pct":        p.MemPct,
-		"uptime_secs":    p.UptimeSecs,
-		"net_up":         p.NetUp,
-		"net_down":       p.NetDown,
-		"last_error":     p.LastError,
-		"xray_state":     p.XrayState,
-		"xray_error":     p.XrayError,
+	// Map updates bypass GORM field serializers. Encode the availability list
+	// explicitly so it survives list requests and panel restarts.
+	unavailable, err := json.Marshal(p.UnavailableMetrics)
+	if err != nil {
+		return err
 	}
+	updates := map[string]any{
+		"unavailable_metrics": string(unavailable),
+		"status":              p.Status,
+		"last_heartbeat":      p.LastHeartbeat,
+		"latency_ms":          p.LatencyMs,
+		"panel_version":       p.PanelVersion,
+		"core_type":           p.CoreType,
+		"running_core":        p.RunningCore,
+		"cpu_pct":             p.CpuPct,
+		"mem_pct":             p.MemPct,
+		"uptime_secs":         p.UptimeSecs,
+		"net_up":              p.NetUp,
+		"net_down":            p.NetDown,
+		"last_error":          p.LastError,
+		"xray_state":          p.XrayState,
+		"xray_error":          p.XrayError,
+	}
+	if p.Status == "online" && p.PanelEdition != "" {
+		updates["panel_edition"] = p.PanelEdition
+	}
+	if p.CoreInfoKnown {
+		updates["core_version"], updates["core_state"], updates["core_error"] = p.CoreVersion, p.CoreState, p.CoreError
+		if p.CoreCapabilities == nil {
+			updates["core_capabilities"] = nil
+		} else {
+			data, _ := json.Marshal(p.CoreCapabilities)
+			updates["core_capabilities"] = string(data)
+		}
+	}
+	if p.CoreInfoKnown {
+		if p.ProtocolAvailability == nil {
+			updates["protocol_availability"] = nil
+		} else {
+			data, err := json.Marshal(p.ProtocolAvailability)
+			if err != nil {
+				return err
+			}
+			updates["protocol_availability"] = string(data)
+		}
+	}
+
 	// Older node builds overload xray with the selected core. Never erase a
 	// previously known Xray version when probing such a sing-box node.
 	if p.XrayVersion != "" {
@@ -1038,7 +1115,9 @@ func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 	}
 	if p.Status == "online" {
 		now := time.Unix(p.LastHeartbeat, 0)
-		nodeMetrics.append(nodeMetricKey(id, "cpu"), now, p.CpuPct)
+		if !slices.Contains(p.UnavailableMetrics, "cpu") {
+			nodeMetrics.append(nodeMetricKey(id, "cpu"), now, p.CpuPct)
+		}
 		nodeMetrics.append(nodeMetricKey(id, "mem"), now, p.MemPct)
 		nodeMetrics.append(nodeMetricKey(id, "netUp"), now, float64(p.NetUp))
 		nodeMetrics.append(nodeMetricKey(id, "netDown"), now, float64(p.NetDown))
@@ -1212,102 +1291,12 @@ func (s *NodeService) withOutboundBridge(nodeID int, outboundTag string, fn func
 		}
 	}
 
-	proc := XrayProcess()
-	if proc == nil || !proc.IsRunning() {
-		coreType, _ := (&SettingService{}).GetCoreType()
-		if coreType == CoreTypeSingBox {
-			return common.NewError("cannot create a temporary node outbound bridge while sing-box is selected; save the node first so its persistent bridge can be generated")
-		}
-		return common.NewError("cannot create node outbound bridge because Xray is not running")
-	}
-	apiPort := proc.GetAPIPort()
-	if apiPort <= 0 {
-		return common.NewError("cannot create node outbound bridge because Xray API is unavailable")
-	}
-
-	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		return fmt.Errorf("allocate temporary node outbound bridge: %w", err)
-	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	if err := listener.Close(); err != nil {
-		return fmt.Errorf("release temporary node outbound bridge port: %w", err)
-	}
-
-	tag := fmt.Sprintf("node-test-%d-%d", nodeID, time.Now().UnixNano())
-	proxyURL := fmt.Sprintf("socks5://127.0.0.1:%d", port)
-
-	inboundJSON, err := json.Marshal(xray.InboundConfig{
-		Listen:   json_util.RawMessage(`"127.0.0.1"`),
-		Port:     port,
-		Protocol: "socks",
-		Settings: json_util.RawMessage(`{"auth":"noauth","udp":false}`),
-		Tag:      tag,
-	})
-	if err != nil {
-		return fmt.Errorf("marshal temporary node outbound bridge: %w", err)
-	}
-
-	cfg := proc.GetConfig()
-	if cfg == nil {
-		return common.NewError("cannot create node outbound bridge because Xray config is unavailable")
-	}
-	routing := map[string]any{}
-	if len(cfg.RouterConfig) > 0 {
-		_ = json.Unmarshal(cfg.RouterConfig, &routing)
-	}
-	rules, _ := routing["rules"].([]any)
-	rule := map[string]any{
-		"type":       "field",
-		"inboundTag": []any{tag},
-	}
-	if routingTagIsBalancer(routing, outboundTag) {
-		rule["balancerTag"] = outboundTag
-	} else {
-		rule["outboundTag"] = outboundTag
-	}
-	routing["rules"] = append([]any{rule}, rules...)
-	routingJSON, err := json.Marshal(routing)
-	if err != nil {
-		return fmt.Errorf("marshal temporary node outbound routing: %w", err)
-	}
-	originalRoutingJSON := cfg.RouterConfig
-
-	api := xray.XrayAPI{}
-	if err := api.Init(apiPort); err != nil {
-		return fmt.Errorf("connect to Xray API for node outbound bridge: %w", err)
-	}
-	defer api.Close()
-
-	if err := api.AddInbound(inboundJSON); err != nil {
-		return fmt.Errorf("add temporary node outbound bridge: %w", err)
-	}
-	defer func() {
-		if err := api.DelInbound(tag); err != nil {
-			logger.Warning("remove temp node bridge inbound failed:", err)
-		}
-	}()
-
-	if err := api.ApplyRoutingConfig(routingJSON); err != nil {
-		return fmt.Errorf("apply temporary node outbound routing: %w", err)
-	}
-	defer func() {
-		restore := originalRoutingJSON
-		if len(restore) == 0 {
-			restore = []byte("{}")
-		}
-		if err := api.ApplyRoutingConfig(restore); err != nil {
-			logger.Warning("restore routing after node bridge failed:", err)
-		}
-	}()
-
-	fn(proxyURL)
-	return nil
+	return common.NewError("save the node before probing so its sing-box egress bridge can be generated")
 }
 
 // A status envelope holds a handful of scalars; the cap keeps a hostile or
 // broken node from dictating the master's allocation on every heartbeat.
-const maxProbeBodyBytes = 1 << 20 // 1 MiB
+const maxProbeBodyBytes = 1 << 20
 
 func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string) (HeartbeatPatch, error) {
 	// Keep the last known configured core even when the HTTP probe fails.
@@ -1317,6 +1306,7 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 	patch := HeartbeatPatch{
 		LastHeartbeat: time.Now().Unix(),
 		CoreType:      normalizeNodeCoreType(n.CoreType),
+		PanelEdition:  n.PanelEdition,
 	}
 
 	addr, err := netsafe.NormalizeHost(n.Address)
@@ -1379,8 +1369,9 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 		Success bool   `json:"success"`
 		Msg     string `json:"msg"`
 		Obj     *struct {
-			CpuPct float64 `json:"cpu"`
-			Mem    struct {
+			CpuPct             float64  `json:"cpu"`
+			UnavailableMetrics []string `json:"unavailableMetrics"`
+			Mem                struct {
 				Current uint64 `json:"current"`
 				Total   uint64 `json:"total"`
 			} `json:"mem"`
@@ -1396,13 +1387,16 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 				ErrorMsg  string `json:"errorMsg"`
 			} `json:"singbox"`
 			Core struct {
-				Type     string `json:"type"`
-				Running  string `json:"running"`
-				State    string `json:"state"`
-				Version  string `json:"version"`
-				ErrorMsg string `json:"errorMsg"`
+				Capabilities         *core.Capabilities                    `json:"capabilities"`
+				ProtocolAvailability map[string]model.ProtocolAvailability `json:"protocolAvailability"`
+				Type                 string                                `json:"type"`
+				Running              string                                `json:"running"`
+				State                string                                `json:"state"`
+				Version              string                                `json:"version"`
+				ErrorMsg             string                                `json:"errorMsg"`
 			} `json:"core"`
 			PanelVersion string `json:"panelVersion"`
+			PanelEdition string `json:"panelEdition"`
 			PanelGuid    string `json:"panelGuid"`
 			Uptime       uint64 `json:"uptime"`
 			NetIO        struct {
@@ -1427,9 +1421,16 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 	}
 	o := envelope.Obj
 	patch.CpuPct = o.CpuPct
+	patch.UnavailableMetrics = o.UnavailableMetrics
 	if o.Mem.Total > 0 {
 		patch.MemPct = float64(o.Mem.Current) * 100.0 / float64(o.Mem.Total)
 	}
+	patch.CoreInfoKnown = true
+	patch.CoreVersion = o.Core.Version
+	patch.CoreState = o.Core.State
+	patch.CoreError = o.Core.ErrorMsg
+	patch.CoreCapabilities = o.Core.Capabilities
+	patch.ProtocolAvailability = o.Core.ProtocolAvailability
 	patch.CoreType = normalizeNodeCoreType(o.Core.Type)
 	patch.RunningCore = normalizeNodeCoreType(o.Core.Running)
 	if o.SingBox != nil {
@@ -1454,7 +1455,7 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 	} else {
 		patch.XrayVersion = o.Xray.Version
 	}
-	if o.SingBox != nil || patch.CoreType != CoreTypeSingBox {
+	if o.SingBox != nil || !IsNativeCore(patch.CoreType) {
 		patch.XrayState = o.Xray.State
 		patch.XrayError = o.Xray.ErrorMsg
 	}
@@ -1465,7 +1466,29 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 		patch.CoreType = CoreTypeXray
 		patch.RunningCore = CoreTypeXray
 	}
+	switch patch.CoreType {
+	case CoreTypeXray:
+		if patch.CoreVersion == "" {
+			patch.CoreVersion = patch.XrayVersion
+		}
+		if patch.CoreState == "" {
+			patch.CoreState = patch.XrayState
+			patch.CoreError = patch.XrayError
+		}
+	case CoreTypeSingBox:
+		if patch.CoreVersion == "" {
+			patch.CoreVersion = patch.SingBoxVersion
+		}
+		if patch.CoreState == "" {
+			patch.CoreState = patch.SingBoxState
+			patch.CoreError = patch.SingBoxError
+		}
+	}
 	patch.PanelVersion = o.PanelVersion
+	patch.PanelEdition = "unmarked"
+	if o.PanelEdition == "sawamen" {
+		patch.PanelEdition = "sawamen"
+	}
 	patch.Guid = o.PanelGuid
 	patch.UptimeSecs = o.Uptime
 	patch.NetUp = o.NetIO.Up
@@ -1474,22 +1497,29 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 }
 
 type ProbeResultUI struct {
-	Status           string  `json:"status" example:"online"`
-	LatencyMs        int     `json:"latencyMs" example:"42"`
-	XrayVersion      string  `json:"xrayVersion" example:"25.10.31"`
-	SingBoxVersion   string  `json:"singboxVersion"`
-	SingBoxInstalled bool    `json:"singboxInstalled"`
-	SingBoxKnown     bool    `json:"singboxKnown"`
-	CoreType         string  `json:"coreType"`
-	RunningCore      string  `json:"runningCore"`
-	PanelVersion     string  `json:"panelVersion" example:"v3.x.x"`
-	CpuPct           float64 `json:"cpuPct" example:"12.5"`
-	MemPct           float64 `json:"memPct" example:"45.2"`
-	UptimeSecs       uint64  `json:"uptimeSecs" example:"86400"`
-	Error            string  `json:"error"`
+	Status               string                                `json:"status" example:"online"`
+	LatencyMs            int                                   `json:"latencyMs" example:"42"`
+	XrayVersion          string                                `json:"xrayVersion" example:"25.10.31"`
+	SingBoxVersion       string                                `json:"singboxVersion"`
+	SingBoxInstalled     bool                                  `json:"singboxInstalled"`
+	SingBoxKnown         bool                                  `json:"singboxKnown"`
+	CoreVersion          string                                `json:"coreVersion"`
+	CoreState            string                                `json:"coreState"`
+	CoreError            string                                `json:"coreError"`
+	CoreCapabilities     *core.Capabilities                    `json:"coreCapabilities"`
+	ProtocolAvailability map[string]model.ProtocolAvailability `json:"protocolAvailability,omitempty"`
+	CoreType             string                                `json:"coreType"`
+	RunningCore          string                                `json:"runningCore"`
+	PanelVersion         string                                `json:"panelVersion" example:"v3.x.x"`
+	PanelEdition         string                                `json:"panelEdition" example:"sawamen"`
+	CpuPct               float64                               `json:"cpuPct" example:"12.5"`
+	MemPct               float64                               `json:"memPct" example:"45.2"`
+	UptimeSecs           uint64                                `json:"uptimeSecs" example:"86400"`
+	UnavailableMetrics   []string                              `json:"unavailableMetrics,omitempty"`
+	Error                string                                `json:"error"`
 	// XrayState/XrayError are populated on successful probes even when the node's
 	// Xray core is not healthy. The UI uses them for a distinct "panel ok, xray failed" indicator.
-	XrayState    string `json:"xrayState"`
+	XrayState    string `json:"presenceRegistry"`
 	XrayError    string `json:"xrayError"`
 	SingBoxState string `json:"singboxState"`
 	SingBoxError string `json:"singboxError"`
@@ -1502,17 +1532,20 @@ func (p HeartbeatPatch) ToUI(ok bool) ProbeResultUI {
 		SingBoxVersion:   p.SingBoxVersion,
 		SingBoxInstalled: p.SingBoxInstalled,
 		SingBoxKnown:     p.SingBoxKnown,
-		CoreType:         p.CoreType,
-		RunningCore:      p.RunningCore,
-		PanelVersion:     p.PanelVersion,
-		CpuPct:           p.CpuPct,
-		MemPct:           p.MemPct,
-		UptimeSecs:       p.UptimeSecs,
-		Error:            FriendlyProbeError(p.LastError),
-		XrayState:        p.XrayState,
-		XrayError:        p.XrayError,
-		SingBoxState:     p.SingBoxState,
-		SingBoxError:     p.SingBoxError,
+		CoreVersion:      p.CoreVersion, CoreState: p.CoreState, CoreError: p.CoreError, CoreCapabilities: p.CoreCapabilities, ProtocolAvailability: p.ProtocolAvailability,
+		CoreType:           p.CoreType,
+		RunningCore:        p.RunningCore,
+		PanelVersion:       p.PanelVersion,
+		PanelEdition:       p.PanelEdition,
+		CpuPct:             p.CpuPct,
+		MemPct:             p.MemPct,
+		UptimeSecs:         p.UptimeSecs,
+		UnavailableMetrics: p.UnavailableMetrics,
+		Error:              FriendlyProbeError(p.LastError),
+		XrayState:          p.XrayState,
+		XrayError:          p.XrayError,
+		SingBoxState:       p.SingBoxState,
+		SingBoxError:       p.SingBoxError,
 	}
 	if ok {
 		r.Status = "online"
@@ -1527,4 +1560,10 @@ func FriendlyProbeError(msg string) string {
 		return "the server speaks HTTP, not HTTPS; set the node scheme to http"
 	}
 	return msg
+}
+
+func (s *NodeService) SetDownNotified(id int, notified bool) error {
+	return database.GetDB().Model(model.Node{}).
+		Where("id = ?", id).
+		Update("down_notified", notified).Error
 }

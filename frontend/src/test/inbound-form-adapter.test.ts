@@ -294,6 +294,45 @@ describe('formValuesToWirePayload', () => {
   });
 });
 
+describe('Snell version-specific form serialization', () => {
+  it('omits old HTTP obfuscation fields for v6', () => {
+    const values = rawInboundToFormValues({
+      ...vlessRow,
+      protocol: 'snell',
+      settings: {
+        version: 6,
+        psk: 'a-secure-psk-for-version-6',
+        mode: 'default',
+        obfsMode: 'none',
+        obfsHost: 'unused.example',
+        clients: [],
+      },
+    });
+    const settings = JSON.parse(formValuesToWirePayload(values).settings);
+    expect(settings.version).toBe(6);
+    expect(settings).not.toHaveProperty('obfsMode');
+    expect(settings).not.toHaveProperty('obfsHost');
+  });
+  it('omits traffic shaping and unused Host for v5', () => {
+    const values = rawInboundToFormValues({
+      ...vlessRow,
+      protocol: 'snell',
+      settings: {
+        version: 5,
+        psk: 'existing-psk',
+        mode: 'default',
+        obfsMode: 'none',
+        obfsHost: 'unused.example',
+        clients: [],
+      },
+    });
+    const settings = JSON.parse(formValuesToWirePayload(values).settings);
+    expect(settings.version).toBe(5);
+    expect(settings).not.toHaveProperty('mode');
+    expect(settings).not.toHaveProperty('obfsHost');
+  });
+});
+
 describe('disableFlow', () => {
   it('DBInbound constructor preserves disableFlow from the API row', () => {
     expect(new DBInbound({ disableFlow: true }).disableFlow).toBe(true);
@@ -441,5 +480,44 @@ describe('xhttp xmux maxConcurrency survives a load/re-save round-trip', () => {
     const stream = JSON.parse(payload.streamSettings) as Record<string, Record<string, unknown>>;
     const xmux = stream.xhttpSettings.xmux as Record<string, unknown>;
     expect(xmux.maxConcurrency).toBe('1-2');
+  });
+});
+
+describe('imported XHTTP extra', () => {
+  it('honors core precedence and keeps client download settings on save', () => {
+    const form = rawInboundToFormValues({
+      ...vlessRow,
+      streamSettings: {
+        network: 'xhttp',
+        security: 'none',
+        xhttpSettings: {
+          host: 'edge.example',
+          path: '/audit',
+          mode: 'packet-up',
+          scMaxEachPostBytes: '999999',
+          extra: {
+            path: '/ignored',
+            scMaxEachPostBytes: 65536,
+            scMinPostsIntervalMs: 60,
+            uplinkChunkSize: 4096,
+            xmux: { maxConcurrency: '4-8' },
+            downloadSettings: { address: 'download.example', port: 443, network: 'xhttp' },
+          },
+        },
+      },
+    });
+    const wire = formValuesToWirePayload(form);
+    const xhttp = JSON.parse(wire.streamSettings!).xhttpSettings;
+    expect(xhttp).not.toHaveProperty('extra');
+    expect(xhttp).toMatchObject({
+      host: 'edge.example',
+      path: '/audit',
+      mode: 'packet-up',
+      scMaxEachPostBytes: '65536',
+      scMinPostsIntervalMs: '60',
+      uplinkChunkSize: 4096,
+      xmux: { maxConcurrency: '4-8' },
+      downloadSettings: { address: 'download.example' },
+    });
   });
 });

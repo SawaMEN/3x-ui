@@ -12,7 +12,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const v2rayStatsAddress = "127.0.0.1:10086"
+const (
+	v2rayStatsAddress = "127.0.0.1:10086"
+	v2rayStatsMethod  = "/experimental.v2rayapi.StatsService/QueryStats"
+)
+
+type V2RayStat = v2rayStat
 
 type v2rayStat struct {
 	Name  string
@@ -32,7 +37,9 @@ type v2rayQueryResponse struct {
 
 type v2rayProtoCodec struct{}
 
-func (v2rayProtoCodec) Name() string { return "singbox-v2rayapi" }
+// The payload is ordinary protobuf. Advertising a private content subtype
+// would make an unmodified gRPC core reject the request before dispatch.
+func (v2rayProtoCodec) Name() string { return "proto" }
 
 func (v2rayProtoCodec) Marshal(v any) ([]byte, error) {
 	req, ok := v.(*v2rayQueryRequest)
@@ -155,11 +162,11 @@ func decodeStat(data []byte) (v2rayStat, error) {
 			if wire != 0 {
 				return stat, fmt.Errorf("invalid Stat.value wire type %d", wire)
 			}
-			value, used := binary.Varint(data)
+			value, used := binary.Uvarint(data)
 			if used <= 0 {
 				return stat, fmt.Errorf("invalid Stat.value")
 			}
-			stat.Value = value
+			stat.Value = int64(value)
 			data = data[used:]
 		default:
 			used, err := skipWire(data, wire)
@@ -199,8 +206,17 @@ func skipWire(data []byte, wire int) (int, error) {
 }
 
 type V2RayStatsClient struct {
-	mu   sync.Mutex
-	conn *grpc.ClientConn
+	mu      sync.Mutex
+	conn    *grpc.ClientConn
+	address string
+	method  string
+}
+
+// NewV2RayStatsClient pins the endpoint and method for a core profile. The zero
+// value keeps the legacy sing-box contract; do not probe alternate methods when
+// reading resetting counters because retries can lose an already-consumed batch.
+func NewV2RayStatsClient(address, method string) *V2RayStatsClient {
+	return &V2RayStatsClient{address: address, method: method}
 }
 
 func (c *V2RayStatsClient) closeLocked() {
@@ -218,12 +234,17 @@ func (c *V2RayStatsClient) connFor(ctx context.Context) (*grpc.ClientConn, error
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	//nolint:staticcheck // DialContext/WithBlock preserve bounded synchronous dial semantics here.
+	address := c.address
+	if address == "" {
+		address = v2rayStatsAddress
+	}
+	//nolint:staticcheck // DialContext preserves bounded synchronous dial semantics; NewClient is lazy.
 	conn, err := grpc.DialContext(
 		dialCtx,
-		v2rayStatsAddress,
+		address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(), //nolint:staticcheck // preserve bounded synchronous dial semantics
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(64<<20)),
 	)
 	if err != nil {
 		return nil, err
@@ -239,9 +260,13 @@ func (c *V2RayStatsClient) Query(ctx context.Context, patterns []string, reset b
 	}
 	req := &v2rayQueryRequest{Patterns: patterns, Reset: reset}
 	var resp v2rayQueryResponse
+	method := c.method
+	if method == "" {
+		method = v2rayStatsMethod
+	}
 	err = conn.Invoke(
 		ctx,
-		"/experimental.v2rayapi.StatsService/QueryStats",
+		method,
 		req,
 		&resp,
 		grpc.ForceCodec(v2rayProtoCodec{}),
@@ -291,4 +316,10 @@ func (c *V2RayStatsClient) QueryUser(ctx context.Context, email string, reset bo
 		}
 	}
 	return up, down, nil
+}
+
+func (c *V2RayStatsClient) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closeLocked()
 }

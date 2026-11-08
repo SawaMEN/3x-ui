@@ -93,6 +93,78 @@ func TestFetchSubscriptionLinksBoundsCacheSize(t *testing.T) {
 	}
 }
 
+func TestFetchSubscriptionLinksBacksOffFailedProvider(t *testing.T) {
+	for _, withStale := range []bool{false, true} {
+		t.Run(strconv.FormatBool(withStale), func(t *testing.T) {
+			resetSubscriptionCache(t)
+			var requests atomic.Int32
+			var recovered atomic.Bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if !recovered.Load() {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				_, _ = w.Write([]byte("vless://new@example.com:443"))
+			}))
+			defer srv.Close()
+			if withStale {
+				subscriptionCache.Lock()
+				subscriptionCache.m[srv.URL] = subscriptionCacheEntry{
+					links: []string{"vless://old@example.com:443"}, fetchedAt: time.Now().Add(-subscriptionCacheTTL),
+				}
+				subscriptionCache.Unlock()
+			}
+			first := fetchSubscriptionLinks(srv.URL)
+			if !first.fetched || !errors.Is(first.err, errBadStatus) {
+				t.Fatalf("initial failure = %+v", first)
+			}
+			for range 10 {
+				result := fetchSubscriptionLinks(srv.URL)
+				if result.fetched || len(result.links) != len(first.links) {
+					t.Fatalf("retry was not backed off: %+v", result)
+				}
+			}
+			if got := requests.Load(); got != 1 {
+				t.Fatalf("provider requests during retry delay = %d, want 1", got)
+			}
+			recovered.Store(true)
+			subscriptionCache.Lock()
+			entry := subscriptionCache.m[srv.URL]
+			entry.retryAfter = time.Now().Add(-time.Second)
+			subscriptionCache.m[srv.URL] = entry
+			subscriptionCache.Unlock()
+			result := fetchSubscriptionLinks(srv.URL)
+			if !result.fetched || result.err != nil || len(result.links) != 1 || result.links[0] != "vless://new@example.com:443" {
+				t.Fatalf("provider did not recover after retry delay: %+v", result)
+			}
+			if fetchSubscriptionLinks(srv.URL).fetched || requests.Load() != 2 {
+				t.Fatal("successful refresh was not cached")
+			}
+		})
+	}
+}
+
+func TestFetchSubscriptionLinksBoundsFailureCache(t *testing.T) {
+	resetSubscriptionCache(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	for i := range subscriptionCacheCapacity + 17 {
+		result := fetchSubscriptionLinks(srv.URL + "?id=" + strconv.Itoa(i))
+		if !result.fetched || !errors.Is(result.err, errBadStatus) {
+			t.Fatalf("failed provider %d = %+v", i, result)
+		}
+	}
+	subscriptionCache.Lock()
+	entries := len(subscriptionCache.m)
+	subscriptionCache.Unlock()
+	if entries != subscriptionCacheCapacity {
+		t.Fatalf("failure cache entries = %d, want %d", entries, subscriptionCacheCapacity)
+	}
+}
+
 func TestFetchSubscriptionLinksSharesStaleResultAfterRefreshFailure(t *testing.T) {
 	resetSubscriptionCache(t)
 	stale := []string{"vless://stale@example.com:443"}

@@ -1,6 +1,7 @@
 package job
 
 import (
+	"context"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
@@ -9,17 +10,25 @@ import (
 )
 
 // CheckCpuJob monitors CPU usage and publishes events when threshold is exceeded.
-type CheckCpuJob struct{}
+type CheckCpuJob struct{ ctx context.Context }
 
 // NewCheckCpuJob creates a new CPU monitoring job instance.
 func NewCheckCpuJob() *CheckCpuJob {
-	return new(CheckCpuJob)
+	return NewCheckCpuJobWithContext(context.Background())
+}
+
+func NewCheckCpuJobWithContext(ctx context.Context) *CheckCpuJob {
+	return &CheckCpuJob{ctx: ctx}
 }
 
 // Run checks CPU usage and publishes a cpu.high event with raw metric data.
 func (j *CheckCpuJob) Run() {
-	percent, err := cpu.Percent(1*time.Minute, false)
-	if err != nil || len(percent) == 0 {
+	ctx := j.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	percent, err := cpu.PercentWithContext(ctx, time.Minute, false)
+	if err != nil || ctx.Err() != nil || len(percent) == 0 {
 		return
 	}
 

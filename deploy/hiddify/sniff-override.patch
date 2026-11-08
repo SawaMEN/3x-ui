@@ -1,0 +1,20 @@
+--- a/hiddify-sing-box/option/rule_action.go
++++ b/hiddify-sing-box/option/rule_action.go
+@@ -326,6 +326,7 @@
+ }
+ 
+ type RouteActionSniff struct {
++	OverrideDestination bool `json:"override_destination,omitempty"`
+ 	Sniffer badoption.Listable[string] `json:"sniffer,omitempty" enum:"tls,http,quic,dns,stun,bittorrent,dtls,ssh,rdp,ntp"`
+ 	Timeout badoption.Duration         `json:"timeout,omitempty"`
+ }
+--- a/hiddify-sing-box/route/rule/rule_action.go
++++ b/hiddify-sing-box/route/rule/rule_action.go
+@@ -108,6 +108,7 @@
+ 		sniffAction := &RuleActionSniff{
+ 			SnifferNames: action.SniffOptions.Sniffer,
+ 			Timeout:      time.Duration(action.SniffOptions.Timeout),
++			OverrideDestination: action.SniffOptions.OverrideDestination,
+ 		}
+ 		return sniffAction, sniffAction.build()
+ 	case C.RuleActionTypeResolve:

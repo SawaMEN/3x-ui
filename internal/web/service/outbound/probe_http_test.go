@@ -265,7 +265,7 @@ func TestTestOutboundsPrevalidationAndOrdering(t *testing.T) {
 		"Outbound has no tag",
 		"Blocked/blackhole outbound cannot be tested",
 		"Loopback outbound cannot be tested",
-		"Failed to start test xray instance: boom",
+		"Failed to start test sing-box instance: boom",
 		"Duplicate outbound tag in batch: a",
 	}
 	for i, want := range wantErrs {
@@ -301,7 +301,7 @@ func TestTestOutboundsFallbackOnStartFailure(t *testing.T) {
 		t.Fatalf("TestOutbounds: %v", err)
 	}
 	for i, r := range results {
-		if r.Success || r.Error != "Failed to start test xray instance: boom" {
+		if r.Success || r.Error != "Failed to start test sing-box instance: boom" {
 			t.Errorf("result %d = %+v, want start failure", i, r)
 		}
 	}
@@ -327,7 +327,7 @@ func TestTestOutboundsNoFallbackWhenBinaryMissing(t *testing.T) {
 		t.Fatalf("TestOutbounds: %v", err)
 	}
 	for i, r := range results {
-		if r.Success || !strings.HasPrefix(r.Error, "Failed to start test xray instance:") {
+		if r.Success || !strings.HasPrefix(r.Error, "Failed to start test sing-box instance:") {
 			t.Errorf("result %d = %+v, want start failure", i, r)
 		}
 	}

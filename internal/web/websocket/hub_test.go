@@ -3,6 +3,7 @@ package websocket
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -243,6 +244,132 @@ func TestHub_ConcurrentRegisterUnregister(t *testing.T) {
 	}
 	wg.Wait()
 	waitClientCount(t, h, 0)
+}
+
+func TestHub_UnregisterWaitsForFullQueueWithoutLeaking(t *testing.T) {
+	h := NewHub()
+	defer h.Stop()
+
+	victim := NewClient("disconnected")
+	h.Register(victim)
+	// Fill the ops buffer while the hub is not yet running. Each pair will
+	// register and immediately unregister a different client once Run starts.
+	for i := 0; i < 15; i++ {
+		c := NewClient("transient")
+		h.Register(c)
+		h.Unregister(c)
+	}
+	h.ops <- clientOp{kind: opUnregister, c: NewClient("absent")}
+	if got := len(h.ops); got != cap(h.ops) {
+		t.Fatalf("ops queue = %d, want %d", got, cap(h.ops))
+	}
+
+	finished := make(chan struct{})
+	go func() {
+		h.Unregister(victim)
+		close(finished)
+	}()
+	select {
+	case <-finished:
+		t.Fatal("unregister was silently dropped while ops queue was full")
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	go h.Run()
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("unregister did not unblock after the hub started")
+	}
+	waitClientCount(t, h, 0)
+	select {
+	case _, ok := <-victim.Send:
+		if ok {
+			t.Fatal("disconnected client's send channel was not closed")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("disconnected client's send channel remained open")
+	}
+}
+
+func TestHub_OversizedBroadcastUsesSmallInvalidateMessage(t *testing.T) {
+	h := NewHub()
+	defer h.Stop()
+	go h.Run()
+
+	c := NewClient("client")
+	h.Register(c)
+	waitClientCount(t, h, 1)
+
+	// A large snapshot must not be retained in the hub's buffered channel.
+	h.Broadcast(MessageTypeInbounds, strings.Repeat("x", maxMessageSize))
+	select {
+	case raw := <-c.Send:
+		if len(raw) > 1024 {
+			t.Fatalf("oversized message was sent to websocket client (%d bytes)", len(raw))
+		}
+		var m Message
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatal(err)
+		}
+		if m.Type != MessageTypeInvalidate {
+			t.Fatalf("expected invalidate, got %s", m.Type)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing REST invalidation on oversized websocket snapshot")
+	}
+}
+
+// A burst that ends with a throttled change must still refresh open tabs.
+// Returning early without a trailing invalidate leaves the last state stale
+// until the next unrelated mutation, even with a perfectly connected socket.
+func TestHub_ThrottledFinalMutationTriggersRESTInvalidation(t *testing.T) {
+	h := NewHub()
+	go h.Run()
+	defer h.Stop()
+
+	c := NewClient("last-update")
+	h.Register(c)
+	waitClientCount(t, h, 1)
+
+	h.Broadcast(MessageTypeTraffic, map[string]int{"up": 1})
+	select {
+	case raw := <-c.Send:
+		var m Message
+		if err := json.Unmarshal(raw, &m); err != nil || m.Type != MessageTypeTraffic {
+			t.Fatalf("first snapshot not delivered: %v %s", err, raw)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("initial traffic snapshot missing")
+	}
+	h.Broadcast(MessageTypeTraffic, map[string]int{"up": 2})
+	select {
+	case raw := <-c.Send:
+		var m Message
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatal(err)
+		}
+		if m.Type != MessageTypeInvalidate {
+			t.Fatalf("throttled final mutation was lost: received %q, expected invalidate", m.Type)
+		}
+		var detail struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(mustJSON(t, m.Payload), &detail); err != nil || detail.Type != string(MessageTypeTraffic) {
+			t.Fatalf("invalidate must name the changed topic: type=%q err=%v", detail.Type, err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("throttled final mutation never triggered REST invalidation")
+	}
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
 
 func waitClientCount(t *testing.T, h *Hub, want int) {

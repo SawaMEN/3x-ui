@@ -3,9 +3,9 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func groupByName(t *testing.T, svc *ClientService, name string) GroupSummary {
@@ -55,7 +55,7 @@ func TestResetGroupTraffic_ZeroesGroupButKeepsClients(t *testing.T) {
 		t.Fatalf("after reset: client count changed to %d, want 2", after.ClientCount)
 	}
 
-	var alice xray.ClientTraffic
+	var alice coremodel.ClientTraffic
 	if err := database.GetDB().Where("email = ?", "alice").First(&alice).Error; err != nil {
 		t.Fatalf("load alice traffic: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestGroupTotalsSurviveSingleClientReset(t *testing.T) {
 		t.Fatalf("group totals changed by client reset: got %+v, want up=140 down=260 used=400", g)
 	}
 
-	var erin xray.ClientTraffic
+	var erin coremodel.ClientTraffic
 	if err := database.GetDB().Where("email = ?", "erin").First(&erin).Error; err != nil {
 		t.Fatalf("load erin traffic: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestGroupTotalsSurviveClientDelete(t *testing.T) {
 	}
 
 	var trafficRows int64
-	if err := database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", "iris").Count(&trafficRows).Error; err != nil {
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).Where("email = ?", "iris").Count(&trafficRows).Error; err != nil {
 		t.Fatalf("count iris traffic rows: %v", err)
 	}
 	if trafficRows != 0 {

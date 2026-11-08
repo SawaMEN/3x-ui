@@ -151,10 +151,14 @@ func ParseHiddifyBackup(reader io.Reader) (*HiddifyBackup, HiddifyPreview, error
 	}
 	seen := make(map[string]bool, len(b.Users))
 	for _, user := range b.Users {
-		if _, err := uuid.Parse(user.UUID); err != nil || seen[user.UUID] {
+		id, err := uuid.Parse(user.UUID)
+		if err != nil || seen[id.String()] {
 			return nil, preview, fmt.Errorf("backup contains an invalid or repeated user UUID")
 		}
-		seen[user.UUID] = true
+		seen[id.String()] = true
+		if user.PackageDays < 0 {
+			return nil, preview, fmt.Errorf("backup contains a negative package duration")
+		}
 		if math.IsNaN(user.UsageLimitGB) || math.IsNaN(user.CurrentUsageGB) || user.UsageLimitGB < 0 || user.CurrentUsageGB < 0 {
 			return nil, preview, fmt.Errorf("backup contains an invalid traffic allowance")
 		}
@@ -355,14 +359,19 @@ func (b *HiddifyBackup) HiddifyClientsSelected(selected []string) ([]ClientCreat
 		}
 		var total int64
 		if user.UsageLimitGB > 0 {
-			if remaining > float64(math.MaxInt64)/(1<<30) {
+			bytes := remaining * (1 << 30)
+			if bytes >= math.Exp2(63) {
 				return nil, fmt.Errorf("traffic allowance exceeds int64")
 			}
-			total = int64(remaining * (1 << 30))
-			// Zero means unlimited in 3x-ui. A depleted limited account is disabled.
+			// Keep limited accounts limited even after a later manual enable.
+			total = max(int64(math.Ceil(bytes)), 1)
 		}
 		expiry := int64(0)
 		if user.PackageDays > 0 {
+			const dayMillis int64 = 24 * 60 * 60 * 1000
+			if int64(user.PackageDays) > math.MaxInt64/dayMillis {
+				return nil, fmt.Errorf("Hiddify package duration exceeds int64 milliseconds")
+			}
 			started := time.Now().UTC()
 			if user.StartDate != nil && strings.TrimSpace(*user.StartDate) != "" {
 				var err error
@@ -377,7 +386,11 @@ func (b *HiddifyBackup) HiddifyClientsSelected(selected []string) ([]ClientCreat
 					return nil, fmt.Errorf("invalid Hiddify start date for user %s", user.UUID)
 				}
 			}
-			expiry = started.AddDate(0, 0, user.PackageDays).UnixMilli()
+			duration := int64(user.PackageDays) * dayMillis
+			if started.UnixMilli() > math.MaxInt64-duration {
+				return nil, fmt.Errorf("Hiddify expiry exceeds int64 milliseconds")
+			}
+			expiry = started.UnixMilli() + duration
 		}
 		items = append(items, ClientCreatePayload{
 			Client: model.Client{

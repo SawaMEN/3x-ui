@@ -119,8 +119,14 @@ func TestTranslateXrayWireGuardToEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got["type"] != "wireguard" || got["tag"] != "warp" || got["system"] != true {
+	if got["type"] != "wireguard" || got["tag"] != "warp" {
 		t.Fatalf("unexpected endpoint: %#v", got)
+	}
+	if system, _ := got["system"].(bool); system {
+		t.Fatalf("translated WireGuard outbound must remain in userspace mode: %#v", got)
+	}
+	if got["domain_resolver"] != nil {
+		t.Fatalf("domain peer must inherit the configured route resolver: %#v", got)
 	}
 	addresses, ok := got["address"].([]string)
 	if !ok || len(addresses) != 2 || addresses[0] != "10.0.0.2/32" {
@@ -289,7 +295,7 @@ func TestTranslateXrayRoutingSupportsBalancerTag(t *testing.T) {
 		"balancers": []any{
 			map[string]any{
 				"tag":      "proxy-pool",
-				"selector": []any{"proxy-a", "proxy-b"},
+				"selector": []any{"proxy-a"},
 			},
 		},
 	}
@@ -307,6 +313,13 @@ func TestTranslateXrayRoutingSupportsBalancerTag(t *testing.T) {
 	}
 	if len(balancers) != 1 || balancers[0]["type"] != "selector" || balancers[0]["tag"] != "proxy-pool" {
 		t.Fatalf("unexpected balancer outbound: %#v", balancers)
+	}
+}
+
+func TestTranslateXrayBalancersRejectsDynamicPool(t *testing.T) {
+	raw := map[string]any{"balancers": []any{map[string]any{"tag": "pool", "selector": []any{"proxy-a", "proxy-b"}}}}
+	if _, err := TranslateXrayBalancers(raw); err == nil {
+		t.Fatal("dynamic pool was silently changed to a static selector")
 	}
 }
 
@@ -672,7 +685,7 @@ func TestTranslateXrayShadowTLSInbound(t *testing.T) {
 		"listen":   "0.0.0.0",
 		"port":     443,
 		"settings": map[string]any{
-			"version": 3,
+			"version":  3,
 			"innerKey": "MDEyMzQ1Njc4OWFiY2RlZg==",
 			"handshake": map[string]any{
 				"server":     "cloudflare.com",
@@ -783,5 +796,64 @@ func TestTranslateXrayShadowTLSEmptyHandshakeUsesDefaultServer(t *testing.T) {
 	}
 	if handshake["server"] != "cloudflare.com" || handshake["server_port"] != 443 {
 		t.Fatalf("unexpected default handshake: %#v", handshake)
+	}
+}
+
+func TestTranslateAnyTLSWrappedByShadowTLSKeepsTwoTLSLayers(t *testing.T) {
+	raw := map[string]any{
+		"protocol": "anytls",
+		"tag":      "anytls-443",
+		"listen":   "0.0.0.0",
+		"port":     443,
+		"settings": map[string]any{
+			"tls": map[string]any{
+				"enabled": true, "serverName": "vpn.example.com",
+				"certificatePath": "/cert/vpn.crt", "keyPath": "/cert/vpn.key",
+			},
+			"clients": []any{map[string]any{"email": "alice", "password": "inner-password"}},
+			"shadowTls": map[string]any{
+				"enabled": true, "password": "outer-password",
+				"handshake":   map[string]any{"server": "cover.example.com", "serverPort": 443},
+				"strictMode":  true,
+				"wildcardSni": "off",
+			},
+		},
+	}
+	outer, inner, err := TranslateShadowTLSWrappedInbound(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outer["type"] != "shadowtls" || outer["listen_port"] != 443 || outer["detour"] != "anytls-443" ||
+		outer["tag"] != "__shadowtls_transport_anytls-443" {
+		t.Fatalf("incorrect outer ShadowTLS listener: %#v", outer)
+	}
+	if _, present := outer["tls"]; present {
+		t.Fatalf("outer ShadowTLS should use its camouflage handshake, not an AnyTLS certificate: %#v", outer)
+	}
+	handshake := outer["handshake"].(map[string]any)
+	if handshake["server"] != "cover.example.com" || outer["strict_mode"] != true {
+		t.Fatalf("incorrect ShadowTLS handshake: %#v", outer)
+	}
+	outerUsers := outer["users"].([]map[string]any)
+	if len(outerUsers) != 1 || outerUsers[0]["password"] != "outer-password" {
+		t.Fatalf("incorrect outer credentials: %#v", outerUsers)
+	}
+	if inner["type"] != "anytls" || inner["tag"] != "anytls-443" {
+		t.Fatalf("incorrect inner AnyTLS inbound: %#v", inner)
+	}
+	if _, present := inner["listen"]; present {
+		t.Fatalf("injected AnyTLS must not bind an additional listener: %#v", inner)
+	}
+	if _, present := inner["listen_port"]; present {
+		t.Fatalf("injected AnyTLS must not bind an additional port: %#v", inner)
+	}
+	tls := inner["tls"].(map[string]any)
+	if tls["enabled"] != true || tls["server_name"] != "vpn.example.com" ||
+		tls["certificate_path"] != "/cert/vpn.crt" || tls["key_path"] != "/cert/vpn.key" {
+		t.Fatalf("inner AnyTLS certificate was lost: %#v", tls)
+	}
+	innerUsers := inner["users"].([]map[string]any)
+	if len(innerUsers) != 1 || innerUsers[0]["password"] != "inner-password" {
+		t.Fatalf("incorrect inner credentials: %#v", innerUsers)
 	}
 }

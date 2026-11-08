@@ -55,30 +55,40 @@ type telemtUserStats struct {
 }
 
 var (
-	telemtMonitorOnce sync.Once
-	telemtRefreshMu   sync.Mutex
-	telemtGeoState    struct {
+	telemtRefreshMu sync.Mutex
+	telemtGeoState  struct {
 		sync.Mutex
 		retryUntil time.Time
 	}
 )
 
-func StartTelemtConnectionMonitor() {
-	telemtMonitorOnce.Do(func() {
-		go func() {
-			_ = refreshTelemtConnectionSnapshot()
-			ticker := time.NewTicker(telemtConnectionMonitorInterval)
-			defer ticker.Stop()
-			for range ticker.C {
-				_ = refreshTelemtConnectionSnapshot()
+// RunTelemtConnectionMonitor owns no goroutine; the panel joins it on shutdown.
+func RunTelemtConnectionMonitor(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
+	_ = refreshTelemtConnectionSnapshot(ctx)
+	ticker := time.NewTicker(telemtConnectionMonitorInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if ctx.Err() == nil {
+				_ = refreshTelemtConnectionSnapshot(ctx)
 			}
-		}()
-	})
+		}
+	}
+}
+
+type telemtMonitorTransport struct{ ctx context.Context }
+
+func (t telemtMonitorTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	return http.DefaultTransport.RoundTrip(request.WithContext(t.ctx))
 }
 
 func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
-	StartTelemtConnectionMonitor()
-
 	db := database.GetDB()
 	if db == nil {
 		return []TelemtConnection{}, nil
@@ -169,7 +179,7 @@ func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
 	return out, nil
 }
 
-func refreshTelemtConnectionSnapshot() error {
+func refreshTelemtConnectionSnapshot(ctx context.Context) error {
 	telemtRefreshMu.Lock()
 	defer telemtRefreshMu.Unlock()
 
@@ -177,7 +187,7 @@ func refreshTelemtConnectionSnapshot() error {
 		return nil
 	}
 
-	client := &http.Client{Timeout: 4 * time.Second}
+	client := &http.Client{Timeout: 4 * time.Second, Transport: telemtMonitorTransport{ctx}}
 	users, err := fetchTelemtUserStats(client)
 	if err != nil {
 		return err
@@ -194,7 +204,7 @@ func refreshTelemtConnectionSnapshot() error {
 }
 
 func fetchTelemtUserStats(client *http.Client) ([]telemtUserStats, error) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:9091/v1/users", nil)
+	req, err := telemtAPIRequest(http.MethodGet, "/v1/users")
 	if err != nil {
 		return nil, fmt.Errorf("telemt: create users request: %w", err)
 	}

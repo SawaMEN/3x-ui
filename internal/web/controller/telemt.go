@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -18,14 +20,26 @@ type TelemtController struct {
 }
 
 func NewTelemtController(g *gin.RouterGroup, settingService service.SettingService) *TelemtController {
-	service.StartTelemtConnectionMonitor()
 	a := &TelemtController{settingService: settingService}
 	g.GET("/status", a.status)
+	g.GET("/published", a.publishedProxies)
+	g.GET("/remote-proxies", a.remoteProxies)
+	g.GET("/subscription/:subid", a.subscriptionProfile)
+	g.POST("/install", a.install)
+	// Only discovery and installation are available before the binary exists.
+	g.Use(a.requireInstalled)
+	g.POST("/remove", a.remove)
 	g.GET("/webproxy/status", a.webProxyStatus)
+	g.GET("/webproxy/diagnostics", a.webProxyDiagnostics)
+	g.POST("/webproxy/availability", a.webProxyAvailability)
+	g.POST("/webproxy/preflight", a.webProxyPreflight)
 	g.POST("/webproxy/enable", a.enableWebProxy)
 	g.POST("/webproxy/disable", a.disableWebProxy)
 	g.GET("/config", a.config)
 	g.POST("/config", a.saveConfig)
+	g.GET("/meko/config", a.mekoConfig)
+	g.POST("/meko/config", a.saveMekoConfig)
+	g.POST("/meko/reconcile", a.reconcileMeko)
 	g.GET("/subscription-proxy", a.subscriptionProxySetting)
 	g.POST("/subscription-proxy", a.saveSubscriptionProxySetting)
 	g.GET("/proxy", a.listProxy)
@@ -34,6 +48,33 @@ func NewTelemtController(g *gin.RouterGroup, settingService service.SettingServi
 	g.GET("/connections", a.connections)
 	g.POST("/action", a.action)
 	return a
+}
+
+func (a *TelemtController) requireInstalled(c *gin.Context) {
+	if !a.service.IsInstalled() {
+		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
+			"success": false,
+			"msg":     "Telemt не установлен. Установите компонент в настройках системы.",
+		})
+		return
+	}
+	c.Next()
+}
+
+func (a *TelemtController) install(c *gin.Context) {
+	if err := a.service.Apply("install"); err != nil {
+		jsonMsg(c, "failed to install Telemt", err)
+		return
+	}
+	jsonObj(c, a.service.Status(), nil)
+}
+
+func (a *TelemtController) remove(c *gin.Context) {
+	if err := a.service.Apply("remove"); err != nil {
+		jsonMsg(c, "failed to remove Telemt", err)
+		return
+	}
+	jsonObj(c, a.service.Status(), nil)
 }
 
 func (a *TelemtController) status(c *gin.Context) {
@@ -63,8 +104,8 @@ func (a *TelemtController) getWebProxyStatus(c *gin.Context) service.TelemtWebPr
 	if webStatus.Enabled && !a.service.WebProxyTelemtActive() {
 		appendWebProxyError("Telemt остановлен: WEB Proxy настроен, но локальный backend не работает")
 	}
-	if webStatus.Enabled && !webStatus.NginxActive {
-		appendWebProxyError("Nginx остановлен: HTTPS endpoint WEB Proxy недоступен")
+	if webStatus.Enabled && !webStatus.FrontendActive {
+		appendWebProxyError(webStatus.Frontend + " остановлен: HTTPS endpoint WEB Proxy недоступен")
 	}
 	if webStatus.Enabled && !webStatus.CertificateReady {
 		appendWebProxyError("TLS-сертификат WEB Proxy отсутствует, просрочен или не подходит домену")
@@ -76,9 +117,35 @@ func (a *TelemtController) webProxyStatus(c *gin.Context) {
 	jsonObj(c, a.getWebProxyStatus(c), nil)
 }
 
+func (a *TelemtController) webProxyAvailability(c *gin.Context) {
+	result, err := a.service.CheckWebAvailabilityFromRussia(c.Request.Context())
+	jsonObj(c, result, err)
+}
+
+func (a *TelemtController) webProxyDiagnostics(c *gin.Context) {
+	status, err := a.service.WebProxyRuntimeDiagnostics(c.Request.Context())
+	jsonObj(c, status, err)
+}
+
+func (a *TelemtController) webProxyPreflight(c *gin.Context) {
+	var req struct {
+		Domain string `json:"domain"`
+		service.TelemtWebProxyOptions
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid WEB Proxy preflight request", err)
+		return
+	}
+	certFile, _ := a.settingService.GetCertFile()
+	keyFile, _ := a.settingService.GetKeyFile()
+	result, err := a.service.PreflightWebProxy(c.Request.Context(), req.Domain, req.TelemtWebProxyOptions, certFile, keyFile)
+	jsonObj(c, result, err)
+}
+
 func (a *TelemtController) enableWebProxy(c *gin.Context) {
 	var req struct {
 		Domain string `json:"domain"`
+		service.TelemtWebProxyOptions
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonMsg(c, "invalid WEB Proxy request", err)
@@ -87,34 +154,11 @@ func (a *TelemtController) enableWebProxy(c *gin.Context) {
 	if strings.TrimSpace(req.Domain) == "" {
 		req.Domain = a.getWebProxyStatus(c).DefaultDomain
 	}
-	snapshot, err := a.service.CaptureWebProxyEnableSnapshot()
-	if err != nil {
-		jsonMsg(c, "failed to capture WEB Proxy state", err)
-		return
-	}
-	nginxWasInstalled := a.service.WebProxyNginxInstalled()
 	certFile, _ := a.settingService.GetCertFile()
 	keyFile, _ := a.settingService.GetKeyFile()
-	_, err = a.service.EnableWebProxy(c.Request.Context(), req.Domain, certFile, keyFile)
+	_, err := a.service.EnableWebProxy(c.Request.Context(), req.Domain, certFile, keyFile, req.TelemtWebProxyOptions)
 	if err != nil {
-		rollbackErr := a.service.RestoreFailedWebProxyEnable(snapshot)
-		if !nginxWasInstalled {
-			a.service.CleanupFailedWebProxyEnable()
-		}
-		msg := err.Error()
-		if rollbackErr != nil {
-			msg += "; WEB Proxy rollback failed: " + rollbackErr.Error()
-		}
-		jsonMsg(c, "WEB Proxy setup failed", errors.New(msg))
-		return
-	}
-	if err := a.service.EnsureWebProxyBackend(); err != nil {
-		rollbackErr := a.service.RestoreWebProxyEnableSnapshot(snapshot)
-		msg := err.Error()
-		if rollbackErr != nil {
-			msg += "; WEB Proxy rollback failed: " + rollbackErr.Error()
-		}
-		jsonMsg(c, "WEB Proxy setup failed", errors.New(msg))
+		jsonMsg(c, "WEB Proxy setup failed", err)
 		return
 	}
 	status := a.getWebProxyStatus(c)
@@ -125,10 +169,6 @@ func (a *TelemtController) enableWebProxy(c *gin.Context) {
 func (a *TelemtController) disableWebProxy(c *gin.Context) {
 	if err := a.service.DisableWebProxy(); err != nil {
 		jsonMsg(c, "failed to disable WEB Proxy", err)
-		return
-	}
-	if err := a.service.CleanupWebProxyBackendDependency(); err != nil {
-		jsonMsg(c, "WEB Proxy disabled, but failed to remove boot dependency", err)
 		return
 	}
 	jsonObj(c, a.getWebProxyStatus(c), nil)
@@ -154,6 +194,33 @@ func (a *TelemtController) saveConfig(c *gin.Context) {
 		return
 	}
 	jsonObj(c, a.service.Status(), nil)
+}
+
+func (a *TelemtController) mekoConfig(c *gin.Context) {
+	jsonObj(c, a.service.GetMekoConfig(), nil)
+}
+
+func (a *TelemtController) saveMekoConfig(c *gin.Context) {
+	var cfg service.TelemtMekoConfig
+	if err := c.ShouldBindJSON(&cfg); err != nil {
+		jsonMsg(c, "invalid MEKO V3 configuration", err)
+		return
+	}
+	if err := a.service.SaveMekoConfig(cfg); err != nil {
+		jsonMsg(c, err.Error(), err)
+		return
+	}
+	jsonObj(c, a.service.GetMekoConfig(), nil)
+}
+
+// Force an immediate apply and verify actual firewall state after a user
+// changes MEKO settings, without waiting for the periodic MTProto poll.
+func (a *TelemtController) reconcileMeko(c *gin.Context) {
+	if err := a.service.RefreshMekoFix(); err != nil {
+		jsonMsg(c, "MEKO firewall rules could not be applied", err)
+		return
+	}
+	jsonObj(c, a.service.GetMekoConfig(), nil)
 }
 
 func (a *TelemtController) subscriptionProxySetting(c *gin.Context) {
@@ -286,9 +353,45 @@ func (a *TelemtController) action(c *gin.Context) {
 		jsonMsg(c, "invalid Telemt action", err)
 		return
 	}
+
+	// Keep the legacy action endpoint compatible, but route MEKO mutations
+	// through the same persisted/validated configuration path as the modern UI.
+	// The old Apply implementation downloaded a separate script and could leave
+	// the service state out of sync with /meko/config.
+	if req.Action == "meko-enable" || req.Action == "meko-disable" {
+		cfg := a.service.GetMekoConfig()
+		cfg.Enabled = req.Action == "meko-enable"
+		if err := a.service.SaveMekoConfig(cfg); err != nil {
+			jsonMsg(c, err.Error(), err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "obj": a.service.Status()})
+		return
+	}
+
 	if err := a.service.Apply(req.Action); err != nil {
 		jsonMsg(c, err.Error(), err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "obj": a.service.Status()})
+}
+
+func (a *TelemtController) subscriptionProfile(c *gin.Context) {
+	c.Header("Cache-Control", "private, no-store")
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancel()
+	profile, err := a.service.SubscriptionProxyView(ctx, c.Param("subid"), publicHostFromRequest(c))
+	jsonObj(c, profile, err)
+}
+
+func (a *TelemtController) publishedProxies(c *gin.Context) {
+	c.Header("Cache-Control", "private, no-store")
+	profiles, err := (&service.InboundService{}).PublishedTelegramProxies(c.Request.Context(), publicHostFromRequest(c))
+	jsonObj(c, profiles, err)
+}
+
+func (a *TelemtController) remoteProxies(c *gin.Context) {
+	c.Header("Cache-Control", "private, no-store")
+	profiles, err := service.RemoteTelegramProxies(c.Request.Context())
+	jsonObj(c, profiles, err)
 }

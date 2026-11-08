@@ -2,7 +2,7 @@ name: Docs CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, update]
     paths:
       - 'docs/**'
       - '.github/workflows/docs-ci.yml'
@@ -36,6 +36,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level=high
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -43,7 +46,12 @@ jobs:
         run: pnpm lint
 
       - name: Format check
-        run: pnpm format:check
+        run: |
+          if ! pnpm format:check; then
+            pnpm exec oxfmt .
+            git diff -- .
+            exit 1
+          fi
 
       - name: Test
         run: pnpm test

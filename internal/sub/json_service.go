@@ -15,10 +15,15 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	hiddifycore "github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	"github.com/SawaMEN/3x-ui/v3/internal/snell"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 )
@@ -118,6 +123,10 @@ func (s *SubJsonService) bakedTemplate() map[string]any {
 
 // GetJson generates a JSON subscription configuration for the given subscription ID and host.
 func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bool) (string, string, error) {
+	return s.getJson(subId, host, alwaysReturnArray, false)
+}
+
+func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, compatible bool) (string, string, error) {
 	subReq := s.SubService.ForRequest(host)
 	subReq.subscriptionBody = true
 	inbounds, err := subReq.getInboundsBySubId(subId)
@@ -131,6 +140,26 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
+
+	excludedEmails := map[string]bool{}
+	if compatible {
+		// An explicit native format must never silently discard a VetroffProxy
+		// connection. Let the HTTP controller deliver the lossless raw links.
+		for _, inbound := range inbounds {
+			if inbound.Protocol == model.VetroffProxy {
+				return "", "", errSubscriptionFormatUnsupported
+			}
+		}
+		inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
+			if !containsUnsupportedJSONProtocol([]*model.Inbound{inbound}) && !containsShadowTLSTransport([]*model.Inbound{inbound}) {
+				return false
+			}
+			for _, client := range subReq.matchingClients(inbound, subId) {
+				excludedEmails[client.Email] = client.Enable || excludedEmails[client.Email]
+			}
+			return true
+		})
+	}
 	// JSON uses Xray's outbound model. Refuse the whole format when any linked
 	// inbound cannot be represented, otherwise auto-detection could silently
 	// drop one connection and still return HTTP 200.
@@ -140,10 +169,16 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 
 	var header string
 	var hasInactiveExternal bool
+	var hasBoundClosed bool
 	var hasEnabledClient bool
 
 	seenEmails := make(map[string]struct{})
+	for email, enabled := range excludedEmails {
+		seenEmails[email] = struct{}{}
+		hasEnabledClient = hasEnabledClient || enabled
+	}
 	entries := make([]subConfigEntry, 0, len(inbounds))
+	var ordered []orderedSubEntry[func() subConfigEntry]
 	// Prepare Inbounds
 	for _, inbound := range inbounds {
 		clients := subReq.matchingClients(inbound, subId)
@@ -151,9 +186,23 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 			continue
 		}
 		subReq.projectThroughFallbackMaster(inbound)
-		if hostEps := subReq.hostEndpoints(inbound, "json"); len(hostEps) > 0 {
-			injectExternalProxy(inbound, hostEps)
-			delete(subReq.streamSettingsByInbound, inbound.Id)
+		if eps := subReq.hostEndpoints(inbound, "json"); eps != nil && len(eps) == 0 {
+			for _, c := range clients {
+				seenEmails[c.Email] = struct{}{}
+				hasEnabledClient = hasEnabledClient || c.Enable
+			}
+			continue
+		}
+		var baseEps []map[string]any
+		baseStream := inbound.StreamSettings
+		// getConfig rewrites inbound.Listen/Port per endpoint while rendering a client, so bound
+		// endpoints resolve against this pre-loop snapshot.
+		baseInbound := *inbound
+		if !subReq.hostsFirst {
+			if baseEps = subReq.hostEndpoints(inbound, "json"); len(baseEps) > 0 {
+				injectExternalProxy(inbound, baseEps)
+				delete(subReq.streamSettingsByInbound, inbound.Id)
+			}
 		}
 
 		var inboundConfigs []json_util.RawMessage
@@ -162,11 +211,41 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 				hasEnabledClient = true
 			}
 			seenEmails[client.Email] = struct{}{}
-			configs := s.getConfig(subReq, inbound, client, host)
-			if len(configs) == 0 {
+			if !client.Enable {
+				continue
+			}
+			if subReq.hostsFirst {
+				variants, closed := subReq.clientHostVariants(&baseInbound, client, "json")
+				hasBoundClosed = hasBoundClosed || closed
+				for _, variant := range variants {
+					render := func() subConfigEntry {
+						configs := s.getConfig(subReq, variant.inbound(subReq, inbound), client, host)
+						return subConfigEntry{sortIndex: inbound.SubSortIndex, id: inbound.Id, configs: configs, hostOrder: variant.order}
+					}
+					ordered = append(ordered, orderedSubEntry[func() subConfigEntry]{variant.order, render})
+				}
+				continue
+			}
+			effective := inbound
+			if effectiveEps, bound := subReq.clientHostEndpoints(&baseInbound, client, "json", baseEps); bound {
+				if len(effectiveEps) == 0 {
+					hasBoundClosed = true
+					continue
+				}
+				clone := baseInbound
+				clone.StreamSettings = baseStream
+				injectExternalProxy(&clone, effectiveEps)
+				effective = &clone
+				delete(subReq.streamSettingsByInbound, inbound.Id)
+			}
+			generated := s.getConfig(subReq, effective, client, host)
+			if len(generated) == 0 {
+				if compatible {
+					continue
+				}
 				return "", "", errSubscriptionFormatUnsupported
 			}
-			inboundConfigs = append(inboundConfigs, configs...)
+			inboundConfigs = append(inboundConfigs, generated...)
 		}
 		if len(inboundConfigs) > 0 {
 			entries = append(entries, subConfigEntry{
@@ -174,6 +253,14 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 				id:        inbound.Id,
 				configs:   inboundConfigs,
 			})
+		}
+	}
+	if subReq.hostsFirst {
+		// Render in final endpoint order so first-link usage remarks stay first.
+		for _, render := range orderedSubValues(ordered) {
+			if entry := render(); len(entry.configs) > 0 {
+				entries = append(entries, entry)
+			}
 		}
 	}
 	entries = s.appendBalancerEntries(entries)
@@ -190,6 +277,23 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 		return entries[i].id < entries[j].id
 	})
 	var configArray []json_util.RawMessage
+	if subReq.hostsFirst {
+		// Preserve balancer slots from the legacy sort; reorder endpoint slots only.
+		var endpoints []subConfigEntry
+		for _, entry := range entries {
+			if entry.kind == 0 {
+				endpoints = append(endpoints, entry)
+			}
+		}
+		sort.SliceStable(endpoints, func(i, j int) bool { return hostOrderLess(endpoints[i].hostOrder, endpoints[j].hostOrder) })
+		next := 0
+		for i := range entries {
+			if entries[i].kind == 0 {
+				entries[i] = endpoints[next]
+				next++
+			}
+		}
+	}
 	for _, entry := range entries {
 		configArray = append(configArray, entry.configs...)
 	}
@@ -205,6 +309,10 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 		for _, el := range expandEntry(ext) {
 			outbound := parsedExternalOutbound(el.Link)
 			if outbound == nil {
+				if compatible {
+					seenEmails[ext.Email] = struct{}{}
+					continue
+				}
 				return "", "", errSubscriptionFormatUnsupported
 			}
 			seenEmails[ext.Email] = struct{}{}
@@ -223,7 +331,7 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 		}
 	}
 
-	if len(configArray) == 0 && !hasInactiveExternal {
+	if len(configArray) == 0 && !hasInactiveExternal && !hasBoundClosed {
 		return "", "", nil
 	}
 
@@ -263,16 +371,20 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 // The existing /json/ format remains Xray-compatible; callers opt into this format
 // explicitly with ?format=sing-box so existing subscriptions are not changed.
 func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnArray bool) (string, string, error) {
-	return s.getSingBoxJson(subId, host, alwaysReturnArray, false)
+	return s.getSingBoxJson(subId, host, alwaysReturnArray, false, false)
 }
 
 // Hiddify expects a single JSON document with an outbounds array, including
 // the hidden ShadowTLS transport used by the visible inner proxy.
 func (s *SubJsonService) GetHiddifySingBoxJson(subId string, host string) (string, string, error) {
-	return s.getSingBoxJson(subId, host, false, true)
+	return s.getSingBoxJson(subId, host, false, true, false)
 }
 
-func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnArray, hiddify bool) (string, string, error) {
+func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnArray, hiddify, compatible bool) (string, string, error) {
+	translateOutbound := singbox.TranslateXrayOutbound
+	if hiddify {
+		translateOutbound = hiddifycore.TranslateOutbound
+	}
 	// Native subscriptions intentionally do not call GetJson(). We still reuse
 	// the panel's mature per-client endpoint generation helpers internally, but
 	// collect and translate the model-backed entries before an Xray document is
@@ -281,6 +393,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	// truth without depending on serialized Xray subscription documents.
 	subReq := s.SubService.ForRequest(host)
 	subReq.subscriptionBody = true
+	subReq.nativeProfile = true
 	inbounds, err := subReq.getInboundsBySubId(subId)
 	if err != nil {
 		return "", "", err
@@ -313,11 +426,84 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		matchedClients[inbound] = clients
 		return clients
 	}
+	var excluded []*model.Inbound
+	inbounds, excluded = subReq.partitionHostFormat(inbounds, "json")
+	for _, inbound := range excluded {
+		for _, client := range clientsFor(inbound) {
+			seenEmails[client.Email] = struct{}{}
+			hasEnabledClient = hasEnabledClient || client.Enable
+		}
+	}
+	// Disabled clients contribute metadata but must not make an unsupported
+	// protocol veto the formats available to the remaining active clients.
+	inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
+		active := false
+		for _, client := range clientsFor(inbound) {
+			seenEmails[client.Email] = struct{}{}
+			active = active || client.Enable
+		}
+		return !active
+	})
+	// MASQUE has no portable URI fallback: explicit sing-box requests must
+	// reject unsupported sibling protocols rather than export partial profiles.
+	// Set this before compatibility filtering, otherwise unsupported siblings
+	// disappear before the completeness check below can see them.
+	if containsSubscriptionProtocol(inbounds, model.MASQUE) {
+		compatible = false
+	}
+	if compatible {
+		// VetroffProxy has no native sing-box outbound; retaining only the
+		// other entries would silently break a mixed subscription.
+		for _, inbound := range inbounds {
+			if inbound.Protocol == model.VetroffProxy {
+				return "", "", errSubscriptionFormatUnsupported
+			}
+		}
+		before := len(inbounds)
+		inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
+			return inbound.Protocol == model.VetroffProxy || singBoxUnsupportedProtocol(inbound.Protocol) && (!hiddify || !hiddifyExtendedProtocol(inbound.Protocol))
+		})
+		if before > 0 && len(inbounds) == 0 && len(externalLinks) == 0 {
+			return "", "", errSubscriptionFormatUnsupported
+		}
+	}
+	if len(inbounds) == 0 && len(externalLinks) == 0 {
+		emails := make([]string, 0, len(seenEmails))
+		for email := range seenEmails {
+			emails = append(emails, email)
+		}
+		traffic, _ := subReq.AggregateTrafficByEmails(emails)
+		traffic.Enable = hasEnabledClient
+		return "", subReq.subscriptionUserinfo(traffic), nil
+	}
 
+	expanded := make(map[*model.Inbound]bool)
+	if subReq.hostsFirst {
+		var ordered []orderedSubEntry[*model.Inbound]
+		for _, inbound := range inbounds {
+			subReq.projectThroughFallbackMaster(inbound)
+			for _, client := range clientsFor(inbound) {
+				variants, _ := subReq.clientHostVariants(inbound, client, "json")
+				for _, variant := range variants {
+					clone := variant.inbound(subReq, inbound)
+					matchedClients[clone] = []model.Client{client}
+					expanded[clone] = true
+					ordered = append(ordered, orderedSubEntry[*model.Inbound]{variant.order, clone})
+				}
+			}
+		}
+		inbounds = orderedSubValues(ordered)
+	}
+	nativeHostEndpoints := func(inbound *model.Inbound) []map[string]any {
+		if expanded[inbound] {
+			return nil
+		}
+		return subReq.hostEndpoints(inbound, "json")
+	}
 	// Detached users are represented by inactive metadata entries so their
 	// subscriptions remain addressable. Those entries are not proxy links and
 	// must not turn a WireGuard-only subscription into a mixed profile.
-	wireguardOnly := true
+	wireguardOnly := len(inbounds) > 0
 	for _, entry := range externalLinks {
 		if entry.Active {
 			wireguardOnly = false
@@ -325,7 +511,9 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		}
 	}
 	var wireguardConfigs []json.RawMessage
+	wireguardEndpoints := make(map[*model.Inbound][]map[string]any)
 	for _, inbound := range inbounds {
+		delete(subReq.streamSettingsByInbound, inbound.Id)
 		clients := clientsFor(inbound)
 		if inbound.Protocol != model.WireGuard {
 			if len(clients) > 0 {
@@ -338,6 +526,10 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		}
 		subReq.projectThroughFallbackMaster(inbound)
 		var settings map[string]any
+		if endpoints := nativeHostEndpoints(inbound); len(endpoints) > 0 {
+			injectExternalProxy(inbound, endpoints)
+			delete(subReq.streamSettingsByInbound, inbound.Id)
+		}
 		_ = json.Unmarshal([]byte(inbound.Settings), &settings)
 		secretKey, _ := settings["secretKey"].(string)
 		if secretKey == "" {
@@ -347,10 +539,25 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		if pub, err := wgutil.PublicKeyFromPrivate(secretKey); err == nil {
 			serverPublicKey = pub
 		}
+		originalInbound := inbound
 		for _, client := range clients {
 			seenEmails[client.Email] = struct{}{}
 			if !client.Enable || client.PrivateKey == "" || serverPublicKey == "" {
 				continue
+			}
+
+			inbound := inbound
+			if !expanded[inbound] {
+				endpoints, bound := subReq.clientHostEndpoints(inbound, client, "json", nativeHostEndpoints(inbound))
+				if bound && len(endpoints) == 0 {
+					continue
+				}
+				if bound {
+					clone := *inbound
+					injectExternalProxy(&clone, endpoints)
+					inbound = &clone
+					delete(subReq.streamSettingsByInbound, inbound.Id)
+				}
 			}
 			addresses := append([]string(nil), client.AllowedIPs...)
 			if len(addresses) == 0 {
@@ -370,12 +577,12 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				if client.PreSharedKey != "" {
 					peer["pre_shared_key"] = client.PreSharedKey
 				}
-				if client.KeepAlive != nil && *client.KeepAlive > 0 {
+				if client.KeepAliveSeconds() > 0 {
 					peer["persistent_keepalive_interval"] = *client.KeepAlive
 				}
 				endpoint := map[string]any{
 					"type":        "wireguard",
-					"tag":         "wg-endpoint",
+					"tag":         subReq.endpointRemark(inbound, client.Email, shareEndpoint.ep, ""),
 					"address":     addresses,
 					"private_key": client.PrivateKey,
 					"peers":       []any{peer},
@@ -399,7 +606,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 						map[string]any{"type": "block", "tag": "blocked"},
 					},
 					"route": map[string]any{
-						"rules":                 []any{map[string]any{"action": "route", "outbound": "wg-endpoint"}},
+						"rules":                 []any{map[string]any{"action": "route", "outbound": endpoint["tag"]}},
 						"final":                 "direct",
 						"auto_detect_interface": true,
 					},
@@ -407,13 +614,14 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				encoded, err := json.MarshalIndent(cfg, "", "  ")
 				if err == nil {
 					wireguardConfigs = append(wireguardConfigs, encoded)
+					wireguardEndpoints[originalInbound] = append(wireguardEndpoints[originalInbound], endpoint)
 					hasEnabledClient = true
 				}
 			}
 		}
 	}
 
-	if wireguardOnly {
+	if wireguardOnly && !hiddify {
 		if len(wireguardConfigs) == 0 {
 			return "", "", errSubscriptionFormatUnsupported
 		}
@@ -436,39 +644,107 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	}
 
 	// Refuse partial sing-box output during ordinary auto-detection. For
-	// Hiddify with ShadowTLS, retain importable nodes even when other protocols
-	// cannot be represented; otherwise Hiddify loses the ShadowTLS node too.
-	// WireGuard endpoint profiles are emitted separately above. A mixed
-	// WireGuard + proxy subscription cannot be represented by the current
-	// separated-profile builder without routing one profile through another,
-	// so reject it instead of falling back to the deprecated WireGuard outbound.
-	shadowTLSForHiddify := hiddify && (containsSubscriptionProtocol(inbounds, model.ShadowTLS) || containsShadowTLSTransport(inbounds))
-	if !shadowTLSForHiddify && (containsSubscriptionProtocol(inbounds, model.WireGuard) || containsUnsupportedSingBoxProtocol(inbounds)) {
+	// Hiddify with native AnyTLS / ShadowTLS, retain importable nodes even when
+	// other protocols cannot be represented; otherwise the client may get
+	// only raw links and silently drop AnyTLS (and every ShadowTLS detour).
+	// Stock sing-box still uses separated WireGuard profiles. Hiddify can
+	// merge its WireGuard/AWG endpoints with proxies in one native document.
+	if containsSubscriptionProtocol(inbounds, model.VetroffProxy) {
+		return "", "", errSubscriptionFormatUnsupported
+	}
+	if !hiddify && slices.ContainsFunc(inbounds, usesXDriveTransport) {
+		return "", "", errSubscriptionFormatUnsupported
+	}
+	// Unlike URI-only subscriptions, a native MASQUE document must be complete:
+	// never let compatibility mode silently omit other selected connections.
+	masqueInSubscription := containsSubscriptionProtocol(inbounds, model.MASQUE)
+	if masqueInSubscription {
+		compatible = false
+	}
+	nativeTLSForHiddify := hiddify && containsNativeTLSSubscription(inbounds) && !masqueInSubscription
+	if (!hiddify && !compatible && containsSubscriptionProtocol(inbounds, model.WireGuard)) ||
+		(!nativeTLSForHiddify && slices.ContainsFunc(inbounds, func(ib *model.Inbound) bool {
+			return singBoxUnsupportedProtocol(ib.Protocol) && (!hiddify || !hiddifyExtendedProtocol(ib.Protocol))
+		})) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
 
 	formatUnsupported := false
-	shadowTLSGenerated := false
+	nativeTLSGenerated := false
 	for _, inbound := range inbounds {
+		delete(subReq.streamSettingsByInbound, inbound.Id)
 		clients := clientsFor(inbound)
 		if len(clients) == 0 {
+			continue
+		}
+		if compatible && !hiddify && inbound.Protocol == model.WireGuard {
+			continue
+		}
+		if hiddify && inbound.Protocol == model.WireGuard {
+			if len(wireguardEndpoints[inbound]) == 0 {
+				formatUnsupported = true
+			}
+			for _, endpoint := range wireguardEndpoints[inbound] {
+				proxies = append(proxies, nativeOutbound{out: endpoint})
+			}
 			continue
 		}
 		// Hiddify can import the supported sing-box outbounds even when another
 		// inbound in this subscription is not representable as an outbound.
 		// Do not let that unrelated inbound remove ShadowTLS from the profile.
-		if shadowTLSForHiddify && (inbound.Protocol == model.WireGuard ||
-			singBoxUnsupportedProtocol(inbound.Protocol)) {
+		if nativeTLSForHiddify && singBoxUnsupportedProtocol(inbound.Protocol) && !hiddifyExtendedProtocol(inbound.Protocol) {
 			continue
 		}
 		subReq.projectThroughFallbackMaster(inbound)
-		if hostEps := subReq.hostEndpoints(inbound, "json"); len(hostEps) > 0 {
+		hostEps := nativeHostEndpoints(inbound)
+		if hostEps != nil && len(hostEps) == 0 {
+			for _, client := range clients {
+				seenEmails[client.Email] = struct{}{}
+				hasEnabledClient = hasEnabledClient || client.Enable
+			}
+			continue
+		}
+		if len(hostEps) > 0 {
 			injectExternalProxy(inbound, hostEps)
+			delete(subReq.streamSettingsByInbound, inbound.Id)
+		}
+		var masqueSettings masque.Settings
+		var masqueSettingsErr error
+		if inbound.Protocol == model.MASQUE {
+			// Parse the listener once even when a subscription shares many users.
+			masqueSettings, masqueSettingsErr = masque.Parse(inbound.Settings)
 		}
 		for _, client := range clients {
 			seenEmails[client.Email] = struct{}{}
 			if client.Enable {
 				hasEnabledClient = true
+			}
+			if !client.Enable {
+				continue
+			}
+
+			inbound := inbound
+			if !expanded[inbound] {
+				endpoints, bound := subReq.clientHostEndpoints(inbound, client, "json", nativeHostEndpoints(inbound))
+				if bound && len(endpoints) == 0 {
+					continue
+				}
+				if bound {
+					clone := *inbound
+					injectExternalProxy(&clone, endpoints)
+					inbound = &clone
+					delete(subReq.streamSettingsByInbound, inbound.Id)
+				}
+			}
+			if hiddify && hiddifyExtendedProtocol(inbound.Protocol) {
+				generated := s.genHiddifyExtended(subReq, inbound, client)
+				if len(generated) == 0 {
+					formatUnsupported = true
+				}
+				for _, ob := range generated {
+					proxies = append(proxies, nativeOutbound{out: ob})
+				}
+				continue
 			}
 			if model.ShadowTLSTransport(inbound.Settings) != nil {
 				generated := 0
@@ -480,12 +756,13 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 						native := s.genNativeTLSLikeEndpoint(subReq, inbound, client, endpoint)
 						if s.wrapNativeShadowTLS(inbound, native, endpoint.ep) {
 							generated++
-							native["tag"] = fmt.Sprintf("ShadowTLS · %s-%d", client.Email, len(proxies)+1)
+							native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint.ep, "")
 							proxies = append(proxies, nativeOutbound{out: native})
 						}
 					}
 				} else {
-					for _, raw := range s.getConfig(subReq, inbound, client, host) {
+					var endpointCopies []map[string]any
+					for index, raw := range s.getConfig(subReq, inbound, client, host, &endpointCopies) {
 						var profile map[string]any
 						if json.Unmarshal(raw, &profile) != nil {
 							continue
@@ -501,19 +778,19 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 						// ShadowTLS replaces the outer Xray transport, including any
 						// global FinalMask or TLS defaults in the JSON template.
 						xray["streamSettings"] = map[string]any{"network": "tcp", "security": "none"}
-						native, err := singbox.TranslateXrayOutbound(xray)
-						if err != nil || !s.wrapNativeShadowTLS(inbound, native, nil) {
+						native, err := translateOutbound(xray)
+						if err != nil || !s.wrapNativeShadowTLS(inbound, native, endpointCopies[index]) {
 							continue
 						}
 						generated++
-						native["tag"] = fmt.Sprintf("ShadowTLS · %s-%d", client.Email, len(proxies)+1)
+						native["tag"] = subReq.endpointRemark(inbound, client.Email, endpointCopies[index], "")
 						proxies = append(proxies, nativeOutbound{out: native})
 					}
 				}
 				if generated == 0 {
 					formatUnsupported = true
 				} else {
-					shadowTLSGenerated = true
+					nativeTLSGenerated = true
 				}
 				continue
 			}
@@ -555,6 +832,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 						}
 						security, _ := newStream["security"].(string)
 						applyExternalProxyTLSToStream(endpoint, newStream, security)
+						liftHostTLSVerification(newStream)
 						applyHostStreamOverrides(endpoint, newStream)
 					}
 					nativeRaw := s.genNativeTUIC(&clone, newStream, client)
@@ -565,14 +843,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 					if err := json.Unmarshal(nativeRaw, &native); err != nil || native == nil {
 						continue
 					}
-					tag := client.Email
-					if tag == "" {
-						tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
-					}
-					if len(proxies) > 0 {
-						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
-					}
-					native["tag"] = tag
+					native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint, "")
 					proxies = append(proxies, nativeOutbound{out: native})
 					generated++
 				}
@@ -591,25 +862,51 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 					if native == nil {
 						continue
 					}
-					tag := client.Email
-					if inbound.Protocol == model.ShadowTLS {
-						tag = "ShadowTLS · " + tag
-					}
-					if tag == "" {
-						tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
-					}
-					if len(proxies) > 0 {
-						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
-					}
-					native["tag"] = tag
+					native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint.ep, "")
 					proxies = append(proxies, nativeOutbound{out: native})
 					generated++
 				}
 				if generated == 0 {
 					formatUnsupported = true
 				}
-				if inbound.Protocol == model.ShadowTLS && generated > 0 {
-					shadowTLSGenerated = true
+				if generated > 0 {
+					nativeTLSGenerated = true
+				}
+				continue
+			}
+			if inbound.Protocol == model.Snell {
+				settings, err := snell.Parse(inbound.Settings)
+				generated := 0
+				if err == nil && client.Password != "" {
+					for _, endpoint := range subReq.shareEndpointsForInbound(inbound) {
+						native := settings.Outbound(endpoint.Address, endpoint.Port, client)
+						native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint.ep, "")
+						proxies = append(proxies, nativeOutbound{out: native})
+						generated++
+					}
+				}
+				if generated == 0 {
+					formatUnsupported = true
+				}
+				continue
+			}
+			if inbound.Protocol == model.MASQUE {
+				if masqueSettingsErr != nil || client.Email == "" || client.Password == "" {
+					formatUnsupported = true
+					continue
+				}
+				generated := 0
+				for _, endpoint := range subReq.shareEndpointsForInbound(inbound) {
+					native := genNativeMASQUE(masqueSettings, client, endpoint)
+					if native == nil {
+						continue
+					}
+					native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint.ep, "")
+					proxies = append(proxies, nativeOutbound{out: native})
+					generated++
+				}
+				if generated == 0 {
+					formatUnsupported = true
 				}
 				continue
 			}
@@ -628,14 +925,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 					if native == nil {
 						continue
 					}
-					tag := client.Email
-					if tag == "" {
-						tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
-					}
-					if len(proxies) > 0 {
-						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
-					}
-					native["tag"] = tag
+					native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint, "")
 					proxies = append(proxies, nativeOutbound{out: native})
 					generated++
 				}
@@ -666,21 +956,14 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				if nativeType, ok := proxy["type"].(string); ok && nativeType != "" {
 					native = proxy
 				} else {
-					translated, err := singbox.TranslateXrayOutbound(proxy)
+					translated, err := translateOutbound(proxy)
 					if err != nil {
 						formatUnsupported = true
 						continue
 					}
 					native = translated
 				}
-				tag := client.Email
-				if tag == "" {
-					tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
-				}
-				if len(proxies) > 0 {
-					tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
-				}
-				native["tag"] = tag
+				native["tag"], _ = xrayCfg["remarks"].(string)
 				proxies = append(proxies, nativeOutbound{out: native})
 			}
 		}
@@ -698,7 +981,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		for _, el := range expandEntry(ext) {
 			outbound := parsedExternalOutbound(el.Link)
 			if outbound == nil {
-				if shadowTLSForHiddify {
+				if nativeTLSForHiddify || compatible {
 					continue
 				}
 				return "", "", errSubscriptionFormatUnsupported
@@ -707,9 +990,9 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			if err := json.Unmarshal(outbound, &xrayOutbound); err != nil {
 				return "", "", err
 			}
-			native, err := singbox.TranslateXrayOutbound(xrayOutbound)
+			native, err := translateOutbound(xrayOutbound)
 			if err != nil {
-				if !shadowTLSForHiddify {
+				if !nativeTLSForHiddify {
 					formatUnsupported = true
 				}
 				continue
@@ -727,7 +1010,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		}
 	}
 
-	if (formatUnsupported && !shadowTLSForHiddify) || (shadowTLSForHiddify && !shadowTLSGenerated) {
+	if (formatUnsupported && !nativeTLSForHiddify && !compatible) || (nativeTLSForHiddify && !nativeTLSGenerated) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
 
@@ -758,9 +1041,9 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		if !ok {
 			return "", header, errSubscriptionFormatUnsupported
 		}
-		native, err := singbox.TranslateXrayOutbound(proxy)
+		native, err := translateOutbound(proxy)
 		if err != nil {
-			return "", header, fmt.Errorf("%w: subscription status: %v", errSubscriptionFormatUnsupported, err)
+			return "", header, fmt.Errorf("%w: subscription status: %w", errSubscriptionFormatUnsupported, err)
 		}
 		tag := strings.TrimSpace(remark)
 		if tag == "" {
@@ -782,7 +1065,16 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	if hiddify {
 		encoded, err = buildHiddifySingBoxSubscription(proxyConfigs)
 	} else {
-		encoded, err = buildSeparatedSingBoxSubscription(s.bakedTemplate(), proxyConfigs, alwaysReturnArray)
+		encoded, err = buildSeparatedSingBoxSubscription(s.bakedTemplate(), proxyConfigs, alwaysReturnArray || compatible && len(wireguardConfigs) > 0)
+		if err == nil && compatible && len(wireguardConfigs) > 0 {
+			var docs []json.RawMessage
+			if err = json.Unmarshal([]byte(encoded), &docs); err == nil {
+				docs = append(docs, wireguardConfigs...)
+				var body []byte
+				body, err = json.MarshalIndent(docs, "", "  ")
+				encoded = string(body)
+			}
+		}
 	}
 	if err != nil {
 		return "", header, err
@@ -802,6 +1094,7 @@ func containsSubscriptionProtocol(inbounds []*model.Inbound, protocol model.Prot
 // subConfigEntry is one ordered block of the JSON subscription: an inbound's
 // configs (kind 0) or a balancer config (kind 1).
 type subConfigEntry struct {
+	hostOrder *hostEntryOrder
 	sortIndex int
 	kind      int
 	id        int
@@ -1113,7 +1406,7 @@ func (s *SubJsonService) buildBalancerConfig(balancer *model.SubBalancer, entrie
 	return config
 }
 
-func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, client model.Client, host string) []json_util.RawMessage {
+func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, client model.Client, host string, endpointCopies ...*[]map[string]any) []json_util.RawMessage {
 	var newJsonArray []json_util.RawMessage
 	stream := s.streamData(inbound.StreamSettings, subKey(client))
 
@@ -1127,14 +1420,11 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 		defaultDest = host
 	}
 
-	// Per-inbound xmux takes precedence over the global subJsonMux.
-	// When xmux is present inside xhttpSettings, XHTTP multiplexing
-	// is handled by xmux — don't also set the legacy outbound.Mux.
+	// XHTTP always multiplexes its own HTTP connections, including when
+	// xmux is omitted and the core applies defaults. Never stack legacy Mux.
 	mux := s.mux
-	if xhttp, ok := stream["xhttpSettings"].(map[string]any); ok {
-		if _, hasXmux := xhttp["xmux"]; hasXmux {
-			mux = ""
-		}
+	if stream["network"] == "xhttp" {
+		mux = ""
 	}
 
 	externalProxies, ok := stream["externalProxy"].([]any)
@@ -1193,8 +1483,14 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 		security, _ := newStream["security"].(string)
 		if hasExternalProxy {
 			applyExternalProxyTLSToStream(extPrxy, newStream, security)
+			liftHostTLSVerification(newStream)
 		}
 		applyHostStreamOverrides(extPrxy, newStream)
+		if ts, ok := newStream["tlsSettings"].(map[string]any); ok && security == "tls" {
+			cs, _ := ts["cipherSuites"].(string)
+			fp, _ := ts["fingerprint"].(string)
+			ts["fingerprint"] = fingerprintForCipherSuites(fp, cs)
+		}
 		hostMux := hostMuxOverride(extPrxy)
 		streamSettings, _ := json.MarshalIndent(newStream, "", "  ")
 
@@ -1247,6 +1543,9 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 
 		newConfig, _ := json.MarshalIndent(newConfigJson, "", "  ")
 		newJsonArray = append(newJsonArray, newConfig)
+		if len(endpointCopies) > 0 && endpointCopies[0] != nil {
+			*endpointCopies[0] = append(*endpointCopies[0], maps.Clone(extPrxy))
+		}
 	}
 
 	return newJsonArray
@@ -1273,6 +1572,7 @@ func (s *SubJsonService) streamData(stream string, clientKey string) map[string]
 		}
 	}
 	delete(streamSettings, "sockopt")
+	dropServerOnlyFinalMasks(streamSettings["finalmask"])
 
 	if s.finalMask != "" {
 		s.applyGlobalFinalMask(streamSettings)
@@ -1290,6 +1590,8 @@ func (s *SubJsonService) streamData(stream string, clientKey string) map[string]
 	case "xhttp":
 		streamSettings["xhttpSettings"] = s.removeAcceptProxy(streamSettings["xhttpSettings"])
 		if xhttp, ok := streamSettings["xhttpSettings"].(map[string]any); ok {
+			xhttp = effectiveXhttpOptions(xhttp)
+			streamSettings["xhttpSettings"] = xhttp
 			delete(xhttp, "noSSEHeader")
 			delete(xhttp, "scMaxBufferedPosts")
 			delete(xhttp, "scStreamUpServerSecs")
@@ -1297,10 +1599,10 @@ func (s *SubJsonService) streamData(stream string, clientKey string) map[string]
 			// Values matching xray-core's own defaults stay off the wire:
 			// old panels seeded them into every stored config and the
 			// literal scMinPostsIntervalMs=30 is a DPI fingerprint (#5141).
-			if v, _ := xhttp["scMaxEachPostBytes"].(string); v == "" || v == "1000000" {
+			if v := xhttp["scMaxEachPostBytes"]; v == nil || v == "" || v == "1000000" {
 				delete(xhttp, "scMaxEachPostBytes")
 			}
-			if v, _ := xhttp["scMinPostsIntervalMs"].(string); v == "" || v == "30" {
+			if v := xhttp["scMinPostsIntervalMs"]; v == nil || v == "" || v == "30" {
 				delete(xhttp, "scMinPostsIntervalMs")
 			}
 		}
@@ -1339,6 +1641,23 @@ func (s *SubJsonService) tlsData(tData map[string]any) map[string]any {
 	if cs, ok := tData["cipherSuites"].(string); ok && cs != "" {
 		tlsData["cipherSuites"] = cs
 	}
+	putClientTLSVerification(tlsData, tlsClientSettings)
+	return tlsData
+}
+
+// liftHostTLSVerification moves the host overrides applyExternalProxyTLSToStream
+// wrote into the panel-shaped tlsSettings.settings up to where xray reads them.
+func liftHostTLSVerification(stream map[string]any) {
+	tlsSettings, _ := stream["tlsSettings"].(map[string]any)
+	inner, ok := tlsSettings["settings"].(map[string]any)
+	if !ok {
+		return
+	}
+	delete(tlsSettings, "settings")
+	putClientTLSVerification(tlsSettings, inner)
+}
+
+func putClientTLSVerification(tlsData map[string]any, tlsClientSettings map[string]any) {
 	if ech, ok := tlsClientSettings["echConfigList"].(string); ok && ech != "" {
 		tlsData["echConfigList"] = ech
 	}
@@ -1350,7 +1669,6 @@ func (s *SubJsonService) tlsData(tData map[string]any) map[string]any {
 	if pins, ok := pinnedSha256List(tlsClientSettings); ok {
 		tlsData["pinnedPeerCertSha256"] = strings.Join(pins, ",")
 	}
-	return tlsData
 }
 
 func (s *SubJsonService) realityData(rData map[string]any, clientKey string) map[string]any {
@@ -1371,7 +1689,9 @@ func (s *SubJsonService) realityData(rData map[string]any, clientKey string) map
 		rltyData["shortId"] = ""
 	}
 	serverNames, ok := rData["serverNames"].([]any)
-	if ok && len(serverNames) > 0 {
+	if name, _ := rltyClientSettings["serverName"].(string); name != "" {
+		rltyData["serverName"] = name
+	} else if ok && len(serverNames) > 0 {
 		rltyData["serverName"], _ = serverNames[random.Num(len(serverNames))].(string)
 	} else {
 		rltyData["serverName"] = ""
@@ -1420,6 +1740,16 @@ func (s *SubJsonService) genVless(subReq *SubService, inbound *model.Inbound, st
 		outbound.Mux = json_util.RawMessage(mux)
 	}
 	outbound.StreamSettings = streamSettings
+	var stream map[string]any
+	_ = json.Unmarshal(streamSettings, &stream)
+	if stream["network"] == "xdrive" {
+		client.Flow = ""
+		if subReq.nativeProfile {
+			outbound.Mux = nil
+		} else {
+			outbound.Mux = json_util.RawMessage(`{"enabled":true,"concurrency":8}`)
+		}
+	}
 
 	// Add encryption for VLESS outbound from inbound settings
 	inboundSettings := subReq.linkSettings(inbound)
@@ -1518,6 +1848,22 @@ func (s *SubJsonService) genNativeTLSLike(subReq *SubService, inbound *model.Inb
 	return s.genNativeTLSLikeEndpoint(subReq, inbound, client, subReq.inboundDefaultEndpoint(inbound))
 }
 
+// containsNativeTLSSubscription identifies protocols whose Hiddify import needs
+// native sing-box JSON; raw AnyTLS links and ShadowTLS detours cannot reliably
+// be imported as a plain URI subscription.
+func containsNativeTLSSubscription(inbounds []*model.Inbound) bool {
+	for _, inbound := range inbounds {
+		if inbound == nil {
+			continue
+		}
+		if inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS ||
+			model.ShadowTLSTransport(inbound.Settings) != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func containsShadowTLSTransport(inbounds []*model.Inbound) bool {
 	for _, inbound := range inbounds {
 		if inbound != nil && model.ShadowTLSTransport(inbound.Settings) != nil {
@@ -1542,14 +1888,25 @@ func (s *SubJsonService) wrapNativeShadowTLS(inbound *model.Inbound, inner map[s
 	}
 	handshake, _ := transport["handshake"].(map[string]any)
 	sni, _ := handshake["server"].(string)
-	if strings.TrimSpace(sni) == "" {
+	sni = strings.TrimSpace(sni)
+	if sni == "" {
+		sni, _ = handshake["address"].(string)
+		sni = strings.TrimSpace(sni)
+	}
+	if sni == "" {
 		sni = "cloudflare.com"
 	}
 	if endpoint != nil {
 		if override, ok := externalProxySNI(endpoint); ok && strings.TrimSpace(override) != "" {
 			wildcard, _ := transport["wildcardSni"].(string)
 			named, _ := transport["handshakeForServerName"].(map[string]any)
-			_, hasNamedSNI := named[strings.ToLower(strings.TrimSpace(override))]
+			hasNamedSNI := false
+			for name := range named {
+				if strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(override)) {
+					hasNamedSNI = true
+					break
+				}
+			}
 			if wildcard == "all" || wildcard == "authed" || net.ParseIP(sni) != nil || hasNamedSNI {
 				sni = strings.TrimSpace(override)
 			}
@@ -1565,6 +1922,35 @@ func (s *SubJsonService) wrapNativeShadowTLS(inbound *model.Inbound, inner map[s
 		"server_port": port, "version": 3, "password": password, "tls": tls,
 	}
 	return true
+}
+
+// genNativeMASQUE keeps the advertised client options consistent with the server
+// while honoring the same TLS host overrides as other native protocols.
+func genNativeMASQUE(settings masque.Settings, client model.Client, endpoint ShareEndpoint) map[string]any {
+	server := strings.TrimSpace(endpoint.Address)
+	if strings.EqualFold(strings.TrimSpace(endpoint.ForceTls), "none") || server == "" || endpoint.Port < 1 || endpoint.Port > 65535 || client.Password == "" || masque.ValidateUsername(client.Email) != nil {
+		return nil
+	}
+	serverName := settings.TLS.ServerName
+	if sni, overridden := externalProxySNI(endpoint.ep); overridden {
+		serverName = strings.TrimSpace(sni)
+	} else if serverName == "" {
+		serverName = server
+	}
+	// Selection order in a multiselect is not a transport preference. Prefer
+	// the highest enabled version and let sing-box fall back when necessary.
+	version := 0
+	for _, candidate := range settings.Version {
+		if candidate > version {
+			version = candidate
+		}
+	}
+	tls := map[string]any{"enabled": true}
+	if serverName != "" {
+		tls["server_name"] = serverName
+	}
+	applyNativeTLSHostOptions(tls, endpoint.ep)
+	return map[string]any{"type": "masque-client", "server": server, "server_port": endpoint.Port, "username": client.Email, "password": client.Password, "path": settings.Path, "version": version, "mtu": settings.MTU, "system": false, "tls": tls}
 }
 
 func (s *SubJsonService) genNativeTLSLikeEndpoint(subReq *SubService, inbound *model.Inbound, client model.Client, endpoint ShareEndpoint) map[string]any {
@@ -1601,17 +1987,43 @@ func (s *SubJsonService) genNativeTLSLikeEndpoint(subReq *SubService, inbound *m
 			"password":    client.Password,
 		}
 		tls := map[string]any{"enabled": true}
-		if rawTLS, ok := settings["tls"].(map[string]any); ok {
-			if serverName, ok := rawTLS["serverName"].(string); ok && strings.TrimSpace(serverName) != "" {
-				tls["server_name"] = strings.TrimSpace(serverName)
+		rawTLS, _ := settings["tls"].(map[string]any)
+		// A node's certificate files are remote paths; never read them from the
+		// central panel. Local listeners share runtime certificate fallback rules.
+		if inbound.NodeID == nil {
+			var lookup func(string) (string, error)
+			if database.GetDB() != nil {
+				lookup = service.NativeTLSSetting
+			}
+			if resolved, err := service.ResolveNativeTLSSettings(rawTLS, lookup); err == nil {
+				rawTLS = resolved
+				settings["tls"] = resolved
 			}
 		}
-		if endpoint.ep != nil {
-			if sni, ok := externalProxySNI(endpoint.ep); ok {
-				tls["server_name"] = sni
+		if serverName, _ := rawTLS["serverName"].(string); strings.TrimSpace(serverName) != "" {
+			tls["server_name"] = strings.TrimSpace(serverName)
+		}
+		if inbound.NodeID == nil {
+			certPath, _ := rawTLS["certificatePath"].(string)
+			if certificate := service.NativeTLSClientCertificate(certPath); certificate != "" {
+				tls["certificate"] = []string{certificate}
 			}
 		}
-		applyNativeTLSHostOptions(tls, endpoint.ep)
+
+		// A wrapped AnyTLS connection performs a second, independent TLS
+		// handshake *inside* the ShadowTLS detour. Host SNI, ALPN and
+		// allowInsecure overrides describe the outer ShadowTLS handshake,
+		// not the certificate presented by this inner AnyTLS listener.
+		// Applying them here makes an otherwise valid pair fail TLS
+		// verification (or ALPN negotiation) on the inner layer.
+		if model.ShadowTLSTransport(inbound.Settings) == nil {
+			if endpoint.ep != nil {
+				if sni, ok := externalProxySNI(endpoint.ep); ok {
+					tls["server_name"] = sni
+				}
+			}
+			applyNativeTLSHostOptions(tls, endpoint.ep)
+		}
 		out["tls"] = tls
 		return out
 	}
@@ -1661,9 +2073,9 @@ func (s *SubJsonService) genNativeTLSLikeEndpoint(subReq *SubService, inbound *m
 	// carries the destination and encrypts the payload after the TLS handshake.
 	return map[string]any{
 		"type": "shadowsocks", "method": "2022-blake3-aes-128-gcm",
-		"password": masterKey + ":" + model.ShadowTLSClientKey(client.Email, client.Password),
-		"udp_over_tcp": map[string]any{"enabled": true, "version": 2},
-		"detour": transportTag,
+		"password":                   masterKey + ":" + model.ShadowTLSClientKey(client.Email, client.Password),
+		"udp_over_tcp":               map[string]any{"enabled": true, "version": 2},
+		"detour":                     transportTag,
 		"_panel_shadowtls_transport": transport,
 	}
 }
@@ -1704,11 +2116,12 @@ func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbou
 		} else if rawPort, ok := endpoint["port"].(int); ok && rawPort > 0 {
 			serverPort = rawPort
 		}
-		if sni, ok := endpoint["sni"].(string); ok && strings.TrimSpace(sni) != "" {
+		if sni, ok := externalProxySNI(endpoint); ok {
 			serverName = strings.TrimSpace(sni)
 		}
 	}
-	if serverName == "" {
+	blankSNI, _ := endpoint["keepSniBlank"].(bool)
+	if serverName == "" && !blankSNI {
 		if server != "" && !strings.Contains(server, ":") && net.ParseIP(server) == nil {
 			serverName = server
 		} else {
@@ -1760,6 +2173,17 @@ func (s *SubJsonService) genNativeTUIC(inbound *model.Inbound, stream map[string
 		settings["congestion_control"] = inst.CongestionControl
 		settings["udp_relay_mode"] = inst.UDPRelayMode
 		settings["zero_rtt_handshake"] = inst.ZeroRTTHandshake
+		stream = maps.Clone(stream)
+		tls, _ := stream["tlsSettings"].(map[string]any)
+		tls = maps.Clone(tls)
+		if tls == nil {
+			tls = map[string]any{}
+		}
+		if len(inst.ALPN) > 0 {
+			tls["alpn"] = inst.ALPN
+		}
+		stream["tlsSettings"] = tls
+		stream["security"] = "tls"
 	}
 	raw := map[string]any{
 		"protocol":       "tuic",
@@ -1788,34 +2212,37 @@ func (s *SubJsonService) genHy(inbound *model.Inbound, newStream map[string]any,
 
 	var settings, stream map[string]any
 	_ = json.Unmarshal([]byte(inbound.Settings), &settings)
-	version, _ := settings["version"].(float64)
+	version := float64(2)
+	if stored, ok := settings["version"].(float64); ok && (stored == 1 || stored == 2) {
+		version = stored
+	}
+	_ = json.Unmarshal([]byte(inbound.StreamSettings), &stream)
+	hyStream, _ := stream["hysteriaSettings"].(map[string]any)
+	if stored, ok := hyStream["version"].(float64); ok && (stored == 1 || stored == 2) {
+		version = stored
+	}
 	outbound.Settings = map[string]any{
 		"version": int(version),
 		"address": inbound.Listen,
 		"port":    inbound.Port,
 	}
 
-	_ = json.Unmarshal([]byte(inbound.StreamSettings), &stream)
-	hyStream, _ := stream["hysteriaSettings"].(map[string]any)
 	outHyStream := map[string]any{
 		"version": int(version),
 		"auth":    client.Auth,
 	}
-	if udpIdleTimeout, ok := hyStream["udpIdleTimeout"].(float64); ok {
-		outHyStream["udpIdleTimeout"] = int(udpIdleTimeout)
-	}
-	if masquerade, ok := hyStream["masquerade"].(map[string]any); ok {
-		outHyStream["masquerade"] = masquerade
-	}
+	// UDP association expiry and HTTP masquerade are server-only.
 	for _, key := range []string{
 		"up_mbps", "down_mbps", "hop_interval", "hop_interval_max",
-		"bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth",
+		"upMbps", "downMbps", "up", "down", "hopInterval", "hopIntervalMax",
+		"bbrProfile", "disableChromeParrot",
+		"bbr_profile", "disable_chrome_parrot",
 	} {
 		if value, ok := hyStream[key]; ok {
 			outHyStream[key] = value
 		}
 	}
-	if obfs, ok := hyStream["obfs"].(map[string]any); ok && len(obfs) > 0 {
+	if obfs, ok := hyStream["obfs"]; ok {
 		outHyStream["obfs"] = obfs
 	}
 	newStream["hysteriaSettings"] = outHyStream

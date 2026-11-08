@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const (
@@ -85,7 +85,7 @@ func ResetClientTrafficLiveSampler() {
 // previous sample. The database is the aggregation boundary: any current or
 // future traffic collector that updates client_traffics automatically becomes
 // visible on the clients page.
-func (s *InboundService) SampleClientTrafficDeltas() ([]*xray.ClientTraffic, []*xray.ClientTraffic, error) {
+func (s *InboundService) SampleClientTrafficDeltas() ([]*coremodel.ClientTraffic, []*coremodel.ClientTraffic, error) {
 	clientTrafficLiveSampler.Lock()
 	defer clientTrafficLiveSampler.Unlock()
 
@@ -108,7 +108,7 @@ func (s *InboundService) SampleClientTrafficDeltas() ([]*xray.ClientTraffic, []*
 		clientTrafficLiveSampler.baseline = baseline
 		clientTrafficLiveSampler.lastScan = scanAt
 		clientTrafficLiveSampler.initialized = true
-		return []*xray.ClientTraffic{}, []*xray.ClientTraffic{}, nil
+		return []*coremodel.ClientTraffic{}, []*coremodel.ClientTraffic{}, nil
 	}
 
 	// Keep an overlap around the boundary. Rows seen repeatedly are harmless:
@@ -122,15 +122,15 @@ func (s *InboundService) SampleClientTrafficDeltas() ([]*xray.ClientTraffic, []*
 	scanAt := time.Now().UnixMilli()
 	elapsedMs := scanAt - clientTrafficLiveSampler.lastScan
 
-	var rows []*xray.ClientTraffic
-	if err := database.GetDB().Model(&xray.ClientTraffic{}).
+	var rows []*coremodel.ClientTraffic
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).
 		Where("last_online >= ?", cutoff).
 		Find(&rows).Error; err != nil {
 		return nil, nil, err
 	}
 
-	deltas := make([]*xray.ClientTraffic, 0, len(rows))
-	changed := make([]*xray.ClientTraffic, 0, len(rows))
+	deltas := make([]*coremodel.ClientTraffic, 0, len(rows))
+	changed := make([]*coremodel.ClientTraffic, 0, len(rows))
 	for _, row := range rows {
 		if row == nil || row.Email == "" {
 			continue
@@ -164,7 +164,7 @@ func (s *InboundService) SampleClientTrafficDeltas() ([]*xray.ClientTraffic, []*
 		up = normalizeClientTrafficDelta(up, elapsedMs)
 		down = normalizeClientTrafficDelta(down, elapsedMs)
 		if up > 0 || down > 0 {
-			deltas = append(deltas, &xray.ClientTraffic{Email: row.Email, Up: up, Down: down})
+			deltas = append(deltas, &coremodel.ClientTraffic{Email: row.Email, Up: up, Down: down})
 		}
 		changed = append(changed, row)
 	}

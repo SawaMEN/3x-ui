@@ -22,6 +22,20 @@ export class WebSocketClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null;
   private listeners: Map<string, Set<WebSocketListener>>;
 
+  // When a laptop wakes or a mobile browser returns from the background,
+  // reconnect immediately instead of retaining the previous 30–60s backoff.
+  // The socket identity guard in #openSocket prevents duplicate connections.
+  readonly #resumeDisconnected = () => {
+    if (!this.shouldReconnect || this.ws) return;
+    this.reconnectAttempts = 0;
+    this.#cancelReconnect();
+    this.#openSocket();
+  };
+
+  readonly #onVisible = () => {
+    if (document.visibilityState === 'visible') this.#resumeDisconnected();
+  };
+
   constructor(basePath = '') {
     this.basePath = basePath;
     this.maxReconnectAttempts = 10;
@@ -42,12 +56,16 @@ export class WebSocketClient {
       return;
     }
     this.shouldReconnect = true;
+    window.addEventListener('online', this.#resumeDisconnected);
+    document.addEventListener('visibilitychange', this.#onVisible);
     this.#cancelReconnect();
     this.#openSocket();
   }
 
   disconnect(): void {
     this.shouldReconnect = false;
+    window.removeEventListener('online', this.#resumeDisconnected);
+    document.removeEventListener('visibilitychange', this.#onVisible);
     this.#cancelReconnect();
     this.reconnectAttempts = 0;
     if (this.ws) {

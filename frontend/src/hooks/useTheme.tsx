@@ -10,8 +10,16 @@ const STORAGE_LOW_POWER = 'xui-low-power';
 
 export type ThemeMode = 'light' | 'dark' | 'ultra-dark' | 'colorful' | 'blue-gray' | 'cyberpunk';
 
+function readStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 function readBool(key: string, fallback: boolean): boolean {
-  const raw = localStorage.getItem(key);
+  const raw = readStorage(key);
   if (raw === null) return fallback;
   return raw === 'true';
 }
@@ -21,7 +29,7 @@ function readLowPower(): boolean {
 }
 
 function readThemeMode(): ThemeMode {
-  const saved = localStorage.getItem(STORAGE_THEME);
+  const saved = readStorage(STORAGE_THEME);
   if (
     saved === 'light' ||
     saved === 'dark' ||
@@ -355,10 +363,16 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({
+  children,
+  fixedMode,
+}: {
+  children: ReactNode;
+  fixedMode?: ThemeMode;
+}) {
   const [mode, setMode] = useState<ThemeMode>(initialMode);
   const [lowPower, setLowPower] = useState<boolean>(() => readLowPower());
-  const activeMode: ThemeMode = lowPower ? 'dark' : mode;
+  const activeMode: ThemeMode = fixedMode ?? (lowPower ? 'dark' : mode);
   const isDark =
     activeMode === 'dark' ||
     activeMode === 'ultra-dark' ||
@@ -368,11 +382,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     applyDom(activeMode, lowPower);
-    localStorage.setItem(STORAGE_THEME, mode);
-    localStorage.setItem(STORAGE_LOW_POWER, String(lowPower));
-    localStorage.setItem(STORAGE_DARK, String(isDark));
-    localStorage.setItem(STORAGE_ULTRA, String(isUltra));
-  }, [activeMode, mode, isDark, isUltra, lowPower]);
+    if (fixedMode) return;
+    try {
+      localStorage.setItem(STORAGE_THEME, mode);
+      localStorage.setItem(STORAGE_LOW_POWER, String(lowPower));
+      localStorage.setItem(STORAGE_DARK, String(isDark));
+      localStorage.setItem(STORAGE_ULTRA, String(isUltra));
+    } catch {
+      // The selected theme still applies when browser storage is unavailable.
+    }
+  }, [activeMode, mode, isDark, isUltra, lowPower, fixedMode]);
 
   const toggleTheme = useCallback(
     () =>

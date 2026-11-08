@@ -1,0 +1,304 @@
+package service
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+)
+
+func TestSubscriptionReportKeepsSupportedLinksAndExplainsUnsupported(t *testing.T) {
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	rows, _, warnings, err := parseOutboundSubscriptionReport([]byte("vless://11111111-1111-4111-8111-111111111111@example.com:443?security=tls#valid\nnot-a-protocol://user:private-password@example.org#unsupported\nssh://user:pass@example.com:22#ssh"), true)
+	if err != nil || len(rows) != 2 || len(warnings) != 1 {
+		t.Fatalf("rows=%v warnings=%v err=%v", rows, warnings, err)
+	}
+	if !strings.Contains(warnings[0], "not-a-protocol") || strings.Contains(warnings[0], "private-password") {
+		t.Fatal(warnings)
+	}
+}
+
+func TestSubscriptionTolerantImportSkipsServerListeners(t *testing.T) {
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	source := []byte(`[
+		{"type":"socks","tag":"proxy","server":"example.org","server_port":1080},
+		{"protocol":"singbox:masque-server","tag":"listener","settings":{"listen":"0.0.0.0","listen_port":443}}
+	]`)
+	rows, identities, warnings, err := parseOutboundSubscriptionReport(source, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || len(identities) != 1 || len(warnings) != 1 {
+		t.Fatalf("server listener not skipped: rows=%v ids=%v warnings=%v", rows, identities, warnings)
+	}
+	if rows[0]["tag"] != "proxy" || !strings.Contains(warnings[0], "Серверный профиль") {
+		t.Fatalf("unexpected result: rows=%v warnings=%v", rows, warnings)
+	}
+	if _, _, _, err := parseOutboundSubscriptionReport(source, false); err == nil {
+		t.Fatal("strict import must reject a server listener")
+	}
+}
+
+func TestSubscriptionStandardLinksBypassInstalledKernelParser(t *testing.T) {
+	// A binary that rejects "parse" must not reject ordinary share links:
+	// VLESS and Trojan are handled by the panel's own parser.
+	writeSubscriptionCheckBinary(t, "exit 9\n")
+	source := "vless://11111111-1111-4111-8111-111111111111@example.com:443?security=tls&type=tcp#vless" +
+		"\ntrojan://password@example.org:443?security=tls&type=tcp#trojan"
+	rows, identities, warnings, err := parseOutboundSubscriptionReport([]byte(source), true)
+	if err != nil || len(rows) != 2 || len(identities) != 2 || len(warnings) != 0 {
+		t.Fatalf("rows=%d ids=%d warnings=%v err=%v", len(rows), len(identities), warnings, err)
+	}
+	if rows[0]["protocol"] != "vless" || rows[1]["protocol"] != "trojan" {
+		t.Fatalf("unexpected protocols: %v, %v", rows[0]["protocol"], rows[1]["protocol"])
+	}
+}
+
+func TestSubscriptionReportNativeSettingsRemainVerbatim(t *testing.T) {
+	rows, _, _, err := parseOutboundSubscriptionReport([]byte(`[{"type":"naive","tag":"naive","server":"example.com","insecure_concurrency":12,"quic":true,"extra_headers":{"Header":"value"},"tls":{"enabled":true}},{"type":"future-protocol","tag":"future","custom":{"nested":[1,2]}}]`), true)
+	if err != nil || len(rows) != 2 {
+		t.Fatal(rows, err)
+	}
+	settings := rows[0]["settings"].(map[string]any)
+	if settings["insecure_concurrency"] != float64(12) || settings["quic"] != true || settings["extra_headers"].(map[string]any)["Header"] != "value" {
+		t.Fatal(settings)
+	}
+	if rows[1]["settings"].(map[string]any)["custom"] == nil {
+		t.Fatal("future settings were dropped")
+	}
+}
+
+func TestSubscriptionDependencyCyclesAndDependentsAreExcluded(t *testing.T) {
+	source := []any{
+		map[string]any{"tag": "a", "protocol": "singbox:socks", "settings": map[string]any{"detour": "b"}},
+		map[string]any{"tag": "b", "protocol": "singbox:socks", "settings": map[string]any{"detour": "a"}},
+		map[string]any{"tag": "chain", "protocol": "singbox:socks", "settings": map[string]any{"detour": "b"}},
+		map[string]any{"tag": "valid", "protocol": "singbox:socks"},
+	}
+	kept, issues := pruneSubscriptionDependencies(source, source)
+	if len(kept) != 1 || kept[0].(map[string]any)["tag"] != "valid" || len(issues) != 3 {
+		t.Fatal(kept, issues)
+	}
+}
+
+func writeSubscriptionCheckBinary(t *testing.T, script string) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	if err := os.WriteFile(filepath.Join(dir, singbox.GetBinaryName()), []byte("#!/bin/sh\n"+script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSubscriptionKernelValidationRejectsSuccessfulInvalidPlaceholder(t *testing.T) {
+	writeSubscriptionCheckBinary(t, "echo 'ERROR unknown outbound type; private-password' >&2\nexit 0\n")
+	row := map[string]any{"protocol": "singbox:future-protocol", "tag": "future", "settings": map[string]any{"password": "private-password"}}
+	err := validateSubscriptionNativeMember(row, CoreTypeHiddify)
+	if err == nil || strings.Contains(err.Error(), "private-password") {
+		t.Fatalf("diagnostic=%v", err)
+	}
+}
+
+func TestSubscriptionKernelValidationPassesAllSettingsAndDoesNotStartCore(t *testing.T) {
+	writeSubscriptionCheckBinary(t, "[ \"$1\" = check ] && [ \"$2\" = -c ] || exit 6\ncat \"$3\" > \"$XUI_BIN_FOLDER/checked.json\"\n")
+	row := map[string]any{"protocol": "singbox:naive", "tag": "proxy", "settings": map[string]any{"server": "example.com", "server_port": 443, "username": "u", "password": "private-password", "insecure_concurrency": 12, "tls": map[string]any{"enabled": true}}}
+	if err := validateSubscriptionNativeMember(row, CoreTypeHiddify); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(singbox.GetBinaryPath()), "checked.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err = json.Unmarshal(data, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg["inbounds"] != nil {
+		t.Fatal("validation created listeners")
+	}
+	out := cfg["outbounds"].([]any)[1].(map[string]any)
+	if out["insecure_concurrency"] != float64(12) || out["password"] != "private-password" {
+		t.Fatal(out)
+	}
+}
+
+func TestSubscriptionCompatibilityIssuesAreReturnedToUI(t *testing.T) {
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	kept, issues, _ := filterSubscriptionOutboundsForCore("test", CoreTypeHiddify, []any{map[string]any{"protocol": "loopback", "tag": "unsupported", "settings": map[string]any{"inboundTag": "x"}}})
+	if len(kept) != 0 || len(issues) != 1 {
+		t.Fatal(kept, issues)
+	}
+}
+
+func TestSubscriptionUnsupportedRefreshKeepsWorkingSourceAsWarning(t *testing.T) {
+	setupSettingTestDB(t)
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	id := serveOutboundSubscription(t, "sub-", func(n int) string {
+		if n == 1 {
+			return "vless://11111111-1111-4111-8111-111111111111@example.com:443?security=tls#valid"
+		}
+		return "not-supported://secret@example.com"
+	})
+	svc := &OutboundSubscriptionService{}
+	first, err := svc.Refresh(id)
+	if err != nil || len(first) != 1 {
+		t.Fatal(first, err)
+	}
+	before, _ := svc.Get(id)
+	second, err := svc.Refresh(id)
+	if err != nil || len(second) != 1 {
+		t.Fatal(second, err)
+	}
+	after, _ := svc.Get(id)
+	if after.LastFetchedOutbounds != before.LastFetchedOutbounds || after.LastError != "" || !strings.Contains(after.LastWarning, "сохранены") {
+		t.Fatalf("%+v", after)
+	}
+}
+
+func TestSubscriptionInstalledKernelPreservesURIOptionsAndSkipsUnknownType(t *testing.T) {
+	binary := os.Getenv("HIDDIFY_CONFIG_CHECK_BINARY")
+	if binary == "" {
+		t.Skip("set HIDDIFY_CONFIG_CHECK_BINARY for installed-kernel checks")
+	}
+	t.Setenv("XUI_BIN_FOLDER", filepath.Dir(binary))
+	rows, _, warnings, err := parseOutboundSubscriptionReport([]byte("naive+https://user:private-password@example.com:443?insecure_concurrency=12#naive\nunknown-protocol://user:password@example.com"), true)
+	if err != nil || len(rows) != 1 || len(warnings) != 1 {
+		t.Fatal(rows, warnings, err)
+	}
+	settings := rows[0]["settings"].(map[string]any)
+	if settings["insecure_concurrency"] != 12 && settings["insecure_concurrency"] != float64(12) {
+		t.Fatal(settings)
+	}
+	source := []any{map[string]any(rows[0]), map[string]any{"tag": "unsupported", "protocol": "singbox:nonexistent-protocol", "settings": map[string]any{}}}
+	kept, issues, _ := filterSubscriptionOutboundsForCore("installed kernel", CoreTypeHiddify, source)
+	if len(kept) != 1 || len(issues) != 1 {
+		t.Fatalf("kept=%v issues=%v", kept, issues)
+	}
+}
+
+func TestSubscriptionReportRejectsDuplicateTagsIncludingMalformedProfiles(t *testing.T) {
+	for _, body := range []string{
+		`[{"tag":"same","type":42},{"tag":"same","type":"socks","server":"example.com"}]`,
+		`[{"tag":"same","type":"socks","server":"example.com"},{"tag":"same","type":42}]`,
+		`[{"tag":"same","type":42},{"tag":"same","type":false}]`,
+	} {
+		_, _, _, err := parseOutboundSubscriptionReport([]byte(body), true)
+		if err == nil || !strings.Contains(err.Error(), "duplicate subscription connection tag") {
+			t.Fatalf("ambiguous subscription accepted: %s; err=%v", body, err)
+		}
+	}
+}
+
+func TestSubscriptionKernelValidationRedactsAuthenticationFields(t *testing.T) {
+	for _, test := range []struct{ field, secret string }{
+		{"id", "private-credential-value"},
+		{"uuid", "private-credential-value"},
+		{"auth", "private-credential-value"},
+		{"auth_str", "private-credential-value"},
+		{"password", "private-credential-value"},
+		{"psk", "private-credential-value"},
+		{"private_key", "private-credential-value"},
+		{"password", "abc"},
+	} {
+		t.Run(test.field+"/"+test.secret, func(t *testing.T) {
+			field, secret := test.field, test.secret
+			writeSubscriptionCheckBinary(t, "echo 'ERROR invalid credential: "+secret+"' >&2\nexit 1\n")
+			row := map[string]any{"protocol": "singbox:future-protocol", "tag": "proxy", "settings": map[string]any{field: secret}}
+			err := validateSubscriptionNativeMember(row, CoreTypeHiddify)
+			if err == nil || strings.Contains(err.Error(), secret) {
+				t.Fatalf("credential exposed in diagnostic: %v", err)
+			}
+		})
+	}
+}
+
+func TestSubscriptionKernelValidationUsesDiagnosticSeverity(t *testing.T) {
+	for _, test := range []struct {
+		name, output string
+		wantError    bool
+	}{
+		{"warning", "WARN[0000] unsupported legacy option ignored", false},
+		{"name", "INFO[0000] outbound/error-proxy: configuration accepted", false},
+		{"plain-error", "ERROR invalid profile", true},
+		{"timed-error", "ERROR[0000] invalid profile", true},
+		{"colored-error", "\x1b[31mERROR\x1b[0m[0000] invalid profile", true},
+		{"fatal", "FATAL[0000] invalid profile", true},
+		{"warning-before-error", "WARN[0000] legacy option ignored\nERROR[0000] invalid profile", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			writeSubscriptionCheckBinary(t, "printf '%s\\n' '"+test.output+"'\nexit 0\n")
+			row := map[string]any{"protocol": "singbox:socks", "tag": "proxy", "settings": map[string]any{"server": "example.com", "server_port": 1080}}
+			err := validateSubscriptionNativeMember(row, CoreTypeHiddify)
+			if (err != nil) != test.wantError {
+				t.Fatalf("diagnostic %q: err=%v; wantError=%v", test.output, err, test.wantError)
+			}
+			if test.wantError && !strings.Contains(err.Error(), "invalid profile") {
+				t.Fatalf("actual error omitted from diagnostic: %v", err)
+			}
+		})
+	}
+}
+
+func TestSubscriptionKernelAssignsTagBeforeValidation(t *testing.T) {
+	folder := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", folder)
+	if err := os.WriteFile(singbox.GetBinaryPath(), []byte(`#!/bin/sh
+[ "$1" != "check" ] || exit 0
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--output" ]; then output="$2"; shift 2; else shift; fi
+done
+printf '%s' '{"outbounds":[{"type":"socks","tag":" § 0","server":"proxy.test","server_port":1080}]}' > "$output"
+`), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	rows, _, _, err := parseOutboundSubscriptionReport([]byte("socks5://proxy.test:1080"), true)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("unnamed kernel connection rejected: rows=%v err=%v", rows, err)
+	}
+	if tag, _ := rows[0]["tag"].(string); strings.TrimSpace(tag) == "" || tag != strings.TrimSpace(tag) {
+		t.Fatalf("invalid generated tag: %q", tag)
+	}
+	setupSettingTestDB(t)
+	id := serveOutboundSubscription(t, "", func(int) string { return "socks5://proxy.test:1080" })
+	first, _ := refreshOutboundTags(t, id)
+	second, _ := refreshOutboundTags(t, id)
+	if len(first) != 1 || len(second) != 1 || first[0] != second[0] {
+		t.Fatalf("subscription refresh changed tags: first=%v second=%v", first, second)
+	}
+}
+
+func TestSubscriptionTrimsProviderNamesAndPreservesReferences(t *testing.T) {
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	body := `{"outbounds":[{"type":"socks","tag":" proxy ","server":"proxy.test","server_port":1080},{"type":"selector","tag":" group ","outbounds":[" proxy "],"default":" proxy "},{"type":"socks","tag":"  ","server":"other.test","server_port":1080}]}`
+	rows, _, _, err := parseOutboundSubscriptionReport([]byte(body), true)
+	if err != nil || len(rows) != 3 {
+		t.Fatalf("provider names rejected: rows=%v err=%v", rows, err)
+	}
+	if rows[0]["tag"] != "proxy" || rows[1]["tag"] != "group" {
+		t.Fatalf("tags not trimmed: %v", rows)
+	}
+	settings := rows[1]["settings"].(map[string]any)
+	if settings["default"] != "proxy" || settings["outbounds"].([]any)[0] != "proxy" {
+		t.Fatalf("group references were not renamed: %v", settings)
+	}
+}
+
+func TestSubscriptionCompatibilityWarningsUseCurrentCore(t *testing.T) {
+	old := "Строка 2: некорректный профиль; " +
+		"13 подключений не поддерживаются текущим ядром sing-box; сохранены в подписке, но не применены: node-1: old reason"
+	if got := currentSubscriptionCompatibilityWarning(old, nil, "xray"); got != "Строка 2: некорректный профиль;" {
+		t.Fatalf("old compatibility warning survived core switch: %q", got)
+	}
+	updated := currentSubscriptionCompatibilityWarning(old, []string{"new-node: incompatible protocol"}, "hiddify-core")
+	if !strings.Contains(updated, "1 подключений не поддерживаются текущим ядром hiddify-core") ||
+		strings.Contains(updated, "node-1: old reason") ||
+		!strings.Contains(updated, "Строка 2: некорректный профиль;") {
+		t.Fatalf("warning did not follow the running core: %q", updated)
+	}
+	if got := currentSubscriptionCompatibilityWarning(updated, []string{"new-node: incompatible protocol"}, "hiddify-core"); got != updated {
+		t.Fatalf("status was appended twice: %q", got)
+	}
+}

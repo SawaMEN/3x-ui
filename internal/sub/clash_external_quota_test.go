@@ -10,17 +10,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
-
-// base64("aes-256-gcm:clientpw"), the SIP002 userinfo both spellings share. The
-// panel emits this node as `plugin=obfs-local;obfs=http`, and Clash has no way
-// to represent it, so both the inbound path and the link path drop it.
-const clashDroppedExternalLink = "ss://YWVzLTI1Ni1nY206Y2xpZW50cHc@198.51.100.9:8443?type=tcp&headerType=http&host=test#obfs"
-
-const tcpObfsStream = `{"network":"tcp","security":"none","tcpSettings":{"header":{"type":"http","request":{"path":["/"],"headers":{"Host":["test"]}}}}}`
 
 func clashSubRouter(t *testing.T) *gin.Engine {
 	t.Helper()
@@ -33,6 +26,8 @@ func clashSubRouter(t *testing.T) *gin.Engine {
 		router.Group("/"),
 		WithSUBJsonEnabled(true),
 		WithSUBClashEnabled(true),
+		WithSUBClashAutoDetect(true),
+		WithSUBClashUserAgentRegex("Clash"),
 		WithSUBEncryption(false),
 	)
 	return router
@@ -51,14 +46,14 @@ func seedClashQuotaSub(t *testing.T, subID string, expiry int64) {
 	t.Helper()
 	db := database.GetDB()
 	seedSubInbound(t, subID, "A", 10001, 1, wsTLSStream)
-	if err := db.Create(&xray.ClientTraffic{Email: "A@e", Up: 11, Down: 22, Total: 1024, ExpiryTime: expiry}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: "A@e", Up: 11, Down: 22, Total: 1024, ExpiryTime: expiry}).Error; err != nil {
 		t.Fatalf("seed A traffic: %v", err)
 	}
 	rec := &model.ClientRecord{Email: "B@e", SubID: subID, UUID: "22222222-2222-4222-8222-222222222222", Enable: true, ExpiryTime: expiry}
 	if err := db.Create(rec).Error; err != nil {
 		t.Fatalf("seed B client: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{Email: "B@e", Up: 100, Down: 200, Total: 2048, ExpiryTime: expiry}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: "B@e", Up: 100, Down: 200, Total: 2048, ExpiryTime: expiry}).Error; err != nil {
 		t.Fatalf("seed B traffic: %v", err)
 	}
 	if err := db.Create(&model.ClientExternalLink{ClientId: rec.Id, Kind: model.ExternalLinkKindLink, Value: clashDroppedExternalLink, SortIndex: 1}).Error; err != nil {
@@ -66,20 +61,24 @@ func seedClashQuotaSub(t *testing.T, subID string, expiry int64) {
 	}
 }
 
-// B's node cannot be represented in Clash, but B still owns quota: the header
-// must keep counting B's traffic, not quietly serve A's numbers alone.
+// Automatic Clash detection must fall back to the complete raw subscription
+// when an external link is unrepresentable, keeping both nodes and their quota.
 func TestClashQuotaHeaderCountsDroppedExternalLink(t *testing.T) {
 	initSubDB(t)
 	subID := "clash-quota-drop"
 	expiry := time.Now().Add(24 * time.Hour).UnixMilli()
 	seedClashQuotaSub(t, subID, expiry)
 
-	w := fetchClashSub(t, clashSubRouter(t), "/clash/"+subID+"?view=raw")
+	router := clashSubRouter(t)
+	req := httptest.NewRequest(http.MethodGet, "/sub/"+subID, nil)
+	req.Header.Set("User-Agent", "Clash")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
-	if strings.Contains(w.Body.String(), "198.51.100.9") {
-		t.Fatalf("unrepresentable node leaked into the profile: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "198.51.100.9") || !strings.Contains(w.Body.String(), "vless://") {
+		t.Fatalf("fallback lost a node: %s", w.Body.String())
 	}
 	wantHeader := fmt.Sprintf("upload=111; download=222; total=3072; expire=%d", expiry/1000)
 	if got := w.Header().Get("Subscription-Userinfo"); got != wantHeader {
@@ -95,7 +94,7 @@ func TestClashAllUnrepresentableNodesAnswerAlike(t *testing.T) {
 		t.Run(source, func(t *testing.T) {
 			initSubDB(t)
 			if source == "inbound" {
-				seedSubInbound(t, "clash-parity", "obfs", 10001, 1, tcpObfsStream)
+				seedSubInbound(t, "clash-parity", "obfs", 10001, 1, kcpShadowsocksStream)
 			} else {
 				rec := &model.ClientRecord{Email: "B@e", SubID: "clash-parity", UUID: "22222222-2222-4222-8222-222222222222", Enable: true}
 				if err := database.GetDB().Create(rec).Error; err != nil {
@@ -116,3 +115,10 @@ func TestClashAllUnrepresentableNodesAnswerAlike(t *testing.T) {
 		t.Fatalf("status differs by node source: %v", statuses)
 	}
 }
+
+// A shadowsocks node over kcp has no Clash form, so both the inbound path and the link
+// path must drop it; the userinfo is base64("aes-256-gcm:clientpw").
+const (
+	clashDroppedExternalLink = "ss://YWVzLTI1Ni1nY206Y2xpZW50cHc@198.51.100.9:8443?type=kcp#unsupported"
+	kcpShadowsocksStream     = `{"network":"kcp","security":"none"}`
+)

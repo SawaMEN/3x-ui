@@ -124,7 +124,7 @@ func TestRemoveInboundTagReferences_DropsInboundOnlyRule(t *testing.T) {
 	}
 }
 
-func TestRemoveInboundTagReferences_KeepsRuleWithOtherMatchers(t *testing.T) {
+func TestRemoveInboundTagReferences_DropsRuleWithDeletedScope(t *testing.T) {
 	setupSettingTestDB(t)
 	seedXrayTemplate(t, `{
 		"routing": {
@@ -149,16 +149,12 @@ func TestRemoveInboundTagReferences_KeepsRuleWithOtherMatchers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetXrayConfigTemplate: %v", err)
 	}
-	rule := findRuleByOutbound(t, got, "direct")
-	if _, ok := rule["inboundTag"]; ok {
-		t.Fatalf("inboundTag should be removed, rule = %#v", rule)
-	}
-	if domain, _ := rule["domain"].([]any); len(domain) != 1 {
-		t.Fatalf("domain matcher should remain, rule = %#v", rule)
+	if rules := routingRulesFromTemplate(t, got); len(rules) != 1 || rules[0]["outboundTag"] != "api" {
+		t.Fatalf("policy escaped its deleted inbound scope: %v", rules)
 	}
 }
 
-func TestRemoveInboundTagReferences_KeepsSourceScopedRule(t *testing.T) {
+func TestRemoveInboundTagReferences_DropsSourceRuleWithDeletedScope(t *testing.T) {
 	setupSettingTestDB(t)
 	seedXrayTemplate(t, `{
 		"routing": {
@@ -182,12 +178,8 @@ func TestRemoveInboundTagReferences_KeepsSourceScopedRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetXrayConfigTemplate: %v", err)
 	}
-	rule := findRuleByOutbound(t, got, "blocked")
-	if _, ok := rule["inboundTag"]; ok {
-		t.Fatalf("inboundTag should be trimmed, rule = %#v", rule)
-	}
-	if src, _ := rule["source"].([]any); len(src) != 1 {
-		t.Fatalf("source-scoped rule was dropped instead of kept; rule = %#v", rule)
+	if rules := routingRulesFromTemplate(t, got); len(rules) != 1 || rules[0]["outboundTag"] != "api" {
+		t.Fatalf("source policy escaped its deleted inbound scope: %v", rules)
 	}
 }
 

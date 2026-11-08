@@ -4,7 +4,6 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { HttpUtil, Msg } from '@/utils';
 import { parseMsg } from '@/utils/zodValidate';
 import { keys } from '@/api/queryKeys';
-import { markLocalInvalidate } from '@/api/invalidationTracker';
 import {
   ClientHydrateSchema,
   ClientPageResponseSchema,
@@ -306,7 +305,6 @@ export function useClients(options: UseClientsOptions = {}) {
   const summary = listQuery.data?.summary ?? DEFAULT_SUMMARY;
 
   const invalidateAll = useCallback(() => {
-    markLocalInvalidate();
     return Promise.all([
       queryClient.invalidateQueries({ queryKey: keys.clients.root() }),
       queryClient.invalidateQueries({ queryKey: keys.inbounds.root() }),
@@ -737,7 +735,7 @@ export function useClients(options: UseClientsOptions = {}) {
         // identically (isActiveSpeed treats both as inactive), so the zeros are
         // dropped and an unchanged result returns the previous object — which lets
         // React bail out of the update instead of re-rendering the table.
-        const next: Record<string, ClientSpeedEntry> = {};
+        const next = Object.create(null) as Record<string, ClientSpeedEntry>;
         for (const ct of p.clientTraffics) {
           if (!ct || !ct.email) continue;
           const up = ct.up || 0;

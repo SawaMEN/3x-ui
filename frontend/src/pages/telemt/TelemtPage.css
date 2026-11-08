@@ -255,3 +255,9 @@
     flex: 1;
   }
 }
+
+.telemt-remote-card .ant-card-head-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}

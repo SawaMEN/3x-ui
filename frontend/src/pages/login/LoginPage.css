@@ -314,9 +314,40 @@
   );
 }
 
+/* Dynamic mobile viewport height avoids hiding the submit button below the
+   browser's expanding address bar on Android/iOS. */
+@supports (min-height: 100dvh) {
+  .login-app,
+  .login-wrapper {
+    min-height: 100dvh;
+  }
+}
+
 @media (max-width: 480px) {
+  .login-toolbar {
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+  }
+
+  .login-wrapper {
+    padding: calc(56px + env(safe-area-inset-top)) 12px max(24px, env(safe-area-inset-bottom));
+  }
+
   .login-card {
-    padding: 32px 20px 24px;
+    max-width: 100%;
+    padding: 28px 16px 24px;
+  }
+
+  /* Five permanently animating blurred layers are expensive on mobile GPUs.
+     Keep the theme colours without compositing continuous blur animations. */
+  .login-app::before,
+  .login-app::after,
+  .login-content::before,
+  .login-content::after,
+  .login-wrapper::before {
+    animation: none;
+    filter: blur(48px);
+    will-change: auto;
   }
 }
 

@@ -1,10 +1,10 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, type RouteObject } from 'react-router';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 import { Spin } from 'antd';
 
 import PanelLayout from '@/layouts/PanelLayout';
+import PanelRouteError from '@/pages/PanelRouteError';
 import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
-import TelemtSubscriptionToggle from '@/pages/telemt/TelemtSubscriptionToggle';
 
 const IndexPage = lazy(() => importWithChunkRecovery(() => import('@/pages/index/IndexPage')));
 const InboundsPage = lazy(() =>
@@ -13,23 +13,26 @@ const InboundsPage = lazy(() =>
 const ClientsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/clients/ClientsPage')),
 );
+const OlcRTCPage = lazy(() => importWithChunkRecovery(() => import('@/pages/olcrtc/OlcRTCPage')));
 const GroupsPage = lazy(() => importWithChunkRecovery(() => import('@/pages/groups/GroupsPage')));
 const NodesPage = lazy(() => importWithChunkRecovery(() => import('@/pages/nodes/NodesPage')));
-const HostsPage = lazy(() => importWithChunkRecovery(() => import('@/pages/hosts/HostsPage')));
-const FirewallPage = lazy(() =>
-  importWithChunkRecovery(() => import('@/pages/firewall/FirewallPage')),
+const ManagerPage = lazy(() =>
+  importWithChunkRecovery(() => import('@/pages/manager/ManagerPage')),
 );
+const HostsPage = lazy(() => importWithChunkRecovery(() => import('@/pages/hosts/HostsPage')));
 const SettingsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/settings/SettingsPage')),
 );
-const XrayPage = lazy(() => importWithChunkRecovery(() => import('@/pages/xray/XrayPage')));
+
 const SingBoxPage = lazy(() =>
-  importWithChunkRecovery(() => import('@/pages/singbox/SingBoxPage')),
+  importWithChunkRecovery(() => import('@/pages/singbox/SingBoxRoutePage')),
+);
+const CoreConfigRoutePage = lazy(() =>
+  importWithChunkRecovery(() => import('@/pages/CoreConfigRoutePage')),
 );
 const ApiDocsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/api-docs/ApiDocsPage')),
 );
-const TelemtPage = lazy(() => importWithChunkRecovery(() => import('@/pages/telemt/TelemtPage')));
 
 function withSuspense(node: React.ReactNode) {
   return (
@@ -37,10 +40,10 @@ function withSuspense(node: React.ReactNode) {
       fallback={
         <div
           style={{
+            minHeight: 240,
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            minHeight: '60vh',
           }}
         >
           <Spin size="large" />
@@ -56,29 +59,25 @@ const routes: RouteObject[] = [
   {
     path: '/',
     element: <PanelLayout />,
+    errorElement: <PanelRouteError />,
     children: [
       { index: true, element: withSuspense(<IndexPage />) },
       { path: 'inbounds', element: withSuspense(<InboundsPage />) },
       { path: 'clients', element: withSuspense(<ClientsPage />) },
+      { path: 'olcrtc', element: withSuspense(<OlcRTCPage />) },
       { path: 'groups', element: withSuspense(<GroupsPage />) },
       { path: 'nodes', element: withSuspense(<NodesPage />) },
+      { path: 'manager', element: withSuspense(<ManagerPage />) },
       { path: 'hosts', element: withSuspense(<HostsPage />) },
-      { path: 'firewall', element: withSuspense(<FirewallPage />) },
+      { path: 'firewall', element: <Navigate to="/settings#advanced/firewall" replace /> },
       { path: 'settings', element: withSuspense(<SettingsPage />) },
-      { path: 'xray', element: withSuspense(<XrayPage />) },
+      { path: 'xray', element: withSuspense(<CoreConfigRoutePage />) },
       { path: 'singbox', element: withSuspense(<SingBoxPage />) },
-      { path: 'outbound', element: withSuspense(<XrayPage />) },
-      { path: 'routing', element: withSuspense(<XrayPage />) },
+      { path: 'outbound', element: withSuspense(<CoreConfigRoutePage />) },
+      { path: 'routing', element: withSuspense(<CoreConfigRoutePage />) },
       { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
-      {
-        path: 'telemt',
-        element: withSuspense(
-          <>
-            <TelemtPage />
-            <TelemtSubscriptionToggle />
-          </>,
-        ),
-      },
+      // Backwards-compatible old bookmarks; Telemt now lives under Inbounds.
+      { path: 'telemt', element: <Navigate to="/inbounds" replace /> },
     ],
   },
 ];

@@ -5,7 +5,6 @@ package sub
 import (
 	"context"
 	"crypto/tls"
-	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -15,20 +14,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 // Server represents the subscription server that serves subscription links and JSON configurations.
 type Server struct {
 	httpServer *http.Server
-	routerMu sync.RWMutex
+	routerMu   sync.RWMutex
 	listener   net.Listener
 
 	sub            *SUBController
@@ -51,20 +51,26 @@ func NewServer() *Server {
 // templates and static assets and returns the ready-to-use engine.
 func (s *Server) initRouter() (*gin.Engine, error) {
 	// Always run in release mode for the subscription server
-	gin.DefaultWriter = io.Discard
-	gin.DefaultErrorWriter = io.Discard
 	gin.SetMode(gin.ReleaseMode)
 
-	engine := gin.Default()
+	engine := gin.New()
+	engine.Use(middleware.Recovery())
 
 	subDomain, err := s.settingService.GetSubDomain()
 	if err != nil {
 		return nil, err
 	}
 
-	if subDomain != "" {
-		engine.Use(s.subscriptionDomainValidator(subDomain))
-	}
+	engine.Use(s.subscriptionDomainValidator(subDomain))
+	engine.GET("/bus/:token", func(c *gin.Context) { service.ServeManagerSubscription(c.Writer, c.Request, c.Param("token")) })
+	engine.Use(func(c *gin.Context) {
+		if enabled, _ := s.settingService.GetSubCDNEnable(); enabled && !strings.Contains(c.Request.URL.Path, "/assets/") {
+			c.Header("Cache-Control", "private, no-store, max-age=0")
+			c.Header("CDN-Cache-Control", "no-store")
+			c.Header("Cloudflare-CDN-Cache-Control", "no-store")
+			c.Header("Vary", "Accept, User-Agent, X-HWID")
+		}
+	})
 
 	LinksPath, err := s.settingService.GetSubPath()
 	if err != nil {
@@ -81,6 +87,43 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		return nil, err
 	}
 
+	// Registered subscription routes are excluded by RootRedirect itself.
+	// Also protect configured prefixes (including invalid/expired IDs) and
+	// in-process forwarding of imported Hiddify URLs through NoRoute.
+	engine.Use(middleware.RootRedirect(s.settingService.GetRootRedirectURL, func(c *gin.Context) bool {
+		path := c.Request.URL.Path
+		if isLegacyHiddifyPanelForward(c.Request) {
+			return true
+		}
+		for _, prefix := range []string{LinksPath, JsonPath, ClashPath, "/assets", "/bus"} {
+			prefix = strings.TrimRight(prefix, "/")
+			if prefix != "" && (path == prefix || strings.HasPrefix(path, prefix+"/")) {
+				return true
+			}
+		}
+		// Direct requests to imported Hiddify paths must keep their former
+		// 404, rather than leaking secret subscription URLs via Location.
+		aliases, err := s.settingService.GetHiddifyLegacySubscriptionAliases()
+		if err != nil {
+			return true
+		}
+		for _, alias := range aliases {
+			prefix := "/" + strings.Trim(alias.Path, "/")
+			if prefix != "/" && (path == prefix || strings.HasPrefix(path, prefix+"/")) {
+				return true
+			}
+		}
+		return false
+	}))
+
+	subFormatMode, err := s.settingService.GetSubFormatMode()
+	if err != nil {
+		return nil, err
+	}
+	subDefaultFormat, err := s.settingService.GetSubDefaultFormat()
+	if err != nil {
+		return nil, err
+	}
 	subJsonEnable, err := s.settingService.GetSubJsonEnable()
 	if err != nil {
 		return nil, err
@@ -182,6 +225,11 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		SubClashRules = ""
 	}
 
+	SubClashRemoteDNS, err := s.settingService.GetSubClashRemoteDNS()
+	if err != nil {
+		SubClashRemoteDNS = false
+	}
+
 	SubTitle, err := s.settingService.GetSubTitle()
 	if err != nil {
 		SubTitle = ""
@@ -281,6 +329,16 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	if assetsFS != nil {
+		// Vite fingerprints JS/CSS/font asset names; the files are public and
+		// content-addressed. Cache them across page visits without caching the
+		// subscriber-specific HTML or subscription response bodies.
+		engine.Use(func(c *gin.Context) {
+			path := c.Request.URL.Path
+			if strings.HasPrefix(path, "/assets/") || strings.HasPrefix(path, linksPathForAssets+"/") {
+				c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			}
+			c.Next()
+		})
 		engine.StaticFS("/assets", assetsFS)
 		if linksPathForAssets != "/assets" {
 			engine.StaticFS(linksPathForAssets, assetsFS)
@@ -331,6 +389,8 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	s.sub = NewSUBController(g,
 		WithSUBPath(LinksPath),
+		WithSUBFormats(subFormatMode, subDefaultFormat),
+		WithSUBLiveFormats(),
 		WithSUBJsonPath(JsonPath),
 		WithSUBClashPath(ClashPath),
 		WithSUBClashAutoDetect(subClashAutoDetect),
@@ -351,6 +411,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		WithSUBJsonObservatory(SubJsonObservatory),
 		WithSUBClashEnableRouting(SubClashEnableRouting),
 		WithSUBClashRules(SubClashRules),
+		WithSUBClashRemoteDNS(SubClashRemoteDNS),
 		WithSUBTitle(SubTitle),
 		WithSUBSupportURL(SubSupportUrl),
 		WithSUBProfileURL(SubProfileUrl),
@@ -391,7 +452,12 @@ func (s *Server) subscriptionDomainValidator(primary string) gin.HandlerFunc {
 	primary = normalizeRequestHost(primary)
 	return func(c *gin.Context) {
 		host := normalizeRequestHost(c.Request.Host)
-		if host == primary {
+		domains, err := s.settingService.GetSubscriptionAllowedHosts(primary)
+		if err != nil {
+			c.AbortWithStatus(http.StatusServiceUnavailable)
+			return
+		}
+		if len(domains) == 0 || domains[host] {
 			c.Next()
 			return
 		}
@@ -399,7 +465,12 @@ func (s *Server) subscriptionDomainValidator(primary string) gin.HandlerFunc {
 		// A legacy Hiddify URL may intentionally use its imported public domain,
 		// but only when the main panel listener already validated and forwarded it.
 		// Direct requests on subPort must obey the normal subscription domain rule.
-		if isLegacyHiddifyPanelForward(c.Request) {
+		restricted, restrictionErr := s.settingService.GetSubRestrictDomains()
+		if restrictionErr != nil {
+			c.AbortWithStatus(http.StatusServiceUnavailable)
+			return
+		}
+		if !restricted && isLegacyHiddifyPanelForward(c.Request) {
 			aliases, err := s.settingService.GetHiddifyLegacySubscriptionAliases()
 			if err == nil {
 				if subID, ok := legacyHiddifySubID(c.Request.URL.Path, aliases); ok && s.settingService.IsHiddifySubscriptionPath(subID, c.Request.URL.Path) {
@@ -589,10 +660,11 @@ func (s *Server) Start() (err error) {
 	}
 
 	if certFile != "" || keyFile != "" {
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		cert, err := network.NewFileCertificate(certFile, keyFile)
 		if err == nil {
 			c := &tls.Config{
-				Certificates: []tls.Certificate{cert},
+				GetCertificate: service.DomainFrontTLS(cert.GetCertificate, listen, port),
+				NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
 			}
 			listener = network.NewAutoHttpsListener(listener)
 			listener = tls.NewListener(listener, c)
@@ -608,7 +680,8 @@ func (s *Server) Start() (err error) {
 
 	s.routerMu.Lock()
 	s.httpServer = &http.Server{
-		Handler: engine,
+		ErrorLog: logger.StandardLogger(),
+		Handler:  service.DomainFrontHandler(engine, listen, port, certFile != "" && keyFile != ""),
 		// The subscription server is the most exposed (public) listener; without
 		// these a few slow-header connections exhaust it (Slowloris). Mirrors the
 		// panel server timeouts in internal/web/web.go.
@@ -619,7 +692,13 @@ func (s *Server) Start() (err error) {
 	}
 	s.routerMu.Unlock()
 
-	go network.ServeHTTP(s.httpServer, listener, "Subscription server")
+	s.httpServer.Protocols = new(http.Protocols)
+	s.httpServer.Protocols.SetHTTP1(true)
+	s.httpServer.Protocols.SetHTTP2(true)
+
+	go func(server *http.Server) {
+		_ = network.ServeHTTP(server, listener, "Subscription server")
+	}(s.httpServer)
 
 	return nil
 }
@@ -627,6 +706,9 @@ func (s *Server) Start() (err error) {
 // Stop gracefully shuts down the subscription server and closes the listener.
 func (s *Server) Stop() error {
 	s.cancel()
+	if s.sub != nil {
+		s.sub.Close()
+	}
 
 	var err1 error
 	var err2 error

@@ -17,6 +17,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
 	xuilogger "github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 // goingDownNodes seeds n online nodes whose address refuses connections, so the
@@ -30,6 +31,9 @@ func goingDownNodes(t *testing.T, n int) {
 	t.Cleanup(func() { _ = database.CloseDB() })
 	runtime.SetManager(runtime.NewManager(runtime.LocalDeps{APIPort: func() int { return 0 }, SetNeedRestart: func() {}}))
 	t.Cleanup(func() { runtime.SetManager(nil) })
+	if err := (&service.SettingService{}).SetNodeDownThreshold(1); err != nil {
+		t.Fatalf("SetNodeDownThreshold: %v", err)
+	}
 	srv := httptest.NewServer(nil)
 	host, port, _ := strings.Cut(strings.TrimPrefix(srv.URL, "http://"), ":")
 	portNum, _ := strconv.Atoi(port)

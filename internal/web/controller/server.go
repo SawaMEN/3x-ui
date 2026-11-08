@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,8 +12,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -31,7 +36,6 @@ type ServerController struct {
 	settingService     service.SettingService
 	panelService       panel.PanelService
 	xrayMetricsService service.XrayMetricsService
-	singBoxService     service.SingBoxService
 	clientService      service.ClientService
 }
 
@@ -53,7 +57,6 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.GET("/xrayMetricsHistory/:metric/:bucket", a.getXrayMetricsHistoryBucket)
 	g.GET("/xrayObservatory", a.getXrayObservatory)
 	g.GET("/xrayObservatoryHistory/:tag/:bucket", a.getXrayObservatoryHistoryBucket)
-	g.GET("/getXrayVersion", a.getXrayVersion)
 	g.GET("/getPanelUpdateInfo", a.getPanelUpdateInfo)
 	g.GET("/getUpdateStatus", a.getUpdateStatus)
 	g.GET("/getConfigJson", a.getConfigJson)
@@ -74,14 +77,16 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/stopCoreService", a.stopCoreService)
 	g.POST("/restartCoreService", a.restartCoreService)
 	g.GET("/coreConfigJson", a.getCoreConfigJson)
-	g.POST("/installXray/:version", a.installXray)
 	g.POST("/updatePanel", a.updatePanel)
 	g.POST("/setUpdateChannel", a.setUpdateChannel)
 	g.POST("/updateGeofile", a.updateGeofile)
 	g.POST("/updateGeofile/:fileName", a.updateGeofile)
 	g.POST("/logs/:count", a.getLogs)
 	g.POST("/xraylogs/:count", a.getXrayLogs)
+	g.GET("/domainActivity", a.getDomainActivity)
+	g.POST("/domainActivity/config", a.setDomainActivity)
 	g.POST("/amneziawglogs/:count", a.getAmneziaWGLogs)
+	g.GET("/amneziawgMetrics", a.getAmneziaWGMetrics)
 	g.POST("/importDB", a.importDB)
 	g.POST("/hiddify/preview", a.previewHiddify)
 	g.POST("/hiddify/import", a.importHiddify)
@@ -93,6 +98,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/clientIps", a.setClientIps)
 
 	a.initVKTurnProxyRouter(g)
+	a.initSNIJobRouter(g)
 }
 
 func (a *ServerController) readHiddify(c *gin.Context) (*service.HiddifyBackup, service.HiddifyPreview, error) {
@@ -101,7 +107,7 @@ func (a *ServerController) readHiddify(c *gin.Context) (*service.HiddifyBackup, 
 	if err != nil {
 		return nil, empty, err
 	}
-	if core != service.CoreTypeSingBox {
+	if !service.IsNativeCore(core) {
 		return nil, empty, fmt.Errorf("select and save sing-box as the core first")
 	}
 	file, header, err := c.Request.FormFile("backup")
@@ -203,23 +209,10 @@ func (a *ServerController) startTask() {
 		}
 	})
 
-	// Keep the rolling dev updater independent from the shared cron scheduler.
-	// This guarantees that dev checks still run even if another cron task fails
-	// to register or the scheduler is not started yet.
-	go func() {
-		time.Sleep(15 * time.Second)
-		check := func() {
-			if err := a.panelService.AutoUpdateDevChannel(); err != nil {
-				logger.Warning("automatic dev panel update check failed:", err)
-			}
-		}
-		check()
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			check()
-		}
-	}()
+	ctx := global.GetWebServer().GetCtx()
+	common.GoRecover("dev panel updater", func() {
+		runDevUpdateChecks(ctx, a.panelService.AutoUpdateDevChannel)
+	})
 }
 
 // status returns the current server status information. The legacy `xray`
@@ -239,41 +232,30 @@ func (a *ServerController) status(c *gin.Context) {
 		coreType = service.CoreTypeXray
 	}
 
-	singBoxState := service.Stop
-	singBoxError := ""
-	singBoxVersion := ""
-	singBoxInstalled := a.singBoxService.Installed()
-	if singBoxInstalled {
-		if version, versionErr := a.singBoxService.CachedVersion(c.Request.Context()); versionErr == nil && version != "" {
-			singBoxVersion = version
+	nativeStatus := func(kind string) gin.H {
+		runtime := service.NativeCore(kind)
+		installed := runtime.Installed()
+		state, message, version := service.Stop, "", ""
+		if installed {
+			version, _ = runtime.CachedVersion(c.Request.Context())
 		}
-	}
-	switch {
-	case a.singBoxService.IsRunning():
-		singBoxState = service.Running
-	case !singBoxInstalled && coreType == service.CoreTypeSingBox:
-		// The panel itself is healthy, but its configured runtime cannot start.
-		// Report this explicitly so an upstream master can distinguish a
-		// deliberately stopped core from a node missing the selected binary.
-		singBoxState = service.Error
-		singBoxError = "sing-box is selected but not installed"
-	case singBoxInstalled:
-		if coreErr := a.singBoxService.LastError(); coreErr != nil {
-			singBoxState = service.Error
-			singBoxError = coreErr.Error()
+		switch {
+		case runtime.IsRunning():
+			state = service.Running
+		case !installed && coreType == kind:
+			state, message = service.Error, kind+" is selected but not installed"
+		case installed:
+			if err := runtime.LastError(); err != nil {
+				state, message = service.Error, err.Error()
+			}
 		}
+		return gin.H{"installed": installed, "state": state, "errorMsg": message, "version": version}
 	}
+	singBoxStatus := nativeStatus(service.CoreTypeSingBox)
 
 	runningCore := ""
-	switch {
-	case coreType == service.CoreTypeSingBox && a.singBoxService.IsRunning():
-		runningCore = service.CoreTypeSingBox
-	case coreType == service.CoreTypeXray && status.Xray.State == service.Running:
-		runningCore = service.CoreTypeXray
-	case a.singBoxService.IsRunning():
-		runningCore = service.CoreTypeSingBox
-	case status.Xray.State == service.Running:
-		runningCore = service.CoreTypeXray
+	if service.NativeCore(coreType).IsRunning() {
+		runningCore = coreType
 	}
 
 	raw, err := json.Marshal(status)
@@ -287,27 +269,18 @@ func (a *ServerController) status(c *gin.Context) {
 		return
 	}
 
-	obj["singbox"] = gin.H{
-		"installed": singBoxInstalled,
-		"state":     singBoxState,
-		"errorMsg":  singBoxError,
-		"version":   singBoxVersion,
-	}
-
-	selectedState := status.Xray.State
-	selectedError := status.Xray.ErrorMsg
-	selectedVersion := status.Xray.Version
-	if coreType == service.CoreTypeSingBox {
-		selectedState = singBoxState
-		selectedError = singBoxError
-		selectedVersion = singBoxVersion
+	obj["panelEdition"] = "sawamen"
+	obj["singbox"] = singBoxStatus
+	selected := nativeStatus(coreType)
+	obj["xray"] = nativeStatus(service.CoreTypeXray)
+	if service.IsNativeCore(coreType) {
+		obj["singbox"] = selected
 	}
 	obj["core"] = gin.H{
-		"type":     coreType,
-		"running":  runningCore,
-		"state":    selectedState,
-		"errorMsg": selectedError,
-		"version":  selectedVersion,
+		"type": coreType, "running": runningCore,
+		"state": selected["state"], "errorMsg": selected["errorMsg"], "version": selected["version"],
+		"capabilities":         core.Type(coreType).Capabilities(),
+		"protocolAvailability": service.ProtocolAvailability(coreType, fmt.Sprint(selected["version"]), selected["installed"] == true),
 	}
 	jsonObj(c, obj, nil)
 }
@@ -386,15 +359,6 @@ func (a *ServerController) getXrayObservatoryHistoryBucket(c *gin.Context) {
 	jsonObj(c, a.xrayMetricsService.AggregateObservatory(tag, bucket, 60), nil)
 }
 
-func (a *ServerController) getXrayVersion(c *gin.Context) {
-	versions, err := a.serverService.GetXrayVersionsCached()
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "getVersion"), err)
-		return
-	}
-	jsonObj(c, versions, nil)
-}
-
 // getPanelUpdateInfo retrieves the current and latest panel version.
 func (a *ServerController) getPanelUpdateInfo(c *gin.Context) {
 	info, err := a.panelService.GetUpdateInfo()
@@ -404,13 +368,6 @@ func (a *ServerController) getPanelUpdateInfo(c *gin.Context) {
 		return
 	}
 	jsonObj(c, info, nil)
-}
-
-// installXray installs or updates Xray to the specified version.
-func (a *ServerController) installXray(c *gin.Context) {
-	version := c.Param("version")
-	err := a.serverService.UpdateXray(version)
-	jsonMsg(c, I18nWeb(c, "pages.index.xraySwitchVersionPopover"), err)
 }
 
 // updatePanel starts a panel self-update. With no "dev" form value it follows
@@ -476,8 +433,8 @@ func (a *ServerController) stopCoreService(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	if coreType == service.CoreTypeSingBox {
-		err = a.singBoxService.Stop(c.Request.Context())
+	if service.IsNativeCore(coreType) {
+		err = service.SelectedNativeCore().Stop(c.Request.Context())
 	} else {
 		err = a.serverService.StopXrayService()
 	}
@@ -490,12 +447,12 @@ func (a *ServerController) restartCoreService(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	if coreType == service.CoreTypeSingBox {
-		if !a.singBoxService.Installed() {
-			jsonMsg(c, "", fmt.Errorf("sing-box is selected but not installed"))
+	if service.IsNativeCore(coreType) {
+		if !service.SelectedNativeCore().Installed() {
+			jsonMsg(c, "", fmt.Errorf("%s is selected but not installed", coreType))
 			return
 		}
-		err = a.singBoxService.Restart(c.Request.Context())
+		err = service.SelectedNativeCore().Restart(c.Request.Context())
 	} else {
 		err = a.serverService.RestartXrayService()
 	}
@@ -508,8 +465,8 @@ func (a *ServerController) getCoreConfigJson(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	if coreType == service.CoreTypeSingBox {
-		cfg, cfgErr := a.singBoxService.GetConfig()
+	if service.IsNativeCore(coreType) {
+		cfg, cfgErr := service.SelectedNativeCore().GetConfig()
 		if cfgErr != nil {
 			jsonMsg(c, "", cfgErr)
 			return
@@ -567,6 +524,15 @@ func (a *ServerController) restartXrayService(c *gin.Context) {
 
 // getLogs retrieves the application logs based on count, level, and syslog filters.
 func (a *ServerController) getLogs(c *gin.Context) {
+	// Opt-in structured diagnostics; keep the legacy []string response for
+	// existing clients and third-party API users.
+	if c.PostForm("format") == "structured" {
+		logs := a.serverService.GetDashboardLogsFiltered(
+			c.Param("count"), c.PostForm("level"), c.PostForm("source"),
+			c.PostForm("query"), c.PostForm("exactLevel"))
+		jsonObj(c, logs, nil)
+		return
+	}
 	logs := a.serverService.GetLogs(c.Param("count"), c.PostForm("level"), c.PostForm("syslog"))
 	jsonObj(c, logs, nil)
 }
@@ -574,8 +540,8 @@ func (a *ServerController) getLogs(c *gin.Context) {
 // getXrayLogs retrieves Xray logs with filtering options for direct, blocked, and proxy traffic.
 func (a *ServerController) getXrayLogs(c *gin.Context) {
 	coreType, err := a.settingService.GetCoreType()
-	if err == nil && coreType == service.CoreTypeSingBox {
-		logs := a.singBoxService.GetLogs(c.Param("count"), c.PostForm("filter"))
+	if err == nil && service.IsNativeCore(coreType) {
+		logs := service.SelectedNativeCore().GetLogs(c.Param("count"), c.PostForm("filter"))
 		jsonObj(c, logs, nil)
 		return
 	}
@@ -691,7 +657,11 @@ func (a *ServerController) getWebCertFiles(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	jsonObj(c, gin.H{"webCertFile": certFile, "webKeyFile": keyFile}, nil)
+	domain, _ := a.settingService.GetWebDomain()
+	if name := service.NativeTLSCertificateName(certFile, domain); name != "" {
+		domain = name
+	}
+	jsonObj(c, gin.H{"webCertFile": certFile, "webKeyFile": keyFile, "webDomain": domain}, nil)
 }
 
 // getNewX25519Cert generates a new X25519 certificate.
@@ -706,12 +676,8 @@ func (a *ServerController) getNewX25519Cert(c *gin.Context) {
 
 // getNewmldsa65 generates a new ML-DSA-65 key.
 func (a *ServerController) getNewmldsa65(c *gin.Context) {
-	cert, err := a.serverService.GetNewmldsa65()
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.getNewmldsa65Error"), err)
-		return
-	}
-	jsonObj(c, cert, nil)
+	_, err := a.serverService.GetNewmldsa65()
+	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.getNewmldsa65Error"), err)
 }
 
 // getNewEchCert generates a new ECH certificate for the given SNI.
@@ -738,7 +704,12 @@ func (a *ServerController) getCertHash(c *gin.Context) {
 // getRemoteCertHash runs `xray tls ping` against the given server and returns
 // its live certificate SHA-256 hash(es) for pinning.
 func (a *ServerController) getRemoteCertHash(c *gin.Context) {
-	hashes, err := a.serverService.GetRemoteCertHash(c.PostForm("server"))
+	allowPrivate := c.PostForm("allowPrivate") == "true"
+	hashes, err := a.serverService.GetRemoteCertHash(c.PostForm("server"), allowPrivate)
+	if errors.Is(err, netsafe.ErrPrivateAddressBlocked) {
+		jsonMsgObj(c, "get remote cert hash", gin.H{"privateTarget": true}, err)
+		return
+	}
 	if err != nil {
 		jsonMsg(c, "get remote cert hash", err)
 		return
@@ -762,7 +733,17 @@ func (a *ServerController) scanRealityTarget(c *gin.Context) {
 // scanRealityTargets probes the supplied comma-separated targets, or the
 // realityScanCandidates setting when empty, ranked by feasibility then latency.
 func (a *ServerController) scanRealityTargets(c *gin.Context) {
-	res, err := a.serverService.ScanRealityTargets(c.PostForm("targets"))
+	mode := c.PostForm("mode")
+	var res []*service.RealityScanResult
+	var err error
+	switch mode {
+	case "", "candidates":
+		res, err = a.serverService.ScanRealityTargetsContext(c.Request.Context(), c.PostForm("targets"))
+	case "nearby":
+		res, err = a.serverService.ScanNearbySNIs(c.Request.Context(), c.PostForm("targets"))
+	default:
+		err = fmt.Errorf("unknown SNI scan mode: %s", mode)
+	}
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.scanRealityTargetError"), err)
 		return
@@ -792,12 +773,8 @@ func (a *ServerController) getNewUUID(c *gin.Context) {
 
 // getNewmlkem768 generates a new ML-KEM-768 key.
 func (a *ServerController) getNewmlkem768(c *gin.Context) {
-	out, err := a.serverService.GetNewmlkem768()
-	if err != nil {
-		jsonMsg(c, "Failed to generate mlkem768 keys", err)
-		return
-	}
-	jsonObj(c, out, nil)
+	_, err := a.serverService.GetNewmlkem768()
+	jsonMsg(c, "Failed to generate mlkem768 keys", err)
 }
 
 func (a *ServerController) getClientIps(c *gin.Context) {
@@ -813,4 +790,39 @@ func (a *ServerController) setClientIps(c *gin.Context) {
 	}
 	err := (&service.InboundService{}).MergeInboundClientIps(ips)
 	jsonMsg(c, "Client IPs merged", err)
+}
+
+func (a *ServerController) getAmneziaWGMetrics(c *gin.Context) {
+	metrics, err := a.serverService.AmneziaWGMetrics()
+	if err != nil {
+		c.AbortWithStatus(http.StatusServiceUnavailable)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, "text/plain; version=0.0.4; charset=utf-8", []byte(metrics))
+}
+
+func runDevUpdateChecks(ctx context.Context, check func() error) {
+	delay := time.NewTimer(15 * time.Second)
+	defer delay.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-delay.C:
+	}
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		if err := check(); err != nil {
+			logger.Warning("automatic dev panel update check failed:", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }

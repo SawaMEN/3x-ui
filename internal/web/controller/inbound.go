@@ -2,25 +2,27 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/wirecodec"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-
-	"github.com/gin-gonic/gin"
 )
 
 // InboundController handles HTTP requests related to Xray inbounds management.
 type InboundController struct {
 	inboundService  service.InboundService
 	clientService   service.ClientService
-	xrayService     service.XrayService
+	xrayService     service.CoreService
 	singBoxService  service.SingBoxService
 	settingService  service.SettingService
 	fallbackService service.FallbackService
@@ -66,7 +68,9 @@ func (a *InboundController) broadcastInboundsUpdate(userId int) {
 func (a *InboundController) inboundServiceFor(c *gin.Context) *service.InboundService {
 	svc := a.inboundService
 	scope, _ := c.Get("api_token_scope")
-	svc.FromNodeSync = scope == model.ApiScopeNodeSync
+	// A master enrolled with an admin token (the -getApiToken default) has no
+	// node-sync scope, so it marks every request it sends instead.
+	svc.FromNodeSync = (scope == model.ApiScopeNodeSync || scope == model.ApiScopeNodeAdmin) || c.GetHeader(wirecodec.MasterPushHeader) != ""
 	return &svc
 }
 
@@ -77,8 +81,10 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.GET("/options", a.getInboundOptions)
 	g.GET("/allLinks", a.getAllInboundLinks)
 	g.GET("/get/:id", a.getInbound)
+	g.GET("/get/:id/links", a.getScopedInboundLinks)
 	g.GET("/:id/fallbacks", a.getFallbacks)
 
+	g.POST("/preflight", a.preflightInbound)
 	g.POST("/add", a.addInbound)
 	g.POST("/del/:id", a.delInbound)
 	g.POST("/bulkDel", a.bulkDelInbounds)
@@ -176,6 +182,12 @@ func (a *InboundController) addInbound(c *gin.Context) {
 		inbound.NodeID = nil
 	}
 
+	// MTProto is not a second core: its runtime is the optional Telemt binary.
+	// Do not persist a local inbound that cannot be started.
+	if inbound.Protocol == model.MTProto && inbound.NodeID == nil && !(service.TelemtService{}).IsInstalled() {
+		jsonMsg(c, "Установите Telemt в системных компонентах перед созданием MTProto", errors.New("Telemt runtime is not installed"))
+		return
+	}
 	inbound, needRestart, err := a.inboundServiceFor(c).AddInbound(inbound)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
@@ -255,6 +267,14 @@ func (a *InboundController) updateInbound(c *gin.Context) {
 	// keeps the wire shape consistent.
 	if inbound.NodeID != nil && *inbound.NodeID == 0 {
 		inbound.NodeID = nil
+	}
+	// Existing remote node inbounds depend on their node's runtime, not ours.
+	if inbound.Protocol == model.MTProto && inbound.Enable && !(service.TelemtService{}).IsInstalled() {
+		previous, previousErr := a.inboundService.GetInbound(id)
+		if previousErr == nil && previous.NodeID == nil {
+			jsonMsg(c, "Установите Telemt перед включением MTProto", errors.New("Telemt runtime is not installed"))
+			return
+		}
 	}
 	inbound, needRestart, err := a.inboundServiceFor(c).UpdateInbound(inbound)
 	if err != nil {
@@ -392,8 +412,8 @@ func (a *InboundController) resetAllTraffics(c *gin.Context) {
 // (see InboundService.AcceptGlobalTraffic for the storage semantics).
 func (a *InboundController) pushClientTraffics(c *gin.Context) {
 	var req struct {
-		MasterGuid string                `json:"masterGuid"`
-		Traffics   []*xray.ClientTraffic `json:"traffics"`
+		MasterGuid string                     `json:"masterGuid"`
+		Traffics   []*coremodel.ClientTraffic `json:"traffics"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
@@ -526,4 +546,14 @@ func (a *InboundController) reorder(c *gin.Context) {
 		return
 	}
 	jsonMsg(c, "inbounds reordered", nil)
+}
+
+func (a *InboundController) preflightInbound(c *gin.Context) {
+	var inbound model.Inbound
+	if err := c.ShouldBindJSON(&inbound); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	inbound.NodeID = nil
+	jsonObj(c, nil, service.PreflightInbound(c.Request.Context(), &inbound))
 }

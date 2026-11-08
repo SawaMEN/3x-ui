@@ -16,6 +16,7 @@ func TestFirewallProtocolsForInbound(t *testing.T) {
 		want     []string
 	}{
 		{name: "vless tcp", protocol: model.VLESS, network: "tcp", want: []string{"tcp"}},
+		{name: "vless storage transport", protocol: model.VLESS, network: "xdrive", want: nil},
 		{name: "vless websocket", protocol: model.VLESS, network: "ws", want: []string{"tcp"}},
 		{name: "vless kcp", protocol: model.VLESS, network: "kcp", want: []string{"udp"}},
 		{name: "mixed", protocol: model.Mixed, network: "tcp", want: []string{"tcp", "udp"}},

@@ -87,9 +87,10 @@ install() {
         else
             start 0
         fi
-        return 0
+        return $?
+    else
+        local rc=$?
     fi
-    local rc=$?
     LOGE "Installation failed."
     [[ $# == 0 ]] && before_show_menu
     return "$rc"
@@ -108,15 +109,16 @@ update() {
             exec /usr/bin/x-ui
         fi
         return 0
+    else
+        local rc=$?
     fi
-    local rc=$?
     LOGE "Update failed. Review the errors above."
     [[ $# == 0 ]] && before_show_menu
     return "$rc"
 }
 
 update_dev() {
-    confirm "This will update x-ui to the latest DEV commit (the rolling 'dev-latest' build, not a stable release). Your data is preserved. Continue?" "y"
+    confirm "This will update x-ui to the latest published DEV build (the rolling 'dev-latest' build, not a stable release). Your data is preserved. Continue?" "y"
     if [[ $? != 0 ]]; then
         LOGE "Cancelled"
         [[ $# == 0 ]] && before_show_menu
@@ -128,22 +130,37 @@ update_dev() {
             exec /usr/bin/x-ui
         fi
         return 0
+    else
+        local rc=$?
     fi
-    local rc=$?
     LOGE "Dev update failed. Review the errors above."
     [[ $# == 0 ]] && before_show_menu
     return "$rc"
 }
 
+restore_packaged_menu() {
+    local source="${xui_folder}/x-ui.sh" temp_file
+    [[ -s "$source" ]] && bash -n "$source" || return 1
+    if grep -q 'x-ui-core.sh' "$source"; then
+        [[ -s "${xui_folder}/x-ui-core.sh" ]] && bash -n "${xui_folder}/x-ui-core.sh" || return 1
+    fi
+    temp_file=$(mktemp /usr/bin/x-ui-menu.XXXXXX) || return 1
+    if cp "$source" "$temp_file" && chmod 0755 "$temp_file" && mv -f "$temp_file" /usr/bin/x-ui; then
+        return 0
+    fi
+    rm -f "$temp_file"
+    return 1
+}
+
 update_menu() {
     echo -e "${yellow}Updating Menu${plain}"
-    confirm "This function will update the menu for the installed panel version." "y"
+    confirm "Restore the management menu shipped with the installed panel version?" "y"
     if [[ $? != 0 ]]; then
         LOGE "Cancelled"
         [[ $# == 0 ]] && before_show_menu
         return 0
     fi
-    if replace_xui_script "$(installed_script_url)" "false"; then
+    if restore_packaged_menu; then
         LOGI "Menu updated successfully."
         if [[ $# == 0 ]]; then
             exec /usr/bin/x-ui
@@ -174,8 +191,9 @@ legacy_version() {
     if run_remote_script "https://raw.githubusercontent.com/SawaMEN/3x-ui/v${tag_version}/install.sh" "v${tag_version}"; then
         [[ $# == 0 ]] && exec /usr/bin/x-ui
         return 0
+    else
+        local rc=$?
     fi
-    local rc=$?
     LOGE "Failed to install panel version $tag_version."
     [[ $# == 0 ]] && before_show_menu
     return "$rc"
@@ -269,6 +287,114 @@ set_port() {
     confirm_restart
 }
 
+# Return service-command failures to scripts instead of letting a later log
+# message or menu condition replace the exit status with zero.
+xui_service_action() {
+    local action="$1"
+    if [[ $release == alpine ]]; then
+        rc-service x-ui "$action"
+    else
+        systemctl "$action" x-ui
+    fi
+}
+
+finish_service_action() {
+    local rc="$1" argc="$2"
+    [[ "$argc" != 0 ]] || before_show_menu
+    return "$rc"
+}
+
+start() {
+    local rc=0
+    if check_status; then
+        LOGI "Panel is already running."
+    elif [[ "$running_in_docker" == true ]]; then
+        LOGE "Panel is not running. Restart the container from the host."
+        rc=1
+    elif xui_service_action start; then
+        sleep 2
+        if check_status; then LOGI "Panel started."; else LOGE "Panel failed to start."; rc=1; fi
+    else
+        rc=$?
+        LOGE "Panel start failed."
+    fi
+    finish_service_action "$rc" "$#"
+}
+
+stop() {
+    local rc=0 state
+    check_status; state=$?
+    if [[ "$state" == 1 ]]; then
+        LOGI "Panel is already stopped."
+    elif [[ "$state" == 2 && "$running_in_docker" != true ]]; then
+        LOGE "x-ui.service is not installed or not loaded. Check systemctl status x-ui; repair with the installer."
+        rc=1
+    elif [[ "$running_in_docker" == true ]]; then
+        LOGE "Stop the container from the host."
+        rc=1
+    elif xui_service_action stop; then
+        sleep 2
+        check_status; state=$?
+        if [[ "$state" == 1 ]]; then LOGI "Panel stopped."; else LOGE "Panel failed to stop."; rc=1; fi
+    else
+        rc=$?
+        LOGE "Panel stop failed."
+    fi
+    finish_service_action "$rc" "$#"
+}
+
+restart() {
+    local rc=0
+    if [[ "$running_in_docker" == true ]]; then
+        if signal_xui HUP && signal_xui USR1; then LOGI "Restart signals sent."; else rc=$?; LOGE "Could not signal panel."; fi
+    elif xui_service_action restart; then
+        sleep 2
+        if check_status; then LOGI "Panel restarted."; else LOGE "Panel failed to restart."; rc=1; fi
+    else
+        rc=$?
+        LOGE "Panel restart failed."
+    fi
+    finish_service_action "$rc" "$#"
+}
+
+restart_xray() {
+    local rc=0
+    if [[ "$running_in_docker" == true ]]; then
+        signal_xui USR1 || rc=$?
+    else
+        xui_service_action reload || rc=$?
+    fi
+    if [[ "$rc" == 0 ]]; then LOGI "Core reload requested."; else LOGE "Core reload failed."; fi
+    finish_service_action "$rc" "$#"
+}
+
+status() {
+    local rc=0
+    if [[ "$running_in_docker" == true ]]; then
+        show_status
+        check_status || rc=$?
+    else
+        xui_service_action status || rc=$?
+    fi
+    finish_service_action "$rc" "$#"
+}
+
+set_autostart() {
+    local action="$1" argc="$2" rc=0
+    if [[ "$running_in_docker" == true ]]; then
+        LOGI "Autostart is controlled by the Docker restart policy."
+    elif [[ $release == alpine ]]; then
+        if [[ "$action" == enable ]]; then rc-update add x-ui default || rc=$?; else rc-update del x-ui || rc=$?; fi
+    else
+        systemctl "$action" x-ui || rc=$?
+    fi
+    if [[ "$rc" == 0 ]]; then LOGI "Autostart setting applied."; else LOGE "Autostart setting failed."; fi
+    finish_service_action "$rc" "$argc"
+}
+
+enable() { set_autostart enable "$#"; }
+disable() { set_autostart disable "$#"; }
+
 xui_pid() {
     ps -ef 2>/dev/null | grep -F "${xui_folder}/x-ui" | grep -v grep | awk 'NR==1 {print $2}'
 }
@@ -295,18 +421,23 @@ check_enabled() {
         return 1
     fi
     if [[ $release == "alpine" ]]; then
-        rc-update show 2>/dev/null | grep -F 'x-ui' | grep -q default
+        rc-update show default 2>/dev/null | grep -Eq '^[[:space:]]*x-ui[[:space:]]*\|'
         return $?
     fi
     systemctl is-enabled --quiet x-ui 2>/dev/null
 }
 
 check_xray_status() {
-    if command -v pgrep >/dev/null 2>&1; then
-        pgrep -f "${xui_folder}/bin/xray-linux" >/dev/null 2>&1
-        return $?
-    fi
-    ps -ef 2>/dev/null | grep -F "${xui_folder}/bin/xray-linux" | grep -v grep >/dev/null 2>&1
+    local bin_folder="${XUI_BIN_FOLDER:-${xui_folder}/bin}" proc exe
+    [[ "$bin_folder" == /* ]] || bin_folder="${xui_folder}/${bin_folder}"
+    bin_folder=$(readlink -f "$bin_folder" 2>/dev/null) || return 1
+    for proc in /proc/[0-9]*/exe; do
+        exe=$(readlink "$proc" 2>/dev/null) || continue
+        case "$exe" in
+            "$bin_folder"/hiddify-core-linux-*|"$bin_folder"/sing-box-linux-*) return 0 ;;
+        esac
+    done
+    return 1
 }
 
 show_status() {
@@ -344,7 +475,8 @@ show_log() {
     fi
 
     echo -e "${green}\t1.${plain} Debug Log"
-    echo -e "${green}\t2.${plain} Clear x-ui journal logs"
+    echo -e "${green}\t2.${plain} Recent panel errors"
+    echo -e "${green}\t3.${plain} Panel update log"
     echo -e "${green}\t0.${plain} Back to Main Menu"
     read -rp "Choose an option: " choice
     case "$choice" in
@@ -353,9 +485,14 @@ show_log() {
             journalctl -u x-ui -e --no-pager -f -p debug
             ;;
         2)
-            journalctl --rotate
-            journalctl --vacuum-time=1s
-            LOGI "Journal logs cleared."
+            journalctl -u x-ui -n 100 --no-pager -p err
+            ;;
+        3)
+            if [[ -r /var/log/x-ui/update.log ]]; then
+                tail -n 100 /var/log/x-ui/update.log
+            else
+                LOGW "No panel update log exists yet."
+            fi
             ;;
         *)
             LOGE "Invalid option."
@@ -578,366 +715,22 @@ run_speedtest() {
     fi
 }
 
-XUI_GATEWAY_NFT_TABLE="xui_gateway"
-XUI_GATEWAY_NAT_TABLE="xui_gateway_nat"
-XUI_GATEWAY_ROUTING_SERVICE="/etc/systemd/system/xui-gateway-routing.service"
-XUI_GATEWAY_STATE="/etc/x-ui/gateway.env"
-
-XUI_GATEWAY_MARK="0x40/0xc0"
-XUI_GATEWAY_TABLE="100"
-XUI_GATEWAY_TPROXY_PORT="52345"
-
-gateway_routing_enable() {
-    cat > "${XUI_GATEWAY_ROUTING_SERVICE}" <<'EOF'
-[Unit]
-Description=3X-UI Gateway Mode Policy Routing
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/sbin/ip rule add fwmark 0x40/0xc0 table 100
-ExecStart=/usr/sbin/ip route add local default dev lo table 100
-RemainAfterExit=yes
-
-ExecStop=/usr/sbin/ip rule del fwmark 0x40/0xc0 table 100
-ExecStop=/usr/sbin/ip route del local default dev lo table 100
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reload
-    systemctl enable --now xui-gateway-routing.service
-}
-
-gateway_routing_disable() {
-    if systemctl is-active --quiet xui-gateway-routing.service; then
-        systemctl stop xui-gateway-routing.service
-    fi
-
-    systemctl disable xui-gateway-routing.service 2>/dev/null || true
-
-    rm -f "${XUI_GATEWAY_ROUTING_SERVICE}"
-
-    systemctl daemon-reload
-
-    ip rule del fwmark 0x40/0xc0 table 100 2>/dev/null || true
-    ip route del local default dev lo table 100 2>/dev/null || true
-}
-
-gateway_save_sysctl() {
-    local value
-
-    value="$(sysctl -n net.ipv4.ip_forward)"
-
-    cat > "${XUI_GATEWAY_STATE}" <<EOF
-IP_FORWARD_OLD=${value}
-EOF
-}
-
-gateway_restore_sysctl() {
-    if [[ -f "${XUI_GATEWAY_STATE}" ]]; then
-        source "${XUI_GATEWAY_STATE}"
-
-        if [[ -n "${IP_FORWARD_OLD}" ]]; then
-            sysctl -w net.ipv4.ip_forward="${IP_FORWARD_OLD}"
-        fi
-    fi
-}
-
-gateway_nft_enable() {
-    local lan_network="$1"
-
-    nft delete table inet xui_gateway 2>/dev/null || true
-
-    nft -f - <<EOF
-table inet xui_gateway {
-    set whitelist {
-        type ipv4_addr
-        flags interval
-        auto-merge
-        elements = {
-            0.0.0.0/8,
-            10.0.0.0/8,
-            100.64.0.0/10,
-            127.0.0.0/8,
-            169.254.0.0/16,
-            172.16.0.0/12,
-            192.0.0.0/24,
-            192.0.2.0/24,
-            192.88.99.0/24,
-            192.168.0.0/16,
-            198.51.100.0/24,
-            203.0.113.0/24,
-            224.0.0.0/3
-        }
-    }
-
-    set whitelist6 {
-        type ipv6_addr
-        flags interval
-        auto-merge
-        elements = {
-            ::/127,
-            fc00::/7,
-            fe80::/10,
-            ff00::/8
-        }
-    }
-
-    set interface {
-        type ipv4_addr
-        flags interval
-        auto-merge
-        elements = {
-            127.0.0.0/8,
-            ${lan_network}
-        }
-    }
-
-    set interface6 {
-        type ipv6_addr
-        flags interval
-        auto-merge
-        elements = {
-            ::1,
-            fe80::/64
-        }
-    }
-
-    chain tp_out {
-        meta mark & 0x00000080 == 0x00000080 return
-        meta l4proto { tcp, udp } fib saddr type local fib daddr type != local jump tp_rule
-    }
-
-    chain tp_pre {
-        iifname "lo" meta mark & 0x000000c0 != 0x00000040 return
-
-        meta l4proto { tcp, udp } \
-            fib saddr type != local \
-            fib daddr type != local \
-            jump tp_rule
-
-        meta l4proto { tcp, udp } \
-            meta mark & 0x000000c0 == 0x00000040 \
-            tproxy ip to 127.0.0.1:52345
-
-        meta l4proto { tcp, udp } \
-            meta mark & 0x000000c0 == 0x00000040 \
-            tproxy ip6 to [::1]:52345
-    }
-
-    chain output {
-        type route hook output priority mangle - 5;
-        policy accept;
-    }
-
-    chain prerouting {
-        type filter hook prerouting priority mangle - 5;
-        policy accept;
-
-        meta nfproto { ipv4, ipv6 } jump tp_pre
-    }
-
-    chain tp_rule {
-        meta mark set ct mark
-
-        meta mark & 0x000000c0 == 0x00000040 return
-
-        iifname "br-*" return
-        iifname "docker*" return
-        iifname "veth*" return
-        iifname "wg*" return
-        iifname "ppp*" return
-
-        ip daddr @interface return
-        ip daddr @whitelist return
-        ip6 daddr @whitelist6 return
-        ip6 daddr @interface6 return
-
-        jump tp_mark
-    }
-
-    chain tp_mark {
-        tcp flags syn / fin,syn,rst,ack \
-            meta mark set meta mark | 0x00000040
-
-        meta l4proto udp ct state new \
-            meta mark set meta mark | 0x00000040
-
-        ct mark set meta mark
-    }
-}
-EOF
-}
-
-gateway_nat_enable() {
-    local lan_network="$1"
-    local wan_if="$2"
-
-    nft delete table ip xui_gateway_nat 2>/dev/null || true
-
-    nft -f - <<EOF
-table ip xui_gateway_nat {
-    chain postrouting {
-        type nat hook postrouting priority srcnat;
-        policy accept;
-
-        ip saddr ${lan_network} oifname "${wan_if}" masquerade
-    }
-}
-EOF
-}
-
-gateway_nft_disable() {
-    nft delete table inet xui_gateway 2>/dev/null || true
-    nft delete table ip xui_gateway_nat 2>/dev/null || true
-}
-
-gateway_get_network() {
-    local ip="$1"
-    local prefix="$2"
-
-    python3 - "$ip" "$prefix" <<'PY'
-import ipaddress
-import sys
-
-ip = ipaddress.ip_interface(f"{sys.argv[1]}/{sys.argv[2]}")
-print(ip.network)
-PY
-}
-
+# Gateway networking and recovery are owned by the Go service shared with the web UI.
 gateway_enable() {
-    local lan_if
-    local lan_ip
-    local prefix
-    local lan_network
-    local has_wan
-    local wan_if
-
-    if [[ -f "${XUI_GATEWAY_STATE}" ]]; then
-        LOGE "Gateway Mode is already enabled."
-        return 1
-    fi
-
-    echo ""
-    echo "=== Gateway Mode ==="
-    echo ""
-
+    local lan_if lan_ip prefix wan_if
     read -rp "LAN interface: " lan_if
+    read -rp "LAN IPv4 address: " lan_ip
+    read -rp "LAN prefix [24]: " prefix
+    read -rp "WAN interface for NAT [none]: " wan_if
+    "${xui_folder}/x-ui" gateway enable --lan-interface "${lan_if}" --lan-ip "${lan_ip}" --lan-prefix "${prefix:-24}" --wan-interface "${wan_if}"
+}
 
-    if [[ -z "${lan_if}" ]] || ! ip link show "${lan_if}" >/dev/null 2>&1; then
-        LOGE "Invalid LAN interface."
-        return 1
-    fi
-
-    read -rp "LAN IP: " lan_ip
-    read -rp "Prefix [24]: " prefix
-    prefix="${prefix:-24}"
-
-    lan_network="$(gateway_get_network "${lan_ip}" "${prefix}")"
-
-    if [[ -z "${lan_network}" ]]; then
-        LOGE "Could not determine LAN network."
-        return 1
-    fi
-
-    read -rp "Does this host have a WAN interface? [y/N]: " has_wan
-
-    if [[ "${has_wan}" =~ ^[Yy]$ ]]; then
-        read -rp "WAN interface: " wan_if
-
-        if [[ -z "${wan_if}" ]] || ! ip link show "${wan_if}" >/dev/null 2>&1; then
-            LOGE "Invalid WAN interface."
-            return 1
-        fi
-    else
-        wan_if=""
-    fi
-
-    echo ""
-    LOGI "LAN interface: ${lan_if}"
-    LOGI "LAN network:   ${lan_network}"
-    LOGI "WAN interface: ${wan_if:-none}"
-    echo ""
-
-    gateway_save_sysctl
-
-    cat >> "${XUI_GATEWAY_STATE}" <<EOF
-LAN_IF=${lan_if}
-LAN_IP=${lan_ip}
-LAN_PREFIX=${prefix}
-LAN_NETWORK=${lan_network}
-WAN_IF=${wan_if}
-EOF
-
-    sysctl -w net.ipv4.ip_forward=1
-
-    gateway_routing_enable
-
-    gateway_nft_enable "${lan_network}"
-
-    if [[ -n "${wan_if}" ]]; then
-        gateway_nat_enable "${lan_network}" "${wan_if}"
-    fi
-
-    if ! "${xui_folder}/x-ui" gateway enable; then
-        LOGE "Failed to configure Xray Gateway Mode."
-
-        gateway_nft_disable
-        gateway_routing_disable
-        gateway_restore_sysctl
-        rm -f "${XUI_GATEWAY_STATE}"
-
-        return 1
-    fi
-
-    restart_xray 0
-
-    echo ""
-    LOGI "Gateway Mode enabled successfully."
+gateway_disable() {
+    "${xui_folder}/x-ui" gateway disable
 }
 
 gateway_status() {
-    echo ""
-    echo "=== Gateway Mode ==="
-    echo ""
-
-    if [[ ! -f "${XUI_GATEWAY_STATE}" ]]; then
-        echo "Status: disabled"
-        return 0
-    fi
-
-    source "${XUI_GATEWAY_STATE}"
-
-    echo "Status:         enabled"
-    echo "LAN interface:  ${LAN_IF}"
-    echo "LAN IP:         ${LAN_IP}/${LAN_PREFIX}"
-    echo "LAN network:    ${LAN_NETWORK}"
-    echo "WAN interface:  ${WAN_IF:-none}"
-    echo "TPROXY port:    52345"
-    echo "Inbound tag:    in-tproxy"
-    echo "Routing mark:   0x40/0xc0"
-    echo "Routing table:  100"
-    echo ""
-
-    echo "Policy routing:"
-    ip rule | grep -F "fwmark 0x40/0xc0" || echo "  NOT FOUND"
-
-    echo ""
-    echo "Routing table 100:"
-    ip route show table 100
-
-    echo ""
-    echo "nftables:"
-    nft list table inet xui_gateway 2>/dev/null || echo "  xui_gateway table not found"
-
-    if [[ -n "${WAN_IF}" ]]; then
-        echo ""
-        echo "NAT:"
-        nft list table ip xui_gateway_nat 2>/dev/null || echo "  xui_gateway_nat table not found"
-    fi
+    "${xui_folder}/x-ui" gateway status
 }
 
 gateway_menu() {
@@ -972,79 +765,99 @@ gateway_menu() {
     esac
 }
 
+print_console_box() {
+    local row width=48 border
+    for row in "$@"; do
+        (( ${#row} <= width )) || width=${#row}
+    done
+    printf -v border '%*s' "$((width + 2))" ''
+    border=${border// /─}
+    printf '┌%s┐\n' "$border"
+    for row in "$@"; do
+        if [[ "$row" == -- ]]; then
+            printf '├%s┤\n' "$border"
+        else
+            printf '│ %-*s │\n' "$width" "$row"
+        fi
+    done
+    printf '└%s┘\n' "$border"
+}
+
 show_usage() {
-    echo -e "┌────────────────────────────────────────────────────────────────┐
-│  ${blue}x-ui control menu usages (subcommands):${plain}                       │
-│                                                                │
-│  ${blue}x-ui${plain}                       - Admin Management Script          │
-│  ${blue}x-ui start${plain}                 - Start                            │
-│  ${blue}x-ui stop${plain}                  - Stop                             │
-│  ${blue}x-ui restart${plain}               - Restart                          │
-│  ${blue}x-ui restart-xray${plain}          - Restart Xray                     │
-│  ${blue}x-ui status${plain}                - Current Status                   │
-│  ${blue}x-ui settings${plain}              - Current Settings                 │
-│  ${blue}x-ui enable${plain}                - Enable Autostart on OS Startup   │
-│  ${blue}x-ui disable${plain}               - Disable Autostart on OS Startup  │
-│  ${blue}x-ui log${plain}                   - Check logs                       │
-│  ${blue}x-ui banlog${plain}                - Check Fail2ban ban logs          │
-│  ${blue}x-ui update${plain}                - Update                           │
-│  ${blue}x-ui update-dev${plain}            - Update to Dev channel (latest)   │
-│  ${blue}x-ui update-menu${plain}           - Update management menu           │
-│  ${blue}x-ui update-all-geofiles${plain}   - Update all geo files             │
-│  ${blue}x-ui migrateDB [file]${plain}      - Convert .db <-> .dump (SQLite)   │
-│  ${blue}x-ui pgclient [ver]${plain}        - Upgrade pg_dump/pg_restore tools │
-│  ${blue}x-ui legacy${plain}                - Legacy version                   │
-│  ${blue}x-ui install${plain}               - Install                          │
-│  ${blue}x-ui uninstall${plain}             - Uninstall                        │
-└────────────────────────────────────────────────────────────────┘"
+    print_console_box \
+        "x-ui control menu usages (subcommands):" \
+        "" \
+        "x-ui                       - Admin Management Script" \
+        "x-ui start                 - Start" \
+        "x-ui stop                  - Stop" \
+        "x-ui restart               - Restart" \
+        "x-ui restart-core          - Restart Sing-box" \
+        "x-ui status                - Current Status" \
+        "x-ui settings              - Current Settings" \
+        "x-ui enable                - Enable Autostart on OS Startup" \
+        "x-ui disable               - Disable Autostart on OS Startup" \
+        "x-ui log                   - Check logs" \
+        "x-ui banlog                - Check Fail2ban ban logs" \
+        "x-ui update                - Update" \
+        "x-ui update-dev            - Update to Dev channel (latest)" \
+        "x-ui update-menu           - Update management menu" \
+        "x-ui update-all-geofiles   - Update all geo files" \
+        "x-ui migrateDB [file]      - Convert .db <-> .dump (SQLite)" \
+        "x-ui pgclient [ver]        - Upgrade pg_dump/pg_restore tools" \
+        "x-ui legacy                - Legacy version" \
+        "x-ui install               - Install" \
+        "x-ui uninstall             - Uninstall"
+}
+
+before_show_menu() {
+    read -rp "Press enter to return to the main menu: " _ || true
 }
 
 show_menu() {
+    [[ "${_xui_menu_active:-0}" == 0 ]] || return 0
+    local _xui_menu_active=1
     while true; do
-        echo -e "
-╔────────────────────────────────────────────────╗
-│  ${green}3X-UI Panel Management Script${plain}                │
-│  ${green}0.${plain} Exit Script                               │
-│────────────────────────────────────────────────│
-│  ${green}1.${plain} Install                                   │
-│  ${green}2.${plain} Update                                    │
-│  ${green}3.${plain} Update to Dev Channel (latest commit)     │
-│  ${green}4.${plain} Update Menu                               │
-│  ${green}5.${plain} Legacy Version                            │
-│  ${green}6.${plain} Uninstall                                 │
-│────────────────────────────────────────────────│
-│  ${green}7.${plain} Reset Username & Password                 │
-│  ${green}8.${plain} Reset Web Base Path                       │
-│  ${green}9.${plain} Reset Settings                            │
-│  ${green}10.${plain} Change Port                              │
-│  ${green}11.${plain} View Current Settings                    │
-│────────────────────────────────────────────────│
-│  ${green}12.${plain} Start                                    │
-│  ${green}13.${plain} Stop                                     │
-│  ${green}14.${plain} Restart                                  │
-│  ${green}15.${plain} Restart Xray                             │
-│  ${green}16.${plain} Check Status                             │
-│  ${green}17.${plain} Logs Management                          │
-│────────────────────────────────────────────────│
-│  ${green}18.${plain} Enable Autostart                         │
-│  ${green}19.${plain} Disable Autostart                        │
-│────────────────────────────────────────────────│
-│  ${green}20.${plain} SSL Certificate Management               │
-│  ${green}21.${plain} Cloudflare SSL Certificate               │
-│  ${green}22.${plain} IP Limit Management                      │
-│  ${green}23.${plain} Firewall Management                      │
-│  ${green}24.${plain} SSH Port Forwarding Management           │
-│  ${green}25.${plain} PostgreSQL Management                    │
-│────────────────────────────────────────────────│
-│  ${green}26.${plain} Enable BBR                               │
-│  ${green}27.${plain} Update Geo Files                         │
-│  ${green}28.${plain} Speedtest                                │
-│  ${green}29.${plain} Gateway Mode                               │
-╚────────────────────────────────────────────────╝
-"
+        print_console_box \
+            "3X-UI Panel Management Script" \
+            "0. Exit Script" \
+            "--" \
+            "1. Install" \
+            "2. Update" \
+            "3. Update to DEV (published build)" \
+            "4. Restore Installed Menu" \
+            "5. Legacy Version" \
+            "6. Uninstall" \
+            "--" \
+            "7. Reset Username & Password" \
+            "8. Reset Web Base Path" \
+            "9. Reset Settings" \
+            "10. Change Port" \
+            "11. View Current Settings" \
+            "--" \
+            "12. Start" \
+            "13. Stop" \
+            "14. Restart" \
+            "15. Restart Sing-box" \
+            "16. Check Status" \
+            "17. Logs Management" \
+            "--" \
+            "18. Enable Autostart" \
+            "19. Disable Autostart" \
+            "--" \
+            "20. SSL Certificate Management" \
+            "21. Cloudflare SSL Certificate" \
+            "22. IP Limit Management" \
+            "23. Firewall Management" \
+            "24. SSH Port Forwarding Management" \
+            "25. PostgreSQL Management" \
+            "--" \
+            "26. Enable BBR" \
+            "27. Update Geo Files" \
+            "28. Speedtest" \
+            "29. Gateway Mode"
         show_status
         echo
-        read -rp "Please enter your selection [0-29]: " num
+        read -rp "Please enter your selection [0-29]: " num || return 0
         case "${num}" in
             0) exit 0 ;;
             1) check_uninstall && install ;;
@@ -1086,7 +899,7 @@ if [[ $# -gt 0 ]]; then
         start) check_install 0 && start 0 ;;
         stop) check_install 0 && stop 0 ;;
         restart) check_install 0 && restart 0 ;;
-        restart-xray) check_install 0 && restart_xray 0 ;;
+        restart-core|restart-xray) check_install 0 && restart_xray 0 ;;
         status) check_install 0 && status 0 ;;
         settings) check_install 0 && check_config 0 ;;
         enable) check_install 0 && enable 0 ;;
@@ -1109,24 +922,11 @@ if [[ $# -gt 0 ]]; then
         migrateDB) migrate_db "$2" "$3" ;;
         pgclient) pg_upgrade_client "$2" ;;
         gateway)
-    check_install 0 || exit 1
-
-    case "$2" in
-        enable)
-            "${xui_folder}/x-ui" gateway enable
+            check_install 0 || exit 1
+            "${xui_folder}/x-ui" gateway "${@:2}"
             ;;
-        disable)
-            "${xui_folder}/x-ui" gateway disable
-            ;;
-        status)
-            "${xui_folder}/x-ui" gateway status
-            ;;
-        *)
-            echo "Usage: x-ui gateway <enable|disable|status>"
-            ;;
-    esac
-    ;;
-        *) show_usage ;;
+        help|--help|-h) show_usage ;;
+        *) show_usage; exit 1 ;;
     esac
 else
     show_menu

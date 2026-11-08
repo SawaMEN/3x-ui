@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { type ChangeEvent, useEffect, useRef } from 'react';
 import {
   AutoComplete,
   Button,
@@ -16,6 +16,7 @@ import type { FormInstance } from 'antd/es/form';
 import type { NamePath } from 'antd/es/form/interface';
 
 import { RandomUtil } from '@/utils';
+import { XdnsSettingsSchema } from '@/schemas/protocols/stream/finalmask';
 import { activateOnKey } from '@/utils/a11y';
 import { OutboundProtocols, UTLS_FINGERPRINT } from '@/schemas/primitives';
 
@@ -219,7 +220,7 @@ function defaultUdpMaskSettings(type: string): Record<string, unknown> {
     case 'mkcp-legacy':
       return { header: '', value: '' };
     case 'xdns':
-      return { domains: [] };
+      return { domains: [{ names: [], types: [16] }], resolvers: [] };
     case 'xicmp':
       return { dgram: false, ips: [] };
     case 'realm':
@@ -1103,7 +1104,6 @@ function UdpMaskItem({
         { value: 'realm', label: 'Realm' },
         { value: 'header-custom', label: 'Header Custom' },
         { value: 'noise', label: 'Noise' },
-        { value: 'sudoku', label: 'Sudoku' },
       ];
 
   return (
@@ -1321,8 +1321,34 @@ function UdpMaskItem({
           }
           if (type === 'xdns') {
             return (
-              <Form.Item label="Domains" name={[fieldName, 'settings', 'domains']}>
-                <Select mode="tags" style={{ width: '100%' }} tokenSeparators={[',']} />
+              <Form.Item
+                label="xDNS settings"
+                name={[fieldName, 'settings']}
+                getValueProps={(value: unknown) => ({
+                  value: typeof value === 'string' ? value : JSON.stringify(value ?? {}, null, 2),
+                })}
+                getValueFromEvent={(event: ChangeEvent<HTMLTextAreaElement>) => {
+                  const text = event.target.value;
+                  try {
+                    return JSON.parse(text) as unknown;
+                  } catch {
+                    return text;
+                  }
+                }}
+                rules={[
+                  {
+                    validator: async (_, value: unknown) => {
+                      if (!XdnsSettingsSchema.safeParse(value).success) {
+                        throw new Error(
+                          'Use object domains ({names, types}) and resolvers ({addrs, worker}). Legacy settings must be converted on both peers.',
+                        );
+                      }
+                    },
+                  },
+                ]}
+                extra="Domains: names and numeric DNS record types (A: 1, TXT: 16, AAAA: 28). Resolvers: addrs and optional worker count."
+              >
+                <Input.TextArea rows={8} spellCheck={false} />
               </Form.Item>
             );
           }

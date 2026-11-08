@@ -38,6 +38,42 @@ export type AwgObfuscation = Pick<
   | 'disableCookies'
 >;
 
+export type AwgVersion = '1.0' | '1.5' | '2.0' | '3.0' | '3.1';
+
+export function awgVersion(o: Partial<AwgObfuscation>): AwgVersion {
+  if (o.randomTrailers || o.disableCookies) return '3.1';
+  if (
+    [
+      o.headerProtectionKey,
+      o.contentPaddingAddition,
+      o.rekeyAfterTime,
+      o.rekeyTimeout,
+      o.rejectAfterTime,
+      o.keepaliveTimeout,
+      o.maxHandshakeAttempts,
+    ].some((v) => v?.trim())
+  )
+    return '3.0';
+  if ((o.s3 ?? 0) > 0 || (o.s4 ?? 0) > 0 || [o.h1, o.h2, o.h3, o.h4].some((v) => v?.includes('-')))
+    return '2.0';
+  if ([o.i1, o.i2, o.i3, o.i4, o.i5].some((v) => v?.trim())) return '1.5';
+  return '1.0';
+}
+
+export function generateAwgPreset(version: AwgVersion): AwgObfuscation {
+  const o = generateAwgObfuscation();
+  if (version === '3.1') return o;
+  o.randomTrailers = o.disableCookies = false;
+  if (version === '3.0') return o;
+  o.headerProtectionKey = o.contentPaddingAddition = '';
+  o.rekeyAfterTime = o.rekeyTimeout = o.rejectAfterTime = '';
+  o.keepaliveTimeout = o.maxHandshakeAttempts = '';
+  o.randomTrailers = o.disableCookies = false;
+  if (version !== '2.0') o.s3 = o.s4 = 0;
+  if (version === '1.0') o.i1 = '';
+  return o;
+}
+
 const randInt = (min: number, max: number) => min + Math.floor(Math.random() * (max - min + 1));
 
 // WireGuard's usual tunnel MTU on a 1500-byte host link.

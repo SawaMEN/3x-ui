@@ -5,9 +5,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // reverseUserProbe records the account maps the panel pushes to the core: the
@@ -136,13 +136,13 @@ func TestAddingClientsKeepsTheReverseTag(t *testing.T) {
 func depleteClientTraffic(t *testing.T, inboundId int, email string) {
 	t.Helper()
 	db := database.GetDB()
-	res := db.Model(&xray.ClientTraffic{}).Where("email = ?", email).
+	res := db.Model(&coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"enable": false, "up": 1, "down": 1})
 	if res.Error != nil {
 		t.Fatalf("deplete traffic: %v", res.Error)
 	}
 	if res.RowsAffected == 0 {
-		if err := db.Create(&xray.ClientTraffic{InboundId: inboundId, Email: email, Enable: false, Up: 1, Down: 1}).Error; err != nil {
+		if err := db.Create(&coremodel.ClientTraffic{InboundId: inboundId, Email: email, Enable: false, Up: 1, Down: 1}).Error; err != nil {
 			t.Fatalf("create depleted traffic: %v", err)
 		}
 	}

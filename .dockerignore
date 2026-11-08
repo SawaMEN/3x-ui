@@ -1,0 +1,11 @@
+.git
+**/node_modules
+frontend/storybook-static
+docs/.next
+docs/.source
+internal/web/dist
+build
+x-ui
+xui-release
+*.tar.gz
+*.tar.xz

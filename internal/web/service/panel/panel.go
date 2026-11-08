@@ -19,6 +19,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/version"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
@@ -240,9 +241,14 @@ func (s *PanelService) startUpdate(useDev bool) (int64, error) {
 	runIDEnv := "XUI_UPDATE_RUN_ID=" + strconv.FormatInt(runID, 10)
 	statusFileEnv := "XUI_UPDATE_STATUS_FILE=" + statusFile
 	proxyEnv := updateProxyEnvVars()
+	for _, key := range []string{"XUI_BIN_FOLDER", "XUI_DB_FOLDER", "XUI_ENABLE_FAIL2BAN"} {
+		if value, ok := os.LookupEnv(key); ok {
+			proxyEnv = append(proxyEnv, key+"="+value)
+		}
+	}
 
 	if systemdRun, err := exec.LookPath("systemd-run"); err == nil {
-		unitName := fmt.Sprintf("x-ui-web-update-%d", time.Now().Unix())
+		unitName := fmt.Sprintf("x-ui-web-update-%d", runID)
 		args := []string{
 			"--unit", unitName,
 			"--setenv", "XUI_MAIN_FOLDER=" + mainFolder,
@@ -493,48 +499,11 @@ func resolveUpdateFolders() (string, string) {
 }
 
 func isNewerVersion(latest string, current string) bool {
-	cmp, ok := compareVersionStrings(latest, current)
+	cmp, ok := version.Compare(latest, current)
 	if !ok {
-		return normalizeVersionTag(latest) != normalizeVersionTag(current)
+		return version.Normalize(latest) != version.Normalize(current)
 	}
 	return cmp > 0
-}
-
-func compareVersionStrings(a, b string) (int, bool) {
-	aParts, okA := parseVersionParts(a)
-	bParts, okB := parseVersionParts(b)
-	if !okA || !okB {
-		return 0, false
-	}
-	for i := range len(aParts) {
-		if aParts[i] > bParts[i] {
-			return 1, true
-		}
-		if aParts[i] < bParts[i] {
-			return -1, true
-		}
-	}
-	return 0, true
-}
-
-func parseVersionParts(version string) ([3]int, bool) {
-	var result [3]int
-	parts := strings.Split(normalizeVersionTag(version), ".")
-	if len(parts) != 3 {
-		return result, false
-	}
-	for i, part := range parts {
-		n, err := strconv.Atoi(part)
-		if err != nil {
-			return result, false
-		}
-		result[i] = n
-	}
-	return result, true
-}
-
-func normalizeVersionTag(version string) string {
-	return strings.TrimPrefix(strings.TrimSpace(version), "v")
 }
 
 func shellQuote(value string) string {

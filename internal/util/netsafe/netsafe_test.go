@@ -2,6 +2,7 @@ package netsafe
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strings"
 	"testing"
@@ -19,6 +20,14 @@ func TestIsBlockedIP(t *testing.T) {
 		{"192.168.1.1", true},
 		{"169.254.0.1", true},
 		{"0.0.0.0", true},
+		{"0.0.0.1", true},            // Current-network address
+		{"239.255.0.1", true},        // Multicast beyond link-local
+		{"ff05::1", true},            // IPv6 site-local multicast
+		{"255.255.255.255", true},    // Broadcast
+		{"::ffff:239.255.0.1", true}, // IPv4-mapped multicast
+		{"198.18.0.1", true},         // Benchmarking network
+		{"240.0.0.1", true},          // Reserved address
+		{"::ffff:240.0.0.1", true},   // IPv4-mapped reserved address
 		{"::", true},
 		{"8.8.8.8", false},
 		{"1.1.1.1", false},
@@ -136,5 +145,24 @@ func TestSSRFGuardedDialContext_AllowPrivateBypassesGuard(t *testing.T) {
 func TestSSRFGuardedDialContext_BadAddress(t *testing.T) {
 	if _, err := SSRFGuardedDialContext(context.Background(), "tcp", "no-port"); err == nil {
 		t.Fatal("expected error for address without port")
+	}
+}
+
+func TestSSRFGuardedDialRejectsNonPublicLiteralBeforeConnect(t *testing.T) {
+	for _, host := range []string{"239.255.0.1", "255.255.255.255", "198.18.0.1", "240.0.0.1", "ff05::1"} {
+		t.Run(host, func(t *testing.T) {
+			called := false
+			_, err := SSRFGuardedDialWith(context.Background(), "tcp", net.JoinHostPort(host, "443"),
+				func(context.Context, string, string) (net.Conn, error) {
+					called = true
+					return nil, errors.New("unexpected dial")
+				})
+			if !errors.Is(err, ErrPrivateAddressBlocked) {
+				t.Fatalf("expected SSRF guard error for %s, got %v", host, err)
+			}
+			if called {
+				t.Fatalf("dialer was called for blocked address %s", host)
+			}
+		})
 	}
 }

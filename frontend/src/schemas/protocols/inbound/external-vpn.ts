@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VetroffOptionsSchema } from './vetroff';
 
 import { NaiveClientSchema } from './naive';
 
@@ -38,3 +39,13 @@ export const TrustTunnelInboundSettingsSchema = z
     }
   });
 export type TrustTunnelInboundSettings = z.infer<typeof TrustTunnelInboundSettingsSchema>;
+
+export const VetroffInboundSettingsSchema = z.object({
+  hostname: z.string().trim().default(''),
+  certificate: z.string().trim().default(''),
+  privateKey: z.string().trim().default(''),
+  vetroff: VetroffOptionsSchema.optional(),
+  clients: z.array(NaiveClientSchema).max(1024).default([]),
+});
+
+export type VetroffInboundSettings = z.infer<typeof VetroffInboundSettingsSchema>;
