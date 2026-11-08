@@ -14,6 +14,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ type DomainFrontCertificate struct {
 	Source    string `json:"source"`
 	Renewal   string `json:"renewal"`
 	CertFile  string `json:"certFile"`
+	KeyFile   string `json:"keyFile"`
 }
 
 type DomainFrontStatus struct {
@@ -140,6 +142,18 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	if !cfg.Enabled {
 		return nil, nil
 	}
+	// A collection of foreign SNI references does not need a local listener,
+	// ACME account or open public ports on the controlling panel.
+	hasLocalDomain := false
+	for _, domain := range cfg.Domains {
+		if domain.Enabled && domain.Mode != "shared_sni" {
+			hasLocalDomain = true
+			break
+		}
+	}
+	if !hasLocalDomain {
+		return nil, nil
+	}
 	if err := os.MkdirAll(m.cachePath, 0o700); err != nil {
 		return nil, err
 	}
@@ -148,6 +162,9 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 		r.challengeRoots = map[string]string{}
 	}
 	for _, d := range cfg.Domains {
+		if d.Mode == "shared_sni" {
+			continue
+		}
 		if files, ok := backend.Certificates[d.Name]; ok && d.Enabled && (d.TLS == "auto" || d.TLS == "existing") {
 			cert, err := network.NewFileCertificate(files.CertFile, files.KeyFile)
 			if err != nil {
@@ -213,7 +230,7 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	// that loader. New certificates are still obtained in the background.
 	var names []string
 	for _, d := range cfg.Domains {
-		if !d.Enabled || (d.TLS != "auto" && d.TLS != "certmagic") || r.external[d.Name] != nil {
+		if !d.Enabled || d.Mode == "shared_sni" || (d.TLS != "auto" && d.TLS != "certmagic") || r.external[d.Name] != nil {
 			continue
 		}
 		names = append(names, d.Name)
@@ -288,7 +305,7 @@ func (r *frontRuntime) domain(host string) (DomainFrontDomain, bool) {
 	}
 	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	for _, d := range r.cfg.Domains {
-		if d.Enabled && d.Name == host {
+		if d.Enabled && d.Mode != "shared_sni" && d.Name == host {
 			return d, true
 		}
 	}
@@ -305,7 +322,7 @@ func (r *frontRuntime) redirectHTTPS(w http.ResponseWriter, req *http.Request) {
 	if r.backend.GetRedirect != nil {
 		redirectURL, _ = r.backend.GetRedirect()
 	}
-	if !r.protectedRedirectPath(d, req.URL.Path) {
+	if d.Mode != "sni_only" && !r.protectedRedirectPath(d, req.URL.Path) {
 		if target := RootRedirectTarget(req, redirectURL); target != "" {
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Referrer-Policy", "no-referrer")
@@ -351,10 +368,16 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 			out.Certificates = append(out.Certificates, entry)
 			continue
 		}
+		if d.Mode == "shared_sni" {
+			entry.State, entry.Source, entry.Renewal, entry.AutoRenew = "external", "remote", "external", false
+			out.Certificates = append(out.Certificates, entry)
+			continue
+		}
 		entry.State = "pending"
 		entry.Source, entry.Renewal = "gateway", "certmagic"
 		if d.TLS == "manual" {
 			entry.Source, entry.Renewal = "manual", "manual"
+			entry.CertFile, entry.KeyFile = d.CertFile, d.KeyFile
 		}
 		external, inherited := files[d.Name]
 		if m.runtime != nil {
@@ -363,7 +386,7 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 			}
 		}
 		if inherited && (d.TLS == "auto" || d.TLS == "existing") {
-			entry.Source, entry.Renewal, entry.CertFile = external.Source, external.Renewal, external.CertFile
+			entry.Source, entry.Renewal, entry.CertFile, entry.KeyFile = external.Source, external.Renewal, external.CertFile, external.KeyFile
 			entry.AutoRenew, entry.Error = external.AutoRenew, external.Warning
 		}
 		var raw []byte
@@ -388,7 +411,15 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 			}
 			issuer := &certmagic.ACMEIssuer{CA: ca}
 			storage := &certmagic.FileStorage{Path: m.cachePath}
-			raw, err = storage.Load(context.Background(), certmagic.StorageKeys.SiteCert(issuer.IssuerKey(), d.Name))
+			certStorageKey := certmagic.StorageKeys.SiteCert(issuer.IssuerKey(), d.Name)
+			keyStorageKey := certmagic.StorageKeys.SitePrivateKey(issuer.IssuerKey(), d.Name)
+			raw, err = storage.Load(context.Background(), certStorageKey)
+			if err == nil {
+				if _, keyErr := storage.Load(context.Background(), keyStorageKey); keyErr == nil {
+					entry.CertFile = filepath.Join(m.cachePath, filepath.FromSlash(certStorageKey))
+					entry.KeyFile = filepath.Join(m.cachePath, filepath.FromSlash(keyStorageKey))
+				}
+			}
 			if m.runtime != nil {
 				m.runtime.mu.Lock()
 				entry.Error = m.runtime.errors[d.Name]
@@ -406,6 +437,14 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 			}
 			if block != nil {
 				if cert, parseErr := x509.ParseCertificate(block.Bytes); parseErr == nil {
+					if strings.Contains(d.Name, ".") {
+						if verifyErr := cert.VerifyHostname(d.Name); verifyErr != nil {
+							entry.Error = "certificate does not match configured domain"
+							entry.State = "error"
+							out.Certificates = append(out.Certificates, entry)
+							continue
+						}
+					}
 					entry.ExpiresAt = cert.NotAfter.Unix()
 					entry.DaysLeft = int(math.Ceil(time.Until(cert.NotAfter).Hours() / 24))
 					entry.Issuer = cert.Issuer.CommonName
@@ -460,7 +499,7 @@ func proxy(target, host string, h2c bool) (*httputil.ReverseProxy, error) {
 func (r *frontRuntime) handler() (http.Handler, error) {
 	handlers := map[string]http.Handler{}
 	for _, d := range r.cfg.Domains {
-		if !d.Enabled {
+		if !d.Enabled || d.Mode == "shared_sni" {
 			continue
 		}
 		h, err := r.domainHandler(d)
@@ -528,6 +567,29 @@ func (r *frontRuntime) protectedRedirectPath(d DomainFrontDomain, path string) b
 }
 
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
+	// SNI-only hosts serve Telemt's generated static website while denying
+	// every panel, subscription and inbound route, even if its path exists.
+	if d.Mode == "sni_only" {
+		dir := r.backend.DecoyDirectories[d.Name]
+		if dir == "" {
+			return nil, fmt.Errorf("SNI site %s has no prepared website", d.Name)
+		}
+		static := http.FileServer(http.Dir(dir))
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+			w.Header().Set("Cache-Control", "public, max-age=300")
+			if req.Method != http.MethodGet && req.Method != http.MethodHead {
+				http.NotFound(w, req)
+				return
+			}
+			switch req.URL.Path {
+			case "/", "/index.html", "/site.css", "/site.js":
+				static.ServeHTTP(w, req)
+			default:
+				http.NotFound(w, req)
+			}
+		}), nil
+	}
 	subTarget := r.backend.SubscriptionTarget
 	subHost := d.Name
 	if r.backend.SubscriptionHost != "" {

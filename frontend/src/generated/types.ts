@@ -555,6 +555,7 @@ export interface DomainFrontCertificate {
   error: string;
   expiresAt: number;
   issuer: string;
+  keyFile: string;
   mode: string;
   name: string;
   renewal: string;

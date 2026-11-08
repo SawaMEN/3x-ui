@@ -2,20 +2,193 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
+
+type ManagedSNIDomain struct {
+	Name     string `json:"name"`
+	Source   string `json:"source"`
+	CertFile string `json:"certFile"`
+	KeyFile  string `json:"keyFile"`
+	NodeID   int    `json:"nodeId,omitempty"`
+	NodeName string `json:"nodeName,omitempty"`
+}
+
+// ManagedSNIDomains reads the *main panel's* live HTTPS endpoints. Remote node
+// editors may reuse these public names, but must never reuse their file paths
+// without explicitly provisioning a certificate on that remote host.
+func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDomain, error) {
+	status, err := DomainFrontStatus()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ManagedSNIDomain, 0, len(status.Certificates)+1)
+	seen := make(map[string]bool)
+	add := func(name, source, certFile, keyFile string) {
+		name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
+		if name == "" || seen[name] || certFile == "" || keyFile == "" {
+			return
+		}
+		pair, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil || len(pair.Certificate) == 0 {
+			return
+		}
+		leaf, err := x509.ParseCertificate(pair.Certificate[0])
+		if err != nil || leaf.VerifyHostname(name) != nil || time.Now().Before(leaf.NotBefore) || !time.Now().Before(leaf.NotAfter) {
+			return
+		}
+		seen[name] = true
+		out = append(out, ManagedSNIDomain{Name: name, Source: source, CertFile: certFile, KeyFile: keyFile})
+	}
+	// Telemt WEB owns the cover site at public TCP 443. Prefer it when
+	// several managed certificates happen to cover the same hostname.
+	state, err := readTelemtWebState()
+	if err == nil && state.Enabled && telemtWebFrontendActive(state) {
+		add(state.Domain, "telemt", state.CertFile, state.KeyFile)
+		for _, alias := range state.Aliases {
+			add(alias, "telemt", state.CertFile, state.KeyFile)
+		}
+	}
+	// Local sites always take precedence, because their certificate paths
+	// belong to the controlling host rather than a connected node.
+	if status.Config.Enabled && status.Running {
+		enabled := make(map[string]bool)
+		for _, domain := range status.Config.Domains {
+			enabled[domain.Name] = domain.Enabled
+		}
+		for _, cert := range status.Certificates {
+			if enabled[cert.Name] && (cert.State == "valid" || cert.State == "renewal_due") {
+				add(cert.Name, "gateway", cert.CertFile, cert.KeyFile)
+			}
+		}
+	}
+	if includeNodes {
+		for _, site := range discoverNodeSNI(ctx) {
+			site.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(site.Name)), ".")
+			if site.Name == "" || !strings.Contains(site.Name, ".") || net.ParseIP(site.Name) != nil || seen[site.Name] {
+				continue
+			}
+			seen[site.Name] = true
+			out = append(out, site)
+		}
+	}
+	// Manual references survive an offline or older child node.
+	for _, domain := range status.Config.Domains {
+		if domain.Enabled && domain.Mode == "shared_sni" && !seen[domain.Name] {
+			seen[domain.Name] = true
+			out = append(out, ManagedSNIDomain{Name: domain.Name, Source: "remote"})
+		}
+	}
+	priority := func(source string) int {
+		switch source {
+		case "telemt":
+			return 0
+		case "gateway":
+			return 1
+		default:
+			return 2
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if a, b := priority(out[i].Source), priority(out[j].Source); a != b {
+			return a < b
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
+}
+
+type nodeSNIResponse struct {
+	NodeID   int
+	NodeName string
+	Sites    []runtime.RemoteManagedSNI
+}
+
+// Discover active cover sites on connected nodes. A single stale node may not
+// delay the SNI dropdown beyond five seconds. Unreachable nodes do not prevent
+// locally stored SNI references from loading.
+func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
+	manager := runtime.GetManager()
+	db := database.GetDB()
+	if manager == nil || db == nil {
+		return nil
+	}
+	var nodes []model.Node
+	if err := db.Where("enable = ?", true).Limit(64).Find(&nodes).Error; err != nil {
+		return nil
+	}
+	requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	limit := make(chan struct{}, 6)
+	results := make(chan nodeSNIResponse, len(nodes))
+	var wg sync.WaitGroup
+	for _, node := range nodes {
+		if node.Id <= 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(node model.Node) {
+			defer wg.Done()
+			select {
+			case limit <- struct{}{}:
+				defer func() { <-limit }()
+			case <-requestCtx.Done():
+				return
+			}
+			remote, err := manager.RemoteFor(&node)
+			if err != nil {
+				return
+			}
+			sites, err := remote.ListManagedSNI(requestCtx)
+			if err == nil && len(sites) > 0 {
+				results <- nodeSNIResponse{NodeID: node.Id, NodeName: node.Name, Sites: sites}
+			}
+		}(node)
+	}
+	wg.Wait()
+	close(results)
+	var out []ManagedSNIDomain
+	for result := range results {
+		for _, site := range result.Sites {
+			if (site.Source != "telemt" && site.Source != "gateway") || site.CertFile == "" || site.KeyFile == "" {
+				continue
+			}
+			out = append(out, ManagedSNIDomain{
+				Name:     site.Name,
+				Source:   "remote",
+				CertFile: site.CertFile,
+				KeyFile:  site.KeyFile,
+				NodeID:   result.NodeID,
+				NodeName: result.NodeName,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].NodeID != out[j].NodeID {
+			return out[i].NodeID < out[j].NodeID
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
+}
 
 var domainFrontState struct {
 	sync.Mutex
@@ -87,6 +260,18 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	}
 	domainFrontState.Lock()
 	defer domainFrontState.Unlock()
+	hasLocalDomain := false
+	for _, domain := range cfg.Domains {
+		if domain.Enabled && domain.Mode != "shared_sni" {
+			hasLocalDomain = true
+			break
+		}
+	}
+	if cfg.Enabled && hasLocalDomain {
+		if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled && telemtWebFrontendActive(state) && cfg.HTTPSPort == 443 {
+			return domainfront.DomainFrontStatus{}, fmt.Errorf("TCP 443 is already serving the Telemt WEB cover site (%s); reuse it as SNI instead of starting another gateway", state.Domain)
+		}
+	}
 	s := &SettingService{}
 	files, states, err := s.domainCertificateFiles(cfg)
 	if err != nil {
@@ -189,6 +374,7 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		PanelPath:          settings.WebBasePath,
 		SubscriptionPaths:  []string{settings.SubPath, settings.SubJsonPath, settings.SubClashPath, "/assets/"},
 		Routes:             map[string][]domainfront.Route{},
+		DecoyDirectories:   map[string]string{},
 	}
 	panelPort := settings.WebPort
 	if override, configured, err := config.GetPortOverride(); configured && err == nil {
@@ -219,7 +405,18 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		backend.SubscriptionHost = certificateHost(settings.SubCertFile, settings.SubDomain)
 	}
 	for _, d := range cfg.Domains {
-		if !d.Enabled {
+		if !d.Enabled || d.Mode == "shared_sni" {
+			continue
+		}
+		if d.Mode == "sni_only" {
+			// Reuse Telemt's existing decoy-site renderer and atomic file writer
+			// instead of maintaining a second set of website templates.
+			sitePath := filepath.Join(config.GetDBFolderPath(), "domain-tls", "sni-sites", fmt.Sprintf("%x", sha256.Sum256([]byte(d.Name))))
+			dir, siteErr := prepareTelemtWebSite(d.Name, filepath.Join(sitePath, "default"), filepath.Join(sitePath, "snapshots"), nil)
+			if siteErr != nil {
+				return backend, fmt.Errorf("SNI site %s: %w", d.Name, siteErr)
+			}
+			backend.DecoyDirectories[d.Name] = dir
 			continue
 		}
 		for _, id := range d.InboundIDs {

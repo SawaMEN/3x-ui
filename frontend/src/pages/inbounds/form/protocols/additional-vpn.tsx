@@ -4,6 +4,7 @@ import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import { HttpUtil } from '@/utils';
+import SniSearchInput from '../security/SniSearchInput';
 
 export function InstallVPNButton({ protocol }: { protocol: 'fptn' | 'openflux' | 'vetroff' }) {
   const { t } = useTranslation();
@@ -81,7 +82,7 @@ export function FptnFields() {
         <Switch />
       </FormField>
       <FormField name={['settings', 'allowedSni']} label="SNI">
-        <Input />
+        <SniSearchInput placeholder="www.bing.com" />
       </FormField>
       <FormField
         name={['settings', 'adsFilter']}

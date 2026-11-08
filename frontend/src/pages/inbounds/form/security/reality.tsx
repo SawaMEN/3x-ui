@@ -18,6 +18,7 @@ import { RadarChartOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/
 import dayjs from 'dayjs';
 
 import { FormField } from '@/components/form/rhf';
+import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import { UTLS_FINGERPRINT } from '@/schemas/primitives';
 import {
   validateRealityClientVer,
@@ -61,7 +62,8 @@ export default function RealityForm({
 }: RealityFormProps) {
   const { t } = useTranslation();
   const uid = useId();
-  const { getFieldState, trigger } = useFormContext();
+  const { data: managedDomains = [] } = useManagedSniDomains();
+  const { getFieldState, getValues, setValue, trigger } = useFormContext();
   const [scannerOpen, setScannerOpen] = useState(false);
   const nodeId = useWatch({ name: 'nodeId' }) as number | null | undefined;
   const mldsa65Seed = useWatch({
@@ -216,8 +218,31 @@ export default function RealityForm({
           />
         </Form.Item>
       )}
-      <FormField label="SNI" name={['streamSettings', 'realitySettings', 'serverNames']}>
-        <Select mode="tags" tokenSeparators={[',']} style={{ width: '100%' }} />
+      <FormField
+        label="SNI"
+        name={['streamSettings', 'realitySettings', 'serverNames']}
+        extra={t('pages.inbounds.form.realityTargetHint')}
+        onAfterChange={(value) => {
+          const names = Array.isArray(value) ? value : [];
+          const picked = names.find(
+            (name) => typeof name === 'string' && managedDomains.some((site) => site.name === name),
+          );
+          if (picked && !getValues('streamSettings.realitySettings.target')) {
+            setValue('streamSettings.realitySettings.target', `${picked}:443`, {
+              shouldDirty: true,
+            });
+          }
+        }}
+      >
+        <Select
+          mode="tags"
+          tokenSeparators={[',']}
+          style={{ width: '100%' }}
+          options={managedDomains.map((domain) => ({
+            value: domain.name,
+            label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
+          }))}
+        />
       </FormField>
       <FormField
         name={['streamSettings', 'realitySettings', 'maxTimediff']}

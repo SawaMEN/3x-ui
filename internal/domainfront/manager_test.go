@@ -236,7 +236,7 @@ func TestManagedTLSApplyRollbackAndExpiry(t *testing.T) {
 }
 
 func TestAutomaticCertificateLifetimeWhileStopped(t *testing.T) {
-	cert, _, _ := testCertificate(t, "auto.example.com", 12)
+	cert, key, _ := testCertificate(t, "auto.example.com", 12)
 	data, err := os.ReadFile(cert)
 	if err != nil {
 		t.Fatal(err)
@@ -247,12 +247,26 @@ func TestAutomaticCertificateLifetimeWhileStopped(t *testing.T) {
 	if err := storage.Store(context.Background(), certmagic.StorageKeys.SiteCert(issuer.IssuerKey(), "auto.example.com"), data); err != nil {
 		t.Fatal(err)
 	}
+	privateKey, err := os.ReadFile(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Store(context.Background(), certmagic.StorageKeys.SitePrivateKey(issuer.IssuerKey(), "auto.example.com"), privateKey); err != nil {
+		t.Fatal(err)
+	}
 	cfg := DefaultConfig()
 	cfg.Enabled = true
 	cfg.Domains = []DomainFrontDomain{{Name: "auto.example.com", Mode: "direct", Enabled: true, TLS: "auto"}}
 	status := NewManager(cache).Status(cfg)
 	if status.Running || status.Certificates[0].DaysLeft != 12 || status.Certificates[0].AutoRenew || status.Certificates[0].State != "renewal_due" {
 		t.Fatalf("status = %#v", status)
+	}
+	result := status.Certificates[0]
+	if result.CertFile == "" || result.KeyFile == "" {
+		t.Fatalf("managed certificate paths missing: %#v", result)
+	}
+	if pair, err := tls.LoadX509KeyPair(result.CertFile, result.KeyFile); err != nil || len(pair.Certificate) == 0 {
+		t.Fatalf("managed certificate paths are not a usable TLS pair: %v", err)
 	}
 }
 
@@ -500,6 +514,110 @@ func TestInvalidCachedCertificateReleasesGatewayPorts(t *testing.T) {
 		listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Listen, strconv.Itoa(port)))
 		if err != nil {
 			t.Fatalf("failed startup leaked port %d: %v", port, err)
+		}
+		_ = listener.Close()
+	}
+}
+
+func TestSNIOnlyDecoyIsIsolated(t *testing.T) {
+	siteDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(siteDir, "index.html"), []byte("<html><h1>Welcome</h1></html>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(siteDir, "site.css"), []byte("body { color: black; }"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	cfg.Domains = []DomainFrontDomain{{Name: "edge.example.com", Mode: "sni_only", Enabled: true, TLS: "manual"}}
+	r := &frontRuntime{cfg: cfg, backend: Backend{
+		SubscriptionTarget: "http://127.0.0.1:1",
+		SubscriptionPaths:  []string{"/sub/", "/assets/"},
+		Routes:             map[string][]Route{"edge.example.com": {{Path: "/vpn", Target: "http://127.0.0.1:1"}}},
+		RedirectURL:        "https://redirect.example.com/",
+		DecoyDirectories:   map[string]string{"edge.example.com": siteDir},
+	}}
+	h, err := r.handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path, method string
+		want         int
+	}{
+		{"/", http.MethodGet, http.StatusOK},
+		{"/", http.MethodHead, http.StatusOK},
+		{"/site.css", http.MethodGet, http.StatusOK},
+		{"/sub/token", http.MethodGet, http.StatusNotFound},
+		{"/assets/app.js", http.MethodGet, http.StatusNotFound},
+		{"/vpn", http.MethodGet, http.StatusNotFound},
+		{"/panel/api/settings", http.MethodGet, http.StatusNotFound},
+		{"/", http.MethodPost, http.StatusNotFound},
+	} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(tc.method, "https://edge.example.com"+tc.path, nil)
+		h.ServeHTTP(w, req)
+		if w.Code != tc.want {
+			t.Errorf("%s %s = %d, want %d", tc.method, tc.path, w.Code, tc.want)
+		}
+		if tc.want == http.StatusOK && tc.path == "/" && tc.method == http.MethodGet && !strings.Contains(w.Body.String(), "Welcome") {
+			t.Errorf("decoy response missing on %s", tc.path)
+		}
+	}
+}
+
+func TestSharedSNIDomainIsNeverServedByLocalGateway(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Domains = []DomainFrontDomain{{
+		Name:    "edge.example.com",
+		Mode:    "shared_sni",
+		Enabled: true,
+		TLS:     "auto",
+	}}
+	r := &frontRuntime{cfg: cfg, backend: Backend{}}
+	if _, ok := r.domain("edge.example.com"); ok {
+		t.Fatal("foreign cover site was exposed by local HTTPS gateway")
+	}
+	handler, err := r.handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "https://edge.example.com/", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("shared SNI unexpectedly served locally: %d", response.Code)
+	}
+	manager := NewManager(t.TempDir())
+	status := manager.Status(cfg)
+	if len(status.Certificates) != 1 || status.Certificates[0].State != "external" || status.Certificates[0].CertFile != "" {
+		t.Fatalf("shared SNI must not expose a local certificate: %#v", status.Certificates)
+	}
+}
+
+func TestSharedSNIOnlyConfigurationOpensNoGatewayPorts(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	cfg.AcceptTerms = false
+	cfg.Listen = "127.0.0.1"
+	cfg.HTTPPort, cfg.HTTPSPort = unusedPort(t), unusedPort(t)
+	cfg.PublicPort = cfg.HTTPSPort
+	cfg.Domains = []DomainFrontDomain{{
+		Name:    "edge.example.com",
+		Mode:    "shared_sni",
+		Enabled: true,
+		TLS:     "auto",
+	}}
+	manager := NewManager(t.TempDir())
+	if err := manager.Apply(context.Background(), cfg, Backend{}); err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Stop()
+	if manager.Status(cfg).Running {
+		t.Fatal("a foreign SNI reference must not start the local gateway")
+	}
+	for _, port := range []int{cfg.HTTPPort, cfg.HTTPSPort} {
+		listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Listen, strconv.Itoa(port)))
+		if err != nil {
+			t.Fatalf("foreign SNI opened local port %d: %v", port, err)
 		}
 		_ = listener.Close()
 	}

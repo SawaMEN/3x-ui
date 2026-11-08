@@ -3,11 +3,16 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
+import {
+  canApplyManagedSniCertificate,
+  type ManagedSniDomain,
+} from '@/api/queries/useManagedSniDomains';
 import { MasqueInboundSettingsSchema } from '@/schemas/protocols/inbound/masque';
 
 export default function MasqueFields() {
   const { t } = useTranslation();
   const { setValue, control } = useFormContext();
+  const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
   const versions = (useWatch({ control, name: 'settings.version' }) ?? [3, 2, 1]) as number[];
   const certificate = useWatch({ control, name: 'settings.tls.certificatePath' });
   const key = useWatch({ control, name: 'settings.tls.keyPath' });
@@ -75,7 +80,15 @@ export default function MasqueFields() {
         style={{ marginBottom: 12 }}
       />
       <FormField name={['settings', 'tls', 'serverName']} label="SNI">
-        <SniSearchInput placeholder="example.com" />
+        <SniSearchInput
+          placeholder="example.com"
+          onPickManagedDomain={(domain: ManagedSniDomain) => {
+            if (canApplyManagedSniCertificate(domain, nodeId)) {
+              set('settings.tls.certificatePath', domain.certFile);
+              set('settings.tls.keyPath', domain.keyFile);
+            }
+          }}
+        />
       </FormField>
       <Alert
         type="success"

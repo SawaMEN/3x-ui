@@ -173,6 +173,50 @@ describe('SNI search in protocol forms', () => {
     },
   );
 
+  it.each([
+    ['local TUIC', <TuicFields key="local-tuic" />, undefined, true],
+    ['remote TUIC', <TuicFields key="remote-tuic" />, 7, false],
+    ['local AnyTLS', <AnyTlsFields key="local-anytls" />, undefined, true],
+    ['remote AnyTLS', <AnyTlsFields key="remote-anytls" />, 7, false],
+  ] as const)(
+    'picks Telemt WEB SNI from the master for %s',
+    async (title, fields, nodeId, local) => {
+      vi.spyOn(HttpUtil, 'get').mockImplementation(
+        async (url) =>
+          new Msg(
+            true,
+            '',
+            url === '/panel/api/domains/sni'
+              ? [
+                  {
+                    name: 'edge.example.com',
+                    source: 'telemt',
+                    certFile: '/etc/letsencrypt/live/edge.example.com/fullchain.pem',
+                    keyFile: '/etc/letsencrypt/live/edge.example.com/privkey.pem',
+                  },
+                ]
+              : [],
+          ),
+      );
+      renderWithProviders(<Harness nodeId={nodeId}>{fields}</Harness>);
+      const select = await screen.findByRole('combobox', { name: 'My SNI' });
+      fireEvent.mouseDown(select);
+      fireEvent.click(await screen.findByText('edge.example.com · Telemt WEB'));
+      await waitFor(() => {
+        const saved = values();
+        const isTuic = title.includes('TUIC');
+        const tls = isTuic ? saved.settings.server : saved.settings.tls;
+        expect(isTuic ? tls.sni : tls.serverName).toBe('edge.example.com');
+        expect(isTuic ? tls.certificate : tls.certificatePath).toBe(
+          local ? '/etc/letsencrypt/live/edge.example.com/fullchain.pem' : '/custom/cert',
+        );
+        expect(isTuic ? tls.private_key : tls.keyPath).toBe(
+          local ? '/etc/letsencrypt/live/edge.example.com/privkey.pem' : '/custom/key',
+        );
+      });
+    },
+  );
+
   it('uses the verified hostname when its certificate contains only wildcard SANs', async () => {
     vi.spyOn(HttpUtil, 'post').mockResolvedValue(
       new Msg(true, '', doneScan([{ ...candidate, serverNames: [] }])),

@@ -70,6 +70,7 @@ type Backend struct {
 	SubscriptionPaths  []string
 	ProtectedPaths     []string // Legacy application paths served by NoRoute.
 	Routes             map[string][]Route
+	DecoyDirectories   map[string]string
 	RedirectURL        string
 }
 
@@ -125,8 +126,17 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 			return fmt.Errorf("duplicate domain: %s", d.Name)
 		}
 		names[d.Name] = true
+		if d.Mode == "shared_sni" {
+			// A foreign cover site is registered on the controlling panel only.
+			// It must never issue a certificate or serve traffic from here.
+			if d.Panel || len(d.InboundIDs) != 0 || strings.TrimSpace(d.Origin) != "" {
+				return fmt.Errorf("shared SNI domains cannot expose panel, inbounds or relay origin")
+			}
+			d.TLS, d.CertFile, d.KeyFile, d.Origin = "auto", "", "", ""
+			continue
+		}
 		switch d.Mode {
-		case "direct", "cdn", "relay", "sub_link_only":
+		case "direct", "cdn", "relay", "sub_link_only", "sni_only", "shared_sni":
 		default:
 			return fmt.Errorf("unknown domain mode: %s", d.Mode)
 		}
@@ -146,6 +156,9 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		}
 		if d.Mode == "sub_link_only" && (d.Panel || len(d.InboundIDs) > 0) {
 			return fmt.Errorf("subscription-only domains cannot expose the panel or VPN inbounds")
+		}
+		if d.Mode == "sni_only" && (d.Panel || len(d.InboundIDs) > 0) {
+			return fmt.Errorf("SNI-only domains cannot expose the panel or VPN inbounds")
 		}
 		d.Origin = strings.TrimSpace(d.Origin)
 		if d.Mode == "relay" {
@@ -204,7 +217,7 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 	if c.SubscriptionDomain != "" {
 		found := false
 		for _, d := range c.Domains {
-			if d.Enabled && d.Name == c.SubscriptionDomain {
+			if d.Enabled && d.Mode != "sni_only" && d.Mode != "shared_sni" && d.Name == c.SubscriptionDomain {
 				found = true
 			}
 		}

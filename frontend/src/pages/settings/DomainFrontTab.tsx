@@ -41,6 +41,7 @@ import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
+import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import { redirectSiteOptions } from './redirect-sites';
 import { rootRedirectError } from './root-redirect';
 
@@ -74,6 +75,14 @@ export default function DomainFrontTab({
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const statusQuery = useDomainFrontStatus();
+  const { data: managedSniDomains = [] } = useManagedSniDomains();
+  const telemtSites = managedSniDomains.filter((site) => site.source === 'telemt');
+  const discoveredNodeSites = managedSniDomains.filter(
+    (site) =>
+      site.source === 'remote' &&
+      site.nodeId != null &&
+      !statusQuery.data?.config.domains.some((domain) => domain.name === site.name),
+  );
   const status = statusQuery.data;
   const config = status?.config;
   const server = useMemo(
@@ -123,7 +132,12 @@ export default function DomainFrontTab({
   const redirectDomains = [
     ...new Set(
       [
-        ...draft.domains.filter((domain) => domain.enabled).map((domain) => domain.name),
+        ...draft.domains
+          .filter(
+            (domain) =>
+              domain.enabled && domain.mode !== 'sni_only' && domain.mode !== 'shared_sni',
+          )
+          .map((domain) => domain.name),
         allSetting?.webDomain || '',
       ].filter(Boolean),
     ),
@@ -163,6 +177,7 @@ export default function DomainFrontTab({
       setDraft(saved);
       markSaved(saved);
       queryClient.setQueryData(keys.settings.domains(), next);
+      void queryClient.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
       void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
       void queryClient.invalidateQueries({ queryKey: keys.settings.all() });
       void load();
@@ -222,40 +237,58 @@ export default function DomainFrontTab({
       setChecking(undefined);
     }
   }
-  function openEditor(index: number) {
+  function openEditor(index: number, sniOnly = false, sharedOnly = false) {
     form.resetFields();
     form.setFieldsValue(
-      index < 0 ? { ...defaultDomain, mode: 'sub_link_only' } : draft.domains[index],
+      index < 0
+        ? {
+            ...defaultDomain,
+            mode: sharedOnly ? 'shared_sni' : sniOnly ? 'sni_only' : 'sub_link_only',
+            tls: sniOnly ? 'certmagic' : 'auto',
+          }
+        : draft.domains[index],
     );
     setPrimaryDomain(
       index < 0
-        ? !draft.subscriptionDomain
+        ? !sniOnly && !sharedOnly && !draft.subscriptionDomain
         : draft.subscriptionDomain === draft.domains[index].name,
     );
     setEditing(index);
   }
   async function saveDomain() {
     const value = await form.validateFields();
+    if (value.mode === 'sni_only' && telemtSites.some((site) => site.name === value.name)) {
+      messageApi.info(label('telemtAlreadyExists'));
+      setEditing(undefined);
+      return;
+    }
     const old = editing != null && editing >= 0 ? draft.domains[editing] : undefined;
     const domain = DomainFormSchema.parse({
       ...defaultDomain,
       ...value,
       panel: false,
-      inboundIds: value.mode === 'sub_link_only' ? [] : (value.inboundIds ?? []),
+      inboundIds:
+        value.mode === 'sub_link_only' || value.mode === 'sni_only' || value.mode === 'shared_sni'
+          ? []
+          : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
-      certFile: value.tls === 'manual' ? value.certFile : '',
-      keyFile: value.tls === 'manual' ? value.keyFile : '',
+      certFile: value.tls === 'manual' && value.mode !== 'shared_sni' ? value.certFile : '',
+      keyFile: value.tls === 'manual' && value.mode !== 'shared_sni' ? value.keyFile : '',
     });
     const domains = [...draft.domains];
     if (editing != null && editing >= 0) domains[editing] = domain;
     else domains.push(domain);
     const canonical =
-      primaryDomain && domain.enabled
+      primaryDomain && domain.enabled && domain.mode !== 'sni_only' && domain.mode !== 'shared_sni'
         ? domain.name
         : draft.subscriptionDomain === old?.name
           ? ''
           : draft.subscriptionDomain;
-    update({ domains, subscriptionDomain: canonical });
+    update({
+      domains,
+      subscriptionDomain: canonical,
+      ...(domain.mode === 'sni_only' ? { enabled: true } : {}),
+    });
     setEditing(undefined);
   }
   const date = (epoch: number) =>
@@ -517,7 +550,7 @@ export default function DomainFrontTab({
             label: label('help'),
             children: (
               <Space orientation="vertical" size={12}>
-                {['direct', 'cdn', 'relay', 'sub_link_only'].map((key) => (
+                {['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only'].map((key) => (
                   <div key={key}>
                     <Typography.Text strong>{label(`mode.${key}`)}</Typography.Text>
                     <Typography.Paragraph style={{ margin: 0 }}>
@@ -663,16 +696,127 @@ export default function DomainFrontTab({
           />
         </Form>
       </Card>
+      {telemtSites.length > 0 && (
+        <Alert
+          type="info"
+          showIcon
+          title={label('telemtReuseTitle')}
+          description={label('telemtReuseDesc')}
+        />
+      )}
+      <Card
+        title={label('sniCertificates')}
+        extra={<Typography.Text type="secondary">{label('sniCertHint')}</Typography.Text>}
+      >
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+          {draft.domains.filter(
+            (domain) => domain.mode === 'sni_only' || domain.mode === 'shared_sni',
+          ).length === 0 &&
+            telemtSites.length === 0 &&
+            discoveredNodeSites.length === 0 && (
+              <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>
+            )}
+          {discoveredNodeSites.map((site) => (
+            <Card key={`node-${site.nodeId}-${site.name}`} size="small" title={site.name}>
+              <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                <Tag>{site.nodeName || label('remoteSNITag')}</Tag>
+                <Typography.Text type="secondary">{label('remoteSNIInfo')}</Typography.Text>
+              </Space>
+            </Card>
+          ))}
+          {draft.domains
+            .filter((domain) => domain.mode === 'shared_sni')
+            .map((site) => (
+              <Card key={`remote-${site.name}`} size="small" title={site.name}>
+                <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                  <Tag>{label('remoteSNITag')}</Tag>
+                  <Typography.Text type="secondary">{label('remoteSNIInfo')}</Typography.Text>
+                </Space>
+              </Card>
+            ))}
+          {telemtSites.map((site) => (
+            <Card key={`telemt-${site.name}`} size="small" title={site.name}>
+              <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                <Tag color="green">Telemt WEB</Tag>
+                <Typography.Text type="secondary">{label('certFile')}</Typography.Text>
+                <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
+                  {site.certFile}
+                </Typography.Text>
+                <Typography.Text type="secondary">{label('keyFile')}</Typography.Text>
+                <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
+                  {site.keyFile}
+                </Typography.Text>
+              </Space>
+            </Card>
+          ))}
+          {draft.domains
+            .filter((domain) => domain.mode === 'sni_only')
+            .map((domain) => {
+              const cert = status?.certificates.find((c) => c.name === domain.name);
+              return (
+                <Card key={domain.name} size="small" title={domain.name}>
+                  <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                    <Tag color={cert?.state === 'valid' ? 'green' : 'default'}>
+                      {label(`state.${cert?.state || 'unsaved'}`)}
+                    </Tag>
+                    {cert?.expiresAt ? (
+                      <Typography.Text type="secondary">
+                        {label('expires')}: {date(cert.expiresAt)} · {renewalLabel(cert.renewal)}
+                      </Typography.Text>
+                    ) : null}
+                    <Typography.Text type="secondary">{label('certFile')}</Typography.Text>
+                    {cert?.certFile ? (
+                      <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
+                        {cert.certFile}
+                      </Typography.Text>
+                    ) : (
+                      <Typography.Text type="secondary">
+                        {label('sniCertificatePending')}
+                      </Typography.Text>
+                    )}
+                    <Typography.Text type="secondary">{label('keyFile')}</Typography.Text>
+                    {cert?.keyFile ? (
+                      <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
+                        {cert.keyFile}
+                      </Typography.Text>
+                    ) : (
+                      <Typography.Text type="secondary">
+                        {label('sniCertificatePending')}
+                      </Typography.Text>
+                    )}
+                  </Space>
+                </Card>
+              );
+            })}
+        </Space>
+      </Card>
       <Card
         title={label('list')}
         extra={
-          <Button
-            icon={<PlusOutlined />}
-            disabled={loading || !initialized}
-            onClick={() => openEditor(-1)}
-          >
-            {label('add')}
-          </Button>
+          <Space wrap>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              disabled={loading || !initialized}
+              onClick={() => openEditor(-1, true)}
+            >
+              {label('addSni')}
+            </Button>
+            <Button
+              icon={<PlusOutlined />}
+              disabled={loading || !initialized}
+              onClick={() => openEditor(-1, false, true)}
+            >
+              {label('addSharedSni')}
+            </Button>
+            <Button
+              icon={<PlusOutlined />}
+              disabled={loading || !initialized}
+              onClick={() => openEditor(-1)}
+            >
+              {label('add')}
+            </Button>
+          </Space>
         }
       >
         <Table
@@ -714,7 +858,9 @@ export default function DomainFrontTab({
                     >
                       {label(`state.${cert?.state || 'unsaved'}`)}
                     </Tag>
-                    <span>{label(`tls.${d.tls}`)}</span>
+                    <span>
+                      {d.mode === 'shared_sni' ? label('remoteSNIInfo') : label(`tls.${d.tls}`)}
+                    </span>
                     {cert?.source && (
                       <Typography.Text type="secondary">
                         {label(`source.${cert.source}`)} · {renewalLabel(cert.renewal)}
@@ -878,13 +1024,21 @@ export default function DomainFrontTab({
           >
             <Select
               onChange={(value) => {
-                if (value === 'sub_link_only') form.setFieldsValue({ inboundIds: [], origin: '' });
-                else if (value !== 'relay') form.setFieldsValue({ origin: '' });
+                if (value === 'sub_link_only' || value === 'sni_only' || value === 'shared_sni') {
+                  form.setFieldsValue({
+                    inboundIds: [],
+                    origin: '',
+                    tls: value === 'shared_sni' ? 'auto' : form.getFieldValue('tls'),
+                  });
+                  if (value === 'sni_only' || value === 'shared_sni') setPrimaryDomain(false);
+                } else if (value !== 'relay') form.setFieldsValue({ origin: '' });
               }}
-              options={['direct', 'cdn', 'relay', 'sub_link_only'].map((value) => ({
-                value,
-                label: label(`mode.${value}`),
-              }))}
+              options={['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'].map(
+                (value) => ({
+                  value,
+                  label: label(`mode.${value}`),
+                }),
+              )}
             />
           </Form.Item>
           <Typography.Paragraph type="secondary">
@@ -901,7 +1055,7 @@ export default function DomainFrontTab({
               <Input placeholder="https://origin.example.com" />
             </Form.Item>
           )}
-          {mode !== 'sub_link_only' && (
+          {mode !== 'sub_link_only' && mode !== 'sni_only' && mode !== 'shared_sni' && (
             <>
               <Form.Item
                 name="inboundIds"
@@ -919,39 +1073,48 @@ export default function DomainFrontTab({
               </Form.Item>
             </>
           )}
-          <Form.Item label={label('useForSubscription')} tooltip={label('useForSubscriptionHelp')}>
-            <Checkbox
-              checked={primaryDomain}
-              onChange={(event) => setPrimaryDomain(event.target.checked)}
+          {mode !== 'sni_only' && mode !== 'shared_sni' && (
+            <Form.Item
+              label={label('useForSubscription')}
+              tooltip={label('useForSubscriptionHelp')}
             >
-              {label('useForSubscription')}
-            </Checkbox>
-          </Form.Item>
-          <Form.Item
-            name="tls"
-            label={label('tlsLabel')}
-            tooltip={label('tlsHelp')}
-            rules={[antdRule(DomainFormSchema.shape.tls, t)]}
-          >
-            <Select
-              options={['auto', 'certmagic', 'existing', 'manual'].map((value) => ({
-                value,
-                label: label(`tls.${value}`),
-              }))}
-            />
-          </Form.Item>
-          <Typography.Paragraph type="secondary">
-            {label(
-              tls === 'manual'
-                ? 'manualDesc'
-                : tls === 'certmagic'
-                  ? 'certmagicDesc'
-                  : tls === 'existing'
-                    ? 'existingTLSDesc'
-                    : 'autoDesc',
-            )}
-          </Typography.Paragraph>
-          {tls === 'manual' && (
+              <Checkbox
+                checked={primaryDomain}
+                onChange={(event) => setPrimaryDomain(event.target.checked)}
+              >
+                {label('useForSubscription')}
+              </Checkbox>
+            </Form.Item>
+          )}
+          {mode !== 'shared_sni' && (
+            <>
+              <Form.Item
+                name="tls"
+                label={label('tlsLabel')}
+                tooltip={label('tlsHelp')}
+                rules={[antdRule(DomainFormSchema.shape.tls, t)]}
+              >
+                <Select
+                  options={['auto', 'certmagic', 'existing', 'manual'].map((value) => ({
+                    value,
+                    label: label(`tls.${value}`),
+                  }))}
+                />
+              </Form.Item>
+              <Typography.Paragraph type="secondary">
+                {label(
+                  tls === 'manual'
+                    ? 'manualDesc'
+                    : tls === 'certmagic'
+                      ? 'certmagicDesc'
+                      : tls === 'existing'
+                        ? 'existingTLSDesc'
+                        : 'autoDesc',
+                )}
+              </Typography.Paragraph>
+            </>
+          )}
+          {mode !== 'shared_sni' && tls === 'manual' && (
             <>
               <Form.Item
                 name="certFile"

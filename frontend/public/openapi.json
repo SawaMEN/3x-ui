@@ -2391,6 +2391,9 @@
           "issuer": {
             "type": "string"
           },
+          "keyFile": {
+            "type": "string"
+          },
           "mode": {
             "type": "string"
           },
@@ -2414,6 +2417,7 @@
           "error",
           "expiresAt",
           "issuer",
+          "keyFile",
           "mode",
           "name",
           "renewal",
@@ -17550,6 +17554,47 @@
         }
       }
     },
+    "/panel/api/domains/sni": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "List managed SNI cover-site domains from this panel and its connected nodes. Use ?local=1 to omit node discovery. File paths refer only to the certificate-owning host; private key contents are never returned.",
+        "operationId": "get_panel_api_domains_sni",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "name": "edge.example.com",
+                      "source": "remote",
+                      "nodeId": 7,
+                      "nodeName": "US"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/domains/status": {
       "get": {
         "tags": [
@@ -17587,6 +17632,7 @@
                         "error": "",
                         "expiresAt": 0,
                         "issuer": "",
+                        "keyFile": "",
                         "mode": "",
                         "name": "",
                         "renewal": "",
@@ -17629,6 +17675,7 @@
                         "error": "",
                         "expiresAt": 0,
                         "issuer": "",
+                        "keyFile": "",
                         "mode": "",
                         "name": "",
                         "renewal": "",
@@ -17682,6 +17729,7 @@
                         "error": "",
                         "expiresAt": 0,
                         "issuer": "",
+                        "keyFile": "",
                         "mode": "",
                         "name": "",
                         "renewal": "",
@@ -17724,6 +17772,7 @@
                         "error": "",
                         "expiresAt": 0,
                         "issuer": "",
+                        "keyFile": "",
                         "mode": "",
                         "name": "",
                         "renewal": "",

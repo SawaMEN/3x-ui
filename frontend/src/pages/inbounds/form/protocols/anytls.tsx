@@ -5,6 +5,10 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
+import {
+  canApplyManagedSniCertificate,
+  type ManagedSniDomain,
+} from '@/api/queries/useManagedSniDomains';
 import { HttpUtil } from '@/utils';
 import { ANYTLS_DEFAULT_PADDING_SCHEME } from '@/schemas/protocols/inbound/anytls';
 
@@ -14,6 +18,14 @@ export default function AnyTlsFields() {
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
   const [loadingPanelSettings, setLoadingPanelSettings] = useState(false);
   const [messageApi, messageContextHolder] = message.useMessage();
+
+  const onManagedSni = (domain: ManagedSniDomain) => {
+    if (!canApplyManagedSniCertificate(domain, nodeId)) return;
+    const options = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
+    setValue('settings.tls.certificatePath', domain.certFile, options);
+    setValue('settings.tls.keyPath', domain.keyFile, options);
+    setValue('settings.tls.enabled', true, options);
+  };
 
   const insertPanelSettings = async () => {
     setLoadingPanelSettings(true);
@@ -60,7 +72,7 @@ export default function AnyTlsFields() {
         label={t('pages.inbounds.form.anytlsServerName')}
         tooltip={t('pages.inbounds.form.anytlsServerNameHint')}
       >
-        <SniSearchInput placeholder="vpn.example.com" />
+        <SniSearchInput placeholder="vpn.example.com" onPickManagedDomain={onManagedSni} />
       </FormField>
       <FormField
         name={['settings', 'tls', 'certificatePath']}

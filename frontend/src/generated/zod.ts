@@ -593,6 +593,7 @@ export const DomainFrontCertificateSchema = z.object({
   error: z.string(),
   expiresAt: z.number().int(),
   issuer: z.string(),
+  keyFile: z.string(),
   mode: z.string(),
   name: z.string(),
   renewal: z.string(),
