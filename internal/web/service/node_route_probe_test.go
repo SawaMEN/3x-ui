@@ -5,10 +5,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
 )
 
 func TestProbeNodeRouteTCPDial(t *testing.T) {
@@ -160,5 +162,63 @@ func TestNodeRouteNativeProbeWrapperRejectsUnsupported(t *testing.T) {
 		if wrapper, ok := nodeRouteNativeProbeWrapper(native); ok {
 			t.Fatalf("accepted unsupported native outbound: %v", wrapper)
 		}
+	}
+}
+
+func TestProbeNodeRouteHTTPFirstTargetSuccess(t *testing.T) {
+	calls := 0
+	result, err := probeNodeRouteHTTP(func(target string) (*outbound.TestOutboundResult, error) {
+		calls++
+		if target != "https://www.google.com/generate_204" {
+			t.Errorf("unexpected primary target %q", target)
+		}
+		return &outbound.TestOutboundResult{Success: true, Delay: 12}, nil
+	})
+	if err != nil || result == nil || !result.Success || result.Delay != 12 || calls != 1 {
+		t.Fatalf("unexpected first-target probe result: result=%+v err=%v calls=%d", result, err, calls)
+	}
+}
+
+func TestProbeNodeRouteHTTPFallback(t *testing.T) {
+	var targets []string
+	result, err := probeNodeRouteHTTP(func(target string) (*outbound.TestOutboundResult, error) {
+		targets = append(targets, target)
+		if len(targets) == 1 {
+			return &outbound.TestOutboundResult{Error: "general SOCKS server failure"}, nil
+		}
+		return &outbound.TestOutboundResult{Success: true, Delay: 27}, nil
+	})
+	if err != nil || result == nil || !result.Success || result.Delay != 27 {
+		t.Fatalf("fallback failed: result=%+v err=%v", result, err)
+	}
+	if len(targets) != 2 || targets[0] != "https://www.google.com/generate_204" || targets[1] != "https://www.cloudflare.com/cdn-cgi/trace" {
+		t.Fatalf("unexpected fallback targets: %v", targets)
+	}
+}
+
+func TestProbeNodeRouteHTTPBothTargetsFailClosed(t *testing.T) {
+	calls := 0
+	result, err := probeNodeRouteHTTP(func(target string) (*outbound.TestOutboundResult, error) {
+		calls++
+		return &outbound.TestOutboundResult{Error: "general SOCKS server failure"}, nil
+	})
+	if err != nil || result == nil || result.Success || calls != 2 {
+		t.Fatalf("probe must fail closed: result=%+v err=%v calls=%d", result, err, calls)
+	}
+	for _, term := range []string{"www.google.com/generate_204", "www.cloudflare.com/cdn-cgi/trace", "general SOCKS server failure"} {
+		if !strings.Contains(result.Error, term) {
+			t.Fatalf("missing failure detail %q in %q", term, result.Error)
+		}
+	}
+}
+
+func TestProbeNodeRouteHTTPBackendErrorStopsRetries(t *testing.T) {
+	calls := 0
+	result, err := probeNodeRouteHTTP(func(string) (*outbound.TestOutboundResult, error) {
+		calls++
+		return nil, fmt.Errorf("temporary probe core failed to start")
+	})
+	if err == nil || result != nil || calls != 1 {
+		t.Fatalf("backend error must not trigger unrelated retries: result=%+v err=%v calls=%d", result, err, calls)
 	}
 }
