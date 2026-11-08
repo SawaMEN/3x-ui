@@ -95,6 +95,28 @@ jobs:
           fi
           bash tools/ci/changed-scopes.sh "$RUNNER_TEMP/ci-paths.txt"
 
+      - name: Restore previous race duration profile
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/ci/race-test-durations.json
+          key: race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-${{ github.run_id }}
+          restore-keys: |
+            race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-
+      - name: Initialize profile if no successful measurement exists
+        if: steps.scopes.outputs.backend == 'true'
+        run: |
+          if [[ ! -s tools/ci/race-test-durations.json ]]; then
+            printf '{"schema_version":1,"packages":{}}\n' > tools/ci/race-test-durations.json
+          fi
+      - name: Share immutable profile snapshot with all race shards
+        if: steps.scopes.outputs.backend == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: race-duration-base
+          path: tools/ci/race-test-durations.json
+          if-no-files-found: error
+          retention-days: 3
+
   shell-tests:
     needs: [changes]
     if: needs.changes.outputs.backend == 'true'
@@ -333,13 +355,11 @@ jobs:
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Download Go dependencies
         run: bash tools/ci/download-go-modules.sh
-      - name: Restore previous race duration profile
-        uses: actions/cache/restore@v4
+      - name: Download one consistent race profile snapshot
+        uses: actions/download-artifact@v8
         with:
-          path: tools/ci/race-test-durations.json
-          key: race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-${{ github.run_id }}
-          restore-keys: |
-            race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-
+          name: race-duration-base
+          path: tools/ci
       - name: Service race detector (shard ${{ matrix.shard }})
         env:
           RACE_EVENTS_FILE: ${{ runner.temp }}/race-service-${{ matrix.shard }}.jsonl
@@ -371,13 +391,11 @@ jobs:
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Download Go dependencies
         run: bash tools/ci/download-go-modules.sh
-      - name: Restore previous race duration profile
-        uses: actions/cache/restore@v4
+      - name: Download one consistent race profile snapshot
+        uses: actions/download-artifact@v8
         with:
-          path: tools/ci/race-test-durations.json
-          key: race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-${{ github.run_id }}
-          restore-keys: |
-            race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-
+          name: race-duration-base
+          path: tools/ci
       - name: Subscription race detector (shard ${{ matrix.shard }})
         env:
           RACE_EVENTS_FILE: ${{ runner.temp }}/race-sub-${{ matrix.shard }}.jsonl
@@ -400,13 +418,11 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - name: Restore previous race duration profile
-        uses: actions/cache/restore@v4
+      - name: Download one consistent race profile snapshot
+        uses: actions/download-artifact@v8
         with:
-          path: tools/ci/race-test-durations.json
-          key: race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-${{ github.run_id }}
-          restore-keys: |
-            race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-
+          name: race-duration-base
+          path: tools/ci
       - name: Download successful race-shard measurements
         uses: actions/download-artifact@v8
         with:
