@@ -16,6 +16,9 @@ const ClientsPage = lazy(() =>
 const OlcRTCPage = lazy(() => importWithChunkRecovery(() => import('@/pages/olcrtc/OlcRTCPage')));
 const GroupsPage = lazy(() => importWithChunkRecovery(() => import('@/pages/groups/GroupsPage')));
 const NodesPage = lazy(() => importWithChunkRecovery(() => import('@/pages/nodes/NodesPage')));
+const CascadeDiagnosticsPage = lazy(() =>
+  importWithChunkRecovery(() => import('@/pages/nodes/CascadeDiagnosticsPage')),
+);
 const ManagerPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/manager/ManagerPage')),
 );
@@ -67,6 +70,7 @@ const routes: RouteObject[] = [
       { path: 'olcrtc', element: withSuspense(<OlcRTCPage />) },
       { path: 'groups', element: withSuspense(<GroupsPage />) },
       { path: 'nodes', element: withSuspense(<NodesPage />) },
+      { path: 'cascade-diagnostics', element: withSuspense(<CascadeDiagnosticsPage />) },
       { path: 'manager', element: withSuspense(<ManagerPage />) },
       { path: 'hosts', element: withSuspense(<HostsPage />) },
       { path: 'firewall', element: <Navigate to="/settings#advanced/firewall" replace /> },
