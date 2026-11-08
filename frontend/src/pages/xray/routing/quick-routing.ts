@@ -229,9 +229,12 @@ export function compileQuickRoute(
 function isUnconditional(rule: RouteRecord, engine: RoutingEngine): boolean {
   if (rule.enabled === false || rule.type === 'logical') return false;
   if (engine === 'xray' && rule.type && rule.type !== 'field') return false;
-  // sing-box sniff/resolve actions do not terminate routing. Inserting
-  // an inbound or domain route before sniff can break SNI-based routing.
-  if (engine === 'sing-box' && rule.action && rule.action !== 'route' && rule.action !== 'reject') {
+  // sing-box sniff/resolve/route-options are non-terminal actions.
+  // Keep them before quick routes so TLS SNI and DNS routing still work.
+  if (
+    engine === 'sing-box' &&
+    (rule.action === 'sniff' || rule.action === 'resolve' || rule.action === 'route-options')
+  ) {
     return false;
   }
   const fields = ROUTE_MATCH_FIELDS.filter((key) => key !== 'action' && key !== 'mode');
