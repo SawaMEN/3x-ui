@@ -327,6 +327,7 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
 			outbound, lastErr = ParseNativeOutboundShareLink(raw)
 			if lastErr == nil {
 				outbound["tag"] = nodeRouteTag(inboundID)
+				lastErr = pinNodeRouteTUICDestination(outbound, inbound, node)
 			}
 		}
 		if lastErr == nil && outbound != nil {
@@ -334,6 +335,26 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
 		}
 	}
 	return nil, fmt.Errorf("node route %d: no compatible connection for %s: %w", inboundID, core, lastErr)
+}
+
+// pinNodeRouteTUICDestination makes a managed TUIC cascade dial the actual
+// remote node listener, not a public subscription host or random host-group
+// endpoint. Those user-facing endpoints may point at a different IP/port,
+// while the route explicitly targets this node's inbound. Keep the original
+// TLS/SNI/ALPN options: authentication must still match the remote listener.
+func pinNodeRouteTUICDestination(outbound map[string]any, inbound *model.Inbound, node *model.Node) error {
+	if inbound == nil || inbound.Protocol != model.TUIC {
+		return nil
+	}
+	if outbound == nil || outbound["type"] != "tuic" {
+		return fmt.Errorf("node route %d: expected native TUIC outbound", inbound.Id)
+	}
+	if node == nil || strings.TrimSpace(node.Address) == "" || inbound.Port < 1 || inbound.Port > 65535 {
+		return fmt.Errorf("node route %d: invalid TUIC destination node address or port", inbound.Id)
+	}
+	outbound["server"] = strings.Trim(strings.TrimSpace(node.Address), "[]")
+	outbound["server_port"] = inbound.Port
+	return nil
 }
 
 // nodeRouteIDs finds explicitly referenced managed destinations. Native
