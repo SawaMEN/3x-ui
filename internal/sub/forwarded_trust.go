@@ -21,9 +21,10 @@ func (s *SubService) forwardedHeadersTrusted(c *gin.Context) (trusted bool) {
 		return true
 	}
 
-	trusted = true
 	defer func() {
-		_ = recover()
+		if recover() != nil {
+			trusted = false
+		}
 	}()
 
 	configured, err := s.settingService.GetTrustedProxyCIDRs()
