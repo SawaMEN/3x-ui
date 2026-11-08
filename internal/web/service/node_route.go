@@ -332,7 +332,7 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
 			outbound, lastErr = ParseNativeOutboundShareLink(raw)
 			if lastErr == nil {
 				outbound["tag"] = nodeRouteTag(inboundID)
-				}
+			}
 		}
 		if lastErr == nil && outbound != nil {
 			return outbound, nil
