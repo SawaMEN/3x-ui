@@ -265,7 +265,12 @@ func syncNodeRouteInbound(inbound *model.Inbound, node *model.Node) error {
 	// credential. This explicit ensure action must activate the listener even
 	// when the client is already linked and the serialized settings match.
 	// It also repairs managed cascades created before the activation fix.
-	if err := remote.RestartXray(ctx); err != nil {
+	// Restart can involve a full sing-box configuration reload. Give it
+	// a separate deadline instead of sharing the time spent listing and
+	// reconciling the remote inbound.
+	activateCtx, activateCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer activateCancel()
+	if err := remote.RestartXray(activateCtx); err != nil {
 		return fmt.Errorf("activate destination node core for managed cascade: %w", err)
 	}
 	return nil
