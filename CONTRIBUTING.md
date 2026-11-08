@@ -264,20 +264,6 @@ Frontend: `cd frontend && npm run test` (vitest), or `npm run test -- --coverage
 
 Input-heavy or pure logic (link builders, parsers, decoders) is also covered by **property tests** (`pgregory.net/rapid`) and **native fuzz targets** (`go test -fuzz`). A fuzz target's **seed corpus** (its inline `f.Add` cases plus any `testdata/fuzz` entries) runs as ordinary subtests under a plain `go test` — no `-fuzz` flag needed — so CI's normal test job exercises the seeds; the time-boxed *fuzzing* exploration (`-fuzz=...`) runs separately as the `fuzz-smoke` job.
 
-### Mutation testing (optional, manual)
-
-[gremlins](https://github.com/go-gremlins/gremlins) checks whether tests actually fail when the code is mutated — a surviving (`LIVED`) mutant means a weak test. It is **slow**, so run it **scoped per package**, never repo-wide or per-commit:
-
-```bash
-go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
-gremlins unleash ./internal/sub/
-gremlins unleash -E 'server\.go|xray\.go|inbound\.go|client_bulk\.go|inbound_traffic\.go|.*_postgres_test\.go' ./internal/web/service/
-```
-
-Treat each survivor as one of: a weak test (strengthen it), dead code (remove it), or an equivalent mutant (unkillable — leave it). Don't write a test purely to kill a mutant if it doesn't reflect real behavior.
-
-CI runs this for you nightly (and on demand) via `.github/workflows/mutation.yml` — scoped per package, results uploaded as artifacts. It is **informational**, not a gate (no thresholds), so check the reports when hardening a suite rather than waiting for a red build.
-
 ### CI
 
 `.github/workflows/ci.yml` runs per PR: `go-test` (with `-shuffle -count=1`), a `race` job (`-race -shuffle -count=1`), a `fuzz-smoke` job on the critical parsers, and the frontend `typecheck`/`lint`/`format:check`/`test`/`build`/`build-storybook`. Snapshots are regression guards — regenerate them (`npx vitest run -u`) only for intentional output changes, never to make a red test green.
