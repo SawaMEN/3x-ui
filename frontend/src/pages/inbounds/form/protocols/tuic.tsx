@@ -45,7 +45,7 @@ export default function TuicFields() {
   const managedDomain = (name: string) =>
     managedDomains.find((domain) => domain.name === name);
 
-  const useManagedDomain = (domain: ManagedSniDomain) => {
+  const applyManagedDomain = (domain: ManagedSniDomain) => {
     updateServerValue('sni', domain.name);
     if (nodeId == null) {
       updateServerValue('certificate', domain.certFile);
@@ -59,7 +59,7 @@ export default function TuicFields() {
     if (!cleanSni) return;
     const managed = managedDomain(cleanSni);
     if (managed) {
-      useManagedDomain(managed);
+      applyManagedDomain(managed);
       return;
     }
 
@@ -92,7 +92,7 @@ export default function TuicFields() {
 
     const managed = managedDomain(cleanSni);
     if (managed) {
-      useManagedDomain(managed);
+      applyManagedDomain(managed);
     } else {
       updateServerValue('sni', cleanSni);
       updateServerValue('certificate', `/root/cert/${cleanSni}/fullchain.pem`);
@@ -296,7 +296,7 @@ export default function TuicFields() {
           value={sni}
           placeholder="example.com"
           onChange={handleSniChange}
-          onPickManagedDomain={useManagedDomain}
+          onPickManagedDomain={applyManagedDomain}
         />
         <span id={`${uid}-sni-hint`} hidden>
           {t('pages.xray.tuic.sniHint')}

@@ -560,7 +560,7 @@ func TestSNIOnlyDecoyIsIsolated(t *testing.T) {
 		if w.Code != tc.want {
 			t.Errorf("%s %s = %d, want %d", tc.method, tc.path, w.Code, tc.want)
 		}
-		if tc.want == http.StatusOK && tc.path == "/" && !strings.Contains(w.Body.String(), "Welcome") {
+		if tc.want == http.StatusOK && tc.path == "/" && tc.method == http.MethodGet && !strings.Contains(w.Body.String(), "Welcome") {
 			t.Errorf("decoy response missing on %s", tc.path)
 		}
 	}

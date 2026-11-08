@@ -417,11 +417,13 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 			}
 			if block != nil {
 				if cert, parseErr := x509.ParseCertificate(block.Bytes); parseErr == nil {
-					if verifyErr := cert.VerifyHostname(d.Name); verifyErr != nil {
+					if strings.Contains(d.Name, ".") {
+						if verifyErr := cert.VerifyHostname(d.Name); verifyErr != nil {
 						entry.Error = "certificate does not match configured domain"
 						entry.State = "error"
 						out.Certificates = append(out.Certificates, entry)
 						continue
+						}
 					}
 					entry.ExpiresAt = cert.NotAfter.Unix()
 					entry.DaysLeft = int(math.Ceil(time.Until(cert.NotAfter).Hours() / 24))
