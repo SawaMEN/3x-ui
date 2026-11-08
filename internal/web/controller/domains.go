@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 

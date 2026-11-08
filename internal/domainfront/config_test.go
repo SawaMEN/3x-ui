@@ -59,10 +59,10 @@ func TestSharedSNIDomainDoesNotRequireLocalACME(t *testing.T) {
 	cfg.Enabled = true
 	cfg.AcceptTerms = false
 	cfg.Domains = []DomainFrontDomain{{
-		Name: "EDGE.EXAMPLE.COM.",
-		Mode: "shared_sni",
+		Name:    "EDGE.EXAMPLE.COM.",
+		Mode:    "shared_sni",
 		Enabled: true,
-		TLS: "certmagic",
+		TLS:     "certmagic",
 	}}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("shared foreign site must not start local ACME: %v", err)

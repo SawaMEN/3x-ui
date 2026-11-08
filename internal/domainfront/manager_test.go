@@ -568,10 +568,10 @@ func TestSNIOnlyDecoyIsIsolated(t *testing.T) {
 func TestSharedSNIDomainIsNeverServedByLocalGateway(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Domains = []DomainFrontDomain{{
-		Name: "edge.example.com",
-		Mode: "shared_sni",
+		Name:    "edge.example.com",
+		Mode:    "shared_sni",
 		Enabled: true,
-		TLS: "auto",
+		TLS:     "auto",
 	}}
 	r := &frontRuntime{cfg: cfg, backend: Backend{}}
 	if _, ok := r.domain("edge.example.com"); ok {
@@ -601,7 +601,10 @@ func TestSharedSNIOnlyConfigurationOpensNoGatewayPorts(t *testing.T) {
 	cfg.HTTPPort, cfg.HTTPSPort = unusedPort(t), unusedPort(t)
 	cfg.PublicPort = cfg.HTTPSPort
 	cfg.Domains = []DomainFrontDomain{{
-		Name: "edge.example.com", Mode: "shared_sni", Enabled: true, TLS: "auto",
+		Name:    "edge.example.com",
+		Mode:    "shared_sni",
+		Enabled: true,
+		TLS:     "auto",
 	}}
 	manager := NewManager(t.TempDir())
 	if err := manager.Apply(context.Background(), cfg, Backend{}); err != nil {

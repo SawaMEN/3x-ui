@@ -2551,6 +2551,14 @@ export const sections: readonly Section[] = [
     endpoints: [
       {
         method: 'GET',
+        path: '/panel/api/domains/sni',
+        summary:
+          'List valid SNI cover-site domains from this panel and its connected nodes. Use ?local=1 to omit node discovery. Private keys are not returned; remote hosts have no certificate file paths.',
+        response:
+          '{\n  "success": true,\n  "obj": [\n    { "name": "edge.example.com", "source": "remote", "nodeId": 7, "nodeName": "US" }\n  ]\n}',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/domains/status',
         responseSchema: 'DomainFrontStatus',
         summary:

@@ -268,9 +268,7 @@ export default function DomainFrontTab({
       ...value,
       panel: false,
       inboundIds:
-        value.mode === 'sub_link_only' ||
-        value.mode === 'sni_only' ||
-        value.mode === 'shared_sni'
+        value.mode === 'sub_link_only' || value.mode === 'sni_only' || value.mode === 'shared_sni'
           ? []
           : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
@@ -281,10 +279,7 @@ export default function DomainFrontTab({
     if (editing != null && editing >= 0) domains[editing] = domain;
     else domains.push(domain);
     const canonical =
-      primaryDomain &&
-      domain.enabled &&
-      domain.mode !== 'sni_only' &&
-      domain.mode !== 'shared_sni'
+      primaryDomain && domain.enabled && domain.mode !== 'sni_only' && domain.mode !== 'shared_sni'
         ? domain.name
         : draft.subscriptionDomain === old?.name
           ? ''
@@ -714,8 +709,9 @@ export default function DomainFrontTab({
         extra={<Typography.Text type="secondary">{label('sniCertHint')}</Typography.Text>}
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          {draft.domains.filter((domain) => domain.mode === 'sni_only' ||
-            domain.mode === 'shared_sni').length === 0 &&
+          {draft.domains.filter(
+            (domain) => domain.mode === 'sni_only' || domain.mode === 'shared_sni',
+          ).length === 0 &&
             telemtSites.length === 0 &&
             discoveredNodeSites.length === 0 && (
               <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>
@@ -1029,14 +1025,20 @@ export default function DomainFrontTab({
             <Select
               onChange={(value) => {
                 if (value === 'sub_link_only' || value === 'sni_only' || value === 'shared_sni') {
-                  form.setFieldsValue({ inboundIds: [], origin: '', tls: value === 'shared_sni' ? 'auto' : form.getFieldValue('tls') });
+                  form.setFieldsValue({
+                    inboundIds: [],
+                    origin: '',
+                    tls: value === 'shared_sni' ? 'auto' : form.getFieldValue('tls'),
+                  });
                   if (value === 'sni_only' || value === 'shared_sni') setPrimaryDomain(false);
                 } else if (value !== 'relay') form.setFieldsValue({ origin: '' });
               }}
-              options={['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'].map((value) => ({
-                value,
-                label: label(`mode.${value}`),
-              }))}
+              options={['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'].map(
+                (value) => ({
+                  value,
+                  label: label(`mode.${value}`),
+                }),
+              )}
             />
           </Form.Item>
           <Typography.Paragraph type="secondary">
