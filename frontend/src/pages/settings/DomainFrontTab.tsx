@@ -222,14 +222,16 @@ export default function DomainFrontTab({
       setChecking(undefined);
     }
   }
-  function openEditor(index: number) {
+  function openEditor(index: number, sniOnly = false) {
     form.resetFields();
     form.setFieldsValue(
-      index < 0 ? { ...defaultDomain, mode: 'sub_link_only' } : draft.domains[index],
+      index < 0
+        ? { ...defaultDomain, mode: sniOnly ? 'sni_only' : 'sub_link_only', tls: sniOnly ? 'certmagic' : 'auto' }
+        : draft.domains[index],
     );
     setPrimaryDomain(
       index < 0
-        ? !draft.subscriptionDomain
+        ? !sniOnly && !draft.subscriptionDomain
         : draft.subscriptionDomain === draft.domains[index].name,
     );
     setEditing(index);
@@ -241,7 +243,7 @@ export default function DomainFrontTab({
       ...defaultDomain,
       ...value,
       panel: false,
-      inboundIds: value.mode === 'sub_link_only' ? [] : (value.inboundIds ?? []),
+      inboundIds: value.mode === 'sub_link_only' || value.mode === 'sni_only' ? [] : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
       certFile: value.tls === 'manual' ? value.certFile : '',
       keyFile: value.tls === 'manual' ? value.keyFile : '',
@@ -250,7 +252,7 @@ export default function DomainFrontTab({
     if (editing != null && editing >= 0) domains[editing] = domain;
     else domains.push(domain);
     const canonical =
-      primaryDomain && domain.enabled
+      primaryDomain && domain.enabled && domain.mode !== 'sni_only'
         ? domain.name
         : draft.subscriptionDomain === old?.name
           ? ''
@@ -517,7 +519,7 @@ export default function DomainFrontTab({
             label: label('help'),
             children: (
               <Space orientation="vertical" size={12}>
-                {['direct', 'cdn', 'relay', 'sub_link_only'].map((key) => (
+                {['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only'].map((key) => (
                   <div key={key}>
                     <Typography.Text strong>{label(`mode.${key}`)}</Typography.Text>
                     <Typography.Paragraph style={{ margin: 0 }}>
@@ -664,15 +666,60 @@ export default function DomainFrontTab({
         </Form>
       </Card>
       <Card
+        title={label('sniCertificates')}
+        extra={<Typography.Text type="secondary">{label('sniCertHint')}</Typography.Text>}
+      >
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+          {draft.domains.filter((domain) => domain.mode === 'sni_only').length === 0 && (
+            <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>
+          )}
+          {draft.domains.filter((domain) => domain.mode === 'sni_only').map((domain) => {
+            const cert = status?.certificates.find((c) => c.name === domain.name);
+            return (
+              <Card key={domain.name} size="small" title={domain.name}>
+                <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                  <Tag color={cert?.state === 'valid' ? 'green' : 'default'}>
+                    {label(`state.${cert?.state || 'unsaved'}`)}
+                  </Tag>
+                  {cert?.expiresAt ? (
+                    <Typography.Text type="secondary">
+                      {label('expires')}: {date(cert.expiresAt)} · {renewalLabel(cert.renewal)}
+                    </Typography.Text>
+                  ) : null}
+                  <Typography.Text type="secondary">{label('certFile')}</Typography.Text>
+                  {cert?.certFile ? (
+                    <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>{cert.certFile}</Typography.Text>
+                  ) : <Typography.Text type="secondary">{label('sniCertificatePending')}</Typography.Text>}
+                  <Typography.Text type="secondary">{label('keyFile')}</Typography.Text>
+                  {cert?.keyFile ? (
+                    <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>{cert.keyFile}</Typography.Text>
+                  ) : <Typography.Text type="secondary">{label('sniCertificatePending')}</Typography.Text>}
+                </Space>
+              </Card>
+            );
+          })}
+        </Space>
+      </Card>
+      <Card
         title={label('list')}
         extra={
-          <Button
-            icon={<PlusOutlined />}
-            disabled={loading || !initialized}
-            onClick={() => openEditor(-1)}
-          >
-            {label('add')}
-          </Button>
+          <Space wrap>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              disabled={loading || !initialized}
+              onClick={() => openEditor(-1, true)}
+            >
+              {label('addSni')}
+            </Button>
+            <Button
+              icon={<PlusOutlined />}
+              disabled={loading || !initialized}
+              onClick={() => openEditor(-1)}
+            >
+              {label('add')}
+            </Button>
+          </Space>
         }
       >
         <Table
@@ -878,10 +925,13 @@ export default function DomainFrontTab({
           >
             <Select
               onChange={(value) => {
-                if (value === 'sub_link_only') form.setFieldsValue({ inboundIds: [], origin: '' });
+                if (value === 'sub_link_only' || value === 'sni_only') {
+                  form.setFieldsValue({ inboundIds: [], origin: '' });
+                  if (value === 'sni_only') setPrimaryDomain(false);
+                }
                 else if (value !== 'relay') form.setFieldsValue({ origin: '' });
               }}
-              options={['direct', 'cdn', 'relay', 'sub_link_only'].map((value) => ({
+              options={['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only'].map((value) => ({
                 value,
                 label: label(`mode.${value}`),
               }))}
@@ -901,7 +951,7 @@ export default function DomainFrontTab({
               <Input placeholder="https://origin.example.com" />
             </Form.Item>
           )}
-          {mode !== 'sub_link_only' && (
+          {mode !== 'sub_link_only' && mode !== 'sni_only' && (
             <>
               <Form.Item
                 name="inboundIds"
@@ -919,14 +969,14 @@ export default function DomainFrontTab({
               </Form.Item>
             </>
           )}
-          <Form.Item label={label('useForSubscription')} tooltip={label('useForSubscriptionHelp')}>
+          {mode !== 'sni_only' && <Form.Item label={label('useForSubscription')} tooltip={label('useForSubscriptionHelp')}>
             <Checkbox
               checked={primaryDomain}
               onChange={(event) => setPrimaryDomain(event.target.checked)}
             >
               {label('useForSubscription')}
             </Checkbox>
-          </Form.Item>
+          </Form.Item>}
           <Form.Item
             name="tls"
             label={label('tlsLabel')}
