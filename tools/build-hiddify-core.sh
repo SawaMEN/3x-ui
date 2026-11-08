@@ -115,6 +115,12 @@ task_goarch=${GOARCH:-$(go env GOARCH)}
 task_binary="hiddify-core-$task_goos-$task_goarch"
 task_cgo=0
 task_link_flags="-s -w -checklinkname=0 -X github.com/hiddify/hiddify-core/v2/hcommon/constants.Version=${target[1]} -X github.com/sagernet/sing-box/constant.Version=${target[4]}"
+# Run protocol regression tests with the non-CGO Cronet backend. The release
+# executable is still compiled and smoke-tested with the requested musl profile.
+# Statically linking the Go test harness against musl crashes before the tests
+# run on both amd64 and arm64 release builders.
+task_test_tags=${target[3]}
+task_test_link_flags=$task_link_flags
 if [[ ${SINGBOX_CRONET_LINKAGE:-purego} == musl ]]; then
   [[ "$task_goos" == linux ]] || { printf '%s\n' 'musl linkage requires Linux' >&2; exit 1; }
   task_cgo=1
@@ -131,15 +137,15 @@ fi
 if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOSTARCH)" ]]; then
   (
     cd -- "$task_source/core"
-    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/transport/v2rayhttpupgrade github.com/sagernet/sing-box/transport/trojan -run '^TestXUIPanel' -count=1 -timeout=30s
-    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/experimental/clashapi/trafficontrol -run '^TestXUIPanelAuthenticatedUserIsConnectionMetadata$' -count=1
-    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box -run '^TestXUIPanelInboundFinalMask' -count=1 -timeout=60s
-    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/transport/v2rayxdrive -count=1 -timeout=90s
-    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/protocol/snell -run '^TestSnellV[56]' -count=1 -timeout=60s
-    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/option -run '^TestXUIPanelHTTP1RoundTrip$' -count=1
-    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/route/rule -run '^TestXUIPanelSniffOverrideAction$' -count=1
-    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/common/tls github.com/sagernet/sing-box/protocol/vless github.com/sagernet/sing-vmess/vless -run '^TestXUIPanel(Reality|Preconnect|Vision|Reverse|Encryption|ExplicitCipher)' -count=1 -timeout=60s
-    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/transport/v2raykcp github.com/sagernet/sing-box/transport/v2rayxhttp github.com/sagernet/sing-box/protocol/group -run '^TestXUIPanel' -count=1 -timeout=90s
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/transport/v2rayhttpupgrade github.com/sagernet/sing-box/transport/trojan -run '^TestXUIPanel' -count=1 -timeout=30s
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/experimental/clashapi/trafficontrol -run '^TestXUIPanelAuthenticatedUserIsConnectionMetadata$' -count=1
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box -run '^TestXUIPanelInboundFinalMask' -count=1 -timeout=60s
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/transport/v2rayxdrive -count=1 -timeout=90s
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/protocol/snell -run '^TestSnellV[56]' -count=1 -timeout=60s
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/option -run '^TestXUIPanelHTTP1RoundTrip$' -count=1
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/route/rule -run '^TestXUIPanelSniffOverrideAction$' -count=1
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/common/tls github.com/sagernet/sing-box/protocol/vless github.com/sagernet/sing-vmess/vless -run '^TestXUIPanel(Reality|Preconnect|Vision|Reverse|Encryption|ExplicitCipher)' -count=1 -timeout=60s
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/transport/v2raykcp github.com/sagernet/sing-box/transport/v2rayxhttp github.com/sagernet/sing-box/protocol/group -run '^TestXUIPanel' -count=1 -timeout=90s
   )
 fi
 (
