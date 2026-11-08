@@ -64,6 +64,33 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
     expect(reassigned.rules[0][destination]).toBe('direct');
   });
 
+  it('supersedes a conflicting basic binding when a quick route is assigned', () => {
+    const basic: RouteRecord =
+      engine === 'xray'
+        ? {
+            type: 'field',
+            comment: 'panel-inbound:in-a',
+            inboundTag: ['in-a'],
+            outboundTag: 'direct',
+          }
+        : {
+            action: 'route',
+            comment: 'panel-inbound:in-a',
+            inbound: ['in-a'],
+            outbound: 'direct',
+          };
+    const other = { ...basic, comment: 'panel-inbound:in-c' };
+    if (engine === 'xray') other.inboundTag = ['in-c'];
+    else other.inbound = ['in-c'];
+    const quick = compileQuickRoute(
+      draft({ inboundTags: ['in-a'], target: 'proxy' }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
+    expect(putQuickRoute([basic, other], quick, engine).rules).toEqual([other, quick.rule]);
+  });
+
   it('does not trim domain exceptions when reassigning an inbound', () => {
     const domain = compileQuickRoute(
       draft({ match: 'domain', values: 'example.org', inboundTags: ['in-a'] }),
