@@ -5,12 +5,27 @@ on:
   pull_request:
     branches:
       - main
+    paths: &release_paths
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "frontend/**"
+      - ".nvmrc"
+      - "Makefile"
+      - "deploy/**"
+      - "internal/**"
+      - "scripts/**"
+      - "tools/**"
+      - "install.sh"
+      - "update.sh"
+      - ".github/workflows/release.yml"
   push:
     branches:
       - main
       - update
     tags:
       - "v*.*.*"
+    paths: *release_paths
 
 # Keep only the newest pushed development-branch build. Obsolete update audit
 # builds must not block the next fixed revision. Explicit version tags and
@@ -44,11 +59,8 @@ jobs:
           GOPROXY: "https://proxy.golang.org|direct"
         run: bash tools/ci/download-go-modules.sh
 
-      - name: Run Go tests
-        run: |
-          make test-go
-          go test ./internal/sudoku -count=1 -ldflags "-X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA}"
-
+      # Full Go test and race coverage is enforced by the CI workflow.
+      # Release validates each compiled artifact against the actual kernel.
       - name: Build frontend bundle
         run: |
           npm ci --no-audit --no-fund
@@ -245,14 +257,32 @@ jobs:
 
           cd ../..
 
+      - name: Restore verified statically linked kernel
+        id: core-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+            x-ui/bin/hiddify-core-linux-${{ matrix.platform }}.sha256
+            x-ui/bin/target.json
+          key: hiddify-musl-${{ matrix.platform }}-v1-${{ hashFiles('deploy/hiddify/**', 'deploy/speed/masque.patch', 'tools/build-hiddify-core.sh', 'tools/verify-hiddify-build.py', 'internal/clientlimit/brokerclient/client.go', 'go.mod', 'go.sum') }}
+
       - name: Build compatible shared-speed protocol servers and kernel
         env:
           GOOS: linux
           GOARCH: ${{ matrix.platform }}
+          CORE_CACHE_HIT: ${{ steps.core-cache.outputs.cache-hit }}
         run: |
+          set -euo pipefail
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
-          # Build the pinned, statically linked kernel directly on the native Linux runner.
-          HIDDIFY_VULNCHECK=1 SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
+          if [[ "$CORE_CACHE_HIT" != "true" ]]; then
+            # Fresh kernel: run the complete upstream patch suite and vulnerability audit.
+            HIDDIFY_VULNCHECK=1 SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
+          else
+            echo "Reusing kernel built from the exact pinned source and patch graph"
+            (cd x-ui/bin && sha256sum -c "hiddify-core-linux-${GOARCH}.sha256")
+            test -s x-ui/bin/target.json
+          fi
       - name: Check panel configuration with downloaded binary
         env:
           CC: gcc

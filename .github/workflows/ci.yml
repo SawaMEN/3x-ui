@@ -346,23 +346,25 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
-      # A transient GitHub Releases 504 must not prevent linting the code.
-      # Keep the fast binary path, but compile the pinned linter via the Go
-      # module proxy when release-asset downloads (or binary setup) fail.
-      - name: golangci-lint (binary)
-        id: golangci_binary
-        continue-on-error: true
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.15.0
-          args: --timeout=5m
-      - name: golangci-lint (Go install fallback)
-        if: steps.golangci_binary.outcome == 'failure'
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.15.0
-          install-mode: goinstall
-          args: --timeout=5m
+      # Retry the installer, never the linter's diagnostics: a formatting
+      # error must not trigger a full second lint pass.
+      - name: Install pinned golangci-lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/golangci-lint.tar.gz"
+          url="https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-linux-amd64.tar.gz"
+          if curl -fLsS --retry 3 --retry-all-errors --connect-timeout 15 --max-time 90 "$url" -o "$archive"; then
+            tar -xzf "$archive" -C "$RUNNER_TEMP"
+            mkdir -p "$RUNNER_TEMP/golangci-bin"
+            install -m 0755 "$RUNNER_TEMP/golangci-lint-2.15.0-linux-amd64/golangci-lint" "$RUNNER_TEMP/golangci-bin/golangci-lint"
+            echo "$RUNNER_TEMP/golangci-bin" >> "$GITHUB_PATH"
+          else
+            go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+            echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Run golangci-lint once
+        run: golangci-lint run --timeout=5m
 
   arch-linux:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
