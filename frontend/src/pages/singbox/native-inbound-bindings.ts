@@ -37,7 +37,22 @@ export function setNativeInboundRouteTarget(
   const marker = PREFIX + tag;
   const rules = records(route.rules);
   const previous = rules.findIndex((rule) => rule.comment === marker);
-  const next = rules.filter((rule) => rule.comment !== marker);
+  // An inbound-only quick route may have claimed the same listener. A new
+  // basic binding takes precedence by narrowing the older panel-owned route.
+  const next = rules.flatMap((rule) => {
+    if (rule.comment === marker) return [];
+    if (
+      outbound &&
+      typeof rule.comment === 'string' &&
+      rule.comment.startsWith('panel-quick:inbound:') &&
+      Array.isArray(rule.inbound) &&
+      rule.inbound.includes(tag)
+    ) {
+      const remaining = rule.inbound.filter((inbound) => inbound !== tag);
+      return remaining.length ? [{ ...rule, inbound: remaining }] : [];
+    }
+    return [rule];
+  });
   if (outbound) {
     const fallback = next.findIndex(isUnconditionalRoute);
     // An existing binding may have been moved below a catch-all by another
