@@ -55,5 +55,4 @@ x-ui uninstall   # удаление
 - [Mekotofeuka/MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — за фикс **MTPROTO**.
 - Основному проекту [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui) — за исходную кодовую базу и развитие проекта.
 
-Основано на [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
 Лицензия: [GPL-3.0](LICENSE).
