@@ -37,6 +37,49 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
     expect(repeat.id).toBe(rule.id);
   });
 
+  it('assigns overlapping inbound groups to the latest selected node without shadowing', () => {
+    const first = compileQuickRoute(draft({ target: 'proxy' }), engine, OUTBOUNDS, INBOUNDS);
+    const second = compileQuickRoute(
+      draft({ inboundTags: ['in-b'], target: 'blocked' }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
+    const afterFirst = putQuickRoute([], first, engine);
+    const afterSecond = putQuickRoute(afterFirst.rules, second, engine);
+    const field = engine === 'xray' ? 'inboundTag' : 'inbound';
+    const destination = engine === 'xray' ? 'outboundTag' : 'outbound';
+    expect(afterSecond.rules.map((rule) => rule[field])).toEqual([['in-a'], ['in-b']]);
+    expect(afterSecond.rules.map((rule) => rule[destination])).toEqual(['proxy', 'blocked']);
+    expect(afterFirst.rules[0][field]).toEqual(['in-a', 'in-b']);
+
+    const all = compileQuickRoute(
+      draft({ inboundTags: ['in-a', 'in-b'], target: 'direct' }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
+    const reassigned = putQuickRoute(afterSecond.rules, all, engine);
+    expect(reassigned.rules).toHaveLength(1);
+    expect(reassigned.rules[0][destination]).toBe('direct');
+  });
+
+  it('does not trim domain exceptions when reassigning an inbound', () => {
+    const domain = compileQuickRoute(
+      draft({ match: 'domain', values: 'example.org', inboundTags: ['in-a'] }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
+    const inbound = compileQuickRoute(
+      draft({ inboundTags: ['in-a'], target: 'blocked' }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
+    expect(putQuickRoute([domain.rule], inbound, engine).rules).toEqual([domain.rule, inbound.rule]);
+  });
+
   it('upserts existing managed route instead of creating duplicates', () => {
     const first = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
     const changed = compileQuickRoute(draft({ target: 'direct' }), engine, OUTBOUNDS, INBOUNDS);
@@ -180,6 +223,15 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
         compileQuickRoute(draft({ match: 'port', values }), engine, OUTBOUNDS, INBOUNDS),
       ).toThrow();
     }
+  });
+
+  it('keeps a non-terminal native sniff action ahead of inbound routes', () => {
+    if (engine !== 'sing-box') return;
+    const sniff = { action: 'sniff' };
+    const fallback = { action: 'route', outbound: 'direct' };
+    const compiled = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
+    const placed = putQuickRoute([sniff, fallback], compiled, engine);
+    expect(placed.rules).toEqual([sniff, compiled.rule, fallback]);
   });
 
   it('detects missing outbound and unreachable quick rule after catch-all', () => {
