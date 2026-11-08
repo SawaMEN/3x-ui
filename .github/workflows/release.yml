@@ -59,8 +59,8 @@ jobs:
           GOPROXY: "https://proxy.golang.org|direct"
         run: bash tools/ci/download-go-modules.sh
 
-      # Full Go test and race coverage is enforced by the CI workflow.
-      # Release validates each compiled artifact against the actual kernel.
+      # Full Go tests execute in parallel (go-tests), not ahead of the
+      # native binary build. Publication requires that job to pass.
       - name: Build frontend bundle
         run: |
           npm ci --no-audit --no-fund
@@ -74,6 +74,24 @@ jobs:
           path: internal/web/dist
           if-no-files-found: error
           compression-level: 0
+
+  go-tests:
+    name: Full Go release test gate (parallel to compilation)
+    runs-on: ubuntu-latest
+    env:
+      GOPROXY: "https://proxy.golang.org|direct"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
+      - name: Run complete Go suite
+        run: |
+          make test-go
+          go test ./internal/sudoku -count=1 -ldflags "-X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA}"
 
   resolve-telemt:
     runs-on: ubuntu-latest
@@ -334,21 +352,40 @@ jobs:
             x-ui-linux-${{ matrix.platform }}.tar.gz
             x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
 
-      - name: Upload stable release assets
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+  publish-stable:
+    name: Publish verified stable archives
+    needs: [build, go-tests]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download tested archives from both architectures
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "x-ui-linux-*"
+          path: stable-artifacts
+          merge-multiple: true
+      - name: Verify stable archive checksums
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            test -s "stable-artifacts/x-ui-linux-$arch.tar.gz"
+            (cd stable-artifacts && sha256sum -c "x-ui-linux-$arch.tar.gz.sha256")
+          done
+      - name: Upload stable release assets after full Go tests
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
-          file: x-ui-linux-${{ matrix.platform }}.tar.gz*
+          file: stable-artifacts/*.tar.gz*
           file_glob: true
           overwrite: true
           prerelease: false
 
-
   publish-dev:
     name: Publish rolling dev release
-    needs: [build]
+    needs: [build, go-tests]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
