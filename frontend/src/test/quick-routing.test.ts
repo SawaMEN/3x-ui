@@ -104,7 +104,10 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
       OUTBOUNDS,
       INBOUNDS,
     );
-    expect(putQuickRoute([domain.rule], inbound, engine).rules).toEqual([domain.rule, inbound.rule]);
+    expect(putQuickRoute([domain.rule], inbound, engine).rules).toEqual([
+      domain.rule,
+      inbound.rule,
+    ]);
   });
 
   it('upserts existing managed route instead of creating duplicates', () => {
