@@ -3,6 +3,8 @@ import { Alert, Button, Collapse, Input, InputNumber, Select, Space, Switch } fr
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
+import SniSearchInput from '../security/SniSearchInput';
+import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import {
   VETROFF_TRANSPORTS,
   VetroffOptionsSchema,
@@ -14,6 +16,7 @@ export function VetroffFields() {
   const { t } = useTranslation();
   const { control, getValues, setValue } = useFormContext();
   const options = useWatch({ control, name: prefix });
+  const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
   const nodes = useFieldArray({ control, name: `${prefix}.nodes` });
   const policies = useFieldArray({ control, name: `${prefix}.userPolicies` });
   const set = (key: string, value: unknown) =>
@@ -94,7 +97,15 @@ export function VetroffFields() {
         <Switch />
       </FormField>
       <FormField name="settings.hostname" label="SNI">
-        <Input placeholder={label('automatic')} />
+        <SniSearchInput
+          placeholder={label('automatic')}
+          onPickManagedDomain={(domain: ManagedSniDomain) => {
+            if (nodeId == null && !options?.autoTLS) {
+              setValue('settings.certificate', domain.certFile, { shouldDirty: true });
+              setValue('settings.privateKey', domain.keyFile, { shouldDirty: true });
+            }
+          }}
+        />
       </FormField>
       {!options?.autoTLS && (
         <>

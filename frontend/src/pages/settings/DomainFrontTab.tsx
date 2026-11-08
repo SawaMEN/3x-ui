@@ -41,6 +41,7 @@ import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
+import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import { redirectSiteOptions } from './redirect-sites';
 import { rootRedirectError } from './root-redirect';
 
@@ -74,6 +75,8 @@ export default function DomainFrontTab({
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const statusQuery = useDomainFrontStatus();
+  const { data: managedSniDomains = [] } = useManagedSniDomains();
+  const telemtSites = managedSniDomains.filter((site) => site.source === 'telemt');
   const status = statusQuery.data;
   const config = status?.config;
   const server = useMemo(
@@ -242,6 +245,11 @@ export default function DomainFrontTab({
   }
   async function saveDomain() {
     const value = await form.validateFields();
+    if (value.mode === 'sni_only' && telemtSites.some((site) => site.name === value.name)) {
+      messageApi.info(label('telemtAlreadyExists'));
+      setEditing(undefined);
+      return;
+    }
     const old = editing != null && editing >= 0 ? draft.domains[editing] : undefined;
     const domain = DomainFormSchema.parse({
       ...defaultDomain,
@@ -676,14 +684,38 @@ export default function DomainFrontTab({
           />
         </Form>
       </Card>
+      {telemtSites.length > 0 && (
+        <Alert
+          type="info"
+          showIcon
+          title={label('telemtReuseTitle')}
+          description={label('telemtReuseDesc')}
+        />
+      )}
       <Card
         title={label('sniCertificates')}
         extra={<Typography.Text type="secondary">{label('sniCertHint')}</Typography.Text>}
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          {draft.domains.filter((domain) => domain.mode === 'sni_only').length === 0 && (
+          {draft.domains.filter((domain) => domain.mode === 'sni_only').length === 0 &&
+            telemtSites.length === 0 && (
             <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>
           )}
+          {telemtSites.map((site) => (
+            <Card key={`telemt-${site.name}`} size="small" title={site.name}>
+              <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                <Tag color="green">Telemt WEB</Tag>
+                <Typography.Text type="secondary">{label('certFile')}</Typography.Text>
+                <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
+                  {site.certFile}
+                </Typography.Text>
+                <Typography.Text type="secondary">{label('keyFile')}</Typography.Text>
+                <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
+                  {site.keyFile}
+                </Typography.Text>
+              </Space>
+            </Card>
+          ))}
           {draft.domains.filter((domain) => domain.mode === 'sni_only').map((domain) => {
             const cert = status?.certificates.find((c) => c.name === domain.name);
             return (

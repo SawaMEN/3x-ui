@@ -18,6 +18,7 @@ import { RadarChartOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/
 import dayjs from 'dayjs';
 
 import { FormField } from '@/components/form/rhf';
+import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import { UTLS_FINGERPRINT } from '@/schemas/primitives';
 import {
   validateRealityClientVer,
@@ -61,6 +62,7 @@ export default function RealityForm({
 }: RealityFormProps) {
   const { t } = useTranslation();
   const uid = useId();
+  const { data: managedDomains = [] } = useManagedSniDomains();
   const { getFieldState, trigger } = useFormContext();
   const [scannerOpen, setScannerOpen] = useState(false);
   const nodeId = useWatch({ name: 'nodeId' }) as number | null | undefined;
@@ -217,7 +219,15 @@ export default function RealityForm({
         </Form.Item>
       )}
       <FormField label="SNI" name={['streamSettings', 'realitySettings', 'serverNames']}>
-        <Select mode="tags" tokenSeparators={[',']} style={{ width: '100%' }} />
+        <Select
+          mode="tags"
+          tokenSeparators={[',']}
+          style={{ width: '100%' }}
+          options={managedDomains.map((domain) => ({
+            value: domain.name,
+            label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : 'TLS'}`,
+          }))}
+        />
       </FormField>
       <FormField
         name={['streamSettings', 'realitySettings', 'maxTimediff']}
