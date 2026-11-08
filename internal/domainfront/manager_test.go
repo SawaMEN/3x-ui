@@ -564,3 +564,31 @@ func TestSNIOnlyDecoyIsIsolated(t *testing.T) {
 		}
 	}
 }
+
+func TestSharedSNIDomainIsNeverServedByLocalGateway(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Domains = []DomainFrontDomain{{
+		Name: "edge.example.com",
+		Mode: "shared_sni",
+		Enabled: true,
+		TLS: "auto",
+	}}
+	r := &frontRuntime{cfg: cfg, backend: Backend{}}
+	if _, ok := r.domain("edge.example.com"); ok {
+		t.Fatal("foreign cover site was exposed by local HTTPS gateway")
+	}
+	handler, err := r.handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "https://edge.example.com/", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("shared SNI unexpectedly served locally: %d", response.Code)
+	}
+	manager := NewManager(t.TempDir())
+	status := manager.Status(cfg)
+	if len(status.Certificates) != 1 || status.Certificates[0].State != "external" || status.Certificates[0].CertFile != "" {
+		t.Fatalf("shared SNI must not expose a local certificate: %#v", status.Certificates)
+	}
+}

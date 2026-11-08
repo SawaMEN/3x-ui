@@ -150,6 +150,9 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 		r.challengeRoots = map[string]string{}
 	}
 	for _, d := range cfg.Domains {
+		if d.Mode == "shared_sni" {
+			continue
+		}
 		if files, ok := backend.Certificates[d.Name]; ok && d.Enabled && (d.TLS == "auto" || d.TLS == "existing") {
 			cert, err := network.NewFileCertificate(files.CertFile, files.KeyFile)
 			if err != nil {
@@ -215,7 +218,7 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	// that loader. New certificates are still obtained in the background.
 	var names []string
 	for _, d := range cfg.Domains {
-		if !d.Enabled || (d.TLS != "auto" && d.TLS != "certmagic") || r.external[d.Name] != nil {
+		if !d.Enabled || d.Mode == "shared_sni" || (d.TLS != "auto" && d.TLS != "certmagic") || r.external[d.Name] != nil {
 			continue
 		}
 		names = append(names, d.Name)
@@ -290,7 +293,7 @@ func (r *frontRuntime) domain(host string) (DomainFrontDomain, bool) {
 	}
 	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	for _, d := range r.cfg.Domains {
-		if d.Enabled && d.Name == host {
+		if d.Enabled && d.Mode != "shared_sni" && d.Name == host {
 			return d, true
 		}
 	}
@@ -350,6 +353,11 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 	for _, d := range cfg.Domains {
 		entry := DomainFrontCertificate{Name: d.Name, Mode: d.TLS, State: "disabled", AutoRenew: out.Running && d.Enabled && cfg.Enabled && (d.TLS == "auto" || d.TLS == "certmagic")}
 		if !d.Enabled {
+			out.Certificates = append(out.Certificates, entry)
+			continue
+		}
+		if d.Mode == "shared_sni" {
+			entry.State, entry.Source, entry.Renewal, entry.AutoRenew = "external", "remote", "external", false
 			out.Certificates = append(out.Certificates, entry)
 			continue
 		}
@@ -479,7 +487,7 @@ func proxy(target, host string, h2c bool) (*httputil.ReverseProxy, error) {
 func (r *frontRuntime) handler() (http.Handler, error) {
 	handlers := map[string]http.Handler{}
 	for _, d := range r.cfg.Domains {
-		if !d.Enabled {
+		if !d.Enabled || d.Mode == "shared_sni" {
 			continue
 		}
 		h, err := r.domainHandler(d)

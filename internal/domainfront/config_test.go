@@ -53,3 +53,30 @@ func TestDomainRolesRejectUnsafeCombinations(t *testing.T) {
 		})
 	}
 }
+
+func TestSharedSNIDomainDoesNotRequireLocalACME(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	cfg.AcceptTerms = false
+	cfg.Domains = []DomainFrontDomain{{
+		Name: "EDGE.EXAMPLE.COM.",
+		Mode: "shared_sni",
+		Enabled: true,
+		TLS: "certmagic",
+	}}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("shared foreign site must not start local ACME: %v", err)
+	}
+	if d := cfg.Domains[0]; d.Name != "edge.example.com" || d.TLS != "auto" || d.CertFile != "" || d.KeyFile != "" {
+		t.Fatalf("shared domain not normalized: %#v", d)
+	}
+	cfg.SubscriptionDomain = "edge.example.com"
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "canonical subscription") {
+		t.Fatalf("shared SNI must not host subscriptions: %v", err)
+	}
+	cfg.SubscriptionDomain = ""
+	cfg.Domains[0].InboundIDs = []int{1}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "shared SNI domains cannot") {
+		t.Fatalf("shared SNI cannot publish inbounds: %v", err)
+	}
+}

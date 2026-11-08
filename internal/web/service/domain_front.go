@@ -64,6 +64,14 @@ func ManagedSNIDomains() ([]ManagedSNIDomain, error) {
 			add(alias, "telemt", state.CertFile, state.KeyFile)
 		}
 	}
+	// Foreign nodes own these HTTPS sites. Their domain is reusable for SNI,
+	// but there is deliberately no local certificate or private-key path.
+	for _, domain := range status.Config.Domains {
+		if domain.Enabled && domain.Mode == "shared_sni" && !seen[domain.Name] {
+			seen[domain.Name] = true
+			out = append(out, ManagedSNIDomain{Name: domain.Name, Source: "remote"})
+		}
+	}
 	if status.Config.Enabled && status.Running {
 		enabled := make(map[string]bool)
 		for _, domain := range status.Config.Domains {
@@ -292,7 +300,7 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		backend.SubscriptionHost = certificateHost(settings.SubCertFile, settings.SubDomain)
 	}
 	for _, d := range cfg.Domains {
-		if !d.Enabled {
+		if !d.Enabled || d.Mode == "shared_sni" {
 			continue
 		}
 		if d.Mode == "sni_only" {
