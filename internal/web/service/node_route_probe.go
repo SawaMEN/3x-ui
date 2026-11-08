@@ -26,8 +26,12 @@ type NodeRouteProbeResult struct {
 	Transport     string `json:"transport"`
 	LatencyMs     int64  `json:"latencyMs,omitempty"`
 	Inconclusive  bool   `json:"inconclusive,omitempty"`
-	TunnelChecked bool   `json:"tunnelChecked,omitempty"`
-	Detail        string `json:"detail"`
+	TunnelChecked      bool   `json:"tunnelChecked,omitempty"`
+	ProbeSource        string `json:"probeSource,omitempty"`
+	FailureStage       string `json:"failureStage,omitempty"`
+	TransportReachable bool   `json:"transportReachable,omitempty"`
+	TransportDetail    string `json:"transportDetail,omitempty"`
+	Detail             string `json:"detail"`
 }
 
 func nodeRouteIsUDP(inbound *model.Inbound) bool {
@@ -228,24 +232,60 @@ func probeNodeRouteTunnel(ctx context.Context, inbound *model.Inbound) (NodeRout
 	if err != nil {
 		return result, true, err
 	}
+	// If the route has already been applied, prefer the actual running core.
+	// A temporary probe process can fail even though production traffic works.
+	applied, appliedChecked := probeNodeRouteAppliedIfAvailable(ctx, core, result.Tag)
+	if appliedChecked && applied != nil && applied.Success {
+		result.Reachable = true
+		result.TransportReachable = true
+		result.LatencyMs = applied.Delay
+		result.ProbeSource = "running-core"
+		result.TransportDetail = "Удалённый транспорт подтверждён HTTPS-запросом через работающее ядро."
+		result.Detail = "HTTPS-запрос через применённое исходящее подключение успешен. Проверка выполнена работающим ядром панели, без запуска отдельного SOCKS-прокси."
+		return result, true, nil
+	}
+
+	// An unsaved route has no applied outbound yet. Preserve the isolated
+	// authenticated probe, but never interpret its SOCKS failure as proof
+	// that the user's already working connection is offline.
+	result.ProbeSource = "temporary-core"
 	service := &outbound.OutboundService{CoreType: core}
 	probe, err := probeNodeRouteHTTP(func(target string) (*outbound.TestOutboundResult, error) {
 		return service.TestOutbound(string(encoded), target, "", "http")
 	})
 	if err != nil {
-		result.Detail = "Проверка трафика через каскад завершилась ошибкой: " + err.Error()
+		result.Inconclusive = true
+		result.FailureStage = "test-core"
+		result.Detail = "Временное проверочное ядро завершилось с ошибкой: " + err.Error() + ". Это не подтверждает неисправность основного подключения."
 		return result, true, nil
 	}
 	if probe == nil {
-		result.Detail = "Проверка каскада не вернула результат"
+		result.Inconclusive = true
+		result.FailureStage = "test-core"
+		result.Detail = "Временное проверочное ядро не вернуло результат. Доступность подключения не определена."
 		return result, true, nil
 	}
 	result.Reachable = probe.Success
 	result.LatencyMs = probe.Delay
 	if probe.Success {
-		result.Detail = "HTTP-запрос через аутентифицированное исходящее подключение успешен. Проверка выполнена с сервера панели."
+		result.TransportReachable = true
+		result.TransportDetail = "HTTPS-запрос через удалённый транспорт выполнен временным ядром."
+		if appliedChecked {
+			result.Inconclusive = true
+			result.Detail = "Временное ядро успешно передало HTTPS-трафик, но проверка применённого маршрута через работающее ядро не прошла. Проверьте применение конфигурации и журнал ядра."
+		} else {
+			result.Detail = "HTTPS-запрос через аутентифицированное исходящее подключение успешен во временном ядре. Это не подтверждает, что новый маршрут уже применён в работающем ядре."
+		}
 	} else {
-		result.Detail = "Трафик через исходящее подключение не проходит: " + probe.Error
+		result.Inconclusive = true
+		result.FailureStage, result.Detail = nodeRouteProbeFailureStage(probe.Error)
+		result.TransportReachable, result.TransportDetail = nodeRouteTransportEvidence(ctx, inbound, native)
+		result.Detail += " HTTPS-запросы через проверочное исходящее не прошли: " + probe.Error
+		if appliedChecked {
+			result.Detail += " Проверка применённого исходящего через работающее ядро тоже не прошла."
+		} else {
+			result.Detail += " Применённое исходящее в работающем ядре не обнаружено: проверялся только временный экземпляр."
+		}
 	}
 	return result, true, nil
 }
