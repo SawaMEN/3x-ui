@@ -112,6 +112,7 @@ export default function CascadeDiagnosticsPage() {
     (kindFilter === 'all' || store.problems.some(p => p.tag === t.tag && p.type === kindFilter))
   ), [targets, nodeFilter, protocolFilter, kindFilter, statusFilter, store.problems]);
   const current = targets.find(t => t.tag === selectedTag) || visible[0];
+  const sourceNodeId = inbounds.find(inbound => inbound.tag === sourceInbound)?.nodeId;
   const filteredProblems = store.problems.filter(p =>
     (nodeFilter === 'all' || p.nodeId === nodeFilter) &&
     (protocolFilter === 'all' || p.protocol === protocolFilter) &&
@@ -150,7 +151,7 @@ export default function CascadeDiagnosticsPage() {
       if (probe?.success && probe.obj) check.probe = probe.obj;
       else check.probeError = probe?.msg || 'Не удалось проверить исходящий туннель';
     } catch (error) { check.probeError = String(error); }
-    if (core === 'xray' && sourceInbound && destination.trim()) {
+    if (core === 'xray' && sourceInbound && sourceNodeId == null && destination.trim()) {
       const value = destination.trim();
       const ip = /^(\d{1,3}\.){3}\d{1,3}$/.test(value) || value.includes(':');
       try {
@@ -160,6 +161,8 @@ export default function CascadeDiagnosticsPage() {
         if (result?.success && result.obj) check.route = result.obj;
         else check.routeError = result?.msg || 'Не удалось проверить правило маршрутизации';
       } catch (error) { check.routeError = String(error); }
+    } else if (sourceNodeId != null) {
+      check.routeError = 'Источник расположен на другой ноде; локальный routeTest не проверяет её маршрутизатор. Необходим тест на ноде-источнике.';
     } else if (core === 'sing-box') {
       check.routeError = 'API проверки совпадения правила доступен только для Xray; требуется отдельная проверка маршрутизации sing-box';
     } else {
@@ -303,8 +306,8 @@ export default function CascadeDiagnosticsPage() {
                         <Col xs={24} md={12}><Typography.Text>Локальное входящее (источник)</Typography.Text>
                           <Select style={{ width: '100%' }} showSearch optionFilterProp="label" value={sourceInbound || undefined}
                             onChange={setSourceInbound} placeholder="Укажите входящее панели" allowClear
-                            options={inbounds.filter(x => x.nodeId == null).map(x =>
-                              ({ label: (x.remark || x.tag) + ' · ' + x.protocol, value: x.tag })).filter(x => !!x.value)} /></Col>
+                            options={inbounds.map(x =>
+                              ({ label: (x.nodeId == null ? 'Панель' : (nodes.find(n => n.id === x.nodeId)?.name || ('Нода #' + x.nodeId))) + ' · ' + (x.remark || x.tag) + ' · ' + x.protocol, value: x.tag })).filter(x => !!x.value)} /></Col>
                         <Col xs={24} md={8}><Typography.Text>Тестовый домен/IP</Typography.Text>
                           <Input value={destination} onChange={e => setDestination(e.target.value)} placeholder="example.com" /></Col>
                         <Col xs={24} md={4} style={{ display: 'flex', alignItems: 'end' }}>
@@ -332,9 +335,10 @@ export default function CascadeDiagnosticsPage() {
                   </Space> },
                 { key: 'connections', label: 'Входящие / исходящие', children:
                   <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-                    <Card size="small" title="Локальные входящие">
-                      <Table size="small" rowKey="id" pagination={{ pageSize: 8 }} dataSource={inbounds.filter(i => i.nodeId == null)}
-                        columns={[{ title: 'Название', dataIndex: 'remark' }, { title: 'Тег', dataIndex: 'tag' },
+                    <Card size="small" title="Входящие панели и нод-источников">
+                      <Table size="small" rowKey="id" pagination={{ pageSize: 8 }} dataSource={inbounds}
+                        columns={[{ title: 'Источник', key: 'source', render: (_: unknown, entry: typeof inbounds[number]) => entry.nodeId == null ? 'Панель' : (nodes.find(n => n.id === entry.nodeId)?.name || 'Нода #' + entry.nodeId) },
+                          { title: 'Название', dataIndex: 'remark' }, { title: 'Тег', dataIndex: 'tag' },
                           { title: 'Протокол', dataIndex: 'protocol' }, { title: 'Порт', dataIndex: 'port' }]} /></Card>
                     <Card size="small" title="Удалённые входящие и управляемые исходящие">
                       <Table size="small" rowKey="tag" loading={loading} dataSource={visible} scroll={{ x: 720 }}
