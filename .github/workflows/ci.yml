@@ -115,6 +115,24 @@ jobs:
         run: |
           go test -p 12 -vet=off -shuffle=on -count=1 ./...
 
+  go-vet:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    env:
+      GOPROXY: "https://proxy.golang.org|direct"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
+      - name: Vet Go packages
+        run: go vet -p 12 ./...
+
   native-core-integration:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
