@@ -26,7 +26,7 @@ type NodeRouteProbeResult struct {
 	Transport     string `json:"transport"`
 	LatencyMs     int64  `json:"latencyMs,omitempty"`
 	Inconclusive  bool   `json:"inconclusive,omitempty"`
-	TunnelChecked bool `json:"tunnelChecked,omitempty"`
+	TunnelChecked bool   `json:"tunnelChecked,omitempty"`
 	Detail        string `json:"detail"`
 }
 
@@ -117,7 +117,6 @@ func probeNodeRouteQUIC(ctx context.Context, address string, port int) (time.Dur
 		return time.Since(start), nil
 	}
 }
-
 
 // nodeRouteNativeProbeWrapper converts a generated native connection into the
 // same panel outbound shape used by ordinary authenticated HTTP probes. Its
