@@ -439,6 +439,16 @@ export default function QuickRoutingPanel({
             }))}
           />
 
+          {draft.match === 'inbound' &&
+            (inboundOptions || []).some((inbound) => inbound.nodeId != null) && (
+              <Alert
+                type="info"
+                showIcon
+                title="Входящие подключения удалённых нод"
+                description="Правило этой панели применяется только к трафику её локального ядра. Если входящий TUIC работает на другой ноде, настраивайте маршрут на этой ноде: удалённый входящий здесь не является источником трафика."
+              />
+            )}
+
           {inTags.length === 0 && (
             <Alert
               type="info"
