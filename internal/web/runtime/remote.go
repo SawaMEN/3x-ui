@@ -791,6 +791,29 @@ type WebCertFiles struct {
 // the central panel can offer them as the "Set Cert from Panel" default for a
 // node-assigned inbound — those paths exist on the node, the central panel's
 // don't. See issue #4854.
+// RemoteManagedSNI identifies a cover site on the node. Its certificate
+// file paths are checked on that node and must never be copied to another.
+type RemoteManagedSNI struct {
+	Name     string `json:"name"`
+	Source   string `json:"source"`
+	CertFile string `json:"certFile"`
+	KeyFile  string `json:"keyFile"`
+}
+
+// ListManagedSNI uses the existing authenticated node API. The local flag
+// prevents recursive discovery when nodes themselves manage child panels.
+func (r *Remote) ListManagedSNI(ctx context.Context) ([]RemoteManagedSNI, error) {
+	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/sni?local=1", nil)
+	if err != nil {
+		return nil, err
+	}
+	var sites []RemoteManagedSNI
+	if err := json.Unmarshal(env.Obj, &sites); err != nil {
+		return nil, fmt.Errorf("decode node SNI cover sites: %w", err)
+	}
+	return sites, nil
+}
+
 func (r *Remote) GetWebCertFiles(ctx context.Context) (*WebCertFiles, error) {
 	env, err := r.do(ctx, http.MethodGet, "panel/api/server/getWebCertFiles", nil)
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
 type ManagedSNIDomain struct {
@@ -27,12 +28,14 @@ type ManagedSNIDomain struct {
 	Source   string `json:"source"`
 	CertFile string `json:"certFile"`
 	KeyFile  string `json:"keyFile"`
+	NodeID   int    `json:"nodeId,omitempty"`
+	NodeName string `json:"nodeName,omitempty"`
 }
 
 // ManagedSNIDomains reads the *main panel's* live HTTPS endpoints. Remote node
 // editors may reuse these public names, but must never reuse their file paths
 // without explicitly provisioning a certificate on that remote host.
-func ManagedSNIDomains() ([]ManagedSNIDomain, error) {
+func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDomain, error) {
 	status, err := DomainFrontStatus()
 	if err != nil {
 		return nil, err
@@ -64,8 +67,20 @@ func ManagedSNIDomains() ([]ManagedSNIDomain, error) {
 			add(alias, "telemt", state.CertFile, state.KeyFile)
 		}
 	}
-	// Foreign nodes own these HTTPS sites. Their domain is reusable for SNI,
-	// but there is deliberately no local certificate or private-key path.
+	// Remote site discovery uses the panel's existing authenticated node
+	// connection and never copies private-key or certificate file paths.
+	if includeNodes {
+		for _, site := range discoverNodeSNI(ctx) {
+			site.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(site.Name)), ".")
+			if site.Name == "" || !strings.Contains(site.Name, ".") || net.ParseIP(site.Name) != nil || seen[site.Name] {
+				continue
+			}
+			seen[site.Name] = true
+			out = append(out, site)
+		}
+	}
+	// Manual foreign SNI references remain available if a node is offline or
+	// runs an older build without the SNI-discovery endpoint.
 	for _, domain := range status.Config.Domains {
 		if domain.Enabled && domain.Mode == "shared_sni" && !seen[domain.Name] {
 			seen[domain.Name] = true
@@ -90,6 +105,77 @@ func ManagedSNIDomains() ([]ManagedSNIDomain, error) {
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
+}
+
+
+type nodeSNIResponse struct {
+	NodeID   int
+	NodeName string
+	Sites    []runtime.RemoteManagedSNI
+}
+
+// Discover active cover sites on connected nodes. A single stale node may not
+// delay the SNI dropdown beyond five seconds. Unreachable nodes do not prevent
+// locally stored SNI references from loading.
+func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
+	manager := runtime.GetManager()
+	db := database.GetDB()
+	if manager == nil || db == nil {
+		return nil
+	}
+	var nodes []model.Node
+	if err := db.Where("enable = ?", true).Limit(64).Find(&nodes).Error; err != nil {
+		return nil
+	}
+	requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	limit := make(chan struct{}, 6)
+	results := make(chan nodeSNIResponse, len(nodes))
+	var wg sync.WaitGroup
+	for _, node := range nodes {
+		if node.Id <= 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(node model.Node) {
+			defer wg.Done()
+			select {
+			case limit <- struct{}{}:
+				defer func() { <-limit }()
+			case <-requestCtx.Done():
+				return
+			}
+			remote, err := manager.RemoteFor(&node)
+			if err != nil {
+				return
+			}
+			sites, err := remote.ListManagedSNI(requestCtx)
+			if err == nil && len(sites) > 0 {
+				results <- nodeSNIResponse{NodeID: node.Id, NodeName: node.Name, Sites: sites}
+			}
+		}(node)
+	}
+	wg.Wait()
+	close(results)
+	var out []ManagedSNIDomain
+	for result := range results {
+		for _, site := range result.Sites {
+			if (site.Source != "telemt" && site.Source != "gateway") || site.CertFile == "" || site.KeyFile == "" {
+				continue
+			}
+			out = append(out, ManagedSNIDomain{
+				Name: site.Name, Source: "remote",
+				NodeID: result.NodeID, NodeName: result.NodeName,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].NodeID != out[j].NodeID {
+			return out[i].NodeID < out[j].NodeID
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
 }
 
 var domainFrontState struct {

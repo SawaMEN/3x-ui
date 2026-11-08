@@ -77,7 +77,7 @@ export default function SniSearchInput({
             disabled={disabled}
             showSearch={{ optionFilterProp: 'label' }}
             options={managedDomains.map((domain) => ({
-              label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
+              label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? domain.nodeName || t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
               value: domain.name,
             }))}
             onChange={(name) => {

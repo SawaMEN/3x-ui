@@ -6,6 +6,8 @@ export interface ManagedSniDomain {
   source: 'telemt' | 'gateway' | 'remote';
   certFile: string;
   keyFile: string;
+  nodeId?: number;
+  nodeName?: string;
 }
 
 // Always request the authenticated main panel, even while editing a remote

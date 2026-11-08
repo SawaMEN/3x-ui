@@ -77,6 +77,12 @@ export default function DomainFrontTab({
   const statusQuery = useDomainFrontStatus();
   const { data: managedSniDomains = [] } = useManagedSniDomains();
   const telemtSites = managedSniDomains.filter((site) => site.source === 'telemt');
+  const discoveredNodeSites = managedSniDomains.filter(
+    (site) =>
+      site.source === 'remote' &&
+      site.nodeId != null &&
+      !statusQuery.data?.config.domains.some((domain) => domain.name === site.name),
+  );
   const status = statusQuery.data;
   const config = status?.config;
   const server = useMemo(
@@ -710,9 +716,18 @@ export default function DomainFrontTab({
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           {draft.domains.filter((domain) => domain.mode === 'sni_only' ||
             domain.mode === 'shared_sni').length === 0 &&
-            telemtSites.length === 0 && (
+            telemtSites.length === 0 &&
+            discoveredNodeSites.length === 0 && (
               <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>
             )}
+          {discoveredNodeSites.map((site) => (
+            <Card key={`node-${site.nodeId}-${site.name}`} size="small" title={site.name}>
+              <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                <Tag>{site.nodeName || label('remoteSNITag')}</Tag>
+                <Typography.Text type="secondary">{label('remoteSNIInfo')}</Typography.Text>
+              </Space>
+            </Card>
+          ))}
           {draft.domains
             .filter((domain) => domain.mode === 'shared_sni')
             .map((site) => (

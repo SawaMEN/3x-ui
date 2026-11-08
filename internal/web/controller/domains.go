@@ -36,7 +36,7 @@ func (a *DomainController) status(c *gin.Context) {
 // The authenticated main panel is the single source of SNI hostnames for
 // local and remotely managed inbounds. File paths are local to this panel.
 func (a *DomainController) sni(c *gin.Context) {
-	result, err := service.ManagedSNIDomains()
+	result, err := service.ManagedSNIDomains(c.Request.Context(), c.Query("local") != "1")
 	jsonObj(c, result, err)
 }
 
