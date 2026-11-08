@@ -188,6 +188,19 @@ func EnsureNodeRoute(userID, inboundID int, core string) (string, bool, error) {
 	if err == nil && !existing.Enable {
 		return "", false, fmt.Errorf("node route service client is disabled")
 	}
+	// A client push can stamp the remote fingerprint before the remote core has
+	// activated its new credentials. Remember whether this inbound is getting
+	// its cascade identity for the first time, independently of the push result.
+	newAttachment := errors.Is(err, gorm.ErrRecordNotFound)
+	if !newAttachment {
+		var linked int64
+		if linkErr := database.GetDB().Model(&model.ClientInbound{}).
+			Where("client_id = ? AND inbound_id = ?", existing.Id, inboundID).
+			Count(&linked).Error; linkErr != nil {
+			return "", false, linkErr
+		}
+		newAttachment = linked == 0
+	}
 	client := model.Client{
 		Email: email, Enable: true, SubID: uuid.NewString(),
 		Comment: "Managed node routing connection", Group: "_system",
@@ -208,7 +221,7 @@ func EnsureNodeRoute(userID, inboundID int, core string) (string, bool, error) {
 	// local database write is not proof that the remote core can authenticate
 	// the cascade. Synchronize the current complete inbound before publishing
 	// its managed outbound to the local routing template.
-	if err := syncNodeRouteInbound(inbound, node); err != nil {
+	if err := syncNodeRouteInbound(inbound, node, newAttachment); err != nil {
 		return "", needRestart, fmt.Errorf("node route %d: remote inbound sync: %w", inboundID, err)
 	}
 	if _, err := resolveNodeRouteOutbound(inboundID, core); err != nil {
@@ -232,7 +245,7 @@ func nodeRouteRemoteInboundExists(inboundTag string, nodeID int, options []runti
 // syncNodeRouteInbound closes the gap between provisioning the dedicated
 // cascade identity in the central database and applying it on the destination
 // node. It pushes only the selected inbound, never the node's entire template.
-func syncNodeRouteInbound(inbound *model.Inbound, node *model.Node) error {
+func syncNodeRouteInbound(inbound *model.Inbound, node *model.Node, newAttachment bool) error {
 	manager := runtime.GetManager()
 	if manager == nil {
 		return fmt.Errorf("runtime manager not initialized")
@@ -263,7 +276,7 @@ func syncNodeRouteInbound(inbound *model.Inbound, node *model.Node) error {
 	// Remote UpdateInbound schedules a restart, but a newly activated cascade
 	// cannot depend on the destination's deferred restart queue. Apply the
 	// updated listener before the source panel enables its routing rule.
-	if pushed {
+	if pushed || newAttachment {
 		if err := remote.RestartXray(ctx); err != nil {
 			return fmt.Errorf("restart destination node core after cascade credential sync: %w", err)
 		}
@@ -327,34 +340,13 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
 			outbound, lastErr = ParseNativeOutboundShareLink(raw)
 			if lastErr == nil {
 				outbound["tag"] = nodeRouteTag(inboundID)
-				lastErr = pinNodeRouteTUICDestination(outbound, inbound, node)
-			}
+				}
 		}
 		if lastErr == nil && outbound != nil {
 			return outbound, nil
 		}
 	}
 	return nil, fmt.Errorf("node route %d: no compatible connection for %s: %w", inboundID, core, lastErr)
-}
-
-// pinNodeRouteTUICDestination makes a managed TUIC cascade dial the actual
-// remote node listener, not a public subscription host or random host-group
-// endpoint. Those user-facing endpoints may point at a different IP/port,
-// while the route explicitly targets this node's inbound. Keep the original
-// TLS/SNI/ALPN options: authentication must still match the remote listener.
-func pinNodeRouteTUICDestination(outbound map[string]any, inbound *model.Inbound, node *model.Node) error {
-	if inbound == nil || inbound.Protocol != model.TUIC {
-		return nil
-	}
-	if outbound == nil || outbound["type"] != "tuic" {
-		return fmt.Errorf("node route %d: expected native TUIC outbound", inbound.Id)
-	}
-	if node == nil || strings.TrimSpace(node.Address) == "" || inbound.Port < 1 || inbound.Port > 65535 {
-		return fmt.Errorf("node route %d: invalid TUIC destination node address or port", inbound.Id)
-	}
-	outbound["server"] = strings.Trim(strings.TrimSpace(node.Address), "[]")
-	outbound["server_port"] = inbound.Port
-	return nil
 }
 
 // nodeRouteIDs finds explicitly referenced managed destinations. Native
