@@ -218,7 +218,11 @@ export default function RealityForm({
           />
         </Form.Item>
       )}
-      <FormField label="SNI" name={['streamSettings', 'realitySettings', 'serverNames']}>
+      <FormField
+        label="SNI"
+        name={['streamSettings', 'realitySettings', 'serverNames']}
+        extra={t('pages.inbounds.form.realityTargetHint')}
+      >
         <Select
           mode="tags"
           tokenSeparators={[',']}

@@ -75,8 +75,7 @@ export default function SniSearchInput({
             value={undefined}
             placeholder={t('pages.settings.domains.managedSni')}
             disabled={disabled}
-            showSearch
-            optionFilterProp="label"
+            showSearch={{ optionFilterProp: 'label' }}
             options={managedDomains.map((domain) => ({
               label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : 'TLS'}`,
               value: domain.name,

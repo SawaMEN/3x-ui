@@ -100,7 +100,8 @@ export function VetroffFields() {
         <SniSearchInput
           placeholder={label('automatic')}
           onPickManagedDomain={(domain: ManagedSniDomain) => {
-            if (nodeId == null && !options?.autoTLS) {
+            if (nodeId == null) {
+              setValue(`${prefix}.autoTLS`, false, { shouldDirty: true });
               setValue('settings.certificate', domain.certFile, { shouldDirty: true });
               setValue('settings.privateKey', domain.keyFile, { shouldDirty: true });
             }

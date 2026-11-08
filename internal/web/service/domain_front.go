@@ -3,14 +3,14 @@ package service
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/x509"
 	"crypto/tls"
-	"sort"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +21,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 )
-
 
 type ManagedSNIDomain struct {
 	Name     string `json:"name"`
@@ -56,6 +55,15 @@ func ManagedSNIDomains() ([]ManagedSNIDomain, error) {
 		seen[name] = true
 		out = append(out, ManagedSNIDomain{Name: name, Source: source, CertFile: certFile, KeyFile: keyFile})
 	}
+	// Telemt WEB owns the cover site at public TCP 443. Prefer it when
+	// several managed certificates happen to cover the same hostname.
+	state, err := readTelemtWebState()
+	if err == nil && state.Enabled && telemtWebFrontendActive(state) {
+		add(state.Domain, "telemt", state.CertFile, state.KeyFile)
+		for _, alias := range state.Aliases {
+			add(alias, "telemt", state.CertFile, state.KeyFile)
+		}
+	}
 	if status.Config.Enabled && status.Running {
 		enabled := make(map[string]bool)
 		for _, domain := range status.Config.Domains {
@@ -65,16 +73,6 @@ func ManagedSNIDomains() ([]ManagedSNIDomain, error) {
 			if enabled[cert.Name] && (cert.State == "valid" || cert.State == "renewal_due") {
 				add(cert.Name, "gateway", cert.CertFile, cert.KeyFile)
 			}
-		}
-	}
-	// Telemt WEB already serves a real HTTPS cover site and owns the port.
-	// Reuse its primary hostname, aliases, and existing certificate, never
-	// create a duplicate gateway or a second ACME certificate for that site.
-	state, err := readTelemtWebState()
-	if err == nil && state.Enabled && telemtWebFrontendActive(state) {
-		add(state.Domain, "telemt", state.CertFile, state.KeyFile)
-		for _, alias := range state.Aliases {
-			add(alias, "telemt", state.CertFile, state.KeyFile)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
