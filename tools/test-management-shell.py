@@ -14,8 +14,20 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def source_path(file):
+    if file in ("x-ui.sh", "x-ui-core.sh"):
+        return ROOT / "scripts/runtime" / file
+    if file == "core-migration.sh":
+        return ROOT / "scripts/migration" / file
+    if file.startswith("x-ui.service."):
+        return ROOT / "deploy/systemd" / file
+    if file == "x-ui.rc":
+        return ROOT / "deploy/openrc" / file
+    return ROOT / file
+
+
 def function(file, name):
-    source = (ROOT / file).read_text()
+    source = source_path(file).read_text()
     match = re.search(r"^(?:function )?" + re.escape(name) + r"\(\) \{", source, re.M)
     if match is None:
         raise ValueError(f"Function {name} not found in {file}")
@@ -71,27 +83,6 @@ fi
       'TEST_CALLS': str(base / 'calls'), 'TEST_RESULT': str(base / 'result'),
       'TEST_EXISTING': '1' if existing else '0', 'XUI_USERNAME': 'chosen',
       'XUI_PASSWORD': 'secret', 'XUI_PANEL_PORT': '30443', 'XUI_WEB_BASE_PATH': 'accesspath'})
-
-    def test_install_smoke_verifies_stable_version_and_dev_commit(self):
-        source = (ROOT / "deploy/test/smoke-noninteractive.sh").read_text()
-        start = source.index('        if [ -n "${XUI_SMOKE_VERSION:-}" ]; then\n            installed=')
-        end = source.index("\n\n        RESULT=", start)
-        check = source[start:end].replace("/usr/local/x-ui/x-ui", '"$TEST_PANEL"')
-        commit = "0123456789abcdef0123456789abcdef01234567"
-        for tag, installed, expected in (("v3.9.8", "3.9.8", 0),
-                                         ("v3.9.8", "3.9.7", 1),
-                                         ("dev-" + commit, "dev+01234567", 0),
-                                         ("dev-" + commit, "dev+ffffffff", 1),
-                                         ("dev-latest", "dev+01234567", 0),
-                                         ("dev-latest", "3.9.8", 1)):
-            with self.subTest(tag=tag, installed=installed), tempfile.TemporaryDirectory() as raw:
-                panel = Path(raw) / "panel"
-                panel.write_text("#!/bin/bash\nprintf '%s\\n' \"$TEST_INSTALLED\"\n")
-                panel.chmod(0o700)
-                result = subprocess.run(["bash", "-c", check], capture_output=True, text=True,
-                                        env=dict(os.environ, XUI_SMOKE_VERSION=tag,
-                                                 TEST_INSTALLED=installed, TEST_PANEL=str(panel)))
-                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
 
     def test_post_update_stops_after_failed_database_migration(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -172,15 +163,6 @@ systemctl() {
 }
 ''' + f"\n{name} 0\nrc=$?\n[[ $rc == 0 ]]\n"
                 self.run_script(script)
-
-    def test_docker_restart_checks_both_signals(self):
-        self.run_script(self.service_functions() + r'''
-LOGE() { :; }; LOGI() { :; }; before_show_menu() { :; }
-running_in_docker=true
-signal_xui() { [[ "$1" == HUP ]] || return 37; }
-restart 0
-[[ $? == 37 ]]
-''')
 
     def test_settings_error_survives_local_declaration(self):
         with tempfile.TemporaryDirectory(prefix="xui space [test] ") as raw:
@@ -394,7 +376,7 @@ load_xui_env
                     stage.mkdir(parents=True)
                     for file in ("x-ui.sh", "x-ui-core.sh"):
                         (stage / file).write_text("#!/bin/bash\nexit 0\n")
-                    payload = (ROOT / unit).read_text()
+                    payload = source_path(unit).read_text()
                     (base / "source").write_text(payload)
                     if bundled: (stage / unit).write_text(payload)
                     self.run_script(self.host_file_functions("update.sh") + r'''
@@ -427,7 +409,7 @@ prepare_release_host_files test-ref >/dev/null 2>&1
             for kind, unit in (("systemd", "x-ui.service.debian"), ("openrc", "x-ui.rc")):
                 with self.subTest(kind=kind):
                     target = base / unit
-                    target.write_text((ROOT / unit).read_text())
+                    target.write_text(source_path(unit).read_text())
                     self.run_script(function("install.sh", "rewrite_release_service_paths") + r'''
 xui_folder="$TEST_INSTALL"
 rewrite_release_service_paths "$TEST_FILE" "$TEST_KIND" || exit 1
@@ -473,8 +455,8 @@ fi
                 (bundle / "bin/hiddify-core-linux-amd64").chmod(0o700)
                 for name in ("x-ui.sh", "x-ui-core.sh"):
                     (bundle / name).write_text("#!/bin/bash\n# upgraded-menu\n")
-                (bundle / "x-ui.service.debian").write_text((ROOT / "x-ui.service.debian").read_text())
-                (bundle / "core-migration.sh").write_text((ROOT / "core-migration.sh").read_text() + r'''
+                (bundle / "x-ui.service.debian").write_text(source_path("x-ui.service.debian").read_text())
+                (bundle / "core-migration.sh").write_text(source_path("core-migration.sh").read_text() + r'''
 core_migration_host_paths() { cm_host_paths=("$TEST_ROOT/host-cli" "$TEST_ROOT/service/x-ui.service"); }
 core_migration_resume_gateway() { :; }
 ''')

@@ -3,6 +3,8 @@ package service
 import (
 	"reflect"
 	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
 func TestNodeRouteTagRoundTrip(t *testing.T) {
@@ -99,5 +101,26 @@ func TestNodeRouteMissingDestinationBlocksInsteadOfDirect(t *testing.T) {
 	native := blockedNodeRouteOutbound(42, "sing-box")
 	if native["tag"] != "node-route-42" || native["type"] != "block" {
 		t.Fatalf("sing-box fallback must block traffic: %v", native)
+	}
+}
+
+func TestNodeRouteRemoteInboundExists(t *testing.T) {
+	options := []runtime.RemoteInboundOption{
+		{Tag: "web-443"},
+		{Tag: "other"},
+	}
+	for _, tc := range []struct {
+		tag    string
+		nodeID int
+		want   bool
+	}{
+		{tag: "web-443", nodeID: 7, want: true},
+		{tag: "n7-web-443", nodeID: 7, want: true},
+		{tag: "n8-web-443", nodeID: 7, want: false},
+		{tag: "n7-absent", nodeID: 7, want: false},
+	} {
+		if got := nodeRouteRemoteInboundExists(tc.tag, tc.nodeID, options); got != tc.want {
+			t.Errorf("tag=%q node=%d: got %v, want %v", tc.tag, tc.nodeID, got, tc.want)
+		}
 	}
 }

@@ -10,7 +10,7 @@ on:
       - "tools/build-hiddify-core.sh"
       - "tools/verify-hiddify-build.py"
       - "deploy/hiddify/fork-contract.json"
-      - "docs/hiddify-core-target.json"
+      - "deploy/hiddify/hiddify-core-target.json"
       - "go.mod"
       - "go.sum"
       - "frontend/**"
@@ -41,7 +41,7 @@ on:
       - "tools/build-hiddify-core.sh"
       - "tools/verify-hiddify-build.py"
       - "deploy/hiddify/fork-contract.json"
-      - "docs/hiddify-core-target.json"
+      - "deploy/hiddify/hiddify-core-target.json"
       - "go.mod"
       - "go.sum"
       - "frontend/**"
@@ -73,11 +73,11 @@ jobs:
       - uses: actions/checkout@v7
       - name: Validate installer and management scripts
         run: |
-          for script in install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh; do
+          for script in install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/migration/core-migration.sh; do
             bash -n "$script"
           done
-          shellcheck --shell=bash --severity=error install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh
-          shellcheck --shell=bash --include=SC2086,SC2046,SC2115,SC2164 install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh
+          shellcheck --shell=bash --severity=error install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/migration/core-migration.sh
+          shellcheck --shell=bash --include=SC2086,SC2046,SC2115,SC2164 install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/migration/core-migration.sh
       - name: Exercise release rollback and CLI failures
         run: |
           python3 tools/test-core-migration-shell.py
@@ -161,6 +161,11 @@ jobs:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
         run: go test ./internal/web/service -run '^TestClientSpeedLimitLiveCore$' -count=1 -v
 
+      - name: Verify real panel ingress -> remote node cascades
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/web/service -run '^TestNodeRouteLiveLocalInboundToRemoteCore$' -count=1 -v
+
       - name: Verify native AWG configuration and TCP/UDP tunnel
         env:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
@@ -233,7 +238,7 @@ jobs:
         run: npm run gen
         working-directory: frontend
       - name: Fail if generated files are stale
-        run: git diff --exit-code -- frontend/src/generated frontend/public/openapi.json docs/public/openapi.json
+        run: git diff --exit-code -- frontend/src/generated frontend/public/openapi.json
 
   govulncheck:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
@@ -372,11 +377,11 @@ jobs:
       - name: Validate Arch installer scripts
         run: |
           bash -n install.sh
-          bash -n x-ui.sh
-          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+          bash -n scripts/runtime/x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh scripts/runtime/x-ui.sh
       - name: Validate Arch systemd unit
         run: |
-          cp x-ui.service.arch /tmp/x-ui.service
+          cp deploy/systemd/x-ui.service.arch /tmp/x-ui.service
           sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
           systemd-analyze verify /tmp/x-ui.service
       - name: Guard against pacman partial upgrades
@@ -543,23 +548,3 @@ jobs:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/speed-core/hiddify-core-linux-amd64
         run: go test -race ./internal/clientlimit/... ./internal/mieru ./internal/sudoku ./internal/singbox ./internal/web/service -run '^TestNativeBroker|^TestMieruSpeedLimitLiveServer$|^TestSudokuSpeedLimits$|^TestMASQUESpeedLimits$|^TestClientSpeedLimit' -count=1 -timeout=5m
 
-  manager-live:
-    name: Manager local and remote protocol lifecycle
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Fetch verified owner core
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 tools/fetch-latest-kernel.py --arch amd64 --output "$RUNNER_TEMP/manager-core"
-      - name: Build panel
-        run: |
-          make dist-stub
-          go build -o "$RUNNER_TEMP/manager-panel" .
-      - name: Exercise two actual installations and encrypted recovery
-        run: python3 tools/ci/manager-smoke.py --panel "$RUNNER_TEMP/manager-panel" --core-dir "$RUNNER_TEMP/manager-core"

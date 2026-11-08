@@ -161,10 +161,11 @@ jobs:
       - name: Install native musl compiler
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools
+          sudo apt-get install -y musl-tools lld binutils
           musl-gcc --version
           dpkg-query --show musl musl-dev musl-tools
           echo "CC=musl-gcc" >> "$GITHUB_ENV"
+          echo "CGO_CFLAGS=-D_LARGEFILE64_SOURCE" >> "$GITHUB_ENV"
 
       - name: Build Linux package
         shell: bash
@@ -209,9 +210,9 @@ jobs:
           rm -rf x-ui
           mkdir -p x-ui/bin
           mv xui-release x-ui/x-ui
-          cp x-ui.service.debian x-ui/
-          cp x-ui.service.arch x-ui/
-          cp x-ui.service.rhel x-ui/
+          cp deploy/systemd/x-ui.service.debian x-ui/
+          cp deploy/systemd/x-ui.service.arch x-ui/
+          cp deploy/systemd/x-ui.service.rhel x-ui/
           cp internal/Telemt/telemt.service x-ui/
           cp internal/Telemt/telemt-update.service x-ui/
           cp internal/Telemt/telemt-update.timer x-ui/
@@ -219,10 +220,10 @@ jobs:
           cp internal/Telemt/telemt.toml.example x-ui/
           cp internal/Telemt/telemt-meko-fix.sh x-ui/
           cp internal/Telemt/telemt-meko-fix.service x-ui/
-          cp x-ui.sh x-ui/
-          cp x-ui-core.sh x-ui/
-          cp x-ui.rc x-ui/
-          cp core-migration.sh x-ui/
+          cp scripts/runtime/x-ui.sh x-ui/
+          cp scripts/runtime/x-ui-core.sh x-ui/
+          cp deploy/openrc/x-ui.rc x-ui/
+          cp scripts/migration/core-migration.sh x-ui/
           cd x-ui/bin
 
           fetch https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
@@ -250,13 +251,8 @@ jobs:
           GOARCH: ${{ matrix.platform }}
         run: |
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
-          # Reuse the native Alpine profile already exercised by Docker checks.
-          docker build --target kernel --build-arg HIDDIFY_VULNCHECK=1 --platform linux/${{ matrix.platform }} -t x-ui-kernel:${{ matrix.platform }} .
-          container=$(docker create --entrypoint /bin/true x-ui-kernel:${{ matrix.platform }})
-          trap 'docker rm -f "$container" >/dev/null' EXIT
-          docker cp "$container:/kernel/." "$PWD/x-ui/bin/"
-          docker rm "$container" >/dev/null
-          trap - EXIT
+          # Build the pinned, statically linked kernel directly on the native Linux runner.
+          HIDDIFY_VULNCHECK=1 SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
       - name: Check panel configuration with downloaded binary
         env:
           CC: gcc

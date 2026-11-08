@@ -8,7 +8,7 @@ task_output=$(cd -- "$task_output" && pwd)
 task_source=$(mktemp -d)
 trap 'rm -rf -- "$task_source"' EXIT
 
-readarray -t target < <(python3 - "$task_root/docs/hiddify-core-target.json" <<'PY'
+readarray -t target < <(python3 - "$task_root/deploy/hiddify/hiddify-core-target.json" <<'PY'
 import json, sys
 lock = json.load(open(sys.argv[1]))
 print(lock['target']['repository'])
@@ -44,7 +44,7 @@ cp "$task_root/internal/clientlimit/brokerclient/client.go" "$task_source/core/h
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/runtime-dependencies.patch"
 (
   cd -- "$task_source/core"
-  readarray -t security_dependencies < <(python3 - "$task_root/docs/hiddify-core-target.json" <<'PYDEPS'
+  readarray -t security_dependencies < <(python3 - "$task_root/deploy/hiddify/hiddify-core-target.json" <<'PYDEPS'
 import json, sys
 for module, version in sorted(json.load(open(sys.argv[1]))['panel_build']['security_dependencies'].items()):
     print(module + '@' + version)
@@ -170,7 +170,7 @@ if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOST
     exit 1
   fi
 fi
-python3 - "$task_root/docs/hiddify-core-target.json" "$task_output/target.json" "${target[3]}" "${SINGBOX_CRONET_LINKAGE:-purego}" <<'PYMANIFEST'
+python3 - "$task_root/deploy/hiddify/hiddify-core-target.json" "$task_output/target.json" "${target[3]}" "${SINGBOX_CRONET_LINKAGE:-purego}" <<'PYMANIFEST'
 import json, sys
 lock=json.load(open(sys.argv[1]))
 lock['panel_build']['tags']=sys.argv[3].split(',')

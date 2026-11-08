@@ -182,7 +182,7 @@ if [[ -d "$cm_backup/managed-bin" ]]; then
 fi
 '''
             env = dict(os.environ, TEST_ROOT=raw, TEST_DB=str(database), TEST_RELEASE="alpine" if alpine else "debian",
-                       TEST_LOG=str(base / "commands"), HELPER=str(ROOT / "core-migration.sh"),
+                       TEST_LOG=str(base / "commands"), HELPER=str(ROOT / "scripts/migration/core-migration.sh"),
                        ARCHIVE=str(archive), CASE=mode, SIM_ENABLED="0" if mode in ("disabled", "missing_unit_failure", "missing_service") else "1",
                        SIM_RUNNING="0" if mode in ("stopped_failure", "missing_unit_failure", "missing_service") else "1")
             result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True)
@@ -362,7 +362,7 @@ core_migration_install_managed_bin
 [[ "$(cat "$XUI_BIN_FOLDER/geoip.dat")" == release-geodata ]]
 [[ "$(cat "$XUI_BIN_FOLDER/custom.dat")" == custom-database ]]
 '''
-                env = dict(os.environ, HELPER=str(ROOT / "core-migration.sh"), TEST_ROOT=raw,
+                env = dict(os.environ, HELPER=str(ROOT / "scripts/migration/core-migration.sh"), TEST_ROOT=raw,
                            XUI_BIN_FOLDER="custom-bin" if relative else str(dest))
                 result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -414,7 +414,7 @@ class ReleaseCompatibilityTests(unittest.TestCase):
 
 class UpgradeStorageTests(unittest.TestCase):
     def run_script(self, base, script):
-        env = dict(os.environ, HELPER=str(ROOT / "core-migration.sh"), TEST_ROOT=str(base))
+        env = dict(os.environ, HELPER=str(ROOT / "scripts/migration/core-migration.sh"), TEST_ROOT=str(base))
         result = subprocess.run(["bash", "-c", 'set -eu\nsource "$HELPER"\n' + script],
                                 env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

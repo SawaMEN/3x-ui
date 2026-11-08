@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/link"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
@@ -202,10 +204,76 @@ func EnsureNodeRoute(userID, inboundID int, core string) (string, bool, error) {
 	if err != nil {
 		return "", needRestart, fmt.Errorf("provision node route client: %w", err)
 	}
+	// The inbound and its service credentials live on another panel. A successful
+	// local database write is not proof that the remote core can authenticate
+	// the cascade. Synchronize the current complete inbound before publishing
+	// its managed outbound to the local routing template.
+	if err := syncNodeRouteInbound(inbound, node); err != nil {
+		return "", needRestart, fmt.Errorf("node route %d: remote inbound sync: %w", inboundID, err)
+	}
 	if _, err := resolveNodeRouteOutbound(inboundID, core); err != nil {
 		return "", needRestart, err
 	}
 	return nodeRouteTag(inboundID), needRestart, nil
+}
+
+// nodeRouteRemoteInboundExists matches only the inbound's tag on its own node.
+// Central panel tags may carry a n<ID>- prefix not present on the node.
+func nodeRouteRemoteInboundExists(inboundTag string, nodeID int, options []runtime.RemoteInboundOption) bool {
+	bare := strings.TrimPrefix(inboundTag, nodeTagPrefix(&nodeID))
+	for _, option := range options {
+		if option.Tag == inboundTag || option.Tag == bare {
+			return true
+		}
+	}
+	return false
+}
+
+// syncNodeRouteInbound closes the gap between provisioning the dedicated
+// cascade identity in the central database and applying it on the destination
+// node. It pushes only the selected inbound, never the node's entire template.
+func syncNodeRouteInbound(inbound *model.Inbound, node *model.Node) error {
+	manager := runtime.GetManager()
+	if manager == nil {
+		return fmt.Errorf("runtime manager not initialized")
+	}
+	remote, err := manager.RemoteFor(node)
+	if err != nil {
+		return err
+	}
+	latest, err := (&InboundService{}).GetInbound(inbound.Id)
+	if err != nil {
+		return err
+	}
+	payload, err := (&InboundService{}).buildInboundForNodePush(database.GetDB(), latest)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	options, err := remote.ListInboundOptions(ctx)
+	if err != nil {
+		return fmt.Errorf("read destination node inbounds: %w", err)
+	}
+	exists := nodeRouteRemoteInboundExists(payload.Tag, node.Id, options)
+	_, err = remote.ReconcileInbound(ctx, payload, exists)
+	if err != nil {
+		return fmt.Errorf("apply cascade credential to destination node: %w", err)
+	}
+	// Fingerprint reconciliation only proves that the node accepted its
+	// configuration, not that the running sing-box instance loaded the service
+	// credential. This explicit ensure action must activate the listener even
+	// when the client is already linked and the serialized settings match.
+	// It also repairs managed cascades created before the activation fix.
+	// Restart can involve a full sing-box configuration reload. Give it
+	// a separate deadline instead of sharing the time spent listing and
+	// reconciling the remote inbound.
+	activateCtx, activateCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer activateCancel()
+	if err := remote.RestartXray(activateCtx); err != nil {
+		return fmt.Errorf("activate destination node core for managed cascade: %w", err)
+	}
+	return nil
 }
 
 // resolveNodeRouteOutbound derives the wire client from the same share links

@@ -54,7 +54,7 @@ def check(root, arch, revision):
             raise ValueError("Expected static ELF: " + name)
     panel_version = subprocess.check_output([str(root / "x-ui"), "-v"], text=True, timeout=30)
     validate_version(panel_version, revision, os.environ.get("GITHUB_REF", ""))
-    expected = json.loads(Path("docs/hiddify-core-target.json").read_text())
+    expected = json.loads(Path("deploy/hiddify/hiddify-core-target.json").read_text())
     actual = json.loads((root / "bin/target.json").read_text())
     tags = ["with_musl" if tag == "with_purego" else tag for tag in expected["panel_build"]["tags"]]
     if (actual["target"] != expected["target"] or actual["panel_build"]["tags"] != tags

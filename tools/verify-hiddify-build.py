@@ -92,7 +92,7 @@ def validate_runtime_security_dependencies(pins, builder):
 
 
 def verify_build(source):
-    lock = json.loads((ROOT / "docs/hiddify-core-target.json").read_text())
+    lock = json.loads((ROOT / "deploy/hiddify/hiddify-core-target.json").read_text())
     require(lock["schema_version"] == 2 and lock["stage"] in (2, 4), "Unknown runtime lock schema/stage")
     target, build = lock["target"], lock["panel_build"]
     fork = json.loads((ROOT / "deploy/hiddify/fork-contract.json").read_text())

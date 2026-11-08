@@ -239,7 +239,12 @@ export default function RoutingTab({
     };
     // Panel-created inbounds are stored in the database, not necessarily in the
     // editable Xray template. Use the same authenticated list as the inbound picker.
-    for (const ib of availableInbounds || []) push(ib.tag);
+    // Remote inbound traffic is handled by the remote node's core. Its tag
+    // cannot be used as a local routing source; including it silently creates
+    // rules that can never match on this panel.
+    for (const ib of availableInbounds || []) {
+      if (ib.nodeId == null) push(ib.tag);
+    }
     for (const ib of (templateSettings?.inbounds as Array<{ tag?: string }>) || []) push(ib?.tag);
     for (const tag of inboundTags || []) push(tag);
     for (const ob of templateSettings?.outbounds || []) {

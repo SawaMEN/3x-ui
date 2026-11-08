@@ -62,7 +62,12 @@ interface NodeRouteProbe {
   reachable: boolean;
   checkedTarget: boolean;
   inconclusive?: boolean;
+  tunnelChecked?: boolean;
   transport: string;
+  transportReachable?: boolean;
+  transportDetail?: string;
+  probeSource?: 'running-core' | 'temporary-core';
+  failureStage?: string;
   latencyMs?: number;
   detail: string;
 }
@@ -212,9 +217,13 @@ export default function QuickRoutingPanel({
     const isUdp = probeResult.transport === 'udp';
     const isMieru =
       nodeTargets.find((node) => node.tag === tag)?.protocol?.toLowerCase() === 'mieru';
-    const status = probeResult.reachable
-      ? 'success'
-      : probeResult.inconclusive || isUdp
+    const status = probeResult.tunnelChecked
+      ? probeResult.inconclusive
+        ? 'warning'
+        : probeResult.reachable
+          ? 'success'
+          : 'error'
+      : probeResult.reachable || probeResult.inconclusive || isUdp
         ? 'warning'
         : 'error';
     return (
@@ -222,22 +231,45 @@ export default function QuickRoutingPanel({
         type={status}
         showIcon
         title={
-          (isMieru
-            ? probeResult.reachable
-              ? 'Mieru TCP отвечает'
-              : probeResult.inconclusive
-                ? 'Mieru · доступность не подтверждена'
-                : 'Mieru TCP недоступен'
-            : isUdp
+          (probeResult.tunnelChecked
+            ? probeResult.inconclusive
               ? probeResult.reachable
-                ? 'UDP/QUIC отвечает'
-                : 'UDP/QUIC не подтверждён'
+                ? 'HTTP прошёл во временном ядре · рабочий маршрут не подтверждён'
+                : 'HTTP-проверка не удалась · доступность не установлена'
               : probeResult.reachable
-                ? 'TCP доступен'
-                : 'TCP недоступен') +
+                ? 'Исходящее работает · HTTP прошёл'
+                : 'HTTP-проверка не прошла'
+            : isMieru
+              ? probeResult.reachable
+                ? 'Mieru TCP отвечает · каскад не проверен'
+                : probeResult.inconclusive
+                  ? 'Mieru · доступность не подтверждена'
+                  : 'Mieru TCP недоступен'
+              : isUdp
+                ? probeResult.reachable
+                  ? 'UDP/QUIC отвечает · каскад не проверен'
+                  : 'UDP/QUIC не подтверждён'
+                : probeResult.reachable
+                  ? 'TCP-порт отвечает · каскад не проверен'
+                  : 'TCP-порт недоступен') +
           (probeResult.latencyMs ? ' · ' + probeResult.latencyMs + ' мс' : '')
         }
-        description={probeResult.detail}
+        description={
+          <Space orientation="vertical" size="small">
+            <span>{probeResult.detail}</span>
+            {probeResult.transportDetail && (
+              <Typography.Text type="secondary">{probeResult.transportDetail}</Typography.Text>
+            )}
+            {probeResult.probeSource && (
+              <Typography.Text type="secondary">
+                Способ проверки:{' '}
+                {probeResult.probeSource === 'running-core'
+                  ? 'через уже работающее ядро'
+                  : 'через отдельное временное ядро'}
+              </Typography.Text>
+            )}
+          </Space>
+        }
       />
     );
   }
@@ -263,6 +295,9 @@ export default function QuickRoutingPanel({
     try {
       await provisionNodeTarget(tag);
       onChange(setQuickRouteTarget(rules, marker, tag, engine, tags));
+      if (nodeTargets.some((node) => node.tag === tag)) {
+        void probeNodeTarget(tag);
+      }
     } catch (err) {
       messageApi.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -298,6 +333,9 @@ export default function QuickRoutingPanel({
       await provisionNodeTarget(draft.target);
       const result = putQuickRoute(rules, compiled, engine);
       onChange(result.rules);
+      if (nodeTargets.some((node) => node.tag === draft.target)) {
+        void probeNodeTarget(draft.target);
+      }
       const text = result.replaced
         ? 'Маршрут с такими условиями обновлён без дублирования.'
         : 'Маршрут добавлен. Сохраните конфигурацию панели, чтобы применить его.';
