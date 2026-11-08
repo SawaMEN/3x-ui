@@ -6,14 +6,14 @@ on:
       - "internal/singbox/**"
       - "deploy/hiddify/hysteria-safety.patch"
       - "tools/build-hiddify-core.sh"
-      - "docs/hiddify-core-target.json"
+      - "deploy/hiddify/hiddify-core-target.json"
       - ".github/workflows/hysteria-compat.yml"
   pull_request:
     paths:
       - "internal/singbox/**"
       - "deploy/hiddify/hysteria-safety.patch"
       - "tools/build-hiddify-core.sh"
-      - "docs/hiddify-core-target.json"
+      - "deploy/hiddify/hiddify-core-target.json"
       - ".github/workflows/hysteria-compat.yml"
   workflow_dispatch:
 

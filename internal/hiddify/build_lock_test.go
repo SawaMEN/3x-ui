@@ -8,7 +8,7 @@ import (
 )
 
 func TestRuntimeIdentityMatchesBuildLock(t *testing.T) {
-	data, err := os.ReadFile("../../docs/hiddify-core-target.json")
+	data, err := os.ReadFile("../../deploy/hiddify/hiddify-core-target.json")
 	if err != nil {
 		t.Fatal(err)
 	}
