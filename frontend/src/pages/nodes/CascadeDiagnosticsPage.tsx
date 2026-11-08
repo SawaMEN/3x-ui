@@ -16,6 +16,12 @@ import {
 } from './cascade-diagnostics';
 
 const STORAGE_KEY = '3x-ui:cascade-diagnostics:v1';
+type AccessLogEntry = {
+  DateTime?: string | number;
+  Inbound?: string;
+  Outbound?: string;
+  Event?: number;
+};
 type StoredState = {
   checks: Record<string, CascadeCheck>;
   problems: CascadeProblem[];
@@ -86,6 +92,8 @@ export default function CascadeDiagnosticsPage() {
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<ProblemKind>('routing');
   const [manualEvidence, setManualEvidence] = useState('');
+  const [coreLogs, setCoreLogs] = useState<AccessLogEntry[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
@@ -219,6 +227,17 @@ export default function CascadeDiagnosticsPage() {
     setStore(s => ({ ...s, problems: s.problems.map(p => p.id === id
       ? { ...p, status, updatedAt: new Date().toISOString() } : p) }));
     log('Статус проблемы ' + id + ' изменён: ' + labelStatus(status));
+  }
+  async function loadCoreLogs() {
+    setLogsLoading(true);
+    try {
+      const result = await HttpUtil.post<AccessLogEntry[]>('/panel/api/server/xraylogs/100',
+        { filter: current?.tag || '', showDirect: true, showBlocked: true, showProxy: true },
+        { silent: true });
+      if (!result?.success || !Array.isArray(result.obj)) throw new Error(result?.msg || 'Логи ядра недоступны');
+      setCoreLogs(result.obj.filter(entry => entry && typeof entry === 'object'));
+    } catch (error) { messageApi.error('Ошибка чтения логов: ' + String(error)); }
+    finally { setLogsLoading(false); }
   }
   function exportReport() {
     const data = { generatedAt: new Date().toISOString(), core,
@@ -371,12 +390,30 @@ export default function CascadeDiagnosticsPage() {
                     </Card>
                   </Space> },
                 { key: 'logs', label: 'Логи и проверки', children:
-                  <Card size="small" title="История проверок в этом браузере">
-                    {store.logs.length ? <Timeline items={store.logs.map((entry, i) => ({
-                      key: i, children: <Typography.Text style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{entry}</Typography.Text>,
-                    }))} /> : <Typography.Text type="secondary">Проверки ещё не запускались.</Typography.Text>}
-                    <Divider /><Typography.Text type="secondary">Только результаты API и ручные записи. Системные логи самих нод следует анализировать отдельно; они не загружаются автоматически.</Typography.Text>
-                  </Card> },
+                  <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+                    <Card size="small" title="Доступные логи ядра основной панели">
+                      <Button loading={logsLoading} onClick={() => void loadCoreLogs()}>Прочитать последние 100 записей</Button>
+                      <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
+                        API возвращает события основного ядра; удалённые ноды здесь не опрашиваются.
+                        Отображаются только время и теги, без IP-адресов и идентификаторов клиентов.
+                      </Typography.Paragraph>
+                      <Table size="small" rowKey={(_, index) => index ?? 0} scroll={{ x: 540 }}
+                        dataSource={coreLogs} pagination={{ pageSize: 10 }}
+                        columns={[
+                          { title: 'Время', dataIndex: 'DateTime', render: (value: string | number | undefined) => value ? new Date(value).toLocaleString('ru-RU') : '—' },
+                          { title: 'Входящее', dataIndex: 'Inbound' },
+                          { title: 'Исходящее', dataIndex: 'Outbound' },
+                          { title: 'Результат', dataIndex: 'Event', render: (value: number | undefined) =>
+                            <Tag color={value === 2 ? 'success' : value === 1 ? 'error' : 'default'}>{value === 2 ? 'PROXY' : value === 1 ? 'BLOCKED' : value === 0 ? 'DIRECT' : '—'}</Tag> },
+                        ]} />
+                    </Card>
+                    <Card size="small" title="Журнал диагностических запусков">
+                      {store.logs.length ? <Timeline items={store.logs.map((entry, i) => ({
+                        key: i, children: <Typography.Text style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{entry}</Typography.Text>,
+                      }))} /> : <Typography.Text type="secondary">Проверки ещё не запускались.</Typography.Text>}
+                      <Divider /><Typography.Text type="secondary">Системные логи удалённых нод необходимо анализировать отдельно.</Typography.Text>
+                    </Card>
+                  </Space> },
                 { key: 'checklist', label: 'Чек-лист', children:
                   <Card size="small" title="Диагностика до и после исправления">
                     <Space orientation="vertical" size="middle">
