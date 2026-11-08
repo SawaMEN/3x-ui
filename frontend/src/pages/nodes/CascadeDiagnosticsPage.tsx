@@ -302,7 +302,7 @@ export default function CascadeDiagnosticsPage() {
                     options={[{ label: 'Любой', value: 'all' }, { label: 'Доступно', value: 'ok' }, { label: 'Недоступно', value: 'failed' },
                       ...problemStatuses]} /></Col>
                   <Col span={24}><Typography.Text>Целевой каскад</Typography.Text>
-                    <Select style={{ width: '100%' }} showSearch optionFilterProp="label" value={current?.tag} onChange={setSelectedTag}
+                    <Select style={{ width: '100%' }} showSearch={{ optionFilterProp: 'label' }} value={current?.tag} onChange={setSelectedTag}
                       options={visible.map(t => ({ value: t.tag, label: t.nodeName + ' · ' + (t.remark || t.protocol) + ' · ' + t.tag }))} placeholder="Выберите маршрут" /></Col>
                 </Row>
               </Card>
@@ -323,7 +323,7 @@ export default function CascadeDiagnosticsPage() {
                     <Card size="small" title="Параметры проверки">
                       <Row gutter={[12, 12]}>
                         <Col xs={24} md={12}><Typography.Text>Локальное входящее (источник)</Typography.Text>
-                          <Select style={{ width: '100%' }} showSearch optionFilterProp="label" value={sourceInbound || undefined}
+                          <Select style={{ width: '100%' }} showSearch={{ optionFilterProp: 'label' }} value={sourceInbound || undefined}
                             onChange={setSourceInbound} placeholder="Укажите входящее панели" allowClear
                             options={inbounds.map(x =>
                               ({ label: (x.nodeId == null ? 'Панель' : (nodes.find(n => n.id === x.nodeId)?.name || ('Нода #' + x.nodeId))) + ' · ' + (x.remark || x.tag) + ' · ' + x.protocol, value: x.tag })).filter(x => !!x.value)} /></Col>
