@@ -9,7 +9,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = (ROOT / ".github/workflows/release.yml").read_text()
-PUBLISH = textwrap.dedent(WORKFLOW.split("      - name: Publish dev-latest\n", 1)[1].split("        run: |\n", 1)[1])
+# Extract only the shell belonging to this step, not later YAML steps.
+PUBLISH_BLOCK = WORKFLOW.split("      - name: Publish dev-latest\n", 1)[1].split("        run: |\n", 1)[1]
+PUBLISH = textwrap.dedent(PUBLISH_BLOCK.split("\n      - name: ", 1)[0] + "\n")
 
 
 class RollingPublication(unittest.TestCase):
