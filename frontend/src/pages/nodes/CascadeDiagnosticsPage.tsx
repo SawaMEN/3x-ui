@@ -73,7 +73,7 @@ export default function CascadeDiagnosticsPage() {
   const [core, setCore] = useState<'xray' | 'sing-box'>('sing-box');
   const [targets, setTargets] = useState<CascadeTarget[]>([]);
   const [fetchError, setFetchError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [probing, setProbing] = useState<string | null>(null);
   const [store, setStore] = useState<StoredState>(readState);
   const [selectedTag, setSelectedTag] = useState('');
@@ -93,8 +93,6 @@ export default function CascadeDiagnosticsPage() {
   }, [store]);
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setFetchError('');
     void HttpUtil.get<CascadeTarget[]>('/panel/api/xray/node-route/targets?core=' + encodeURIComponent(core), undefined, { silent: true })
       .then(result => {
         if (cancelled) return;
@@ -270,7 +268,7 @@ export default function CascadeDiagnosticsPage() {
               <Typography.Text type="secondary">* Подтверждены только автоматизированные этапы. Проверка сквозного потока с пользовательского входящего выполняется отдельно.</Typography.Text>
               <Card size="small" title="Фильтры и маршрут">
                 <Row gutter={[10, 10]}>
-                  <Col xs={24} sm={12} lg={4}><Typography.Text>Ядро</Typography.Text><Select style={{ width: '100%' }} value={core} onChange={value => { setCore(value); setSelectedTag(''); }}
+                  <Col xs={24} sm={12} lg={4}><Typography.Text>Ядро</Typography.Text><Select style={{ width: '100%' }} value={core} onChange={value => { setCore(value); setSelectedTag(''); setLoading(true); setFetchError(''); }}
                     options={[{ label: 'sing-box', value: 'sing-box' }, { label: 'Xray', value: 'xray' }]} /></Col>
                   <Col xs={24} sm={12} lg={5}><Typography.Text>Нода</Typography.Text><Select style={{ width: '100%' }} value={nodeFilter} onChange={setNodeFilter}
                     options={[{ label: 'Все ноды', value: 'all' }, ...nodes.map(n => ({ label: n.name || String(n.id), value: n.id }))]} /></Col>
