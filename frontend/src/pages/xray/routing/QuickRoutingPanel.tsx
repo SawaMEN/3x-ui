@@ -227,8 +227,8 @@ export default function QuickRoutingPanel({
         title={
           (probeResult.tunnelChecked
             ? probeResult.reachable
-              ? 'Каскад работает · трафик проходит'
-              : 'Каскад не работает · трафик не проходит'
+              ? 'Исходящее работает · HTTP прошёл'
+              : 'Исходящее не отвечает · HTTP не прошёл'
             : isMieru
               ? probeResult.reachable
                 ? 'Mieru TCP отвечает · каскад не проверен'
