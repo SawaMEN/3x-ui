@@ -40,6 +40,22 @@ describe('Xray inbound to outbound routing', () => {
     expect(repaired[0].inboundTag).toEqual(['in-a']);
   });
 
+  it('supersedes only its listener in an overlapping quick cascade', () => {
+    const quick: RuleObject = {
+      type: 'field',
+      ruleTag: 'panel-quick:inbound:example',
+      inboundTag: ['in-a', 'in-b'],
+      outboundTag: 'node-route-5',
+    };
+    const result = setInboundRouteTarget([quick, ...rules], 'in-a', 'node-route-9');
+    expect(result[0].inboundTag).toEqual(['in-b']);
+    expect(result[0].outboundTag).toBe('node-route-5');
+    expect(inboundRouteTarget(result, 'in-a')).toBe('node-route-9');
+    expect(result.find((r) => r.comment === 'panel-inbound:in-a')?.outboundTag).toBe(
+      'node-route-9',
+    );
+  });
+
   it('appends fallback when no generic catch-all exists', () => {
     const next = setInboundRouteTarget([rules[0]], 'a', 'warp');
     expect(next[1]).toMatchObject({ inboundTag: ['a'], outboundTag: 'warp' });
