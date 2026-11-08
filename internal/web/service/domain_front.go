@@ -67,26 +67,8 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 			add(alias, "telemt", state.CertFile, state.KeyFile)
 		}
 	}
-	// Remote site discovery uses the panel's existing authenticated node
-	// connection and never copies private-key or certificate file paths.
-	if includeNodes {
-		for _, site := range discoverNodeSNI(ctx) {
-			site.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(site.Name)), ".")
-			if site.Name == "" || !strings.Contains(site.Name, ".") || net.ParseIP(site.Name) != nil || seen[site.Name] {
-				continue
-			}
-			seen[site.Name] = true
-			out = append(out, site)
-		}
-	}
-	// Manual foreign SNI references remain available if a node is offline or
-	// runs an older build without the SNI-discovery endpoint.
-	for _, domain := range status.Config.Domains {
-		if domain.Enabled && domain.Mode == "shared_sni" && !seen[domain.Name] {
-			seen[domain.Name] = true
-			out = append(out, ManagedSNIDomain{Name: domain.Name, Source: "remote"})
-		}
-	}
+	// Local sites always take precedence, because their certificate paths
+	// belong to the controlling host rather than a connected node.
 	if status.Config.Enabled && status.Running {
 		enabled := make(map[string]bool)
 		for _, domain := range status.Config.Domains {
@@ -98,15 +80,41 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 			}
 		}
 	}
+	if includeNodes {
+		for _, site := range discoverNodeSNI(ctx) {
+			site.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(site.Name)), ".")
+			if site.Name == "" || !strings.Contains(site.Name, ".") || net.ParseIP(site.Name) != nil || seen[site.Name] {
+				continue
+			}
+			seen[site.Name] = true
+			out = append(out, site)
+		}
+	}
+	// Manual references survive an offline or older child node.
+	for _, domain := range status.Config.Domains {
+		if domain.Enabled && domain.Mode == "shared_sni" && !seen[domain.Name] {
+			seen[domain.Name] = true
+			out = append(out, ManagedSNIDomain{Name: domain.Name, Source: "remote"})
+		}
+	}
+	priority := func(source string) int {
+		switch source {
+		case "telemt":
+			return 0
+		case "gateway":
+			return 1
+		default:
+			return 2
+		}
+	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].Source != out[j].Source {
-			return out[i].Source == "telemt"
+		if a, b := priority(out[i].Source), priority(out[j].Source); a != b {
+			return a < b
 		}
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
 }
-
 
 type nodeSNIResponse struct {
 	NodeID   int
@@ -164,8 +172,12 @@ func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
 				continue
 			}
 			out = append(out, ManagedSNIDomain{
-				Name: site.Name, Source: "remote",
-				NodeID: result.NodeID, NodeName: result.NodeName,
+				Name:     site.Name,
+				Source:   "remote",
+				CertFile: site.CertFile,
+				KeyFile:  site.KeyFile,
+				NodeID:   result.NodeID,
+				NodeName: result.NodeName,
 			})
 		}
 	}

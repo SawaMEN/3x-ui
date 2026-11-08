@@ -24,7 +24,10 @@ import { CipherSuitesSelect } from '@/components/form';
 import DynamicEchHelper from '@/components/form/DynamicEchHelper';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from './SniSearchInput';
-import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
+import {
+  canApplyManagedSniCertificate,
+  type ManagedSniDomain,
+} from '@/api/queries/useManagedSniDomains';
 import {
   ALPN_OPTION,
   DOMAIN_STRATEGY_OPTION,
@@ -334,7 +337,7 @@ export default function TlsForm({
     name: 'streamSettings.tlsSettings.settings.fingerprint',
   });
   const onManagedSni = (domain: ManagedSniDomain) => {
-    if (nodeId != null) return;
+    if (!canApplyManagedSniCertificate(domain, nodeId)) return;
     // Server-side TLS files can only be applied on the node that stores them.
     const opts = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
     const row = {

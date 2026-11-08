@@ -10,8 +10,19 @@ export interface ManagedSniDomain {
   nodeName?: string;
 }
 
-// Always request the authenticated main panel, even while editing a remote
-// node. Local file paths are deliberately not portable to a remote node.
+// Certificate paths belong to the hosting node and cannot be reused on
+// other nodes, even when those nodes share a public SNI hostname.
+export function canApplyManagedSniCertificate(
+  domain: ManagedSniDomain,
+  nodeId: number | null | undefined,
+): boolean {
+  if (!domain.certFile || !domain.keyFile) return false;
+  if (domain.source === 'remote') {
+    return nodeId != null && domain.nodeId != null && nodeId === domain.nodeId;
+  }
+  return nodeId == null;
+}
+
 export function useManagedSniDomains() {
   return useQuery({
     queryKey: ['settings', 'managed-sni'],

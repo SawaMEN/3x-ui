@@ -18,7 +18,10 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
-import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
+import {
+  canApplyManagedSniCertificate,
+  type ManagedSniDomain,
+} from '@/api/queries/useManagedSniDomains';
 import { HttpUtil } from '@/utils';
 
 export default function TuicFields() {
@@ -46,7 +49,7 @@ export default function TuicFields() {
 
   const applyManagedDomain = (domain: ManagedSniDomain) => {
     updateServerValue('sni', domain.name);
-    if (nodeId == null) {
+    if (canApplyManagedSniCertificate(domain, nodeId)) {
       updateServerValue('certificate', domain.certFile);
       updateServerValue('private_key', domain.keyFile);
     }
@@ -61,6 +64,8 @@ export default function TuicFields() {
       applyManagedDomain(managed);
       return;
     }
+    // Paths on a child node are unknown unless discovered on that same node.
+    if (nodeId != null) return;
 
     const currentCert = String(getValues('settings.server.certificate') || '');
     const currentKey = String(getValues('settings.server.private_key') || '');
@@ -94,8 +99,10 @@ export default function TuicFields() {
       applyManagedDomain(managed);
     } else {
       updateServerValue('sni', cleanSni);
-      updateServerValue('certificate', `/root/cert/${cleanSni}/fullchain.pem`);
-      updateServerValue('private_key', `/root/cert/${cleanSni}/privkey.pem`);
+      if (nodeId == null) {
+        updateServerValue('certificate', `/root/cert/${cleanSni}/fullchain.pem`);
+        updateServerValue('private_key', `/root/cert/${cleanSni}/privkey.pem`);
+      }
     }
     // Keep the TLS certificate name and client SNI consistent.
     updateServerValue('congestion_control', 'bbr');

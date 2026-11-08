@@ -5,7 +5,10 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
-import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
+import {
+  canApplyManagedSniCertificate,
+  type ManagedSniDomain,
+} from '@/api/queries/useManagedSniDomains';
 import { HttpUtil } from '@/utils';
 import { ANYTLS_DEFAULT_PADDING_SCHEME } from '@/schemas/protocols/inbound/anytls';
 
@@ -17,7 +20,7 @@ export default function AnyTlsFields() {
   const [messageApi, messageContextHolder] = message.useMessage();
 
   const onManagedSni = (domain: ManagedSniDomain) => {
-    if (nodeId != null) return;
+    if (!canApplyManagedSniCertificate(domain, nodeId)) return;
     const options = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
     setValue('settings.tls.certificatePath', domain.certFile, options);
     setValue('settings.tls.keyPath', domain.keyFile, options);
