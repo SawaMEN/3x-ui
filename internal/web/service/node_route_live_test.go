@@ -3,6 +3,7 @@ package service
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
@@ -134,6 +135,30 @@ func nodeRouteLiveHTTP(socksPort int, target string) (string, error) {
 	return string(body), nil
 }
 
+// A test-only subscription renderer keeps the production managed-outbound
+// resolver and injector in the request path, with the remote link pinned to
+// an isolated loopback listener.
+type nodeRouteLiveLinkProvider struct {
+	inboundID int
+	email     string
+	link      string
+}
+
+func (p *nodeRouteLiveLinkProvider) SubLinksForSubId(_, _ string) ([]string, error) {
+	return nil, nil
+}
+
+func (p *nodeRouteLiveLinkProvider) LinksForClient(_ string, inbound *model.Inbound, email string) []string {
+	if inbound == nil || inbound.Id != p.inboundID || email != p.email {
+		return nil
+	}
+	return []string{p.link}
+}
+
+func (p *nodeRouteLiveLinkProvider) LinksForInbounds(_ string, _ []*model.Inbound) []string {
+	return nil
+}
+
 // This checks real client -> panel-managed inbound -> node-route -> remote
 // proxy -> HTTP traffic, rather than only probing the destination port or
 // testing an outbound in a separate instance without the routing rule.
@@ -170,7 +195,33 @@ func TestNodeRouteLiveLocalInboundToRemoteCore(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			destination := nodeRouteTag(42)
+			remoteNode := &model.Node{Name: "cascade-live-node", Address: "127.0.0.1", Enable: true, Status: "online"}
+			if err := database.GetDB().Create(remoteNode).Error; err != nil {
+				t.Fatal(err)
+			}
+			remoteProtocol := model.VLESS
+			link := fmt.Sprintf("vless://%s@127.0.0.1:%d?security=none&type=tcp#remote", nodeRouteLiveUUID, remotePort)
+			if tc.remote == "shadowsocks" {
+				remoteProtocol = model.Shadowsocks
+				identity := base64.RawURLEncoding.EncodeToString([]byte("aes-128-gcm:cascade-test-password"))
+				link = fmt.Sprintf("ss://%s@127.0.0.1:%d#remote", identity, remotePort)
+			}
+			foreignInbound := &model.Inbound{
+				Enable: true, Protocol: remoteProtocol, Tag: "remote-" + tc.remote,
+				Port: remotePort, NodeID: &remoteNode.Id, Settings: "{}", StreamSettings: "{}",
+			}
+			if err := database.GetDB().Create(foreignInbound).Error; err != nil {
+				t.Fatal(err)
+			}
+			email := nodeRouteClientEmail(foreignInbound.Id)
+			identity := &model.ClientRecord{Email: email, UUID: nodeRouteLiveUUID, Password: "cascade-test-password", Enable: true, SubID: "cascade-live"}
+			if err := database.GetDB().Create(identity).Error; err != nil {
+				t.Fatal(err)
+			}
+			previousProvider := subLinkProvider()
+			RegisterSubLinkProvider(&nodeRouteLiveLinkProvider{inboundID: foreignInbound.Id, email: email, link: link})
+			t.Cleanup(func() { RegisterSubLinkProvider(previousProvider) })
+			destination := nodeRouteTag(foreignInbound.Id)
 			template := fmt.Sprintf(`{"route":{"final":"blocked","rules":[{"comment":"panel-quick:inbound:live","enabled":true,"inbound":[%q],"action":"route","outbound":%q}]}}`, source.Tag, destination)
 			if err := singBoxSettingService.SetSingBoxConfigTemplate(template); err != nil {
 				t.Fatal(err)
@@ -211,21 +262,19 @@ func TestNodeRouteLiveLocalInboundToRemoteCore(t *testing.T) {
 			}
 			foreign.Inbounds = []map[string]any{remoteInbound}
 			found := false
-			for i, ob := range main.Outbounds {
-				if ob["tag"] == destination {
-					if ob["type"] != "block" {
-						t.Fatalf("unexpected managed test outbound: %#v", ob)
-					}
-					// Replace the deliberately missing DB destination with
-					// a real isolated foreign-core connection for this test.
-					// The production generator is still responsible for the
-					// actual local listener and first-match routing rules.
-					main.Outbounds[i] = managedOutbound
-					found = true
+			for _, ob := range main.Outbounds {
+				if ob["tag"] != destination {
+					continue
 				}
+				if ob["type"] != managedOutbound["type"] ||
+					ob["server"] != "127.0.0.1" ||
+					fmt.Sprint(ob["server_port"]) != strconv.Itoa(remotePort) {
+					t.Fatalf("managed outbound was not generated from the remote service link: %#v", ob)
+				}
+				found = true
 			}
 			if !found {
-				t.Fatal("panel did not inject a managed node-route destination")
+				t.Fatal("panel did not resolve the foreign inbound as an outbound")
 			}
 			stopRemote := startNodeRouteLiveCore(t, binary, foreign, remotePort)
 			ready := localPort
