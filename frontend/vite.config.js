@@ -79,6 +79,19 @@ function injectBasePathPlugin() {
 
 // Cloudflare Rocket Loader rewrites script tags and runs bundles through its
 // own loader, breaking ES-module semantics; data-cfasync="false" opts out.
+// MSW is used by development/tests only. Vite copies public/ wholesale into
+// every production bundle; removing its worker prevents embedding unused JS
+// into the Go executable while keeping the dev server worker available.
+function omitTestOnlyPublicAssetsPlugin() {
+  return {
+    name: 'xui-omit-test-only-public-assets',
+    apply: 'build',
+    closeBundle() {
+      fs.rmSync(path.join(outDir, 'mockServiceWorker.js'), { force: true });
+    },
+  };
+}
+
 function rocketLoaderOptOutPlugin() {
   return {
     name: 'xui-rocket-loader-opt-out',
@@ -152,7 +165,7 @@ function makeBackendProxy(target) {
 }
 
 export default defineConfig({
-  plugins: [react(), injectBasePathPlugin(), rocketLoaderOptOutPlugin()],
+  plugins: [react(), injectBasePathPlugin(), rocketLoaderOptOutPlugin(), omitTestOnlyPublicAssetsPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),

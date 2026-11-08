@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useLocation } from 'react-router';
 import {
@@ -31,18 +31,32 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { AllSettingSchema } from '@/schemas/setting';
 import AppSidebar from '@/layouts/AppSidebar';
+import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
 import GeneralTab from './GeneralTab';
 import { panelUrlAfterRestart, waitForPanelRestart } from './panel-url';
-import SecurityTab from './SecurityTab';
-import TelegramTab from './TelegramTab';
-import EmailTab from './EmailTab';
-import SubscriptionGeneralTab from './SubscriptionGeneralTab';
-import SubscriptionFormatsTab from './SubscriptionFormatsTab';
-import SubscriptionBalancersTab from './SubscriptionBalancersTab';
-import AdditionalSettingsTab from './AdditionalSettingsTab';
-import GatewayModeControl from './GatewayModeControl';
 import './SettingsPage.css';
 import { getAdditionalSettingsTab } from './additional-settings';
+
+// The main settings screen ships only the default tab initially. Less common
+// tab content is downloaded when selected; chunk-recovery matches panel routes.
+const SecurityTab = lazy(() => importWithChunkRecovery(() => import('./SecurityTab')));
+const TelegramTab = lazy(() => importWithChunkRecovery(() => import('./TelegramTab')));
+const EmailTab = lazy(() => importWithChunkRecovery(() => import('./EmailTab')));
+const SubscriptionGeneralTab = lazy(() =>
+  importWithChunkRecovery(() => import('./SubscriptionGeneralTab')),
+);
+const SubscriptionFormatsTab = lazy(() =>
+  importWithChunkRecovery(() => import('./SubscriptionFormatsTab')),
+);
+const SubscriptionBalancersTab = lazy(() =>
+  importWithChunkRecovery(() => import('./SubscriptionBalancersTab')),
+);
+const AdditionalSettingsTab = lazy(() =>
+  importWithChunkRecovery(() => import('./AdditionalSettingsTab')),
+);
+const GatewayModeControl = lazy(() =>
+  importWithChunkRecovery(() => import('./GatewayModeControl')),
+);
 
 interface ApiMsg {
   success?: boolean;
@@ -401,11 +415,13 @@ export default function SettingsPage() {
                     )}
 
                     <Col span={24}>
-                      {activeSlug === 'gateway' ? (
-                        categoryBody
-                      ) : (
-                        <Card hoverable>{categoryBody}</Card>
-                      )}
+                      <Suspense fallback={<Spin size="large" />}>
+                        {activeSlug === 'gateway' ? (
+                          categoryBody
+                        ) : (
+                          <Card hoverable>{categoryBody}</Card>
+                        )}
+                      </Suspense>
                     </Col>
 
                     {activeSlug === 'general' && (slug === '' || slug === 'general') && (
