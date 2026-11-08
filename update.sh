@@ -1080,7 +1080,11 @@ select_release_tag() {
     if [[ -z "$requested" ]]; then
         requested=$(resolve_latest_tag) || return 1
         status=$(release_curl -sL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
-            "https://raw.githubusercontent.com/SawaMEN/3x-ui/${requested}/core-migration.sh")
+            "https://raw.githubusercontent.com/SawaMEN/3x-ui/${requested}/scripts/migration/core-migration.sh")
+        if [[ "$status" == 404 ]]; then
+            status=$(release_curl -sL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
+                "https://raw.githubusercontent.com/SawaMEN/3x-ui/${requested}/core-migration.sh")
+        fi
         case "$status" in
             200) ;;
             404)
@@ -1130,7 +1134,8 @@ prepare_release_host_files() {
     if [[ "$release" == alpine ]]; then
         file="$cm_stage/x-ui/x-ui.rc"
         if [[ ! -s "$file" ]]; then
-            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/x-ui.rc" "$file" || return 1
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/deploy/openrc/x-ui.rc" "$file" ||
+                download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/x-ui.rc" "$file" || return 1
         fi
         [[ -s "$file" ]] && sh -n "$file" || return 1
         rewrite_release_service_paths "$file" openrc || return 1
@@ -1144,7 +1149,8 @@ prepare_release_host_files() {
     if [[ -s "$cm_stage/x-ui/x-ui.service" ]]; then unit=x-ui.service; fi
     cm_service_unit="$cm_stage/x-ui/$unit"
     if [[ ! -s "$cm_service_unit" ]]; then
-        download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/$unit" "$cm_service_unit" || return 1
+        download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/deploy/systemd/$unit" "$cm_service_unit" ||
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/$unit" "$cm_service_unit" || return 1
     fi
     [[ -s "$cm_service_unit" ]] && grep -q '^\[Service\]$' "$cm_service_unit" && grep -q '^ExecStart=' "$cm_service_unit" && grep -q '^WorkingDirectory=' "$cm_service_unit" || {
         echo "Release systemd unit is missing or invalid; installation unchanged." >&2
@@ -1432,7 +1438,8 @@ update_x-ui() {
     rm -f "${xui_script_temp}"
     if [[ -s "${cm_stage}/x-ui/x-ui.sh" ]]; then
         cp "${cm_stage}/x-ui/x-ui.sh" "${xui_script_temp}" || _fail "ERROR: Cannot stage the release management script"
-    elif ! download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh" "${xui_script_temp}"; then
+    elif ! download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/scripts/runtime/x-ui.sh" "${xui_script_temp}" &&
+         ! download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh" "${xui_script_temp}"; then
         rm -f "${xui_script_temp}"
         _fail "ERROR: Failed to download x-ui.sh script; the previous installation will be restored"
     fi

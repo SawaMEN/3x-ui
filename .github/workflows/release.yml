@@ -210,9 +210,9 @@ jobs:
           rm -rf x-ui
           mkdir -p x-ui/bin
           mv xui-release x-ui/x-ui
-          cp x-ui.service.debian x-ui/
-          cp x-ui.service.arch x-ui/
-          cp x-ui.service.rhel x-ui/
+          cp deploy/systemd/x-ui.service.debian x-ui/
+          cp deploy/systemd/x-ui.service.arch x-ui/
+          cp deploy/systemd/x-ui.service.rhel x-ui/
           cp internal/Telemt/telemt.service x-ui/
           cp internal/Telemt/telemt-update.service x-ui/
           cp internal/Telemt/telemt-update.timer x-ui/
@@ -220,10 +220,10 @@ jobs:
           cp internal/Telemt/telemt.toml.example x-ui/
           cp internal/Telemt/telemt-meko-fix.sh x-ui/
           cp internal/Telemt/telemt-meko-fix.service x-ui/
-          cp x-ui.sh x-ui/
-          cp x-ui-core.sh x-ui/
-          cp x-ui.rc x-ui/
-          cp core-migration.sh x-ui/
+          cp scripts/runtime/x-ui.sh x-ui/
+          cp scripts/runtime/x-ui-core.sh x-ui/
+          cp deploy/openrc/x-ui.rc x-ui/
+          cp scripts/migration/core-migration.sh x-ui/
           cd x-ui/bin
 
           fetch https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat

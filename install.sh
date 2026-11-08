@@ -1633,7 +1633,11 @@ select_release_tag() {
     if [[ -z "$requested" ]]; then
         requested=$(resolve_latest_tag) || return 1
         status=$(release_curl -sL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
-            "https://raw.githubusercontent.com/SawaMEN/3x-ui/${requested}/core-migration.sh")
+            "https://raw.githubusercontent.com/SawaMEN/3x-ui/${requested}/scripts/migration/core-migration.sh")
+        if [[ "$status" == 404 ]]; then
+            status=$(release_curl -sL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
+                "https://raw.githubusercontent.com/SawaMEN/3x-ui/${requested}/core-migration.sh")
+        fi
         case "$status" in
             200) ;;
             404)
@@ -1683,7 +1687,8 @@ prepare_release_host_files() {
     if [[ "$release" == alpine ]]; then
         file="$cm_stage/x-ui/x-ui.rc"
         if [[ ! -s "$file" ]]; then
-            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/x-ui.rc" "$file" || return 1
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/deploy/openrc/x-ui.rc" "$file" ||
+                download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/x-ui.rc" "$file" || return 1
         fi
         [[ -s "$file" ]] && sh -n "$file" || return 1
         rewrite_release_service_paths "$file" openrc || return 1
@@ -1697,7 +1702,8 @@ prepare_release_host_files() {
     if [[ -s "$cm_stage/x-ui/x-ui.service" ]]; then unit=x-ui.service; fi
     cm_service_unit="$cm_stage/x-ui/$unit"
     if [[ ! -s "$cm_service_unit" ]]; then
-        download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/$unit" "$cm_service_unit" || return 1
+        download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/deploy/systemd/$unit" "$cm_service_unit" ||
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/$unit" "$cm_service_unit" || return 1
     fi
     [[ -s "$cm_service_unit" ]] && grep -q '^\[Service\]$' "$cm_service_unit" && grep -q '^ExecStart=' "$cm_service_unit" && grep -q '^WorkingDirectory=' "$cm_service_unit" || {
         echo "Release systemd unit is missing or invalid; installation unchanged." >&2
@@ -1855,7 +1861,8 @@ install_x-ui() {
     rm -f "${xui_script_temp}"
     if tar -tzf "${archive}" | grep -Fxq 'x-ui/x-ui.sh'; then
         tar -xOf "${archive}" x-ui/x-ui.sh > "${xui_script_temp}" || exit 1
-    elif ! curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh"; then
+    elif ! curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/scripts/runtime/x-ui.sh" &&
+         ! curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh"; then
         rm -f "${xui_script_temp}"
         echo -e "${red}Failed to download x-ui.sh${plain}"
         exit 1
@@ -2100,7 +2107,8 @@ install_x-ui() {
         if [[ -n "${cm_stage:-}" ]]; then
             cp "${cm_stage}/x-ui/x-ui.rc" "${xui_rc_temp}"
         else
-            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.rc" "${xui_rc_temp}"
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/deploy/openrc/x-ui.rc" "${xui_rc_temp}" ||
+                download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.rc" "${xui_rc_temp}"
         fi
         if [[ $? -ne 0 ]]; then
             rm -f "${xui_rc_temp}"
@@ -2170,19 +2178,23 @@ install_x-ui() {
             echo -e "${yellow}Service files not found in tar.gz, downloading from GitHub...${plain}"
             case "${release}" in
                 ubuntu | debian | armbian)
-                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.debian"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/deploy/systemd/x-ui.service.debian"
                     ;;
                 arch | manjaro | parch)
-                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.arch"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/deploy/systemd/x-ui.service.arch"
                     ;;
                 *)
-                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.rhel"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/deploy/systemd/x-ui.service.rhel"
                     ;;
             esac
 
             if ! _install_xui_service_unit "$service_unit_url" "true"; then
-                echo -e "${red}Failed to install x-ui.service from GitHub (${script_ref}) -- the release tarball did not ship one either${plain}"
-                exit 1
+                # Earlier release tags stored systemd templates at the repository root.
+                service_unit_url="${service_unit_url/\/deploy\/systemd\//\/}"
+                if ! _install_xui_service_unit "$service_unit_url" "true"; then
+                    echo -e "${red}Failed to install x-ui.service from GitHub (${script_ref}) -- no usable release unit${plain}"
+                    exit 1
+                fi
             fi
             service_installed=true
         fi

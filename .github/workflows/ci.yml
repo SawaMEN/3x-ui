@@ -73,11 +73,11 @@ jobs:
       - uses: actions/checkout@v7
       - name: Validate installer and management scripts
         run: |
-          for script in install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh; do
+          for script in install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/migration/core-migration.sh; do
             bash -n "$script"
           done
-          shellcheck --shell=bash --severity=error install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh
-          shellcheck --shell=bash --include=SC2086,SC2046,SC2115,SC2164 install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh
+          shellcheck --shell=bash --severity=error install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/migration/core-migration.sh
+          shellcheck --shell=bash --include=SC2086,SC2046,SC2115,SC2164 install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/migration/core-migration.sh
       - name: Exercise release rollback and CLI failures
         run: |
           python3 tools/test-core-migration-shell.py
@@ -377,11 +377,11 @@ jobs:
       - name: Validate Arch installer scripts
         run: |
           bash -n install.sh
-          bash -n x-ui.sh
-          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+          bash -n scripts/runtime/x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh scripts/runtime/x-ui.sh
       - name: Validate Arch systemd unit
         run: |
-          cp x-ui.service.arch /tmp/x-ui.service
+          cp deploy/systemd/x-ui.service.arch /tmp/x-ui.service
           sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
           systemd-analyze verify /tmp/x-ui.service
       - name: Guard against pacman partial upgrades

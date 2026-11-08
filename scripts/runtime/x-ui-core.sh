@@ -204,12 +204,19 @@ replace_xui_script() {
 installed_script_url() {
     local ver
     ver=$("${xui_folder}/x-ui" -v 2> /dev/null | tr -d '[:space:]')
-    if [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && curl -fsIL -o /dev/null "https://raw.githubusercontent.com/SawaMEN/3x-ui/v${ver}/x-ui.sh"; then
-        echo "https://raw.githubusercontent.com/SawaMEN/3x-ui/v${ver}/x-ui.sh"
-    else
-        echo -e "${yellow}No x-ui.sh published for the installed version (${ver:-unknown}), using main${plain}" >&2
-        echo "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/x-ui.sh"
+    local base="https://raw.githubusercontent.com/SawaMEN/3x-ui"
+    local path url
+    if [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        for path in scripts/runtime/x-ui.sh x-ui.sh; do
+            url="$base/v${ver}/$path"
+            if curl -fsIL -o /dev/null "$url"; then
+                printf '%s\n' "$url"
+                return 0
+            fi
+        done
     fi
+    echo -e "${yellow}No x-ui.sh published for the installed version (${ver:-unknown}), using main${plain}" >&2
+    echo "$base/main/scripts/runtime/x-ui.sh"
 }
 
 update_menu() {
