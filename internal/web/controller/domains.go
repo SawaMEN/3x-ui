@@ -63,9 +63,13 @@ func (a *DomainController) check(c *gin.Context) {
 		return
 	}
 	found := false
+	port := cfg.PublicPort
 	for _, d := range cfg.Domains {
 		if d.Name == req.Name {
 			found = true
+			if d.Mode == "shared_sni" {
+				port = 443
+			}
 		}
 	}
 	if !found {
@@ -85,7 +89,7 @@ func (a *DomainController) check(c *gin.Context) {
 		result.Addresses = append(result.Addresses, ip.IP.String())
 	}
 	dialer := tls.Dialer{NetDialer: &net.Dialer{Timeout: 5 * time.Second}, Config: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: req.Name}}
-	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(req.Name, strconv.Itoa(cfg.PublicPort)))
+	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(req.Name, strconv.Itoa(port)))
 	if err != nil {
 		result.Error = err.Error()
 		jsonObj(c, result, nil)

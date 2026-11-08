@@ -77,7 +77,7 @@ export default function SniSearchInput({
             disabled={disabled}
             showSearch={{ optionFilterProp: 'label' }}
             options={managedDomains.map((domain) => ({
-              label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : 'TLS'}`,
+              label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
               value: domain.name,
             }))}
             onChange={(name) => {
@@ -85,6 +85,9 @@ export default function SniSearchInput({
               if (!domain) return;
               onChange?.(domain.name);
               onPickManagedDomain?.(domain);
+              if (domain.source === 'remote' && purpose === 'tls') {
+                messageApi.info(t('pages.settings.domains.remoteSNITLSWarning'));
+              }
             }}
           />
         )}

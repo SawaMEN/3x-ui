@@ -4,7 +4,7 @@ import {
   DomainFrontDomainSchema as DomainResponseSchema,
 } from '@/generated/zod';
 
-export const DomainModeSchema = z.enum(['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only']);
+export const DomainModeSchema = z.enum(['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni']);
 export const DomainTLSModeSchema = z.enum(['auto', 'certmagic', 'existing', 'manual']);
 const hostname = z
   .string()

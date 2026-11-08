@@ -2431,13 +2431,15 @@
           "cdn": "CDN",
           "relay": "Relay",
           "sub_link_only": "Subscription only",
-          "sni_only": "SNI only — decoy site"
+          "sni_only": "SNI only — decoy site",
+          "shared_sni": "External SNI — foreign node"
         },
         "modeDesc": {
           "direct": "DNS points directly to this server. The gateway terminates TLS and serves subscriptions and selected HTTP-based VPN inbounds. Admin panel access is a separate opt-in.",
           "cdn": "DNS uses a CDN proxy in front of this server. The gateway manages the origin certificate and serves subscriptions and compatible HTTP-based VPN inbounds. Configure Full (strict), bypass personal response caching and browser challenges at the CDN.",
           "relay": "This server terminates HTTPS and forwards permitted subscription and VPN paths to the HTTPS origin you specify. Matching users, paths and transports must already exist at that origin. This is an HTTP relay, not a raw TCP/UDP relay.",
           "sub_link_only": "Serves subscriptions and their web page assets. It cannot expose the admin panel or publish VPN nodes, and unrelated paths return 404. Use it to separate the address users import from the panel and VPN endpoints.",
+          "shared_sni": "Registers an existing HTTPS cover site hosted on a foreign node as a reusable SNI. The controlling panel creates no local website, opens no port, and holds no private key. Ordinary TLS on other VPN nodes still requires a matching certificate on each node.",
           "sni_only": "Hosts a small HTTPS landing page with a separately managed, automatically renewed TLS certificate. It does not expose panel, subscription or VPN routes. Its hostname can be selected for TUIC SNI or Telemt Fake-TLS; TUIC uses UDP 443 while the site uses TCP 443."
         },
         "transportHelp": "The gateway supports WS, HTTPUpgrade, XHTTP and gRPC with unique non-root paths. Raw TCP, REALITY, Snell, WireGuard and other UDP protocols keep their own listeners. HTTP/3 is not provided by this gateway.",
@@ -2463,6 +2465,10 @@
         "stagingDesc": "For setup testing without consuming production issuance limits. Test certificates are not trusted by browsers. Turn this off and apply again for a public trusted certificate.",
         "list": "Domains",
         "addSni": "Create SNI site",
+        "addSharedSni": "Use external SNI",
+        "remoteSNITag": "Foreign node",
+        "remoteSNIInfo": "The HTTPS site and its certificate are on another node; no local private key is stored here.",
+        "remoteSNITLSWarning": "The hostname is selected as SNI. Standard TLS needs a matching certificate on this VPN server; the foreign site's private key is not copied.",
         "sniCertificates": "SNI certificates",
         "sniCertHint": "Copy these paths into protocol TLS settings",
         "sniEmpty": "No SNI-only sites yet",
@@ -2486,7 +2492,8 @@
           "error": "Issuance failed",
           "disabled": "Disabled",
           "stopped": "Gateway stopped",
-          "unsaved": "Not applied"
+          "unsaved": "Not applied",
+          "external": "On another node"
         },
         "tls": {
           "auto": "Automatic — existing or Let’s Encrypt",

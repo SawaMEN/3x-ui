@@ -3,7 +3,7 @@ import { HttpUtil } from '@/utils';
 
 export interface ManagedSniDomain {
   name: string;
-  source: 'telemt' | 'gateway';
+  source: 'telemt' | 'gateway' | 'remote';
   certFile: string;
   keyFile: string;
 }
