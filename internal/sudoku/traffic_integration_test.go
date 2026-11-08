@@ -7,11 +7,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"testing"
 	"time"
 
@@ -148,7 +150,7 @@ func testSudokuTraffic(t *testing.T, limited bool) {
 				t.Fatal(err)
 			}
 			for i := 0; i < 2; i++ { // The second connection reuses the mux session when enabled.
-				conn, err := dialer.Dial("tcp", tcp.Addr().String())
+				conn, err := dialSudokuAfterStartup(dialer, tcp.Addr().String())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -175,6 +177,17 @@ func testSudokuTraffic(t *testing.T, limited bool) {
 			}
 			officialSudokuUDPEcho(t, socksAddr, udp.LocalAddr().(*net.UDPAddr).Port)
 		})
+	}
+}
+
+func dialSudokuAfterStartup(dialer proxy.Dialer, target string) (net.Conn, error) {
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		conn, err := dialer.Dial("tcp", target)
+		if err == nil || !errors.Is(err, syscall.ECONNREFUSED) || time.Now().After(deadline) {
+			return conn, err
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
