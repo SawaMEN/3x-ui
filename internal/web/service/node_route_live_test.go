@@ -50,7 +50,10 @@ func nodeRouteLivePort(t *testing.T, network string) int {
 func startNodeRouteLiveCore(t *testing.T, binary string, cfg *singbox.Config, tcpReadyPort int) func() {
 	t.Helper()
 	cfg.Log = map[string]any{"level": "warn"}
-	cfg.Experimental = nil
+	// Config.Marshal installs a default Clash API listener on 127.0.0.1:10090
+	// unless explicitly disabled. Three simultaneous cores must not compete
+	// for that panel-only socket during the isolated cascade test.
+	cfg.Experimental = map[string]any{"clash_api": map[string]any{"external_controller": ""}}
 	raw, err := cfg.Marshal()
 	if err != nil {
 		t.Fatal(err)
