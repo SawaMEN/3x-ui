@@ -229,11 +229,49 @@ export function compileQuickRoute(
 function isUnconditional(rule: RouteRecord, engine: RoutingEngine): boolean {
   if (rule.enabled === false || rule.type === 'logical') return false;
   if (engine === 'xray' && rule.type && rule.type !== 'field') return false;
+  // sing-box sniff/resolve actions do not terminate routing. Inserting
+  // an inbound or domain route before sniff can break SNI-based routing.
+  if (engine === 'sing-box' && rule.action && rule.action !== 'route' && rule.action !== 'reject') {
+    return false;
+  }
   const fields = ROUTE_MATCH_FIELDS.filter((key) => key !== 'action' && key !== 'mode');
   return !fields.some((key) => {
     const value = rule[key];
     if (Array.isArray(value)) return value.length > 0;
     return value !== undefined && value !== null && value !== '' && value !== false;
+  });
+}
+
+// An inbound-only quick rule is a fallback for the listed listeners. When
+// assigning a listener to another node, narrow older panel-owned inbound
+// fallbacks so the first-match router does not keep using the old node.
+// Domain/IP exceptions and user-authored rules retain their original scopes.
+function replaceOverlappingQuickInbounds(
+  rules: RouteRecord[],
+  next: CompiledQuickRoute,
+  engine: RoutingEngine,
+): RouteRecord[] {
+  if (!next.id.startsWith(QUICK_PREFIX + 'inbound:')) return [...rules];
+  const field = engine === 'xray' ? 'inboundTag' : 'inbound';
+  const incoming = next.rule[field];
+  if (!Array.isArray(incoming)) return [...rules];
+  const selected = new Set(incoming.filter((tag): tag is string => typeof tag === 'string'));
+
+  return rules.flatMap((rule) => {
+    const marker = engine === 'xray' ? rule.ruleTag : rule.comment;
+    if (
+      typeof marker !== 'string' ||
+      !marker.startsWith(QUICK_PREFIX + 'inbound:') ||
+      marker === next.id ||
+      !Array.isArray(rule[field])
+    ) {
+      return [rule];
+    }
+    const before = rule[field] as unknown[];
+    const remaining = before.filter((tag) => typeof tag !== 'string' || !selected.has(tag));
+    if (remaining.length === before.length) return [rule];
+    if (remaining.length === 0) return [];
+    return [{ ...rule, [field]: remaining }];
   });
 }
 
@@ -243,8 +281,8 @@ export function putQuickRoute(
   engine: RoutingEngine,
 ): { rules: RouteRecord[]; replaced: boolean; shadowed: boolean } {
   const marker = (rule: RouteRecord) => (engine === 'xray' ? rule.ruleTag : rule.comment);
-  const existing = rules.findIndex((rule) => marker(rule) === next.id);
-  const updated = [...rules];
+  const updated = replaceOverlappingQuickInbounds(rules, next, engine);
+  const existing = updated.findIndex((rule) => marker(rule) === next.id);
   if (existing !== -1) {
     updated[existing] = { ...updated[existing], ...next.rule };
     // A native reject has no outbound. Do not retain an old destination when
