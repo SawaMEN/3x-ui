@@ -85,7 +85,7 @@ export default function SniSearchInput({
               if (!domain) return;
               onChange?.(domain.name);
               onPickManagedDomain?.(domain);
-              if (domain.source === 'remote' && purpose === 'tls') {
+              if (domain.source === 'remote' && domain.nodeId !== nodeId && purpose === 'tls') {
                 messageApi.info(t('pages.settings.domains.remoteSNITLSWarning'));
               }
             }}
