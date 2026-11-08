@@ -64,6 +64,10 @@ interface NodeRouteProbe {
   inconclusive?: boolean;
   tunnelChecked?: boolean;
   transport: string;
+  transportReachable?: boolean;
+  transportDetail?: string;
+  probeSource?: 'running-core' | 'temporary-core';
+  failureStage?: string;
   latencyMs?: number;
   detail: string;
 }
@@ -214,9 +218,11 @@ export default function QuickRoutingPanel({
     const isMieru =
       nodeTargets.find((node) => node.tag === tag)?.protocol?.toLowerCase() === 'mieru';
     const status = probeResult.tunnelChecked
-      ? probeResult.reachable
-        ? 'success'
-        : 'error'
+      ? probeResult.inconclusive
+        ? 'warning'
+        : probeResult.reachable
+          ? 'success'
+          : 'error'
       : probeResult.reachable || probeResult.inconclusive || isUdp
         ? 'warning'
         : 'error';
@@ -226,9 +232,13 @@ export default function QuickRoutingPanel({
         showIcon
         title={
           (probeResult.tunnelChecked
-            ? probeResult.reachable
-              ? 'Исходящее работает · HTTP прошёл'
-              : 'Исходящее не отвечает · HTTP не прошёл'
+            ? probeResult.inconclusive
+              ? probeResult.reachable
+                ? 'HTTP прошёл во временном ядре · рабочий маршрут не подтверждён'
+                : 'HTTP-проверка не удалась · доступность не установлена'
+              : probeResult.reachable
+                ? 'Исходящее работает · HTTP прошёл'
+                : 'HTTP-проверка не прошла'
             : isMieru
               ? probeResult.reachable
                 ? 'Mieru TCP отвечает · каскад не проверен'
@@ -244,7 +254,22 @@ export default function QuickRoutingPanel({
                   : 'TCP-порт недоступен') +
           (probeResult.latencyMs ? ' · ' + probeResult.latencyMs + ' мс' : '')
         }
-        description={probeResult.detail}
+        description={
+          <Space orientation="vertical" size="small">
+            <span>{probeResult.detail}</span>
+            {probeResult.transportDetail && (
+              <Typography.Text type="secondary">{probeResult.transportDetail}</Typography.Text>
+            )}
+            {probeResult.probeSource && (
+              <Typography.Text type="secondary">
+                Способ проверки:{' '}
+                {probeResult.probeSource === 'running-core'
+                  ? 'через уже работающее ядро'
+                  : 'через отдельное временное ядро'}
+              </Typography.Text>
+            )}
+          </Space>
+        }
       />
     );
   }
