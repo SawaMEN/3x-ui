@@ -205,8 +205,16 @@ export default function CascadeDiagnosticsPage() {
           throw new Error(reason);
         }
         log('Служебное подключение ' + target.tag + ' применено; нужна повторная проверка.');
-        setStore(s => ({ ...s, problems: s.problems.map(p =>
-          p.tag === target.tag && p.status !== 'verified' ? { ...p, status: 'retest', updatedAt: new Date().toISOString() } : p) }));
+        setStore(s => {
+          const checks = { ...s.checks };
+          delete checks[target.tag];
+          return {
+            ...s, checks, liveEvidence: '', ciApproved: false,
+            checklist: s.checklist.map((checked, index) => index === 7 ? false : checked),
+            problems: s.problems.map(p =>
+              p.tag === target.tag ? { ...p, status: 'retest', updatedAt: new Date().toISOString() } : p),
+          };
+        });
         messageApi.success('Подключение применено. Запустите повторную проверку.');
         await refresh();
       },
