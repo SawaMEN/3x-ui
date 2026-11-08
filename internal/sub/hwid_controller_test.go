@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -144,6 +145,41 @@ func TestSubscriptionHwidGateSkipsHtmlInfoPage(t *testing.T) {
 	}
 	if rec.Header().Get("X-Hwid-Not-Supported") != "" {
 		t.Fatalf("HTML sub page should not be HWID-gated: %#v", rec.Header())
+	}
+}
+
+func TestSubscriptionHwidHTMLRedactsConnectionCredentials(t *testing.T) {
+	router, subID := initHwidSubRouter(t, 1)
+	limited := requestSub(t, router, http.MethodGet, "/sub/"+subID, "", "text/html")
+	if limited.Code != http.StatusOK {
+		t.Fatalf("HWID-limited info page status = %d", limited.Code)
+	}
+	if !strings.Contains(limited.Body.String(), `"links":null`) ||
+		strings.Contains(limited.Body.String(), "vless://") ||
+		strings.Contains(limited.Body.String(), "11111111-2222-4333-8444-555555555555") {
+		t.Fatal("read-only HTML preview leaked protocol credentials under an HWID limit")
+	}
+	// Keep existing read-only preview behavior: visiting HTML never uses a
+	// device slot and does not require an X-HWID header.
+	if limited.Header().Get("X-Hwid-Active") != "" {
+		t.Fatal("HTML preview unexpectedly consumed an HWID device slot")
+	}
+	var count int64
+	if err := database.GetDB().Model(&model.ClientHwid{}).
+		Where("sub_id = ?", subID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("HTML preview registered %d device(s)", count)
+	}
+
+	if err := database.GetDB().Model(&model.ClientRecord{}).
+		Where("sub_id = ?", subID).Update("limit_hwid", 0).Error; err != nil {
+		t.Fatal(err)
+	}
+	unlimited := requestSub(t, router, http.MethodGet, "/sub/"+subID, "", "text/html")
+	if unlimited.Code != http.StatusOK || !strings.Contains(unlimited.Body.String(), `"links":[`) {
+		t.Fatalf("unrestricted HTML preview stopped exposing its normal links: status %d", unlimited.Code)
 	}
 }
 
