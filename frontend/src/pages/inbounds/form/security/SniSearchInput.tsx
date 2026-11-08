@@ -41,15 +41,22 @@ export default function SniSearchInput({
   const [messageApi, contextHolder] = message.useMessage();
   const { control } = useFormContext();
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
-  const managedDomains = nodeId == null && domainStatus?.running && domainStatus.config.enabled
-    ? domainStatus.config.domains
-        .filter((domain) => domain.enabled && domain.mode === 'sni_only')
-        .flatMap((domain) => {
-          const cert = domainStatus.certificates.find((item) => item.name === domain.name);
-          if (!cert || !['valid', 'renewal_due'].includes(cert.state) || !cert.certFile || !cert.keyFile) return [];
-          return [{ name: domain.name, certFile: cert.certFile, keyFile: cert.keyFile }];
-        })
-    : [];
+  const managedDomains =
+    nodeId == null && domainStatus?.running && domainStatus.config.enabled
+      ? domainStatus.config.domains
+          .filter((domain) => domain.enabled && domain.mode === 'sni_only')
+          .flatMap((domain) => {
+            const cert = domainStatus.certificates.find((item) => item.name === domain.name);
+            if (
+              !cert ||
+              !['valid', 'renewal_due'].includes(cert.state) ||
+              !cert.certFile ||
+              !cert.keyFile
+            )
+              return [];
+            return [{ name: domain.name, certFile: cert.certFile, keyFile: cert.keyFile }];
+          })
+      : [];
   const scan: SNIScanCallback = async (targets, mode, signal, progress, recheck) => {
     try {
       return await runSNIScan(nodeId, purpose, targets, mode, signal, progress, recheck);

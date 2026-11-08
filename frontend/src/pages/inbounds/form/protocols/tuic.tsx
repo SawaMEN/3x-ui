@@ -43,10 +43,15 @@ export default function TuicFields() {
 
   const managedDomain = (name: string) => {
     if (nodeId != null || !domainStatus?.running || !domainStatus.config.enabled) return undefined;
-    const matched = domainStatus.config.domains.find((domain) => domain.enabled && domain.mode === 'sni_only' && domain.name === name);
+    const matched = domainStatus.config.domains.find(
+      (domain) => domain.enabled && domain.mode === 'sni_only' && domain.name === name,
+    );
     if (!matched) return undefined;
     const cert = domainStatus.certificates.find((entry) => entry.name === matched.name);
-    return cert && ['valid', 'renewal_due'].includes(cert.state) && cert.certFile && cert.keyFile
+    return cert &&
+      ['valid', 'renewal_due'].includes(cert.state) &&
+      cert.certFile &&
+      cert.keyFile
       ? { name: matched.name, certFile: cert.certFile, keyFile: cert.keyFile }
       : undefined;
   };
@@ -70,10 +75,16 @@ export default function TuicFields() {
     const currentCert = String(getValues('settings.server.certificate') || '');
     const currentKey = String(getValues('settings.server.private_key') || '');
 
-    if (!currentCert || currentCert.startsWith('/root/cert/')) {
+    const usedManagedCert = domainStatus?.certificates.some(
+      (entry) => entry.certFile !== '' && entry.certFile === currentCert,
+    );
+    if (!currentCert || currentCert.startsWith('/root/cert/') || usedManagedCert) {
       updateServerValue('certificate', `/root/cert/${cleanSni}/fullchain.pem`);
     }
-    if (!currentKey || currentKey.startsWith('/root/cert/')) {
+    const usedManagedKey = domainStatus?.certificates.some(
+      (entry) => entry.keyFile !== '' && entry.keyFile === currentKey,
+    );
+    if (!currentKey || currentKey.startsWith('/root/cert/') || usedManagedKey) {
       updateServerValue('private_key', `/root/cert/${cleanSni}/privkey.pem`);
     }
   };

@@ -226,7 +226,11 @@ export default function DomainFrontTab({
     form.resetFields();
     form.setFieldsValue(
       index < 0
-        ? { ...defaultDomain, mode: sniOnly ? 'sni_only' : 'sub_link_only', tls: sniOnly ? 'certmagic' : 'auto' }
+        ? {
+            ...defaultDomain,
+            mode: sniOnly ? 'sni_only' : 'sub_link_only',
+            tls: sniOnly ? 'certmagic' : 'auto',
+          }
         : draft.domains[index],
     );
     setPrimaryDomain(
@@ -243,7 +247,10 @@ export default function DomainFrontTab({
       ...defaultDomain,
       ...value,
       panel: false,
-      inboundIds: value.mode === 'sub_link_only' || value.mode === 'sni_only' ? [] : (value.inboundIds ?? []),
+      inboundIds:
+        value.mode === 'sub_link_only' || value.mode === 'sni_only'
+          ? []
+          : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
       certFile: value.tls === 'manual' ? value.certFile : '',
       keyFile: value.tls === 'manual' ? value.keyFile : '',
@@ -257,7 +264,11 @@ export default function DomainFrontTab({
         : draft.subscriptionDomain === old?.name
           ? ''
           : draft.subscriptionDomain;
-    update({ domains, subscriptionDomain: canonical });
+    update({
+      domains,
+      subscriptionDomain: canonical,
+      ...(domain.mode === 'sni_only' ? { enabled: true } : {}),
+    });
     setEditing(undefined);
   }
   const date = (epoch: number) =>
@@ -968,14 +979,19 @@ export default function DomainFrontTab({
               </Form.Item>
             </>
           )}
-          {mode !== 'sni_only' && <Form.Item label={label('useForSubscription')} tooltip={label('useForSubscriptionHelp')}>
-            <Checkbox
-              checked={primaryDomain}
-              onChange={(event) => setPrimaryDomain(event.target.checked)}
+          {mode !== 'sni_only' && (
+            <Form.Item
+              label={label('useForSubscription')}
+              tooltip={label('useForSubscriptionHelp')}
             >
-              {label('useForSubscription')}
-            </Checkbox>
-          </Form.Item>}
+              <Checkbox
+                checked={primaryDomain}
+                onChange={(event) => setPrimaryDomain(event.target.checked)}
+              >
+                {label('useForSubscription')}
+              </Checkbox>
+            </Form.Item>
+          )}
           <Form.Item
             name="tls"
             label={label('tlsLabel')}
