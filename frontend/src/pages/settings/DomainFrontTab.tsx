@@ -123,7 +123,7 @@ export default function DomainFrontTab({
   const redirectDomains = [
     ...new Set(
       [
-        ...draft.domains.filter((domain) => domain.enabled).map((domain) => domain.name),
+        ...draft.domains.filter((domain) => domain.enabled && domain.mode !== 'sni_only').map((domain) => domain.name),
         allSetting?.webDomain || '',
       ].filter(Boolean),
     ),
@@ -928,8 +928,7 @@ export default function DomainFrontTab({
                 if (value === 'sub_link_only' || value === 'sni_only') {
                   form.setFieldsValue({ inboundIds: [], origin: '' });
                   if (value === 'sni_only') setPrimaryDomain(false);
-                }
-                else if (value !== 'relay') form.setFieldsValue({ origin: '' });
+                } else if (value !== 'relay') form.setFieldsValue({ origin: '' });
               }}
               options={['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only'].map((value) => ({
                 value,

@@ -236,7 +236,7 @@ func TestManagedTLSApplyRollbackAndExpiry(t *testing.T) {
 }
 
 func TestAutomaticCertificateLifetimeWhileStopped(t *testing.T) {
-	cert, _, _ := testCertificate(t, "auto.example.com", 12)
+	cert, key, _ := testCertificate(t, "auto.example.com", 12)
 	data, err := os.ReadFile(cert)
 	if err != nil {
 		t.Fatal(err)
@@ -247,12 +247,26 @@ func TestAutomaticCertificateLifetimeWhileStopped(t *testing.T) {
 	if err := storage.Store(context.Background(), certmagic.StorageKeys.SiteCert(issuer.IssuerKey(), "auto.example.com"), data); err != nil {
 		t.Fatal(err)
 	}
+	privateKey, err := os.ReadFile(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Store(context.Background(), certmagic.StorageKeys.SitePrivateKey(issuer.IssuerKey(), "auto.example.com"), privateKey); err != nil {
+		t.Fatal(err)
+	}
 	cfg := DefaultConfig()
 	cfg.Enabled = true
 	cfg.Domains = []DomainFrontDomain{{Name: "auto.example.com", Mode: "direct", Enabled: true, TLS: "auto"}}
 	status := NewManager(cache).Status(cfg)
 	if status.Running || status.Certificates[0].DaysLeft != 12 || status.Certificates[0].AutoRenew || status.Certificates[0].State != "renewal_due" {
 		t.Fatalf("status = %#v", status)
+	}
+	result := status.Certificates[0]
+	if result.CertFile == "" || result.KeyFile == "" {
+		t.Fatalf("managed certificate paths missing: %#v", result)
+	}
+	if pair, err := tls.LoadX509KeyPair(result.CertFile, result.KeyFile); err != nil || len(pair.Certificate) == 0 {
+		t.Fatalf("managed certificate paths are not a usable TLS pair: %v", err)
 	}
 }
 
