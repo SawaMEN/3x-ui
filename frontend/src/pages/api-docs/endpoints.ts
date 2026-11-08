@@ -2553,7 +2553,7 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/domains/sni',
         summary:
-          'List managed SNI cover-site domains from this panel and its connected nodes. Use ?local=1 to omit node discovery. File paths refer only to the certificate's owning host; private key contents are never returned.',
+          'List managed SNI cover-site domains from this panel and its connected nodes. Use ?local=1 to omit node discovery. File paths refer only to the certificate-owning host; private key contents are never returned.',
         response:
           '{\n  "success": true,\n  "obj": [\n    { "name": "edge.example.com", "source": "remote", "nodeId": 7, "nodeName": "US" }\n  ]\n}',
       },
