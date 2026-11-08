@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import {
-  Alert, Button, Card, Checkbox, Col, Divider, Input, Layout, Modal, Row,
+  Alert, Button, Card, Checkbox, Col, ConfigProvider, Divider, Input, Layout, Modal, Row,
   Select, Space, Statistic, Table, Tabs, Tag, Timeline, Typography, message,
 } from 'antd';
 import AppSidebar from '@/layouts/AppSidebar';
@@ -241,6 +241,7 @@ export default function CascadeDiagnosticsPage() {
       <Button size="small" disabled={!target.available} onClick={() => ensure(target)}>Подготовить</Button></Space> },
   ];
   return (
+    <ConfigProvider theme={antdThemeConfig}>
     <div className="cascade-diagnostics-page" style={{ minHeight: '100vh' }}>
       {contextHolder}
       <Layout style={{ minHeight: '100vh' }}>
@@ -269,19 +270,19 @@ export default function CascadeDiagnosticsPage() {
               <Typography.Text type="secondary">* Подтверждены только автоматизированные этапы. Проверка сквозного потока с пользовательского входящего выполняется отдельно.</Typography.Text>
               <Card size="small" title="Фильтры и маршрут">
                 <Row gutter={[10, 10]}>
-                  <Col xs={24} sm={12} lg={4}><Typography.Text>Ядро</Typography.Text><Select block value={core} onChange={value => { setCore(value); setSelectedTag(''); }}
+                  <Col xs={24} sm={12} lg={4}><Typography.Text>Ядро</Typography.Text><Select style={{ width: '100%' }} value={core} onChange={value => { setCore(value); setSelectedTag(''); }}
                     options={[{ label: 'sing-box', value: 'sing-box' }, { label: 'Xray', value: 'xray' }]} /></Col>
-                  <Col xs={24} sm={12} lg={5}><Typography.Text>Нода</Typography.Text><Select block value={nodeFilter} onChange={setNodeFilter}
+                  <Col xs={24} sm={12} lg={5}><Typography.Text>Нода</Typography.Text><Select style={{ width: '100%' }} value={nodeFilter} onChange={setNodeFilter}
                     options={[{ label: 'Все ноды', value: 'all' }, ...nodes.map(n => ({ label: n.name || String(n.id), value: n.id }))]} /></Col>
-                  <Col xs={24} sm={12} lg={4}><Typography.Text>Протокол</Typography.Text><Select block value={protocolFilter} onChange={setProtocolFilter}
+                  <Col xs={24} sm={12} lg={4}><Typography.Text>Протокол</Typography.Text><Select style={{ width: '100%' }} value={protocolFilter} onChange={setProtocolFilter}
                     options={[{ label: 'Все протоколы', value: 'all' }, ...Array.from(new Set(targets.map(t => t.protocol))).map(p => ({ label: p, value: p }))]} /></Col>
-                  <Col xs={24} sm={12} lg={5}><Typography.Text>Тип ошибки</Typography.Text><Select block value={kindFilter} onChange={setKindFilter}
+                  <Col xs={24} sm={12} lg={5}><Typography.Text>Тип ошибки</Typography.Text><Select style={{ width: '100%' }} value={kindFilter} onChange={setKindFilter}
                     options={[{ label: 'Все типы', value: 'all' }, ...kinds]} /></Col>
-                  <Col xs={24} sm={12} lg={6}><Typography.Text>Статус</Typography.Text><Select block value={statusFilter} onChange={setStatusFilter}
+                  <Col xs={24} sm={12} lg={6}><Typography.Text>Статус</Typography.Text><Select style={{ width: '100%' }} value={statusFilter} onChange={setStatusFilter}
                     options={[{ label: 'Любой', value: 'all' }, { label: 'Доступно', value: 'ok' }, { label: 'Недоступно', value: 'failed' },
                       ...problemStatuses]} /></Col>
                   <Col span={24}><Typography.Text>Целевой каскад</Typography.Text>
-                    <Select block showSearch optionFilterProp="label" value={current?.tag} onChange={setSelectedTag}
+                    <Select style={{ width: '100%' }} showSearch optionFilterProp="label" value={current?.tag} onChange={setSelectedTag}
                       options={visible.map(t => ({ value: t.tag, label: t.nodeName + ' · ' + (t.remark || t.protocol) + ' · ' + t.tag }))} placeholder="Выберите маршрут" /></Col>
                 </Row>
               </Card>
@@ -302,7 +303,7 @@ export default function CascadeDiagnosticsPage() {
                     <Card size="small" title="Параметры проверки">
                       <Row gutter={[12, 12]}>
                         <Col xs={24} md={12}><Typography.Text>Локальное входящее (источник)</Typography.Text>
-                          <Select block showSearch optionFilterProp="label" value={sourceInbound || undefined}
+                          <Select style={{ width: '100%' }} showSearch optionFilterProp="label" value={sourceInbound || undefined}
                             onChange={setSourceInbound} placeholder="Укажите входящее панели" allowClear
                             options={inbounds.filter(x => x.nodeId == null).map(x =>
                               ({ label: (x.remark || x.tag) + ' · ' + x.protocol, value: x.tag })).filter(x => !!x.value)} /></Col>
@@ -349,7 +350,7 @@ export default function CascadeDiagnosticsPage() {
                       <Row gutter={[8, 8]}>
                         <Col xs={24} md={10}><Input aria-label="Описание проблемы" value={title} onChange={e => setTitle(e.target.value)}
                           placeholder="Что не работает?" maxLength={250} onPressEnter={addProblem} /></Col>
-                        <Col xs={24} md={5}><Select block value={kind} onChange={setKind} options={kinds} /></Col>
+                        <Col xs={24} md={5}><Select style={{ width: '100%' }} value={kind} onChange={setKind} options={kinds} /></Col>
                         <Col xs={24} md={6}><Input value={manualEvidence} onChange={e => setManualEvidence(e.target.value)}
                           placeholder="Лог, ссылка или результат теста" maxLength={1000} /></Col>
                         <Col xs={24} md={3}><Button type="primary" block onClick={addProblem}>Добавить</Button></Col>
@@ -415,5 +416,6 @@ export default function CascadeDiagnosticsPage() {
         </Layout>
       </Layout>
     </div>
+    </ConfigProvider>
   );
 }
