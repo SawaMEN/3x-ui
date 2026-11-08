@@ -122,7 +122,7 @@ func TestNodeRouteNativeProbeWrapper(t *testing.T) {
 			native := map[string]any{
 				"type": protocol, "tag": "node-route-12",
 				"server": "vpn.example.com", "server_port": 443,
-				"uuid": "11111111-1111-1111-1111-111111111111",
+				"uuid":     "11111111-1111-1111-1111-111111111111",
 				"password": "test-credential",
 				"tls": map[string]any{"enabled": true, "server_name": "vpn.example.com"},
 			}
