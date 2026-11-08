@@ -1,7 +1,10 @@
 # 3X-UI
 
+<p align="center">
+  <img src="./media/3x-ui-cyberpunk.svg" alt="3X-UI" width="460">
+</p>
+
 Панель управления VPN-подключениями, клиентами, подписками, маршрутизацией и статистикой.
-Используется модифицированное ядро [SawaMEN/hiddify-core](https://github.com/SawaMEN/hiddify-core).
 
 ## Установка на Linux
 
