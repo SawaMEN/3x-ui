@@ -426,7 +426,7 @@ jobs:
       - name: Download successful race-shard measurements
         uses: actions/download-artifact@v8
         with:
-          pattern: race-duration-*
+          pattern: race-duration-s*
           path: race-fragments
           merge-multiple: true
       - name: Merge observed durations (EWMA 60/40)
