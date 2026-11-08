@@ -11,6 +11,14 @@
 - **Осталось:** 7/16 групп, включая частично реализованные, плюс интеграционные проверки.
 - **Слияния рабочих веток в `main`:** 0/3 по состоянию этого среза; все три PR открыты и помечены draft.
 
+## Выполнено в текущем продолжении (без переключения production)
+
+- [x] Исправлена межтестовая гонка staged monitoring в sing-box PR #23: ожидание завершения предыдущей пробы перед новой. Коммит [b09bfaf](https://github.com/SawaMEN/hiddify-sing-box/commit/b09bfaf80ae161f1545dd9af65190dad8945edea).
+- [x] Отформатированы изменения VLESS для исправления CI PR #22. Коммиты [7d56509](https://github.com/SawaMEN/hiddify-sing-box/commit/7d56509257a3ca497716e3b8b7ebd6711434aec8) и [791b026](https://github.com/SawaMEN/hiddify-sing-box/commit/791b0267fb41b223ab54119d71cb566864b7e0fc).
+- [x] Перенесена защита от повторного закрытия VLESS-сокета с TCP/UDP/packet тестами из PR #22 в рабочую ветку PR #23: [c496406](https://github.com/SawaMEN/hiddify-sing-box/commit/c4964069d8816d84d865cf20ea34c238ba7c9e74), [bcb876d](https://github.com/SawaMEN/hiddify-sing-box/commit/bcb876d82236498c439e1e2c358931d34eeae519).
+- [ ] **Требуется подтверждение CI** этих HEAD-коммитов перед любым merge.
+- [ ] Рабочие ветки и core/main по-прежнему требуют всех проверок и переноса 7 остальных патчей.
+
 ## Реестр 16 патчей
 
 | Патч | Статус | Что нужно |
