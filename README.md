@@ -33,28 +33,13 @@ x-ui uninstall   # удаление
 - [XTLS / RealiTLScanner](https://github.com/XTLS/RealiTLScanner) — идея поиска подходящих SNI по соседним IP и проверки TLS-сертификатов.
 - [XTLS / Xray-core](https://github.com/XTLS/Xray-core) — ядро Xray, совместимость и решения для сетевого стека.
 - [SagerNet / sing-box](https://github.com/SagerNet/sing-box) — сетевое ядро и реализации протоколов.
-
-## Дополнительно
-
-Благодарность авторам сторонних протоколов, интеграций и компонентов, используемых проектом:
-
 - [telemt / telemt](https://github.com/telemt/telemt) — сервер MTProto.
-- [WINGS-N / vk-turn-proxy](https://github.com/WINGS-N/vk-turn-proxy) и [WINGS-N / 3x-ui](https://github.com/WINGS-N/3x-ui) — VK TURN-прокси и решения для интеграции.
-- [Liafanx / MTProxyL](https://github.com/Liafanx/MTProxyL) — HTML-шаблоны сайтов-приманок (MIT).
 - [Mekotofeuka / MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — идеи защиты и исправления MTProto.
-- [Amnezia VPN / amneziawg-go](https://github.com/amnezia-vpn/amneziawg-go) — реализация AmneziaWG.
-- [klzgrad / naiveproxy](https://github.com/klzgrad/naiveproxy) — NaïveProxy.
-- [enfein / mieru](https://github.com/enfein/mieru) — Mieru и сервер Mita.
-- [SUDOKU-ASCII / sudoku](https://github.com/SUDOKU-ASCII/sudoku) — Sudoku Tunnel.
-- [HyNetworks / hysteria](https://github.com/HyNetworks/hysteria) — Hysteria.
-- [esrrhs / pingtunnel](https://github.com/esrrhs/pingtunnel) — PingTunnel.
-- [TrustTunnel / TrustTunnel](https://github.com/TrustTunnel/TrustTunnel) — TrustTunnel.
-- [NNdroid / dnstt](https://github.com/NNdroid/dnstt) — DNSTT.
-- [svenshi / oxidns](https://github.com/svenshi/oxidns) — OxiDNS.
-- [EAimTY / tuic](https://github.com/EAimTY/tuic) — TUIC.
-- [p1neappleXpress / OpenFlux](https://github.com/p1neappleXpress/OpenFlux) — OpenFlux.
-- [fptn-project / fptn](https://github.com/fptn-project/fptn) — FPTN.
 
-Часть проектов послужила источником идей или кода, другие интегрируются как отдельные компоненты. Условия лицензий и уведомления об авторстве сторонних материалов сохраняются в соответствующих файлах.
+Дополнительная благодарность авторам сторонних протоколов, интеграций и компонентов, используемых проектом:
+
+[WINGS-N / vk-turn-proxy](https://github.com/WINGS-N/vk-turn-proxy) и [3x-ui](https://github.com/WINGS-N/3x-ui), [Liafanx / MTProxyL](https://github.com/Liafanx/MTProxyL), [AmneziaWG](https://github.com/amnezia-vpn/amneziawg-go), [NaïveProxy](https://github.com/klzgrad/naiveproxy), [Mieru](https://github.com/enfein/mieru), [Sudoku](https://github.com/SUDOKU-ASCII/sudoku), [Hysteria](https://github.com/HyNetworks/hysteria), [PingTunnel](https://github.com/esrrhs/pingtunnel), [TrustTunnel](https://github.com/TrustTunnel/TrustTunnel), [DNSTT](https://github.com/NNdroid/dnstt), [OxiDNS](https://github.com/svenshi/oxidns), [TUIC](https://github.com/EAimTY/tuic), [OpenFlux](https://github.com/p1neappleXpress/OpenFlux), [FPTN](https://github.com/fptn-project/fptn).
+
+Часть проектов послужила источником идей или кода, другие интегрируются как отдельные компоненты. Лицензии и уведомления об авторстве сторонних материалов сохранены.
 
 Лицензия панели: [GPL-3.0](LICENSE).
