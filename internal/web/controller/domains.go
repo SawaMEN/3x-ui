@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -88,15 +89,28 @@ func (a *DomainController) check(c *gin.Context) {
 	for _, ip := range ips {
 		result.Addresses = append(result.Addresses, ip.IP.String())
 	}
-	dialer := tls.Dialer{NetDialer: &net.Dialer{Timeout: 5 * time.Second}, Config: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: req.Name}}
-	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(req.Name, strconv.Itoa(port)))
+	// Resolve and dial the *validated public IP*, not the hostname again:
+	// prevent DNS rebinding to private panel endpoints during a TLS check.
+	conn, err := netsafe.SSRFGuardedDialContext(ctx, "tcp", net.JoinHostPort(req.Name, strconv.Itoa(port)))
 	if err != nil {
 		result.Error = err.Error()
 		jsonObj(c, result, nil)
 		return
 	}
-	defer conn.Close()
-	cert := conn.(*tls.Conn).ConnectionState().PeerCertificates[0]
+	secure := tls.Client(conn, &tls.Config{MinVersion: tls.VersionTLS12, ServerName: req.Name})
+	defer secure.Close()
+	if err := secure.HandshakeContext(ctx); err != nil {
+		result.Error = err.Error()
+		jsonObj(c, result, nil)
+		return
+	}
+	certs := secure.ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		result.Error = "remote site did not present a certificate"
+		jsonObj(c, result, nil)
+		return
+	}
+	cert := certs[0]
 	result.ExpiresAt = cert.NotAfter.Unix()
 	result.DaysLeft = int(math.Ceil(time.Until(cert.NotAfter).Hours() / 24))
 	result.Issuer = cert.Issuer.CommonName

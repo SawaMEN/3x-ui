@@ -222,6 +222,17 @@ export default function RealityForm({
         label="SNI"
         name={['streamSettings', 'realitySettings', 'serverNames']}
         extra={t('pages.inbounds.form.realityTargetHint')}
+        onAfterChange={(value) => {
+          const names = Array.isArray(value) ? value : [];
+          const picked = names.find(
+            (name) => typeof name === 'string' && managedDomains.some((site) => site.name === name),
+          );
+          if (picked && !getValues('streamSettings.realitySettings.target')) {
+            setValue('streamSettings.realitySettings.target', `${picked}:443`, {
+              shouldDirty: true,
+            });
+          }
+        }}
       >
         <Select
           mode="tags"
@@ -231,14 +242,6 @@ export default function RealityForm({
             value: domain.name,
             label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
           }))}
-          onChange={(names: string[]) => {
-            const picked = names.find((name) => managedDomains.some((site) => site.name === name));
-            if (picked && !getValues('streamSettings.realitySettings.target')) {
-              setValue('streamSettings.realitySettings.target', `${picked}:443`, {
-                shouldDirty: true,
-              });
-            }
-          }}
         />
       </FormField>
       <FormField
