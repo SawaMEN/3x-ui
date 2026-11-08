@@ -31,17 +31,9 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { AllSettingSchema } from '@/schemas/setting';
 import AppSidebar from '@/layouts/AppSidebar';
-import GeneralTab from './GeneralTab';
 import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
+import GeneralTab from './GeneralTab';
 import { panelUrlAfterRestart, waitForPanelRestart } from './panel-url';
-
-
-
-
-
-
-
-
 import './SettingsPage.css';
 import { getAdditionalSettingsTab } from './additional-settings';
 
@@ -50,11 +42,21 @@ import { getAdditionalSettingsTab } from './additional-settings';
 const SecurityTab = lazy(() => importWithChunkRecovery(() => import('./SecurityTab')));
 const TelegramTab = lazy(() => importWithChunkRecovery(() => import('./TelegramTab')));
 const EmailTab = lazy(() => importWithChunkRecovery(() => import('./EmailTab')));
-const SubscriptionGeneralTab = lazy(() => importWithChunkRecovery(() => import('./SubscriptionGeneralTab')));
-const SubscriptionFormatsTab = lazy(() => importWithChunkRecovery(() => import('./SubscriptionFormatsTab')));
-const SubscriptionBalancersTab = lazy(() => importWithChunkRecovery(() => import('./SubscriptionBalancersTab')));
-const AdditionalSettingsTab = lazy(() => importWithChunkRecovery(() => import('./AdditionalSettingsTab')));
-const GatewayModeControl = lazy(() => importWithChunkRecovery(() => import('./GatewayModeControl')));
+const SubscriptionGeneralTab = lazy(() =>
+  importWithChunkRecovery(() => import('./SubscriptionGeneralTab')),
+);
+const SubscriptionFormatsTab = lazy(() =>
+  importWithChunkRecovery(() => import('./SubscriptionFormatsTab')),
+);
+const SubscriptionBalancersTab = lazy(() =>
+  importWithChunkRecovery(() => import('./SubscriptionBalancersTab')),
+);
+const AdditionalSettingsTab = lazy(() =>
+  importWithChunkRecovery(() => import('./AdditionalSettingsTab')),
+);
+const GatewayModeControl = lazy(() =>
+  importWithChunkRecovery(() => import('./GatewayModeControl')),
+);
 
 interface ApiMsg {
   success?: boolean;
