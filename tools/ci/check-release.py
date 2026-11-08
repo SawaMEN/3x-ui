@@ -31,7 +31,9 @@ def check(root, arch, revision):
     scripts = ["x-ui.sh", "x-ui-core.sh", "telemt-update.sh"]
     required = binaries + scripts + ["core-migration.sh", "bin/target.json", "bin/speed-components.json",
                                    "x-ui.service.debian", "x-ui.service.arch", "x-ui.service.rhel",
-                                   "bin/geoip.dat", "bin/geosite.dat"]
+                                   "bin/geoip.dat", "bin/geosite.dat",
+                                   "bin/geoip_IR.dat", "bin/geosite_IR.dat",
+                                   "bin/geoip_RU.dat", "bin/geosite_RU.dat"]
     for name in required:
         path = root / name
         if not path.is_file() or path.stat().st_size == 0:
