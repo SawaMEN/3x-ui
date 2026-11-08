@@ -79,7 +79,7 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
             inbound: ['in-a'],
             outbound: 'direct',
           };
-    const other = { ...basic, comment: 'panel-inbound:in-c' };
+    const other: RouteRecord = { ...basic, comment: 'panel-inbound:in-c' };
     if (engine === 'xray') other.inboundTag = ['in-c'];
     else other.inbound = ['in-c'];
     const quick = compileQuickRoute(
