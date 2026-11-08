@@ -126,7 +126,7 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		}
 		names[d.Name] = true
 		switch d.Mode {
-		case "direct", "cdn", "relay", "sub_link_only":
+		case "direct", "cdn", "relay", "sub_link_only", "sni_only":
 		default:
 			return fmt.Errorf("unknown domain mode: %s", d.Mode)
 		}
@@ -146,6 +146,9 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		}
 		if d.Mode == "sub_link_only" && (d.Panel || len(d.InboundIDs) > 0) {
 			return fmt.Errorf("subscription-only domains cannot expose the panel or VPN inbounds")
+		}
+		if d.Mode == "sni_only" && (d.Panel || len(d.InboundIDs) > 0) {
+			return fmt.Errorf("SNI-only domains cannot expose the panel or VPN inbounds")
 		}
 		d.Origin = strings.TrimSpace(d.Origin)
 		if d.Mode == "relay" {
@@ -204,7 +207,7 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 	if c.SubscriptionDomain != "" {
 		found := false
 		for _, d := range c.Domains {
-			if d.Enabled && d.Name == c.SubscriptionDomain {
+			if d.Enabled && d.Mode != "sni_only" && d.Name == c.SubscriptionDomain {
 				found = true
 			}
 		}

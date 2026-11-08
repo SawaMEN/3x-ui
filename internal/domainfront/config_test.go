@@ -24,6 +24,12 @@ func TestDomainRolesRejectUnsafeCombinations(t *testing.T) {
 			c.Domains[0].Panel = true
 		}, "subscription-only domains cannot expose"},
 		{"sub-only inbound", func(c *DomainFrontConfig) { c.Domains[0].Mode = "sub_link_only" }, "subscription-only domains cannot expose"},
+		{"SNI-only inbound", func(c *DomainFrontConfig) { c.Domains[0].Mode = "sni_only" }, "SNI-only domains cannot expose"},
+		{"SNI-only canonical subscription", func(c *DomainFrontConfig) {
+			c.Domains[0].Mode = "sni_only"
+			c.Domains[0].InboundIDs = nil
+			c.SubscriptionDomain = c.Domains[0].Name
+		}, "canonical subscription domain must be an enabled domain"},
 		{"relay insecure origin", func(c *DomainFrontConfig) {
 			c.Domains[0].Mode = "relay"
 			c.Domains[0].Origin = "http://origin.example.com"

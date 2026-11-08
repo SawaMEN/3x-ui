@@ -589,6 +589,7 @@ export type ClientsSummary = z.infer<typeof ClientsSummarySchema>;
 export const DomainFrontCertificateSchema = z.object({
   autoRenew: z.boolean(),
   certFile: z.string(),
+  keyFile: z.string(),
   daysLeft: z.number().int(),
   error: z.string(),
   expiresAt: z.number().int(),

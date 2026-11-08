@@ -504,3 +504,42 @@ func TestInvalidCachedCertificateReleasesGatewayPorts(t *testing.T) {
 		_ = listener.Close()
 	}
 }
+
+
+func TestSNIOnlyDecoyIsIsolated(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Domains = []DomainFrontDomain{{Name: "edge.example.com", Mode: "sni_only", Enabled: true, TLS: "manual"}}
+	r := &frontRuntime{cfg: cfg, backend: Backend{
+		SubscriptionTarget: "http://127.0.0.1:1",
+		SubscriptionPaths: []string{"/sub/", "/assets/"},
+		Routes: map[string][]Route{"edge.example.com": {{Path: "/vpn", Target: "http://127.0.0.1:1"}}},
+		RedirectURL: "https://redirect.example.com/",
+	}}
+	h, err := r.handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path string
+		method string
+		want int
+	}{
+		{"/", http.MethodGet, http.StatusOK},
+		{"/", http.MethodHead, http.StatusOK},
+		{"/sub/token", http.MethodGet, http.StatusNotFound},
+		{"/assets/app.js", http.MethodGet, http.StatusNotFound},
+		{"/vpn", http.MethodGet, http.StatusNotFound},
+		{"/panel/api/settings", http.MethodGet, http.StatusNotFound},
+		{"/", http.MethodPost, http.StatusNotFound},
+	} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(tc.method, "https://edge.example.com"+tc.path, nil)
+		h.ServeHTTP(w, req)
+		if w.Code != tc.want {
+			t.Errorf("%s %s = %d, want %d", tc.method, tc.path, w.Code, tc.want)
+		}
+		if tc.want == http.StatusOK && !strings.Contains(w.Body.String(), "Welcome") {
+			t.Errorf("decoy response missing on %s", tc.path)
+		}
+	}
+}

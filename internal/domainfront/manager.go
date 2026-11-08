@@ -14,6 +14,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ type DomainFrontCertificate struct {
 	Source    string `json:"source"`
 	Renewal   string `json:"renewal"`
 	CertFile  string `json:"certFile"`
+	KeyFile   string `json:"keyFile"`
 }
 
 type DomainFrontStatus struct {
@@ -305,7 +307,7 @@ func (r *frontRuntime) redirectHTTPS(w http.ResponseWriter, req *http.Request) {
 	if r.backend.GetRedirect != nil {
 		redirectURL, _ = r.backend.GetRedirect()
 	}
-	if !r.protectedRedirectPath(d, req.URL.Path) {
+	if d.Mode != "sni_only" && !r.protectedRedirectPath(d, req.URL.Path) {
 		if target := RootRedirectTarget(req, redirectURL); target != "" {
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Referrer-Policy", "no-referrer")
@@ -355,6 +357,7 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 		entry.Source, entry.Renewal = "gateway", "certmagic"
 		if d.TLS == "manual" {
 			entry.Source, entry.Renewal = "manual", "manual"
+			entry.CertFile, entry.KeyFile = d.CertFile, d.KeyFile
 		}
 		external, inherited := files[d.Name]
 		if m.runtime != nil {
@@ -363,7 +366,7 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 			}
 		}
 		if inherited && (d.TLS == "auto" || d.TLS == "existing") {
-			entry.Source, entry.Renewal, entry.CertFile = external.Source, external.Renewal, external.CertFile
+			entry.Source, entry.Renewal, entry.CertFile, entry.KeyFile = external.Source, external.Renewal, external.CertFile, external.KeyFile
 			entry.AutoRenew, entry.Error = external.AutoRenew, external.Warning
 		}
 		var raw []byte
@@ -388,7 +391,15 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 			}
 			issuer := &certmagic.ACMEIssuer{CA: ca}
 			storage := &certmagic.FileStorage{Path: m.cachePath}
-			raw, err = storage.Load(context.Background(), certmagic.StorageKeys.SiteCert(issuer.IssuerKey(), d.Name))
+			certStorageKey := certmagic.StorageKeys.SiteCert(issuer.IssuerKey(), d.Name)
+			keyStorageKey := certmagic.StorageKeys.SitePrivateKey(issuer.IssuerKey(), d.Name)
+			raw, err = storage.Load(context.Background(), certStorageKey)
+			if err == nil {
+				if _, keyErr := storage.Load(context.Background(), keyStorageKey); keyErr == nil {
+					entry.CertFile = filepath.Join(m.cachePath, filepath.FromSlash(certStorageKey))
+					entry.KeyFile = filepath.Join(m.cachePath, filepath.FromSlash(keyStorageKey))
+				}
+			}
 			if m.runtime != nil {
 				m.runtime.mu.Lock()
 				entry.Error = m.runtime.errors[d.Name]
@@ -406,6 +417,12 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 			}
 			if block != nil {
 				if cert, parseErr := x509.ParseCertificate(block.Bytes); parseErr == nil {
+					if verifyErr := cert.VerifyHostname(d.Name); verifyErr != nil {
+						entry.Error = "certificate does not match configured domain"
+						entry.State = "error"
+						out.Certificates = append(out.Certificates, entry)
+						continue
+					}
 					entry.ExpiresAt = cert.NotAfter.Unix()
 					entry.DaysLeft = int(math.Ceil(time.Until(cert.NotAfter).Hours() / 24))
 					entry.Issuer = cert.Issuer.CommonName
@@ -528,6 +545,20 @@ func (r *frontRuntime) protectedRedirectPath(d DomainFrontDomain, path string) b
 }
 
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
+	// SNI-only hosts are deliberately isolated from all subscription, VPN,
+	// redirect, and admin routes. They serve a small, static HTTPS decoy.
+	if d.Mode == "sni_only" {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+			w.Header().Set("Cache-Control", "public, max-age=300")
+			if req.URL.Path != "/" || (req.Method != http.MethodGet && req.Method != http.MethodHead) {
+				http.NotFound(w, req)
+				return
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = fmt.Fprint(w, "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Welcome</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui,sans-serif;color:#263238;background:#f8fafc}main{max-width:36rem;padding:2rem;text-align:center}</style></head><body><main><h1>Welcome</h1><p>This site is available.</p></main></body></html>")
+		}), nil
+	}
 	subTarget := r.backend.SubscriptionTarget
 	subHost := d.Name
 	if r.backend.SubscriptionHost != "" {

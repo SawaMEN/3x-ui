@@ -551,6 +551,7 @@ export interface ClientsSummary {
 export interface DomainFrontCertificate {
   autoRenew: boolean;
   certFile: string;
+  keyFile: string;
   daysLeft: number;
   error: string;
   expiresAt: number;
