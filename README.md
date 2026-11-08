@@ -43,5 +43,17 @@ x-ui uninstall   # удаление
 - [Интеграция ядра](docs/hiddify-core-integration.md)
 - [Руководство разработчика](CONTRIBUTING.md)
 
+## Благодарности
+
+Этот репозиторий является форком основного проекта [https://github.com/MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
+
+Отдельная благодарность авторам и участникам следующих проектов:
+
+- [telemt/telemt](https://github.com/telemt/telemt) — за **Telemt**.
+- [WINGS-N/3x-ui](https://github.com/WINGS-N/3x-ui) — за **vk-turn-proxy**.
+- [Liafanx/MTProxyL](https://github.com/Liafanx/MTProxyL) — за **MTProxyL**.
+- [Mekotofeuka/MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — за фикс **MTPROTO**.
+- Основному проекту [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui) — за исходную кодовую базу и развитие проекта.
+
 Основано на [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
 Лицензия: [GPL-3.0](LICENSE).
