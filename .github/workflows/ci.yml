@@ -333,8 +333,25 @@ jobs:
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Download Go dependencies
         run: bash tools/ci/download-go-modules.sh
+      - name: Restore previous race duration profile
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/ci/race-test-durations.json
+          key: race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-${{ github.run_id }}
+          restore-keys: |
+            race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-
       - name: Service race detector (shard ${{ matrix.shard }})
+        env:
+          RACE_EVENTS_FILE: ${{ runner.temp }}/race-service-${{ matrix.shard }}.jsonl
+          RACE_FRAGMENT_FILE: ${{ runner.temp }}/race-service-${{ matrix.shard }}.json
         run: bash tools/ci/race-package-shard.sh ./internal/web/service ${{ matrix.shard }} 3
+      - name: Upload observed race-test durations
+        uses: actions/upload-artifact@v7
+        with:
+          name: race-duration-service-${{ matrix.shard }}
+          path: ${{ runner.temp }}/race-service-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 7
 
   race-sub:
     needs: [changes]
@@ -354,8 +371,65 @@ jobs:
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Download Go dependencies
         run: bash tools/ci/download-go-modules.sh
+      - name: Restore previous race duration profile
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/ci/race-test-durations.json
+          key: race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-${{ github.run_id }}
+          restore-keys: |
+            race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-
       - name: Subscription race detector (shard ${{ matrix.shard }})
+        env:
+          RACE_EVENTS_FILE: ${{ runner.temp }}/race-sub-${{ matrix.shard }}.jsonl
+          RACE_FRAGMENT_FILE: ${{ runner.temp }}/race-sub-${{ matrix.shard }}.json
         run: bash tools/ci/race-package-shard.sh ./internal/sub ${{ matrix.shard }} 2
+      - name: Upload observed race-test durations
+        uses: actions/upload-artifact@v7
+        with:
+          name: race-duration-sub-${{ matrix.shard }}
+          path: ${{ runner.temp }}/race-sub-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  race-duration-profile:
+    name: Update measured race-test durations
+    needs: [race-service, race-sub]
+    if: ${{ always() && needs.race-service.result == 'success' && needs.race-sub.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore previous race duration profile
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/ci/race-test-durations.json
+          key: race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-${{ github.run_id }}
+          restore-keys: |
+            race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-
+      - name: Download successful race-shard measurements
+        uses: actions/download-artifact@v8
+        with:
+          pattern: race-duration-*
+          path: race-fragments
+          merge-multiple: true
+      - name: Merge observed durations (EWMA 60/40)
+        run: |
+          python3 tools/ci/race-balance.py merge \
+            --previous tools/ci/race-test-durations.json \
+            --fragments race-fragments --count 5 \
+            --output tools/ci/race-test-durations.json
+      - name: Save profile for subsequent CI runs
+        uses: actions/cache/save@v4
+        with:
+          path: tools/ci/race-test-durations.json
+          key: race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-${{ github.run_id }}
+      - name: Upload merged duration profile
+        uses: actions/upload-artifact@v7
+        with:
+          name: race-duration-profile
+          path: tools/ci/race-test-durations.json
+          retention-days: 14
 
   fuzz-smoke:
     needs: [changes]
