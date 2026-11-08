@@ -7,7 +7,7 @@ require (
 	github.com/apernet/quic-go v0.61.1-0.20260806010916-184d081eef3e
 	github.com/caddyserver/certmagic v0.25.6
 	github.com/enfein/mieru/v3 v3.38.0
-	github.com/gin-contrib/gzip v1.2.8
+	github.com/gin-contrib/gzip v1.2.9
 	github.com/gin-contrib/sessions v1.1.2
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-ldap/ldap/v3 v3.4.15
@@ -20,6 +20,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/klauspost/compress v1.20.3
 	github.com/mattn/go-sqlite3 v1.14.52
+	github.com/miekg/dns v1.1.73
 	github.com/mymmrac/telego v1.12.1
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7
@@ -87,7 +88,6 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mholt/acmez/v3 v3.1.7 // indirect
-	github.com/miekg/dns v1.1.73 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/molecule-man/go-brrr v1.1.1 // indirect
