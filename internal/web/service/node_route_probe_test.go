@@ -124,7 +124,7 @@ func TestNodeRouteNativeProbeWrapper(t *testing.T) {
 				"server": "vpn.example.com", "server_port": 443,
 				"uuid":     "11111111-1111-1111-1111-111111111111",
 				"password": "test-credential",
-				"tls": map[string]any{"enabled": true, "server_name": "vpn.example.com"},
+				"tls":      map[string]any{"enabled": true, "server_name": "vpn.example.com"},
 			}
 			probe, ok := nodeRouteNativeProbeWrapper(native)
 			if !ok {
