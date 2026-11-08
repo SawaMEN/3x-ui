@@ -433,3 +433,9 @@ jobs:
           for old_asset in panel-tunnel-linux-amd64.tar.gz panel-tunnel-linux-arm64.tar.gz telemt.version telemt-linux-amd64.tar.gz telemt-linux-amd64.tar.gz.sha256 telemt-linux-arm64.tar.gz telemt-linux-arm64.tar.gz.sha256; do
             gh release delete-asset dev-latest "$old_asset" --yes 2>/dev/null || true
           done
+
+      - name: Report release workflow timing
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/workflow-performance.py --run-id "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"

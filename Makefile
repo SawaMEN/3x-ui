@@ -80,8 +80,13 @@ build: build-fe ## Build the frontend then the Go binary
 build-storybook: ## Build the static Storybook (compile-checks all stories)
 	cd $(FRONTEND) && npm run build-storybook
 
-# The PR gate. Matches ci.yml: codegen freshness, both linters, the formatter,
-# typecheck, both test suites, a full build, and the Storybook compile-check.
+# Fail fast if code generation is stale; then run independent checks in parallel.
+# Keep the bundle build after tests so go:embed never sees partially written assets.
+# Override VERIFY_JOBS for larger local machines (e.g. make VERIFY_JOBS=4 verify).
+VERIFY_JOBS ?= 2
 .PHONY: verify
-verify: gen-check lint format-check typecheck msw-worker-check test build build-storybook ## Full local gate (mirrors CI)
+verify: ## Full local gate with bounded parallelism
+	@$(MAKE) gen-check
+	@$(MAKE) -j$(VERIFY_JOBS) lint format-check typecheck msw-worker-check test
+	@$(MAKE) -j$(VERIFY_JOBS) build build-storybook
 	@echo "verify: OK"
