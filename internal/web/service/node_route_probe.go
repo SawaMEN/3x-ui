@@ -147,6 +147,37 @@ func nodeRouteNativeProbeWrapper(native map[string]any) (map[string]any, bool) {
 	}, true
 }
 
+// probeNodeRouteHTTP distinguishes an unreachable tunnel from a blocked test
+// destination. A healthy cascade can fail to reach Google's connectivity URL
+// because of remote egress filtering; require two independent HTTPS failures
+// before reporting the whole tunnel as unavailable. Both requests use the same
+// authenticated service outbound, never a direct fallback.
+func probeNodeRouteHTTP(test func(string) (*outbound.TestOutboundResult, error)) (*outbound.TestOutboundResult, error) {
+	targets := [...]string{
+		"https://www.google.com/generate_204",
+		"https://www.cloudflare.com/cdn-cgi/trace",
+	}
+	failures := make([]string, 0, len(targets))
+	for _, target := range targets {
+		result, err := test(target)
+		if err != nil {
+			return nil, err
+		}
+		if result == nil {
+			return nil, fmt.Errorf("node route HTTP probe returned no result for %s", target)
+		}
+		if result.Success {
+			return result, nil
+		}
+		reason := result.Error
+		if reason == "" {
+			reason = "HTTP probe failed without details"
+		}
+		failures = append(failures, target+": "+reason)
+	}
+	return &outbound.TestOutboundResult{Error: strings.Join(failures, " | ")}, nil
+}
+
 // probeNodeRouteTunnel actually sends HTTP traffic through the generated
 // service-client outbound. A reachable port is never reported as a working
 // tunnel. Only provisioned, supported protocols use the authenticated probe;
@@ -197,8 +228,10 @@ func probeNodeRouteTunnel(ctx context.Context, inbound *model.Inbound) (NodeRout
 	if err != nil {
 		return result, true, err
 	}
-	probe, err := (&outbound.OutboundService{CoreType: core}).
-		TestOutbound(string(encoded), "", "", "http")
+	service := &outbound.OutboundService{CoreType: core}
+	probe, err := probeNodeRouteHTTP(func(target string) (*outbound.TestOutboundResult, error) {
+		return service.TestOutbound(string(encoded), target, "", "http")
+	})
 	if err != nil {
 		result.Detail = "Проверка трафика через каскад завершилась ошибкой: " + err.Error()
 		return result, true, nil
