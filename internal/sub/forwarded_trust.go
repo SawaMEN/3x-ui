@@ -28,11 +28,11 @@ func (s *SubService) forwardedHeadersTrusted(c *gin.Context) (trusted bool) {
 
 	configured, err := s.settingService.GetTrustedProxyCIDRs()
 	if err != nil {
-		return true
+		return false
 	}
 	configured = strings.TrimSpace(configured)
-	if configured == "" || configured == service.DefaultTrustedProxyCIDRs {
-		return true
+	if configured == "" {
+		configured = service.DefaultTrustedProxyCIDRs
 	}
 	return remoteAddrInCIDRs(c.Request.RemoteAddr, configured)
 }
