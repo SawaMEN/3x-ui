@@ -521,6 +521,13 @@ func TestInvalidCachedCertificateReleasesGatewayPorts(t *testing.T) {
 
 
 func TestSNIOnlyDecoyIsIsolated(t *testing.T) {
+	siteDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(siteDir, "index.html"), []byte("<html><h1>Welcome</h1></html>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(siteDir, "site.css"), []byte("body { color: black; }"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	cfg := DefaultConfig()
 	cfg.Domains = []DomainFrontDomain{{Name: "edge.example.com", Mode: "sni_only", Enabled: true, TLS: "manual"}}
 	r := &frontRuntime{cfg: cfg, backend: Backend{
@@ -528,18 +535,19 @@ func TestSNIOnlyDecoyIsIsolated(t *testing.T) {
 		SubscriptionPaths: []string{"/sub/", "/assets/"},
 		Routes: map[string][]Route{"edge.example.com": {{Path: "/vpn", Target: "http://127.0.0.1:1"}}},
 		RedirectURL: "https://redirect.example.com/",
+		DecoyDirectories: map[string]string{"edge.example.com": siteDir},
 	}}
 	h, err := r.handler()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		path string
-		method string
+		path, method string
 		want int
 	}{
 		{"/", http.MethodGet, http.StatusOK},
 		{"/", http.MethodHead, http.StatusOK},
+		{"/site.css", http.MethodGet, http.StatusOK},
 		{"/sub/token", http.MethodGet, http.StatusNotFound},
 		{"/assets/app.js", http.MethodGet, http.StatusNotFound},
 		{"/vpn", http.MethodGet, http.StatusNotFound},
@@ -552,7 +560,7 @@ func TestSNIOnlyDecoyIsIsolated(t *testing.T) {
 		if w.Code != tc.want {
 			t.Errorf("%s %s = %d, want %d", tc.method, tc.path, w.Code, tc.want)
 		}
-		if tc.want == http.StatusOK && !strings.Contains(w.Body.String(), "Welcome") {
+		if tc.want == http.StatusOK && tc.path == "/" && !strings.Contains(w.Body.String(), "Welcome") {
 			t.Errorf("decoy response missing on %s", tc.path)
 		}
 	}

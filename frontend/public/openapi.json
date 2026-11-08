@@ -2391,6 +2391,10 @@
           "issuer": {
             "type": "string"
           },
+
+          "keyFile": {
+            "type": "string"
+          },
           "mode": {
             "type": "string"
           },
@@ -2414,6 +2418,7 @@
           "error",
           "expiresAt",
           "issuer",
+          "keyFile",
           "mode",
           "name",
           "renewal",
@@ -17587,6 +17592,7 @@
                         "error": "",
                         "expiresAt": 0,
                         "issuer": "",
+                        "keyFile": "",
                         "mode": "",
                         "name": "",
                         "renewal": "",
@@ -17629,6 +17635,7 @@
                         "error": "",
                         "expiresAt": 0,
                         "issuer": "",
+                        "keyFile": "",
                         "mode": "",
                         "name": "",
                         "renewal": "",
@@ -17682,6 +17689,7 @@
                         "error": "",
                         "expiresAt": 0,
                         "issuer": "",
+                        "keyFile": "",
                         "mode": "",
                         "name": "",
                         "renewal": "",
@@ -17724,6 +17732,7 @@
                         "error": "",
                         "expiresAt": 0,
                         "issuer": "",
+                        "keyFile": "",
                         "mode": "",
                         "name": "",
                         "renewal": "",

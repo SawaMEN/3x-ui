@@ -545,18 +545,27 @@ func (r *frontRuntime) protectedRedirectPath(d DomainFrontDomain, path string) b
 }
 
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
-	// SNI-only hosts are deliberately isolated from all subscription, VPN,
-	// redirect, and admin routes. They serve a small, static HTTPS decoy.
+	// SNI-only hosts serve Telemt's generated static website while denying
+	// every panel, subscription and inbound route, even if its path exists.
 	if d.Mode == "sni_only" {
+		dir := r.backend.DecoyDirectories[d.Name]
+		if dir == "" {
+			return nil, fmt.Errorf("SNI site %s has no prepared website", d.Name)
+		}
+		static := http.FileServer(http.Dir(dir))
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 			w.Header().Set("Cache-Control", "public, max-age=300")
-			if req.URL.Path != "/" || (req.Method != http.MethodGet && req.Method != http.MethodHead) {
+			if req.Method != http.MethodGet && req.Method != http.MethodHead {
 				http.NotFound(w, req)
 				return
 			}
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = fmt.Fprint(w, "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Welcome</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui,sans-serif;color:#263238;background:#f8fafc}main{max-width:36rem;padding:2rem;text-align:center}</style></head><body><main><h1>Welcome</h1><p>This site is available.</p></main></body></html>")
+			switch req.URL.Path {
+			case "/", "/index.html", "/site.css", "/site.js":
+				static.ServeHTTP(w, req)
+			default:
+				http.NotFound(w, req)
+			}
 		}), nil
 	}
 	subTarget := r.backend.SubscriptionTarget

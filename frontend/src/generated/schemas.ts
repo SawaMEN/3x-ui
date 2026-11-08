@@ -2365,6 +2365,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "issuer": {
         "type": "string"
       },
+
+      "keyFile": {
+        "type": "string"
+      },
       "mode": {
         "type": "string"
       },
@@ -2388,6 +2392,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "error",
       "expiresAt",
       "issuer",
+      "keyFile",
       "mode",
       "name",
       "renewal",

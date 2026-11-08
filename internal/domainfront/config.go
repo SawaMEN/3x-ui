@@ -70,6 +70,7 @@ type Backend struct {
 	SubscriptionPaths  []string
 	ProtectedPaths     []string // Legacy application paths served by NoRoute.
 	Routes             map[string][]Route
+	DecoyDirectories   map[string]string
 	RedirectURL        string
 }
 

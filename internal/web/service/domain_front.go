@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -189,6 +190,7 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		PanelPath:          settings.WebBasePath,
 		SubscriptionPaths:  []string{settings.SubPath, settings.SubJsonPath, settings.SubClashPath, "/assets/"},
 		Routes:             map[string][]domainfront.Route{},
+		DecoyDirectories:   map[string]string{},
 	}
 	panelPort := settings.WebPort
 	if override, configured, err := config.GetPortOverride(); configured && err == nil {
@@ -220,6 +222,17 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 	}
 	for _, d := range cfg.Domains {
 		if !d.Enabled {
+			continue
+		}
+		if d.Mode == "sni_only" {
+			// Reuse Telemt's existing decoy-site renderer and atomic file writer
+			// instead of maintaining a second set of website templates.
+			sitePath := filepath.Join(config.GetDBFolderPath(), "domain-tls", "sni-sites", fmt.Sprintf("%x", sha256.Sum256([]byte(d.Name))))
+			dir, siteErr := prepareTelemtWebSite(d.Name, filepath.Join(sitePath, "default"), filepath.Join(sitePath, "snapshots"), nil)
+			if siteErr != nil {
+				return backend, fmt.Errorf("SNI site %s: %w", d.Name, siteErr)
+			}
+			backend.DecoyDirectories[d.Name] = dir
 			continue
 		}
 		for _, id := range d.InboundIDs {
