@@ -42,8 +42,7 @@ export default function TuicFields() {
     });
   };
 
-  const managedDomain = (name: string) =>
-    managedDomains.find((domain) => domain.name === name);
+  const managedDomain = (name: string) => managedDomains.find((domain) => domain.name === name);
 
   const applyManagedDomain = (domain: ManagedSniDomain) => {
     updateServerValue('sni', domain.name);

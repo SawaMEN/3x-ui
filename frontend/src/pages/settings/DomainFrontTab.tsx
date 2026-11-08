@@ -126,7 +126,9 @@ export default function DomainFrontTab({
   const redirectDomains = [
     ...new Set(
       [
-        ...draft.domains.filter((domain) => domain.enabled && domain.mode !== 'sni_only').map((domain) => domain.name),
+        ...draft.domains
+          .filter((domain) => domain.enabled && domain.mode !== 'sni_only')
+          .map((domain) => domain.name),
         allSetting?.webDomain || '',
       ].filter(Boolean),
     ),
@@ -166,6 +168,7 @@ export default function DomainFrontTab({
       setDraft(saved);
       markSaved(saved);
       queryClient.setQueryData(keys.settings.domains(), next);
+      void queryClient.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
       void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
       void queryClient.invalidateQueries({ queryKey: keys.settings.all() });
       void load();
@@ -256,9 +259,7 @@ export default function DomainFrontTab({
       ...value,
       panel: false,
       inboundIds:
-        value.mode === 'sub_link_only' || value.mode === 'sni_only'
-          ? []
-          : (value.inboundIds ?? []),
+        value.mode === 'sub_link_only' || value.mode === 'sni_only' ? [] : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
       certFile: value.tls === 'manual' ? value.certFile : '',
       keyFile: value.tls === 'manual' ? value.keyFile : '',
@@ -699,8 +700,8 @@ export default function DomainFrontTab({
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           {draft.domains.filter((domain) => domain.mode === 'sni_only').length === 0 &&
             telemtSites.length === 0 && (
-            <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>
-          )}
+              <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>
+            )}
           {telemtSites.map((site) => (
             <Card key={`telemt-${site.name}`} size="small" title={site.name}>
               <Space orientation="vertical" size={6} style={{ width: '100%' }}>
@@ -716,31 +717,45 @@ export default function DomainFrontTab({
               </Space>
             </Card>
           ))}
-          {draft.domains.filter((domain) => domain.mode === 'sni_only').map((domain) => {
-            const cert = status?.certificates.find((c) => c.name === domain.name);
-            return (
-              <Card key={domain.name} size="small" title={domain.name}>
-                <Space orientation="vertical" size={6} style={{ width: '100%' }}>
-                  <Tag color={cert?.state === 'valid' ? 'green' : 'default'}>
-                    {label(`state.${cert?.state || 'unsaved'}`)}
-                  </Tag>
-                  {cert?.expiresAt ? (
-                    <Typography.Text type="secondary">
-                      {label('expires')}: {date(cert.expiresAt)} · {renewalLabel(cert.renewal)}
-                    </Typography.Text>
-                  ) : null}
-                  <Typography.Text type="secondary">{label('certFile')}</Typography.Text>
-                  {cert?.certFile ? (
-                    <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>{cert.certFile}</Typography.Text>
-                  ) : <Typography.Text type="secondary">{label('sniCertificatePending')}</Typography.Text>}
-                  <Typography.Text type="secondary">{label('keyFile')}</Typography.Text>
-                  {cert?.keyFile ? (
-                    <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>{cert.keyFile}</Typography.Text>
-                  ) : <Typography.Text type="secondary">{label('sniCertificatePending')}</Typography.Text>}
-                </Space>
-              </Card>
-            );
-          })}
+          {draft.domains
+            .filter((domain) => domain.mode === 'sni_only')
+            .map((domain) => {
+              const cert = status?.certificates.find((c) => c.name === domain.name);
+              return (
+                <Card key={domain.name} size="small" title={domain.name}>
+                  <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                    <Tag color={cert?.state === 'valid' ? 'green' : 'default'}>
+                      {label(`state.${cert?.state || 'unsaved'}`)}
+                    </Tag>
+                    {cert?.expiresAt ? (
+                      <Typography.Text type="secondary">
+                        {label('expires')}: {date(cert.expiresAt)} · {renewalLabel(cert.renewal)}
+                      </Typography.Text>
+                    ) : null}
+                    <Typography.Text type="secondary">{label('certFile')}</Typography.Text>
+                    {cert?.certFile ? (
+                      <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
+                        {cert.certFile}
+                      </Typography.Text>
+                    ) : (
+                      <Typography.Text type="secondary">
+                        {label('sniCertificatePending')}
+                      </Typography.Text>
+                    )}
+                    <Typography.Text type="secondary">{label('keyFile')}</Typography.Text>
+                    {cert?.keyFile ? (
+                      <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
+                        {cert.keyFile}
+                      </Typography.Text>
+                    ) : (
+                      <Typography.Text type="secondary">
+                        {label('sniCertificatePending')}
+                      </Typography.Text>
+                    )}
+                  </Space>
+                </Card>
+              );
+            })}
         </Space>
       </Card>
       <Card

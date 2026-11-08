@@ -93,7 +93,7 @@ export default function MtprotoFields() {
                   : 'Enter a domain without scheme, port or path, e.g. web.example.com'),
             }}
           >
-            <Input placeholder="web.example.com" suffix=":443" />
+            <SniSearchInput placeholder="web.example.com" />
           </FormField>
           <FormField
             name={['settings', 'webProxy', 'aliases']}
