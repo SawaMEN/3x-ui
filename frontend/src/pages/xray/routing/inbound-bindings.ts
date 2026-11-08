@@ -55,7 +55,23 @@ export function setInboundRouteTarget(
   const marker = PREFIX + inboundTag;
   // Reconcile only panel-owned entries; user-authored rules are untouched.
   const previous = rules.findIndex((rule) => rule.comment === marker);
-  const next = rules.filter((rule) => rule.comment !== marker);
+  // The quick editor can also own an inbound-only fallback. When this basic
+  // binding is changed, take the listener out of its old quick route instead
+  // of leaving an earlier rule that silently overrides the new destination.
+  const next = rules.flatMap((rule) => {
+    if (rule.comment === marker) return [];
+    if (
+      outboundTag &&
+      typeof rule.ruleTag === 'string' &&
+      rule.ruleTag.startsWith('panel-quick:inbound:') &&
+      Array.isArray(rule.inboundTag) &&
+      rule.inboundTag.includes(inboundTag)
+    ) {
+      const remaining = rule.inboundTag.filter((tag) => tag !== inboundTag);
+      return remaining.length ? [{ ...rule, inboundTag: remaining }] : [];
+    }
+    return [rule];
+  });
   if (!outboundTag) return next;
   const fallback = next.findIndex(isCatchAll);
   // A stale managed rule may already sit after a catch-all. Reposition it
