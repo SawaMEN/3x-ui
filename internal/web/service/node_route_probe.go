@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
@@ -12,7 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
+	"gorm.io/gorm"
 )
 
 // NodeRouteProbeResult identifies the actual target transport. A TCP dial or
@@ -24,6 +28,7 @@ type NodeRouteProbeResult struct {
 	Transport     string `json:"transport"`
 	LatencyMs     int64  `json:"latencyMs,omitempty"`
 	Inconclusive  bool   `json:"inconclusive,omitempty"`
+	TunnelChecked bool `json:"tunnelChecked,omitempty"`
 	Detail        string `json:"detail"`
 }
 
@@ -115,6 +120,84 @@ func probeNodeRouteQUIC(ctx context.Context, address string, port int) (time.Dur
 	}
 }
 
+
+// nodeRouteTUICProbeWrapper uses the same native TUIC settings as the runtime,
+// but wraps them in the panel's singbox:<protocol> format for the shared
+// outbound HTTP test. Never return these credentials to a web client.
+func nodeRouteTUICProbeWrapper(native map[string]any) (map[string]any, error) {
+	protocol, _ := native["type"].(string)
+	tag, _ := native["tag"].(string)
+	if protocol != "tuic" || tag == "" {
+		return nil, fmt.Errorf("not a managed TUIC outbound")
+	}
+	settings := make(map[string]any, len(native))
+	for key, value := range native {
+		if key != "type" && key != "tag" {
+			settings[key] = value
+		}
+	}
+	return map[string]any{
+		"protocol": "singbox:tuic",
+		"tag":      tag,
+		"settings": settings,
+	}, nil
+}
+
+// For an already provisioned destination, a real HTTP request through the
+// authenticated TUIC outbound is a much stronger check than QUIC version
+// negotiation. It runs from this panel, not from another ingress node.
+// An absent managed identity means the operator has not created a route yet:
+// keep the existing transport-only probe for that case.
+func probeNodeRouteTUIC(ctx context.Context, inboundID int) (NodeRouteProbeResult, bool, error) {
+	var count int64
+	if err := database.GetDB().Model(&model.ClientRecord{}).
+		Where("email = ?", nodeRouteClientEmail(inboundID)).Count(&count).Error; err != nil {
+		return NodeRouteProbeResult{}, false, err
+	}
+	if count == 0 {
+		return NodeRouteProbeResult{}, false, nil
+	}
+	result := NodeRouteProbeResult{
+		Tag: nodeRouteTag(inboundID), CheckedTarget: true,
+		Transport: "udp", TunnelChecked: true,
+	}
+	if err := ctx.Err(); err != nil {
+		return result, true, err
+	}
+	native, err := resolveNodeRouteOutbound(inboundID, "sing-box")
+	if err != nil {
+		result.Detail = "Не удалось построить исходящее TUIC-подключение: " + err.Error()
+		return result, true, nil
+	}
+	wrapper, err := nodeRouteTUICProbeWrapper(native)
+	if err != nil {
+		result.Detail = "Некорректная конфигурация исходящего TUIC: " + err.Error()
+		return result, true, nil
+	}
+	encoded, err := json.Marshal(wrapper)
+	if err != nil {
+		return result, true, err
+	}
+	probe, err := (&outbound.OutboundService{CoreType: "sing-box"}).
+		TestOutbound(string(encoded), "", "", "http")
+	if err != nil {
+		result.Detail = "Проверка TUIC-трафика завершилась ошибкой: " + err.Error()
+		return result, true, nil
+	}
+	if probe == nil {
+		result.Detail = "Проверка TUIC-трафика не вернула результат"
+		return result, true, nil
+	}
+	result.Reachable = probe.Success
+	result.LatencyMs = probe.Delay
+	if probe.Success {
+		result.Detail = "HTTP-трафик через аутентифицированное TUIC-подключение проходит. Проверка выполнена с сервера панели, а не с другой входящей ноды."
+	} else {
+		result.Detail = "HTTP-трафик через TUIC не проходит. Проверьте TLS/SNI, учётные данные, UDP-порт и исходящий доступ зарубежной ноды: " + probe.Error
+	}
+	return result, true, nil
+}
+
 // ProbeNodeRoute actively checks the destination port from the panel server.
 // QUIC UDP probes require a matching version-negotiation response; a timeout
 // cannot be interpreted as proof that the service is unreachable.
@@ -130,6 +213,15 @@ func ProbeNodeRoute(ctx context.Context, userID, inboundID int) (NodeRouteProbeR
 		Tag: nodeRouteTag(inboundID), CheckedTarget: true, Transport: "tcp",
 	}
 	result.CheckedTarget = true
+	if inbound.Protocol == model.TUIC {
+		verified, attempted, probeErr := probeNodeRouteTUIC(ctx, inboundID)
+		if probeErr != nil && !errors.Is(probeErr, gorm.ErrRecordNotFound) {
+			return NodeRouteProbeResult{}, probeErr
+		}
+		if attempted {
+			return verified, nil
+		}
+	}
 	var duration time.Duration
 	if inbound.Protocol == model.Mieru {
 		return probeNodeRouteMieru(ctx, inbound, node.Address), nil
@@ -140,7 +232,8 @@ func ProbeNodeRoute(ctx context.Context, userID, inboundID int) (NodeRouteProbeR
 			result.Detail = "UDP/QUIC-ответ не получен: доступность UDP-порта не подтверждена (сервер может не отвечать на version negotiation). " + err.Error()
 			return result, nil
 		}
-		result.Detail = "Получен корректный ответ QUIC от UDP-порта ноды. Авторизация и передача VPN-трафика не проверялись."
+		result.Inconclusive = true
+		result.Detail = "Получен ответ QUIC от UDP-порта. Авторизация и передача VPN-трафика не проверялись. Создайте маршрут и повторите проверку, чтобы проверить реальный TUIC-трафик."
 	} else {
 		duration, err = probeNodeRouteTCP(ctx, node.Address, inbound.Port)
 		if err != nil {
