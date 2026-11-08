@@ -163,6 +163,21 @@ func TestResolveRequest_GatesRealIPFallback(t *testing.T) {
 	}
 }
 
+func TestResolveRequest_TrustedProxyRealIPDoesNotReplaceHost(t *testing.T) {
+	initSubDB(t)
+	setTrustedProxyCIDRs(t, "127.0.0.1/32")
+	c := requestFrom(t, "127.0.0.1:51000", map[string]string{
+		"X-Real-IP":         "198.51.100.7",
+		"X-Forwarded-Proto": "https",
+	})
+	scheme, host, hostWithPort, header := (&SubService{}).ResolveRequest(c)
+	if scheme != "https" || host != "panel.example.com" ||
+		hostWithPort != "panel.example.com:2096" || header != "panel.example.com" {
+		t.Fatalf("trusted reverse proxy used the subscriber IP as a server: %s %s %s %s",
+			scheme, host, hostWithPort, header)
+	}
+}
+
 func TestHasForwardedHeaders(t *testing.T) {
 	tests := []struct {
 		name    string
