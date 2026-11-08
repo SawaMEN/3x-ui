@@ -45,6 +45,27 @@ describe('native sing-box per-inbound routing', () => {
     expect(nativeInboundRouteTarget(repaired, 'in-1')).toBe('node-route-12');
   });
 
+  it('supersedes only the selected listener in a native quick cascade', () => {
+    const original = {
+      route: {
+        rules: [
+          {
+            action: 'route',
+            comment: 'panel-quick:inbound:example',
+            inbound: ['in-1', 'in-2'],
+            outbound: 'node-route-5',
+          },
+          { action: 'route', outbound: 'direct' },
+        ],
+      },
+    };
+    const changed = setNativeInboundRouteTarget(original, 'in-1', 'node-route-9');
+    const rules = records(object(changed.route).rules);
+    expect(rules[0].inbound).toEqual(['in-2']);
+    expect(rules[0].outbound).toBe('node-route-5');
+    expect(nativeInboundRouteTarget(changed, 'in-1')).toBe('node-route-9');
+  });
+
   it('keeps its position when changed', () => {
     const changed = setNativeInboundRouteTarget(
       setNativeInboundRouteTarget(config, 'one', 'a'),
