@@ -273,19 +273,56 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
 	return nil, fmt.Errorf("node route %d: no compatible connection for %s: %w", inboundID, core, lastErr)
 }
 
-// nodeRouteIDs finds only explicitly referenced managed destinations.
+// nodeRouteIDs finds explicitly referenced managed destinations. Native
+// logical rules may nest their destination; ignoring them silently drops
+// the required outbound while leaving the routing rule intact.
 func nodeRouteIDs(rules []map[string]any, key string) []int {
 	seen := make(map[int]bool)
 	var ids []int
-	for _, rule := range rules {
+	var visit func(map[string]any)
+	visit = func(rule map[string]any) {
 		if rule["enabled"] == false || rule["action"] == "reject" {
-			continue
+			return
 		}
-		tag, _ := rule[key].(string)
-		if id, ok := nodeRouteInboundID(tag); ok && !seen[id] {
-			seen[id] = true
-			ids = append(ids, id)
+		if tag, _ := rule[key].(string); tag != "" {
+			if id, ok := nodeRouteInboundID(tag); ok && !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
 		}
+		if key != "outbound" {
+			return
+		}
+		switch children := rule["rules"].(type) {
+		case []any:
+			for _, child := range children {
+				if nested, ok := child.(map[string]any); ok {
+					visit(nested)
+				}
+			}
+		case []map[string]any:
+			for _, child := range children {
+				visit(child)
+			}
+		}
+	}
+	for _, rule := range rules {
+		visit(rule)
+	}
+	return ids
+}
+
+// The native final route is a real destination even when there are no field
+// rules. Include it so final=node-route-N never produces an unresolved tag.
+func nativeNodeRouteIDs(rules []map[string]any, final string) []int {
+	ids := nodeRouteIDs(rules, "outbound")
+	if id, ok := nodeRouteInboundID(final); ok {
+		for _, existing := range ids {
+			if existing == id {
+				return ids
+			}
+		}
+		ids = append(ids, id)
 	}
 	return ids
 }
