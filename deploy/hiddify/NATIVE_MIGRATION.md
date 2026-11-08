@@ -27,6 +27,13 @@
 - [ ] Дождаться итогов новых CI на последних HEAD (а не переносить результаты старых коммитов).
 - [ ] Подтвердить оставшиеся семь групп и доступные для записи зависимости, затем выполнять слияние в порядке sing-box → core → 3x-ui.
 
+## Итог текущего прогона интеграции
+
+- **Core parser/integration: PASS** на кандидате PR #20 (`dc0129e`). Нативный синтаксис и парсер проходят, но это не означает работоспособный релиз.
+- **Полная сборка: FAIL (fail-closed)** на `rebase-panel-protection.py`. После устранения повторного применения восьми завершённых патчей обнаружено несовместимое наложение protection-кода в шести файлах: `common/tls/reality_client.go`, `common/tls/reality_server.go`, `option/tls.go`, `option/vless.go`, `protocol/vless/outbound.go`, `protocol/vless/xui_preconnect.go`.
+- **Требуется исправить содержимое, а не обходить проверку:** завершить серверную ML-DSA, Vision testseed и нативные зависимости, затем заменить `protection-options.patch` целиком и подтвердить сравнительными тестами. Текущий production builder 3x-ui/main не изменён.
+- **Внешнее условие:** создать управляемые форки `SawaMEN/sing-vmess`, `SawaMEN/utls-lx`, `SawaMEN/xray-core` или принять поддерживаемый vendoring. Подробности в [sing-box issue #24](https://github.com/SawaMEN/hiddify-sing-box/issues/24).
+
 ## Реестр 16 патчей
 
 | Патч | Статус | Что нужно |
