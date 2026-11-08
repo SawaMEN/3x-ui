@@ -188,19 +188,6 @@ func EnsureNodeRoute(userID, inboundID int, core string) (string, bool, error) {
 	if err == nil && !existing.Enable {
 		return "", false, fmt.Errorf("node route service client is disabled")
 	}
-	// A client push can stamp the remote fingerprint before the remote core has
-	// activated its new credentials. Remember whether this inbound is getting
-	// its cascade identity for the first time, independently of the push result.
-	newAttachment := errors.Is(err, gorm.ErrRecordNotFound)
-	if !newAttachment {
-		var linked int64
-		if linkErr := database.GetDB().Model(&model.ClientInbound{}).
-			Where("client_id = ? AND inbound_id = ?", existing.Id, inboundID).
-			Count(&linked).Error; linkErr != nil {
-			return "", false, linkErr
-		}
-		newAttachment = linked == 0
-	}
 	client := model.Client{
 		Email: email, Enable: true, SubID: uuid.NewString(),
 		Comment: "Managed node routing connection", Group: "_system",
@@ -221,7 +208,7 @@ func EnsureNodeRoute(userID, inboundID int, core string) (string, bool, error) {
 	// local database write is not proof that the remote core can authenticate
 	// the cascade. Synchronize the current complete inbound before publishing
 	// its managed outbound to the local routing template.
-	if err := syncNodeRouteInbound(inbound, node, newAttachment); err != nil {
+	if err := syncNodeRouteInbound(inbound, node); err != nil {
 		return "", needRestart, fmt.Errorf("node route %d: remote inbound sync: %w", inboundID, err)
 	}
 	if _, err := resolveNodeRouteOutbound(inboundID, core); err != nil {
@@ -245,7 +232,7 @@ func nodeRouteRemoteInboundExists(inboundTag string, nodeID int, options []runti
 // syncNodeRouteInbound closes the gap between provisioning the dedicated
 // cascade identity in the central database and applying it on the destination
 // node. It pushes only the selected inbound, never the node's entire template.
-func syncNodeRouteInbound(inbound *model.Inbound, node *model.Node, newAttachment bool) error {
+func syncNodeRouteInbound(inbound *model.Inbound, node *model.Node) error {
 	manager := runtime.GetManager()
 	if manager == nil {
 		return fmt.Errorf("runtime manager not initialized")
@@ -273,13 +260,14 @@ func syncNodeRouteInbound(inbound *model.Inbound, node *model.Node, newAttachmen
 	if err != nil {
 		return fmt.Errorf("apply cascade credential to destination node: %w", err)
 	}
-	// Remote UpdateInbound schedules a restart, but a newly activated cascade
-	// cannot depend on the destination's deferred restart queue. Apply the
-	// updated listener before the source panel enables its routing rule.
-	if pushed || newAttachment {
-		if err := remote.RestartXray(ctx); err != nil {
-			return fmt.Errorf("restart destination node core after cascade credential sync: %w", err)
-		}
+	// Fingerprint reconciliation only proves that the node accepted its
+	// configuration, not that the running sing-box instance loaded the service
+	// credential. This explicit ensure action must activate the listener even
+	// when the client is already linked and the serialized settings match.
+	// It also repairs managed cascades created before the activation fix.
+	_ = pushed
+	if err := remote.RestartXray(ctx); err != nil {
+		return fmt.Errorf("activate destination node core for managed cascade: %w", err)
 	}
 	return nil
 }
