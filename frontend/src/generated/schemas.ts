@@ -2365,7 +2365,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "issuer": {
         "type": "string"
       },
-
       "keyFile": {
         "type": "string"
       },

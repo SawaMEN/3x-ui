@@ -2391,7 +2391,6 @@
           "issuer": {
             "type": "string"
           },
-
           "keyFile": {
             "type": "string"
           },
