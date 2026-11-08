@@ -20,7 +20,7 @@ jobs:
         with:
           node-version-file: .nvmrc
       - name: Format Go sources
-        run: gofmt -w internal/snell internal/sub/snell_link.go
+        run: test -z "$(gofmt -l internal/snell internal/sub/snell_link.go)"
       - name: Frontend dependencies
         working-directory: frontend
         run: npm ci --no-audit --no-fund

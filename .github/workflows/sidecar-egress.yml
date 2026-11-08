@@ -2,8 +2,7 @@ name: Sidecar egress regression
 on:
   push:
     branches: [main, up]
-  pull_request:
-    paths:
+    paths: &sidecar_paths
       - 'internal/sidecaregress/**'
       - 'internal/sudoku/**'
       - 'internal/web/service/inbound_sudoku*'
@@ -15,9 +14,17 @@ on:
       - 'internal/mieru/**'
       - 'internal/externalvpn/**'
       - 'internal/web/service/singbox*'
+      - 'go.mod'
+      - 'go.sum'
+      - 'tools/build-speed-components.py'
+  pull_request:
+    paths: *sidecar_paths
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: sidecar-egress-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest

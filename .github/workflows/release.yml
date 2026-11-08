@@ -5,12 +5,27 @@ on:
   pull_request:
     branches:
       - main
+    paths: &release_paths
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "frontend/**"
+      - ".nvmrc"
+      - "Makefile"
+      - "deploy/**"
+      - "internal/**"
+      - "scripts/**"
+      - "tools/**"
+      - "install.sh"
+      - "update.sh"
+      - ".github/workflows/release.yml"
   push:
     branches:
       - main
       - update
     tags:
       - "v*.*.*"
+    paths: *release_paths
 
 # Keep only the newest pushed development-branch build. Obsolete update audit
 # builds must not block the next fixed revision. Explicit version tags and
@@ -44,11 +59,8 @@ jobs:
           GOPROXY: "https://proxy.golang.org|direct"
         run: bash tools/ci/download-go-modules.sh
 
-      - name: Run Go tests
-        run: |
-          make test-go
-          go test ./internal/sudoku -count=1 -ldflags "-X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA}"
-
+      # Full Go tests execute in parallel (go-tests), not ahead of the
+      # native binary build. Publication requires that job to pass.
       - name: Build frontend bundle
         run: |
           npm ci --no-audit --no-fund
@@ -62,6 +74,24 @@ jobs:
           path: internal/web/dist
           if-no-files-found: error
           compression-level: 0
+
+  go-tests:
+    name: Full Go release test gate (parallel to compilation)
+    runs-on: ubuntu-latest
+    env:
+      GOPROXY: "https://proxy.golang.org|direct"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
+      - name: Run complete Go suite
+        run: |
+          make test-go
+          go test ./internal/sudoku -count=1 -ldflags "-X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA}"
 
   resolve-telemt:
     runs-on: ubuntu-latest
@@ -245,14 +275,32 @@ jobs:
 
           cd ../..
 
+      - name: Restore verified statically linked kernel
+        id: core-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+            x-ui/bin/hiddify-core-linux-${{ matrix.platform }}.sha256
+            x-ui/bin/target.json
+          key: hiddify-musl-${{ matrix.platform }}-v1-${{ hashFiles('deploy/hiddify/**', 'deploy/speed/masque.patch', 'tools/build-hiddify-core.sh', 'tools/verify-hiddify-build.py', 'internal/clientlimit/brokerclient/client.go', 'go.mod', 'go.sum') }}
+
       - name: Build compatible shared-speed protocol servers and kernel
         env:
           GOOS: linux
           GOARCH: ${{ matrix.platform }}
+          CORE_CACHE_HIT: ${{ steps.core-cache.outputs.cache-hit }}
         run: |
+          set -euo pipefail
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
-          # Build the pinned, statically linked kernel directly on the native Linux runner.
-          HIDDIFY_VULNCHECK=1 SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
+          if [[ "$CORE_CACHE_HIT" != "true" ]]; then
+            # Fresh kernel: run the complete upstream patch suite and vulnerability audit.
+            HIDDIFY_VULNCHECK=1 SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
+          else
+            echo "Reusing kernel built from the exact pinned source and patch graph"
+            (cd x-ui/bin && sha256sum -c "hiddify-core-linux-${GOARCH}.sha256")
+            test -s x-ui/bin/target.json
+          fi
       - name: Check panel configuration with downloaded binary
         env:
           CC: gcc
@@ -304,21 +352,40 @@ jobs:
             x-ui-linux-${{ matrix.platform }}.tar.gz
             x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
 
-      - name: Upload stable release assets
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+  publish-stable:
+    name: Publish verified stable archives
+    needs: [build, go-tests]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download tested archives from both architectures
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "x-ui-linux-*"
+          path: stable-artifacts
+          merge-multiple: true
+      - name: Verify stable archive checksums
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            test -s "stable-artifacts/x-ui-linux-$arch.tar.gz"
+            (cd stable-artifacts && sha256sum -c "x-ui-linux-$arch.tar.gz.sha256")
+          done
+      - name: Upload stable release assets after full Go tests
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
-          file: x-ui-linux-${{ matrix.platform }}.tar.gz*
+          file: stable-artifacts/*.tar.gz*
           file_glob: true
           overwrite: true
           prerelease: false
 
-
   publish-dev:
     name: Publish rolling dev release
-    needs: [build]
+    needs: [build, go-tests]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -403,3 +470,9 @@ jobs:
           for old_asset in panel-tunnel-linux-amd64.tar.gz panel-tunnel-linux-arm64.tar.gz telemt.version telemt-linux-amd64.tar.gz telemt-linux-amd64.tar.gz.sha256 telemt-linux-arm64.tar.gz telemt-linux-arm64.tar.gz.sha256; do
             gh release delete-asset dev-latest "$old_asset" --yes 2>/dev/null || true
           done
+
+      - name: Report release workflow timing
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/workflow-performance.py --run-id "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
