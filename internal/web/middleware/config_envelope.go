@@ -13,7 +13,13 @@ import (
 
 // maxDecodedConfigBytes caps a decompressed request body (defense in depth on
 // top of wirecodec's own ceiling).
-const maxDecodedConfigBytes = 8 << 20
+const (
+	maxDecodedConfigBytes = 8 << 20
+	// A zstd payload can be slightly larger than its decoded form. Limit the
+	// encoded bytes too: database-import routes skip the global body limit,
+	// and GET requests bypass it entirely.
+	maxEncodedConfigBytes = 16 << 20
+)
 
 // ConfigEnvelopeMiddleware advertises node envelope support on every response
 // and, for requests that opt into the envelope, decompresses (zstd) and verifies
@@ -39,12 +45,20 @@ func ConfigEnvelopeMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		raw, err := io.ReadAll(c.Request.Body)
+		limit := int64(maxDecodedConfigBytes)
+		if enc == wirecodec.EncodingZstd {
+			limit = maxEncodedConfigBytes
+		}
+		raw, err := io.ReadAll(io.LimitReader(c.Request.Body, limit+1))
+		_ = c.Request.Body.Close()
 		if err != nil {
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
-		_ = c.Request.Body.Close()
+		if int64(len(raw)) > limit {
+			c.AbortWithStatus(http.StatusRequestEntityTooLarge)
+			return
+		}
 
 		if enc == wirecodec.EncodingZstd {
 			decoded, derr := wirecodec.Decompress(raw, maxDecodedConfigBytes)
