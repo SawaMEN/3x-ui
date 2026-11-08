@@ -154,7 +154,7 @@ func TestSubscriptionHwidHTMLRedactsConnectionCredentials(t *testing.T) {
 	if limited.Code != http.StatusOK {
 		t.Fatalf("HWID-limited info page status = %d", limited.Code)
 	}
-	if !strings.Contains(limited.Body.String(), `"links":null`) ||
+	if !strings.Contains(limited.Body.String(), `"links":[]`) ||
 		strings.Contains(limited.Body.String(), "vless://") ||
 		strings.Contains(limited.Body.String(), "11111111-2222-4333-8444-555555555555") {
 		t.Fatal("read-only HTML preview leaked protocol credentials under an HWID limit")
