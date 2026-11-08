@@ -256,17 +256,22 @@ func syncNodeRouteInbound(inbound *model.Inbound, node *model.Node) error {
 		return fmt.Errorf("read destination node inbounds: %w", err)
 	}
 	exists := nodeRouteRemoteInboundExists(payload.Tag, node.Id, options)
-	pushed, err := remote.ReconcileInbound(ctx, payload, exists)
+	_, err = remote.ReconcileInbound(ctx, payload, exists)
 	if err != nil {
 		return fmt.Errorf("apply cascade credential to destination node: %w", err)
 	}
-	// Remote UpdateInbound schedules a restart, but a newly activated cascade
-	// cannot depend on the destination's deferred restart queue. Apply the
-	// updated listener before the source panel enables its routing rule.
-	if pushed {
-		if err := remote.RestartXray(ctx); err != nil {
-			return fmt.Errorf("restart destination node core after cascade credential sync: %w", err)
-		}
+	// Fingerprint reconciliation only proves that the node accepted its
+	// configuration, not that the running sing-box instance loaded the service
+	// credential. This explicit ensure action must activate the listener even
+	// when the client is already linked and the serialized settings match.
+	// It also repairs managed cascades created before the activation fix.
+	// Restart can involve a full sing-box configuration reload. Give it
+	// a separate deadline instead of sharing the time spent listing and
+	// reconciling the remote inbound.
+	activateCtx, activateCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer activateCancel()
+	if err := remote.RestartXray(activateCtx); err != nil {
+		return fmt.Errorf("activate destination node core for managed cascade: %w", err)
 	}
 	return nil
 }

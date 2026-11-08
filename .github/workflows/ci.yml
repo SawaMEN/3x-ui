@@ -161,6 +161,11 @@ jobs:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
         run: go test ./internal/web/service -run '^TestClientSpeedLimitLiveCore$' -count=1 -v
 
+      - name: Verify real panel ingress -> remote node cascades
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/web/service -run '^TestNodeRouteLiveLocalInboundToRemoteCore$' -count=1 -v
+
       - name: Verify native AWG configuration and TCP/UDP tunnel
         env:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64

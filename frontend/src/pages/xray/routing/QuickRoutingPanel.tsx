@@ -62,6 +62,7 @@ interface NodeRouteProbe {
   reachable: boolean;
   checkedTarget: boolean;
   inconclusive?: boolean;
+  tunnelChecked?: boolean;
   transport: string;
   latencyMs?: number;
   detail: string;
@@ -212,9 +213,11 @@ export default function QuickRoutingPanel({
     const isUdp = probeResult.transport === 'udp';
     const isMieru =
       nodeTargets.find((node) => node.tag === tag)?.protocol?.toLowerCase() === 'mieru';
-    const status = probeResult.reachable
-      ? 'success'
-      : probeResult.inconclusive || isUdp
+    const status = probeResult.tunnelChecked
+      ? probeResult.reachable
+        ? 'success'
+        : 'error'
+      : probeResult.reachable || probeResult.inconclusive || isUdp
         ? 'warning'
         : 'error';
     return (
@@ -222,19 +225,23 @@ export default function QuickRoutingPanel({
         type={status}
         showIcon
         title={
-          (isMieru
+          (probeResult.tunnelChecked
             ? probeResult.reachable
-              ? 'Mieru TCP отвечает'
-              : probeResult.inconclusive
-                ? 'Mieru · доступность не подтверждена'
-                : 'Mieru TCP недоступен'
-            : isUdp
+              ? 'Исходящее работает · HTTP прошёл'
+              : 'Исходящее не отвечает · HTTP не прошёл'
+            : isMieru
               ? probeResult.reachable
-                ? 'UDP/QUIC отвечает'
-                : 'UDP/QUIC не подтверждён'
-              : probeResult.reachable
-                ? 'TCP доступен'
-                : 'TCP недоступен') +
+                ? 'Mieru TCP отвечает · каскад не проверен'
+                : probeResult.inconclusive
+                  ? 'Mieru · доступность не подтверждена'
+                  : 'Mieru TCP недоступен'
+              : isUdp
+                ? probeResult.reachable
+                  ? 'UDP/QUIC отвечает · каскад не проверен'
+                  : 'UDP/QUIC не подтверждён'
+                : probeResult.reachable
+                  ? 'TCP-порт отвечает · каскад не проверен'
+                  : 'TCP-порт недоступен') +
           (probeResult.latencyMs ? ' · ' + probeResult.latencyMs + ' мс' : '')
         }
         description={probeResult.detail}
@@ -263,6 +270,9 @@ export default function QuickRoutingPanel({
     try {
       await provisionNodeTarget(tag);
       onChange(setQuickRouteTarget(rules, marker, tag, engine, tags));
+      if (nodeTargets.some((node) => node.tag === tag)) {
+        void probeNodeTarget(tag);
+      }
     } catch (err) {
       messageApi.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -298,6 +308,9 @@ export default function QuickRoutingPanel({
       await provisionNodeTarget(draft.target);
       const result = putQuickRoute(rules, compiled, engine);
       onChange(result.rules);
+      if (nodeTargets.some((node) => node.tag === draft.target)) {
+        void probeNodeTarget(draft.target);
+      }
       const text = result.replaced
         ? 'Маршрут с такими условиями обновлён без дублирования.'
         : 'Маршрут добавлен. Сохраните конфигурацию панели, чтобы применить его.';
