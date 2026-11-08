@@ -62,6 +62,7 @@ interface NodeRouteProbe {
   reachable: boolean;
   checkedTarget: boolean;
   inconclusive?: boolean;
+  tunnelChecked?: boolean;
   transport: string;
   latencyMs?: number;
   detail: string;
@@ -212,11 +213,15 @@ export default function QuickRoutingPanel({
     const isUdp = probeResult.transport === 'udp';
     const isMieru =
       nodeTargets.find((node) => node.tag === tag)?.protocol?.toLowerCase() === 'mieru';
-    const status = probeResult.reachable
-      ? 'success'
-      : probeResult.inconclusive || isUdp
+    const status = probeResult.tunnelChecked
+      ? probeResult.reachable
+        ? 'success'
+        : 'error'
+      : isUdp
         ? 'warning'
-        : 'error';
+        : probeResult.reachable
+          ? 'success'
+          : 'error';
     return (
       <Alert
         type={status}
@@ -229,9 +234,13 @@ export default function QuickRoutingPanel({
                 ? 'Mieru · доступность не подтверждена'
                 : 'Mieru TCP недоступен'
             : isUdp
-              ? probeResult.reachable
-                ? 'UDP/QUIC отвечает'
-                : 'UDP/QUIC не подтверждён'
+              ? probeResult.tunnelChecked
+                ? probeResult.reachable
+                  ? 'TUIC-трафик проходит'
+                  : 'TUIC-трафик не проходит'
+                : probeResult.reachable
+                  ? 'UDP/QUIC отвечает · TUIC не проверен'
+                  : 'UDP/QUIC не подтверждён'
               : probeResult.reachable
                 ? 'TCP доступен'
                 : 'TCP недоступен') +
@@ -263,6 +272,9 @@ export default function QuickRoutingPanel({
     try {
       await provisionNodeTarget(tag);
       onChange(setQuickRouteTarget(rules, marker, tag, engine, tags));
+      if (nodeTargets.some((node) => node.tag === tag && node.protocol.toLowerCase() === 'tuic')) {
+        void probeNodeTarget(tag);
+      }
     } catch (err) {
       messageApi.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -298,6 +310,9 @@ export default function QuickRoutingPanel({
       await provisionNodeTarget(draft.target);
       const result = putQuickRoute(rules, compiled, engine);
       onChange(result.rules);
+      if (nodeTargets.some((node) => node.tag === draft.target && node.protocol.toLowerCase() === 'tuic')) {
+        void probeNodeTarget(draft.target);
+      }
       const text = result.replaced
         ? 'Маршрут с такими условиями обновлён без дублирования.'
         : 'Маршрут добавлен. Сохраните конфигурацию панели, чтобы применить его.';
