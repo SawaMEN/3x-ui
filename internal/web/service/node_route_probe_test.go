@@ -116,44 +116,49 @@ func TestProbeNodeRouteQUICRejectsWrongConnectionIDs(t *testing.T) {
 	<-done
 }
 
-func TestNodeRouteTUICProbeWrapper(t *testing.T) {
-	native := map[string]any{
-		"type": "tuic", "tag": "node-route-12",
-		"server": "vpn.example.com", "server_port": 443,
-		"uuid": "11111111-1111-1111-1111-111111111111",
-		"password": "test-credential",
-		"tls": map[string]any{"enabled": true, "server_name": "vpn.example.com"},
-	}
-	probe, err := nodeRouteTUICProbeWrapper(native)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if probe["protocol"] != "singbox:tuic" || probe["tag"] != "node-route-12" {
-		t.Fatalf("unexpected probe wrapper: %v", probe)
-	}
-	settings, ok := probe["settings"].(map[string]any)
-	if !ok || settings["password"] != "test-credential" || settings["server"] != "vpn.example.com" {
-		t.Fatal("managed TUIC credentials must be forwarded to the authenticated test")
-	}
-	if _, exists := settings["type"]; exists {
-		t.Fatal("TUIC type must be owned by the outbound wrapper")
-	}
-	if _, exists := settings["tag"]; exists {
-		t.Fatal("TUIC tag must be owned by the outbound wrapper")
-	}
-	if native["type"] != "tuic" || native["tag"] != "node-route-12" {
-		t.Fatal("probe wrapper must not mutate the actual managed outbound")
+func TestNodeRouteNativeProbeWrapper(t *testing.T) {
+	for _, protocol := range []string{"tuic", "vless", "vmess", "trojan", "shadowsocks", "hysteria", "anytls", "naive", "snell", "shadowtls"} {
+		t.Run(protocol, func(t *testing.T) {
+			native := map[string]any{
+				"type": protocol, "tag": "node-route-12",
+				"server": "vpn.example.com", "server_port": 443,
+				"uuid": "11111111-1111-1111-1111-111111111111",
+				"password": "test-credential",
+				"tls": map[string]any{"enabled": true, "server_name": "vpn.example.com"},
+			}
+			probe, ok := nodeRouteNativeProbeWrapper(native)
+			if !ok {
+				t.Fatalf("%s must support an authenticated HTTP probe", protocol)
+			}
+			if probe["protocol"] != "singbox:"+protocol || probe["tag"] != "node-route-12" {
+				t.Fatalf("unexpected probe wrapper: %v", probe)
+			}
+			settings, ok := probe["settings"].(map[string]any)
+			if !ok || settings["password"] != "test-credential" || settings["server"] != "vpn.example.com" {
+				t.Fatal("managed credentials must be forwarded to the authenticated probe")
+			}
+			if _, exists := settings["type"]; exists {
+				t.Fatal("protocol type belongs to the outbound wrapper")
+			}
+			if _, exists := settings["tag"]; exists {
+				t.Fatal("tag belongs to the outbound wrapper")
+			}
+			if native["type"] != protocol || native["tag"] != "node-route-12" {
+				t.Fatal("probe wrapper must not mutate the actual managed outbound")
+			}
+		})
 	}
 }
 
-func TestNodeRouteTUICProbeWrapperRejectsOtherProtocols(t *testing.T) {
+func TestNodeRouteNativeProbeWrapperRejectsUnsupported(t *testing.T) {
 	for _, native := range []map[string]any{
-		{"type": "vless", "tag": "node-route-12"},
+		{"type": "mieru", "tag": "node-route-12"},
+		{"type": "wireguard", "tag": "node-route-12"},
 		{"type": "tuic"},
 		{"tag": "node-route-12"},
 	} {
-		if _, err := nodeRouteTUICProbeWrapper(native); err == nil {
-			t.Fatalf("accepted invalid managed TUIC outbound: %v", native)
+		if wrapper, ok := nodeRouteNativeProbeWrapper(native); ok {
+			t.Fatalf("accepted unsupported native outbound: %v", wrapper)
 		}
 	}
 }
