@@ -82,7 +82,8 @@ func injectSingBoxNodeRoutes(cfg *singbox.Config, native *SingBoxService) error 
 			parsedRules = append(parsedRules, item)
 		}
 	}
-	ids := nodeRouteIDs(parsedRules, "outbound")
+	final, _ := cfg.Route["final"].(string)
+	ids := nativeNodeRouteIDs(parsedRules, final)
 	if len(ids) == 0 {
 		return nil
 	}
