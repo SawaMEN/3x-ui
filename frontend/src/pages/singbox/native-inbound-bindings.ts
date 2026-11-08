@@ -40,8 +40,16 @@ export function setNativeInboundRouteTarget(
   const next = rules.filter((rule) => rule.comment !== marker);
   if (outbound) {
     const fallback = next.findIndex(isUnconditionalRoute);
+    // An existing binding may have been moved below a catch-all by another
+    // editor. Reposition it before that fallback on every update.
     const index =
-      previous >= 0 ? Math.min(previous, next.length) : fallback >= 0 ? fallback : next.length;
+      fallback >= 0
+        ? previous >= 0
+          ? Math.min(previous, fallback)
+          : fallback
+        : previous >= 0
+          ? Math.min(previous, next.length)
+          : next.length;
     next.splice(index, 0, { action: 'route', comment: marker, inbound: [tag], outbound });
   }
   return { ...config, route: { ...route, rules: next } };
