@@ -258,6 +258,22 @@ function replaceOverlappingQuickInbounds(
   const selected = new Set(incoming.filter((tag): tag is string => typeof tag === 'string'));
 
   return rules.flatMap((rule) => {
+    // The basic binding editor creates the same kind of per-inbound fallback.
+    // A new quick assignment supersedes that panel-owned binding as well.
+    const basicMarker = rule.comment;
+    const basicTag =
+      typeof basicMarker === 'string' && basicMarker.startsWith('panel-inbound:')
+        ? basicMarker.slice('panel-inbound:'.length)
+        : '';
+    if (
+      basicTag &&
+      selected.has(basicTag) &&
+      Array.isArray(rule[field]) &&
+      rule[field].length === 1 &&
+      rule[field][0] === basicTag
+    ) {
+      return [];
+    }
     const marker = engine === 'xray' ? rule.ruleTag : rule.comment;
     if (
       typeof marker !== 'string' ||
