@@ -1,7 +1,7 @@
 name: Sidecar egress regression
 on:
   push:
-    branches: [main]
+    branches: [main, up]
   pull_request:
     paths:
       - 'internal/sidecaregress/**'
