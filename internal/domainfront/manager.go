@@ -142,6 +142,18 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	if !cfg.Enabled {
 		return nil, nil
 	}
+	// A collection of foreign SNI references does not need a local listener,
+	// ACME account or open public ports on the controlling panel.
+	hasLocalDomain := false
+	for _, domain := range cfg.Domains {
+		if domain.Enabled && domain.Mode != "shared_sni" {
+			hasLocalDomain = true
+			break
+		}
+	}
+	if !hasLocalDomain {
+		return nil, nil
+	}
 	if err := os.MkdirAll(m.cachePath, 0o700); err != nil {
 		return nil, err
 	}

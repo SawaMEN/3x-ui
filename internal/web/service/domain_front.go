@@ -162,7 +162,14 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	}
 	domainFrontState.Lock()
 	defer domainFrontState.Unlock()
-	if cfg.Enabled {
+	hasLocalDomain := false
+	for _, domain := range cfg.Domains {
+		if domain.Enabled && domain.Mode != "shared_sni" {
+			hasLocalDomain = true
+			break
+		}
+	}
+	if cfg.Enabled && hasLocalDomain {
 		if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled && telemtWebFrontendActive(state) && cfg.HTTPSPort == 443 {
 			return domainfront.DomainFrontStatus{}, fmt.Errorf("TCP 443 is already serving the Telemt WEB cover site (%s); reuse it as SNI instead of starting another gateway", state.Domain)
 		}

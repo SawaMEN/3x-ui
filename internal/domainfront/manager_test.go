@@ -592,3 +592,30 @@ func TestSharedSNIDomainIsNeverServedByLocalGateway(t *testing.T) {
 		t.Fatalf("shared SNI must not expose a local certificate: %#v", status.Certificates)
 	}
 }
+
+func TestSharedSNIOnlyConfigurationOpensNoGatewayPorts(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	cfg.AcceptTerms = false
+	cfg.Listen = "127.0.0.1"
+	cfg.HTTPPort, cfg.HTTPSPort = unusedPort(t), unusedPort(t)
+	cfg.PublicPort = cfg.HTTPSPort
+	cfg.Domains = []DomainFrontDomain{{
+		Name: "edge.example.com", Mode: "shared_sni", Enabled: true, TLS: "auto",
+	}}
+	manager := NewManager(t.TempDir())
+	if err := manager.Apply(context.Background(), cfg, Backend{}); err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Stop()
+	if manager.Status(cfg).Running {
+		t.Fatal("a foreign SNI reference must not start the local gateway")
+	}
+	for _, port := range []int{cfg.HTTPPort, cfg.HTTPSPort} {
+		listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Listen, strconv.Itoa(port)))
+		if err != nil {
+			t.Fatalf("foreign SNI opened local port %d: %v", port, err)
+		}
+		_ = listener.Close()
+	}
+}

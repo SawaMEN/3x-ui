@@ -63,7 +63,7 @@ export default function RealityForm({
   const { t } = useTranslation();
   const uid = useId();
   const { data: managedDomains = [] } = useManagedSniDomains();
-  const { getFieldState, trigger } = useFormContext();
+  const { getFieldState, getValues, setValue, trigger } = useFormContext();
   const [scannerOpen, setScannerOpen] = useState(false);
   const nodeId = useWatch({ name: 'nodeId' }) as number | null | undefined;
   const mldsa65Seed = useWatch({
@@ -229,8 +229,16 @@ export default function RealityForm({
           style={{ width: '100%' }}
           options={managedDomains.map((domain) => ({
             value: domain.name,
-            label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : 'TLS'}`,
+            label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
           }))}
+          onChange={(names: string[]) => {
+            const picked = names.find((name) => managedDomains.some((site) => site.name === name));
+            if (picked && !getValues('streamSettings.realitySettings.target')) {
+              setValue('streamSettings.realitySettings.target', `${picked}:443`, {
+                shouldDirty: true,
+              });
+            }
+          }}
         />
       </FormField>
       <FormField
