@@ -414,6 +414,18 @@ func (a *SUBController) maybeServeSubPage(c *gin.Context) bool {
 	if !ok {
 		return true
 	}
+	// The HTML info page is deliberately readable without consuming a device
+	// slot. Do not leak raw protocol credentials through its embedded page
+	// data when actual subscription downloads require HWID admission.
+	hwid, found, err := a.clientService.HwidSlotStatusForSubID(c.Param("subid"))
+	if err != nil {
+		c.AbortWithStatus(http.StatusServiceUnavailable)
+		return true
+	}
+	if !found || hwid.Active {
+		page.Result = nil
+		page.Emails = nil
+	}
 	a.serveSubPage(c, page.BasePath, page)
 	return true
 }
