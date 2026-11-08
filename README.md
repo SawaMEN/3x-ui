@@ -26,23 +26,25 @@ x-ui uninstall   # удаление
 
 ## Благодарности
 
-Проект основан на [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui). Благодарность авторам и участникам проектов, чей код, компоненты, протоколы, шаблоны или технические решения используются при разработке и работе панели.
+Особая благодарность авторам и участникам проектов, на которых основана панель и её ключевые возможности:
 
-**Ядра и сетевые технологии**
-
+- [MHSanaei / 3x-ui](https://github.com/MHSanaei/3x-ui) — исходная кодовая база панели.
 - [Hiddify / hiddify-core](https://github.com/hiddify/hiddify-core) и [hiddify-sing-box](https://github.com/hiddify/hiddify-sing-box) — основа модифицированного ядра.
-- [SagerNet / sing-box](https://github.com/SagerNet/sing-box) — сетевое ядро и реализация протоколов.
-- [XTLS / Xray-core](https://github.com/XTLS/Xray-core) — ядро Xray, совместимость и решения, использованные в реализации WireGuard TCP/UDP.
-- [Amnezia VPN / amneziawg-go](https://github.com/amnezia-vpn/amneziawg-go) — реализация AmneziaWG.
-- [klzgrad / naiveproxy](https://github.com/klzgrad/naiveproxy) — проект NaïveProxy и технология маскировки трафика.
+- [XTLS / RealiTLScanner](https://github.com/XTLS/RealiTLScanner) — идея поиска подходящих SNI по соседним IP и проверки TLS-сертификатов.
+- [XTLS / Xray-core](https://github.com/XTLS/Xray-core) — ядро Xray, совместимость и решения для сетевого стека.
+- [SagerNet / sing-box](https://github.com/SagerNet/sing-box) — сетевое ядро и реализации протоколов.
 
-**Интеграции и отдельные компоненты**
+## Дополнительно
+
+Благодарность авторам сторонних протоколов, интеграций и компонентов, используемых проектом:
 
 - [telemt / telemt](https://github.com/telemt/telemt) — сервер MTProto.
-- [WINGS-N / vk-turn-proxy](https://github.com/WINGS-N/vk-turn-proxy) и [WINGS-N / 3x-ui](https://github.com/WINGS-N/3x-ui) — VK TURN-прокси и решения для его интеграции.
+- [WINGS-N / vk-turn-proxy](https://github.com/WINGS-N/vk-turn-proxy) и [WINGS-N / 3x-ui](https://github.com/WINGS-N/3x-ui) — VK TURN-прокси и решения для интеграции.
 - [Liafanx / MTProxyL](https://github.com/Liafanx/MTProxyL) — HTML-шаблоны сайтов-приманок (MIT).
 - [Mekotofeuka / MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — идеи защиты и исправления MTProto.
-- [enfein / mieru](https://github.com/enfein/mieru) — Mieru, включая собираемый сервер Mita.
+- [Amnezia VPN / amneziawg-go](https://github.com/amnezia-vpn/amneziawg-go) — реализация AmneziaWG.
+- [klzgrad / naiveproxy](https://github.com/klzgrad/naiveproxy) — NaïveProxy.
+- [enfein / mieru](https://github.com/enfein/mieru) — Mieru и сервер Mita.
 - [SUDOKU-ASCII / sudoku](https://github.com/SUDOKU-ASCII/sudoku) — Sudoku Tunnel.
 - [HyNetworks / hysteria](https://github.com/HyNetworks/hysteria) — Hysteria.
 - [esrrhs / pingtunnel](https://github.com/esrrhs/pingtunnel) — PingTunnel.
@@ -53,10 +55,6 @@ x-ui uninstall   # удаление
 - [p1neappleXpress / OpenFlux](https://github.com/p1neappleXpress/OpenFlux) — OpenFlux.
 - [fptn-project / fptn](https://github.com/fptn-project/fptn) — FPTN.
 
-**Графические материалы**
-
-- [Arcticons-Team / Arcticons](https://github.com/Arcticons-Team/Arcticons), Donnnno и участники проекта — адаптированные SVG-иконки (CC BY-SA 4.0). Сведения о происхождении и лицензировании: [иконки подписок](frontend/src/pages/sub/app-icons/README.md).
-
-Перечень включает как прямые заимствования, так и интегрируемые сторонние компоненты; он не означает, что весь их код скопирован в панель. Авторские права и условия лицензий сторонних материалов сохраняются.
+Часть проектов послужила источником идей или кода, другие интегрируются как отдельные компоненты. Условия лицензий и уведомления об авторстве сторонних материалов сохраняются в соответствующих файлах.
 
 Лицензия панели: [GPL-3.0](LICENSE).
