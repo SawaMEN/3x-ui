@@ -423,8 +423,8 @@ func (a *SUBController) maybeServeSubPage(c *gin.Context) bool {
 		return true
 	}
 	if !found || hwid.Active {
-		page.Result = nil
-		page.Emails = nil
+		page.Result = []string{}
+		page.Emails = []string{}
 	}
 	a.serveSubPage(c, page.BasePath, page)
 	return true
