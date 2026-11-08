@@ -81,17 +81,8 @@ echo "The OS release is: $release"
 os_version=""
 os_version=$(grep "^VERSION_ID" /etc/os-release | cut -d '=' -f2 | tr -d '"' | tr -d '.')
 
-running_in_docker="false"
-if [[ -f /.dockerenv ]] || [[ "${XUI_IN_DOCKER}" == "true" ]]; then
-    running_in_docker="true"
-fi
-
 # Declare Variables
-if [[ "${running_in_docker}" == "true" ]]; then
-    xui_folder="${XUI_MAIN_FOLDER:=/app}"
-else
-    xui_folder="${XUI_MAIN_FOLDER:=/usr/local/x-ui}"
-fi
+xui_folder="${XUI_MAIN_FOLDER:=/usr/local/x-ui}"
 xui_service="${XUI_SERVICE:=/etc/systemd/system}"
 log_folder="${XUI_LOG_FOLDER:=/var/log/x-ui}"
 mkdir -p "${log_folder}"
@@ -524,15 +515,6 @@ start() {
         echo ""
         LOGI "Panel is running, No need to start again, If you need to restart, please select restart"
     else
-        if [[ "${running_in_docker}" == "true" ]]; then
-            LOGE "Panel process is not running inside this container."
-            LOGI "In Docker the panel is the container's main process. Restart the container to bring it back up:"
-            LOGI "  docker restart <container_name>"
-            if [[ $# == 0 ]]; then
-                before_show_menu
-            fi
-            return 0
-        fi
         if [[ $release == "alpine" ]]; then
             rc-service x-ui start
         else
@@ -558,15 +540,6 @@ stop() {
         echo ""
         LOGI "Panel stopped, No need to stop again!"
     else
-        if [[ "${running_in_docker}" == "true" ]]; then
-            LOGI "In Docker the panel runs as the container's main process."
-            LOGI "To stop it, stop the container from the host:"
-            LOGI "  docker stop <container_name>"
-            if [[ $# == 0 ]]; then
-                before_show_menu
-            fi
-            return 0
-        fi
         if [[ $release == "alpine" ]]; then
             rc-service x-ui stop
         else
@@ -587,26 +560,6 @@ stop() {
 }
 
 restart() {
-    if [[ "${running_in_docker}" == "true" ]]; then
-        if signal_xui HUP; then
-            sleep 1
-            signal_xui USR1
-            LOGI "Restart signal sent to the panel and sing-box."
-        else
-            LOGE "Could not find the running panel process to signal."
-        fi
-        sleep 2
-        check_status
-        if [[ $? == 0 ]]; then
-            LOGI "x-ui and xray Restarted successfully"
-        else
-            LOGE "Panel restart failed, Please check the log information later"
-        fi
-        if [[ $# == 0 ]]; then
-            before_show_menu
-        fi
-        return 0
-    fi
     if [[ $release == "alpine" ]]; then
         rc-service x-ui restart
     else
@@ -625,19 +578,6 @@ restart() {
 }
 
 restart_xray() {
-    if [[ "${running_in_docker}" == "true" ]]; then
-        if signal_xui USR1; then
-            LOGI "sing-box Restart signal sent successfully, Please check the log information to confirm whether xray restarted successfully"
-        else
-            LOGE "Could not find the running panel process to signal."
-        fi
-        sleep 2
-        show_xray_status
-        if [[ $# == 0 ]]; then
-            before_show_menu
-        fi
-        return 0
-    fi
     if [[ $release == "alpine" ]]; then
         rc-service x-ui reload
     else
@@ -652,13 +592,6 @@ restart_xray() {
 }
 
 status() {
-    if [[ "${running_in_docker}" == "true" ]]; then
-        show_status
-        if [[ $# == 0 ]]; then
-            before_show_menu
-        fi
-        return 0
-    fi
     if [[ $release == "alpine" ]]; then
         rc-service x-ui status
     else
@@ -670,14 +603,6 @@ status() {
 }
 
 enable() {
-    if [[ "${running_in_docker}" == "true" ]]; then
-        LOGI "Autostart is controlled by the Docker restart policy (e.g. 'restart: unless-stopped' in docker-compose.yml)."
-        LOGI "There is no service to enable inside the container."
-        if [[ $# == 0 ]]; then
-            before_show_menu
-        fi
-        return 0
-    fi
     if [[ $release == "alpine" ]]; then
         rc-update add x-ui default
     else
@@ -695,14 +620,6 @@ enable() {
 }
 
 disable() {
-    if [[ "${running_in_docker}" == "true" ]]; then
-        LOGI "Autostart is controlled by the Docker restart policy (e.g. 'restart: unless-stopped' in docker-compose.yml)."
-        LOGI "Set 'restart: no' for the container on the host to disable autostart."
-        if [[ $# == 0 ]]; then
-            before_show_menu
-        fi
-        return 0
-    fi
     if [[ $release == "alpine" ]]; then
         rc-update del x-ui
     else
@@ -889,16 +806,6 @@ signal_xui() {
 
 # 0: running, 1: not running, 2: not installed
 check_status() {
-    if [[ "${running_in_docker}" == "true" ]]; then
-        if [[ ! -x "${xui_folder}/x-ui" ]]; then
-            return 2
-        fi
-        if [[ -n "$(xui_pid)" ]]; then
-            return 0
-        else
-            return 1
-        fi
-    fi
     if [[ $release == "alpine" ]]; then
         if [[ ! -f /etc/init.d/x-ui ]]; then
             return 2
@@ -986,10 +893,6 @@ show_status() {
 }
 
 show_enable_status() {
-    if [[ "${running_in_docker}" == "true" ]]; then
-        echo -e "Start automatically: ${green}Managed by Docker${plain}"
-        return
-    fi
     check_enabled
     if [[ $? == 0 ]]; then
         echo -e "Start automatically: ${green}Yes${plain}"
@@ -3174,9 +3077,6 @@ pg_upgrade_client() {
             return 0
         fi
         LOGI "Installed PostgreSQL client tools are version ${have}; version ${want} or newer is required."
-    fi
-    if [[ "${running_in_docker}" == "true" ]]; then
-        LOGI "Note: packages installed inside the container are lost when the container is recreated."
     fi
     case "${release}" in
         ubuntu | debian | armbian)

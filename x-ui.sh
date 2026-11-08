@@ -308,9 +308,6 @@ start() {
     local rc=0
     if check_status; then
         LOGI "Panel is already running."
-    elif [[ "$running_in_docker" == true ]]; then
-        LOGE "Panel is not running. Restart the container from the host."
-        rc=1
     elif xui_service_action start; then
         sleep 2
         if check_status; then LOGI "Panel started."; else LOGE "Panel failed to start."; rc=1; fi
@@ -326,11 +323,8 @@ stop() {
     check_status; state=$?
     if [[ "$state" == 1 ]]; then
         LOGI "Panel is already stopped."
-    elif [[ "$state" == 2 && "$running_in_docker" != true ]]; then
+    elif [[ "$state" == 2 ]]; then
         LOGE "x-ui.service is not installed or not loaded. Check systemctl status x-ui; repair with the installer."
-        rc=1
-    elif [[ "$running_in_docker" == true ]]; then
-        LOGE "Stop the container from the host."
         rc=1
     elif xui_service_action stop; then
         sleep 2
@@ -345,9 +339,7 @@ stop() {
 
 restart() {
     local rc=0
-    if [[ "$running_in_docker" == true ]]; then
-        if signal_xui HUP && signal_xui USR1; then LOGI "Restart signals sent."; else rc=$?; LOGE "Could not signal panel."; fi
-    elif xui_service_action restart; then
+    if xui_service_action restart; then
         sleep 2
         if check_status; then LOGI "Panel restarted."; else LOGE "Panel failed to restart."; rc=1; fi
     else
@@ -359,31 +351,20 @@ restart() {
 
 restart_xray() {
     local rc=0
-    if [[ "$running_in_docker" == true ]]; then
-        signal_xui USR1 || rc=$?
-    else
-        xui_service_action reload || rc=$?
-    fi
+    xui_service_action reload || rc=$?
     if [[ "$rc" == 0 ]]; then LOGI "Core reload requested."; else LOGE "Core reload failed."; fi
     finish_service_action "$rc" "$#"
 }
 
 status() {
     local rc=0
-    if [[ "$running_in_docker" == true ]]; then
-        show_status
-        check_status || rc=$?
-    else
-        xui_service_action status || rc=$?
-    fi
+    xui_service_action status || rc=$?
     finish_service_action "$rc" "$#"
 }
 
 set_autostart() {
     local action="$1" argc="$2" rc=0
-    if [[ "$running_in_docker" == true ]]; then
-        LOGI "Autostart is controlled by the Docker restart policy."
-    elif [[ $release == alpine ]]; then
+    if [[ $release == alpine ]]; then
         if [[ "$action" == enable ]]; then rc-update add x-ui default || rc=$?; else rc-update del x-ui || rc=$?; fi
     else
         systemctl "$action" x-ui || rc=$?
@@ -400,11 +381,6 @@ xui_pid() {
 }
 
 check_status() {
-    if [[ "${running_in_docker}" == "true" ]]; then
-        [[ -x "${xui_folder}/x-ui" ]] || return 2
-        [[ -n "$(xui_pid)" ]] && return 0
-        return 1
-    fi
     if [[ $release == "alpine" ]]; then
         [[ -f /etc/init.d/x-ui ]] || return 2
         rc-service x-ui status >/dev/null 2>&1 && return 0
@@ -417,9 +393,6 @@ check_status() {
 }
 
 check_enabled() {
-    if [[ "${running_in_docker}" == "true" ]]; then
-        return 1
-    fi
     if [[ $release == "alpine" ]]; then
         rc-update show default 2>/dev/null | grep -Eq '^[[:space:]]*x-ui[[:space:]]*\|'
         return $?
