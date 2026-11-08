@@ -486,6 +486,9 @@ jobs:
         if: github.event_name == 'pull_request'
         run: npm run build:ci
         working-directory: frontend
+      - name: Reject MSW worker in production bundle
+        if: github.event_name == 'pull_request'
+        run: test ! -e internal/web/dist/mockServiceWorker.js
       - name: Report frontend bundle size
         if: github.event_name == 'pull_request'
         run: python3 tools/ci/size_report.py --frontend internal/web/dist --summary "$GITHUB_STEP_SUMMARY"
