@@ -217,33 +217,31 @@ export default function QuickRoutingPanel({
       ? probeResult.reachable
         ? 'success'
         : 'error'
-      : isUdp
+      : probeResult.reachable || probeResult.inconclusive || isUdp
         ? 'warning'
-        : probeResult.reachable
-          ? 'success'
-          : 'error';
+        : 'error';
     return (
       <Alert
         type={status}
         showIcon
         title={
-          (isMieru
+          (probeResult.tunnelChecked
             ? probeResult.reachable
-              ? 'Mieru TCP отвечает'
-              : probeResult.inconclusive
-                ? 'Mieru · доступность не подтверждена'
-                : 'Mieru TCP недоступен'
-            : isUdp
-              ? probeResult.tunnelChecked
+              ? 'Каскад работает · трафик проходит'
+              : 'Каскад не работает · трафик не проходит'
+            : isMieru
+              ? probeResult.reachable
+                ? 'Mieru TCP отвечает · каскад не проверен'
+                : probeResult.inconclusive
+                  ? 'Mieru · доступность не подтверждена'
+                  : 'Mieru TCP недоступен'
+              : isUdp
                 ? probeResult.reachable
-                  ? 'TUIC-трафик проходит'
-                  : 'TUIC-трафик не проходит'
-                : probeResult.reachable
-                  ? 'UDP/QUIC отвечает · TUIC не проверен'
+                  ? 'UDP/QUIC отвечает · каскад не проверен'
                   : 'UDP/QUIC не подтверждён'
-              : probeResult.reachable
-                ? 'TCP доступен'
-                : 'TCP недоступен') +
+                : probeResult.reachable
+                  ? 'TCP-порт отвечает · каскад не проверен'
+                  : 'TCP-порт недоступен') +
           (probeResult.latencyMs ? ' · ' + probeResult.latencyMs + ' мс' : '')
         }
         description={probeResult.detail}
@@ -272,7 +270,7 @@ export default function QuickRoutingPanel({
     try {
       await provisionNodeTarget(tag);
       onChange(setQuickRouteTarget(rules, marker, tag, engine, tags));
-      if (nodeTargets.some((node) => node.tag === tag && node.protocol.toLowerCase() === 'tuic')) {
+      if (nodeTargets.some((node) => node.tag === tag)) {
         void probeNodeTarget(tag);
       }
     } catch (err) {
@@ -310,7 +308,7 @@ export default function QuickRoutingPanel({
       await provisionNodeTarget(draft.target);
       const result = putQuickRoute(rules, compiled, engine);
       onChange(result.rules);
-      if (nodeTargets.some((node) => node.tag === draft.target && node.protocol.toLowerCase() === 'tuic')) {
+      if (nodeTargets.some((node) => node.tag === draft.target)) {
         void probeNodeTarget(draft.target);
       }
       const text = result.replaced
@@ -438,16 +436,6 @@ export default function QuickRoutingPanel({
               label: formatInboundTag(value, remarkByTag),
             }))}
           />
-
-          {draft.match === 'inbound' &&
-            (inboundOptions || []).some((inbound) => inbound.nodeId != null) && (
-              <Alert
-                type="info"
-                showIcon
-                title="Входящие подключения удалённых нод"
-                description="Правило этой панели применяется только к трафику её локального ядра. Если входящий TUIC работает на другой ноде, настраивайте маршрут на этой ноде: удалённый входящий здесь не является источником трафика."
-              />
-            )}
 
           {inTags.length === 0 && (
             <Alert
