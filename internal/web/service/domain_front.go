@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/tls"
+	"sort"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -11,12 +14,77 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 )
+
+
+type ManagedSNIDomain struct {
+	Name     string `json:"name"`
+	Source   string `json:"source"`
+	CertFile string `json:"certFile"`
+	KeyFile  string `json:"keyFile"`
+}
+
+// ManagedSNIDomains reads the *main panel's* live HTTPS endpoints. Remote node
+// editors may reuse these public names, but must never reuse their file paths
+// without explicitly provisioning a certificate on that remote host.
+func ManagedSNIDomains() ([]ManagedSNIDomain, error) {
+	status, err := DomainFrontStatus()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ManagedSNIDomain, 0, len(status.Certificates)+1)
+	seen := make(map[string]bool)
+	add := func(name, source, certFile, keyFile string) {
+		name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
+		if name == "" || seen[name] || certFile == "" || keyFile == "" {
+			return
+		}
+		pair, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil || len(pair.Certificate) == 0 {
+			return
+		}
+		leaf, err := x509.ParseCertificate(pair.Certificate[0])
+		if err != nil || leaf.VerifyHostname(name) != nil || time.Now().Before(leaf.NotBefore) || !time.Now().Before(leaf.NotAfter) {
+			return
+		}
+		seen[name] = true
+		out = append(out, ManagedSNIDomain{Name: name, Source: source, CertFile: certFile, KeyFile: keyFile})
+	}
+	if status.Config.Enabled && status.Running {
+		enabled := make(map[string]bool)
+		for _, domain := range status.Config.Domains {
+			enabled[domain.Name] = domain.Enabled
+		}
+		for _, cert := range status.Certificates {
+			if enabled[cert.Name] && (cert.State == "valid" || cert.State == "renewal_due") {
+				add(cert.Name, "gateway", cert.CertFile, cert.KeyFile)
+			}
+		}
+	}
+	// Telemt WEB already serves a real HTTPS cover site and owns the port.
+	// Reuse its primary hostname, aliases, and existing certificate, never
+	// create a duplicate gateway or a second ACME certificate for that site.
+	state, err := readTelemtWebState()
+	if err == nil && state.Enabled && telemtWebFrontendActive(state) {
+		add(state.Domain, "telemt", state.CertFile, state.KeyFile)
+		for _, alias := range state.Aliases {
+			add(alias, "telemt", state.CertFile, state.KeyFile)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Source != out[j].Source {
+			return out[i].Source == "telemt"
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
+}
 
 var domainFrontState struct {
 	sync.Mutex
@@ -88,6 +156,11 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	}
 	domainFrontState.Lock()
 	defer domainFrontState.Unlock()
+	if cfg.Enabled {
+		if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled && telemtWebFrontendActive(state) && cfg.HTTPSPort == 443 {
+			return domainfront.DomainFrontStatus{}, fmt.Errorf("TCP 443 is already serving the Telemt WEB cover site (%s); reuse it as SNI instead of starting another gateway", state.Domain)
+		}
+	}
 	s := &SettingService{}
 	files, states, err := s.domainCertificateFiles(cfg)
 	if err != nil {

@@ -21,6 +21,7 @@ func NewDomainController(g *gin.RouterGroup) {
 	a := &DomainController{}
 	g = g.Group("/domains")
 	g.GET("/status", a.status)
+	g.GET("/sni", a.sni)
 	g.POST("/apply", a.apply)
 	g.POST("/check", a.check)
 	g.POST("/recommend", a.recommend)
@@ -28,6 +29,13 @@ func NewDomainController(g *gin.RouterGroup) {
 
 func (a *DomainController) status(c *gin.Context) {
 	result, err := service.DomainFrontStatus()
+	jsonObj(c, result, err)
+}
+
+// The authenticated main panel is the single source of SNI hostnames for
+// local and remotely managed inbounds. File paths are local to this panel.
+func (a *DomainController) sni(c *gin.Context) {
+	result, err := service.ManagedSNIDomains()
 	jsonObj(c, result, err)
 }
 
