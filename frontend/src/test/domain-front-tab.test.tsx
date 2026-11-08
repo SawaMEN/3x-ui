@@ -36,6 +36,7 @@ function fixture(existing = false) {
             source: 'panel',
             renewal: 'acme.sh',
             certFile: '/root/cert/existing/fullchain.pem',
+            keyFile: '/root/cert/existing/privkey.pem',
             issuer: 'Installer issuer',
             expiresAt: Math.floor(Date.now() / 1000) + 40 * 86400,
             daysLeft: 40,
@@ -58,6 +59,7 @@ function fixture(existing = false) {
             source: 'panel',
             renewal: 'acme.sh',
             certFile: '/root/cert/sub.example.com/fullchain.pem',
+            keyFile: '/root/cert/sub.example.com/privkey.pem',
           },
         ]
       : [],

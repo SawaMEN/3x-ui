@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { describe, expect, it } from 'vitest';
 import { FormProvider, useForm, type UseFormReturn } from 'react-hook-form';
-import { render, act } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import { Form } from 'antd';
 import TuicFields from '@/pages/inbounds/form/protocols/tuic';
+import { renderWithProviders } from './test-utils';
 import { rawInboundToFormValues, formValuesToWirePayload } from '@/lib/xray/inbound-form-adapter';
 import { InboundFormSchema, type InboundFormValues } from '@/schemas/forms/inbound-form';
 import { genTuicLink } from '@/lib/xray/inbound-link';
@@ -38,12 +39,12 @@ function Harness() {
 
 describe('TUIC legacy edit and raw profile precedence', () => {
   it('mounting old flat settings must display current certificate', () => {
-    render(<Harness />);
+    renderWithProviders(<Harness />);
     const displayed = Array.from(document.querySelectorAll('input')).map((x) => x.value);
     expect(displayed).toContain('/old/cert.pem');
   });
   it('editing only SNI must preserve controller and runtime values', () => {
-    render(<Harness />);
+    renderWithProviders(<Harness />);
     act(() => methods.setValue('settings.server.sni', 'new.example'));
     const parsed = InboundFormSchema.parse(methods.getValues());
     const saved = JSON.parse(formValuesToWirePayload(parsed).settings);
@@ -56,7 +57,7 @@ describe('TUIC legacy edit and raw profile precedence', () => {
     expect.soft(saved.server.max_udp_relay_packet_size).toBe(8192);
   });
   it('mounting then saving without TUIC changes must preserve flat values', () => {
-    render(<Harness />);
+    renderWithProviders(<Harness />);
     const saved = JSON.parse(
       formValuesToWirePayload(InboundFormSchema.parse(methods.getValues())).settings,
     );
