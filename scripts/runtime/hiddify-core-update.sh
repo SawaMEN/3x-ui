@@ -77,20 +77,27 @@ committed=0
 cleanup() {
   status=$?
   trap - EXIT INT TERM
+  local restore_failed=0
   if (( swapping && ! committed )); then
     echo "New core failed health checks: restoring prior core" >&2
     systemctl stop x-ui >/dev/null 2>&1 || true
     for asset in "${assets[@]}"; do
-      rm -f -- "$bin/$asset"
+      rm -f -- "$bin/$asset" || restore_failed=1
       if [[ -f "$backup/$asset" ]]; then
-        cp -p -- "$backup/$asset" "$bin/$asset" || echo "CRITICAL: failed to restore $asset" >&2
+        cp -p -- "$backup/$asset" "$bin/$asset" || { echo "CRITICAL: failed to restore $asset" >&2; restore_failed=1; }
       fi
     done
     if (( was_active )); then
-      systemctl start x-ui || echo "CRITICAL: prior panel failed to restart" >&2
+      systemctl start x-ui || { echo "CRITICAL: prior panel failed to restart" >&2; restore_failed=1; }
     fi
   fi
-  rm -rf -- "$stage" "$backup"
+  for asset in "${assets[@]}"; do rm -f -- "$bin/.core-update-$asset.$"; done
+  rm -rf -- "$stage"
+  if (( restore_failed )); then
+    echo "CRITICAL: recovery snapshot preserved at $backup" >&2
+    exit 1
+  fi
+  rm -rf -- "$backup"
   exit "$status"
 }
 trap cleanup EXIT
