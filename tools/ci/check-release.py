@@ -59,8 +59,10 @@ def check(root, arch, revision):
     for name in ("x-ui", core):
         programs = subprocess.check_output(["readelf", "-l", str(root / name)], text=True)
         dynamic = subprocess.check_output(["readelf", "-d", str(root / name)], text=True)
-        if "INTERP" in programs or "NEEDED" in dynamic:
-            raise ValueError("Expected static ELF: " + name)
+        interpreter = [line.strip() for line in programs.splitlines() if "INTERP" in line or "Requesting program interpreter" in line]
+        dependencies = [line.strip() for line in dynamic.splitlines() if "(NEEDED)" in line]
+        if interpreter or dependencies:
+            raise ValueError(f"Expected portable static ELF: {name}; INTERP={interpreter}; NEEDED={dependencies}")
     panel_version = subprocess.check_output([str(root / "x-ui"), "-v"], text=True, timeout=30)
     validate_version(panel_version, revision, os.environ.get("GITHUB_REF", ""))
     expected = json.loads(Path("deploy/hiddify/hiddify-core-target.json").read_text())
