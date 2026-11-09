@@ -1986,6 +1986,17 @@ install_x-ui() {
             fi
         fi
 
+        # Latest compatible Hiddify core is updated separately from the panel.
+        # Keep the timer installed for subsequent core-only stable releases.
+        if [[ -f hiddify-core-update.sh && -f fetch-latest-kernel.py &&
+              -f hiddify-core-update.service && -f hiddify-core-update.timer ]]; then
+            chmod 0755 hiddify-core-update.sh
+            sed "s|/usr/local/x-ui/hiddify-core-update.sh|${xui_folder}/hiddify-core-update.sh|"                 hiddify-core-update.service > "${xui_service}/hiddify-core-update.service"
+            install -m 0644 hiddify-core-update.timer "${xui_service}/hiddify-core-update.timer"
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl enable --now hiddify-core-update.timer 2>/dev/null || true
+        fi
+
         # Install the automatic MEKO V3 helper for active MTProto sidecars.
         # The panel initializes its state and starts it when ports appear.
         # nftables is preferred; IPv4 iptables remains a fallback.
