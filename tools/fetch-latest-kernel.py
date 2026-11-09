@@ -26,7 +26,7 @@ PREFIX = "https://github.com/SawaMEN/hiddify-core/releases/download/"
 TAGS = {
     "with_xui_panel", "with_v2ray_api", "with_awg", "with_quic",
     "with_wireguard", "with_clash_api", "with_utls", "with_masque",
-    "with_gvisor", "with_naive_outbound", "tfogo_checklinkname0",
+    "with_gvisor", "with_naive_outbound", "with_kcp", "tfogo_checklinkname0",
 }
 
 

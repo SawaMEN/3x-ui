@@ -144,7 +144,7 @@ func stage5ProcessFixture(t *testing.T) (*SingBoxService, string, *atomic.Int32)
 	starts := filepath.Join(dir, "starts")
 	script := fmt.Sprintf(`#!/bin/sh
 case "$1" in
-version) printf 'hiddify-core version %s\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque,with_gvisor,with_naive_outbound,with_purego,tfogo_checklinkname0\nRevision: %s\n' ;;
+version) printf 'hiddify-core version %s\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque,with_gvisor,with_naive_outbound,with_purego,with_kcp,tfogo_checklinkname0\nRevision: %s\n' ;;
 check) test -f "$3" || exit 2
 if grep -q stage-audit-reject "$3"; then echo 'candidate rejected' >&2; exit 3; fi
 if test -f "$(dirname "$0")/hold-check"; then
