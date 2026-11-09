@@ -324,8 +324,15 @@ jobs:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
         run: |
           set -euo pipefail
-          go test -json ./internal/hiddify \
-            -run '^(TestPinnedBinaryRawRuntimeAndStatistics|TestPinnedProtocolTransportMatrix)
+          go test -json ./internal/hiddify -run '^TestPinned(BinaryRawRuntimeAndStatistics|ProtocolTransportMatrix)$' -count=1 -timeout=8m | tee native-runtime-check.jsonl
+          python3 tools/ci/require-go-tests.py native-runtime-check.jsonl TestPinnedBinaryRawRuntimeAndStatistics TestPinnedProtocolTransportMatrix
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Verify imported HY2 links with the packaged native kernel
         working-directory: frontend
         env:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
