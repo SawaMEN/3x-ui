@@ -91,7 +91,7 @@ cleanup() {
       systemctl start x-ui || { echo "CRITICAL: prior panel failed to restart" >&2; restore_failed=1; }
     fi
   fi
-  for asset in "${assets[@]}"; do rm -f -- "$bin/.core-update-$asset.$"; done
+  for asset in "${assets[@]}"; do rm -f -- "$bin/.core-update-$asset.$$"; done
   rm -rf -- "$stage"
   if (( restore_failed )); then
     echo "CRITICAL: recovery snapshot preserved at $backup" >&2
