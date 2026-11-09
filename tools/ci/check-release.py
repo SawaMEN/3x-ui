@@ -50,7 +50,7 @@ def check(root, arch, revision):
     # verified, architecture-matched Cronet shared library in the same package.
     with (root / "bin/libcronet.so").open("rb") as source:
         header = source.read(20)
-    if (len(header) < 20 or header[:6] != b"\\x7fELF\\x02\\x01"
+    if (len(header) < 20 or header[:6] != b"\x7fELF\x02\x01"
             or struct.unpack_from("<HH", header, 16) != (3, machine)):
         raise ValueError("Cronet shared library has incorrect ELF identity")
     metadata = subprocess.check_output(["go", "version", "-m", str(root / "x-ui")], text=True)
