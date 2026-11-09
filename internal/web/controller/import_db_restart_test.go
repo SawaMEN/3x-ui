@@ -44,7 +44,7 @@ func TestImportDBSchedulesPanelRestart(t *testing.T) {
 	binDir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", binDir)
 	t.Setenv("XUI_LOG_FOLDER", t.TempDir())
-	if err := os.WriteFile(filepath.Join(binDir, filepath.Base(config.OwnerCoreBinaryPath())), []byte(fmt.Sprintf("#!/bin/sh\ncase \"$1\" in\nversion) printf 'hiddify-core version %%s\\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque,with_gvisor,with_naive_outbound,with_purego,with_kcp,tfogo_checklinkname0\\nRevision: %%s\\n' '%s' '%s';;\ncheck) exit 0;;\nsrun) exec sleep 60;;\nesac\n", hiddify.TargetVersion, hiddify.TargetRevision)), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(binDir, filepath.Base(config.OwnerCoreBinaryPath())), []byte(fmt.Sprintf("#!/bin/sh\ncase \"$1\" in\nversion) printf 'hiddify-core version %%s\\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque,with_gvisor,with_naive_outbound,with_purego,with_kcp,tfogo_checklinkname0,http2legacy\\nRevision: %%s\\n' '%s' '%s';;\ncheck) exit 0;;\nsrun) exec sleep 60;;\nesac\n", hiddify.TargetVersion, hiddify.TargetRevision)), 0o755); err != nil {
 		t.Fatalf("write stub sing-box: %v", err)
 	}
 

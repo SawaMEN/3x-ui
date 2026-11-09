@@ -104,7 +104,8 @@
       "tfogo_checklinkname0",
       "with_xui_panel",
       "with_masque",
-      "with_kcp"
+      "with_kcp",
+      "http2legacy"
     ],
     "sing_box_version": "sawamen-4fe303071f4f",
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",

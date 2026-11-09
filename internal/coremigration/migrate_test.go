@@ -81,7 +81,7 @@ func fixture(t *testing.T) (runner, *trial, string) {
 	}
 	script := fmt.Sprintf(`#!/bin/sh
 case "$1" in
-version) printf 'hiddify-core version %s\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque,with_gvisor,with_naive_outbound,with_purego,with_kcp,tfogo_checklinkname0\nRevision: %s\n' ;;
+version) printf 'hiddify-core version %s\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque,with_gvisor,with_naive_outbound,with_purego,with_kcp,tfogo_checklinkname0,http2legacy\nRevision: %s\n' ;;
 check) exit 0 ;;
 *) exit 1 ;;
 esac
