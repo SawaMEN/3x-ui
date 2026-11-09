@@ -272,7 +272,7 @@ jobs:
           cp internal/Telemt/telemt-meko-fix.sh x-ui/
           cp internal/Telemt/telemt-meko-fix.service x-ui/
           cp scripts/runtime/x-ui.sh x-ui/
-          cp scripts/runtime/x-ui-core.sh x-ui/
+          install -m 0755 scripts/runtime/x-ui-core.sh x-ui/x-ui-core.sh
           install -m 0755 scripts/runtime/hiddify-core-update.sh x-ui/hiddify-core-update.sh
           install -m 0644 deploy/systemd/hiddify-core-update.service x-ui/hiddify-core-update.service
           install -m 0644 deploy/systemd/hiddify-core-update.timer x-ui/hiddify-core-update.timer
