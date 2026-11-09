@@ -140,7 +140,6 @@
     },
     "transport_balancer_overlay": "deploy/hiddify/transport-balancer.patch",
     "xray_runtime_compat_overlay": "deploy/hiddify/xray-runtime-compat.patch",
-    "kcp_transport_test_overlay": "deploy/hiddify/kcp_transport_test.go.in",
     "xhttp_extension_test_overlay": "deploy/hiddify/xhttp_extension_test.go.in",
     "balancer_strategy_test_overlay": "deploy/hiddify/balancer_strategy_test.go.in",
     "vless_handshake_overlay": "deploy/hiddify/vless-handshake.patch",
@@ -149,7 +148,6 @@
     "reverse_protocol_overlay": "deploy/hiddify/sing-vmess-reverse.patch",
     "reverse_runtime_test_overlay": "deploy/hiddify/reverse_runtime_test.go.in",
     "reverse_vision_test_overlay": "deploy/hiddify/reverse_vision_test.go.in",
-    "runtime_dependencies_overlay": "deploy/hiddify/runtime-dependencies.patch",
     "security_dependencies": {
       "golang.org/x/net": "v0.62.0",
       "github.com/go-chi/chi/v5": "v5.3.0",

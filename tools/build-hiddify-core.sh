@@ -41,7 +41,7 @@ git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/speed/masqu
 mkdir -p "$task_source/core/hiddify-sing-box/internal/xuispeed"
 cp "$task_root/internal/clientlimit/brokerclient/client.go" "$task_source/core/hiddify-sing-box/internal/xuispeed/client.go"
 
-git -C "$task_source/core" apply "$task_root/deploy/hiddify/runtime-dependencies.patch"
+: # reviewed runtime dependencies are already in native core/go.mod
 (
   cd -- "$task_source/core"
   readarray -t security_dependencies < <(python3 - "$task_root/deploy/hiddify/hiddify-core-target.json" <<'PYDEPS'
@@ -96,7 +96,8 @@ git -C "$task_source/core" apply --directory=xui-dependencies/sing-vmess "$task_
 cp "$task_root/deploy/hiddify/reverse_vision_test.go.in" "$task_source/core/xui-dependencies/sing-vmess/vless/xui_reverse_test.go"
 cp "$task_root/deploy/hiddify/reverse_runtime_test.go.in" "$task_source/core/hiddify-sing-box/protocol/vless/xui_reverse_test.go"
 git -C "$task_source/core" apply --directory=xui-dependencies/xray-core "$task_root/deploy/hiddify/xray-runtime-compat.patch"
-cp "$task_root/deploy/hiddify/kcp_transport_test.go.in" "$task_source/core/hiddify-sing-box/transport/v2raykcp/xui_kcp_test.go"
+test -f "$task_source/core/hiddify-sing-box/transport/v2raykcp/h_kcp_test.go"
+test -f "$task_source/core/hiddify-sing-box/h_xray_kcp_test.go"
 cp "$task_root/deploy/hiddify/xhttp_extension_test.go.in" "$task_source/core/hiddify-sing-box/transport/v2rayxhttp/xui_xhttp_test.go"
 cp "$task_root/deploy/hiddify/balancer_strategy_test.go.in" "$task_source/core/hiddify-sing-box/protocol/group/xui_balancer_test.go"
 cp "$task_root/deploy/hiddify/reality_protection_test.go.in" "$task_source/core/hiddify-sing-box/common/tls/xui_panel_reality_test.go"
