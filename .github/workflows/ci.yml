@@ -117,6 +117,27 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  resolve-core:
+    name: Pin latest stable Linux core for CI
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.core.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve complete published Linux release once
+        id: core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(python3 tools/fetch-latest-kernel.py --latest-tag)
+          test -n "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Selected CI native core $tag"
+
   shell-tests:
     needs: [changes]
     if: needs.changes.outputs.backend == 'true'
@@ -191,7 +212,7 @@ jobs:
         run: go vet -p 12 ./...
 
   native-core-integration:
-    needs: [changes]
+    needs: [changes, resolve-core]
     if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     env:
@@ -206,12 +227,13 @@ jobs:
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Download Go dependencies
         run: bash tools/ci/download-go-modules.sh
-      - name: Fetch exactly pinned published core for AWG integration
+      - name: Fetch latest stable core pinned once per CI run for AWG integration
         env:
           GH_TOKEN: ${{ github.token }}
+          CORE_RELEASE_TAG: ${{ needs.resolve-core.outputs.tag }}
         run: |
-          read -r tag core_sha sing_sha < <(python3 -c 'import json; t=json.load(open("deploy/hiddify/hiddify-core-target.json"))["target"]; print(t["version"], t["commit"], t["submodules"]["hiddify-sing-box"])')
-          python3 tools/fetch-latest-kernel.py --arch amd64 --output "$RUNNER_TEMP/awg-core" --tag "$tag" --expected-core-sha "$core_sha" --expected-singbox-sha "$sing_sha"
+          test -n "$CORE_RELEASE_TAG"
+          python3 tools/fetch-latest-kernel.py --arch amd64 --output "$RUNNER_TEMP/awg-core" --tag "$CORE_RELEASE_TAG"
       - name: Verify native subscription protocol exports
         env:
           HIDDIFY_TEST_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
@@ -678,7 +700,7 @@ jobs:
           go test ./internal/web/service -run '^TestTelemtWeb(AlternativeFrontends|CarrierSelection|RenewalRebuilds|FrontendStops)' -v -count=1
 
   native-client-speed:
-    needs: [changes]
+    needs: [changes, resolve-core]
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -688,14 +710,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Build companion protocols and fetch exactly pinned core
+      - name: Build companion protocols and fetch CI-run-pinned stable core
         env:
           GH_TOKEN: ${{ github.token }}
+          CORE_RELEASE_TAG: ${{ needs.resolve-core.outputs.tag }}
         run: |
           make dist-stub
           python3 tools/build-speed-components.py --output "$RUNNER_TEMP/speed-bin"
-          read -r tag core_sha sing_sha < <(python3 -c 'import json; t=json.load(open("deploy/hiddify/hiddify-core-target.json"))["target"]; print(t["version"], t["commit"], t["submodules"]["hiddify-sing-box"])')
-          python3 tools/fetch-latest-kernel.py --arch amd64 --output "$RUNNER_TEMP/speed-core" --tag "$tag" --expected-core-sha "$core_sha" --expected-singbox-sha "$sing_sha"
+          test -n "$CORE_RELEASE_TAG"
+          python3 tools/fetch-latest-kernel.py --arch amd64 --output "$RUNNER_TEMP/speed-core" --tag "$CORE_RELEASE_TAG"
       - name: Exercise shared TCP budget and real Mieru Sudoku MASQUE payloads
         env:
           MIERU_TEST_BINARY: ${{ runner.temp }}/speed-bin/mita

@@ -23,6 +23,34 @@ def validate_version(version, revision, ref):
         raise ValueError("Panel version does not advertise the exact development revision")
 
 
+def validate_elf_linkage(name, arch, programs, dynamic, cronet_linkage):
+    """Allow only the reviewed glibc loader for purego Cronet kernels.
+
+    Purego uses dlopen/dlsym through glibc, so CGO_ENABLED=0 does not imply
+    a static ELF. The x-ui executable remains fully static. Unknown loaders,
+    extra shared libraries and RPATH/RUNPATH are still release blockers.
+    """
+    loader = re.findall(r"\[Requesting program interpreter: ([^\]]+)\]", programs)
+    libraries = re.findall(r"\(NEEDED\)\s+Shared library: \[([^\]]+)\]", dynamic)
+    interp_present = bool(re.search(r"^\s*INTERP\s", programs, re.MULTILINE))
+    if not loader and not libraries and not interp_present and "(NEEDED)" not in dynamic:
+        return
+    approved_loader = {
+        "amd64": "/lib64/ld-linux-x86-64.so.2",
+        "arm64": "/lib/ld-linux-aarch64.so.1",
+    }[arch]
+    approved_libraries = {"libc.so.6", "libpthread.so.0", "libdl.so.2"}
+    if (name != f"bin/hiddify-core-linux-{arch}"
+            or cronet_linkage != "purego"
+            or not interp_present or loader != [approved_loader]
+            or len(libraries) != len(approved_libraries)
+            or set(libraries) != approved_libraries
+            or "(RPATH)" in dynamic or "(RUNPATH)" in dynamic):
+        raise ValueError(
+            f"Unapproved ELF runtime linkage: {name}; "
+            f"INTERP={loader}; NEEDED={libraries}; Cronet={cronet_linkage}")
+
+
 def check(root, arch, revision):
     root = root.resolve()
     machine = {"amd64": 62, "arm64": 183}[arch]
@@ -46,8 +74,8 @@ def check(root, arch, revision):
     for name in binaries + scripts:
         if not (root / name).stat().st_mode & stat.S_IXUSR:
             raise ValueError("Missing executable bit: " + name)
-    # Pure-Go core is linked statically; Naive/Chromium uses the separately
-    # verified, architecture-matched Cronet shared library in the same package.
+    # Purego kernels load glibc for dlopen and use the separately verified,
+    # architecture-matched Cronet shared library bundled in the package.
     with (root / "bin/libcronet.so").open("rb") as source:
         header = source.read(20)
     if (len(header) < 20 or header[:6] != b"\x7fELF\x02\x01"
@@ -56,17 +84,14 @@ def check(root, arch, revision):
     metadata = subprocess.check_output(["go", "version", "-m", str(root / "x-ui")], text=True)
     if f"vcs.revision={revision}" not in metadata or "vcs.modified=false" not in metadata:
         raise ValueError("Panel build provenance is missing, dirty or differs from the release SHA")
+    actual = json.loads((root / "bin/target.json").read_text())
     for name in ("x-ui", core):
         programs = subprocess.check_output(["readelf", "-l", str(root / name)], text=True)
         dynamic = subprocess.check_output(["readelf", "-d", str(root / name)], text=True)
-        interpreter = [line.strip() for line in programs.splitlines() if "INTERP" in line or "Requesting program interpreter" in line]
-        dependencies = [line.strip() for line in dynamic.splitlines() if "(NEEDED)" in line]
-        if interpreter or dependencies:
-            raise ValueError(f"Expected portable static ELF: {name}; INTERP={interpreter}; NEEDED={dependencies}")
+        validate_elf_linkage(name, arch, programs, dynamic, actual.get("panel_build", {}).get("cronet_linkage"))
     panel_version = subprocess.check_output([str(root / "x-ui"), "-v"], text=True, timeout=30)
     validate_version(panel_version, revision, os.environ.get("GITHUB_REF", ""))
     expected = json.loads(Path("deploy/hiddify/hiddify-core-target.json").read_text())
-    actual = json.loads((root / "bin/target.json").read_text())
     # The panel tracks the latest published stable core, not the source SHA
     # previously frozen in its historical build lock. Preserve compatibility
     # by requiring the same feature set, interface, transport profile and
