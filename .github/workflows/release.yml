@@ -35,6 +35,24 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/update')) }}
 
 jobs:
+  resolve-core:
+    name: Select latest complete stable native core once
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve latest published core with Linux SHA-256 assets
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(python3 tools/fetch-latest-kernel.py --latest-tag)
+          test -n "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Using verified stable core release $tag"
+
   frontend:
     name: Build frontend once
     runs-on: ubuntu-latest
@@ -148,7 +166,7 @@ jobs:
           if-no-files-found: error
 
   build:
-    needs: [frontend, telemt, resolve-telemt]
+    needs: [frontend, telemt, resolve-telemt, resolve-core]
     permissions:
       contents: write
     env:
@@ -254,7 +272,11 @@ jobs:
           cp internal/Telemt/telemt-meko-fix.sh x-ui/
           cp internal/Telemt/telemt-meko-fix.service x-ui/
           cp scripts/runtime/x-ui.sh x-ui/
-          cp scripts/runtime/x-ui-core.sh x-ui/
+          install -m 0755 scripts/runtime/x-ui-core.sh x-ui/x-ui-core.sh
+          install -m 0755 scripts/runtime/hiddify-core-update.sh x-ui/hiddify-core-update.sh
+          install -m 0644 deploy/systemd/hiddify-core-update.service x-ui/hiddify-core-update.service
+          install -m 0644 deploy/systemd/hiddify-core-update.timer x-ui/hiddify-core-update.timer
+          install -m 0644 tools/fetch-latest-kernel.py x-ui/fetch-latest-kernel.py
           cp deploy/openrc/x-ui.rc x-ui/
           cp scripts/migration/core-migration.sh x-ui/
           cd x-ui/bin
@@ -278,32 +300,24 @@ jobs:
 
           cd ../..
 
-      - name: Restore verified statically linked kernel
-        id: core-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
-            x-ui/bin/hiddify-core-linux-${{ matrix.platform }}.sha256
-            x-ui/bin/target.json
-          key: hiddify-musl-${{ matrix.platform }}-v1-${{ hashFiles('deploy/hiddify/**', 'deploy/speed/masque.patch', 'tools/build-hiddify-core.sh', 'tools/verify-hiddify-build.py', 'internal/clientlimit/brokerclient/client.go', 'go.mod', 'go.sum') }}
-
-      - name: Build compatible shared-speed protocol servers and kernel
-        env:
-          GOOS: linux
-          GOARCH: ${{ matrix.platform }}
-          CORE_CACHE_HIT: ${{ steps.core-cache.outputs.cache-hit }}
+      - name: Build independent speed protocol server
         run: |
           set -euo pipefail
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
-          if [[ "$CORE_CACHE_HIT" != "true" ]]; then
-            # Fresh kernel: run the complete upstream patch suite and vulnerability audit.
-            HIDDIFY_VULNCHECK=1 SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
-          else
-            echo "Reusing kernel built from the exact pinned source and patch graph"
-            (cd x-ui/bin && sha256sum -c "hiddify-core-linux-${GOARCH}.sha256")
-            test -s x-ui/bin/target.json
-          fi
+
+      - name: Download latest stable Hiddify core at workflow-pinned release tag
+        env:
+          GOARCH: ${{ matrix.platform }}
+          CORE_RELEASE_TAG: ${{ needs.resolve-core.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tools -p test_fetch_latest_kernel.py
+          # The release is resolved ONCE, then pinned for both architectures.
+          # Never silently fall back to old bundled code if a newer release fails.
+          python3 tools/fetch-latest-kernel.py --tag "$CORE_RELEASE_TAG" \
+            --arch "$GOARCH" --output "$PWD/x-ui/bin"
+          (cd x-ui/bin && sha256sum -c "hiddify-core-linux-${GOARCH}.sha256" && sha256sum -c libcronet.so.sha256)
       - name: Check panel configuration with downloaded binary
         env:
           CC: gcc
@@ -313,6 +327,17 @@ jobs:
           set -euo pipefail
           go test -json ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1 | tee native-config-check.jsonl
           python3 tools/ci/require-go-tests.py native-config-check.jsonl TestPinnedBinaryChecksGeneratedConfigurations
+
+      - name: Verify pinned core runtime, user statistics and transport matrix
+        env:
+          CC: gcc
+          CGO_ENABLED: "1"
+          HIDDIFY_RUNTIME_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          go test -json ./internal/hiddify -run '^TestPinned(BinaryRawRuntimeAndStatistics|ProtocolTransportMatrix)$' -count=1 -timeout=8m | tee native-runtime-check.jsonl
+          python3 tools/ci/require-go-tests.py native-runtime-check.jsonl TestPinnedBinaryRawRuntimeAndStatistics TestPinnedProtocolTransportMatrix
 
       - uses: actions/setup-node@v7
         with:
@@ -336,6 +361,8 @@ jobs:
           PYTEST
 
       - name: Package
+        env:
+          CORE_RELEASE_TAG: ${{ needs.resolve-core.outputs.tag }}
         run: |
           for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku vetroff vetroff-bundle; do
             test ! -e "x-ui/bin/$component"

@@ -1419,9 +1419,14 @@ update_x-ui() {
     fi
     [[ -f telemt-meko-fix.sh ]] && chmod 0755 telemt-meko-fix.sh
     [[ -f telemt-update.sh ]] && chmod 0755 telemt-update.sh
+    [[ ! -f hiddify-core-update.sh ]] || chmod 0755 hiddify-core-update.sh
     # Replace managed units on upgrades while preserving the user's settings.
     # Standalone telemt.service remains opt-in; MTProto inbounds run as sidecars.
     if [[ $release != "alpine" ]]; then
+        if [[ -f hiddify-core-update.service && -f hiddify-core-update.timer ]]; then
+            sed "s|/usr/local/x-ui/hiddify-core-update.sh|${xui_folder}/hiddify-core-update.sh|"                 hiddify-core-update.service > "${xui_service}/hiddify-core-update.service"
+            install -m 0644 hiddify-core-update.timer "${xui_service}/hiddify-core-update.timer"
+        fi
         for unit in telemt.service telemt-meko-fix.service telemt-update.service telemt-update.timer; do
             [[ ! -f "$unit" ]] || install -m 0644 "$unit" "${xui_service}/$unit"
         done
@@ -1505,6 +1510,9 @@ update_x-ui() {
     fi
 
     core_migration_commit || _fail "Updated panel did not start its modified Sing-box; restoring snapshot"
+    if [[ $release != alpine && -f "${xui_service}/hiddify-core-update.timer" ]]; then
+        systemctl enable --now hiddify-core-update.timer 2>/dev/null ||             echo "Warning: Hiddify auto-update timer was not enabled" >&2
+    fi
     if [[ -z "${cm_backup:-}" ]]; then config_after_update || _fail "Database migration failed; update did not complete"; fi
 
     # Stale partial downloads / migration helpers can survive a hard reboot.

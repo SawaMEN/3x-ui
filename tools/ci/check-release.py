@@ -28,8 +28,8 @@ def check(root, arch, revision):
     machine = {"amd64": 62, "arm64": 183}[arch]
     core = f"bin/hiddify-core-linux-{arch}"
     binaries = ["x-ui", core, "bin/telemt", "bin/mita", "bin/tuic-server"]
-    scripts = ["x-ui.sh", "x-ui-core.sh", "telemt-update.sh"]
-    required = binaries + scripts + ["core-migration.sh", "bin/target.json", "bin/speed-components.json",
+    scripts = ["x-ui.sh", "x-ui-core.sh", "telemt-update.sh", "hiddify-core-update.sh"]
+    required = binaries + scripts + ["core-migration.sh", "fetch-latest-kernel.py", "hiddify-core-update.service", "hiddify-core-update.timer", "bin/target.json", "bin/libcronet.so", "bin/libcronet.so.sha256", "bin/speed-components.json",
                                    "x-ui.service.debian", "x-ui.service.arch", "x-ui.service.rhel",
                                    "bin/geoip.dat", "bin/geosite.dat",
                                    "bin/geoip_IR.dat", "bin/geosite_IR.dat",
@@ -46,26 +46,50 @@ def check(root, arch, revision):
     for name in binaries + scripts:
         if not (root / name).stat().st_mode & stat.S_IXUSR:
             raise ValueError("Missing executable bit: " + name)
+    # Pure-Go core is linked statically; Naive/Chromium uses the separately
+    # verified, architecture-matched Cronet shared library in the same package.
+    with (root / "bin/libcronet.so").open("rb") as source:
+        header = source.read(20)
+    if (len(header) < 20 or header[:6] != b"\x7fELF\x02\x01"
+            or struct.unpack_from("<HH", header, 16) != (3, machine)):
+        raise ValueError("Cronet shared library has incorrect ELF identity")
     metadata = subprocess.check_output(["go", "version", "-m", str(root / "x-ui")], text=True)
     if f"vcs.revision={revision}" not in metadata or "vcs.modified=false" not in metadata:
         raise ValueError("Panel build provenance is missing, dirty or differs from the release SHA")
     for name in ("x-ui", core):
         programs = subprocess.check_output(["readelf", "-l", str(root / name)], text=True)
         dynamic = subprocess.check_output(["readelf", "-d", str(root / name)], text=True)
-        if "INTERP" in programs or "NEEDED" in dynamic:
-            raise ValueError("Expected static ELF: " + name)
+        interpreter = [line.strip() for line in programs.splitlines() if "INTERP" in line or "Requesting program interpreter" in line]
+        dependencies = [line.strip() for line in dynamic.splitlines() if "(NEEDED)" in line]
+        if interpreter or dependencies:
+            raise ValueError(f"Expected portable static ELF: {name}; INTERP={interpreter}; NEEDED={dependencies}")
     panel_version = subprocess.check_output([str(root / "x-ui"), "-v"], text=True, timeout=30)
     validate_version(panel_version, revision, os.environ.get("GITHUB_REF", ""))
     expected = json.loads(Path("deploy/hiddify/hiddify-core-target.json").read_text())
     actual = json.loads((root / "bin/target.json").read_text())
-    tags = ["with_musl" if tag == "with_purego" else tag for tag in expected["panel_build"]["tags"]]
-    if (actual["target"] != expected["target"] or actual["panel_build"]["tags"] != tags
-            or actual["panel_build"].get("cronet_linkage") != "musl"
-            or actual["panel_build"].get("runtime_dependencies") != []):
-        raise ValueError("Packaged core differs from pinned source/musl profile")
-    if (root / "bin/libcronet.so").exists():
-        raise ValueError("Static musl package must not contain stale glibc libcronet")
-    for name in (core,):
+    # The panel tracks the latest published stable core, not the source SHA
+    # previously frozen in its historical build lock. Preserve compatibility
+    # by requiring the same feature set, interface, transport profile and
+    # security linkage. Version/commit are checked against the release itself.
+    target, profile = actual["target"], actual["panel_build"]
+    old_profile = expected["target"]["version"].split("-mask", 1)
+    new_profile = target["version"].split("-mask", 1)
+    selected_tag = os.environ.get("CORE_RELEASE_TAG", "")
+    if (not selected_tag or target["version"] != selected_tag
+            or len(old_profile) != 2 or len(new_profile) != 2
+            or old_profile[1] != new_profile[1]
+            or target["repository"] != "https://github.com/SawaMEN/hiddify-core"
+            or not re.fullmatch(r"[a-f0-9]{40}", target["commit"])
+            or not re.fullmatch(r"[a-f0-9]{40}", target["submodules"]["hiddify-sing-box"])
+            or not target["version"].startswith(
+                "sawamen-" + target["commit"][:12] + "-" + target["submodules"]["hiddify-sing-box"][:12] + "-")
+            or not set(expected["panel_build"]["tags"]).issubset(profile["tags"])
+            or profile.get("cronet_linkage") != "purego"
+            or profile.get("runtime_dependencies") != expected["panel_build"].get("runtime_dependencies")
+            or actual.get("runtime_contract", {}).get("stats_grpc_method")
+                  != expected["runtime_contract"]["stats_grpc_method"]):
+        raise ValueError("Latest core release violates panel's mandatory runtime/ABI contract")
+    for name in (core, "bin/libcronet.so"):
         fields = (root / (name + ".sha256")).read_text().split()
         actual_digest = hashlib.file_digest((root / name).open("rb"), "sha256").hexdigest()
         if len(fields) != 2 or fields[0] != actual_digest or fields[1].lstrip("*") != Path(name).name:

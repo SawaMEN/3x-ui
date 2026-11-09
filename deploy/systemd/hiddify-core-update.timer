@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the latest stable Hiddify core every six hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

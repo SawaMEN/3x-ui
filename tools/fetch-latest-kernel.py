@@ -26,7 +26,7 @@ PREFIX = "https://github.com/SawaMEN/hiddify-core/releases/download/"
 TAGS = {
     "with_xui_panel", "with_v2ray_api", "with_awg", "with_quic",
     "with_wireguard", "with_clash_api", "with_utls", "with_masque",
-    "with_gvisor", "with_naive_outbound", "tfogo_checklinkname0",
+    "with_gvisor", "with_naive_outbound", "with_kcp", "tfogo_checklinkname0",
 }
 
 
@@ -90,7 +90,45 @@ def checksum(file, checksum_file):
         raise ValueError("SHA-256 mismatch: " + Path(file).name)
 
 
-def install(release, arch, destination):
+def verify_release_identity(release, manifest):
+    """Bind the source gitlinks and packaged version to the immutable release identity."""
+    tag = release.get("tag_name")
+    source = manifest.get("target", {})
+    core_sha = source.get("commit")
+    sing_sha = source.get("submodules", {}).get("hiddify-sing-box")
+    if not isinstance(core_sha, str) or not re.fullmatch(r"[a-f0-9]{40}", core_sha):
+        raise ValueError("Release has no valid core source SHA")
+    if not isinstance(sing_sha, str) or not re.fullmatch(r"[a-f0-9]{40}", sing_sha):
+        raise ValueError("Release has no valid Sing-box source SHA")
+    if (not isinstance(tag, str) or
+            not tag.startswith(f"sawamen-{core_sha[:12]}-{sing_sha[:12]}-")):
+        raise ValueError("Core release tag mismatches packaged source revisions")
+    if source.get("repository") != "https://github.com/SawaMEN/hiddify-core":
+        raise ValueError("Wrong packaged core repository")
+    if source.get("version") != tag:
+        raise ValueError("Packaged core version differs from release tag")
+    target_commit = release.get("target_commitish")
+    if target_commit is not None and target_commit != core_sha:
+        raise ValueError("Published release points to a different core commit")
+
+
+def verify_source_pin(manifest, expected_core_sha=None, expected_singbox_sha=None):
+    """Reject validly signed archives from any source revision other than our lock."""
+    source = manifest.get("target", {})
+    pinned = (
+        ("core", source.get("commit"), expected_core_sha),
+        ("hiddify-sing-box", source.get("submodules", {}).get("hiddify-sing-box"), expected_singbox_sha),
+    )
+    for name, actual, expected in pinned:
+        if expected is None:
+            continue
+        if not re.fullmatch(r"[a-f0-9]{40}", expected):
+            raise ValueError("Invalid pinned " + name + " SHA")
+        if actual != expected:
+            raise ValueError("Kernel " + name + " differs from pinned source")
+
+
+def install(release, arch, destination, expected_core_sha=None, expected_singbox_sha=None):
     tag = release["tag_name"]
     name = f"sing-box-linux-{arch}.tar.gz"
     assets = {a["name"]: a for a in release["assets"]}
@@ -118,6 +156,8 @@ def install(release, arch, destination):
         checksum(temp / binary, temp / (binary + ".sha256"))
         checksum(temp / "libcronet.so", temp / "libcronet.so.sha256")
         manifest = json.loads((temp / "target.json").read_text())
+        verify_release_identity(release, manifest)
+        verify_source_pin(manifest, expected_core_sha, expected_singbox_sha)
         profile = manifest["panel_build"]
         source = manifest["target"]
         if source["repository"] != "https://github.com/SawaMEN/hiddify-core" or source["version"] != tag:
@@ -145,6 +185,8 @@ def main():
     parser.add_argument("--arch", choices=("amd64", "arm64"))
     parser.add_argument("--tag")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--expected-core-sha")
+    parser.add_argument("--expected-singbox-sha")
     args = parser.parse_args()
     release = resolve(args.tag)
     if args.latest_tag:
@@ -152,7 +194,7 @@ def main():
     else:
         if not args.arch or args.output is None:
             parser.error("--arch and --output are required")
-        install(release, args.arch, args.output)
+        install(release, args.arch, args.output, args.expected_core_sha, args.expected_singbox_sha)
 
 
 if __name__ == "__main__":

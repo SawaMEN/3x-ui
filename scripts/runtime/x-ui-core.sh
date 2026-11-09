@@ -305,6 +305,8 @@ uninstall() {
         rm /etc/init.d/x-ui -f
     else
         systemctl stop x-ui
+        systemctl disable --now hiddify-core-update.timer 2>/dev/null || true
+        rm -f "${xui_service}/hiddify-core-update.timer" "${xui_service}/hiddify-core-update.service"
         systemctl disable x-ui
         rm "${xui_service}"/x-ui.service -f
         systemctl daemon-reload
