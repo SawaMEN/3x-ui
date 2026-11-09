@@ -28,8 +28,8 @@ def check(root, arch, revision):
     machine = {"amd64": 62, "arm64": 183}[arch]
     core = f"bin/hiddify-core-linux-{arch}"
     binaries = ["x-ui", core, "bin/telemt", "bin/mita", "bin/tuic-server"]
-    scripts = ["x-ui.sh", "x-ui-core.sh", "telemt-update.sh"]
-    required = binaries + scripts + ["core-migration.sh", "bin/target.json", "bin/libcronet.so", "bin/libcronet.so.sha256", "bin/speed-components.json",
+    scripts = ["x-ui.sh", "x-ui-core.sh", "telemt-update.sh", "hiddify-core-update.sh"]
+    required = binaries + scripts + ["core-migration.sh", "fetch-latest-kernel.py", "hiddify-core-update.service", "hiddify-core-update.timer", "bin/target.json", "bin/libcronet.so", "bin/libcronet.so.sha256", "bin/speed-components.json",
                                    "x-ui.service.debian", "x-ui.service.arch", "x-ui.service.rhel",
                                    "bin/geoip.dat", "bin/geosite.dat",
                                    "bin/geoip_IR.dat", "bin/geosite_IR.dat",

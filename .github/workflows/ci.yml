@@ -125,13 +125,14 @@ jobs:
       - uses: actions/checkout@v7
       - name: Validate installer and management scripts
         run: |
-          for script in install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/migration/core-migration.sh; do
+          for script in install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/runtime/hiddify-core-update.sh scripts/migration/core-migration.sh; do
             bash -n "$script"
           done
-          shellcheck --shell=bash --severity=error install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/migration/core-migration.sh
+          shellcheck --shell=bash --severity=error install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/runtime/hiddify-core-update.sh scripts/migration/core-migration.sh
           shellcheck --shell=bash --include=SC2086,SC2046,SC2115,SC2164 install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/migration/core-migration.sh
       - name: Exercise release rollback and CLI failures
         run: |
+          python3 -m unittest discover -s tools -p test_fetch_latest_kernel.py
           python3 tools/test-core-migration-shell.py
           python3 tools/test-management-shell.py
           python3 -m unittest discover -s tools/ci -p 'test_*.py'
