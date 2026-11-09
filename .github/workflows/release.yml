@@ -316,6 +316,188 @@ jobs:
           go test -json ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1 | tee native-config-check.jsonl
           python3 tools/ci/require-go-tests.py native-config-check.jsonl TestPinnedBinaryChecksGeneratedConfigurations
 
+      - name: Verify pinned core runtime, user statistics and transport matrix
+        env:
+          CC: gcc
+          CGO_ENABLED: "1"
+          HIDDIFY_RUNTIME_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          go test -json ./internal/hiddify \
+            -run '^(TestPinnedBinaryRawRuntimeAndStatistics|TestPinnedProtocolTransportMatrix)
+        working-directory: frontend
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-${{ matrix.platform }}
+        run: |
+          npm ci --no-audit --no-fund
+          npx vitest run src/test/singbox-share-links.test.ts --project unit --reporter=json --outputFile="$RUNNER_TEMP/native-share-links.json"
+          python3 - "$RUNNER_TEMP/native-share-links.json" <<'PYTEST'
+          import json, sys
+          result=json.load(open(sys.argv[1]))
+          assert result['numPendingTests']==0 and result['numFailedTests']==0
+          checks=[a for suite in result['testResults'] for a in suite['assertionResults'] if a['title']=='checks actual imported HY2 JSON with the pinned owner core']
+          assert len(checks)==1 and checks[0]['status']=='passed', 'mandatory native HY2 import test did not pass'
+          print('Native share-link suite passed without skips:', result['numPassedTests'])
+          PYTEST
+
+      - name: Package
+        run: |
+          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku vetroff vetroff-bundle; do
+            test ! -e "x-ui/bin/$component"
+          done
+          for core in x-ui/bin/xray-* x-ui/bin/sing-box-upstream-*; do
+            test ! -e "$core" && test ! -L "$core"
+          done
+          python3 tools/ci/check-release.py x-ui "${{ matrix.platform }}" "$GITHUB_SHA"
+          tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui
+          sha256sum x-ui-linux-${{ matrix.platform }}.tar.gz > x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
+
+      - name: Report package and frontend sizes
+        run: |
+          python3 tools/ci/size_report.py --package x-ui \
+            --archive x-ui-linux-${{ matrix.platform }}.tar.gz \
+            --frontend internal/web/dist \
+            --json x-ui-linux-${{ matrix.platform }}.sizes.json \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: x-ui-linux-${{ matrix.platform }}
+          path: |
+            x-ui-linux-${{ matrix.platform }}.tar.gz
+            x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
+            x-ui-linux-${{ matrix.platform }}.sizes.json
+
+  publish-stable:
+    name: Publish verified stable archives
+    needs: [build, go-tests]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download tested archives from both architectures
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "x-ui-linux-*"
+          path: stable-artifacts
+          merge-multiple: true
+      - name: Verify stable archive checksums
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            test -s "stable-artifacts/x-ui-linux-$arch.tar.gz"
+            (cd stable-artifacts && sha256sum -c "x-ui-linux-$arch.tar.gz.sha256")
+          done
+      - name: Upload stable release assets after full Go tests
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          file: stable-artifacts/*.tar.gz*
+          file_glob: true
+          overwrite: true
+          prerelease: false
+
+  publish-dev:
+    name: Publish rolling dev release
+    needs: [build, go-tests]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: dev-release
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install pinned formatter without lifecycle scripts
+        working-directory: frontend
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Download Linux build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "x-ui-linux-*"
+          path: dev-artifacts
+          merge-multiple: true
+
+      - name: Verify complete rolling release
+        run: |
+          for arch in amd64 arm64; do
+            test -s "dev-artifacts/x-ui-linux-$arch.tar.gz"
+            test -s "dev-artifacts/x-ui-linux-$arch.tar.gz.sha256"
+            (cd dev-artifacts && sha256sum -c "x-ui-linux-$arch.tar.gz.sha256")
+          done
+
+      - name: Publish dev-latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          short="${COMMIT::8}"
+          # A slower build must not supersede newer application changes.
+          # The formatter workflow may add a bot-only formatting commit
+          # after the release build has started. Its GITHUB_TOKEN push does
+          # not trigger another release build, so allow that safe descendant.
+          git fetch --no-tags --depth=50 origin main:refs/remotes/origin/main
+          latest=$(git rev-parse origin/main)
+          if [[ "$latest" != "$COMMIT" ]]; then
+            if ! git merge-base --is-ancestor "$COMMIT" "$latest"; then
+              echo "main diverged from the build commit; rolling release unchanged."
+              exit 0
+            fi
+            while IFS= read -r revision; do
+              subject=$(git show -s --format=%s "$revision")
+              author=$(git show -s --format=%an "$revision")
+              if [[ "$subject" != "chore(format): apply oxfmt" || "$author" != "github-actions[bot]" ]]; then
+                echo "New application changes were committed; rolling release unchanged."
+                exit 0
+              fi
+              while IFS= read -r changed; do
+                if [[ "$changed" != frontend/src/* ]]; then
+                  echo "Formatter commit changed non-frontend files; rolling release unchanged."
+                  exit 0
+                fi
+              done < <(git diff-tree --no-commit-id --name-only -r "$revision")
+            done < <(git rev-list "$COMMIT..$latest")
+            if ! python3 tools/ci/verify-format-descendant.py "$COMMIT" "$latest"; then
+              echo "Descendant changes are not equivalent under the pinned formatter; rolling release unchanged."
+              exit 0
+            fi
+            echo "Verified formatter-only descendants; publishing tested artifacts."
+          fi
+          git tag -f dev-latest "$COMMIT"
+          git push -f origin refs/tags/dev-latest
+          if ! gh release edit dev-latest --prerelease --latest=false --title "Dev build $short" --notes "Rolling development build from main. commit=$COMMIT"; then
+            gh release create dev-latest --prerelease --latest=false --target "$COMMIT" --title "Dev build $short" --notes "Rolling development build from main. commit=$COMMIT"
+          fi
+          gh release upload dev-latest dev-artifacts/*.tar.gz dev-artifacts/*.sha256 --clobber
+          # Retire patched protocol servers; components use official releases.
+          for old_asset in panel-tunnel-linux-amd64.tar.gz panel-tunnel-linux-arm64.tar.gz telemt.version telemt-linux-amd64.tar.gz telemt-linux-amd64.tar.gz.sha256 telemt-linux-arm64.tar.gz telemt-linux-arm64.tar.gz.sha256; do
+            gh release delete-asset dev-latest "$old_asset" --yes 2>/dev/null || true
+          done
+
+      - name: Report release workflow timing
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/workflow-performance.py --run-id "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            -count=1 -timeout=8m | tee native-runtime-check.jsonl
+          python3 tools/ci/require-go-tests.py native-runtime-check.jsonl \
+            TestPinnedBinaryRawRuntimeAndStatistics TestPinnedProtocolTransportMatrix
+
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
