@@ -13,7 +13,7 @@ import (
 func GetBinaryPath() string { return config.OwnerCoreBinaryPath() }
 func GetConfigPath() string { return filepath.Join(filepath.Dir(GetBinaryPath()), "hiddify-core.json") }
 
-var requiredBuildTags = []string{"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_clash_api", "with_utls", "with_masque", "with_gvisor", "with_naive_outbound", "tfogo_checklinkname0", "with_kcp"}
+var requiredBuildTags = []string{"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_clash_api", "with_utls", "with_masque", "with_gvisor", "with_naive_outbound", "tfogo_checklinkname0", "with_kcp", "http2legacy"}
 
 // Releases include target.json alongside the binary. Read their actual build
 // identity instead of requiring the panel's historical source-lock revision.
