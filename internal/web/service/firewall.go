@@ -541,6 +541,12 @@ func ufwFirewallSpec(spec string) string {
 }
 
 func firewallSetting(key, fallback string) (string, error) {
+	// Background workers may start before the database is initialized.
+	// Treat an unavailable database as an error: never assume persisted
+	// firewall preferences or reconcile rules using fallback values.
+	if database.GetDB() == nil {
+		return "", fmt.Errorf("firewall settings database is not initialized")
+	}
 	st, err := (&SettingService{}).getSetting(key)
 	if database.IsNotFound(err) {
 		return fallback, nil
