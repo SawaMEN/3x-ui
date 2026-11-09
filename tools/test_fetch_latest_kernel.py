@@ -55,5 +55,34 @@ class StableReleaseTests(unittest.TestCase):
                 selector.resolve("sawamen-abcdef123456-panel8")
 
 
+
+class SourcePinsTest(unittest.TestCase):
+    CORE = "a" * 40
+    SING = "b" * 40
+
+    def manifest(self):
+        return {"target": {
+            "commit": self.CORE,
+            "submodules": {"hiddify-sing-box": self.SING},
+        }}
+
+    def test_exact_revision_is_accepted(self):
+        selector.verify_source_pin(self.manifest(), self.CORE, self.SING)
+
+    def test_rejects_wrong_core_or_engine_revision(self):
+        for core, sing in (("c" * 40, self.SING), (self.CORE, "d" * 40)):
+            with self.subTest(core=core, sing=sing), self.assertRaises(ValueError):
+                selector.verify_source_pin(self.manifest(), core, sing)
+
+    def test_rejects_missing_revision_and_malformed_pin(self):
+        for manifest in ({}, {"target": {}}, {"target": {"commit": self.CORE}}):
+            with self.subTest(manifest=manifest), self.assertRaises(ValueError):
+                selector.verify_source_pin(manifest, self.CORE, self.SING)
+        with self.assertRaises(ValueError):
+            selector.verify_source_pin(self.manifest(), "../main", self.SING)
+        with self.assertRaises(ValueError):
+            selector.verify_source_pin(self.manifest(), self.CORE, "short")
+
+
 if __name__ == "__main__":
     unittest.main()
