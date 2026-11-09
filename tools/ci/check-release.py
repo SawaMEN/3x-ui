@@ -67,11 +67,28 @@ def check(root, arch, revision):
     validate_version(panel_version, revision, os.environ.get("GITHUB_REF", ""))
     expected = json.loads(Path("deploy/hiddify/hiddify-core-target.json").read_text())
     actual = json.loads((root / "bin/target.json").read_text())
-    if (actual["target"] != expected["target"]
-            or actual["panel_build"]["tags"] != expected["panel_build"]["tags"]
-            or actual["panel_build"].get("cronet_linkage") != "purego"
-            or actual["panel_build"].get("runtime_dependencies") != expected["panel_build"].get("runtime_dependencies")):
-        raise ValueError("Packaged core differs from exact pinned native source and purego profile")
+    # The panel tracks the latest published stable core, not the source SHA
+    # previously frozen in its historical build lock. Preserve compatibility
+    # by requiring the same feature set, interface, transport profile and
+    # security linkage. Version/commit are checked against the release itself.
+    target, profile = actual["target"], actual["panel_build"]
+    old_profile = expected["target"]["version"].split("-mask", 1)
+    new_profile = target["version"].split("-mask", 1)
+    selected_tag = os.environ.get("CORE_RELEASE_TAG", "")
+    if (not selected_tag or target["version"] != selected_tag
+            or len(old_profile) != 2 or len(new_profile) != 2
+            or old_profile[1] != new_profile[1]
+            or target["repository"] != "https://github.com/SawaMEN/hiddify-core"
+            or not re.fullmatch(r"[a-f0-9]{40}", target["commit"])
+            or not re.fullmatch(r"[a-f0-9]{40}", target["submodules"]["hiddify-sing-box"])
+            or not target["version"].startswith(
+                "sawamen-" + target["commit"][:12] + "-" + target["submodules"]["hiddify-sing-box"][:12] + "-")
+            or not set(expected["panel_build"]["tags"]).issubset(profile["tags"])
+            or profile.get("cronet_linkage") != "purego"
+            or profile.get("runtime_dependencies") != expected["panel_build"].get("runtime_dependencies")
+            or actual.get("runtime_contract", {}).get("stats_grpc_method")
+                  != expected["runtime_contract"]["stats_grpc_method"]):
+        raise ValueError("Latest core release violates panel's mandatory runtime/ABI contract")
     for name in (core, "bin/libcronet.so"):
         fields = (root / (name + ".sha256")).read_text().split()
         actual_digest = hashlib.file_digest((root / name).open("rb"), "sha256").hexdigest()

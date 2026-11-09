@@ -56,6 +56,31 @@ class StableReleaseTests(unittest.TestCase):
 
 
 
+
+class ReleaseIdentityTests(unittest.TestCase):
+    CORE = "a" * 40
+    SING = "b" * 40
+    TAG = "sawamen-" + CORE[:12] + "-" + SING[:12] + "-mask1-ciphers1-net62-sec1-stream1"
+
+    def manifest(self):
+        return {"target": {"repository": "https://github.com/SawaMEN/hiddify-core",
+                           "version": self.TAG, "commit": self.CORE,
+                           "submodules": {"hiddify-sing-box": self.SING}}}
+
+    def test_accepts_release_pinned_to_both_source_gitlinks(self):
+        selector.verify_release_identity({"tag_name": self.TAG, "target_commitish": self.CORE}, self.manifest())
+
+    def test_rejects_tag_or_source_identity_mismatch(self):
+        for update in ({"tag_name": "sawamen-" + "c" * 12 + "-" + self.SING[:12] + "-mask1"},
+                       {"tag_name": self.TAG, "target_commitish": "d" * 40}):
+            with self.subTest(update=update), self.assertRaises(ValueError):
+                selector.verify_release_identity(update, self.manifest())
+        modified = self.manifest()
+        modified["target"]["submodules"]["hiddify-sing-box"] = "c" * 40
+        with self.assertRaises(ValueError):
+            selector.verify_release_identity({"tag_name": self.TAG}, modified)
+
+
 class SourcePinsTest(unittest.TestCase):
     CORE = "a" * 40
     SING = "b" * 40

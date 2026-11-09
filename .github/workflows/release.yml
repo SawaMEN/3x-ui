@@ -35,6 +35,24 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/update')) }}
 
 jobs:
+  resolve-core:
+    name: Select latest complete stable native core once
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve latest published core with Linux SHA-256 assets
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(python3 tools/fetch-latest-kernel.py --latest-tag)
+          test -n "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Using verified stable core release $tag"
+
   frontend:
     name: Build frontend once
     runs-on: ubuntu-latest
@@ -148,7 +166,7 @@ jobs:
           if-no-files-found: error
 
   build:
-    needs: [frontend, telemt, resolve-telemt]
+    needs: [frontend, telemt, resolve-telemt, resolve-core]
     permissions:
       contents: write
     env:
@@ -283,27 +301,17 @@ jobs:
           set -euo pipefail
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
 
-      - name: Download exact published Hiddify core (never compile in the panel)
+      - name: Download latest stable Hiddify core at workflow-pinned release tag
         env:
           GOARCH: ${{ matrix.platform }}
+          CORE_RELEASE_TAG: ${{ needs.resolve-core.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 -m unittest discover -s tools -p test_fetch_latest_kernel.py
-          # Read the immutable release tag and both source SHA pins from one
-          # repository-owned manifest; no GitHub latest or moving branches.
-          mapfile -t pins < <(python3 - <<'PY'
-          import json
-          lock = json.load(open("deploy/hiddify/hiddify-core-target.json"))
-          target = lock["target"]
-          print(target["version"])
-          print(target["commit"])
-          print(target["submodules"]["hiddify-sing-box"])
-          PY
-          )
-          test "${#pins[@]}" -eq 3
-          python3 tools/fetch-latest-kernel.py --tag "${pins[0]}" \
-            --expected-core-sha "${pins[1]}" \
-            --expected-singbox-sha "${pins[2]}" \
+          # The release is resolved ONCE, then pinned for both architectures.
+          # Never silently fall back to old bundled code if a newer release fails.
+          python3 tools/fetch-latest-kernel.py --tag "$CORE_RELEASE_TAG" \
             --arch "$GOARCH" --output "$PWD/x-ui/bin"
           (cd x-ui/bin && sha256sum -c "hiddify-core-linux-${GOARCH}.sha256" && sha256sum -c libcronet.so.sha256)
       - name: Check panel configuration with downloaded binary
@@ -349,6 +357,8 @@ jobs:
           PYTEST
 
       - name: Package
+        env:
+          CORE_RELEASE_TAG: ${{ needs.resolve-core.outputs.tag }}
         run: |
           for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku vetroff vetroff-bundle; do
             test ! -e "x-ui/bin/$component"

@@ -90,6 +90,28 @@ def checksum(file, checksum_file):
         raise ValueError("SHA-256 mismatch: " + Path(file).name)
 
 
+def verify_release_identity(release, manifest):
+    """Bind the source gitlinks and packaged version to the immutable release identity."""
+    tag = release.get("tag_name")
+    source = manifest.get("target", {})
+    core_sha = source.get("commit")
+    sing_sha = source.get("submodules", {}).get("hiddify-sing-box")
+    if not isinstance(core_sha, str) or not re.fullmatch(r"[a-f0-9]{40}", core_sha):
+        raise ValueError("Release has no valid core source SHA")
+    if not isinstance(sing_sha, str) or not re.fullmatch(r"[a-f0-9]{40}", sing_sha):
+        raise ValueError("Release has no valid Sing-box source SHA")
+    if (not isinstance(tag, str) or
+            not tag.startswith(f"sawamen-{core_sha[:12]}-{sing_sha[:12]}-")):
+        raise ValueError("Core release tag mismatches packaged source revisions")
+    if source.get("repository") != "https://github.com/SawaMEN/hiddify-core":
+        raise ValueError("Wrong packaged core repository")
+    if source.get("version") != tag:
+        raise ValueError("Packaged core version differs from release tag")
+    target_commit = release.get("target_commitish")
+    if target_commit is not None and target_commit != core_sha:
+        raise ValueError("Published release points to a different core commit")
+
+
 def verify_source_pin(manifest, expected_core_sha=None, expected_singbox_sha=None):
     """Reject validly signed archives from any source revision other than our lock."""
     source = manifest.get("target", {})
@@ -134,6 +156,7 @@ def install(release, arch, destination, expected_core_sha=None, expected_singbox
         checksum(temp / binary, temp / (binary + ".sha256"))
         checksum(temp / "libcronet.so", temp / "libcronet.so.sha256")
         manifest = json.loads((temp / "target.json").read_text())
+        verify_release_identity(release, manifest)
         verify_source_pin(manifest, expected_core_sha, expected_singbox_sha)
         profile = manifest["panel_build"]
         source = manifest["target"]
