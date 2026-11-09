@@ -29,7 +29,7 @@ def check(root, arch, revision):
     core = f"bin/hiddify-core-linux-{arch}"
     binaries = ["x-ui", core, "bin/telemt", "bin/mita", "bin/tuic-server"]
     scripts = ["x-ui.sh", "x-ui-core.sh", "telemt-update.sh"]
-    required = binaries + scripts + ["core-migration.sh", "bin/target.json", "bin/speed-components.json",
+    required = binaries + scripts + ["core-migration.sh", "bin/target.json", "bin/libcronet.so", "bin/libcronet.so.sha256", "bin/speed-components.json",
                                    "x-ui.service.debian", "x-ui.service.arch", "x-ui.service.rhel",
                                    "bin/geoip.dat", "bin/geosite.dat",
                                    "bin/geoip_IR.dat", "bin/geosite_IR.dat",
@@ -46,6 +46,13 @@ def check(root, arch, revision):
     for name in binaries + scripts:
         if not (root / name).stat().st_mode & stat.S_IXUSR:
             raise ValueError("Missing executable bit: " + name)
+    # Pure-Go core is linked statically; Naive/Chromium uses the separately
+    # verified, architecture-matched Cronet shared library in the same package.
+    with (root / "bin/libcronet.so").open("rb") as source:
+        header = source.read(20)
+    if (len(header) < 20 or header[:6] != b"\\x7fELF\\x02\\x01"
+            or struct.unpack_from("<HH", header, 16) != (3, machine)):
+        raise ValueError("Cronet shared library has incorrect ELF identity")
     metadata = subprocess.check_output(["go", "version", "-m", str(root / "x-ui")], text=True)
     if f"vcs.revision={revision}" not in metadata or "vcs.modified=false" not in metadata:
         raise ValueError("Panel build provenance is missing, dirty or differs from the release SHA")
@@ -58,14 +65,12 @@ def check(root, arch, revision):
     validate_version(panel_version, revision, os.environ.get("GITHUB_REF", ""))
     expected = json.loads(Path("deploy/hiddify/hiddify-core-target.json").read_text())
     actual = json.loads((root / "bin/target.json").read_text())
-    tags = ["with_musl" if tag == "with_purego" else tag for tag in expected["panel_build"]["tags"]]
-    if (actual["target"] != expected["target"] or actual["panel_build"]["tags"] != tags
-            or actual["panel_build"].get("cronet_linkage") != "musl"
-            or actual["panel_build"].get("runtime_dependencies") != []):
-        raise ValueError("Packaged core differs from pinned source/musl profile")
-    if (root / "bin/libcronet.so").exists():
-        raise ValueError("Static musl package must not contain stale glibc libcronet")
-    for name in (core,):
+    if (actual["target"] != expected["target"]
+            or actual["panel_build"]["tags"] != expected["panel_build"]["tags"]
+            or actual["panel_build"].get("cronet_linkage") != "purego"
+            or actual["panel_build"].get("runtime_dependencies") != expected["panel_build"].get("runtime_dependencies")):
+        raise ValueError("Packaged core differs from exact pinned native source and purego profile")
+    for name in (core, "bin/libcronet.so"):
         fields = (root / (name + ".sha256")).read_text().split()
         actual_digest = hashlib.file_digest((root / name).open("rb"), "sha256").hexdigest()
         if len(fields) != 2 or fields[0] != actual_digest or fields[1].lstrip("*") != Path(name).name:
