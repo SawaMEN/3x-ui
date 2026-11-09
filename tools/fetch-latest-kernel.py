@@ -90,7 +90,23 @@ def checksum(file, checksum_file):
         raise ValueError("SHA-256 mismatch: " + Path(file).name)
 
 
-def install(release, arch, destination):
+def verify_source_pin(manifest, expected_core_sha=None, expected_singbox_sha=None):
+    """Reject validly signed archives from any source revision other than our lock."""
+    source = manifest.get("target", {})
+    pinned = (
+        ("core", source.get("commit"), expected_core_sha),
+        ("hiddify-sing-box", source.get("submodules", {}).get("hiddify-sing-box"), expected_singbox_sha),
+    )
+    for name, actual, expected in pinned:
+        if expected is None:
+            continue
+        if not re.fullmatch(r"[a-f0-9]{40}", expected):
+            raise ValueError("Invalid pinned " + name + " SHA")
+        if actual != expected:
+            raise ValueError("Kernel " + name + " differs from pinned source")
+
+
+def install(release, arch, destination, expected_core_sha=None, expected_singbox_sha=None):
     tag = release["tag_name"]
     name = f"sing-box-linux-{arch}.tar.gz"
     assets = {a["name"]: a for a in release["assets"]}
@@ -118,6 +134,7 @@ def install(release, arch, destination):
         checksum(temp / binary, temp / (binary + ".sha256"))
         checksum(temp / "libcronet.so", temp / "libcronet.so.sha256")
         manifest = json.loads((temp / "target.json").read_text())
+        verify_source_pin(manifest, expected_core_sha, expected_singbox_sha)
         profile = manifest["panel_build"]
         source = manifest["target"]
         if source["repository"] != "https://github.com/SawaMEN/hiddify-core" or source["version"] != tag:
@@ -145,6 +162,8 @@ def main():
     parser.add_argument("--arch", choices=("amd64", "arm64"))
     parser.add_argument("--tag")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--expected-core-sha")
+    parser.add_argument("--expected-singbox-sha")
     args = parser.parse_args()
     release = resolve(args.tag)
     if args.latest_tag:
@@ -152,7 +171,7 @@ def main():
     else:
         if not args.arch or args.output is None:
             parser.error("--arch and --output are required")
-        install(release, args.arch, args.output)
+        install(release, args.arch, args.output, args.expected_core_sha, args.expected_singbox_sha)
 
 
 if __name__ == "__main__":
