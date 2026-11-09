@@ -1,4 +1,4 @@
-name: Pinned Hiddify core security audit
+name: Pinned Hiddify core release integrity audit
 
 on:
   schedule:
@@ -15,25 +15,28 @@ concurrency:
 jobs:
   audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Install musl toolchain for production-equivalent scan
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools lld binutils
-          echo "CC=musl-gcc" >> "$GITHUB_ENV"
-          echo "CGO_CFLAGS=-D_LARGEFILE64_SOURCE" >> "$GITHUB_ENV"
-      - name: Build and rescan exact production kernel without binary cache
+      - name: Verify pinned release metadata and source revisions
         env:
-          GOOS: linux
-          GOARCH: amd64
-        run: HIDDIFY_VULNCHECK=1 SINGBOX_CRONET_LINKAGE=musl bash tools/build-hiddify-core.sh "$RUNNER_TEMP/core-security"
-      - name: Verify statically linked production kernel
+          GH_TOKEN: ${{ github.token }}
         run: |
-          (cd "$RUNNER_TEMP/core-security" && sha256sum -c hiddify-core-linux-amd64.sha256)
-          test -s "$RUNNER_TEMP/core-security/target.json"
+          set -euo pipefail
+          mapfile -t pins < <(python3 - <<'PY'
+          import json
+          lock=json.load(open("deploy/hiddify/hiddify-core-target.json"))
+          print(lock["target"]["version"])
+          print(lock["target"]["commit"])
+          print(lock["target"]["submodules"]["hiddify-sing-box"])
+          PY
+          )
+          test "${#pins[@]}" -eq 3
+          python3 -m unittest discover -s tools -p test_fetch_latest_kernel.py -v
+          python3 tools/fetch-latest-kernel.py --tag "${pins[0]}" \
+            --expected-core-sha "${pins[1]}" --expected-singbox-sha "${pins[2]}" \
+            --arch amd64 --output "$RUNNER_TEMP/core-security"
+          (cd "$RUNNER_TEMP/core-security" && \
+            sha256sum -c hiddify-core-linux-amd64.sha256 && \
+            sha256sum -c libcronet.so.sha256)
+          "$RUNNER_TEMP/core-security/hiddify-core-linux-amd64" version
