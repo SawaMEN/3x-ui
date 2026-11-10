@@ -264,7 +264,7 @@ func WithRenewalFirewall(ctx context.Context, owner string, ports []int, operati
 // when it completes. Separate IDs protect overlapping issuance operations.
 func DomainCertificateFirewallEvents(httpPort, httpsPort int) func(context.Context, string, map[string]any) error {
 	type pendingLease struct {
-		id string
+		id   string
 		stop func()
 	}
 	var mu sync.Mutex

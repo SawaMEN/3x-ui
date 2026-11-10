@@ -33,8 +33,10 @@ type externalRenewalHookLease struct {
 	stop      chan struct{}
 }
 
-var externalRenewalHookMu sync.Mutex
-var externalRenewalHookSessions = map[string][]externalRenewalHookLease{}
+var (
+	externalRenewalHookMu       sync.Mutex
+	externalRenewalHookSessions = map[string][]externalRenewalHookLease{}
+)
 
 // Linux /proc start-time protects the watchdog from process ID reuse.
 func externalRenewalProcessStart(pid int) (string, error) {
@@ -210,7 +212,9 @@ func ServeCertificateRenewalHookSocket(ctx context.Context) {
 			logger.Warning("renewal socket pathname is not a socket; refusing to replace it")
 			return
 		}
-		probe, dialErr := net.DialTimeout("unix", socket, 200*time.Millisecond)
+		var probeDialer net.Dialer
+		probeDialer.Timeout = 200 * time.Millisecond
+		probe, dialErr := probeDialer.DialContext(ctx, "unix", socket)
 		if dialErr == nil {
 			_ = probe.Close()
 			logger.Warning("renewal socket is already active")
