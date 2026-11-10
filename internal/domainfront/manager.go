@@ -52,6 +52,7 @@ type DomainFrontStatus struct {
 }
 
 type Manager struct {
+	operations sync.RWMutex // renewal checks exclude gateway replacement and Stop
 	mu        sync.Mutex
 	cachePath string
 	runtime   *frontRuntime
@@ -86,6 +87,8 @@ func (m *Manager) Apply(ctx context.Context, cfg DomainFrontConfig, backend Back
 	if err := cfg.ValidateWithCertificates(backend.Certificates); err != nil {
 		return err
 	}
+	m.operations.Lock()
+	defer m.operations.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	old := m.runtime
@@ -114,6 +117,8 @@ func (m *Manager) Apply(ctx context.Context, cfg DomainFrontConfig, backend Back
 // issuer's renewal policy. It never forces a renewal and never issues for a
 // foreign, disabled or externally managed name. Caller bounds the context.
 func (m *Manager) CheckManagedRenewal(ctx context.Context, name string) error {
+	m.operations.RLock()
+	defer m.operations.RUnlock()
 	m.mu.Lock()
 	r := m.runtime
 	if r == nil || r.magic == nil {
@@ -140,6 +145,8 @@ func (m *Manager) CheckManagedRenewal(ctx context.Context, name string) error {
 }
 
 func (m *Manager) Stop() {
+	m.operations.Lock()
+	defer m.operations.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.runtime != nil {
