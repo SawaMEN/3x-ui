@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -24,12 +25,45 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.GET("/status", a.status)
 	g.GET("/certificates", a.certificates)
 	g.GET("/certificates/events", a.certificateEvents)
+	g.GET("/dns/credential", a.dnsCredential)
+	g.POST("/dns/credential", a.saveDNSCredential)
 	g.POST("/certificates/renew", a.renewCertificate)
 	g.GET("/sni", a.sni)
 	g.POST("/apply", a.apply)
 	g.POST("/preflight", a.preflight)
 	g.POST("/check", a.check)
 	g.POST("/recommend", a.recommend)
+}
+
+// DNS API tokens are write-only. Authenticated clients can inspect only
+// whether the server has a token; there is never a "read token" endpoint.
+func (a *DomainController) dnsCredential(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	result, err := service.DomainDNSCredentialState()
+	jsonObj(c, result, err)
+}
+
+func (a *DomainController) saveDNSCredential(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	var req struct {
+		Token string `json:"token"`
+		Clear bool `json:"clear"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	if req.Clear && req.Token != "" {
+		jsonObj(c, nil, fmt.Errorf("clear and token cannot be supplied together"))
+		return
+	}
+	if err := service.SaveDomainDNSCredential(req.Token, req.Clear); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.DomainDNSCredentialState()
+	jsonObj(c, result, err)
 }
 
 func (a *DomainController) status(c *gin.Context) {
