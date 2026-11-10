@@ -51,6 +51,7 @@ import { SettingListItem } from '@/components/ui';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import { redirectSiteOptions } from './redirect-sites';
+import { onNumber } from '@/utils/onNumber';
 import { rootRedirectError } from './root-redirect';
 
 type DomainSection = 'domains' | 'certificates' | 'sni' | 'settings';
@@ -968,7 +969,7 @@ export default function DomainFrontTab({
                         min={0}
                         max={180}
                         value={draft.dns01Propagation ?? 0}
-                        onChange={(value) => update({ dns01Propagation: value ?? 0 })}
+                        onChange={onNumber((value) => update({ dns01Propagation: value }))}
                       />
                     </Form.Item>
                   </Space>
