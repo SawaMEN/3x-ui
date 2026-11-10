@@ -51,6 +51,11 @@ func isInternalUIAPI(path string) bool {
 		path == "/panel/api/domains/preflight" ||
 		path == "/panel/api/domains/certificates/renew" ||
 		path == "/panel/api/domains/certificates" ||
+		// Certificate event history, scoped DNS credential administration and
+		// ephemeral HTTP-01 proof are panel-only, not stable public APIs.
+		path == "/panel/api/domains/certificates/events" ||
+		path == "/panel/api/domains/dns/credential" ||
+		path == "/panel/api/domains/probe/http01" ||
 		path == "/panel/api/telemt/subscription-proxy" ||
 		path == "/panel/api/xray/outbound-subs/:id/probe"
 }
