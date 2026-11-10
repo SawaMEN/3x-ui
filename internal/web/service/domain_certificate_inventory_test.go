@@ -1,12 +1,12 @@
 package service
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
-	"path/filepath"
 )
 
 func TestCertificateChallengeClassification(t *testing.T) {
