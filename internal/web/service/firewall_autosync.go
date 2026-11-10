@@ -123,7 +123,7 @@ func (s *FirewallService) SetAutoSyncPreference(ctx context.Context, enabled boo
 // configurable pass remains as drift repair for imports and future mutation
 // paths and keeps the managed iptables jump behind newly added admin rules.
 func (s *FirewallService) RunAutoSync(parent context.Context) {
-	syncNow := func() {
+	syncNow := func(explicit bool) {
 		if parent.Err() != nil {
 			return
 		}
@@ -187,7 +187,7 @@ func (s *FirewallService) RunAutoSync(parent context.Context) {
 			return
 		}
 		auto, err := firewallAutoSync()
-		if err != nil || !auto {
+		if err != nil || (!auto && !explicit) {
 			return
 		}
 		if err := s.syncManagedSafeLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
@@ -195,7 +195,7 @@ func (s *FirewallService) RunAutoSync(parent context.Context) {
 		}
 	}
 
-	syncNow()
+	syncNow(false)
 	timer := time.NewTimer(firewallSyncInterval())
 	defer timer.Stop()
 	for {

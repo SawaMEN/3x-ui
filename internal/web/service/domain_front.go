@@ -313,6 +313,7 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	}
 	result := manager.StatusWithCertificates(cfg, files)
 	result.ExistingCertificates = s.existingDomainCertificates()
+	TriggerFirewallSync()
 	return result, nil
 }
 
