@@ -729,6 +729,15 @@ func main() {
 		if err := gateway.CLI(os.Args[2:]); err != nil {
 			log.Fatal("gateway command failed; check the gateway configuration and arguments")
 		}
+	case "certificate-hook":
+		if len(os.Args) != 4 {
+			log.Fatal("usage: x-ui certificate-hook begin|end certbot|acme.sh")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		if err := service.InvokeCertificateRenewalHook(ctx, os.Args[2], os.Args[3]); err != nil {
+			log.Fatal("certificate renewal firewall hook: ", err)
+		}
 	case "core-migrate":
 		if err := coremigration.CLIWithInitializer(os.Args[2:], initNodeTokenCrypto); err != nil {
 			log.Fatal("core migration failed; check the migration configuration and arguments")
@@ -841,6 +850,7 @@ Commands:
     recovery      export, check or extract an encrypted complete recovery bundle
     encrypt-tokens encrypt node bearer tokens with the configured active key
     setting        set settings
+    certificate-hook local, root-only temporary firewall integration for renewal hooks
     gateway         configure transparent gateway mode
 `
 }
