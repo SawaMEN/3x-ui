@@ -867,6 +867,7 @@ export interface ManagerEntry {
   nodeId?: number | null;
   port: string;
   preset?: string;
+  realityTarget?: string;
   relayId: number;
   sni: string;
   templateId: number;
