@@ -105,8 +105,13 @@ def main():
     if state['source_commit'] != SOURCE or state['base_commit'] != BASE:
         parser.error('inventory belongs to another diff')
     actual = {row['path']: row for row in state['files']}
-    if len(actual) != len(expected) or set(actual) != {row['path'] for row in expected}:
+    if len(state['files']) != len(expected) or len(actual) != len(state['files']) or set(actual) != {row['path'] for row in expected}:
         parser.error('inventory does not cover the complete original diff exactly once')
+    for row in state['files']:
+        if row['status'] not in ('pending', 'reviewed'):
+            parser.error(f"unsupported review status for {row['path']}")
+        if row['status'] == 'reviewed' and (not row.get('evidence') or not row.get('reviewed_sha256')):
+            parser.error(f"review mark lacks evidence or a content hash: {row['path']}")
     if args.action == 'mark':
         if not args.evidence or not args.paths:
             parser.error('mark requires paths and --evidence describing the completed review')

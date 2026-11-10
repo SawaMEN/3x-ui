@@ -78,7 +78,7 @@ func dropLegacyInboundPortUnique() error {
 		return err
 	}
 	for _, name := range explicitIndexes {
-		if err := db.Exec(`DROP INDEX IF EXISTS "` + name + `"`).Error; err != nil {
+		if err := db.Exec(`DROP INDEX IF EXISTS ` + quoteSQLiteIdentifier(name)).Error; err != nil {
 			return err
 		}
 	}
@@ -90,7 +90,30 @@ func dropLegacyInboundPortUnique() error {
 }
 
 func rebuildInboundsWithoutInlineUniquePort() error {
-	return db.Transaction(func(tx *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) (result error) {
+		// Renaming a temporary parent must not rewrite views, triggers on other
+		// tables or foreign-key definitions to its soon-to-be-deleted name.
+		// The panel opens SQLite with foreign-key enforcement disabled.
+		var foreignKeys, legacyAlter int
+		if err := tx.Raw(`PRAGMA foreign_keys`).Scan(&foreignKeys).Error; err != nil {
+			return err
+		}
+		if foreignKeys != 0 {
+			return fmt.Errorf("legacy inbound rebuild requires foreign_keys=OFF")
+		}
+		if err := tx.Raw(`PRAGMA legacy_alter_table`).Scan(&legacyAlter).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`PRAGMA legacy_alter_table=ON`).Error; err != nil {
+			return err
+		}
+		defer func() {
+			result = errors.Join(result, tx.Exec(fmt.Sprintf("PRAGMA legacy_alter_table=%d", legacyAlter)).Error)
+		}()
+		var objects []struct{ Type, Name, SQL string }
+		if err := tx.Raw(`SELECT type,name,sql FROM sqlite_master WHERE tbl_name='inbounds' AND type IN ('index','trigger') AND sql IS NOT NULL`).Scan(&objects).Error; err != nil {
+			return err
+		}
 		var list []sqliteIndexListRow
 		if err := tx.Raw(`PRAGMA index_list('inbounds')`).Scan(&list).Error; err != nil {
 			return err
@@ -99,7 +122,7 @@ func rebuildInboundsWithoutInlineUniquePort() error {
 			if idx.Origin != "c" {
 				continue
 			}
-			if err := tx.Exec(`DROP INDEX IF EXISTS "` + idx.Name + `"`).Error; err != nil {
+			if err := tx.Exec(`DROP INDEX IF EXISTS ` + quoteSQLiteIdentifier(idx.Name)).Error; err != nil {
 				return err
 			}
 		}
@@ -124,14 +147,30 @@ func rebuildInboundsWithoutInlineUniquePort() error {
 		shared := make([]string, 0, len(newCols))
 		for _, c := range newCols {
 			if _, ok := oldSet[c]; ok {
-				shared = append(shared, `"`+c+`"`)
+				shared = append(shared, quoteSQLiteIdentifier(c))
 			}
 		}
 		colList := strings.Join(shared, ", ")
 		if err := tx.Exec(`INSERT INTO inbounds (` + colList + `) SELECT ` + colList + ` FROM inbounds_legacy_rebuild`).Error; err != nil {
 			return err
 		}
-		return tx.Exec(`DROP TABLE inbounds_legacy_rebuild`).Error
+		if err := tx.Exec(`DROP TABLE inbounds_legacy_rebuild`).Error; err != nil {
+			return err
+		}
+		// GORM recreates its own indexes. Restore the remaining user-defined
+		// objects only after copying rows, so audit triggers do not fire twice.
+		for _, object := range objects {
+			var count int64
+			if err := tx.Raw(`SELECT count(*) FROM sqlite_master WHERE type=? AND name=?`, object.Type, object.Name).Scan(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				if err := tx.Exec(object.SQL).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	})
 }
 
@@ -381,7 +420,7 @@ func repairOverflowedTrafficCounters() error {
 		for _, col := range target.columns {
 			statements := []string{
 				fmt.Sprintf("UPDATE %s SET %s = %d WHERE %s > %d", target.table, col, TrafficMax, col, TrafficMax),
-				fmt.Sprintf("UPDATE %s SET %s = 0 WHERE %s < 0", target.table, col, col),
+				fmt.Sprintf("UPDATE %s SET %s = 0 WHERE %s IS NULL OR %s < 0", target.table, col, col, col),
 			}
 			if !IsPostgres() {
 				statements = append([]string{

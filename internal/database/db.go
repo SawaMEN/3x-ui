@@ -237,7 +237,7 @@ func sqliteUniquePortIndexes() (autoIndexes, explicitIndexes []string, err error
 		var cols []struct {
 			Name string `gorm:"column:name"`
 		}
-		if err = db.Raw(`PRAGMA index_info("` + idx.Name + `")`).Scan(&cols).Error; err != nil {
+		if err = db.Raw(`PRAGMA index_info(` + quoteSQLiteIdentifier(idx.Name) + `)`).Scan(&cols).Error; err != nil {
 			return nil, nil, err
 		}
 		if len(cols) != 1 || cols[0].Name != "port" {
@@ -256,7 +256,7 @@ func sqliteTableColumns(tx *gorm.DB, table string) ([]string, error) {
 	var rows []struct {
 		Name string `gorm:"column:name"`
 	}
-	if err := tx.Raw(`PRAGMA table_info("` + table + `")`).Scan(&rows).Error; err != nil {
+	if err := tx.Raw(`PRAGMA table_info(` + quoteSQLiteIdentifier(table) + `)`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	cols := make([]string, 0, len(rows))

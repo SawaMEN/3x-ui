@@ -11131,9 +11131,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "e76f07e0c2f67182e8ac373cd8565344520bc3f7f121d55c466af0cbddf36c1e"
     },
     {
       "path": "internal/coremodel/doc.go",
@@ -11142,9 +11142,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "5efc2a77be48a8dc86b450bbff1bf68e74126028e9386d2589f9cadfeef09811"
     },
     {
       "path": "internal/coremodel/inbound.go",
@@ -11153,9 +11153,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "920e94a60cf664007a626352e11bf668952aef5eda8995ddf198f24092ef01e6"
     },
     {
       "path": "internal/coremodel/telegram_subscription.go",
@@ -11164,9 +11164,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "a7da7fa949891b4cebd57bdb72e5b6907b65359f060e04461b1be28e6a2dd5f8"
     },
     {
       "path": "internal/coremodel/traffic.go",
@@ -11175,9 +11175,9 @@
       "deletions": 2,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "627d6608db36b2879203b64bf467f388820a0ec3f64499e4e2a3ea7344c26d18"
     },
     {
       "path": "internal/database/client_keepalive_migration_test.go",
@@ -11252,9 +11252,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "63c4f4766ac16723b716fe855664a660753b243dffbcabd56de9c2e35783cbdb"
     },
     {
       "path": "internal/database/dbtest/dbtest_test.go",
@@ -11275,8 +11275,8 @@
       "subsystem": "database",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Reviewed snapshot SQL encoding, transactions, quoted names, storage classes and quota overflow predicate. Generated-column and infinite-real restore failures reproduced before fixes; full database package passes after fixes.",
-      "reviewed_sha256": "de9094a14f7761d7539e66c540a5957716540eadcacd6de3fbbcf6d1189b6a3a"
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "2aa358b1be36573d2088532b70161eee5b175652c2d6e95e1425d1f97aaf9850"
     },
     {
       "path": "internal/database/dump_sqlite_test.go",
@@ -11362,9 +11362,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "627f37d0b3d2462931e11fc76df34a76d5bb1b6ae10a648342d23eca3cb370db"
     },
     {
       "path": "internal/database/model/awg_client_options.go",
@@ -11373,9 +11373,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "71bc14d66114377419437204ebd8e8ab024cbfadb83893eb06063cc77aa7f580"
     },
     {
       "path": "internal/database/model/client_connection_name.go",
@@ -11384,9 +11384,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "98908b4829d7a6e0c1367f3232e956a1dc47b241fd412b9e51f6cafe83400099"
     },
     {
       "path": "internal/database/model/client_connection_name_test.go",
@@ -11406,9 +11406,9 @@
       "deletions": 10,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "fe1dcdcc10f1d73eaeef223495d02722babcba754f1036d205338200b0141ed5"
     },
     {
       "path": "internal/database/model/client_hiddify_subscription.go",
@@ -11417,9 +11417,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "cbb98bdb4a3d6945f610a69016f1c44d6f6fa150e6d973793830ae59c4bae766"
     },
     {
       "path": "internal/database/model/client_speed_limit.go",
@@ -11428,9 +11428,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "4130f96079fd4ce4c0961b0a7611f4907e130ad24f7b232243567cea231458fc"
     },
     {
       "path": "internal/database/model/core_traffic_checkpoint.go",
@@ -11439,9 +11439,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "1e00d542d50a01e547018e285f3b55d619cf65ad3720d0f2a358b0e97a10de17"
     },
     {
       "path": "internal/database/model/hysteria_version_test.go",
@@ -11472,9 +11472,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "d0007452a95e2ca16af63f46a21d4f27fd1e5f435cfae26a59f96ce67815ccd3"
     },
     {
       "path": "internal/database/model/manager.go",
@@ -11483,9 +11483,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "6cc157a37c5fc264b663cce6ed8f9b935d88592af1b437cd9ebfea9dde6c7266"
     },
     {
       "path": "internal/database/model/model.go",
@@ -11549,9 +11549,9 @@
       "deletions": 4,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "afca812a264267d1c635c9bb5e344212685971dc344259055013a0ca5fd1b630"
     },
     {
       "path": "internal/database/model/protocol_capabilities.go",
@@ -11560,9 +11560,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "26af9e62cc4faffbc615b278bf5772e56631d0ba4e33285ece2d67b04464cd14"
     },
     {
       "path": "internal/database/model/routing_list.go",
@@ -11571,9 +11571,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "287178ea20cae74b5b93865079068c12d2e8ba485d34dd97c43488f2df0c1e86"
     },
     {
       "path": "internal/database/model/tuic_traffic_receipt.go",
@@ -11582,9 +11582,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "b371cf607ed72bbbee9fec19d977e926c071a6b3a2fdc7da86341480154b798c"
     },
     {
       "path": "internal/database/node_down_notified_migration_test.go",
@@ -11615,9 +11615,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
+      "reviewed_sha256": "89ee419aa13f8014b192b708699095017d354872fa843ece75fb7862796669b0"
     },
     {
       "path": "internal/database/stage3_compatibility_test.go",
@@ -19139,9 +19139,9 @@
       "deletions": 0,
       "subsystem": "limits",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read complete speed-limit config integration and both test files, verified routing order, native identities, restart and persistence paths. TestClientSpeedLimit* passes; real-core test is explicitly skipped without HIDDIFY_CONFIG_CHECK_BINARY.",
+      "reviewed_sha256": "d7577be89ef4ac24fc95d0f22df7ec30243d43ad4673dbb22c6149266f3a31ff"
     },
     {
       "path": "internal/web/service/client_speed_limit_live_test.go",
@@ -19150,9 +19150,9 @@
       "deletions": 0,
       "subsystem": "limits",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read complete speed-limit config integration and both test files, verified routing order, native identities, restart and persistence paths. TestClientSpeedLimit* passes; real-core test is explicitly skipped without HIDDIFY_CONFIG_CHECK_BINARY.",
+      "reviewed_sha256": "15b5cdc7c1387deadbaff367547e6f9b8c138bcaf27ac81439e49ebddde7ce92"
     },
     {
       "path": "internal/web/service/client_speed_limit_test.go",
@@ -19161,9 +19161,9 @@
       "deletions": 0,
       "subsystem": "limits",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read complete speed-limit config integration and both test files, verified routing order, native identities, restart and persistence paths. TestClientSpeedLimit* passes; real-core test is explicitly skipped without HIDDIFY_CONFIG_CHECK_BINARY.",
+      "reviewed_sha256": "13eef2b75380dd40663c25b991f83a6b6d17c6d275e6b7e2a9ff5e8b5f9eb180"
     },
     {
       "path": "internal/web/service/client_stat_reuse_test.go",

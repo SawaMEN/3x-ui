@@ -568,8 +568,8 @@ func seedClientsFromInboundJSON() error {
 				}
 				var c model.Client
 				if err := json.Unmarshal(blob, &c); err != nil {
-					log.Printf("ClientsTable seed: skip client in inbound %d (unmarshal failed): %v; payload=%s",
-						inbound.Id, err, string(blob))
+					log.Printf("ClientsTable seed: skip client in inbound %d (unmarshal failed): %v",
+						inbound.Id, err)
 					continue
 				}
 				email := strings.TrimSpace(c.Email)
