@@ -24,10 +24,10 @@ import (
 )
 
 type ManagedSNIDomain struct {
-	Name     string `json:"name"`
-	Source   string `json:"source"`
-	CertFile string `json:"certFile"`
-	KeyFile  string `json:"keyFile"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	CertFile  string `json:"certFile"`
+	KeyFile   string `json:"keyFile"`
 	NodeID    int    `json:"nodeId,omitempty"`
 	NodeName  string `json:"nodeName,omitempty"`
 	ExpiresAt int64  `json:"expiresAt,omitempty"`
