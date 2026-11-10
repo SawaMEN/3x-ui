@@ -575,6 +575,10 @@ export interface DomainFrontCheck {
 
 export interface DomainFrontConfig {
   acceptTerms: boolean;
+  dns01Propagation?: number;
+  dns01Provider?: string;
+  dns01Zone?: string;
+  dns01ZoneId?: string;
   domains: DomainFrontDomain[];
   email: string;
   enabled: boolean;

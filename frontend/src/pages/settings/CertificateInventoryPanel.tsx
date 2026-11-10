@@ -16,6 +16,7 @@ import { ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import { CertificateInventorySchema } from '@/schemas/domain-certificates';
+import CertificateAuditPanel from './CertificateAuditPanel';
 
 export default function CertificateInventoryPanel() {
   const { t, i18n } = useTranslation();
@@ -185,7 +186,13 @@ export default function CertificateInventoryPanel() {
               title: label('actions'),
               key: 'actions',
               render: (_value, item) =>
-                item.manager === 'acme.sh' || item.manager === 'certbot' ? (
+                !item.nodeId &&
+                (item.manager === 'acme.sh' ||
+                  item.manager === 'certbot' ||
+                  (item.manager === 'certmagic' &&
+                    item.autoRenew &&
+                    item.expiresAt > 0 &&
+                    item.daysLeft <= 30)) ? (
                   <Popconfirm
                     title={label('renewConfirm')}
                     description={label('renewDescription')}
@@ -213,6 +220,7 @@ export default function CertificateInventoryPanel() {
           ]}
         />
       </Card>
+      <CertificateAuditPanel />
     </>
   );
 }

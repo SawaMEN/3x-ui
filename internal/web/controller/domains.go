@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -18,17 +19,72 @@ import (
 
 type DomainController struct{}
 
+// Node-to-node bearer authentication is sufficient for read-only discovery,
+// but not for changing a gateway's DNS tokens, certificates, or listener config.
+// Those high-impact actions require an interactive panel session.
+func requireDomainAdminSession(c *gin.Context) bool {
+	if c.GetBool("api_authed") {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"success": false, "msg": "Domain mutations require an interactive administrator session",
+		})
+		return false
+	}
+	return true
+}
+
 func NewDomainController(g *gin.RouterGroup) {
 	a := &DomainController{}
 	g = g.Group("/domains")
 	g.GET("/status", a.status)
 	g.GET("/certificates", a.certificates)
+	g.GET("/certificates/events", a.certificateEvents)
+	g.GET("/dns/credential", a.dnsCredential)
+	g.POST("/dns/credential", a.saveDNSCredential)
 	g.POST("/certificates/renew", a.renewCertificate)
 	g.GET("/sni", a.sni)
 	g.POST("/apply", a.apply)
 	g.POST("/preflight", a.preflight)
+	g.POST("/probe/http01", a.probeHTTP01)
 	g.POST("/check", a.check)
 	g.POST("/recommend", a.recommend)
+}
+
+// DNS API tokens are write-only. Authenticated clients can inspect only
+// whether the server has a token; there is never a "read token" endpoint.
+func (a *DomainController) dnsCredential(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	result, err := service.DomainDNSCredentialStateFor(c.DefaultQuery("provider", "cloudflare"))
+	jsonObj(c, result, err)
+}
+
+func (a *DomainController) saveDNSCredential(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	var req struct {
+		Provider string `json:"provider"`
+		Token string `json:"token"`
+		Clear bool `json:"clear"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	if req.Clear && req.Token != "" {
+		jsonObj(c, nil, fmt.Errorf("clear and token cannot be supplied together"))
+		return
+	}
+	if req.Provider == "" {
+		req.Provider = "cloudflare"
+	}
+	if err := service.SaveDomainDNSCredentialFor(req.Provider, req.Token, req.Clear); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.DomainDNSCredentialStateFor(req.Provider)
+	jsonObj(c, result, err)
 }
 
 func (a *DomainController) status(c *gin.Context) {
@@ -38,6 +94,9 @@ func (a *DomainController) status(c *gin.Context) {
 
 // Renew exactly one already registered local certificate, never a caller-supplied path.
 func (a *DomainController) renewCertificate(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
 	var request struct {
 		ID string `json:"id" binding:"required"`
 	}
@@ -49,10 +108,16 @@ func (a *DomainController) renewCertificate(c *gin.Context) {
 	jsonObj(c, result, err)
 }
 
+func (a *DomainController) certificateEvents(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	result, err := service.CertificateAuditHistory()
+	jsonObj(c, result, err)
+}
+
 func (a *DomainController) certificates(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	result, err := service.DomainCertificateInventory(ctx)
+	result, err := service.DomainCertificateInventoryScoped(ctx, c.Query("local") != "1")
 	jsonObj(c, result, err)
 }
 
@@ -61,10 +126,21 @@ func (a *DomainController) certificates(c *gin.Context) {
 // owning node and are not transferable between hosts.
 func (a *DomainController) sni(c *gin.Context) {
 	result, err := service.ManagedSNIDomains(c.Request.Context(), c.Query("local") != "1")
+	if c.Query("summary") == "1" {
+		// Node discovery never needs absolute paths. Keep private paths on
+		// the owning host even when its parent has a valid API token.
+		for i := range result {
+			result[i].CertFile = ""
+			result[i].KeyFile = ""
+		}
+	}
 	jsonObj(c, result, err)
 }
 
 func (a *DomainController) apply(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
 	cfg := domainfront.DefaultConfig()
 	if err := c.ShouldBindJSON(&cfg); err != nil {
 		jsonObj(c, nil, err)
@@ -82,6 +158,23 @@ func (a *DomainController) preflight(c *gin.Context) {
 		return
 	}
 	result, err := service.PreflightDomainFront(c.Request.Context(), cfg)
+	jsonObj(c, result, err)
+}
+
+// This endpoint is authenticated just like other node APIs. It never
+// accepts arbitrary ports or paths and does not mutate gateway state.
+func (a *DomainController) probeHTTP01(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1024)
+	var input struct {
+		Name string `json:"name" binding:"required"`
+		Token string `json:"token" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	result, err := service.ObservePublicHTTP01(c.Request.Context(), input.Name, input.Token)
 	jsonObj(c, result, err)
 }
 

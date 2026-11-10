@@ -52,6 +52,7 @@ type DomainFrontStatus struct {
 }
 
 type Manager struct {
+	operations sync.RWMutex // renewal checks exclude gateway replacement and Stop
 	mu        sync.Mutex
 	cachePath string
 	runtime   *frontRuntime
@@ -73,6 +74,7 @@ type frontRuntime struct {
 	cancel         context.CancelFunc
 	mu             sync.Mutex
 	errors         map[string]string
+	proofs         map[string]http01Proof
 	handlerHTTPS   http.Handler
 	routing        atomic.Pointer[http.Handler]
 	handlerHTTP    http.Handler
@@ -85,6 +87,8 @@ func (m *Manager) Apply(ctx context.Context, cfg DomainFrontConfig, backend Back
 	if err := cfg.ValidateWithCertificates(backend.Certificates); err != nil {
 		return err
 	}
+	m.operations.Lock()
+	defer m.operations.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	old := m.runtime
@@ -109,7 +113,40 @@ func (m *Manager) Apply(ctx context.Context, cfg DomainFrontConfig, backend Back
 	return nil
 }
 
+// CheckManagedRenewal checks one local CertMagic certificate against the
+// issuer's renewal policy. It never forces a renewal and never issues for a
+// foreign, disabled or externally managed name. Caller bounds the context.
+func (m *Manager) CheckManagedRenewal(ctx context.Context, name string) error {
+	m.operations.RLock()
+	defer m.operations.RUnlock()
+	m.mu.Lock()
+	r := m.runtime
+	if r == nil || r.magic == nil {
+		m.mu.Unlock()
+		return errors.New("domain gateway is not running")
+	}
+	managed := false
+	for _, domain := range r.cfg.Domains {
+		if !domain.Enabled || domain.Name != name || domain.Mode == "shared_sni" {
+			continue
+		}
+		if (domain.TLS == "auto" || domain.TLS == "certmagic") && r.external[name] == nil {
+			managed = true
+		}
+		break
+	}
+	magic := r.magic
+	m.mu.Unlock()
+	if !managed {
+		return errors.New("certificate is not managed locally by CertMagic")
+	}
+	// false means never force ACME issuance for a healthy certificate.
+	return magic.RenewCertSync(ctx, name, false)
+}
+
 func (m *Manager) Stop() {
+	m.operations.Lock()
+	defer m.operations.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.runtime != nil {
@@ -223,7 +260,51 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	if cfg.Staging {
 		ca = certmagic.LetsEncryptStagingCA
 	}
-	r.issuer = certmagic.NewACMEIssuer(r.magic, certmagic.ACMEIssuer{CA: ca, Email: cfg.Email, Agreed: cfg.AcceptTerms, AltHTTPPort: cfg.HTTPPort, AltTLSALPNPort: cfg.HTTPSPort, Logger: logger})
+	issuerOptions := certmagic.ACMEIssuer{CA: ca, Email: cfg.Email, Agreed: cfg.AcceptTerms, AltHTTPPort: cfg.HTTPPort, AltTLSALPNPort: cfg.HTTPSPort, Logger: logger}
+	if cfg.DNS01Provider != "" {
+		// DNS-only issuance works without public 80/443 challenge ports and
+		// supports wildcard certificates. These settings are shared by all
+		// providers, while each provider retains a separately scoped token.
+		issuerOptions.DisableHTTPChallenge = true
+		issuerOptions.DisableTLSALPNChallenge = true
+		switch cfg.DNS01Provider {
+		case "cloudflare":
+			provider, err := NewCloudflareTXTProvider(cfg.DNS01Zone, cfg.DNS01ZoneID, backend.DNS01Token)
+			if err != nil {
+				r.cache.Stop()
+				for _, listener := range r.listeners {
+					_ = listener.Close()
+				}
+				return nil, fmt.Errorf("Cloudflare DNS-01 is not configured: %w", err)
+			}
+			issuerOptions.DNS01Solver = &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{
+				DNSProvider: provider,
+				PropagationDelay: time.Duration(cfg.DNS01Propagation) * time.Second,
+				PropagationTimeout: 4 * time.Minute,
+			}}
+		case "digitalocean":
+			provider, err := NewDigitalOceanTXTProvider(cfg.DNS01Zone, backend.DNS01Token)
+			if err != nil {
+				r.cache.Stop()
+				for _, listener := range r.listeners {
+					_ = listener.Close()
+				}
+				return nil, fmt.Errorf("DigitalOcean DNS-01 is not configured: %w", err)
+			}
+			issuerOptions.DNS01Solver = &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{
+				DNSProvider: provider,
+				PropagationDelay: time.Duration(cfg.DNS01Propagation) * time.Second,
+				PropagationTimeout: 4 * time.Minute,
+			}}
+		default:
+			r.cache.Stop()
+			for _, listener := range r.listeners {
+				_ = listener.Close()
+			}
+			return nil, errors.New("unsupported DNS-01 provider")
+		}
+	}
+	r.issuer = certmagic.NewACMEIssuer(r.magic, issuerOptions)
 	r.magic.Issuers = []certmagic.Issuer{r.issuer}
 	// ManageAsync also loads saved certificates asynchronously. Warm the cache
 	// before serving HTTPS so the first handshake after a restart does not race
@@ -304,8 +385,23 @@ func (r *frontRuntime) domain(host string) (DomainFrontDomain, bool) {
 		host = name
 	}
 	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	// Exact hosts take priority over a wildcard, even if the wildcard was
+	// listed first. Wildcards match exactly one DNS label, never the apex.
 	for _, d := range r.cfg.Domains {
 		if d.Enabled && d.Mode != "shared_sni" && d.Name == host {
+			return d, true
+		}
+	}
+	for _, d := range r.cfg.Domains {
+		if !d.Enabled || d.Mode == "shared_sni" || !strings.HasPrefix(d.Name, "*.") {
+			continue
+		}
+		suffix := strings.TrimPrefix(d.Name, "*.")
+		if !strings.HasSuffix(host, "."+suffix) {
+			continue
+		}
+		label := strings.TrimSuffix(host, "."+suffix)
+		if label != "" && !strings.Contains(label, ".") {
 			return d, true
 		}
 	}
@@ -331,6 +427,13 @@ func (r *frontRuntime) redirectHTTPS(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	host := d.Name
+	if strings.HasPrefix(d.Name, "*.") {
+		host = req.Host
+		if name, _, err := net.SplitHostPort(host); err == nil {
+			host = name
+		}
+		host = strings.TrimSuffix(strings.ToLower(host), ".")
+	}
 	if r.cfg.PublicPort != 443 {
 		host = net.JoinHostPort(host, strconv.Itoa(r.cfg.PublicPort))
 	}

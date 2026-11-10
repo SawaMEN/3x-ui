@@ -196,6 +196,9 @@ func makeCertificateInventory(status domainfront.DomainFrontStatus, states []dom
 	byKey := map[string]*CertificateInventoryItem{}
 	for _, cert := range certs {
 		manager, challenge := certificateManager(cert, states)
+		if manager == "certmagic" && status.Config.DNS01Provider != "" {
+			challenge = "dns-01"
+		}
 		if cert.Source == "telemt" && manager == "remote" {
 			manager, challenge = "external", "unknown"
 		}
@@ -272,6 +275,18 @@ func appendRemoteCertificateReferences(items []CertificateInventoryItem, sites [
 		if site.Source != "remote" || site.NodeID <= 0 {
 			continue
 		}
+		// A node that supports read-only inventory already provided its
+		// actual certificate state. Do not append a duplicate placeholder.
+		found := false
+		for _, item := range items {
+			if item.NodeID == site.NodeID && item.Name == site.Name {
+				found = true
+				break
+			}
+		}
+		if found {
+			continue
+		}
 		key := "remote|" + strconv.Itoa(site.NodeID) + "|" + site.Name
 		hash := sha256.Sum256([]byte(key))
 		items = append(items, CertificateInventoryItem{
@@ -294,6 +309,12 @@ func appendRemoteCertificateReferences(items []CertificateInventoryItem, sites [
 // DomainCertificateInventory only inspects certificates of THIS host.
 // No remote node's private-key path is ever used as a local filesystem path.
 func DomainCertificateInventory(ctx context.Context) (CertificateInventory, error) {
+	return DomainCertificateInventoryScoped(ctx, true)
+}
+
+// DomainCertificateInventoryScoped disables child discovery when the request
+// came from an authenticated parent panel, preventing recursive fanout.
+func DomainCertificateInventoryScoped(ctx context.Context, includeNodes bool) (CertificateInventory, error) {
 	status, err := DomainFrontStatus()
 	if err != nil {
 		return CertificateInventory{}, err
@@ -303,8 +324,11 @@ func DomainCertificateInventory(ctx context.Context) (CertificateInventory, erro
 		state = &telemt
 	}
 	inventory := CertificateInventory{Items: makeCertificateInventory(status, domainACMEStates(domainACMEHomes()), state)}
-	if sites, sitesErr := ManagedSNIDomains(ctx, true); sitesErr == nil {
-		inventory.Items = appendRemoteCertificateReferences(inventory.Items, sites)
+	if includeNodes {
+		inventory.Items = append(inventory.Items, readRemoteCertificateInventories(ctx)...)
+		if sites, sitesErr := ManagedSNIDomains(ctx, true); sitesErr == nil {
+			inventory.Items = appendRemoteCertificateReferences(inventory.Items, sites)
+		}
 	}
 	firewall, fwErr := (&FirewallService{}).GetManagedStatusSafe(ctx, rememberedFirewallSafetyPort())
 	if fwErr == nil {

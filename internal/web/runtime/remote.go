@@ -802,10 +802,74 @@ type RemoteManagedSNI struct {
 	Issuer    string `json:"issuer,omitempty"`
 }
 
+// RemoteCertificateSummary is the node's read-only certificate metadata.
+// It contains no private keys and deliberately omits certificate paths.
+type RemoteCertificateSummary struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Names     []string `json:"names"`
+	Manager   string   `json:"manager"`
+	Challenge string   `json:"challenge"`
+	State     string   `json:"state"`
+	Issuer    string   `json:"issuer"`
+	ExpiresAt int64    `json:"expiresAt"`
+	DaysLeft  int      `json:"daysLeft"`
+	AutoRenew bool     `json:"autoRenew"`
+	Warning   string   `json:"warning,omitempty"`
+}
+
+// ListCertificateSummaries uses the node's existing authenticated API and
+// disables recursion. Nothing in the response is used as a local file path.
+// ProbePublicHTTP01 performs an independent reachability check on the
+// selected authenticated node; only the random challenge token is sent.
+type RemoteHTTP01Observation struct {
+	Name string `json:"name"`
+	CheckedAt int64 `json:"checkedAt"`
+	Addresses []string `json:"addresses"`
+	Verified bool `json:"verified"`
+	Detail string `json:"detail"`
+}
+
+func (r *Remote) ProbePublicHTTP01(ctx context.Context, name, token string) (RemoteHTTP01Observation, error) {
+	env, err := r.do(ctx, http.MethodPost, "panel/api/domains/probe/http01",
+		struct {
+			Name string `json:"name"`
+			Token string `json:"token"`
+		}{Name: name, Token: token})
+	if err != nil {
+		return RemoteHTTP01Observation{}, err
+	}
+	var result RemoteHTTP01Observation
+	if err := json.Unmarshal(env.Obj, &result); err != nil {
+		return RemoteHTTP01Observation{}, errors.New("invalid node HTTP-01 observation response")
+	}
+	if len(result.Addresses) > 16 || len(result.Detail) > 256 || result.Name != name {
+		return RemoteHTTP01Observation{}, errors.New("invalid node HTTP-01 observation data")
+	}
+	return result, nil
+}
+
+func (r *Remote) ListCertificateSummaries(ctx context.Context) ([]RemoteCertificateSummary, error) {
+	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/certificates?local=1", nil)
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Items []RemoteCertificateSummary `json:"items"`
+	}
+	if err := json.Unmarshal(env.Obj, &response); err != nil {
+		return nil, fmt.Errorf("decode node certificate summaries: %w", err)
+	}
+	if len(response.Items) > 250 {
+		return nil, fmt.Errorf("node returned too many certificates")
+	}
+	return response.Items, nil
+}
+
 // ListManagedSNI uses the existing authenticated node API. The local flag
 // prevents recursive discovery when nodes themselves manage child panels.
 func (r *Remote) ListManagedSNI(ctx context.Context) ([]RemoteManagedSNI, error) {
-	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/sni?local=1", nil)
+	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/sni?local=1&summary=1", nil)
 	if err != nil {
 		return nil, err
 	}

@@ -98,10 +98,43 @@ func RenewDomainCertificate(ctx context.Context, id string) (DomainCertificateRe
 	if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled {
 		telemt = &state
 	}
+	for _, item := range makeCertificateInventory(status, states, telemt) {
+		if item.ID != id || item.Manager != "certmagic" || !item.AutoRenew || item.NodeID != 0 {
+			continue
+		}
+		// Normal CertMagic maintenance renews automatically. Manual checks
+		// are limited to certificates close to expiry to avoid abuse of the
+		// public ACME CA. They use CertMagic's non-forced renewal policy.
+		if item.ExpiresAt <= 0 || item.ExpiresAt > time.Now().Add(30*24*time.Hour).Unix() {
+			return DomainCertificateRenewalResult{}, errors.New("CertMagic certificate is not due for renewal")
+		}
+		ctx, cancel := context.WithTimeout(ctx, 8*time.Minute)
+		defer cancel()
+		record := func(outcome string) {
+			if auditErr := RecordCertificateAudit("certmagic", id, item.Name, "renew", outcome); auditErr != nil {
+				logger.Debug("CertMagic renewal audit failed:", auditErr)
+			}
+		}
+		record("started")
+		if err := managedDomainFront().CheckManagedRenewal(ctx, item.Name); err != nil {
+			record("failed")
+			return DomainCertificateRenewalResult{}, errors.New("CertMagic renewal check failed; review certificate status and audit history")
+		}
+		record("succeeded")
+		return DomainCertificateRenewalResult{
+			ID: id, Manager: "certmagic", Finished: true, CheckedAt: time.Now().Unix(),
+		}, nil
+	}
 	binary, args, ports, manager, err := localCertificateRenewalPlan(id, status, states, telemt)
 	if err != nil {
 		return DomainCertificateRenewalResult{}, err
 	}
+	audit := func(outcome string) {
+		if auditErr := RecordCertificateAudit(manager, id, "", "renew", outcome); auditErr != nil {
+			logger.Debug("certificate renewal audit failed:", auditErr)
+		}
+	}
+	audit("started")
 	timeout, cancel := context.WithTimeout(ctx, 12*time.Minute)
 	defer cancel()
 	if err := WithRenewalFirewall(timeout, manager+":"+id, ports, func(operationCtx context.Context) error {
@@ -113,8 +146,10 @@ func RenewDomainCertificate(ctx context.Context, id string) (DomainCertificateRe
 		}
 		return nil
 	}); err != nil {
+		audit("failed")
 		return DomainCertificateRenewalResult{}, err
 	}
+	audit("succeeded")
 	return DomainCertificateRenewalResult{
 		ID: id, Manager: manager, Finished: true, CheckedAt: time.Now().Unix(),
 	}, nil

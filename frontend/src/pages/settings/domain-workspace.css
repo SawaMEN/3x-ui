@@ -90,3 +90,76 @@
     padding: 10px;
   }
 }
+
+/* Domain manager: one primary workflow at a time, rather than a long
+   stack of unrelated gateway, DNS, certificate and redirect forms. */
+.domain-manager > .ant-space-item {
+  width: 100%;
+  min-width: 0;
+}
+.domain-manager-nav {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.domain-manager-nav .ant-segmented {
+  min-width: min(100%, 480px);
+  padding: 4px;
+}
+.domain-manager-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  width: 100%;
+}
+.domain-manager-panel .ant-card {
+  min-width: 0;
+}
+.domain-manager-panel .ant-table-wrapper {
+  min-width: 0;
+}
+.domain-workspace-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 22px;
+  row-gap: 8px;
+  margin-top: 14px;
+}
+.domain-workspace-summary strong {
+  font-variant-numeric: tabular-nums;
+}
+.domain-workspace .ant-card-body {
+  padding: 18px 20px;
+}
+.domain-workspace-actions {
+  padding-top: 12px;
+  margin-top: 14px;
+}
+.domain-workspace-guidance {
+  margin-top: 10px;
+}
+@media (max-width: 620px) {
+  .domain-manager-nav .ant-segmented {
+    min-width: 450px;
+  }
+  .domain-workspace .ant-card-body {
+    padding: 14px;
+  }
+  .domain-workspace-heading {
+    gap: 8px;
+  }
+  .domain-workspace-heading .ant-typography {
+    max-width: 100%;
+  }
+  .domain-workspace-summary {
+    column-gap: 14px;
+  }
+  .domain-workspace-actions {
+    align-items: stretch;
+  }
+  .domain-workspace-audit {
+    min-width: 0;
+    width: 100%;
+  }
+}

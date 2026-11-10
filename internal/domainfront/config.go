@@ -34,6 +34,10 @@ type DomainFrontConfig struct {
 	Email              string              `json:"email"`
 	AcceptTerms        bool                `json:"acceptTerms"`
 	Staging            bool                `json:"staging"`
+	DNS01Provider      string              `json:"dns01Provider,omitempty"`
+	DNS01Zone          string              `json:"dns01Zone,omitempty"`
+	DNS01ZoneID        string              `json:"dns01ZoneId,omitempty"`
+	DNS01Propagation   int                 `json:"dns01Propagation,omitempty"`
 	SubscriptionDomain string              `json:"subscriptionDomain"`
 	Domains            []DomainFrontDomain `json:"domains"`
 }
@@ -62,6 +66,7 @@ type Backend struct {
 	Certificates        map[string]CertificateFiles
 	ChallengeRoots      map[string]string
 	CertificateEvent    func(context.Context, string, map[string]any) error
+	DNS01Token          string // private; never serialized into DomainFrontConfig or API
 	GetRedirect         func() (string, error)
 	SubscriptionHost    string
 
@@ -104,6 +109,28 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 	if len(c.Domains) > 100 {
 		return fmt.Errorf("at most 100 domains are supported")
 	}
+	c.DNS01Provider = strings.ToLower(strings.TrimSpace(c.DNS01Provider))
+	c.DNS01Zone = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(c.DNS01Zone), "."))
+	c.DNS01ZoneID = strings.TrimSpace(c.DNS01ZoneID)
+	if c.DNS01Provider != "" {
+		if c.DNS01Provider != "cloudflare" && c.DNS01Provider != "digitalocean" {
+			return fmt.Errorf("unsupported DNS-01 provider")
+		}
+		if !validPublicDNSName(c.DNS01Zone) {
+			return fmt.Errorf("DNS-01 requires a valid public DNS zone")
+		}
+		if c.DNS01Provider == "cloudflare" && !cloudflareID.MatchString(c.DNS01ZoneID) {
+			return fmt.Errorf("DNS-01 requires a valid Cloudflare zone ID")
+		}
+		if c.DNS01Provider == "digitalocean" && c.DNS01ZoneID != "" {
+			return fmt.Errorf("DigitalOcean DNS-01 does not use a zone ID")
+		}
+		if c.DNS01Propagation < 0 || c.DNS01Propagation > 180 {
+			return fmt.Errorf("DNS-01 propagation delay must be between 0 and 180 seconds")
+		}
+	} else if c.DNS01Zone != "" || c.DNS01ZoneID != "" || c.DNS01Propagation != 0 {
+		return fmt.Errorf("DNS-01 provider must be selected before configuring a zone")
+	}
 	c.Email = strings.TrimSpace(c.Email)
 	if c.Email != "" {
 		address, err := mail.ParseAddress(c.Email)
@@ -120,9 +147,23 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 			d.InboundIDs = []int{}
 		}
 		d.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(d.Name)), ".")
-		name, err := netsafe.NormalizeHost(d.Name)
+		// A wildcard covers precisely one subdomain label. Its issuance
+		// requires DNS-01; the normal HTTP challenge cannot validate it.
+		wildcard := strings.HasPrefix(d.Name, "*.")
+		base := d.Name
+		if wildcard {
+			base = strings.TrimPrefix(base, "*.")
+			if c.DNS01Provider == "" || (d.TLS != "auto" && d.TLS != "certmagic") {
+				return fmt.Errorf("%s: wildcard certificates require automatic DNS-01 validation", d.Name)
+			}
+		}
+		name, err := netsafe.NormalizeHost(base)
 		if err != nil || net.ParseIP(name) != nil || !strings.Contains(name, ".") {
 			return fmt.Errorf("a public DNS hostname is required: %s", d.Name)
+		}
+		if c.DNS01Provider != "" && d.Enabled && d.Mode != "shared_sni" && (d.TLS == "auto" || d.TLS == "certmagic") &&
+			d.Name != c.DNS01Zone && !strings.HasSuffix(d.Name, "."+c.DNS01Zone) {
+			return fmt.Errorf("%s: DNS-01 zone does not own this domain", d.Name)
 		}
 		if names[d.Name] {
 			return fmt.Errorf("duplicate domain: %s", d.Name)

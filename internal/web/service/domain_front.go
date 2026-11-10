@@ -218,14 +218,15 @@ func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
 	var out []ManagedSNIDomain
 	for result := range results {
 		for _, site := range result.Sites {
-			if !managedNodeCertificateSourceSupported(site.Source) || site.CertFile == "" || site.KeyFile == "" {
+			if !managedNodeCertificateSourceSupported(site.Source) || site.Name == "" {
 				continue
 			}
+			// A node confirms ownership of its own certificate. Its absolute
+			// paths are intentionally not returned to the parent or browser:
+			// the same path may refer to a different key on another machine.
 			out = append(out, ManagedSNIDomain{
 				Name:      site.Name,
 				Source:    "remote",
-				CertFile:  site.CertFile,
-				KeyFile:   site.KeyFile,
 				NodeID:    result.NodeID,
 				NodeName:  result.NodeName,
 				ExpiresAt: site.ExpiresAt,
@@ -341,12 +342,15 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 		return domainfront.DomainFrontStatus{}, err
 	}
 	backend.Certificates = files
+	if err := configureDomainDNS01(cfg, &backend); err != nil {
+		return domainfront.DomainFrontStatus{}, err
+	}
 	roots, rollback, err := prepareDomainACME(cfg, files, states)
 	if err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
 	backend.ChallengeRoots = roots
-	backend.CertificateEvent = DomainCertificateFirewallEvents(cfg.HTTPPort, cfg.HTTPSPort)
+	backend.CertificateEvent = DomainCertificateAuditedEventsForDNS(cfg.HTTPPort, cfg.HTTPSPort, cfg.DNS01Provider != "")
 	manager := managedDomainFront()
 	if err := manager.Apply(ctx, cfg, backend); err != nil {
 		rollback()
@@ -360,7 +364,9 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 		rollback()
 		oldBackend, buildErr := s.domainFrontBackend(old)
 		if buildErr == nil {
-			_ = manager.Apply(ctx, old, oldBackend)
+			if tokenErr := configureDomainDNS01(old, &oldBackend); tokenErr == nil {
+				_ = manager.Apply(ctx, old, oldBackend)
+			}
 		}
 		return manager.Status(old), err
 	}
@@ -387,12 +393,15 @@ func StartDomainFront() error {
 		return err
 	}
 	backend.Certificates = files
+	if err := configureDomainDNS01(cfg, &backend); err != nil {
+		return err
+	}
 	roots, rollback, err := prepareDomainACME(cfg, files, states)
 	if err != nil {
 		return err
 	}
 	backend.ChallengeRoots = roots
-	backend.CertificateEvent = DomainCertificateFirewallEvents(cfg.HTTPPort, cfg.HTTPSPort)
+	backend.CertificateEvent = DomainCertificateAuditedEventsForDNS(cfg.HTTPPort, cfg.HTTPSPort, cfg.DNS01Provider != "")
 	if err := managedDomainFront().Apply(context.Background(), cfg, backend); err != nil {
 		rollback()
 		return err

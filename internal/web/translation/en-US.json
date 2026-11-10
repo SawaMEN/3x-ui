@@ -2072,6 +2072,8 @@
       "eventGroupXray": "Xray Core",
       "eventGroupSystem": "System",
       "eventGroupSecurity": "Security",
+      "eventGroupCertificates": "Certificates",
+      "eventCertificateHealth": "Certificate expiry or failure",
       "eventGroupNode": "Nodes",
       "eventOutboundDown": "Down",
       "eventOutboundUp": "Up",
@@ -2568,6 +2570,24 @@
         "autoCheckHelp": "Check the saved primary domain automatically, showing DNS addresses and the certificate visible from the server. New certificate issuance may still be pending; wait and check again if needed. Disable to check manually.",
         "termsHelp": "Agreement is needed for new certificates issued by CertMagic. Reusing an acme.sh certificate does not require accepting a new agreement. Consent is never selected automatically.",
         "manualSettings": "Manual HTTPS and external proxy",
+        "dns01": {
+          "title": "Automatic DNS-01 validation",
+          "hint": "Issue and renew wildcard or regular certificates through Cloudflare or DigitalOcean DNS. Use a token scoped to the selected zone's DNS records; it stays on the server and is never returned to the UI.",
+          "provider": "Domain validation method",
+          "disabled": "Standard HTTP-01 / TLS-ALPN-01",
+          "zone": "DNS zone",
+          "zoneId": "Cloudflare zone ID",
+          "propagation": "Propagation delay, seconds",
+          "token": "Cloudflare API token",
+          "saveToken": "Save token",
+          "clearToken": "Remove token",
+          "credentialSaved": "Token configured",
+          "credentialMissing": "Token not configured",
+          "environment": "Provided through environment",
+          "saved": "Token saved. Apply gateway settings to activate.",
+          "cleared": "Token removed",
+          "saveError": "Could not save DNS token"
+        },
         "workspace": {
           "title": "Domain control center",
           "online": "Gateway running",
@@ -2620,7 +2640,20 @@
             "healthy": "Valid",
             "pending": "Awaiting certificate"
           },
-          "subtitle": "Live gateway status, certificates and domains in one workspace"
+          "subtitle": "Live gateway status, certificates and domains in one workspace",
+          "otherTypes": "Other options",
+          "navigation": "Domain management sections",
+          "moreActions": "More actions",
+          "editorAdvanced": "Advanced: TLS and status",
+          "editorSaveHint": "The domain will be added to the list. Select Save and apply to check and activate the configuration.",
+          "autoTLSSetup": "Automatic TLS setup",
+          "autoTLSHint": "Enter a contact email and accept the Let's Encrypt terms to issue the certificate automatically when you apply.",
+          "section": {
+            "domains": "Domains",
+            "certificates": "Certificates",
+            "sni": "SNI and nodes",
+            "settings": "Settings"
+          }
         },
         "preflight": {
           "action": "Check readiness",
@@ -2697,7 +2730,32 @@
           "renewCompleted": "Renewal command finished. Verify the certificate expiry.",
           "renewFailed": "Certificate renewal failed",
           "temporaryPorts": "Only during renewal",
-          "panelSchedule": "Automatic 3x-ui renewal check"
+          "panelSchedule": "Automatic 3x-ui renewal check",
+          "audit": {
+            "title": "Certificate history",
+            "description": "Recent issuance, renewal and expiration events. Limited to 250 records without secrets or command output.",
+            "empty": "No events yet",
+            "date": "Date",
+            "domain": "Domain",
+            "unspecified": "No domain",
+            "manager": "Manager",
+            "action": "Action",
+            "outcome": "Outcome",
+            "actions": {
+              "obtain": "Issue",
+              "renew": "Renewal",
+              "hook": "External hook",
+              "health": "Health monitor"
+            },
+            "outcomes": {
+              "started": "Started",
+              "succeeded": "Succeeded",
+              "failed": "Failed",
+              "expiring": "Expiring soon",
+              "expired": "Expired",
+              "recovered": "Recovered"
+            }
+          }
         }
       },
       "subAppearanceTheme": "Page theme",
@@ -3504,6 +3562,7 @@
       "eventXrayCrash": "sing-box CRASHED",
       "eventXrayCrashError": "Error: {{ .Error }}",
       "eventNodeDown": "Node {{ .Name }} is DOWN",
+      "eventCertificateHealth": "Certificate {{ .Domain }}: {{ .State }} ({{ .Manager }})",
       "eventNodeUp": "Node {{ .Name }} is UP",
       "eventLoginFallback": "Login failed from {{ .Source }}",
       "memoryThreshold": "Memory Load {{ .Percent }}% exceeds the threshold of {{ .Threshold }}%",

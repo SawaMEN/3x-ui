@@ -125,6 +125,7 @@ func (s *FirewallService) SetAutoSyncPreference(ctx context.Context, enabled boo
 func (s *FirewallService) RunAutoSync(parent context.Context) {
 	go ServeCertificateRenewalHookSocket(parent)
 	go RunDomainCertificateRenewalScheduler(parent)
+	go RunCertificateHealthMonitor(parent)
 	syncNow := func(explicit bool) {
 		if parent.Err() != nil {
 			return

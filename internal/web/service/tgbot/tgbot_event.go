@@ -2,6 +2,7 @@ package tgbot
 
 import (
 	"fmt"
+	"html"
 	"os"
 	"strconv"
 	"strings"
@@ -117,6 +118,19 @@ func (t *Tgbot) formatEventMessage(e eventbus.Event) string {
 			msg += "\n" + t.I18nBot("tgbot.messages.eventDelayDetail", "Delay=="+fmt.Sprintf("%d", data.LatencyMs))
 		}
 		return msg
+
+	case eventbus.EventCertificateHealth:
+		if data, ok := e.Data.(*eventbus.CertificateHealthData); ok {
+			notice := header + t.I18nBot("tgbot.messages.eventCertificateHealth",
+				"Domain=="+html.EscapeString(e.Source),
+				"State=="+html.EscapeString(data.State),
+				"Manager=="+html.EscapeString(data.Manager))
+			if data.NodeID > 0 {
+				notice += "\nNode #" + fmt.Sprintf("%d", data.NodeID)
+			}
+			return notice
+		}
+		return ""
 
 	case eventbus.EventCPUHigh:
 		if data, ok := e.Data.(*eventbus.SystemMetricData); ok {

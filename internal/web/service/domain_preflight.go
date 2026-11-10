@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -57,11 +58,23 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 	if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled && telemtWebFrontendActive(state) {
 		telemtCover = state.Domain
 	}
-	return runDomainPreflight(ctx, cfg, files, old, status.Running, preflightDeps{
+	report := runDomainPreflight(ctx, cfg, files, old, status.Running, preflightDeps{
 		lookup:      net.DefaultResolver.LookupIPAddr,
 		probePort:   probeDomainPort,
 		telemtCover: telemtCover,
-	}), nil
+	})
+	if cfg.Enabled && cfg.DNS01Provider != "" {
+		credential, tokenErr := DomainDNSCredentialStateFor(cfg.DNS01Provider)
+		if tokenErr != nil || !credential.Configured {
+			report.Ready = false
+			report.Checks = append(report.Checks, domainPreflightCheck{
+				Code: "dns01_credentials_missing", Severity: "error",
+				Message: "Selected DNS-01 provider requires a scoped API token configured on this server.",
+			})
+		}
+	}
+	augmentDomainPreflightWithNodeEvidence(ctx, cfg, &report)
+	return report, nil
 }
 
 func probeDomainPort(ctx context.Context, listen string, port int) error {
@@ -141,7 +154,7 @@ func runDomainPreflight(
 			}
 		}
 	}
-	if cfg.HTTPPort != 80 {
+	if cfg.DNS01Provider == "" && cfg.HTTPPort != 80 {
 		for _, domain := range local {
 			if domain.TLS == "certmagic" || domain.TLS == "auto" && files[domain.Name].CertFile == "" {
 				add("http01_port", "warning", "", "Automatic HTTP-01 validation normally requires public TCP 80; verify external NAT or use another supported challenge method.")
@@ -197,6 +210,9 @@ func runDomainPreflight(
 	}
 dispatch:
 	for index := range local {
+		if strings.HasPrefix(local[index].Name, "*.") {
+			continue // wildcard DNS A record is not meaningful
+		}
 		select {
 		case jobs <- index:
 		case <-checkCtx.Done():
@@ -206,6 +222,10 @@ dispatch:
 	close(jobs)
 	workers.Wait()
 	for i, domain := range local {
+		if strings.HasPrefix(domain.Name, "*.") {
+			add("wildcard_dns01", "info", domain.Name, "DNS-01 validates the wildcard via a temporary TXT record. Individual wildcard subdomain A/AAAA records cannot be established from this draft.")
+			continue
+		}
 		answer := answers[i]
 		if answer.err != nil {
 			add("dns_lookup_failed", "warning", domain.Name, fmt.Sprintf("DNS lookup failed: %s", answer.err))
