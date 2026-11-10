@@ -15,6 +15,7 @@ import {
   Form,
   Input,
   InputNumber,
+  List,
   Modal,
   Popconfirm,
   Select,
@@ -39,6 +40,8 @@ import {
 } from '@/schemas/domain-front';
 import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
 import DomainOverview from './DomainOverview';
+import { DomainPreflightReportSchema } from '@/schemas/domain-preflight';
+import type { DomainPreflightReport } from '@/schemas/domain-preflight';
 import type { DomainPreset } from './DomainOverview';
 import { getDomainHealth } from './domain-health';
 import type { AllSetting } from '@/models/setting';
@@ -115,6 +118,9 @@ export default function DomainFrontTab({
   const [domainFilter, setDomainFilter] = useState('all');
   const [expanded, setExpanded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [preflighting, setPreflighting] = useState(false);
+  const [preflightReport, setPreflightReport] = useState<DomainPreflightReport>();
+  const [preflightDraft, setPreflightDraft] = useState('');
   const [scanningRedirect, setScanningRedirect] = useState(false);
   const [redirectScan, setRedirectScan] = useState<RedirectSiteScan>();
   const [separatePublicPort, setSeparatePublicPort] = useState(false);
@@ -154,6 +160,35 @@ export default function DomainFrontTab({
   const redirectError = allSetting?.rootRedirectEnable
     ? rootRedirectError(allSetting.rootRedirectURL, redirectDomains)
     : '';
+  async function preflight(config: DomainConfigForm) {
+    const response = await HttpUtil.post('/panel/api/domains/preflight', config, {
+      silent: true,
+      timeout: 15_000,
+    });
+    if (!response?.success) throw new Error(response?.msg || t('somethingWentWrong'));
+    const report = DomainPreflightReportSchema.parse(response.obj);
+    setPreflightReport(report);
+    setPreflightDraft(JSON.stringify(config));
+    return report;
+  }
+
+  async function checkReadiness() {
+    const parsed = DomainConfigFormSchema.safeParse(draft);
+    if (!parsed.success) {
+      messageApi.error(t(parsed.error.issues[0].message));
+      return;
+    }
+    setPreflighting(true);
+    try {
+      const report = await preflight(parsed.data);
+      if (!report.ready) messageApi.warning(label('preflight.blocked'));
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : t('somethingWentWrong'));
+    } finally {
+      setPreflighting(false);
+    }
+  }
+
   async function apply() {
     if (redirectError) {
       messageApi.error(redirectError);
@@ -164,6 +199,36 @@ export default function DomainFrontTab({
       messageApi.error(t(parsed.error.issues[0].message));
       return;
     }
+    if (dirty) {
+      setPreflighting(true);
+      try {
+        const report = await preflight(parsed.data);
+        if (!report.ready) {
+          messageApi.error(label('preflight.blocked'));
+          return;
+        }
+        const warnings = report.checks.filter((check) => check.severity === 'warning');
+        if (warnings.length > 0) {
+          Modal.confirm({
+            title: label('preflight.confirm'),
+            content: label('preflight.confirmDetails', { count: warnings.length }),
+            okText: label('preflight.continue'),
+            cancelText: t('cancel'),
+            onOk: () => commitParsed(parsed.data),
+          });
+          return;
+        }
+      } catch (error) {
+        messageApi.error(error instanceof Error ? error.message : t('somethingWentWrong'));
+        return;
+      } finally {
+        setPreflighting(false);
+      }
+    }
+    await commitParsed(parsed.data);
+  }
+
+  async function commitParsed(parsed: DomainConfigForm) {
     const domainFirst = dirty && settingsDirty && !!allSetting?.rootRedirectEnable;
     let committed = false;
     setBusy(true);
@@ -176,7 +241,7 @@ export default function DomainFrontTab({
         );
         return;
       }
-      const msg = await HttpUtil.post('/panel/api/domains/apply', parsed.data, { silent: true });
+      const msg = await HttpUtil.post('/panel/api/domains/apply', parsed, { silent: true });
       if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
       const next = DomainFrontStatusSchema.parse(msg.obj);
       committed = true;
@@ -396,18 +461,62 @@ export default function DomainFrontTab({
       <Space wrap>
         <Button
           type="primary"
-          loading={busy}
+          loading={busy || preflighting}
           aria-label={label('apply')}
-          disabled={(!dirty && !settingsDirty) || loading || !!redirectError}
+          disabled={(!dirty && !settingsDirty) || loading || !!redirectError || preflighting || busy}
           onClick={() => void apply()}
         >
           {label('apply')}
+        </Button>
+        <Button
+          onClick={() => void checkReadiness()}
+          disabled={!initialized || preflighting || busy}
+          loading={preflighting}
+          aria-label={label('preflight.action')}
+        >
+          {label('preflight.action')}
         </Button>
         <Button icon={<ReloadOutlined />} onClick={() => void load()}>
           {label('refresh')}
         </Button>
         {dirty && <Typography.Text type="secondary">{label('unsaved')}</Typography.Text>}
       </Space>
+      {preflightReport && preflightDraft === JSON.stringify(draft) && (
+        <Card size="small" title={label('preflight.title')}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
+            <Alert
+              showIcon
+              type={!preflightReport.ready
+                ? 'error'
+                : preflightReport.checks.some((check) => check.severity === 'warning')
+                  ? 'warning'
+                  : 'success'}
+              title={label(preflightReport.ready ? 'preflight.ready' : 'preflight.blocked')}
+            />
+            <List
+              size="small"
+              dataSource={preflightReport.checks}
+              renderItem={(check) => (
+                <List.Item>
+                  <Space orientation="vertical" size={2} style={{ width: '100%' }}>
+                    <Space wrap>
+                      <Tag color={check.severity === 'error' ? 'red' : check.severity === 'warning' ? 'orange' : 'default'}>
+                        {label('preflight.severity.' + check.severity)}
+                      </Tag>
+                      {check.domain && <Typography.Text strong>{check.domain}</Typography.Text>}
+                      <Typography.Text>{label('preflight.code.' + check.code)}</Typography.Text>
+                    </Space>
+                    <Typography.Text type="secondary">{check.message}</Typography.Text>
+                    {check.addresses?.length ? (
+                      <Typography.Text code>{check.addresses.join(', ')}</Typography.Text>
+                    ) : null}
+                  </Space>
+                </List.Item>
+              )}
+            />
+          </Space>
+        </Card>
+      )}
       <DomainOverview
         draft={draft}
         status={status}

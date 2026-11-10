@@ -91,6 +91,12 @@ function fixture(existing = false) {
         ],
       }),
     ),
+    http.post('*/panel/api/domains/preflight', () =>
+      HttpResponse.json({
+        success: true,
+        obj: { ready: true, checkedAt: 1, checks: [] },
+      }),
+    ),
     http.post('*/panel/api/domains/apply', async ({ request }) => {
       applied = DomainConfigFormSchema.parse(await request.json());
       return HttpResponse.json({ success: true, obj: { ...status(), config: applied } });
@@ -271,6 +277,37 @@ describe('domain and TLS dashboard', () => {
       expect(table?.textContent).toContain('cdn.example.org');
       expect(table?.textContent).not.toContain('sub.example.com');
     });
+    expect(f.applied).toBeUndefined();
+  });
+
+  it('checks the unsaved draft without applying it', async () => {
+    const f = fixture();
+    renderWithProviders(<DomainFrontTab />);
+    await screen.findByDisplayValue('old@example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Check readiness' }));
+    expect(await screen.findByText('Configuration is ready to apply')).toBeTruthy();
+    expect(f.applied).toBeUndefined();
+  });
+
+  it('blocks applying an invalid draft reported by the server preflight', async () => {
+    const f = fixture();
+    server.use(
+      http.post('*/panel/api/domains/preflight', () =>
+        HttpResponse.json({
+          success: true,
+          obj: {
+            ready: false,
+            checkedAt: 1,
+            checks: [{ code: 'telemt_port_conflict', severity: 'error', message: 'TCP 443 is in use' }],
+          },
+        }),
+      ),
+    );
+    renderWithProviders(<DomainFrontTab />);
+    const email = await screen.findByDisplayValue('old@example.com');
+    fireEvent.change(email, { target: { value: 'next@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    expect(await screen.findByText('Configuration contains blocking errors')).toBeTruthy();
     expect(f.applied).toBeUndefined();
   });
 

@@ -2500,6 +2500,41 @@
             "pending": "Ожидает сертификат"
           },
           "subtitle": "Состояние шлюза, сертификатов и доменов в одном месте"
+        },
+        "preflight": {
+          "action": "Проверить готовность",
+          "title": "Предварительная проверка",
+          "ready": "Конфигурация готова к применению",
+          "blocked": "В конфигурации есть блокирующие ошибки",
+          "confirm": "Проверьте предупреждения перед применением",
+          "confirmDetails": "Обнаружено предупреждений: {count}. Состояние DNS и портов может измениться. Продолжить применение?",
+          "continue": "Применить с предупреждениями",
+          "severity": {
+            "error": "Ошибка",
+            "warning": "Предупреждение",
+            "info": "Информация"
+          },
+          "code": {
+            "panel_forbidden": "Запрещён доступ к панели через шлюз",
+            "invalid_config": "Некорректная конфигурация",
+            "gateway_disabled": "Шлюз отключён",
+            "remote_sni": "Внешний SNI (другая нода)",
+            "no_local_domains": "Нет локальных доменов",
+            "telemt_port_conflict": "Telemt WEB занимает TCP 443",
+            "port_owned": "Порт уже используется шлюзом",
+            "port_unavailable": "Возможен конфликт порта",
+            "http01_port": "Проверьте публичный TCP 80 для HTTP-01",
+            "manual_certificate_unreadable": "Не удалось загрузить сертификат или ключ",
+            "manual_certificate_invalid": "Некорректный формат сертификата",
+            "manual_certificate_hostname": "Сертификат не соответствует имени домена",
+            "manual_certificate_expired": "Сертификат просрочен или ещё не действует",
+            "manual_certificate_expiring": "Срок сертификата скоро истечёт",
+            "dns_lookup_failed": "Ошибка DNS",
+            "dns_missing": "Отсутствует DNS-запись",
+            "dns_private": "DNS указывает на непубличные IP",
+            "dns_resolved": "DNS-записи найдены",
+            "dns_timeout": "Превышено время проверки DNS"
+          }
         }
       },
       "subAppearanceTheme": "Тема страницы",

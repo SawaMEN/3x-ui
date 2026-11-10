@@ -2621,6 +2621,41 @@
             "pending": "Awaiting certificate"
           },
           "subtitle": "Live gateway status, certificates and domains in one workspace"
+        },
+        "preflight": {
+          "action": "Check readiness",
+          "title": "Configuration preflight",
+          "ready": "Configuration is ready to apply",
+          "blocked": "Configuration contains blocking errors",
+          "confirm": "Review the warnings before applying",
+          "confirmDetails": "Preflight found {count} warning(s). DNS and port availability may change. Continue applying the configuration?",
+          "continue": "Apply despite warnings",
+          "severity": {
+            "error": "Error",
+            "warning": "Warning",
+            "info": "Information"
+          },
+          "code": {
+            "panel_forbidden": "Admin panel exposure is prohibited",
+            "invalid_config": "Configuration validation failed",
+            "gateway_disabled": "Gateway is disabled",
+            "remote_sni": "External SNI (other node)",
+            "no_local_domains": "No local domains to start",
+            "telemt_port_conflict": "Telemt WEB conflicts with gateway on TCP 443",
+            "port_owned": "Already bound by the gateway",
+            "port_unavailable": "Port may be occupied",
+            "http01_port": "Check public TCP 80 for HTTP-01",
+            "manual_certificate_unreadable": "Manual certificate or key cannot be opened",
+            "manual_certificate_invalid": "Certificate format is invalid",
+            "manual_certificate_hostname": "Certificate hostname mismatch",
+            "manual_certificate_expired": "Certificate is expired or not yet valid",
+            "manual_certificate_expiring": "Certificate expires soon",
+            "dns_lookup_failed": "DNS lookup failed",
+            "dns_missing": "DNS record is missing",
+            "dns_private": "DNS resolves to non-public IPs",
+            "dns_resolved": "DNS records found",
+            "dns_timeout": "DNS diagnostics timed out"
+          }
         }
       },
       "subAppearanceTheme": "Page theme",
