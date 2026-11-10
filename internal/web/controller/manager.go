@@ -20,6 +20,7 @@ func NewManagerController(g *gin.RouterGroup) *ManagerController {
 	g.GET("/state", a.state)
 	g.GET("/subscriptions/:id", a.detail)
 	g.POST("/subscriptions", a.save)
+	g.POST("/subscriptions/bulk-shared", a.bulkShared)
 	g.POST("/preflight", a.preflight)
 	g.POST("/subscriptions/:id/rotate", a.rotate)
 	g.POST("/subscriptions/:id/delete", a.remove)
@@ -65,6 +66,15 @@ func (a *ManagerController) save(c *gin.Context) {
 	}
 	v, err := a.service.Save(session.GetLoginUser(c).Id, in)
 	jsonObj(c, v, err)
+}
+
+func (a *ManagerController) bulkShared(c *gin.Context) {
+	var input service.ManagerBulkSharedInput
+	if !managerBind(c, &input) {
+		return
+	}
+	result, err := a.service.BulkCreateShared(session.GetLoginUser(c).Id, input)
+	jsonObj(c, result, err)
 }
 
 func (a *ManagerController) queue(c *gin.Context, kind string) {
