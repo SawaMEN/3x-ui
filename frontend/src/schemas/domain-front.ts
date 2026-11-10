@@ -19,7 +19,7 @@ const hostname = z
   .toLowerCase()
   .max(253)
   .regex(
-    /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/,
+    /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/,
     'pages.settings.domains.invalidHostname',
   );
 export const DomainFormSchema = DomainResponseSchema.extend({
