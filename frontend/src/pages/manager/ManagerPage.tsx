@@ -36,6 +36,7 @@ import type { Relay, Subscription } from './schema';
 import SubscriptionEditor from './SubscriptionEditor';
 import SubscriptionWorkspace from './SubscriptionWorkspace';
 import BulkSharedModal from './BulkSharedModal';
+import CoverSiteModal from './CoverSiteModal';
 import RelayEditor from './RelayEditor';
 import { runSNIScan } from '@/pages/inbounds/form/security/sni-scanner';
 import { scannedServerName } from '@/pages/inbounds/form/security/RealityTargetScannerModal';
@@ -60,6 +61,7 @@ export default function ManagerPage() {
   const [nodeOpen, setNodeOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [bulkSharedOpen, setBulkSharedOpen] = useState(false);
+  const [coverSiteOpen, setCoverSiteOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [domains, setDomains] = useState('');
   const [qr, setQr] = useState('');
@@ -389,6 +391,11 @@ export default function ManagerPage() {
                             <Button icon={<SearchOutlined />} onClick={() => setScanOpen(true)}>
                               {m('scan')}
                             </Button>
+                            <Button onClick={() => setCoverSiteOpen(true)}>
+                              {i18n.language.startsWith('ru')
+                                ? 'Сайт-заглушка и TLS'
+                                : 'Cover site & TLS'}
+                            </Button>
                             <Button onClick={exportDomains}>{m('export')}</Button>
                             <Upload
                               accept=".txt,.csv"
@@ -558,6 +565,20 @@ export default function ManagerPage() {
           </Layout.Content>
         </Layout>
       </Layout>
+      <CoverSiteModal
+        open={coverSiteOpen}
+        nodes={nodes}
+        onClose={() => setCoverSiteOpen(false)}
+        onSuccess={(domain, state) => {
+          refresh();
+          void cache.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
+          msg.success(
+            i18n.language.startsWith('ru')
+              ? `Сайт ${domain}: ${state}`
+              : `Site ${domain}: ${state}`,
+          );
+        }}
+      />
       <BulkSharedModal
         open={bulkSharedOpen}
         onClose={() => setBulkSharedOpen(false)}
