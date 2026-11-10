@@ -53,10 +53,10 @@ type DomainFrontStatus struct {
 
 type Manager struct {
 	operations sync.RWMutex // renewal checks exclude gateway replacement and Stop
-	mu        sync.Mutex
-	cachePath string
-	runtime   *frontRuntime
-	lastError string
+	mu         sync.Mutex
+	cachePath  string
+	runtime    *frontRuntime
+	lastError  string
 }
 
 type frontRuntime struct {

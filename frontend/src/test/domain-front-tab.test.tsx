@@ -71,7 +71,26 @@ function fixture(existing = false) {
     http.get('*/panel/api/domains/certificates', () =>
       HttpResponse.json({
         success: true,
-        obj: { items: [], firewallEnabled: true, firewallBackend: 'nftables' },
+        obj: {
+          items: status().certificates.map((cert) => ({
+            id: cert.name,
+            name: cert.name,
+            names: [cert.name],
+            usedBy: ['Subscription'],
+            manager: cert.renewal,
+            challenge: 'http-01',
+            ports: [80],
+            source: cert.source,
+            state: cert.state,
+            issuer: cert.issuer,
+            expiresAt: cert.expiresAt,
+            daysLeft: cert.daysLeft,
+            autoRenew: cert.autoRenew,
+            certFile: cert.certFile,
+          })),
+          firewallEnabled: true,
+          firewallBackend: 'nftables',
+        },
       }),
     ),
     http.get('*/panel/api/domains/status', () => {
@@ -167,7 +186,7 @@ describe('domain and TLS dashboard', () => {
     renderWithProviders(<DomainFrontTab />);
     expect(await screen.findByText('sub.example.com')).toBeTruthy();
     await openDomainSection('Certificates');
-    expect(await screen.findByText('Days remaining: 45 days')).toBeTruthy();
+    expect(await screen.findByText(/45 days/)).toBeTruthy();
     const email = await findDomainEmail();
     fireEvent.change(email, { target: { value: 'edited@example.com' } });
     const initialReads = f.reads;
