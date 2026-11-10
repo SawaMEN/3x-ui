@@ -867,7 +867,7 @@ func (r *Remote) ListCertificateSummaries(ctx context.Context) ([]RemoteCertific
 // ListManagedSNI uses the existing authenticated node API. The local flag
 // prevents recursive discovery when nodes themselves manage child panels.
 func (r *Remote) ListManagedSNI(ctx context.Context) ([]RemoteManagedSNI, error) {
-	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/sni?local=1", nil)
+	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/sni?local=1&summary=1", nil)
 	if err != nil {
 		return nil, err
 	}
