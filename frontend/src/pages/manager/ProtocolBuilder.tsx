@@ -22,7 +22,11 @@ import {
 import { runSNIScan } from '@/pages/inbounds/form/security/sni-scanner';
 import { nodeSupportsProtocol } from '@/lib/xray/node-protocols';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
-import { managerTLSCertificatesForNode } from './certificate-recipes';
+import {
+  managerTLSCertificateForSni,
+  managerTLSCertificatesForNode,
+} from './certificate-recipes';
+import { HttpUtil } from '@/utils';
 import { buildManagerRecipes, catalogGroups, managerCatalog, MAX_MANAGER_ENTRIES } from './catalog';
 import type { Subscription } from './schema';
 
@@ -49,10 +53,15 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
   const [replace, setReplace] = useState(true);
   const [allowUnconfiguredTLS, setAllowUnconfiguredTLS] = useState(false);
   const [tlsSniByNode, setTlsSniByNode] = useState<Record<number, string>>({});
+  const [acmeEmail, setAcmeEmail] = useState('');
+  const [acmeConsent, setAcmeConsent] = useState(false);
+  const [issuingCertificates, setIssuingCertificates] = useState(false);
+  const [issueMessage, setIssueMessage] = useState('');
   const {
     data: certificates = [],
     isFetching: certsFetching,
     isError: certsError,
+    refetch: refetchCertificates,
   } = useManagedSniDomains();
   const [message, setMessage] = useState('');
   const t = (ru: string, en: string) => (russian ? ru : en);
@@ -146,6 +155,101 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       setScanError(String(error));
     } finally {
       setScanning(null);
+    }
+  };
+  const issueNodeCertificates = async () => {
+    if (issuingCertificates) return;
+    if (!acmeConsent || !acmeEmail.trim()) {
+      setIssueMessage(
+        t(
+          'Укажите контактный email и подтвердите владение доменом и условия Let’s Encrypt.',
+          'Enter an ACME email and confirm domain ownership and Let’s Encrypt terms.',
+        ),
+      );
+      return;
+    }
+    const targets = new Map<string, { nodeId: number; domain: string }>();
+    const skipped: string[] = [];
+    for (const nodeId of nodeIds) {
+      for (const item of selectedItems) {
+        if (item.sniMode !== 'tls') continue;
+        const selected = tlsSniByNode[nodeId] ?? sniByPreset[item.id] ?? '';
+        const domain = selected.trim().toLowerCase().replace(/\\.$/, '');
+        if (!domain || domain === 'auto' || domain === 'inherit') {
+          skipped.push(`${item.name} · #${nodeId}`);
+          continue;
+        }
+        if (managerTLSCertificateForSni(certificates, nodeId, domain)) continue;
+        targets.set(`${nodeId}|${domain}`, { nodeId, domain });
+      }
+    }
+    if (targets.size === 0) {
+      setIssueMessage(
+        skipped.length
+          ? t(
+              'Укажите конкретные TLS-домены для протоколов или каждой ноды.',
+              'Select explicit TLS hostnames for protocols or nodes.',
+            )
+          : t('Все выбранные TLS-сертификаты уже найдены.', 'All selected TLS certificates are already available.'),
+      );
+      return;
+    }
+    if (targets.size > 30) {
+      setIssueMessage(
+        t(
+          'За один запуск поддерживается не более 30 сертификатов. Разделите ноды на группы.',
+          'Maximum 30 certificates per request. Split nodes into groups.',
+        ),
+      );
+      return;
+    }
+    setIssuingCertificates(true);
+    const successes: string[] = [];
+    const errors: string[] = [];
+    try {
+      for (const target of targets.values()) {
+        try {
+          const result = await HttpUtil.post(
+            '/panel/api/manager/domains/cover-site',
+            {
+              nodeId: target.nodeId,
+              domain: target.domain,
+              email: acmeEmail.trim(),
+              acceptTerms: true,
+            },
+            { headers: { 'Content-Type': 'application/json' }, silent: true },
+          );
+          if (result?.success) {
+            const payload = result.obj as { state?: string } | undefined;
+            successes.push(`${target.domain} (#${target.nodeId}): ${payload?.state ?? 'pending'}`);
+          } else {
+            errors.push(`${target.domain} (#${target.nodeId}): ${result?.msg ?? 'failed'}`);
+          }
+        } catch (error) {
+          errors.push(`${target.domain} (#${target.nodeId}): ${String(error)}`);
+        }
+      }
+      await refetchCertificates();
+      setIssueMessage(
+        [
+          ...successes,
+          ...errors,
+          ...(skipped.length
+            ? [
+                t(
+                  'Для некоторых протоколов не указан TLS-домен.',
+                  'Some protocols have no explicit TLS hostname.',
+                ),
+              ]
+            : []),
+          t(
+            'Новые сертификаты могут выпускаться асинхронно. Обновите список, затем сформируйте подключения.',
+            'New certificates may be issued asynchronously. Refresh the list before generating recipes.',
+          ),
+        ].join(' · '),
+      );
+    } finally {
+      setIssuingCertificates(false);
     }
   };
   const apply = () => {
@@ -537,7 +641,41 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
         />
       )}
       <Typography.Title level={5} style={{ margin: 0 }}>
-        {t('3. Создание черновика', '3. Create draft')}
+        {t('3. Автоматический выпуск сертификатов', '3. Automatic certificate issuance')}
+      </Typography.Title>
+      <Card size="small">
+        <Space orientation="vertical" style={{ width: '100%' }}>
+          <Typography.Text type="secondary">
+            {t(
+              'Для TLS без сертификата укажите домен (общий для протокола или отдельный для ноды). CertMagic выпустит и будет продлевать сертификат на нужной ноде через существующий Domain Front. Нужны DNS и доступные ACME-порты; конфликт 80/443 не изменит работающий VPN.',
+              'For TLS without a certificate choose a hostname per protocol or node. Existing Domain Front/CertMagic will issue and renew on the selected node. DNS and reachable ACME challenge ports are required; port 80/443 conflicts do not replace a running VPN.',
+            )}
+          </Typography.Text>
+          <Input
+            value={acmeEmail}
+            onChange={(event) => setAcmeEmail(event.target.value)}
+            type="email"
+            maxLength={254}
+            placeholder={t('Email для ACME', 'ACME contact email')}
+          />
+          <Checkbox checked={acmeConsent} onChange={(event) => setAcmeConsent(event.target.checked)}>
+            {t(
+              'Я контролирую указанные домены и принимаю условия Let’s Encrypt.',
+              'I control the selected hostnames and accept the Let’s Encrypt terms.',
+            )}
+          </Checkbox>
+          <Button
+            loading={issuingCertificates}
+            disabled={issuingCertificates || selectedItems.every((item) => item.sniMode !== 'tls')}
+            onClick={() => void issueNodeCertificates()}
+          >
+            {t('Выпустить недостающие TLS-сертификаты на нодах', 'Issue missing TLS certificates on selected nodes')}
+          </Button>
+          {issueMessage && <Alert showIcon type="info" title={issueMessage} />}
+        </Space>
+      </Card>
+      <Typography.Title level={5} style={{ margin: 0 }}>
+        {t('4. Создание черновика', '4. Create draft')}
       </Typography.Title>
       <Checkbox
         checked={allowUnconfiguredTLS}

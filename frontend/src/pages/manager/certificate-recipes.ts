@@ -48,11 +48,11 @@ export function managerTLSCertificateForSni(
 export function managerConfigNeedsTLSCertificate(config: ManagerConfig): boolean {
   const stream = JSON.parse(config.streamSettings) as { security?: string };
   if (stream.security === 'tls') return true;
-  const settings = JSON.parse(config.settings) as Record<string, any>;
+  const settings = JSON.parse(config.settings) as {
+    tls?: { enabled?: boolean; certificatePath?: string; keyPath?: string };
+  };
   if (['tuic', 'vetroff', 'trusttunnel'].includes(config.protocol)) return true;
-  const nativeTLS = settings.tls as
-    | { enabled?: boolean; certificatePath?: string; keyPath?: string }
-    | undefined;
+  const nativeTLS = settings.tls;
   return (
     !!nativeTLS &&
     nativeTLS.enabled !== false &&
@@ -85,7 +85,21 @@ export function managerConfigWithTLSCertificate(
     ];
     return { ...config, streamSettings: JSON.stringify(stream) };
   }
-  const settings = JSON.parse(config.settings) as Record<string, any>;
+  const settings = JSON.parse(config.settings) as {
+    tls?: {
+      enabled?: boolean;
+      certificatePath?: string;
+      keyPath?: string;
+      serverName?: string;
+    };
+    server?: { certificate?: string; private_key?: string; sni?: string };
+    certificate?: string;
+    private_key?: string;
+    privateKey?: string;
+    sni?: string;
+    hostname?: string;
+    vetroff?: { autoTLS?: boolean };
+  };
   if (
     settings.tls &&
     settings.tls.enabled !== false &&
