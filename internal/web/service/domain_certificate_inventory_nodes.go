@@ -72,7 +72,7 @@ func nodeCertificateInventoryItem(nodeID int, nodeName string, cert runtime.Remo
 		issuer = issuer[:128]
 	}
 	return CertificateInventoryItem{
-		ID: hex.EncodeToString(id[:12]), Name: name, Names: names,
+		ID: "n" + hex.EncodeToString(id[:12]), Name: name, Names: names,
 		UsedBy: []string{"node"}, Manager: manager, Challenge: challenge,
 		Ports: []int{}, Source: "remote", State: state,
 		Issuer: issuer, ExpiresAt: cert.ExpiresAt, DaysLeft: cert.DaysLeft,
