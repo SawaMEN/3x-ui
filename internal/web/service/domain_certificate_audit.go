@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
@@ -22,7 +20,6 @@ const (
 var (
 	certificateAuditMu sync.Mutex
 	certificateHealthMu sync.Mutex
-	auditDomainPattern = regexp.MustCompile(`^(?:\\*\\.)?[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
 )
 
 // CertificateAuditEntry stores only fixed event types and a trusted local
@@ -47,8 +44,23 @@ func boundedCertificateAudit(entries []CertificateAuditEntry, event CertificateA
 
 func certificateAuditDomain(value string) string {
 	value = strings.ToLower(strings.TrimSpace(strings.TrimSuffix(value, ".")))
-	if len(value) > 253 || !auditDomainPattern.MatchString(value) || !strings.Contains(value, ".") || strings.Contains(value, "..") {
+	if len(value) < 4 || len(value) > 253 || !strings.Contains(value, ".") || strings.Contains(value, "..") {
 		return ""
+	}
+	host := strings.TrimPrefix(value, "*.")
+	if strings.Contains(host, "*") {
+		return ""
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return ""
+		}
+		for _, ch := range label {
+			if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' {
+				continue
+			}
+			return ""
+		}
 	}
 	return value
 }
@@ -245,5 +257,3 @@ func RunCertificateHealthMonitor(ctx context.Context) {
 		}
 	}
 }
-
-var _ = domainfront.DomainFrontStatus{}
