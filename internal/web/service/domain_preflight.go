@@ -57,11 +57,22 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 	if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled && telemtWebFrontendActive(state) {
 		telemtCover = state.Domain
 	}
-	return runDomainPreflight(ctx, cfg, files, old, status.Running, preflightDeps{
+	report := runDomainPreflight(ctx, cfg, files, old, status.Running, preflightDeps{
 		lookup:      net.DefaultResolver.LookupIPAddr,
 		probePort:   probeDomainPort,
 		telemtCover: telemtCover,
-	}), nil
+	})
+	if cfg.Enabled && cfg.DNS01Provider != "" {
+		credential, tokenErr := DomainDNSCredentialState()
+		if tokenErr != nil || !credential.Configured {
+			report.Ready = false
+			report.Checks = append(report.Checks, domainPreflightCheck{
+				Code: "dns01_credentials_missing", Severity: "error",
+				Message: "Cloudflare DNS-01 requires a restricted API token configured on this server.",
+			})
+		}
+	}
+	return report, nil
 }
 
 func probeDomainPort(ctx context.Context, listen string, port int) error {
@@ -141,7 +152,7 @@ func runDomainPreflight(
 			}
 		}
 	}
-	if cfg.HTTPPort != 80 {
+	if cfg.DNS01Provider == "" && cfg.HTTPPort != 80 {
 		for _, domain := range local {
 			if domain.TLS == "certmagic" || domain.TLS == "auto" && files[domain.Name].CertFile == "" {
 				add("http01_port", "warning", "", "Automatic HTTP-01 validation normally requires public TCP 80; verify external NAT or use another supported challenge method.")
