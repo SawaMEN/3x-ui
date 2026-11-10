@@ -64,12 +64,12 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 		telemtCover: telemtCover,
 	})
 	if cfg.Enabled && cfg.DNS01Provider != "" {
-		credential, tokenErr := DomainDNSCredentialState()
+		credential, tokenErr := DomainDNSCredentialStateFor(cfg.DNS01Provider)
 		if tokenErr != nil || !credential.Configured {
 			report.Ready = false
 			report.Checks = append(report.Checks, domainPreflightCheck{
 				Code: "dns01_credentials_missing", Severity: "error",
-				Message: "Cloudflare DNS-01 requires a restricted API token configured on this server.",
+				Message: "Selected DNS-01 provider requires a scoped API token configured on this server.",
 			})
 		}
 	}
