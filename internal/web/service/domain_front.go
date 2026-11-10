@@ -340,7 +340,7 @@ func StartDomainFront() error {
 		return err
 	}
 	backend.ChallengeRoots = roots
-	backend.CertificateEvent = DomainCertificateFirewallEvents()
+	backend.CertificateEvent = DomainCertificateFirewallEvents(cfg.HTTPPort, cfg.HTTPSPort)
 	if err := managedDomainFront().Apply(context.Background(), cfg, backend); err != nil {
 		rollback()
 		return err
