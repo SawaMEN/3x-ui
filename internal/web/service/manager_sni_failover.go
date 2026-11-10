@@ -10,7 +10,7 @@ import (
 )
 
 func managerSNIChoices(e model.ManagerEntry) []string {
-	choices := make([]string, 0, 1+len(e.SNIBackups))
+	choices := make([]string, 0, 1 + len(e.SNIBackups))
 	choices = append(choices, e.SNI)
 	seen := map[string]bool{e.SNI: true}
 	for _, candidate := range e.SNIBackups {
@@ -49,7 +49,7 @@ func managerChooseEntrySNI(
 			// Publish the actual hostname chosen by applySNI, not its placeholder.
 			var stream struct {
 				Security string `json:"security"`
-				Reality struct {
+				Reality  struct {
 					ServerNames []string `json:"serverNames"`
 				} `json:"realitySettings"`
 			}
