@@ -620,6 +620,10 @@ export const EXAMPLES: Record<string, unknown> = {
   },
   "DomainFrontConfig": {
     "acceptTerms": false,
+    "dns01Propagation": 0,
+    "dns01Provider": "",
+    "dns01Zone": "",
+    "dns01ZoneId": "",
     "domains": [
       {
         "certFile": "",
@@ -676,6 +680,10 @@ export const EXAMPLES: Record<string, unknown> = {
     ],
     "config": {
       "acceptTerms": false,
+      "dns01Propagation": 0,
+      "dns01Provider": "",
+      "dns01Zone": "",
+      "dns01ZoneId": "",
       "domains": [
         {
           "certFile": "",
