@@ -12,7 +12,7 @@ func TestManagedSNIDomainsSameHostnameAcrossNodes(t *testing.T) {
 	}}
 	remote := []ManagedSNIDomain{
 		{NodeID: 7, NodeName: "One", Name: "vpn.example.org", Source: "remote", CertFile: "/node-7/cert.pem", KeyFile: "/node-7/key.pem"},
-		{NodeID: 9, NodeName: "Two", Name: "VPN.EXAMPLE.ORG.", Source: "remote", CertFile: "/node-9/cert.pem", KeyFile: "/node-9/key.pem"},
+		{NodeID: 9, NodeName: "Two", Name: "VPN.EXAMPLE.ORG.", Source: "remote", CertFile: "/node-9/cert.pem", KeyFile: "/node-9/key.pem", ExpiresAt: 2000000000, Issuer: "Test CA"},
 		{NodeID: 7, NodeName: "One", Name: "vpn.example.org", Source: "remote", CertFile: "/duplicate.pem", KeyFile: "/duplicate.key"},
 		{NodeID: 10, NodeName: "Three", Name: "vpn.example.org", Source: "remote"},
 		{NodeID: 0, Name: "vpn.example.org", Source: "remote", CertFile: "/unowned.pem", KeyFile: "/unowned.key"},
@@ -23,7 +23,8 @@ func TestManagedSNIDomainsSameHostnameAcrossNodes(t *testing.T) {
 	}
 	if got[0].CertFile != "/panel/cert.pem" ||
 		got[1].NodeID != 7 || got[1].CertFile != "/node-7/cert.pem" ||
-		got[2].NodeID != 9 || got[2].CertFile != "/node-9/cert.pem" {
+		got[2].NodeID != 9 || got[2].CertFile != "/node-9/cert.pem" ||
+		got[2].ExpiresAt != 2000000000 || got[2].Issuer != "Test CA" {
 		t.Fatalf("certificate paths were mixed, lost or duplicated: %+v", got)
 	}
 	if !seen["vpn.example.org"] {
