@@ -131,6 +131,7 @@ export default function DomainFrontTab({
   const [separatePublicPort, setSeparatePublicPort] = useState(false);
   const [editing, setEditing] = useState<number>();
   const [primaryDomain, setPrimaryDomain] = useState(false);
+  const [advancedEditorOpen, setAdvancedEditorOpen] = useState(false);
   const [form] = Form.useForm<DomainForm>();
   const [messageApi, holder] = message.useMessage();
   const mode = Form.useWatch('mode', form);
@@ -398,6 +399,7 @@ export default function DomainFrontTab({
         ? !sniOnly && !sharedOnly && !draft.subscriptionDomain
         : draft.subscriptionDomain === draft.domains[index].name,
     );
+    setAdvancedEditorOpen(index >= 0 && (draft.domains[index]?.tls !== 'auto' || !draft.domains[index]?.enabled));
     setEditing(index);
   }
   async function saveDomain() {
@@ -432,7 +434,7 @@ export default function DomainFrontTab({
     update({
       domains,
       subscriptionDomain: canonical,
-      ...(domain.mode === 'sni_only' ? { enabled: true } : {}),
+      ...(editing === -1 && domain.mode !== 'shared_sni' && !draft.domains.some((item) => item.enabled && item.mode !== 'shared_sni') ? { enabled: true } : {}),
     });
     setEditing(undefined);
   }
@@ -555,6 +557,27 @@ export default function DomainFrontTab({
           description={statusQuery.error.message}
         />
       )}
+
+      {section === 'domains' && draft.enabled &&
+        draft.domains.some((item) => item.enabled && item.mode !== 'shared_sni' && item.tls === 'auto') &&
+        (!draft.email || !draft.acceptTerms) && (
+          <Card size="small" title={label('workspace.autoTLSSetup')}>
+            <Typography.Paragraph type="secondary">{label('workspace.autoTLSHint')}</Typography.Paragraph>
+            <Space wrap align="start" style={{ width: '100%' }}>
+              <Input
+                type="email"
+                aria-label={label('email')}
+                placeholder={label('email')}
+                value={draft.email}
+                onChange={(event) => update({ email: event.target.value })}
+                style={{ width: 280, maxWidth: '100%' }}
+              />
+              <Checkbox checked={draft.acceptTerms} onChange={(event) => update({ acceptTerms: event.target.checked })}>
+                {label('terms')} <a href="https://letsencrypt.org/repository/" target="_blank" rel="noopener noreferrer">Let's Encrypt</a>
+              </Checkbox>
+            </Space>
+          </Card>
+        )}
       <div className="domain-manager-nav" role="navigation" aria-label={label('workspace.navigation')}>
         <Segmented
           block
@@ -1271,6 +1294,7 @@ export default function DomainFrontTab({
           })
         }
         forceRender
+        width={580}
       >
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item
@@ -1292,14 +1316,6 @@ export default function DomainFrontTab({
             ]}
           >
             <Input placeholder="sub.example.com" />
-          </Form.Item>
-          <Form.Item
-            name="enabled"
-            label={label('domainEnabled')}
-            tooltip={label('domainEnabledHelp')}
-            valuePropName="checked"
-          >
-            <Switch />
           </Form.Item>
           <Form.Item
             name="mode"
@@ -1371,6 +1387,25 @@ export default function DomainFrontTab({
               </Checkbox>
             </Form.Item>
           )}
+          <Collapse
+            size="small"
+            style={{ marginTop: 12 }}
+            activeKey={advancedEditorOpen ? ['domain-advanced'] : []}
+            onChange={(keys) => setAdvancedEditorOpen(Array.isArray(keys) ? keys.includes('domain-advanced') : keys === 'domain-advanced')}
+            items={[{
+              key: 'domain-advanced',
+              label: label('workspace.editorAdvanced'),
+              forceRender: true,
+              children: (
+                <>
+          <Form.Item
+            name="enabled"
+            label={label('domainEnabled')}
+            tooltip={label('domainEnabledHelp')}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
           {mode !== 'shared_sni' && (
             <>
               <Form.Item
@@ -1419,6 +1454,13 @@ export default function DomainFrontTab({
               </Form.Item>
             </>
           )}
+                </>
+              ),
+            }]}
+          />
+          <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+            {label('workspace.editorSaveHint')}
+          </Typography.Paragraph>
         </Form>
       </Modal>
     </Space>
