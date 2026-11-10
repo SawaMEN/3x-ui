@@ -2697,7 +2697,32 @@
           "renewCompleted": "Renewal command finished. Verify the certificate expiry.",
           "renewFailed": "Certificate renewal failed",
           "temporaryPorts": "Only during renewal",
-          "panelSchedule": "Automatic 3x-ui renewal check"
+          "panelSchedule": "Automatic 3x-ui renewal check",
+          "audit": {
+            "title": "Certificate history",
+            "description": "Recent issuance, renewal and expiration events. Limited to 250 records without secrets or command output.",
+            "empty": "No events yet",
+            "date": "Date",
+            "domain": "Domain",
+            "unspecified": "No domain",
+            "manager": "Manager",
+            "action": "Action",
+            "outcome": "Outcome",
+            "actions": {
+              "obtain": "Issue",
+              "renew": "Renewal",
+              "hook": "External hook",
+              "health": "Health monitor"
+            },
+            "outcomes": {
+              "started": "Started",
+              "succeeded": "Succeeded",
+              "failed": "Failed",
+              "expiring": "Expiring soon",
+              "expired": "Expired",
+              "recovered": "Recovered"
+            }
+          }
         }
       },
       "subAppearanceTheme": "Page theme",
