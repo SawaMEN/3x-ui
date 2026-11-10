@@ -28,6 +28,8 @@ import { HttpUtil } from '@/utils';
 import { ClientOptionsSchema, newEntry, SubscriptionSchema, PreflightSchema } from './schema';
 import type { Relay, Subscription } from './schema';
 import { MANAGER_PRESETS, createManagerPreset } from './presets';
+import { MAX_MANAGER_ENTRIES } from './catalog';
+import ProtocolBuilder from './ProtocolBuilder';
 import { DBInbound } from '@/models/dbinbound';
 const ConfigurationEditor = lazy(() => import('@/pages/inbounds/form/InboundFormModal'));
 
@@ -46,10 +48,10 @@ export default function SubscriptionEditor({
   onSave: (v: Subscription, generate: boolean) => Promise<boolean>;
   onTemplate: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const m = (k: string) => t('pages.manager.' + k);
   const form = useForm<Subscription>({ defaultValues: value });
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: 'entries' });
+  const { fields, append, remove, replace } = useFieldArray({ control: form.control, name: 'entries' });
   const [editingConfig, setEditingConfig] = useState<number | null>(null);
   const entries = useWatch({ control: form.control, name: 'entries' });
   const { data: templates = [] } = useInboundOptions();
@@ -206,7 +208,25 @@ export default function SubscriptionEditor({
             <Alert type="success" showIcon title={m('ready')} />
           )}
           <Tabs
+            defaultActiveKey={value.id === 0 ? 'builder' : 'general'}
             items={[
+              {
+                key: 'builder',
+                label: i18n.language.startsWith('ru') ? 'Конструктор протоколов' : 'Protocol builder',
+                children: (
+                  <ProtocolBuilder
+                    nodes={nodes}
+                    domains={domains}
+                    currentCount={fields.length}
+                    russian={i18n.language.startsWith('ru')}
+                    onApply={(recipes, replaceExisting) => {
+                      if (replaceExisting) replace(recipes);
+                      else append(recipes);
+                      setChecked(null);
+                    }}
+                  />
+                ),
+              },
               {
                 key: 'general',
                 label: m('general'),
@@ -280,7 +300,7 @@ export default function SubscriptionEditor({
               },
               {
                 key: 'connections',
-                label: `${m('connections')} (${fields.length}/20)`,
+                label: `${m('connections')} (${fields.length}/${MAX_MANAGER_ENTRIES})`,
                 children: (
                   <>
                     <Alert
@@ -477,6 +497,22 @@ export default function SubscriptionEditor({
                                         />
                                       </FormField>
                                     </Col>
+                                    {e?.mode === 'generate' &&
+                                      e.config?.streamSettings?.includes('"security":"reality"') && (
+                                        <Col xs={24} sm={12}>
+                                          <FormField
+                                            name={`entries.${i}.realityTarget`}
+                                            label={i18n.language.startsWith('ru')
+                                              ? 'Сайт-заглушка (REALITY Target)'
+                                              : 'Camouflage website (REALITY Target)'}
+                                            extra={i18n.language.startsWith('ru')
+                                              ? 'Домен:порт; если пусто, используется SNI.'
+                                              : 'Hostname:port; empty uses SNI.'}
+                                          >
+                                            <Input placeholder="example.com:443" />
+                                          </FormField>
+                                        </Col>
+                                      )}
                                   </>
                                 )}
                                 <Col xs={24} sm={12}>
@@ -500,7 +536,7 @@ export default function SubscriptionEditor({
                         block
                         type="dashed"
                         icon={<PlusOutlined />}
-                        disabled={fields.length >= 20}
+                        disabled={fields.length >= MAX_MANAGER_ENTRIES}
                         onClick={() => append(newEntry())}
                       >
                         {m('addConnection')}
