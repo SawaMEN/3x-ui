@@ -82,6 +82,13 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 			}
 		}
 	}
+	// Existing panel and subscription certificates can also be reused on
+	// this host. Validate their SANs, dates and key pairs with the same add()
+	// check; never copy these paths to a connected node.
+	if settings, err := (&SettingService{}).GetAllSetting(); err == nil {
+		add(settings.SubDomain, "subscription", settings.SubCertFile, settings.SubKeyFile)
+		add(settings.WebDomain, "panel", settings.WebCertFile, settings.WebKeyFile)
+	}
 	if includeNodes {
 		out = mergeNodeManagedSNIDomains(out, discoverNodeSNI(ctx), seen)
 	}
@@ -98,8 +105,12 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 			return 0
 		case "gateway":
 			return 1
-		default:
+		case "subscription":
 			return 2
+		case "panel":
+			return 3
+		default:
+			return 4
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
