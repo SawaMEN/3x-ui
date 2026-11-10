@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { keys } from '@/api/queryKeys';
 import { useDomainFrontStatus } from '@/api/queries/useDomainFrontStatus';
 import { useServerDraft } from '@/hooks/useServerDraft';
@@ -126,6 +126,18 @@ export default function DomainFrontTab({
   const [editing, setEditing] = useState<number>();
   const [primaryDomain, setPrimaryDomain] = useState(false);
   const [advancedEditorOpen, setAdvancedEditorOpen] = useState(false);
+  const [dnsToken, setDnsToken] = useState('');
+  const [savingDNSToken, setSavingDNSToken] = useState(false);
+  const dnsCredential = useQuery({
+    queryKey: ['settings', 'domains', 'dns-credential'],
+    enabled: section === 'settings',
+    retry: false,
+    queryFn: async () => {
+      const response = await HttpUtil.get('/panel/api/domains/dns/credential', undefined, { silent: true });
+      if (!response?.success) throw new Error(response?.msg || 'Cannot load DNS token status');
+      return response.obj as { configured: boolean; source?: string };
+    },
+  });
   const [form] = Form.useForm<DomainForm>();
   const [messageApi, holder] = message.useMessage();
   const mode = Form.useWatch('mode', form);
@@ -139,6 +151,26 @@ export default function DomainFrontTab({
 
   function load() {
     return statusQuery.refetch();
+  }
+
+  async function updateDNSToken(clear = false) {
+    if (savingDNSToken) return;
+    setSavingDNSToken(true);
+    try {
+      const response = await HttpUtil.post(
+        '/panel/api/domains/dns/credential',
+        clear ? { clear: true } : { token: dnsToken },
+        { silent: true },
+      );
+      if (!response?.success) throw new Error(response?.msg || label('dns01.saveError'));
+      setDnsToken('');
+      messageApi.success(label(clear ? 'dns01.cleared' : 'dns01.saved'));
+      void dnsCredential.refetch();
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : label('dns01.saveError'));
+    } finally {
+      setSavingDNSToken(false);
+    }
   }
 
   function update(patch: Partial<DomainConfigForm>) {
@@ -892,6 +924,89 @@ export default function DomainFrontTab({
       )}
       {section === 'settings' && (
         <div className="domain-manager-panel" data-testid="domain-panel-settings">
+          <Card size="small" title={label('dns01.title')} style={{ marginBottom: 12 }}>
+            <Typography.Paragraph type="secondary">{label('dns01.hint')}</Typography.Paragraph>
+            <Form layout="vertical">
+              <Form.Item label={label('dns01.provider')}>
+                <Select
+                  aria-label={label('dns01.provider')}
+                  value={draft.dns01Provider || ''}
+                  onChange={(value) =>
+                    update({
+                      dns01Provider: value,
+                      ...(value === '' ? { dns01Zone: '', dns01ZoneId: '', dns01Propagation: 0 } : {}),
+                    })
+                  }
+                  options={[
+                    { value: '', label: label('dns01.disabled') },
+                    { value: 'cloudflare', label: 'Cloudflare' },
+                  ]}
+                />
+              </Form.Item>
+              {draft.dns01Provider === 'cloudflare' && (
+                <>
+                  <Space wrap style={{ width: '100%' }}>
+                    <Form.Item label={label('dns01.zone')}>
+                      <Input
+                        aria-label={label('dns01.zone')}
+                        value={draft.dns01Zone ?? ''}
+                        placeholder="example.com"
+                        onChange={(event) => update({ dns01Zone: event.target.value })}
+                      />
+                    </Form.Item>
+                    <Form.Item label={label('dns01.zoneId')}>
+                      <Input
+                        aria-label={label('dns01.zoneId')}
+                        value={draft.dns01ZoneId ?? ''}
+                        placeholder="32-character Cloudflare ID"
+                        onChange={(event) => update({ dns01ZoneId: event.target.value })}
+                      />
+                    </Form.Item>
+                    <Form.Item label={label('dns01.propagation')}>
+                      <InputNumber
+                        aria-label={label('dns01.propagation')}
+                        min={0}
+                        max={180}
+                        value={draft.dns01Propagation ?? 0}
+                        onChange={(value) => update({ dns01Propagation: value ?? 0 })}
+                      />
+                    </Form.Item>
+                  </Space>
+                  <Typography.Paragraph type="secondary">
+                    {dnsCredential.data?.configured
+                      ? label('dns01.credentialSaved')
+                      : label('dns01.credentialMissing')}
+                    {dnsCredential.data?.source === 'environment' && ' · ' + label('dns01.environment')}
+                  </Typography.Paragraph>
+                  <Space wrap>
+                    <Input.Password
+                      aria-label={label('dns01.token')}
+                      placeholder={label('dns01.token')}
+                      autoComplete="new-password"
+                      value={dnsToken}
+                      onChange={(event) => setDnsToken(event.target.value)}
+                      style={{ width: 300, maxWidth: '100%' }}
+                    />
+                    <Button
+                      loading={savingDNSToken}
+                      disabled={!dnsToken}
+                      onClick={() => void updateDNSToken()}
+                    >
+                      {label('dns01.saveToken')}
+                    </Button>
+                    <Button
+                      danger
+                      disabled={!dnsCredential.data?.configured || dnsCredential.data?.source === 'environment'}
+                      loading={savingDNSToken}
+                      onClick={() => void updateDNSToken(true)}
+                    >
+                      {label('dns01.clearToken')}
+                    </Button>
+                  </Space>
+                </>
+              )}
+            </Form>
+          </Card>
           {allSetting && updateSetting && (
             <div className="domain-redirect-settings">
               <SettingListItem
