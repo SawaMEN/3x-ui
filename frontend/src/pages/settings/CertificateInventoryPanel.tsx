@@ -16,6 +16,7 @@ import { ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import { CertificateInventorySchema } from '@/schemas/domain-certificates';
+import CertificateAuditPanel from './CertificateAuditPanel';
 
 export default function CertificateInventoryPanel() {
   const { t, i18n } = useTranslation();
@@ -213,6 +214,7 @@ export default function CertificateInventoryPanel() {
           ]}
         />
       </Card>
+      <CertificateAuditPanel />
     </>
   );
 }
