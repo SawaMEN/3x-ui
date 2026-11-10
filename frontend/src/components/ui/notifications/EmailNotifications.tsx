@@ -105,6 +105,11 @@ const GROUPS: NotificationGroupConfig[] = [
   },
   {
     icon: <SafetyOutlined aria-hidden />,
+    title: 'eventGroupCertificates',
+    events: [{ key: 'certificate.health', label: 'eventCertificateHealth', settingKey: '' }],
+  },
+  {
+    icon: <SafetyOutlined aria-hidden />,
     title: 'eventGroupSecurity',
     events: [{ key: 'login.attempt', label: 'eventLoginAttempt', settingKey: '' }],
   },
