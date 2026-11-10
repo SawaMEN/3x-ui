@@ -4,6 +4,7 @@ import {
   managerCertificateName,
   managerTLSCertificateForSni,
   managerTLSCertificatesForNode,
+  managerConfigNeedsTLSCertificate,
   managerConfigWithTLSCertificate,
 } from '@/pages/manager/certificate-recipes';
 import { buildManagerRecipes } from '@/pages/manager/catalog';
@@ -138,6 +139,53 @@ describe('manager per-node TLS certificates', () => {
     const nodeCert = JSON.parse(entries[1].config?.streamSettings || '{}').tlsSettings
       .certificates[0];
     expect(nodeCert.certificateFile).toBe('/etc/france/fullchain.pem');
+  });
+
+  it('maps certificate files to each native TLS protocol without Xray-only fields', () => {
+    for (const protocol of ['naive', 'anytls', 'masque', 'tuic', 'vetroff', 'trusttunnel']) {
+      const config = createManagerPreset(protocol);
+      expect(managerConfigNeedsTLSCertificate(config)).toBe(true);
+      const filled = managerConfigWithTLSCertificate(config, local);
+      const settings = JSON.parse(filled.settings);
+      expect(filled.streamSettings).toBe(config.streamSettings);
+      if (['naive', 'anytls', 'masque'].includes(protocol)) {
+        expect(settings.tls).toMatchObject({
+          enabled: true,
+          serverName: local.name,
+          certificatePath: local.certFile,
+          keyPath: local.keyFile,
+        });
+      } else if (protocol === 'tuic') {
+        expect(settings.server).toMatchObject({
+          certificate: local.certFile,
+          private_key: local.keyFile,
+          sni: local.name,
+        });
+      } else {
+        expect(settings).toMatchObject({
+          hostname: local.name,
+          certificate: local.certFile,
+          privateKey: local.keyFile,
+        });
+      }
+    }
+  });
+
+  it('classifies native TLS protocols into certificate-backed recipes', () => {
+    for (const protocol of ['naive', 'anytls', 'masque', 'tuic', 'vetroff', 'trusttunnel']) {
+      const built = buildManagerRecipes({
+        presets: [protocol],
+        nodeIds: [0],
+        nodes: [],
+        domains: [],
+        sniByPreset: {},
+        targetByPreset: {},
+        verifiedSniByNode: {},
+        managedCertificates: [local],
+      });
+      expect(built.entries).toHaveLength(1);
+      expect(built.entries[0].sni).toBe(local.name);
+    }
   });
 
   it('supports explicit manual TLS drafts but still requires preflight validation', () => {

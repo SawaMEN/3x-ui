@@ -51,7 +51,7 @@ func managerSNIHealthDecision(entry model.ManagerEntry, healthy bool, now int64)
 func managerSNIHealthBackups(entry model.ManagerEntry, selected string) []string {
 	// Keep the previous working hostname available for a later recovery.
 	choices := make([]string, 0, len(entry.SNIBackups)+1)
-	for _, name := range append(slices.Clone(entry.SNIBackups), entry.SNI) {
+	for _, name := range append([]string{entry.SNI}, entry.SNIBackups...) {
 		if name != selected && !slices.Contains(choices, name) {
 			choices = append(choices, name)
 		}
@@ -240,6 +240,15 @@ func (s *ManagerService) monitorSNI(ctx context.Context, op *model.ManagerOperat
 					return err
 				}
 				managerMarkRestart(restart)
+				persisted, err := svc.GetInbound(next.Id)
+				if err != nil || persisted.Settings != original.Settings ||
+					persisted.Port != original.Port ||
+					!managerSNIHealthRealityKeysEqual(original.StreamSettings, persisted.StreamSettings) {
+					if err == nil {
+						err = fmt.Errorf("inbound credentials changed after update")
+					}
+					return s.rollbackManagerSNIHealth(ctx, &original, err)
+				}
 				applied := s.applyGeneration(ctx, []model.ManagerEntry{{ActiveInboundID: next.Id}})
 				if applied != nil {
 					return s.rollbackManagerSNIHealth(ctx, &original, applied)
