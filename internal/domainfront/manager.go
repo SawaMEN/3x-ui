@@ -254,25 +254,48 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 		ca = certmagic.LetsEncryptStagingCA
 	}
 	issuerOptions := certmagic.ACMEIssuer{CA: ca, Email: cfg.Email, Agreed: cfg.AcceptTerms, AltHTTPPort: cfg.HTTPPort, AltTLSALPNPort: cfg.HTTPSPort, Logger: logger}
-	if cfg.DNS01Provider == "cloudflare" {
-		provider, err := NewCloudflareTXTProvider(cfg.DNS01Zone, cfg.DNS01ZoneID, backend.DNS01Token)
-		if err != nil {
+	if cfg.DNS01Provider != "" {
+		// DNS-only issuance works without public 80/443 challenge ports and
+		// supports wildcard certificates. These settings are shared by all
+		// providers, while each provider retains a separately scoped token.
+		issuerOptions.DisableHTTPChallenge = true
+		issuerOptions.DisableTLSALPNChallenge = true
+		switch cfg.DNS01Provider {
+		case "cloudflare":
+			provider, err := NewCloudflareTXTProvider(cfg.DNS01Zone, cfg.DNS01ZoneID, backend.DNS01Token)
+			if err != nil {
+				r.cache.Stop()
+				for _, listener := range r.listeners {
+					_ = listener.Close()
+				}
+				return nil, fmt.Errorf("Cloudflare DNS-01 is not configured: %w", err)
+			}
+			issuerOptions.DNS01Solver = &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{
+				DNSProvider: provider,
+				PropagationDelay: time.Duration(cfg.DNS01Propagation) * time.Second,
+				PropagationTimeout: 4 * time.Minute,
+			}}
+		case "digitalocean":
+			provider, err := NewDigitalOceanTXTProvider(cfg.DNS01Zone, backend.DNS01Token)
+			if err != nil {
+				r.cache.Stop()
+				for _, listener := range r.listeners {
+					_ = listener.Close()
+				}
+				return nil, fmt.Errorf("DigitalOcean DNS-01 is not configured: %w", err)
+			}
+			issuerOptions.DNS01Solver = &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{
+				DNSProvider: provider,
+				PropagationDelay: time.Duration(cfg.DNS01Propagation) * time.Second,
+				PropagationTimeout: 4 * time.Minute,
+			}}
+		default:
 			r.cache.Stop()
 			for _, listener := range r.listeners {
 				_ = listener.Close()
 			}
-			return nil, fmt.Errorf("Cloudflare DNS-01 is not configured: %w", err)
+			return nil, errors.New("unsupported DNS-01 provider")
 		}
-		// All automatic certificates use DNS-01 when explicitly configured.
-		// HTTP/TLS-ALPN challenges are disabled, so ACME never needs to open
-		// temporary firewall ports for these certificates.
-		issuerOptions.DisableHTTPChallenge = true
-		issuerOptions.DisableTLSALPNChallenge = true
-		issuerOptions.DNS01Solver = &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{
-			DNSProvider: provider,
-			PropagationDelay: time.Duration(cfg.DNS01Propagation) * time.Second,
-			PropagationTimeout: 4 * time.Minute,
-		}}
 	}
 	r.issuer = certmagic.NewACMEIssuer(r.magic, issuerOptions)
 	r.magic.Issuers = []certmagic.Issuer{r.issuer}
