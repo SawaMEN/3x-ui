@@ -386,7 +386,7 @@ func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, 
 	if err := managerFreshServerKeys(ib); err != nil {
 		return nil, err
 	}
-	if err := s.applySNI(sub.UserID, ib, e.SNI); err != nil {
+	if err := s.applyEntrySNI(sub.UserID, ib, e); err != nil {
 		return nil, err
 	}
 	// Recheck the selected random target and certificate, not only the preview sample.
@@ -515,6 +515,58 @@ func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) erro
 			return fmt.Errorf("SNI requires TLS or Reality")
 		}
 	}
+	raw, err := json.Marshal(stream)
+	if err == nil {
+		ib.StreamSettings = string(raw)
+	}
+	return err
+}
+
+// managerRealityTarget accepts a hostname with an optional explicit TLS port.
+// The value is a REALITY camouflage destination, not a web server deployed by the panel.
+func managerRealityTarget(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.ContainsAny(value, "/?#@ \\t\\r\\n") {
+		return "", fmt.Errorf("REALITY target must be a hostname or hostname:port")
+	}
+	host, port, hasPort := strings.Cut(value, ":")
+	if _, err := managerDomain(host); err != nil {
+		return "", fmt.Errorf("invalid REALITY target hostname: %w", err)
+	}
+	if !hasPort {
+		return strings.ToLower(host) + ":443", nil
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return "", fmt.Errorf("invalid REALITY target port")
+	}
+	return fmt.Sprintf("%s:%d", strings.ToLower(host), n), nil
+}
+
+// applyEntrySNI preserves independent per-entry SNI and camouflage target.
+func (s *ManagerService) applyEntrySNI(owner int, ib *model.Inbound, entry model.ManagerEntry) error {
+	if err := s.applySNI(owner, ib, entry.SNI); err != nil {
+		return err
+	}
+	if entry.RealityTarget == "" {
+		return nil
+	}
+	target, err := managerRealityTarget(entry.RealityTarget)
+	if err != nil {
+		return err
+	}
+	var stream map[string]any
+	if err := json.Unmarshal([]byte(ib.StreamSettings), &stream); err != nil {
+		return err
+	}
+	if stream["security"] != "reality" {
+		return fmt.Errorf("camouflage target requires REALITY security")
+	}
+	reality, ok := stream["realitySettings"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("REALITY settings are missing")
+	}
+	reality["target"], reality["dest"] = target, target
 	raw, err := json.Marshal(stream)
 	if err == nil {
 		ib.StreamSettings = string(raw)
