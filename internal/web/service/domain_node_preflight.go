@@ -26,6 +26,11 @@ func augmentDomainPreflightWithNodeEvidence(ctx context.Context, cfg domainfront
 	if !cfg.Enabled {
 		return
 	}
+	// The UI uses a 15-second deadline. Together with the six-second
+	// built-in DNS preflight, node checks must finish within that budget.
+	ctx, cancelAll := context.WithTimeout(ctx, 7*time.Second)
+	defer cancelAll()
+	augmentNodeCertificateEvidence(ctx, cfg, report)
 	for _, check := range report.Checks {
 		if check.Code != "dns_resolved" || len(check.Addresses) == 0 {
 			continue
@@ -143,5 +148,91 @@ func augmentDomainPreflightWithNodeEvidence(ctx context.Context, cfg domainfront
 		report.Checks = append(report.Checks, domainPreflightCheck{
 			Code: code, Severity: severity, Domain: name, Message: msg,
 		})
+	}
+}
+
+// Remote SNI certificate paths never cross the node boundary. Inspect the
+// authenticated metadata only, and compare a configured public node address
+// with DNS as advisory evidence (NAT/CDN fronting may be intentional).
+func augmentNodeCertificateEvidence(ctx context.Context, cfg domainfront.DomainFrontConfig, report *domainPreflightReport) {
+	var shared []string
+	for _, d := range cfg.Domains {
+		if d.Enabled && d.Mode == "shared_sni" {
+			shared = append(shared, d.Name)
+		}
+		if len(shared) >= 8 {
+			break
+		}
+	}
+	if len(shared) == 0 {
+		return
+	}
+	certs := readRemoteCertificateInventories(ctx)
+	db := database.GetDB()
+	nodeAddresses := make(map[int]string)
+	if db != nil {
+		var nodes []model.Node
+		if err := db.Select("id", "address").Where("enable = ?", true).Limit(64).Find(&nodes).Error; err == nil {
+			for _, node := range nodes {
+				nodeAddresses[node.Id] = node.Address
+			}
+		}
+	}
+	for _, name := range shared {
+		certificateFound := false
+		for _, item := range certs {
+			if item.NodeID <= 0 || item.Name != name {
+				continue
+			}
+			certificateFound = true
+			code, severity := "node_certificate_valid", "info"
+			message := fmt.Sprintf("Node #%d owns the matching certificate; its private key remains on that node.", item.NodeID)
+			if item.State == "expired" || item.State == "error" || item.DaysLeft < 0 {
+				code, severity = "node_certificate_invalid", "warning"
+				message = fmt.Sprintf("Node #%d reports a certificate that is expired or unhealthy.", item.NodeID)
+			} else if item.State != "valid" && item.State != "renewal_due" {
+				code = "node_certificate_unknown"
+				message = fmt.Sprintf("Node #%d has not confirmed a valid certificate for this SNI.", item.NodeID)
+			}
+			report.Checks = append(report.Checks, domainPreflightCheck{
+				Code: code, Severity: severity, Domain: name, Message: message,
+			})
+			// Only compare literal global IPs. A host name, private node
+			// address, NAT or a CDN does not provide a proven public mapping.
+			nodeIP := net.ParseIP(nodeAddresses[item.NodeID])
+			if nodeIP == nil || netsafe.IsBlockedIP(nodeIP) {
+				continue
+			}
+			dnsCtx, stop := context.WithTimeout(ctx, 2*time.Second)
+			addrs, err := net.DefaultResolver.LookupIPAddr(dnsCtx, name)
+			stop()
+			if err != nil {
+				continue
+			}
+			matched := false
+			for _, entry := range addrs {
+				if entry.IP.Equal(nodeIP) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				report.Checks = append(report.Checks, domainPreflightCheck{
+					Code: "node_dns_address_mismatch", Severity: "warning", Domain: name,
+					Message: fmt.Sprintf("DNS does not include node #%d's configured public IP; verify CDN, NAT or proxy mapping.", item.NodeID),
+				})
+			} else {
+				report.Checks = append(report.Checks, domainPreflightCheck{
+					Code: "node_dns_address_match", Severity: "info", Domain: name,
+					Message: fmt.Sprintf("DNS includes node #%d's configured public IP.", item.NodeID),
+				})
+			}
+		}
+		if !certificateFound {
+			report.Checks = append(report.Checks, domainPreflightCheck{
+				Code: "node_certificate_unverified", Severity: "info", Domain: name,
+				Message: "No connected node supplied certificate evidence for this shared SNI. Verify on the owning node.",
+			})
+		}
 	}
 }
