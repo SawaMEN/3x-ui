@@ -33,6 +33,7 @@ on:
       - dns
       - telemt
       - manager
+      - domen
     paths:
       - "**.go"
       - "deploy/speed/**"
