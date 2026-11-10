@@ -379,7 +379,41 @@ func CreateHostsFromExternalProxy(tx *gorm.DB, inboundId int, streamSettings str
 	return created, nil
 }
 
+// Preserve the complete legacy endpoint contract when moving it into Hosts.
 func externalProxyEntryToHost(inboundId, index int, ep map[string]any) *model.Host {
+	host := legacyExternalProxyEntryToHost(inboundId, index, ep)
+	if remark, _ := ep["remark"].(string); strings.TrimSpace(remark) != "" {
+		runes := []rune(remark)
+		if len(runes) > 256 {
+			runes = runes[:256]
+		}
+		host.Remark = string(runes)
+	}
+	host.Alpn = externalProxyStringList(ep["alpn"])
+	host.PinnedPeerCertSha256 = externalProxyStringList(ep["pinnedPeerCertSha256"])
+	host.VerifyPeerCertByName, _ = ep["verifyPeerCertByName"].(string)
+	host.CipherSuites, _ = ep["cipherSuites"].(string)
+	host.VlessRoute, _ = ep["vlessRoute"].(string)
+	host.AllowInsecure, _ = ep["allowInsecure"].(bool)
+	host.ServerDescription, _ = ep["serverDescription"].(string)
+	return host
+}
+
+func externalProxyStringList(value any) []string {
+	if text, ok := value.(string); ok {
+		var values []string
+		for _, part := range strings.Split(text, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				values = append(values, part)
+			}
+		}
+		return values
+	}
+	return anyToNonEmptyStrings(value)
+}
+
+// Frozen mapping used only to recognize untouched rows made by older builds.
+func legacyExternalProxyEntryToHost(inboundId, index int, ep map[string]any) *model.Host {
 	security, _ := ep["forceTls"].(string)
 	switch security {
 	case "same", "tls", "none":
@@ -722,7 +756,12 @@ func fail2banEnforcementState() (fail2banState, error) {
 	if _, err := exec.LookPath("fail2ban-client"); err != nil {
 		return fail2banAbsent, nil
 	}
-	if err := exec.CommandContext(context.Background(), "fail2ban-client", "-h").Run(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, "fail2ban-client", "-h").Run(); err != nil {
+		if ctx.Err() != nil {
+			return fail2banUnknown, ctx.Err()
+		}
 		return fail2banUnknown, err
 	}
 	return fail2banEnforcing, nil
@@ -2092,6 +2131,10 @@ func untouchedImportedHosts(tx *gorm.DB, inboundId int, imports []*model.Host) (
 // externalProxyHosts maps each entry to the host an import creates; the bool reports whether
 // the stream carries an externalProxy list at all, an empty one included.
 func externalProxyHosts(inboundId int, streamSettings string) ([]*model.Host, bool) {
+	return externalProxyHostsWithMapper(inboundId, streamSettings, externalProxyEntryToHost)
+}
+
+func externalProxyHostsWithMapper(inboundId int, streamSettings string, mapper func(int, int, map[string]any) *model.Host) ([]*model.Host, bool) {
 	if strings.TrimSpace(streamSettings) == "" {
 		return nil, false
 	}
@@ -2103,7 +2146,7 @@ func externalProxyHosts(inboundId int, streamSettings string) ([]*model.Host, bo
 	var hosts []*model.Host
 	for i, raw := range eps {
 		if ep, ok := raw.(map[string]any); ok {
-			hosts = append(hosts, externalProxyEntryToHost(inboundId, i, ep))
+			hosts = append(hosts, mapper(inboundId, i, ep))
 		}
 	}
 	return hosts, listed
@@ -2156,7 +2199,7 @@ func EnsureFirstUser() (username, password string, err error) {
 
 func importedHostFields(h model.Host) model.Host {
 	h.Id, h.GroupId, h.SortOrder, h.CreatedAt, h.UpdatedAt = 0, "", 0, 0, 0
-	for _, list := range []*[]string{&h.Tags, &h.Alpn, &h.PinnedPeerCertSha256, &h.ExcludeFromSubTypes, &h.NodeGuids} {
+	for _, list := range []*[]string{&h.Tags, &h.Snis, &h.Alpn, &h.PinnedPeerCertSha256, &h.ExcludeFromSubTypes, &h.NodeGuids} {
 		if len(*list) == 0 {
 			*list = nil
 		}

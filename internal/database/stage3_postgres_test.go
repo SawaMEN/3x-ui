@@ -63,7 +63,13 @@ func stage3Canonical(t *testing.T, g *gorm.DB) string {
 		if err := g.Model(m).Select(s.Schema.DBNames).Order("1").Find(&rows).Error; err != nil {
 			t.Fatal(err)
 		}
-
+		for _, row := range rows {
+			for column, value := range row {
+				if instant, ok := value.(time.Time); ok {
+					row[column] = instant.UTC()
+				}
+			}
+		}
 		result[s.Table] = rows
 	}
 	b, err := json.Marshal(result)
@@ -82,6 +88,9 @@ func stage3PopulatedLegacy(t *testing.T) string {
 	}
 	g := GetDB()
 	// Populate every service table added after3.9.8, not just historical tables.
+	// PostgreSQL timestamps have microsecond precision. Use a shared UTC value
+	// representable by both drivers rather than implicit nanosecond defaults.
+	fixtureTime := time.Now().UTC().Truncate(time.Microsecond)
 	for _, m := range migrationModels() {
 		s := &gorm.Statement{DB: g}
 		if err := s.Parse(m); err != nil {
@@ -99,6 +108,9 @@ func stage3PopulatedLegacy(t *testing.T) string {
 		for _, name := range s.Schema.DBNames {
 			f := s.Schema.FieldsByDBName[name]
 			value, _ := f.ValueOf(context.Background(), v)
+			if f.FieldType == reflect.TypeOf(time.Time{}) {
+				value = fixtureTime
+			}
 			if f.AutoIncrement {
 				value = 900001
 			}

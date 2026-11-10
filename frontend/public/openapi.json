@@ -4428,10 +4428,6 @@
             "minimum": 1,
             "type": "integer"
           },
-          "presenceRegistry": {
-            "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
-            "type": "string"
-          },
           "protocolAvailability": {
             "additionalProperties": {
               "$ref": "#/components/schemas/ProtocolAvailability"
@@ -4508,6 +4504,10 @@
           "xrayError": {
             "type": "string"
           },
+          "xrayState": {
+            "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
+            "type": "string"
+          },
           "xrayVersion": {
             "example": "25.10.31",
             "type": "string"
@@ -4548,7 +4548,6 @@
           "panelVersion",
           "pinnedCertSha256",
           "port",
-          "presenceRegistry",
           "remark",
           "runningCore",
           "scheme",
@@ -4563,6 +4562,7 @@
           "updatedAt",
           "uptimeSecs",
           "xrayError",
+          "xrayState",
           "xrayVersion"
         ],
         "type": "object"
@@ -4815,10 +4815,6 @@
             "example": 2053,
             "type": "integer"
           },
-          "presenceRegistry": {
-            "example": "running",
-            "type": "string"
-          },
           "protocolAvailability": {
             "additionalProperties": {
               "$ref": "#/components/schemas/ProtocolAvailability"
@@ -4883,6 +4879,10 @@
           "xrayError": {
             "type": "string"
           },
+          "xrayState": {
+            "example": "running",
+            "type": "string"
+          },
           "xrayVersion": {
             "example": "25.10.31",
             "type": "string"
@@ -4924,7 +4924,6 @@
           "panelVersion",
           "pinnedCertSha256",
           "port",
-          "presenceRegistry",
           "remark",
           "runningCore",
           "scheme",
@@ -4938,6 +4937,7 @@
           "updatedAt",
           "uptimeSecs",
           "xrayError",
+          "xrayState",
           "xrayVersion"
         ],
         "type": "object"
@@ -5117,10 +5117,6 @@
             "example": "v3.x.x",
             "type": "string"
           },
-          "presenceRegistry": {
-            "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
-            "type": "string"
-          },
           "protocolAvailability": {
             "additionalProperties": {
               "$ref": "#/components/schemas/ProtocolAvailability"
@@ -5163,6 +5159,10 @@
           "xrayError": {
             "type": "string"
           },
+          "xrayState": {
+            "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
+            "type": "string"
+          },
           "xrayVersion": {
             "example": "25.10.31",
             "type": "string"
@@ -5179,7 +5179,6 @@
           "memPct",
           "panelEdition",
           "panelVersion",
-          "presenceRegistry",
           "runningCore",
           "singboxError",
           "singboxInstalled",
@@ -5189,6 +5188,7 @@
           "status",
           "uptimeSecs",
           "xrayError",
+          "xrayState",
           "xrayVersion"
         ],
         "type": "object"
@@ -15761,7 +15761,6 @@
                       "parentGuid": "",
                       "pinnedCertSha256": "",
                       "port": 2053,
-                      "presenceRegistry": "running",
                       "protocolAvailability": {},
                       "remark": "Primary edge",
                       "runningCore": "",
@@ -15780,6 +15779,7 @@
                       "updatedAt": 1700003600,
                       "uptimeSecs": 86400,
                       "xrayError": "",
+                      "xrayState": "running",
                       "xrayVersion": "25.10.31"
                     }
                   ]
@@ -15978,7 +15978,6 @@
                     "parentGuid": "",
                     "pinnedCertSha256": "",
                     "port": 2053,
-                    "presenceRegistry": "running",
                     "protocolAvailability": {},
                     "remark": "Primary edge",
                     "runningCore": "",
@@ -15997,6 +15996,7 @@
                     "updatedAt": 1700003600,
                     "uptimeSecs": 86400,
                     "xrayError": "",
+                    "xrayState": "running",
                     "xrayVersion": "25.10.31"
                   }
                 }
@@ -16144,7 +16144,6 @@
                     "parentGuid": "",
                     "pinnedCertSha256": "",
                     "port": 2053,
-                    "presenceRegistry": "running",
                     "protocolAvailability": {},
                     "remark": "Primary edge",
                     "runningCore": "",
@@ -16163,6 +16162,7 @@
                     "updatedAt": 1700003600,
                     "uptimeSecs": 86400,
                     "xrayError": "",
+                    "xrayState": "running",
                     "xrayVersion": "25.10.31"
                   }
                 }
@@ -16387,7 +16387,6 @@
                     "memPct": 45.2,
                     "panelEdition": "sawamen",
                     "panelVersion": "v3.x.x",
-                    "presenceRegistry": "",
                     "protocolAvailability": {},
                     "runningCore": "",
                     "singboxError": "",
@@ -16401,6 +16400,7 @@
                     ],
                     "uptimeSecs": 86400,
                     "xrayError": "",
+                    "xrayState": "",
                     "xrayVersion": "25.10.31"
                   }
                 }
@@ -22026,7 +22026,6 @@
                   "parentGuid": "",
                   "pinnedCertSha256": "",
                   "port": 2053,
-                  "presenceRegistry": "running",
                   "protocolAvailability": {},
                   "remark": "Primary edge",
                   "runningCore": "",
@@ -22045,6 +22044,7 @@
                   "updatedAt": 1700003600,
                   "uptimeSecs": 86400,
                   "xrayError": "",
+                  "xrayState": "running",
                   "xrayVersion": "25.10.31"
                 }
               ],

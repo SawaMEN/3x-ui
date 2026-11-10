@@ -1353,7 +1353,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "parentGuid": "",
     "pinnedCertSha256": "",
     "port": 2053,
-    "presenceRegistry": "",
     "protocolAvailability": {},
     "remark": "",
     "runningCore": "",
@@ -1373,6 +1372,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "updatedAt": 1700000000,
     "uptimeSecs": 86400,
     "xrayError": "",
+    "xrayState": "",
     "xrayVersion": "25.10.31"
   },
   "NodeMutationRequest": {
@@ -1435,7 +1435,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "parentGuid": "",
     "pinnedCertSha256": "",
     "port": 2053,
-    "presenceRegistry": "running",
     "protocolAvailability": {},
     "remark": "Primary edge",
     "runningCore": "",
@@ -1454,6 +1453,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "updatedAt": 1700003600,
     "uptimeSecs": 86400,
     "xrayError": "",
+    "xrayState": "running",
     "xrayVersion": "25.10.31"
   },
   "OutboundTraffics": {
@@ -1495,7 +1495,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "memPct": 45.2,
     "panelEdition": "sawamen",
     "panelVersion": "v3.x.x",
-    "presenceRegistry": "",
     "protocolAvailability": {},
     "runningCore": "",
     "singboxError": "",
@@ -1509,6 +1508,7 @@ export const EXAMPLES: Record<string, unknown> = {
     ],
     "uptimeSecs": 86400,
     "xrayError": "",
+    "xrayState": "",
     "xrayVersion": "25.10.31"
   },
   "ProtocolAvailability": {

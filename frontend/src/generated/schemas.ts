@@ -4402,10 +4402,6 @@ export const SCHEMAS: Record<string, unknown> = {
         "minimum": 1,
         "type": "integer"
       },
-      "presenceRegistry": {
-        "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
-        "type": "string"
-      },
       "protocolAvailability": {
         "additionalProperties": {
           "$ref": "#/components/schemas/ProtocolAvailability"
@@ -4482,6 +4478,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "xrayError": {
         "type": "string"
       },
+      "xrayState": {
+        "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
+        "type": "string"
+      },
       "xrayVersion": {
         "example": "25.10.31",
         "type": "string"
@@ -4522,7 +4522,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "panelVersion",
       "pinnedCertSha256",
       "port",
-      "presenceRegistry",
       "remark",
       "runningCore",
       "scheme",
@@ -4537,6 +4536,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "updatedAt",
       "uptimeSecs",
       "xrayError",
+      "xrayState",
       "xrayVersion"
     ],
     "type": "object"
@@ -4789,10 +4789,6 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": 2053,
         "type": "integer"
       },
-      "presenceRegistry": {
-        "example": "running",
-        "type": "string"
-      },
       "protocolAvailability": {
         "additionalProperties": {
           "$ref": "#/components/schemas/ProtocolAvailability"
@@ -4857,6 +4853,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "xrayError": {
         "type": "string"
       },
+      "xrayState": {
+        "example": "running",
+        "type": "string"
+      },
       "xrayVersion": {
         "example": "25.10.31",
         "type": "string"
@@ -4898,7 +4898,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "panelVersion",
       "pinnedCertSha256",
       "port",
-      "presenceRegistry",
       "remark",
       "runningCore",
       "scheme",
@@ -4912,6 +4911,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "updatedAt",
       "uptimeSecs",
       "xrayError",
+      "xrayState",
       "xrayVersion"
     ],
     "type": "object"
@@ -5091,10 +5091,6 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "v3.x.x",
         "type": "string"
       },
-      "presenceRegistry": {
-        "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
-        "type": "string"
-      },
       "protocolAvailability": {
         "additionalProperties": {
           "$ref": "#/components/schemas/ProtocolAvailability"
@@ -5137,6 +5133,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "xrayError": {
         "type": "string"
       },
+      "xrayState": {
+        "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
+        "type": "string"
+      },
       "xrayVersion": {
         "example": "25.10.31",
         "type": "string"
@@ -5153,7 +5153,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "memPct",
       "panelEdition",
       "panelVersion",
-      "presenceRegistry",
       "runningCore",
       "singboxError",
       "singboxInstalled",
@@ -5163,6 +5162,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "status",
       "uptimeSecs",
       "xrayError",
+      "xrayState",
       "xrayVersion"
     ],
     "type": "object"

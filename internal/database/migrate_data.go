@@ -14,6 +14,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -379,22 +380,49 @@ func resetPostgresSequences(dst *gorm.DB) error {
 	return nil
 }
 
-// resyncPostgresSequences sets each model's id sequence to MAX(id); idempotent. Id-less
-// composite-PK tables are skipped — Postgres rejects MAX(id) at parse time and logs it (#5665).
+// resyncPostgresSequences advances ID sequences behind explicitly imported rows.
+// Never rewind sequences after deletions or consume the first ID of an empty table.
+// Id-less composite-PK tables are skipped (#5665).
 func resyncPostgresSequences(db *gorm.DB, models []any) error {
 	for _, m := range models {
 		t, ok := tableWithIdColumn(db, m)
 		if !ok {
 			continue
 		}
-		// t comes from the trusted model set parsed by GORM, not user input, so
-		// interpolating it as an identifier is safe. Propagate failures to callers.
-		if err := db.Exec(
-			`SELECT setval(pg_get_serial_sequence(?, 'id'), COALESCE((SELECT MAX(id) FROM "`+t+`"), 1), true)
-			 WHERE pg_get_serial_sequence(?, 'id') IS NOT NULL`,
-			t, t,
-		).Error; err != nil {
-			return fmt.Errorf("reset sequence %s: %w", t, err)
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			// INSERT takes a RowExclusive lock before evaluating its ID default.
+			// Exclude table writers while comparing the sequence with stored IDs.
+			if err := tx.Exec("LOCK TABLE ? IN SHARE ROW EXCLUSIVE MODE", clause.Table{Name: t}).Error; err != nil {
+				return err
+			}
+			var sequence sql.NullString
+			if err := tx.Raw("SELECT pg_get_serial_sequence(?, 'id')", t).Scan(&sequence).Error; err != nil || !sequence.Valid {
+				return err
+			}
+			var maximum sql.NullInt64
+			if err := tx.Raw("SELECT MAX(id) FROM ?", clause.Table{Name: t}).Scan(&maximum).Error; err != nil || !maximum.Valid {
+				return err
+			}
+			var state struct {
+				LastValue int64
+				IsCalled  bool
+			}
+			// pg_get_serial_sequence supplies the qualified, quoted identifier.
+			if err := tx.Raw("SELECT last_value, is_called FROM " + sequence.String).Scan(&state).Error; err != nil {
+				return err
+			}
+			if maximum.Int64 < state.LastValue || (maximum.Int64 == state.LastValue && state.IsCalled) {
+				return nil
+			}
+			var command string
+			if err := tx.Raw(`SELECT format('ALTER SEQUENCE %s RESTART WITH %s', ?::text, ?::numeric + seqincrement) FROM pg_sequence WHERE seqrelid = ?::regclass`, sequence.String, maximum.Int64, sequence.String).Scan(&command).Error; err != nil {
+				return err
+			}
+			// Unlike setval, RESTART rolls back with the transaction and discards
+			// cached sequence values held by other connections.
+			return tx.Exec(command).Error
+		}); err != nil {
+			return fmt.Errorf("resync sequence %s: %w", t, err)
 		}
 	}
 	return nil

@@ -1114,7 +1114,6 @@ export const NodeSchema = z.object({
   parentGuid: z.string().optional(),
   pinnedCertSha256: z.string(),
   port: z.number().int().min(1).max(65535),
-  presenceRegistry: z.string(),
   protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   remark: z.string(),
   runningCore: z.string(),
@@ -1132,6 +1131,7 @@ export const NodeSchema = z.object({
   updatedAt: z.number().int(),
   uptimeSecs: z.number().int(),
   xrayError: z.string(),
+  xrayState: z.string(),
   xrayVersion: z.string(),
 });
 export type Node = z.infer<typeof NodeSchema>;
@@ -1194,7 +1194,6 @@ export const NodeViewSchema = z.object({
   parentGuid: z.string().optional(),
   pinnedCertSha256: z.string(),
   port: z.number().int(),
-  presenceRegistry: z.string(),
   protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   remark: z.string(),
   runningCore: z.string(),
@@ -1211,6 +1210,7 @@ export const NodeViewSchema = z.object({
   updatedAt: z.number().int(),
   uptimeSecs: z.number().int(),
   xrayError: z.string(),
+  xrayState: z.string(),
   xrayVersion: z.string(),
 });
 export type NodeView = z.infer<typeof NodeViewSchema>;
@@ -1260,7 +1260,6 @@ export const ProbeResultUISchema = z.object({
   memPct: z.number(),
   panelEdition: z.string(),
   panelVersion: z.string(),
-  presenceRegistry: z.string(),
   protocolAvailability: z.record(z.string(), z.lazy(() => ProtocolAvailabilitySchema)).optional(),
   runningCore: z.string(),
   singboxError: z.string(),
@@ -1272,6 +1271,7 @@ export const ProbeResultUISchema = z.object({
   unavailableMetrics: z.array(z.string()).optional(),
   uptimeSecs: z.number().int(),
   xrayError: z.string(),
+  xrayState: z.string(),
   xrayVersion: z.string(),
 });
 export type ProbeResultUI = z.infer<typeof ProbeResultUISchema>;

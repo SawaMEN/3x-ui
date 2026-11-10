@@ -1037,7 +1037,6 @@ export interface Node {
   parentGuid?: string;
   pinnedCertSha256: string;
   port: number;
-  presenceRegistry: string;
   protocolAvailability?: Record<string, ProtocolAvailability>;
   remark: string;
   runningCore: string;
@@ -1055,6 +1054,7 @@ export interface Node {
   updatedAt: number;
   uptimeSecs: number;
   xrayError: string;
+  xrayState: string;
   xrayVersion: string;
 }
 
@@ -1115,7 +1115,6 @@ export interface NodeView {
   parentGuid?: string;
   pinnedCertSha256: string;
   port: number;
-  presenceRegistry: string;
   protocolAvailability?: Record<string, ProtocolAvailability>;
   remark: string;
   runningCore: string;
@@ -1132,6 +1131,7 @@ export interface NodeView {
   updatedAt: number;
   uptimeSecs: number;
   xrayError: string;
+  xrayState: string;
   xrayVersion: string;
 }
 
@@ -1177,7 +1177,6 @@ export interface ProbeResultUI {
   memPct: number;
   panelEdition: string;
   panelVersion: string;
-  presenceRegistry: string;
   protocolAvailability?: Record<string, ProtocolAvailability>;
   runningCore: string;
   singboxError: string;
@@ -1189,6 +1188,7 @@ export interface ProbeResultUI {
   unavailableMetrics?: string[];
   uptimeSecs: number;
   xrayError: string;
+  xrayState: string;
   xrayVersion: string;
 }
 

@@ -466,6 +466,10 @@ func runSeeders(isUsersEmpty bool) error {
 		return err
 	}
 
+	if err := repairImportedHostTLS(); err != nil {
+		return err
+	}
+
 	if err := seedMtprotoCustomShareAddrToHosts(); err != nil {
 		return err
 	}

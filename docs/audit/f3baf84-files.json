@@ -11186,9 +11186,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "2f2e3d2f58dcbb4171315af06b86410ee144acfa34eec8226aa1c6cd620c4066"
     },
     {
       "path": "internal/database/client_keepalive_postgres_test.go",
@@ -11197,9 +11197,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "279b9b72d6d34d6b5f8ede6c35220948d4e59e7c41df08ce5d8a6db2cec1901b"
     },
     {
       "path": "internal/database/coremodel_migration_test.go",
@@ -11208,9 +11208,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "8047c28a8902d711e7c67b2b53790a32a8d6960a5e8ac628324043bc0e162703"
     },
     {
       "path": "internal/database/db.go",
@@ -11219,9 +11219,9 @@
       "deletions": 1227,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "0247d6af58fdbc4107d183030aaebb2a1de2762d6bd4cd7dd3c2d24fc5be5902"
     },
     {
       "path": "internal/database/db_seed_test.go",
@@ -11230,9 +11230,9 @@
       "deletions": 1,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "2625421325d46e330b1f9e40701414a0bdc6c5d3c34dd228856e29fbe596f6b8"
     },
     {
       "path": "internal/database/db_settled_test.go",
@@ -11241,9 +11241,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "e002a0bd3667acd29668462028d3bdfee2e6b9deb40a505e6faf7f8be80fcc77"
     },
     {
       "path": "internal/database/dbtest/dbtest.go",
@@ -11263,9 +11263,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "f11bee427a2464f6720eb588f70203d54d8406e6fa542741a43ac079d54d7b96"
     },
     {
       "path": "internal/database/dump_sqlite.go",
@@ -11285,9 +11285,9 @@
       "deletions": 4,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "2d56a962c7bddccc4286af7a56eb105cf94611328fb7c0169a9c16431688e8d4"
     },
     {
       "path": "internal/database/export_atomic_test.go",
@@ -11296,9 +11296,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "bf25f7fa4784f8bb9b94fb39c6c9e6f010a3dfc0810bf131c6795aeab9169ef2"
     },
     {
       "path": "internal/database/host_migration_test.go",
@@ -11307,9 +11307,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "ef5cbf8b5a21a0187e47285b572dab0016c6c0a587f74f57d7aa0cfa778eedee"
     },
     {
       "path": "internal/database/host_test.go",
@@ -11318,9 +11318,9 @@
       "deletions": 1,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "1b6f06e7473284d5bdd0d54ea93c7fe330e9ae7c76dbc4ea782c870cdd96d7cf"
     },
     {
       "path": "internal/database/index_tags_test.go",
@@ -11329,9 +11329,9 @@
       "deletions": 4,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "81aa134b88553372f35ed2efe537c29b506776150d56edfdcf8cfc19d9ea71f8"
     },
     {
       "path": "internal/database/migrate_data.go",
@@ -11340,9 +11340,9 @@
       "deletions": 103,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "1625460c990dbc4785bd559b33046e74c1aa7c898b10a85bfe0ac2305fc2cccb"
     },
     {
       "path": "internal/database/migration_models_test.go",
@@ -11351,9 +11351,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "ede17b25acdf96786cf9e1a8db36294155d00a7fc64adf7768e238319b873170"
     },
     {
       "path": "internal/database/migrations.go",
@@ -11395,9 +11395,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "dc385d808dc421a829382139b7909d799c0c6d13d0da95839eb3ed9a8e7196fc"
     },
     {
       "path": "internal/database/model/client_global_traffic.go",
@@ -11450,9 +11450,9 @@
       "deletions": 5,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "bf7d7e161d15ac7ecaa5228569ce754d29c8cbcb74e0ecc04abb6f31a47f74f4"
     },
     {
       "path": "internal/database/model/keepalive_range_test.go",
@@ -11461,9 +11461,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "366596d45aa6c372c2763e98120a8888c360998a3058524434e8cd9af7adc567"
     },
     {
       "path": "internal/database/model/keepalive_value.go",
@@ -11494,9 +11494,9 @@
       "deletions": 208,
       "subsystem": "database",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "2adc898db307919ca72572f6c8d555064d1c18f7583d4546ba1926f33a09574b"
     },
     {
       "path": "internal/database/model/model_mtproto_test.go",
@@ -11505,9 +11505,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "943cdbc9d6477909e86c102b94844e37923c7ca2c9656254360a2c22462c3c39"
     },
     {
       "path": "internal/database/model/model_test.go",
@@ -11516,9 +11516,9 @@
       "deletions": 3,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "0d7684b2e7fcb6e20084291ad7611aa47e1fdb2a07da8b4021ae81a83e494f73"
     },
     {
       "path": "internal/database/model/model_wireguard_peers_test.go",
@@ -11527,9 +11527,9 @@
       "deletions": 4,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "8edaee9f9e07e4e11009dacdd65e0c4df4dfd3f381626a98b60c2b9289db043e"
     },
     {
       "path": "internal/database/model/model_wireguard_test.go",
@@ -11538,9 +11538,9 @@
       "deletions": 2,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "af7072147285c7f8830d272695e4d85a5e013b9b80f0d6df5eca31e71d25f9f9"
     },
     {
       "path": "internal/database/model/node_client_ip.go",
@@ -11593,9 +11593,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "ef9eca0a80787319104e2dbf746f30df14c5d5f0385793753c3b2c4f16a9c6d2"
     },
     {
       "path": "internal/database/postgres_export_roundtrip_test.go",
@@ -11604,9 +11604,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "64825758ac0572afa16e11a480156fb9f95adae7193dd4c52c5417d7dabaf8c2"
     },
     {
       "path": "internal/database/seeders.go",
@@ -11616,8 +11616,8 @@
       "subsystem": "database",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
-      "reviewed_sha256": "89ee419aa13f8014b192b708699095017d354872fa843ece75fb7862796669b0"
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "136287cb6e827772f7d3560df40b7a65e246231e8195214b1248d2e601d10cb5"
     },
     {
       "path": "internal/database/stage3_compatibility_test.go",
@@ -11626,9 +11626,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "ac91b36dcec66788f821fb73a768ea8085ceb185b3d6cd4b5fe5645be0c08698"
     },
     {
       "path": "internal/database/stage3_dump_test.go",
@@ -11637,9 +11637,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "355ff82275dd0a988ff3526c6baa640f18fa994483ce86364f4fe2070752361e"
     },
     {
       "path": "internal/database/stage3_native_backup_test.go",
@@ -11648,9 +11648,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "5e8f123d5c0b04f407f319076dda2f6167fece496a5c66e24db2b68b04802b1d"
     },
     {
       "path": "internal/database/stage3_postgres_test.go",
@@ -11659,9 +11659,9 @@
       "deletions": 0,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "0766cd9c8177a24e935c416d344a3ffd885a8af26b916c0bb7b92af033dba9af"
     },
     {
       "path": "internal/database/testdata/v3.9.8.sql",
@@ -11681,9 +11681,9 @@
       "deletions": 7,
       "subsystem": "database",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
+      "reviewed_sha256": "a1afb1b238b214794323591803ebdbcb4b8bd0c09901dcf8ccbc0d423829e2a3"
     },
     {
       "path": "internal/database/traffic_quota.go",
@@ -21614,9 +21614,9 @@
       "deletions": 73,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full NodeView/mutation contract review; A27 JSON regression reproduced on all four payloads; node contract/core status/tree tests pass with race detector; generated OpenAPI/types/Zod refreshed and TypeScript check passes.",
+      "reviewed_sha256": "d1cf1eb0f86e7c1003f50c6277f4870d40c2e6d1541ff00401ced96dde5c07dc"
     },
     {
       "path": "internal/web/service/node_core_status_test.go",

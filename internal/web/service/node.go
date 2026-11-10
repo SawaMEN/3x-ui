@@ -1519,7 +1519,7 @@ type ProbeResultUI struct {
 	Error                string                                `json:"error"`
 	// XrayState/XrayError are populated on successful probes even when the node's
 	// Xray core is not healthy. The UI uses them for a distinct "panel ok, xray failed" indicator.
-	XrayState    string `json:"presenceRegistry"`
+	XrayState    string `json:"xrayState"`
 	XrayError    string `json:"xrayError"`
 	SingBoxState string `json:"singboxState"`
 	SingBoxError string `json:"singboxError"`
