@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sync/atomic"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
