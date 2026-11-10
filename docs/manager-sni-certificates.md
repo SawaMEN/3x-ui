@@ -62,11 +62,17 @@ operator based on the server scan alone.
   panel/subscription certificate pairs, including those exposed by authenticated
   remote nodes. Each item remains scoped to its originating node, with
   issuer/expiry shown when available.
-- Xray stream-TLS recipes automatically populate SNI and file-backed
-  certificate references for each selected node; expired entries are not
-  selected. Per-node TLS domain overrides are available. If no certificate
-  is known, that node/protocol pair is skipped by default. An explicit
-  manual-only draft option still requires normal preflight.
+- Xray stream-TLS and node-native NaiveProxy, AnyTLS, MASQUE, TUIC,
+  VetroffProxy and TrustTunnel recipes use their own expected TLS certificate
+  configuration format and node-local certificate paths. Expired certificates
+  are excluded. Per-node TLS hostname overrides are supported. Missing
+  certificates are skipped rather than substituting another node's files.
+- The builder's explicit opt-in CertMagic action can request up to 30
+  missing (node, hostname) certificates in a batch. It uses the already
+  deployed Domain Front TLS manager on that node to host an owned HTTPS
+  cover site, renew its certificate and supply node-local paths. Certificate
+  issuance is asynchronous, so recipes must be built only once a valid
+  certificate appears in the managed inventory.
 - Backend preflight/rollback remains in charge of actual publication.
   The interface does not claim a server-side scan guarantees accessibility
   from the subscriber's network.
@@ -109,37 +115,51 @@ operator based on the server scan alone.
   On complete failure the current published generation is left unchanged
   and the existing rollback process applies. The selected candidate is
   recorded in the new published entries.
-- This is **not** an always-on health watcher or an in-place change of a live
-  connection. A scheduled rotation can use the fallback, but REALITY keys
-  still rotate as part of the normal generation workflow. In-place
-  key-preserving automatic failover requires a separate verified and
-  idempotent update transaction, and must not be claimed as implemented.
+- **Opt-in live health monitor**: setting `monitorSni` on a subscription
+  starts a bounded `sni_health` job on the configured interval (5–1440
+  minutes; 10 by default). The scheduler queues at most 12 subscriptions
+  per minute and checks up to 8 published connections per job. Only
+  manager-owned, already published REALITY connections with DNS-backed
+  SNI reserves are eligible.
+- Three independent failed scheduled checks, separated by the configured
+  interval, are required. Switching is limited to once per 30 minutes
+  for each connection. Candidate reserves are checked on the node hosting
+  that inbound using existing bounded SNI scanner/probe capabilities.
+  A scanner error is an **unknown health state**, not proof of a broken SNI.
+  DNS/IP agreement, a valid certificate, TLS 1.3, h2, X25519 and at least
+  4/5 successful probes are required before using a reserve.
+- The live update changes only REALITY SNI/target on the existing inbound,
+  preserves its port, client identities, private key and short IDs, and
+  publishes the actual hostname only after the runtime accepts the change.
+  On an apply/persistence error the original inbound is restored. Unit and
+  integration tests cover stability, cooldown, key/credential preservation
+  and a simulated failed-core rollback.
+- **Availability qualification**: updating a running core can briefly
+  interrupt existing connections depending on the runtime; the monitor
+  does **not** promise zero packet loss or reachability from every ISP.
+  Normal full-generation rotation may still rotate server keys.
 
-## Next steps
+## Operational limits and optional future extensions
 
-1. **Finish node-aware certificate health**: the implemented inventory
-   already shows known hostnames, expiry and issuer. Extend it to report
-   renewal/issuance method and complete SAN coverage for every node.
-2. **Extend certificate-backed recipes**: Xray stream TLS now reuses known
-   certificate files on their owning node. Add carefully validated per-node
-   CertMagic issuance and native-protocol certificate mappings, using the
-   existing certificate manager rather than a parallel ACME implementation.
-3. **Verified SNI/target pairs**: allow a pinned public IP:port plus matching
-   SNI for neighbor-only discoveries, but only after server-side preflight
-   supports independently verifying the same IP+SNI pair. Refuse loopback,
-   private, reserved or otherwise prohibited destinations. Never silently
-   switch a pinned target to DNS-based hostname resolution.
-4. **Optional live health watcher**: the current implementation only
-   uses reserves during generation/preflight. Add scheduled repeated failure
-   checks and in-place, key-preserving, transactional live failover with
-   hysteresis before enabling uninterrupted automatic switching.
-5. **Owned website/decoy mode**: integrate the existing domain-front manager
-   to serve an optional real HTTPS page on a selected node, with validation
-   of port and certificate ownership. Do not treat this as the REALITY
-   fallback target.
-6. **Multi-user shared inbounds**: add per-client credentials to selected
-   shared inbounds, preserving existing clients/usage and isolating node
-   failures. Maintain the current manager rotation/cleanup rollback.
+- The two previously requested additional features (live SNI monitoring and
+  per-node automated TLS issuance) are implemented with the above safeguards.
+  Deployment still requires integration verification and operator-controlled
+  DNS, HTTPS/ACME listener availability and compatible remote-node versions.
+- ACME HTTP-01/TLS-ALPN-01 only works when the required challenge listener
+  is reachable on the intended node. If a VPN already owns TCP 80/443,
+  the gateway **refuses the conflict**; it does not temporarily take over an
+  active listener. A DNS-01 provider integration or explicit port-sharing
+  configuration is a separate choice, not an implicit feature.
+- External certificates installed by another provider can be used when
+  present and valid; renewal remains that provider's responsibility unless
+  the administrator provisions the domain under CertMagic.
+- Future optional improvements: issuer/SAN/renewal-method metadata for
+  every legacy cert source, a DNS-01 provider integration for contested
+  80/443 environments, and explicit IP+SNI pinning for neighboring-IP
+  discoveries after independent server-side verification.
+- Shared inbound creation is an administrative action in the existing
+  Inbounds editor; the Manager bulk flow creates up to 100 independent
+  clients against such shared listeners rather than one listener per client.
 
 ## Exclusions and checks
 
