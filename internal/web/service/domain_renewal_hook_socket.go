@@ -164,7 +164,15 @@ func executeExternalCertificateHook(ctx context.Context, request externalRenewal
 			}
 		}
 		externalRenewalHookMu.Unlock()
-		return releaseExternalRenewalLease(request.Manager, id)
+		err := releaseExternalRenewalLease(request.Manager, id)
+		outcome := "succeeded"
+		if err != nil {
+			outcome = "failed"
+		}
+		if logErr := RecordCertificateAudit(request.Manager, "", "", "hook", outcome); logErr != nil {
+			logger.Debug("certificate hook audit failed:", logErr)
+		}
+		return err
 	}
 	ports, err := externalCertificateHookPortsCurrent(ctx, request.Manager)
 	if err != nil {
@@ -185,6 +193,9 @@ func executeExternalCertificateHook(ctx context.Context, request externalRenewal
 		} else {
 			logger.Warning("cannot watch external certificate process:", startErr)
 		}
+	}
+	if auditErr := RecordCertificateAudit(request.Manager, "", "", "hook", "started"); auditErr != nil {
+		logger.Debug("certificate hook audit failed:", auditErr)
 	}
 	return nil
 }
