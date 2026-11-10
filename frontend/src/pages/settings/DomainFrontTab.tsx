@@ -87,12 +87,6 @@ export default function DomainFrontTab({
   const statusQuery = useDomainFrontStatus();
   const { data: managedSniDomains = [] } = useManagedSniDomains();
   const telemtSites = managedSniDomains.filter((site) => site.source === 'telemt');
-  const discoveredNodeSites = managedSniDomains.filter(
-    (site) =>
-      site.source === 'remote' &&
-      site.nodeId != null &&
-      !statusQuery.data?.config.domains.some((domain) => domain.name === site.name),
-  );
   const status = statusQuery.data;
   const config = status?.config;
   const server = useMemo(
@@ -802,102 +796,37 @@ export default function DomainFrontTab({
       )}
         </div>
       )}
+
       {section === 'sni' && (
         <div className="domain-manager-panel" data-testid="domain-panel-sni">
-      {telemtSites.length > 0 && (
-        <Alert
-          type="info"
-          showIcon
-          title={label('telemtReuseTitle')}
-          description={label('telemtReuseDesc')}
-        />
-      )}
-      <Card
-        title={label('sniCertificates')}
-        extra={<Typography.Text type="secondary">{label('sniCertHint')}</Typography.Text>}
-      >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          {draft.domains.filter(
-            (domain) => domain.mode === 'sni_only' || domain.mode === 'shared_sni',
-          ).length === 0 &&
-            telemtSites.length === 0 &&
-            discoveredNodeSites.length === 0 && (
-              <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>
-            )}
-          {discoveredNodeSites.map((site) => (
-            <Card key={`node-${site.nodeId}-${site.name}`} size="small" title={site.name}>
-              <Space orientation="vertical" size={6} style={{ width: '100%' }}>
-                <Tag>{site.nodeName || label('remoteSNITag')}</Tag>
-                <Typography.Text type="secondary">{label('remoteSNIInfo')}</Typography.Text>
-              </Space>
-            </Card>
-          ))}
-          {draft.domains
-            .filter((domain) => domain.mode === 'shared_sni')
-            .map((site) => (
-              <Card key={`remote-${site.name}`} size="small" title={site.name}>
-                <Space orientation="vertical" size={6} style={{ width: '100%' }}>
-                  <Tag>{label('remoteSNITag')}</Tag>
-                  <Typography.Text type="secondary">{label('remoteSNIInfo')}</Typography.Text>
+          {telemtSites.length > 0 && (
+            <Alert type="info" showIcon title={label('telemtReuseTitle')} description={label('telemtReuseDesc')} />
+          )}
+          <Card size="small" title={label('sniCertificates')}>
+            <Typography.Paragraph type="secondary">{label('sniCertHint')}</Typography.Paragraph>
+            <Space orientation="vertical" size={10} style={{ width: '100%' }}>
+              {managedSniDomains.length === 0 &&
+                !draft.domains.some((item) => item.mode === 'sni_only' || item.mode === 'shared_sni') && (
+                  <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>
+                )}
+              {managedSniDomains.map((site) => (
+                <Space wrap key={`${site.nodeId ?? 'local'}-${site.name}-${site.source}`}>
+                  <Typography.Text strong>{site.name}</Typography.Text>
+                  <Tag color={site.source === 'telemt' || site.source === 'gateway' ? 'success' : undefined}>
+                    {site.source === 'remote' ? label('remoteSNITag') : site.source}
+                  </Tag>
+                  {site.nodeName && <Typography.Text type="secondary">{site.nodeName}</Typography.Text>}
                 </Space>
-              </Card>
-            ))}
-          {telemtSites.map((site) => (
-            <Card key={`telemt-${site.name}`} size="small" title={site.name}>
-              <Space orientation="vertical" size={6} style={{ width: '100%' }}>
-                <Tag color="green">Telemt WEB</Tag>
-                <Typography.Text type="secondary">{label('certFile')}</Typography.Text>
-                <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
-                  {site.certFile}
-                </Typography.Text>
-                <Typography.Text type="secondary">{label('keyFile')}</Typography.Text>
-                <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
-                  {site.keyFile}
-                </Typography.Text>
-              </Space>
-            </Card>
-          ))}
-          {draft.domains
-            .filter((domain) => domain.mode === 'sni_only')
-            .map((domain) => {
-              const cert = status?.certificates.find((c) => c.name === domain.name);
-              return (
-                <Card key={domain.name} size="small" title={domain.name}>
-                  <Space orientation="vertical" size={6} style={{ width: '100%' }}>
-                    <Tag color={cert?.state === 'valid' ? 'green' : 'default'}>
-                      {label(`state.${cert?.state || 'unsaved'}`)}
-                    </Tag>
-                    {cert?.expiresAt ? (
-                      <Typography.Text type="secondary">
-                        {label('expires')}: {date(cert.expiresAt)} · {renewalLabel(cert.renewal)}
-                      </Typography.Text>
-                    ) : null}
-                    <Typography.Text type="secondary">{label('certFile')}</Typography.Text>
-                    {cert?.certFile ? (
-                      <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
-                        {cert.certFile}
-                      </Typography.Text>
-                    ) : (
-                      <Typography.Text type="secondary">
-                        {label('sniCertificatePending')}
-                      </Typography.Text>
-                    )}
-                    <Typography.Text type="secondary">{label('keyFile')}</Typography.Text>
-                    {cert?.keyFile ? (
-                      <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
-                        {cert.keyFile}
-                      </Typography.Text>
-                    ) : (
-                      <Typography.Text type="secondary">
-                        {label('sniCertificatePending')}
-                      </Typography.Text>
-                    )}
-                  </Space>
-                </Card>
-              );
-            })}
-        </Space>
-      </Card>
+              ))}
+              {draft.domains.filter((item) => (item.mode === 'sni_only' || item.mode === 'shared_sni') &&
+                !managedSniDomains.some((site) => site.name === item.name)).map((item) => (
+                <Space wrap key={item.name}>
+                  <Typography.Text strong>{item.name}</Typography.Text>
+                  <Tag>{item.mode === 'shared_sni' ? label('remoteSNITag') : label('state.unsaved')}</Tag>
+                </Space>
+              ))}
+            </Space>
+          </Card>
         </div>
       )}
       {section === 'settings' && (
