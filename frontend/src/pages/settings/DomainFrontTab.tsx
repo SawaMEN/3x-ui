@@ -124,7 +124,8 @@ export default function DomainFrontTab({
   const [messageApi, holder] = message.useMessage();
   const mode = Form.useWatch('mode', form);
   const tls = Form.useWatch('tls', form);
-  const label = (key: string) => t(`pages.settings.domains.${key}`);
+  const label = (key: string, values?: Record<string, string | number>) =>
+    t(`pages.settings.domains.${key}`, values);
   const renewalLabel = (value: string) =>
     value === 'external' || value === 'manual' ? label(`renewal.${value}`) : value;
   const certificateError = (value: string) =>

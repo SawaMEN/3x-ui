@@ -43,7 +43,8 @@ export default function DomainOverview({
   onAdd,
 }: Props) {
   const { t } = useTranslation();
-  const l = (key: string) => t('pages.settings.domains.workspace.' + key);
+  const l = (key: string, values?: Record<string, string | number>) =>
+    t('pages.settings.domains.workspace.' + key, values);
   const summary = getDomainSummary(draft, status, checks);
   const running = !!status?.running;
   const canAudit =

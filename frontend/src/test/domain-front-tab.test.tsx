@@ -255,6 +255,25 @@ describe('domain and TLS dashboard', () => {
     await waitFor(() => expect(f.checked).toEqual(['new.example.com']));
   });
 
+  it('audits saved domains in bulk and filters the domain table without modifying configuration', async () => {
+    const f = fixture();
+    f.config.domains.push({ ...defaultDomain, name: 'cdn.example.org', mode: 'cdn' });
+    renderWithProviders(<DomainFrontTab />);
+    await screen.findByDisplayValue('old@example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Audit all DNS/TLS' }));
+    await waitFor(() => expect(f.checked).toEqual(expect.arrayContaining([
+      'sub.example.com', 'cdn.example.org',
+    ])));
+    const search = screen.getByRole('textbox', { name: 'Search domains' });
+    fireEvent.change(search, { target: { value: 'cdn.example.org' } });
+    await waitFor(() => {
+      const table = document.querySelector('.ant-table-tbody');
+      expect(table?.textContent).toContain('cdn.example.org');
+      expect(table?.textContent).not.toContain('sub.example.com');
+    });
+    expect(f.applied).toBeUndefined();
+  });
+
   it('checks DNS automatically without an extra toggle', async () => {
     const f = fixture();
     renderWithProviders(<DomainFrontTab />);
