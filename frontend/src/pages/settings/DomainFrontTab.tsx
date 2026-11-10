@@ -10,6 +10,7 @@ import {
   AutoComplete,
   Button,
   Card,
+  Dropdown,
   Checkbox,
   Collapse,
   Form,
@@ -17,7 +18,6 @@ import {
   InputNumber,
   List,
   Modal,
-  Popconfirm,
   Select,
   Segmented,
   Space,
@@ -591,7 +591,10 @@ export default function DomainFrontTab({
       </div>
       {section === 'domains' && (
         <div className="domain-manager-panel" data-testid="domain-panel-domains">
+
       <Card
+        size="small"
+        className="domain-manager-hosts"
         title={label('list')}
       >
         <Space wrap style={{ marginBottom: 12, width: '100%' }}>
@@ -611,9 +614,7 @@ export default function DomainFrontTab({
             options={[
               { value: 'all', label: label('workspace.filter.all') },
               { value: 'attention', label: label('workspace.filter.attention') },
-              ...(
-                ['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'] as const
-              ).map((mode) => ({
+              ...(['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'] as const).map((mode) => ({
                 value: mode,
                 label: label('mode.' + mode),
               })),
@@ -625,10 +626,11 @@ export default function DomainFrontTab({
         </Space>
         <Table
           className="domain-config-table"
+          size="small"
           rowKey="name"
           dataSource={filteredDomains}
-          pagination={{ pageSize: 10, hideOnSinglePage: true, showSizeChanger: true }}
-          scroll={{ x: 760 }}
+          pagination={{ pageSize: 10, hideOnSinglePage: true }}
+          scroll={{ x: 600 }}
           locale={{ emptyText: label('empty') }}
           columns={[
             {
@@ -644,106 +646,79 @@ export default function DomainFrontTab({
             {
               title: label('modeLabel'),
               dataIndex: 'mode',
-              render: (value: string) => <Tag>{label(`mode.${value}`)}</Tag>,
+              render: (value: string) => (
+                <Typography.Text type="secondary">{label('mode.' + value)}</Typography.Text>
+              ),
             },
             {
               title: label('workspace.healthLabel'),
               key: 'health',
-              render: (_, d: DomainForm) => {
-                const saved =
-                  status?.config.domains.some(
-                    (item) => item.name === d.name && JSON.stringify(item) === JSON.stringify(d),
-                  ) ?? false;
+              render: (_value: unknown, d: DomainForm) => {
+                const saved = status?.config.domains.some(
+                  (item) => item.name === d.name && JSON.stringify(item) === JSON.stringify(d),
+                ) ?? false;
                 const health = getDomainHealth(d, status, checks[d.name], saved);
-                const color =
-                  health === 'healthy'
-                    ? 'green'
-                    : health === 'error'
-                      ? 'red'
-                      : health === 'expiring'
-                        ? 'orange'
-                        : 'default';
-                return <Tag color={color}>{label('workspace.health.' + health)}</Tag>;
-              },
-            },
-            {
-              title: label('certificate'),
-              render: (_, d) => {
-                const cert = status?.certificates.find((c) => c.name === d.name);
+                const cert = status?.certificates.find((item) => item.name === d.name);
+                const color = health === 'healthy' ? 'success'
+                  : health === 'error' ? 'error'
+                    : health === 'expiring' ? 'warning' : 'default';
                 return (
                   <Space orientation="vertical" size={2}>
-                    <Tag
-                      color={
-                        cert?.state === 'valid'
-                          ? 'green'
-                          : cert?.state === 'expired' || cert?.state === 'error'
-                            ? 'red'
-                            : 'default'
-                      }
-                    >
-                      {label(`state.${cert?.state || 'unsaved'}`)}
-                    </Tag>
-                    <span>
-                      {d.mode === 'shared_sni' ? label('remoteSNIInfo') : label(`tls.${d.tls}`)}
-                    </span>
-                    {cert?.source && (
-                      <Typography.Text type="secondary">
-                        {label(`source.${cert.source}`)} · {renewalLabel(cert.renewal)}
-                      </Typography.Text>
-                    )}
-                    {cert?.expiresAt ? (
-                      <>
-                        <span>
-                          {label('remaining')}: {cert.daysLeft} {label('days')}
-                        </span>
-                        <span>
-                          {label('expires')}: {date(cert.expiresAt)}
-                        </span>
-                        <Typography.Text type="secondary">{cert.issuer}</Typography.Text>
-                      </>
-                    ) : null}
-                    {cert?.error && (
-                      <Typography.Text type="danger">
-                        {certificateError(cert.error)}
-                      </Typography.Text>
-                    )}
+                    <Tag color={color}>{label('workspace.health.' + health)}</Tag>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {cert?.expiresAt
+                        ? `${label('remaining')}: ${cert.daysLeft} ${label('days')}`
+                        : d.mode === 'shared_sni'
+                          ? label('remoteSNIInfo')
+                          : label('tls.' + d.tls)}
+                    </Typography.Text>
                   </Space>
                 );
               },
             },
             {
               title: label('actions'),
-              render: (_, d) => (
-                <Space wrap>
+              render: (_value: unknown, d: DomainForm) => (
+                <Space size={4}>
                   <Button
+                    type="link"
                     size="small"
-                    onClick={() =>
-                      openEditor(draft.domains.findIndex((item) => item.name === d.name))
-                    }
+                    onClick={() => openEditor(draft.domains.findIndex((item) => item.name === d.name))}
                   >
                     {label('edit')}
                   </Button>
-                  <Button
-                    loading={checking === d.name}
-                    disabled={dirty || !initialized || auditing}
-                    onClick={() => void check(d.name)}
+                  <Dropdown
+                    trigger={['click']}
+                    menu={{
+                      items: [
+                        { key: 'check', label: label('check'), disabled: dirty || !initialized || auditing },
+                        { type: 'divider' },
+                        { key: 'remove', label: label('remove'), danger: true },
+                      ],
+                      onClick: ({ key }) => {
+                        if (key === 'check') void check(d.name);
+                        if (key === 'remove') {
+                          Modal.confirm({
+                            title: label('removeConfirm'),
+                            okText: label('remove'),
+                            okButtonProps: { danger: true },
+                            onOk: () => update({
+                              domains: draft.domains.filter((item) => item.name !== d.name),
+                              subscriptionDomain: draft.subscriptionDomain === d.name
+                                ? '' : draft.subscriptionDomain,
+                            }),
+                          });
+                        }
+                      },
+                    }}
                   >
-                    {label('check')}
-                  </Button>
-                  <Popconfirm
-                    title={label('removeConfirm')}
-                    onConfirm={() =>
-                      update({
-                        domains: draft.domains.filter((item) => item.name !== d.name),
-                        subscriptionDomain:
-                          draft.subscriptionDomain === d.name ? '' : draft.subscriptionDomain,
-                      })
-                    }
-                  >
-                    <Button danger size="small">
-                      {label('remove')}
-                    </Button>
-                  </Popconfirm>
+                    <Button
+                      icon={<MoreOutlined />}
+                      size="small"
+                      aria-label={label('workspace.moreActions')}
+                      loading={checking === d.name}
+                    />
+                  </Dropdown>
                 </Space>
               ),
             },
@@ -760,8 +735,7 @@ export default function DomainFrontTab({
                   </Typography.Text>
                   {result.expiresAt > 0 && (
                     <Typography.Text>
-                      {label('publicTLS')}: {result.issuer} · {result.daysLeft} {label('days')} ·{' '}
-                      {date(result.expiresAt)}
+                      {label('publicTLS')}: {result.issuer} · {result.daysLeft} {label('days')} · {date(result.expiresAt)}
                     </Typography.Text>
                   )}
                   {result.error && <Typography.Text type="danger">{result.error}</Typography.Text>}
