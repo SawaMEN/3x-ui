@@ -12,8 +12,11 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 )
 
-const cloudflareDNSCredentialEnv = "X_UI_CLOUDFLARE_DNS_TOKEN"
-const cloudflareDNSCredentialFile = "domain-cloudflare-dns-token"
+const (
+	cloudflareDNSCredentialEnv  = "X_UI_CLOUDFLARE_DNS_TOKEN"
+	cloudflareDNSCredentialFile = "domain-cloudflare-dns-token"
+)
+
 var domainDNSCredentialMu sync.Mutex
 
 type DomainDNSCredentialStatus struct {
@@ -66,7 +69,7 @@ func readDomainDNSCredentialFor(provider string) (string, string, error) {
 		return "", "", errors.New("cannot inspect DNS credential file")
 	}
 	// Never follow symlinks or read credentials accessible to other users.
-	if !stat.Mode().IsRegular() || stat.Mode().Perm()&0077 != 0 || stat.Size() > 520 {
+	if !stat.Mode().IsRegular() || stat.Mode().Perm()&0o077 != 0 || stat.Size() > 520 {
 		return "", "", errors.New("DNS credential file must be a private regular file (0600)")
 	}
 	raw, err := os.ReadFile(path)
@@ -113,7 +116,7 @@ func SaveDomainDNSCredentialFor(provider, token string, clear bool) error {
 	if !validDomainDNSToken(token) {
 		return errors.New("Cloudflare DNS token must be 20–512 printable characters without whitespace")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return errors.New("cannot prepare DNS credential directory")
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".domain-dns-token-*")
@@ -121,7 +124,7 @@ func SaveDomainDNSCredentialFor(provider, token string, clear bool) error {
 		return errors.New("cannot create private DNS credential file")
 	}
 	defer os.Remove(f.Name())
-	if err := f.Chmod(0600); err != nil {
+	if err := f.Chmod(0o600); err != nil {
 		_ = f.Close()
 		return errors.New("cannot restrict DNS credential permissions")
 	}

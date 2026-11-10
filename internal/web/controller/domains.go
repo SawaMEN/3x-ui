@@ -65,8 +65,8 @@ func (a *DomainController) saveDNSCredential(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
 	var req struct {
 		Provider string `json:"provider"`
-		Token string `json:"token"`
-		Clear bool `json:"clear"`
+		Token    string `json:"token"`
+		Clear    bool   `json:"clear"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonObj(c, nil, err)
@@ -166,7 +166,7 @@ func (a *DomainController) preflight(c *gin.Context) {
 func (a *DomainController) probeHTTP01(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1024)
 	var input struct {
-		Name string `json:"name" binding:"required"`
+		Name  string `json:"name" binding:"required"`
 		Token string `json:"token" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {

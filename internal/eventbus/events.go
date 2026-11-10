@@ -135,6 +135,6 @@ type SystemMetricData struct {
 // CertificateHealthData is non-sensitive metadata for administrator notices.
 type CertificateHealthData struct {
 	Manager string
-	State string
-	NodeID int // zero = local; a positive value identifies the owning node
+	State   string
+	NodeID  int // zero = local; a positive value identifies the owning node
 }

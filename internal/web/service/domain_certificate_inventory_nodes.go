@@ -77,7 +77,7 @@ func nodeCertificateInventoryItem(nodeID int, nodeName string, cert runtime.Remo
 		Ports: []int{}, Source: "remote", State: state,
 		Issuer: issuer, ExpiresAt: cert.ExpiresAt, DaysLeft: cert.DaysLeft,
 		AutoRenew: cert.AutoRenew,
-		NodeID: nodeID, NodeName: nodeName,
+		NodeID:    nodeID, NodeName: nodeName,
 	}, true
 }
 

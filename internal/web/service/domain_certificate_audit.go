@@ -13,13 +13,13 @@ import (
 )
 
 const (
-	certificateAuditSettingKey = "domainCertificateAuditHistory"
+	certificateAuditSettingKey  = "domainCertificateAuditHistory"
 	certificateHealthSettingKey = "domainCertificateHealthStates"
-	certificateAuditLimit = 250
+	certificateAuditLimit       = 250
 )
 
 var (
-	certificateAuditMu sync.Mutex
+	certificateAuditMu  sync.Mutex
 	certificateHealthMu sync.Mutex
 )
 
@@ -27,13 +27,13 @@ var (
 // certificate identifier. No command output, tokens, paths or ACME payloads
 // are ever retained in this history.
 type CertificateAuditEntry struct {
-	At int64 `json:"at"`
-	Manager string `json:"manager"`
+	At            int64  `json:"at"`
+	Manager       string `json:"manager"`
 	CertificateID string `json:"certificateId,omitempty"`
-	Domain string `json:"domain,omitempty"`
-	Action string `json:"action"`
-	Outcome string `json:"outcome"`
-	NodeID int `json:"nodeId,omitempty"`
+	Domain        string `json:"domain,omitempty"`
+	Action        string `json:"action"`
+	Outcome       string `json:"outcome"`
+	NodeID        int    `json:"nodeId,omitempty"`
 }
 
 func boundedCertificateAudit(entries []CertificateAuditEntry, event CertificateAuditEntry) []CertificateAuditEntry {
@@ -309,7 +309,7 @@ func scanCertificateHealth() error {
 	if eventBus != nil {
 		for _, change := range changes {
 			eventBus.Publish(eventbus.Event{
-				Type: eventbus.EventCertificateHealth,
+				Type:   eventbus.EventCertificateHealth,
 				Source: certificateAuditDomain(change.Domain),
 				Data: &eventbus.CertificateHealthData{
 					Manager: change.Manager, State: change.Outcome, NodeID: change.NodeID,

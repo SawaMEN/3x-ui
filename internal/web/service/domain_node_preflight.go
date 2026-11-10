@@ -15,8 +15,10 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
-const maxIndependentObservers = 3
-const maxObservedDomains = 3
+const (
+	maxIndependentObservers = 3
+	maxObservedDomains      = 3
+)
 
 // augmentDomainPreflightWithNodeEvidence is a bounded diagnostic, not a
 // prerequisite for obtaining a new certificate. ACME performs the final
@@ -110,7 +112,7 @@ func augmentDomainPreflightWithNodeEvidence(ctx context.Context, cfg domainfront
 		type observation struct {
 			nodeName string
 			verified bool
-			detail string
+			detail   string
 		}
 		results := make(chan observation, len(nodes))
 		var wg sync.WaitGroup

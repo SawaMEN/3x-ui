@@ -823,17 +823,17 @@ type RemoteCertificateSummary struct {
 // ProbePublicHTTP01 performs an independent reachability check on the
 // selected authenticated node; only the random challenge token is sent.
 type RemoteHTTP01Observation struct {
-	Name string `json:"name"`
-	CheckedAt int64 `json:"checkedAt"`
+	Name      string   `json:"name"`
+	CheckedAt int64    `json:"checkedAt"`
 	Addresses []string `json:"addresses"`
-	Verified bool `json:"verified"`
-	Detail string `json:"detail"`
+	Verified  bool     `json:"verified"`
+	Detail    string   `json:"detail"`
 }
 
 func (r *Remote) ProbePublicHTTP01(ctx context.Context, name, token string) (RemoteHTTP01Observation, error) {
 	env, err := r.do(ctx, http.MethodPost, "panel/api/domains/probe/http01",
 		struct {
-			Name string `json:"name"`
+			Name  string `json:"name"`
 			Token string `json:"token"`
 		}{Name: name, Token: token})
 	if err != nil {

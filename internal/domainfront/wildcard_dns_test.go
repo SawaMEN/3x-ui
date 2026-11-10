@@ -44,7 +44,7 @@ func TestWildcardOnlyMatchesOneLabelAndExactDomainWins(t *testing.T) {
 		{Name: "api.example.org", Enabled: true, Mode: "sub_link_only"},
 	}}}
 	for _, test := range []struct {
-		host string
+		host    string
 		matched string
 	}{
 		{"api.example.org", "api.example.org"},

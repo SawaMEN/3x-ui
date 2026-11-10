@@ -63,14 +63,15 @@ func ObservePublicHTTP01(ctx context.Context, name, token string) (HTTP01Observa
 		return result, nil
 	}
 	transport := &http.Transport{
-		Proxy: nil,
+		Proxy:             nil,
 		DisableKeepAlives: true,
 		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
 			return netsafe.SSRFGuardedDialContext(ctx, "tcp", addr)
 		},
 	}
 	defer transport.CloseIdleConnections()
-	client := http.Client{Transport: transport, Timeout: 5 * time.Second,
+	client := http.Client{
+		Transport: transport, Timeout: 5 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return errors.New("HTTP-01 diagnostic redirect refused")
 		},

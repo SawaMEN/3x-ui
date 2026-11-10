@@ -9,7 +9,7 @@ import (
 func TestNodeCertificateInventoryOnlyPublishesMetadata(t *testing.T) {
 	remote := runtime.RemoteCertificateSummary{
 		ID: "old-node-local-id", Name: " Sub.Example.Org. ",
-		Names: []string{"sub.example.org", "www.example.org"},
+		Names:   []string{"sub.example.org", "www.example.org"},
 		Manager: "certbot", Challenge: "http-01",
 		State: "valid", Issuer: "Issuer", ExpiresAt: 1890000000,
 		DaysLeft: 25, AutoRenew: true,
@@ -51,8 +51,10 @@ func TestNodeCertificateInventorySanitizesUntrustedPeerMetadata(t *testing.T) {
 
 func TestRemoteCertificateRefDoesNotDuplicateNodeInventory(t *testing.T) {
 	cert := CertificateInventoryItem{ID: "remote-cert", Name: "sub.example.org", NodeID: 17, NodeName: "edge", Source: "remote"}
-	sites := []ManagedSNIDomain{{NodeID: 17, NodeName: "edge", Name: "sub.example.org", Source: "remote"},
-		{NodeID: 18, NodeName: "other", Name: "sub.example.org", Source: "remote"}}
+	sites := []ManagedSNIDomain{
+		{NodeID: 17, NodeName: "edge", Name: "sub.example.org", Source: "remote"},
+		{NodeID: 18, NodeName: "other", Name: "sub.example.org", Source: "remote"},
+	}
 	combined := appendRemoteCertificateReferences([]CertificateInventoryItem{cert}, sites)
 	if len(combined) != 2 {
 		t.Fatalf("expected one real remote item and one fallback reference, got %+v", combined)
