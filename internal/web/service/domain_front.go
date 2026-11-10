@@ -168,7 +168,7 @@ func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
 	var out []ManagedSNIDomain
 	for result := range results {
 		for _, site := range result.Sites {
-			if (site.Source != "telemt" && site.Source != "gateway") || site.CertFile == "" || site.KeyFile == "" {
+			if (site.Source != "telemt" && site.Source != "gateway") || site.Name == "" {
 				continue
 			}
 			// A node confirms ownership of its own certificate. Its absolute
