@@ -15,7 +15,7 @@ func TestManagerSNIBackupPreservesIdentityAndCommitsOnlyWorkingCandidate(t *test
 		StreamSettings: `{"security":"reality","realitySettings":{"privateKey":"persistent-key","serverNames":["primary.example.org"]}}`,
 	}
 	entry := model.ManagerEntry{
-		SNI: "primary.example.org",
+		SNI:        "primary.example.org",
 		SNIBackups: []string{"backup.example.org", "another.example.org"},
 	}
 	attempts := []string{}
