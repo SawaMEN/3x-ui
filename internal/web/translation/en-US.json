@@ -2623,6 +2623,10 @@
           "subtitle": "Live gateway status, certificates and domains in one workspace",
           "otherTypes": "Other options",
           "navigation": "Domain management sections",
+          "editorAdvanced": "Advanced: TLS and status",
+          "editorSaveHint": "The domain will be added to the list. Select Save and apply to check and activate the configuration.",
+          "autoTLSSetup": "Automatic TLS setup",
+          "autoTLSHint": "Enter a contact email and accept the Let's Encrypt terms to issue the certificate automatically when you apply.",
           "section": {
             "domains": "Domains",
             "certificates": "Certificates",
