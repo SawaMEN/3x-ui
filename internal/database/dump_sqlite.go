@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -239,7 +240,12 @@ type sqliteDumpWriter interface {
 }
 
 func dumpTableData(db sqliteQuerier, table string, b sqliteDumpWriter) error {
-	rows, err := db.QueryContext(context.Background(), `SELECT * FROM `+quoteSQLiteIdentifier(table))
+	columns, err := sqliteWritableColumns(db, table)
+	if err != nil {
+		return err
+	}
+	columnList := strings.Join(columns, ",")
+	rows, err := db.QueryContext(context.Background(), `SELECT `+columnList+` FROM `+quoteSQLiteIdentifier(table))
 	if err != nil {
 		return err
 	}
@@ -250,7 +256,7 @@ func dumpTableData(db sqliteQuerier, table string, b sqliteDumpWriter) error {
 		return err
 	}
 	n := len(cols)
-	prefix := `INSERT INTO ` + quoteSQLiteIdentifier(table) + ` VALUES(`
+	prefix := `INSERT INTO ` + quoteSQLiteIdentifier(table) + ` (` + columnList + `) VALUES(`
 
 	vals := make([]any, n)
 	ptrs := make([]any, n)
@@ -273,6 +279,35 @@ func dumpTableData(db sqliteQuerier, table string, b sqliteDumpWriter) error {
 	return rows.Err()
 }
 
+// Generated columns are recomputed by SQLite. SELECT * includes their values,
+// but INSERT must only specify writable columns (also excluding hidden fields).
+func sqliteWritableColumns(db sqliteQuerier, table string) ([]string, error) {
+	rows, err := db.QueryContext(context.Background(), `PRAGMA table_xinfo(`+quoteSQLiteIdentifier(table)+`)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var columns []string
+	for rows.Next() {
+		var cid, notNull, primaryKey, hidden int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey, &hidden); err != nil {
+			return nil, err
+		}
+		if hidden == 0 {
+			columns = append(columns, quoteSQLiteIdentifier(name))
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(columns) == 0 {
+		return nil, fmt.Errorf("table %q has no writable columns", table)
+	}
+	return columns, nil
+}
+
 // sqliteLiteral renders a scanned column value as a SQLite SQL literal.
 func sqliteLiteral(v any) string {
 	switch x := v.(type) {
@@ -281,6 +316,12 @@ func sqliteLiteral(v any) string {
 	case int64:
 		return strconv.FormatInt(x, 10)
 	case float64:
+		if math.IsInf(x, 1) {
+			return "1e999"
+		}
+		if math.IsInf(x, -1) {
+			return "-1e999"
+		}
 		return strconv.FormatFloat(x, 'g', -1, 64)
 	case bool:
 		if x {

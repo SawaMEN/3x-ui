@@ -39,7 +39,7 @@ type Client struct {
 	lanes  [2]*lane
 }
 type lane struct {
-	sync.Mutex
+	gate chan struct{}
 	conn net.Conn
 }
 
@@ -69,7 +69,7 @@ func NewWithConfig(cfg Config, user string) (*Client, error) {
 	if err != nil || ip == nil || !ip.IsLoopback() || len(cfg.Password) == 0 || len(cfg.Password) > 255 || len(id) == 0 || len(id) > 255 {
 		return nil, errors.New("invalid speed broker endpoint")
 	}
-	return &Client{config: cfg, user: id, lanes: [2]*lane{{}, {}}}, nil
+	return &Client{config: cfg, user: id, lanes: [2]*lane{{gate: make(chan struct{}, 1)}, {gate: make(chan struct{}, 1)}}}, nil
 }
 
 func (c *Client) Close() {
@@ -97,12 +97,22 @@ func (c *Client) Wait(ctx context.Context, direction byte, n int) error {
 		return errors.New("invalid speed request")
 	}
 	l := c.lanes[direction]
-	l.Lock()
-	defer l.Unlock()
+	select {
+	case l.gate <- struct{}{}:
+		defer func() { <-l.gate }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	for n > 0 {
 		chunk := chunkSize(n)
 		if err := c.wait(ctx, l, direction, chunk); err != nil {
 			c.Close()
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
 			return err
 		}
 		n -= chunk
@@ -118,6 +128,7 @@ func (c *Client) wait(ctx context.Context, l *lane, direction byte, n int) error
 	}
 	conn := l.conn
 	c.mu.Unlock()
+	newConnection := conn == nil
 	if conn == nil {
 		var err error
 		conn, err = (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp", c.config.Address)
@@ -132,14 +143,17 @@ func (c *Client) wait(ctx context.Context, l *lane, direction byte, n int) error
 		}
 		l.conn = conn
 		c.mu.Unlock()
+	}
+	// Cancellation must cover authentication as well as budget frames.
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	if newConnection {
 		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
-		if err = c.authenticate(conn); err != nil {
+		if err := c.authenticate(conn); err != nil {
 			return err
 		}
 	}
 	_ = conn.SetDeadline(time.Now().Add(35 * time.Second))
-	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	defer stop()
 	frame := []byte{direction, 0, 0, 0, 0}
 	binary.BigEndian.PutUint32(frame[1:], uint32(n))
 	if err := writeAll(conn, frame); err != nil {
