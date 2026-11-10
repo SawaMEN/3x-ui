@@ -57,3 +57,16 @@ func TestManagedSNIDomainsKeepsSeveralDomainsOnOneNode(t *testing.T) {
 		t.Fatalf("distinct (node, hostname) sites collapsed: %+v", got)
 	}
 }
+
+func TestManagedNodeCertificateSourceSupported(t *testing.T) {
+	for _, source := range []string{"telemt", "gateway", "panel", "subscription"} {
+		if !managedNodeCertificateSourceSupported(source) {
+			t.Errorf("active node certificate source %q was rejected", source)
+		}
+	}
+	for _, source := range []string{"remote", "", "unknown"} {
+		if managedNodeCertificateSourceSupported(source) {
+			t.Errorf("unsupported node certificate source %q was trusted", source)
+		}
+	}
+}
