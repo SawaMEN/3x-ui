@@ -68,6 +68,12 @@ function fixture(existing = false) {
   let reads = 0;
   const checked: string[] = [];
   server.use(
+    http.get('*/panel/api/domains/certificates', () =>
+      HttpResponse.json({
+        success: true,
+        obj: { items: [], firewallEnabled: true, firewallBackend: 'nftables' },
+      }),
+    ),
     http.get('*/panel/api/domains/status', () => {
       reads++;
       return HttpResponse.json({ success: true, obj: status() });
@@ -270,7 +276,7 @@ describe('domain and TLS dashboard', () => {
     await waitFor(() =>
       expect(f.checked).toEqual(expect.arrayContaining(['sub.example.com', 'cdn.example.org'])),
     );
-    const search = screen.getByRole('textbox', { name: 'Search domains' });
+    const search = screen.getByRole('searchbox', { name: 'Search domains' });
     fireEvent.change(search, { target: { value: 'cdn.example.org' } });
     await waitFor(() => {
       const table = document.querySelector('.ant-table-tbody');
@@ -309,7 +315,7 @@ describe('domain and TLS dashboard', () => {
     const email = await screen.findByDisplayValue('old@example.com');
     fireEvent.change(email, { target: { value: 'next@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
-    expect(await screen.findByText('Configuration contains blocking errors')).toBeTruthy();
+    expect((await screen.findAllByText('Configuration contains blocking errors')).length).toBeGreaterThan(0);
     expect(f.applied).toBeUndefined();
   });
 

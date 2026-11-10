@@ -22,6 +22,7 @@ func NewDomainController(g *gin.RouterGroup) {
 	a := &DomainController{}
 	g = g.Group("/domains")
 	g.GET("/status", a.status)
+	g.GET("/certificates", a.certificates)
 	g.GET("/sni", a.sni)
 	g.POST("/apply", a.apply)
 	g.POST("/preflight", a.preflight)
@@ -31,6 +32,13 @@ func NewDomainController(g *gin.RouterGroup) {
 
 func (a *DomainController) status(c *gin.Context) {
 	result, err := service.DomainFrontStatus()
+	jsonObj(c, result, err)
+}
+
+func (a *DomainController) certificates(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	result, err := service.DomainCertificateInventory(ctx)
 	jsonObj(c, result, err)
 }
 

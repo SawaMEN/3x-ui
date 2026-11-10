@@ -40,6 +40,7 @@ import {
 } from '@/schemas/domain-front';
 import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
 import DomainOverview from './DomainOverview';
+import CertificateInventoryPanel from './CertificateInventoryPanel';
 import { DomainPreflightReportSchema } from '@/schemas/domain-preflight';
 import type { DomainPreflightReport } from '@/schemas/domain-preflight';
 import type { DomainPreset } from './DomainOverview';
@@ -725,6 +726,7 @@ export default function DomainFrontTab({
         title={label('automation')}
         description={label('automationDesc')}
       />
+      <CertificateInventoryPanel />
       {!!status?.existingCertificates?.length && (
         <Collapse
           items={[

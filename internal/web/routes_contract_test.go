@@ -49,6 +49,7 @@ func isInternalUIAPI(path string) bool {
 		// network checks and preflight never persists configuration.
 		path == "/panel/api/domains/recommend" ||
 		path == "/panel/api/domains/preflight" ||
+		path == "/panel/api/domains/certificates" ||
 		path == "/panel/api/telemt/subscription-proxy" ||
 		path == "/panel/api/xray/outbound-subs/:id/probe"
 }
