@@ -74,7 +74,9 @@ func (p *CloudflareTXTProvider) validateTXT(zone string, rr libdns.RR) (string, 
 		return "", errors.New("DNS-01 provider accepts only challenge TXT records in its configured zone")
 	}
 	name := strings.ToLower(libdns.AbsoluteName(rr.Name, p.zone))
-	if !strings.HasSuffix(name, "."+p.zone) || !validPublicDNSName(strings.TrimSuffix(name, ".")) {
+	if !strings.HasSuffix(name, "."+p.zone) ||
+		!strings.HasPrefix(name, "_acme-challenge.") ||
+		!validPublicDNSName(strings.TrimPrefix(name, "_acme-challenge.")) {
 		return "", errors.New("invalid ACME TXT record name")
 	}
 	return strings.TrimSuffix(name, "."), nil
