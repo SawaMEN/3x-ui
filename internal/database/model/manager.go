@@ -20,6 +20,7 @@ type ManagerEntry struct {
 	NodeID          *int                  `json:"nodeId,omitempty"`
 	Port            string                `json:"port"`
 	SNI             string                `json:"sni"`
+	RealityTarget   string                `json:"realityTarget,omitempty"`
 	Label           string                `json:"label"`
 	Flag            string                `json:"flag"`
 	RelayID         int                   `json:"relayId"`
