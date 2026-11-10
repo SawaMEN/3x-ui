@@ -800,6 +800,41 @@ type RemoteManagedSNI struct {
 	KeyFile  string `json:"keyFile"`
 }
 
+// RemoteCertificateSummary is the node's read-only certificate metadata.
+// It contains no private keys and deliberately omits certificate paths.
+type RemoteCertificateSummary struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Names     []string `json:"names"`
+	Manager   string   `json:"manager"`
+	Challenge string   `json:"challenge"`
+	State     string   `json:"state"`
+	Issuer    string   `json:"issuer"`
+	ExpiresAt int64    `json:"expiresAt"`
+	DaysLeft  int      `json:"daysLeft"`
+	AutoRenew bool     `json:"autoRenew"`
+	Warning   string   `json:"warning,omitempty"`
+}
+
+// ListCertificateSummaries uses the node's existing authenticated API and
+// disables recursion. Nothing in the response is used as a local file path.
+func (r *Remote) ListCertificateSummaries(ctx context.Context) ([]RemoteCertificateSummary, error) {
+	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/certificates?local=1", nil)
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Items []RemoteCertificateSummary `json:"items"`
+	}
+	if err := json.Unmarshal(env.Obj, &response); err != nil {
+		return nil, fmt.Errorf("decode node certificate summaries: %w", err)
+	}
+	if len(response.Items) > 250 {
+		return nil, fmt.Errorf("node returned too many certificates")
+	}
+	return response.Items, nil
+}
+
 // ListManagedSNI uses the existing authenticated node API. The local flag
 // prevents recursive discovery when nodes themselves manage child panels.
 func (r *Remote) ListManagedSNI(ctx context.Context) ([]RemoteManagedSNI, error) {
