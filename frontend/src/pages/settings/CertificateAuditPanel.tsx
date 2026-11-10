@@ -11,6 +11,7 @@ const auditEntry = z.object({
   domain: z.string().optional(),
   action: z.string(),
   outcome: z.string(),
+  nodeId: z.number().int().positive().optional(),
 });
 
 export default function CertificateAuditPanel() {
@@ -56,10 +57,12 @@ export default function CertificateAuditPanel() {
           },
           {
             title: label('domain'),
-            render: (_value, item) =>
-              item.domain || (
-                <Typography.Text type="secondary">{label('unspecified')}</Typography.Text>
-              ),
+            render: (_value, item) => (
+              <span>
+                {item.domain || label('unspecified')}
+                {item.nodeId != null && <Tag style={{ marginInlineStart: 8 }}>Node #{item.nodeId}</Tag>}
+              </span>
+            ),
           },
           { title: label('manager'), dataIndex: 'manager' },
           {
