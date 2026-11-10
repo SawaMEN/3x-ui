@@ -359,6 +359,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
           ].map((node) => {
             const selected = nodeIds.includes(node.id);
             const known = verifiedSniByNode[node.id];
+            const ownedCertificates = managerTLSCertificatesForNode(certificates, node.id);
             return (
               <div
                 key={node.id}
@@ -384,10 +385,10 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                 {selected && (
                   <Tag>
                     {t('TLS-сертификаты:', 'TLS certificates:')}{' '}
-                    {managerTLSCertificatesForNode(certificates, node.id).length}
+                    {ownedCertificates.length}
                   </Tag>
                 )}
-                {selected && managerTLSCertificatesForNode(certificates, node.id).length > 0 && (
+                {selected && ownedCertificates.length > 0 && (
                   <AutoComplete
                     style={{ minWidth: 240, maxWidth: '100%' }}
                     value={tlsSniByNode[node.id] ?? 'inherit'}
@@ -408,12 +409,40 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                         value: 'auto',
                         label: t('TLS: автоматически на ноде', 'TLS: automatic on node'),
                       },
-                      ...managerTLSCertificatesForNode(certificates, node.id).map((site) => ({
+                      ...ownedCertificates.map((site) => ({
                         value: site.name,
                         label: site.name,
                       })),
                     ]}
                   />
+                )}
+                {selected && ownedCertificates.length > 0 && (
+                  <div style={{ width: '100%' }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {t(
+                        'Действующие сертификаты ноды (срок в днях; без срока — старая версия API):',
+                        'Node certificates (days remaining; no date means an older node API):',
+                      )}
+                    </Typography.Text>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                      {ownedCertificates.slice(0, 6).map((site) => {
+                        const days = site.expiresAt
+                          ? Math.max(0, Math.ceil((site.expiresAt * 1000 - Date.now()) / 86400000))
+                          : null;
+                        return (
+                          <Tag
+                            key={site.name}
+                            color={days !== null && days <= 14 ? 'warning' : undefined}
+                          >
+                            {site.name}
+                            {days !== null ? ` · ${days} ${t('дн.', 'days')}` : ''}
+                            {site.issuer ? ` · ${site.issuer}` : ''}
+                          </Tag>
+                        );
+                      })}
+                      {ownedCertificates.length > 6 && <Tag>+{ownedCertificates.length - 6}</Tag>}
+                    </div>
+                  </div>
                 )}
                 {selected && (
                   <Button
