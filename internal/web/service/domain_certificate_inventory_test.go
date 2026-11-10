@@ -66,3 +66,14 @@ func TestCertificateInventoryGroupsSharedFilesAndSkipsRemotePorts(t *testing.T) 
 		}
 	}
 }
+
+func TestRemoteCertificateReferencesDoNotExposeNodeKeys(t *testing.T) {
+	sites := []ManagedSNIDomain{
+		{Name: "node.example.org", Source: "remote", NodeID: 9, NodeName: "Edge", CertFile: "/node/private/cert.pem", KeyFile: "/node/private/key.pem"},
+		{Name: "local.example.org", Source: "gateway", CertFile: "/local/cert.pem"},
+	}
+	items := appendRemoteCertificateReferences(nil, sites)
+	if len(items) != 1 || items[0].NodeID != 9 || items[0].CertFile != "" || len(items[0].Ports) != 0 {
+		t.Fatalf("remote node leaked paths or ports: %+v", items)
+	}
+}

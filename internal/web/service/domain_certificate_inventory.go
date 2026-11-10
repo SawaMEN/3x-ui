@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
@@ -236,6 +237,32 @@ func containsCertificateLabel(labels []string, target string) bool {
 	return false
 }
 
+// appendRemoteCertificateReferences adds node references without touching
+// their certificate files or disclosing node-local private-key paths.
+func appendRemoteCertificateReferences(items []CertificateInventoryItem, sites []ManagedSNIDomain) []CertificateInventoryItem {
+	for _, site := range sites {
+		if site.Source != "remote" || site.NodeID <= 0 {
+			continue
+		}
+		key := "remote|" + strconv.Itoa(site.NodeID) + "|" + site.Name
+		hash := sha256.Sum256([]byte(key))
+		items = append(items, CertificateInventoryItem{
+			ID: hex.EncodeToString(hash[:12]), Name: site.Name,
+			Names: []string{site.Name}, UsedBy: []string{"node"},
+			Manager: "remote", Challenge: "unknown",
+			Ports: []int{}, Source: "remote", State: "external",
+			NodeID: site.NodeID, NodeName: site.NodeName,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Name != items[j].Name {
+			return items[i].Name < items[j].Name
+		}
+		return items[i].ID < items[j].ID
+	})
+	return items
+}
+
 // DomainCertificateInventory only inspects certificates of THIS host.
 // No remote node's private-key path is ever used as a local filesystem path.
 func DomainCertificateInventory(ctx context.Context) (CertificateInventory, error) {
@@ -248,6 +275,9 @@ func DomainCertificateInventory(ctx context.Context) (CertificateInventory, erro
 		state = &telemt
 	}
 	inventory := CertificateInventory{Items: makeCertificateInventory(status, domainACMEStates(domainACMEHomes()), state)}
+	if sites, sitesErr := ManagedSNIDomains(ctx, true); sitesErr == nil {
+		inventory.Items = appendRemoteCertificateReferences(inventory.Items, sites)
+	}
 	firewall, fwErr := (&FirewallService{}).GetManagedStatusSafe(ctx, rememberedFirewallSafetyPort())
 	if fwErr == nil {
 		inventory.FirewallEnabled = firewall.Enabled && firewall.Supported
