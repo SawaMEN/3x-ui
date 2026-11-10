@@ -31,6 +31,7 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.GET("/sni", a.sni)
 	g.POST("/apply", a.apply)
 	g.POST("/preflight", a.preflight)
+	g.POST("/probe/http01", a.probeHTTP01)
 	g.POST("/check", a.check)
 	g.POST("/recommend", a.recommend)
 }
@@ -123,6 +124,23 @@ func (a *DomainController) preflight(c *gin.Context) {
 		return
 	}
 	result, err := service.PreflightDomainFront(c.Request.Context(), cfg)
+	jsonObj(c, result, err)
+}
+
+// This endpoint is authenticated just like other node APIs. It never
+// accepts arbitrary ports or paths and does not mutate gateway state.
+func (a *DomainController) probeHTTP01(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1024)
+	var input struct {
+		Name string `json:"name" binding:"required"`
+		Token string `json:"token" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	result, err := service.ObservePublicHTTP01(c.Request.Context(), input.Name, input.Token)
 	jsonObj(c, result, err)
 }
 
