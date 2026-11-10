@@ -23,6 +23,7 @@ func NewDomainController(g *gin.RouterGroup) {
 	g = g.Group("/domains")
 	g.GET("/status", a.status)
 	g.GET("/certificates", a.certificates)
+	g.POST("/certificates/renew", a.renewCertificate)
 	g.GET("/sni", a.sni)
 	g.POST("/apply", a.apply)
 	g.POST("/preflight", a.preflight)
@@ -32,6 +33,19 @@ func NewDomainController(g *gin.RouterGroup) {
 
 func (a *DomainController) status(c *gin.Context) {
 	result, err := service.DomainFrontStatus()
+	jsonObj(c, result, err)
+}
+
+// Renew exactly one already registered local certificate, never a caller-supplied path.
+func (a *DomainController) renewCertificate(c *gin.Context) {
+	var request struct {
+		ID string `json:"id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.RenewDomainCertificate(c.Request.Context(), request.ID)
 	jsonObj(c, result, err)
 }
 

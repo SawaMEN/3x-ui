@@ -123,6 +123,7 @@ func (s *FirewallService) SetAutoSyncPreference(ctx context.Context, enabled boo
 // configurable pass remains as drift repair for imports and future mutation
 // paths and keeps the managed iptables jump behind newly added admin rules.
 func (s *FirewallService) RunAutoSync(parent context.Context) {
+	go RunDomainCertificateRenewalScheduler(parent)
 	syncNow := func(explicit bool) {
 		if parent.Err() != nil {
 			return

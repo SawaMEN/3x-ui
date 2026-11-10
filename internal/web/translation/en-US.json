@@ -2689,7 +2689,13 @@
             "http-01": "HTTP-01",
             "tls-alpn-01": "TLS-ALPN-01",
             "http-01+tls-alpn-01": "HTTP-01 / TLS-ALPN-01"
-          }
+          },
+          "actions": "Actions",
+          "renewAction": "Renew",
+          "renewConfirm": "Check and renew this certificate?",
+          "renewDescription": "TCP 80/443 will be opened temporarily if required. The original firewall rules will be restored afterwards. Renewal happens only when the certificate manager considers it due.",
+          "renewCompleted": "Renewal command finished. Verify the certificate expiry.",
+          "renewFailed": "Certificate renewal failed"
         }
       },
       "subAppearanceTheme": "Page theme",

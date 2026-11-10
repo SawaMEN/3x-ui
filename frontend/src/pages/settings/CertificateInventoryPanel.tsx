@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Button, Card, Empty, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Empty, Popconfirm, Space, Table, Tag, Typography, message } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
@@ -8,6 +9,8 @@ import { CertificateInventorySchema } from '@/schemas/domain-certificates';
 export default function CertificateInventoryPanel() {
   const { t, i18n } = useTranslation();
   const label = (key: string) => t('pages.settings.domains.certificateInventory.' + key);
+  const [renewing, setRenewing] = useState<string>();
+  const [notice, contextHolder] = message.useMessage();
   const certificates = useQuery({
     queryKey: ['settings', 'domains', 'certificate-inventory'],
     queryFn: async () => {
@@ -22,7 +25,27 @@ export default function CertificateInventoryPanel() {
     refetchIntervalInBackground: false,
   });
 
+  async function renew(id: string) {
+    setRenewing(id);
+    try {
+      const response = await HttpUtil.post(
+        '/panel/api/domains/certificates/renew',
+        { id },
+        { silent: true, timeout: 780000 },
+      );
+      if (!response?.success) throw new Error(response?.msg || label('renewFailed'));
+      notice.success(label('renewCompleted'));
+      void certificates.refetch();
+    } catch (error) {
+      notice.error(error instanceof Error ? error.message : label('renewFailed'));
+    } finally {
+      setRenewing(undefined);
+    }
+  }
+
   return (
+    <>
+    {contextHolder}
     <Card
       size="small"
       title={label('title')}
@@ -141,6 +164,27 @@ export default function CertificateInventoryPanel() {
             ),
           },
           {
+            title: label('actions'),
+            key: 'actions',
+            render: (_value, item) =>
+              item.manager === 'acme.sh' || item.manager === 'certbot' ? (
+                <Popconfirm
+                  title={label('renewConfirm')}
+                  description={label('renewDescription')}
+                  onConfirm={() => renew(item.id)}
+                  okText={label('renewAction')}
+                >
+                  <Button
+                    size="small"
+                    loading={renewing === item.id}
+                    disabled={!!renewing}
+                  >
+                    {label('renewAction')}
+                  </Button>
+                </Popconfirm>
+              ) : null,
+          },
+          {
             title: label('certificatePath'),
             key: 'path',
             render: (_value, item) =>
@@ -155,5 +199,6 @@ export default function CertificateInventoryPanel() {
         ]}
       />
     </Card>
+    </>
   );
 }
