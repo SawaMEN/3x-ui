@@ -22,7 +22,7 @@ import {
 import { runSNIScan } from '@/pages/inbounds/form/security/sni-scanner';
 import { nodeSupportsProtocol } from '@/lib/xray/node-protocols';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
-import { managerTLSCertificateForSni, managerTLSCertificatesForNode } from './certificate-recipes';
+import { managerCertificateName, managerTLSCertificateForSni, managerTLSCertificatesForNode } from './certificate-recipes';
 import { HttpUtil } from '@/utils';
 import { buildManagerRecipes, catalogGroups, managerCatalog, MAX_MANAGER_ENTRIES } from './catalog';
 import type { Subscription } from './schema';
@@ -171,7 +171,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       for (const item of selectedItems) {
         if (item.sniMode !== 'tls') continue;
         const selected = tlsSniByNode[nodeId] ?? sniByPreset[item.id] ?? '';
-        const domain = selected.trim().toLowerCase().replace(/\\.$/, '');
+        const domain = managerCertificateName(selected);
         if (!domain || domain === 'auto' || domain === 'inherit') {
           skipped.push(`${item.name} · #${nodeId}`);
           continue;

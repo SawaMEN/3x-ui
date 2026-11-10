@@ -88,6 +88,22 @@ describe('manager multi-node recipe builder', () => {
     expect(fixed.entries[0].sniBackups).toBeUndefined();
   });
 
+  it('normalizes and deduplicates backup SNI names before creating a draft', () => {
+    const result = buildManagerRecipes({
+      presets: ['vless-tcp-reality'],
+      nodeIds: [0],
+      nodes: [],
+      domains: [],
+      sniByPreset: { 'vless-tcp-reality': 'PRIMARY.EXAMPLE.ORG' },
+      verifiedSniByNode: {},
+      backupSniByNode: {
+        0: ['primary.example.org.', 'BACKUP.EXAMPLE.ORG.', 'backup.example.org', 'third.example.org'],
+      },
+      targetByPreset: {},
+    });
+    expect(result.entries[0].sniBackups).toEqual(['backup.example.org', 'third.example.org']);
+  });
+
   it('rejects oversized plans instead of silently dropping entries', () => {
     const result = buildManagerRecipes({
       presets: ['vless-tcp-reality'],

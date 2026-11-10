@@ -3,6 +3,7 @@ import { nodeSupportsProtocol } from '@/lib/xray/node-protocols';
 import { createManagerPreset, MANAGER_PRESETS } from './presets';
 import { newEntry } from './schema';
 import {
+  managerCertificateName,
   managerConfigNeedsTLSCertificate,
   managerConfigWithTLSCertificate,
   managerTLSCertificateForSni,
@@ -275,6 +276,13 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
       const securedConfig = certificate
         ? managerConfigWithTLSCertificate(config, certificate)
         : config;
+      // An SNI discovered under a different case or with a trailing dot
+      // must never become its own backup or appear twice in the draft.
+      const backups = [
+        ...new Set((options.backupSniByNode?.[nodeId] ?? []).map(managerCertificateName)),
+      ]
+        .filter((host) => host && host !== managerCertificateName(sni))
+        .slice(0, 6);
       const entry = {
         ...newEntry(),
         mode: 'generate' as const,
@@ -284,10 +292,7 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
         nodeId,
         port: 'random',
         sni: certificate?.name ?? sni,
-        sniBackups:
-          preset.sniMode === 'reality' && !customTarget
-            ? (options.backupSniByNode?.[nodeId] ?? []).filter((host) => host !== sni).slice(0, 6)
-            : undefined,
+        sniBackups: preset.sniMode === 'reality' && !customTarget ? backups : undefined,
         realityTarget:
           preset.sniMode === 'reality' ? (options.targetByPreset[id] || '').trim() : undefined,
         label: `${preset.name} · ${nodeName}`,
