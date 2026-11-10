@@ -164,6 +164,9 @@ func (s *Subscriber) formatMessage(e eventbus.Event) (subject, body string) {
 			content := kv("Domain", html.EscapeString(e.Source))
 			content += kv("Status", html.EscapeString(data.State))
 			content += kv("Manager", html.EscapeString(data.Manager))
+			if data.NodeID > 0 {
+				content += kv("Node", fmt.Sprintf("#%d", data.NodeID))
+			}
 			body = wrap("Certificate health", content)
 		}
 
