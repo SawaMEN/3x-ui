@@ -109,6 +109,35 @@ func (m *Manager) Apply(ctx context.Context, cfg DomainFrontConfig, backend Back
 	return nil
 }
 
+// CheckManagedRenewal checks one local CertMagic certificate against the
+// issuer's renewal policy. It never forces a renewal and never issues for a
+// foreign, disabled or externally managed name. Caller bounds the context.
+func (m *Manager) CheckManagedRenewal(ctx context.Context, name string) error {
+	m.mu.Lock()
+	r := m.runtime
+	if r == nil || r.magic == nil {
+		m.mu.Unlock()
+		return errors.New("domain gateway is not running")
+	}
+	managed := false
+	for _, domain := range r.cfg.Domains {
+		if !domain.Enabled || domain.Name != name || domain.Mode == "shared_sni" {
+			continue
+		}
+		if (domain.TLS == "auto" || domain.TLS == "certmagic") && r.external[name] == nil {
+			managed = true
+		}
+		break
+	}
+	magic := r.magic
+	m.mu.Unlock()
+	if !managed {
+		return errors.New("certificate is not managed locally by CertMagic")
+	}
+	// false means never force ACME issuance for a healthy certificate.
+	return magic.RenewCertSync(ctx, name, false)
+}
+
 func (m *Manager) Stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
