@@ -936,6 +936,9 @@ export const ManagerEntrySchema = z.object({
   relayId: z.number().int(),
   sni: z.string(),
   sniBackups: z.array(z.string()).optional(),
+  sniHealthCheckedAt: z.number().int().optional(),
+  sniHealthFailures: z.number().int().optional(),
+  sniHealthLastSwitchAt: z.number().int().optional(),
   templateId: z.number().int(),
 });
 export type ManagerEntry = z.infer<typeof ManagerEntrySchema>;
@@ -1043,8 +1046,11 @@ export const ManagerSubscriptionSchema = z.object({
   incy: z.string(),
   intervalMinutes: z.number().int(),
   lastRotation: z.number().int(),
+  monitorSni: z.boolean(),
+  monitorSniIntervalMinutes: z.number().int(),
   name: z.string(),
   nextRotation: z.number().int(),
+  nextSniHealthCheck: z.number().int(),
   note: z.string(),
   ownClient: z.boolean(),
   published: z.array(z.lazy(() => ManagerEntrySchema)),
