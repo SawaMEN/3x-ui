@@ -40,7 +40,8 @@ export default function DomainOverview({
     t('pages.settings.domains.workspace.' + key, values);
   const summary = getDomainSummary(draft, status, checks);
   const running = !!status?.running;
-  const canAudit = !dirty && !loading && !auditing && !status?.error && !!status && summary.active > 0;
+  const canAudit =
+    !dirty && !loading && !auditing && !status?.error && !!status && summary.active > 0;
 
   return (
     <Card className="domain-workspace" loading={loading} size="small">
@@ -66,21 +67,33 @@ export default function DomainOverview({
           {l('managedSni')}: {managedSniCount}
         </Typography.Text>
       </div>
-      {(summary.failedCertificates > 0 || summary.expiringCertificates > 0 || dirty || !summary.total) && (
+      {(summary.failedCertificates > 0 ||
+        summary.expiringCertificates > 0 ||
+        dirty ||
+        !summary.total) && (
         <div className="domain-workspace-guidance">
           {!summary.total && <Typography.Text type="secondary">{l('emptyHint')}</Typography.Text>}
           {summary.failedCertificates > 0 && (
-            <Typography.Text type="danger">{l('certError', { count: summary.failedCertificates })}</Typography.Text>
+            <Typography.Text type="danger">
+              {l('certError', { count: summary.failedCertificates })}
+            </Typography.Text>
           )}
           {summary.expiringCertificates > 0 && (
-            <Typography.Text type="warning">{l('certExpiring', { count: summary.expiringCertificates })}</Typography.Text>
+            <Typography.Text type="warning">
+              {l('certExpiring', { count: summary.expiringCertificates })}
+            </Typography.Text>
           )}
           {dirty && <Typography.Text type="secondary">{l('unsavedHint')}</Typography.Text>}
         </div>
       )}
       <div className="domain-workspace-actions">
         <Space wrap>
-          <Button type="primary" icon={<PlusOutlined />} disabled={!status || loading} onClick={() => onAdd('subscription')}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            disabled={!status || loading}
+            onClick={() => onAdd('subscription')}
+          >
             {t('pages.settings.domains.add')}
           </Button>
           <Dropdown
@@ -111,8 +124,12 @@ export default function DomainOverview({
             </Button>
           </Tooltip>
           {auditTotal > 0 && (
-            <Progress size="small" percent={Math.round((auditDone / auditTotal) * 100)}
-              status={auditing ? 'active' : 'normal'} format={() => auditDone + ' / ' + auditTotal} />
+            <Progress
+              size="small"
+              percent={Math.round((auditDone / auditTotal) * 100)}
+              status={auditing ? 'active' : 'normal'}
+              format={() => auditDone + ' / ' + auditTotal}
+            />
           )}
         </div>
       </div>
