@@ -2733,7 +2733,7 @@
           "panelSchedule": "Automatic 3x-ui renewal check",
           "audit": {
             "title": "Certificate history",
-            "description": "Recent issuance, renewal and expiration events. Limited to 250 records without secrets or command output.",
+            "helpText": "Recent issuance, renewal and expiration events. Limited to 250 records without secrets or command output.",
             "empty": "No events yet",
             "date": "Date",
             "domain": "Domain",

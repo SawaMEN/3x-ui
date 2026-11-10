@@ -20,8 +20,8 @@ import (
 // administrator-selected zone. It never lists or alters unrelated DNS records.
 type CloudflareTXTProvider struct {
 	zone, zoneID, token string
-	endpoint string // fixed in production; overridden only in package tests
-	client *http.Client
+	endpoint            string // fixed in production; overridden only in package tests
+	client              *http.Client
 }
 
 type cloudflareTXTRecord struct {
@@ -90,7 +90,7 @@ func (p *CloudflareTXTProvider) validateTXT(zone string, rr libdns.RR) (string, 
 
 type cloudflareEnvelope struct {
 	Success bool `json:"success"`
-	Result struct {
+	Result  struct {
 		ID string `json:"id"`
 	} `json:"result"`
 }
@@ -159,10 +159,10 @@ func (p *CloudflareTXTProvider) AppendRecords(ctx context.Context, zone string, 
 			return result, err
 		}
 		id, err := p.request(ctx, http.MethodPost, "", struct {
-			Type string `json:"type"`
-			Name string `json:"name"`
+			Type    string `json:"type"`
+			Name    string `json:"name"`
 			Content string `json:"content"`
-			TTL int `json:"ttl"`
+			TTL     int    `json:"ttl"`
 		}{Type: "TXT", Name: name, Content: rr.Data, TTL: 120})
 		if err != nil {
 			return result, err

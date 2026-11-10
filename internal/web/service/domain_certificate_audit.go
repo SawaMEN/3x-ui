@@ -105,10 +105,11 @@ func RecordCertificateAudit(manager, id, domain, action, outcome string) error {
 		id = ""
 	}
 	for _, ch := range id {
-		if !((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) {
-			id = ""
-			break
+		if ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' {
+			continue
 		}
+		id = ""
+		break
 	}
 	event := CertificateAuditEntry{
 		At: time.Now().Unix(), Manager: manager, CertificateID: id,
@@ -145,9 +146,10 @@ func RecordCertificateAuditWithNode(change CertificateAuditEntry) error {
 		return errors.New("invalid remote certificate health state")
 	}
 	for _, ch := range change.CertificateID {
-		if !((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) {
-			return errors.New("invalid remote certificate identifier")
+		if ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' {
+			continue
 		}
+		return errors.New("invalid remote certificate identifier")
 	}
 	change.At = time.Now().Unix()
 	change.Domain = certificateAuditDomain(change.Domain)

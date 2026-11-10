@@ -19,14 +19,15 @@ import (
 // permissions only; creation IDs never leave this provider.
 type DigitalOceanTXTProvider struct {
 	zone, token string
-	endpoint string
-	client *http.Client
+	endpoint    string
+	client      *http.Client
 }
 
 type digitalOceanTXTRecord struct {
 	rr libdns.RR
 	id int64
 }
+
 func (r digitalOceanTXTRecord) RR() libdns.RR { return r.rr }
 
 func NewDigitalOceanTXTProvider(zone, token string) (*DigitalOceanTXTProvider, error) {
@@ -119,7 +120,7 @@ func (p *DigitalOceanTXTProvider) AppendRecords(ctx context.Context, zone string
 			Type string `json:"type"`
 			Name string `json:"name"`
 			Data string `json:"data"`
-			TTL int `json:"ttl"`
+			TTL  int    `json:"ttl"`
 		}{Type: "TXT", Name: name, Data: rr.Data, TTL: 120})
 		if err != nil {
 			return out, err

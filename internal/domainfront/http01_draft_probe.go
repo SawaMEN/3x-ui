@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
 )
 
 // StartDraftHTTP01Probe temporarily binds public TCP 80 to verify an
@@ -61,14 +63,14 @@ func StartDraftHTTP01Probe(ctx context.Context, cfg DomainFrontConfig, name stri
 		}
 	})
 	server := &http.Server{
-		Handler: handler, ReadHeaderTimeout: 3*time.Second,
-		IdleTimeout: 3*time.Second, MaxHeaderBytes: 4<<10,
+		Handler: handler, ReadHeaderTimeout: 3 * time.Second,
+		IdleTimeout: 3 * time.Second, MaxHeaderBytes: 4 << 10,
 	}
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() { _ = server.Close() })
 	}
-	go func() { _ = server.Serve(listener) }()
+	go func() { _ = network.ServeHTTP(server, listener, "Temporary HTTP-01 proof listener") }()
 	go func() {
 		<-ctx.Done()
 		cleanup()

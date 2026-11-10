@@ -44,10 +44,6 @@ func domainDNSCredentialTarget(provider string) (string, string, error) {
 	}
 }
 
-func readDomainDNSCredential() (string, string, error) {
-	return readDomainDNSCredentialFor("cloudflare")
-}
-
 func readDomainDNSCredentialFor(provider string) (string, string, error) {
 	filename, environment, err := domainDNSCredentialTarget(provider)
 	if err != nil {

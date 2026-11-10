@@ -33,7 +33,7 @@ export default function CertificateAuditPanel() {
   });
   return (
     <Card size="small" title={label('title')} style={{ marginTop: 12 }}>
-      <Typography.Paragraph type="secondary">{label('description')}</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">{label('helpText')}</Typography.Paragraph>
       {history.error && (
         <Alert type="error" showIcon title={history.error.message} style={{ marginBottom: 12 }} />
       )}
@@ -60,7 +60,9 @@ export default function CertificateAuditPanel() {
             render: (_value, item) => (
               <span>
                 {item.domain || label('unspecified')}
-                {item.nodeId != null && <Tag style={{ marginInlineStart: 8 }}>Node #{item.nodeId}</Tag>}
+                {item.nodeId != null && (
+                  <Tag style={{ marginInlineStart: 8 }}>Node #{item.nodeId}</Tag>
+                )}
               </span>
             ),
           },
