@@ -33,16 +33,35 @@ func validDomainDNSToken(value string) bool {
 	return true
 }
 
+func domainDNSCredentialTarget(provider string) (string, string, error) {
+	switch provider {
+	case "cloudflare":
+		return cloudflareDNSCredentialFile, cloudflareDNSCredentialEnv, nil
+	case "digitalocean":
+		return "domain-digitalocean-dns-token", "X_UI_DIGITALOCEAN_DNS_TOKEN", nil
+	default:
+		return "", "", errors.New("unsupported DNS-01 provider")
+	}
+}
+
 func readDomainDNSCredential() (string, string, error) {
+	return readDomainDNSCredentialFor("cloudflare")
+}
+
+func readDomainDNSCredentialFor(provider string) (string, string, error) {
+	filename, environment, err := domainDNSCredentialTarget(provider)
+	if err != nil {
+		return "", "", err
+	}
 	domainDNSCredentialMu.Lock()
 	defer domainDNSCredentialMu.Unlock()
-	if token := strings.TrimSpace(os.Getenv(cloudflareDNSCredentialEnv)); token != "" {
+	if token := strings.TrimSpace(os.Getenv(environment)); token != "" {
 		if !validDomainDNSToken(token) {
 			return "", "", errors.New("invalid Cloudflare DNS-01 environment credential")
 		}
 		return token, "environment", nil
 	}
-	path := filepath.Join(config.GetDBFolderPath(), cloudflareDNSCredentialFile)
+	path := filepath.Join(config.GetDBFolderPath(), filename)
 	stat, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", "", nil
@@ -66,7 +85,11 @@ func readDomainDNSCredential() (string, string, error) {
 }
 
 func DomainDNSCredentialState() (DomainDNSCredentialStatus, error) {
-	token, source, err := readDomainDNSCredential()
+	return DomainDNSCredentialStateFor("cloudflare")
+}
+
+func DomainDNSCredentialStateFor(provider string) (DomainDNSCredentialStatus, error) {
+	token, source, err := readDomainDNSCredentialFor(provider)
 	return DomainDNSCredentialStatus{Configured: token != "", Source: source}, err
 }
 
@@ -74,9 +97,17 @@ func DomainDNSCredentialState() (DomainDNSCredentialStatus, error) {
 // responses. Its owner-only file survives restarts. A systemd environment
 // credential takes precedence over the saved file when configured.
 func SaveDomainDNSCredential(token string, clear bool) error {
+	return SaveDomainDNSCredentialFor("cloudflare", token, clear)
+}
+
+func SaveDomainDNSCredentialFor(provider, token string, clear bool) error {
+	filename, _, err := domainDNSCredentialTarget(provider)
+	if err != nil {
+		return err
+	}
 	domainDNSCredentialMu.Lock()
 	defer domainDNSCredentialMu.Unlock()
-	path := filepath.Join(config.GetDBFolderPath(), cloudflareDNSCredentialFile)
+	path := filepath.Join(config.GetDBFolderPath(), filename)
 	if clear {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return errors.New("cannot remove DNS credential")
@@ -119,15 +150,15 @@ func configureDomainDNS01(cfg domainfront.DomainFrontConfig, backend *domainfron
 	if cfg.DNS01Provider == "" {
 		return nil
 	}
-	if cfg.DNS01Provider != "cloudflare" {
-		return errors.New("unsupported DNS-01 provider")
+	if _, _, err := domainDNSCredentialTarget(cfg.DNS01Provider); err != nil {
+		return err
 	}
-	token, _, err := readDomainDNSCredential()
+	token, _, err := readDomainDNSCredentialFor(cfg.DNS01Provider)
 	if err != nil {
 		return err
 	}
 	if token == "" {
-		return fmt.Errorf("Cloudflare DNS-01 requires a scoped token; configure it in Domains and TLS settings")
+		return fmt.Errorf("%s DNS-01 requires a scoped token; configure it in Domains and TLS settings", cfg.DNS01Provider)
 	}
 	backend.DNS01Token = token
 	return nil
