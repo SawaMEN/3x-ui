@@ -153,15 +153,19 @@ func DomainCertificateAuditedEventsForDNS(httpPort, httpsPort int, dnsOnly bool)
 		name, _ := payload["identifier"].(string)
 		if name != "" {
 			action, outcome := "", ""
+			operation := "obtain"
+			if renewal, _ := payload["renewal"].(bool); renewal {
+				operation = "renew"
+			}
 			switch event {
 			case "cert_obtaining":
-				action, outcome = "obtain", "started"
+				action, outcome = operation, "started"
 			case "cert_obtained":
-				action, outcome = "obtain", "succeeded"
+				action, outcome = operation, "succeeded"
 			case "cert_renewed":
 				action, outcome = "renew", "succeeded"
 			case "cert_failed":
-				action, outcome = "obtain", "failed"
+				action, outcome = operation, "failed"
 			}
 			if err != nil {
 				outcome = "failed"
