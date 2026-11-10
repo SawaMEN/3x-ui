@@ -818,6 +818,35 @@ type RemoteCertificateSummary struct {
 
 // ListCertificateSummaries uses the node's existing authenticated API and
 // disables recursion. Nothing in the response is used as a local file path.
+// ProbePublicHTTP01 performs an independent reachability check on the
+// selected authenticated node; only the random challenge token is sent.
+type RemoteHTTP01Observation struct {
+	Name string `json:"name"`
+	CheckedAt int64 `json:"checkedAt"`
+	Addresses []string `json:"addresses"`
+	Verified bool `json:"verified"`
+	Detail string `json:"detail"`
+}
+
+func (r *Remote) ProbePublicHTTP01(ctx context.Context, name, token string) (RemoteHTTP01Observation, error) {
+	env, err := r.do(ctx, http.MethodPost, "panel/api/domains/probe/http01",
+		struct {
+			Name string `json:"name"`
+			Token string `json:"token"`
+		}{Name: name, Token: token})
+	if err != nil {
+		return RemoteHTTP01Observation{}, err
+	}
+	var result RemoteHTTP01Observation
+	if err := json.Unmarshal(env.Obj, &result); err != nil {
+		return RemoteHTTP01Observation{}, errors.New("invalid node HTTP-01 observation response")
+	}
+	if len(result.Addresses) > 16 || len(result.Detail) > 256 || result.Name != name {
+		return RemoteHTTP01Observation{}, errors.New("invalid node HTTP-01 observation data")
+	}
+	return result, nil
+}
+
 func (r *Remote) ListCertificateSummaries(ctx context.Context) ([]RemoteCertificateSummary, error) {
 	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/certificates?local=1", nil)
 	if err != nil {
