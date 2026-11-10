@@ -2567,7 +2567,61 @@
         "autoCheck": "Check DNS/TLS after apply",
         "autoCheckHelp": "Check the saved primary domain automatically, showing DNS addresses and the certificate visible from the server. New certificate issuance may still be pending; wait and check again if needed. Disable to check manually.",
         "termsHelp": "Agreement is needed for new certificates issued by CertMagic. Reusing an acme.sh certificate does not require accepting a new agreement. Consent is never selected automatically.",
-        "manualSettings": "Manual HTTPS and external proxy"
+        "manualSettings": "Manual HTTPS and external proxy",
+        "workspace": {
+          "title": "Domain control center",
+          "description": "Live gateway status, certificates and domains in one workspace",
+          "online": "Gateway running",
+          "offline": "Gateway requires attention",
+          "disabled": "Gateway disabled",
+          "active": "Active domains",
+          "healthy": "Verified / valid",
+          "attention": "Needs attention",
+          "managedSni": "Managed SNI",
+          "emptyHint": "Start by choosing a configuration below. No DNS records or certificates are changed until you save and apply.",
+          "certError": "Certificates with errors: {count}",
+          "certExpiring": "Certificates expiring within 30 days: {count}",
+          "acmeHint": "Automatic Let's Encrypt certificates need a contact email and acceptance of the terms.",
+          "gatewayHint": "The gateway is enabled but not running. Review port availability and TLS configuration.",
+          "unsavedHint": "You have unsaved changes. Apply them before testing the public DNS and TLS endpoints.",
+          "quickAdd": "Quick setup",
+          "preset": {
+            "subscription": "Subscription",
+            "direct": "Direct / proxy",
+            "cdn": "CDN",
+            "sni": "Local SNI",
+            "shared": "Remote SNI"
+          },
+          "hint": {
+            "subscription": "Create a domain for subscription links",
+            "direct": "Create a direct HTTPS entry and select compatible inbounds",
+            "cdn": "Create an HTTPS domain behind your CDN",
+            "sni": "Create a certificate for local SNI use",
+            "shared": "Reference an SNI domain managed on another node"
+          },
+          "audit": "Audit all DNS/TLS",
+          "auditHint": "Check publicly reachable TLS certificates for all saved, active domains (up to three in parallel)",
+          "auditSaveFirst": "Save and apply changes before running diagnostics",
+          "auditWarnings": "DNS/TLS audit completed with {count} errors",
+          "auditSuccess": "DNS/TLS audit finished successfully",
+          "searchPlaceholder": "Search domains",
+          "filterLabel": "Filter by domain mode or health",
+          "filter": {
+            "all": "All domains",
+            "attention": "Needs attention"
+          },
+          "showing": "Showing {count}",
+          "healthLabel": "Health",
+          "health": {
+            "disabled": "Disabled",
+            "unsaved": "Unsaved",
+            "external": "Remote / external",
+            "error": "Error",
+            "expiring": "Expiring soon",
+            "healthy": "Valid",
+            "pending": "Awaiting certificate"
+          }
+        }
       },
       "subAppearanceTheme": "Page theme",
       "subAppearanceClassic": "Classic appearance",

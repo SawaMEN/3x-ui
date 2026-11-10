@@ -38,6 +38,9 @@ import {
   defaultDomainConfig,
 } from '@/schemas/domain-front';
 import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
+import DomainOverview from './DomainOverview';
+import type { DomainPreset } from './DomainOverview';
+import { getDomainHealth } from './domain-health';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
@@ -105,6 +108,11 @@ export default function DomainFrontTab({
   const { data: options = [] } = useInboundOptions();
   const [checks, setChecks] = useState<Record<string, DomainFrontCheck>>({});
   const [checking, setChecking] = useState<string>();
+  const [auditing, setAuditing] = useState(false);
+  const [auditDone, setAuditDone] = useState(0);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [domainSearch, setDomainSearch] = useState('');
+  const [domainFilter, setDomainFilter] = useState('all');
   const [expanded, setExpanded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [scanningRedirect, setScanningRedirect] = useState(false);
@@ -237,6 +245,64 @@ export default function DomainFrontTab({
       setChecking(undefined);
     }
   }
+  async function auditDomains() {
+    if (!status || dirty || busy || auditing) return;
+    // Only saved domains can be checked. Limit concurrency to avoid
+    // overwhelming the panel and the DNS/TLS endpoints on larger installations.
+    const names = status.config.domains.filter((domain) => domain.enabled).map((domain) => domain.name);
+    if (names.length === 0) return;
+    setAuditing(true);
+    setAuditTotal(names.length);
+    setAuditDone(0);
+    let next = 0;
+    let completed = 0;
+    let failures = 0;
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(names.length, 3) }, async () => {
+          while (next < names.length) {
+            const name = names[next++];
+            try {
+              const msg = await HttpUtil.post('/panel/api/domains/check', { name }, { silent: true });
+              if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
+              const result = DomainFrontCheckSchema.parse(msg.obj);
+              if (result.error) failures++;
+              setChecks((prev) => ({ ...prev, [name]: result }));
+            } catch (error) {
+              failures++;
+              setChecks((prev) => ({
+                ...prev,
+                [name]: {
+                  name,
+                  addresses: [],
+                  checkedAt: Math.floor(Date.now() / 1000),
+                  expiresAt: 0,
+                  daysLeft: 0,
+                  issuer: '',
+                  error: error instanceof Error ? error.message : t('somethingWentWrong'),
+                },
+              }));
+            } finally {
+              completed++;
+              setAuditDone(completed);
+            }
+          }
+        }),
+      );
+      if (failures > 0)
+        messageApi.warning(t('pages.settings.domains.workspace.auditWarnings', { count: failures }));
+      else messageApi.success(t('pages.settings.domains.workspace.auditSuccess'));
+    } finally {
+      setAuditing(false);
+    }
+  }
+
+  function openPreset(preset: DomainPreset) {
+    openEditor(-1, preset === 'sni', preset === 'shared');
+    if (preset === 'direct') form.setFieldsValue({ mode: 'direct', tls: 'auto' });
+    if (preset === 'cdn') form.setFieldsValue({ mode: 'cdn', tls: 'auto' });
+  }
+
   function openEditor(index: number, sniOnly = false, sharedOnly = false) {
     form.resetFields();
     form.setFieldsValue(
@@ -293,6 +359,19 @@ export default function DomainFrontTab({
   }
   const date = (epoch: number) =>
     new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' }).format(epoch * 1000);
+  const filteredDomains = draft.domains.filter((domain) => {
+    if (!domain.name.toLowerCase().includes(domainSearch.trim().toLowerCase())) return false;
+    if (domainFilter === 'all') return true;
+    if (domainFilter === 'attention') {
+      const saved = status?.config.domains.some(
+        (item) => item.name === domain.name && JSON.stringify(item) === JSON.stringify(domain),
+      ) ?? false;
+      return ['error', 'expiring'].includes(
+        getDomainHealth(domain, status, checks[domain.name], saved),
+      );
+    }
+    return domain.mode === domainFilter;
+  });
   const compatible = options.filter(
     (o) =>
       o.enable &&
@@ -319,6 +398,19 @@ export default function DomainFrontTab({
         </Button>
         {dirty && <Typography.Text type="secondary">{label('unsaved')}</Typography.Text>}
       </Space>
+      <DomainOverview
+        draft={draft}
+        status={status}
+        checks={checks}
+        managedSniCount={managedSniDomains.length}
+        dirty={dirty}
+        loading={loading}
+        auditing={auditing}
+        auditDone={auditDone}
+        auditTotal={auditTotal}
+        onAudit={() => void auditDomains()}
+        onAdd={openPreset}
+      />
       {statusQuery.error && (
         <Alert
           type="error"
@@ -819,10 +911,37 @@ export default function DomainFrontTab({
           </Space>
         }
       >
+        <Space wrap style={{ marginBottom: 12, width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder={label('workspace.searchPlaceholder')}
+            aria-label={label('workspace.searchPlaceholder')}
+            value={domainSearch}
+            onChange={(event) => setDomainSearch(event.target.value)}
+            style={{ width: 250, maxWidth: '100%' }}
+          />
+          <Select
+            aria-label={label('workspace.filterLabel')}
+            value={domainFilter}
+            onChange={setDomainFilter}
+            style={{ minWidth: 180 }}
+            options={[
+              { value: 'all', label: label('workspace.filter.all') },
+              { value: 'attention', label: label('workspace.filter.attention') },
+              ...(['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'] as const).map((mode) => ({
+                value: mode,
+                label: label('mode.' + mode),
+              })),
+            ]}
+          />
+          <Typography.Text type="secondary">
+            {label('workspace.showing', { count: filteredDomains.length })}
+          </Typography.Text>
+        </Space>
         <Table
           rowKey="name"
-          dataSource={draft.domains}
-          pagination={false}
+          dataSource={filteredDomains}
+          pagination={{ pageSize: 10, hideOnSinglePage: true, showSizeChanger: true }}
           scroll={{ x: 760 }}
           locale={{ emptyText: label('empty') }}
           columns={[
@@ -840,6 +959,21 @@ export default function DomainFrontTab({
               title: label('modeLabel'),
               dataIndex: 'mode',
               render: (value: string) => <Tag>{label(`mode.${value}`)}</Tag>,
+            },
+            {
+              title: label('workspace.healthLabel'),
+              key: 'health',
+              render: (_, d: DomainForm) => {
+                const saved = status?.config.domains.some(
+                  (item) => item.name === d.name && JSON.stringify(item) === JSON.stringify(d),
+                ) ?? false;
+                const health = getDomainHealth(d, status, checks[d.name], saved);
+                const color = health === 'healthy' ? 'green'
+                  : health === 'error' ? 'red'
+                  : health === 'expiring' ? 'orange'
+                  : 'default';
+                return <Tag color={color}>{label('workspace.health.' + health)}</Tag>;
+              },
             },
             {
               title: label('certificate'),
@@ -888,14 +1022,14 @@ export default function DomainFrontTab({
             },
             {
               title: label('actions'),
-              render: (_, d, index) => (
+              render: (_, d) => (
                 <Space wrap>
-                  <Button size="small" onClick={() => openEditor(index)}>
+                  <Button size="small" onClick={() => openEditor(draft.domains.findIndex((item) => item.name === d.name))}>
                     {label('edit')}
                   </Button>
                   <Button
                     loading={checking === d.name}
-                    disabled={dirty || !initialized}
+                    disabled={dirty || !initialized || auditing}
                     onClick={() => void check(d.name)}
                   >
                     {label('check')}
@@ -904,7 +1038,7 @@ export default function DomainFrontTab({
                     title={label('removeConfirm')}
                     onConfirm={() =>
                       update({
-                        domains: draft.domains.filter((_, i) => i !== index),
+                        domains: draft.domains.filter((item) => item.name !== d.name),
                         subscriptionDomain:
                           draft.subscriptionDomain === d.name ? '' : draft.subscriptionDomain,
                       })
