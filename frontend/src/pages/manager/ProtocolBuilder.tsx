@@ -40,6 +40,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
   const [sniByPreset, setSniByPreset] = useState<Record<string, string>>({});
   const [targetByPreset, setTargetByPreset] = useState<Record<string, string>>({});
   const [verifiedSniByNode, setVerifiedSniByNode] = useState<Record<number, string>>({});
+  const [backupSniByNode, setBackupSniByNode] = useState<Record<number, string[]>>({});
   const [scanResultsByNode, setScanResultsByNode] = useState<Record<number, RealityScanResult[]>>(
     {},
   );
@@ -74,6 +75,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
         sniByPreset,
         targetByPreset,
         verifiedSniByNode,
+        backupSniByNode,
         managedCertificates: certificates,
         tlsSniByNode,
         allowUnconfiguredTLS,
@@ -86,6 +88,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       sniByPreset,
       targetByPreset,
       verifiedSniByNode,
+      backupSniByNode,
       certificates,
       tlsSniByNode,
       allowUnconfiguredTLS,
@@ -120,6 +123,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       return next;
     });
     setScanResultsByNode((current) => ({ ...current, [nodeId]: [] }));
+    setBackupSniByNode((current) => ({ ...current, [nodeId]: [] }));
     try {
       // Reuse the panel scanner (neighbor discovery, candidate discovery,
       // TLS 1.3/H2/X25519 and repeated stability probes).
@@ -382,6 +386,11 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                     {t('Проверен:', 'Verified:')} {known}
                   </Tag>
                 )}
+                {selected && (backupSniByNode[node.id]?.length ?? 0) > 0 && (
+                  <Tag color="processing">
+                    {t('Резервных SNI:', 'Backup SNIs:')} {backupSniByNode[node.id].length}
+                  </Tag>
+                )}
                 {selected && (
                   <Tag>
                     {t('TLS-сертификаты:', 'TLS certificates:')} {ownedCertificates.length}
@@ -487,6 +496,25 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                             }
                           >
                             {t('Выбрать', 'Select')}
+                          </Button>
+                        )}
+                        {isAutoUsableManagerSNI(row) && row.host !== known && (
+                          <Button
+                            size="small"
+                            type={backupSniByNode[node.id]?.includes(row.host) ? 'primary' : 'default'}
+                            onClick={() =>
+                              setBackupSniByNode((current) => {
+                                const list = current[node.id] || [];
+                                const next = list.includes(row.host)
+                                  ? list.filter((host) => host !== row.host)
+                                  : [...list, row.host].slice(0, 6);
+                                return { ...current, [node.id]: next };
+                              })
+                            }
+                          >
+                            {backupSniByNode[node.id]?.includes(row.host)
+                              ? t('В резерве', 'In reserve')
+                              : t('Добавить в резерв', 'Add backup')}
                           </Button>
                         )}
                       </div>
