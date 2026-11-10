@@ -2,6 +2,7 @@ package email
 
 import (
 	"fmt"
+	"html"
 	"os"
 	"strconv"
 	"strings"
@@ -156,6 +157,15 @@ func (s *Subscriber) formatMessage(e eventbus.Event) (subject, body string) {
 			}
 		}
 		body = wrap(i18n("tgbot.messages.eventNodeUp", "Name=="+e.Source), content)
+
+	case eventbus.EventCertificateHealth:
+		if data, ok := e.Data.(*eventbus.CertificateHealthData); ok {
+			subject = host + " certificate " + data.State + ": " + e.Source
+			content := kv("Domain", html.EscapeString(e.Source))
+			content += kv("Status", html.EscapeString(data.State))
+			content += kv("Manager", html.EscapeString(data.Manager))
+			body = wrap("Certificate health", content)
+		}
 
 	case eventbus.EventCPUHigh:
 		if data, ok := e.Data.(*eventbus.SystemMetricData); ok {
