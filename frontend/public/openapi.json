@@ -3775,6 +3775,17 @@
             },
             "type": "array"
           },
+          "sniHealthCheckedAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sniHealthFailures": {
+            "type": "integer"
+          },
+          "sniHealthLastSwitchAt": {
+            "format": "int64",
+            "type": "integer"
+          },
           "templateId": {
             "type": "integer"
           }
@@ -4152,10 +4163,20 @@
             "format": "int64",
             "type": "integer"
           },
+          "monitorSni": {
+            "type": "boolean"
+          },
+          "monitorSniIntervalMinutes": {
+            "type": "integer"
+          },
           "name": {
             "type": "string"
           },
           "nextRotation": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "nextSniHealthCheck": {
             "format": "int64",
             "type": "integer"
           },
@@ -4197,8 +4218,11 @@
           "incy",
           "intervalMinutes",
           "lastRotation",
+          "monitorSni",
+          "monitorSniIntervalMinutes",
           "name",
           "nextRotation",
+          "nextSniHealthCheck",
           "note",
           "ownClient",
           "published",
@@ -6283,6 +6307,9 @@
                         "sniBackups": [
                           ""
                         ],
+                        "sniHealthCheckedAt": 0,
+                        "sniHealthFailures": 0,
+                        "sniHealthLastSwitchAt": 0,
                         "templateId": 0
                       }
                     ],
@@ -6292,8 +6319,11 @@
                     "incy": "",
                     "intervalMinutes": 0,
                     "lastRotation": 0,
+                    "monitorSni": false,
+                    "monitorSniIntervalMinutes": 0,
                     "name": "",
                     "nextRotation": 0,
+                    "nextSniHealthCheck": 0,
                     "note": "",
                     "ownClient": false,
                     "published": [
@@ -6313,6 +6343,9 @@
                         "sniBackups": [
                           ""
                         ],
+                        "sniHealthCheckedAt": 0,
+                        "sniHealthFailures": 0,
+                        "sniHealthLastSwitchAt": 0,
                         "templateId": 0
                       }
                     ],
@@ -6579,6 +6612,9 @@
                             "sniBackups": [
                               ""
                             ],
+                            "sniHealthCheckedAt": 0,
+                            "sniHealthFailures": 0,
+                            "sniHealthLastSwitchAt": 0,
                             "templateId": 0
                           }
                         ],
@@ -6588,8 +6624,11 @@
                         "incy": "",
                         "intervalMinutes": 0,
                         "lastRotation": 0,
+                        "monitorSni": false,
+                        "monitorSniIntervalMinutes": 0,
                         "name": "",
                         "nextRotation": 0,
+                        "nextSniHealthCheck": 0,
                         "note": "",
                         "ownClient": false,
                         "published": [
@@ -6609,6 +6648,9 @@
                             "sniBackups": [
                               ""
                             ],
+                            "sniHealthCheckedAt": 0,
+                            "sniHealthFailures": 0,
+                            "sniHealthLastSwitchAt": 0,
                             "templateId": 0
                           }
                         ],
@@ -6686,6 +6728,9 @@
                         "sniBackups": [
                           ""
                         ],
+                        "sniHealthCheckedAt": 0,
+                        "sniHealthFailures": 0,
+                        "sniHealthLastSwitchAt": 0,
                         "templateId": 0
                       }
                     ],
@@ -6695,8 +6740,11 @@
                     "incy": "",
                     "intervalMinutes": 0,
                     "lastRotation": 0,
+                    "monitorSni": false,
+                    "monitorSniIntervalMinutes": 0,
                     "name": "",
                     "nextRotation": 0,
+                    "nextSniHealthCheck": 0,
                     "note": "",
                     "ownClient": false,
                     "published": [
@@ -6716,6 +6764,9 @@
                         "sniBackups": [
                           ""
                         ],
+                        "sniHealthCheckedAt": 0,
+                        "sniHealthFailures": 0,
+                        "sniHealthLastSwitchAt": 0,
                         "templateId": 0
                       }
                     ],
