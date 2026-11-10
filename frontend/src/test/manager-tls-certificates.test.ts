@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import {
+  managerCertificateName,
   managerTLSCertificateForSni,
   managerTLSCertificatesForNode,
   managerConfigWithTLSCertificate,
@@ -64,6 +65,10 @@ function plan(
 }
 
 describe('manager per-node TLS certificates', () => {
+  it('normalizes case and trailing dots before matching an SNI certificate', () => {
+    expect(managerCertificateName(' VPN.EXAMPLE.ORG. ')).toBe('vpn.example.org');
+  });
+
   it('retains the same hostname independently on the panel and multiple nodes', () => {
     expect(managerTLSCertificatesForNode(sites, 0)).toEqual([
       expect.objectContaining({ certFile: local.certFile }),

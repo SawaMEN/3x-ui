@@ -70,3 +70,15 @@ func TestManagedNodeCertificateSourceSupported(t *testing.T) {
 		}
 	}
 }
+
+func TestManagedSNIDomainsNormalizesRemoteHostnames(t *testing.T) {
+	seen := make(map[string]bool)
+	sites := []ManagedSNIDomain{
+		{NodeID: 6, Name: "VPN.EXAMPLE.ORG.", Source: "remote", CertFile: "/one.crt", KeyFile: "/one.key"},
+		{NodeID: 6, Name: "vpn.example.org", Source: "remote", CertFile: "/two.crt", KeyFile: "/two.key"},
+	}
+	got := mergeNodeManagedSNIDomains(nil, sites, seen)
+	if len(got) != 1 || got[0].Name != "vpn.example.org" || got[0].CertFile != "/one.crt" {
+		t.Fatalf("case-variant remote hostname was duplicated: %+v", got)
+	}
+}

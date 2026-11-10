@@ -59,8 +59,9 @@ operator based on the server scan alone.
 - Keeps certificates for identical hostnames on different nodes instead of
   collapsing them into one list entry.
 - Reuses active Domain Front and Telemt certificates, and matching existing
-  panel/subscription certificate pairs. Each item remains scoped to its
-  originating node, with issuer/expiry shown when available.
+  panel/subscription certificate pairs, including those exposed by authenticated
+  remote nodes. Each item remains scoped to its originating node, with
+  issuer/expiry shown when available.
 - Xray stream-TLS recipes automatically populate SNI and file-backed
   certificate references for each selected node; expired entries are not
   selected. Per-node TLS domain overrides are available. If no certificate
