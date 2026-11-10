@@ -73,6 +73,7 @@ type frontRuntime struct {
 	cancel         context.CancelFunc
 	mu             sync.Mutex
 	errors         map[string]string
+	proofs         map[string]http01Proof
 	handlerHTTPS   http.Handler
 	routing        atomic.Pointer[http.Handler]
 	handlerHTTP    http.Handler
