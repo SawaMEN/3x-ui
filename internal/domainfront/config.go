@@ -66,6 +66,7 @@ type Backend struct {
 	Certificates        map[string]CertificateFiles
 	ChallengeRoots      map[string]string
 	CertificateEvent    func(context.Context, string, map[string]any) error
+	DNS01Token          string // private; never serialized into DomainFrontConfig or API
 	GetRedirect         func() (string, error)
 	SubscriptionHost    string
 
