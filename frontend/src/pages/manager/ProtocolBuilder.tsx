@@ -22,10 +22,7 @@ import {
 import { runSNIScan } from '@/pages/inbounds/form/security/sni-scanner';
 import { nodeSupportsProtocol } from '@/lib/xray/node-protocols';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
-import {
-  managerTLSCertificateForSni,
-  managerTLSCertificatesForNode,
-} from './certificate-recipes';
+import { managerTLSCertificateForSni, managerTLSCertificatesForNode } from './certificate-recipes';
 import { HttpUtil } from '@/utils';
 import { buildManagerRecipes, catalogGroups, managerCatalog, MAX_MANAGER_ENTRIES } from './catalog';
 import type { Subscription } from './schema';
@@ -190,7 +187,10 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
               'Укажите конкретные TLS-домены для протоколов или каждой ноды.',
               'Select explicit TLS hostnames for protocols or nodes.',
             )
-          : t('Все выбранные TLS-сертификаты уже найдены.', 'All selected TLS certificates are already available.'),
+          : t(
+              'Все выбранные TLS-сертификаты уже найдены.',
+              'All selected TLS certificates are already available.',
+            ),
       );
       return;
     }
@@ -658,7 +658,10 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
             maxLength={254}
             placeholder={t('Email для ACME', 'ACME contact email')}
           />
-          <Checkbox checked={acmeConsent} onChange={(event) => setAcmeConsent(event.target.checked)}>
+          <Checkbox
+            checked={acmeConsent}
+            onChange={(event) => setAcmeConsent(event.target.checked)}
+          >
             {t(
               'Я контролирую указанные домены и принимаю условия Let’s Encrypt.',
               'I control the selected hostnames and accept the Let’s Encrypt terms.',
@@ -669,7 +672,10 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
             disabled={issuingCertificates || selectedItems.every((item) => item.sniMode !== 'tls')}
             onClick={() => void issueNodeCertificates()}
           >
-            {t('Выпустить недостающие TLS-сертификаты на нодах', 'Issue missing TLS certificates on selected nodes')}
+            {t(
+              'Выпустить недостающие TLS-сертификаты на нодах',
+              'Issue missing TLS certificates on selected nodes',
+            )}
           </Button>
           {issueMessage && <Alert showIcon type="info" title={issueMessage} />}
         </Space>
