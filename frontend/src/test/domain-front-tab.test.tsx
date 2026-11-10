@@ -68,6 +68,12 @@ function fixture(existing = false) {
   let reads = 0;
   const checked: string[] = [];
   server.use(
+    http.get('*/panel/api/domains/certificates', () =>
+      HttpResponse.json({
+        success: true,
+        obj: { items: [], firewallEnabled: true, firewallBackend: 'nftables' },
+      }),
+    ),
     http.get('*/panel/api/domains/status', () => {
       reads++;
       return HttpResponse.json({ success: true, obj: status() });
@@ -89,6 +95,12 @@ function fixture(existing = false) {
             ssMethod: '',
           },
         ],
+      }),
+    ),
+    http.post('*/panel/api/domains/preflight', () =>
+      HttpResponse.json({
+        success: true,
+        obj: { ready: true, checkedAt: 1, checks: [] },
       }),
     ),
     http.post('*/panel/api/domains/apply', async ({ request }) => {
@@ -216,7 +228,9 @@ describe('domain and TLS dashboard', () => {
     chooseSelectOption('tls', title);
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await waitFor(() =>
-      expect(document.querySelector('.ant-table-tbody')?.textContent).toContain(title),
+      expect(
+        document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
+      ).toContain(title),
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() => expect(f.applied?.domains[0].tls).toBe(tlsMode));
@@ -242,7 +256,9 @@ describe('domain and TLS dashboard', () => {
     fireEvent.change(input, { target: { value: 'new.example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await waitFor(() =>
-      expect(document.querySelector('.ant-table-tbody')?.textContent).toContain('new.example.com'),
+      expect(
+        document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
+      ).toContain('new.example.com'),
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() => expect(f.applied?.subscriptionDomain).toBe('new.example.com'));
@@ -253,6 +269,60 @@ describe('domain and TLS dashboard', () => {
       inboundIds: [],
     });
     await waitFor(() => expect(f.checked).toEqual(['new.example.com']));
+  });
+
+  it('audits saved domains in bulk and filters the domain table without modifying configuration', async () => {
+    const f = fixture();
+    f.config.domains.push({ ...defaultDomain, name: 'cdn.example.org', mode: 'cdn' });
+    renderWithProviders(<DomainFrontTab />);
+    await screen.findByDisplayValue('old@example.com');
+    fireEvent.click(screen.getByRole('button', { name: /Audit all DNS\/TLS/ }));
+    await waitFor(() =>
+      expect(f.checked).toEqual(expect.arrayContaining(['sub.example.com', 'cdn.example.org'])),
+    );
+    const search = screen.getByRole('searchbox', { name: 'Search domains' });
+    fireEvent.change(search, { target: { value: 'cdn.example.org' } });
+    await waitFor(() => {
+      const table = document.querySelector('.domain-config-table .ant-table-tbody');
+      expect(table?.textContent).toContain('cdn.example.org');
+      expect(table?.textContent).not.toContain('sub.example.com');
+    });
+    expect(f.applied).toBeUndefined();
+  });
+
+  it('checks the unsaved draft without applying it', async () => {
+    const f = fixture();
+    renderWithProviders(<DomainFrontTab />);
+    await screen.findByDisplayValue('old@example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Check readiness' }));
+    expect(await screen.findByText('Configuration is ready to apply')).toBeTruthy();
+    expect(f.applied).toBeUndefined();
+  });
+
+  it('blocks applying an invalid draft reported by the server preflight', async () => {
+    const f = fixture();
+    server.use(
+      http.post('*/panel/api/domains/preflight', () =>
+        HttpResponse.json({
+          success: true,
+          obj: {
+            ready: false,
+            checkedAt: 1,
+            checks: [
+              { code: 'telemt_port_conflict', severity: 'error', message: 'TCP 443 is in use' },
+            ],
+          },
+        }),
+      ),
+    );
+    renderWithProviders(<DomainFrontTab />);
+    const email = await screen.findByDisplayValue('old@example.com');
+    fireEvent.change(email, { target: { value: 'next@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    expect(
+      (await screen.findAllByText('Configuration contains blocking errors')).length,
+    ).toBeGreaterThan(0);
+    expect(f.applied).toBeUndefined();
   });
 
   it('checks DNS automatically without an extra toggle', async () => {
@@ -447,9 +517,9 @@ describe('domain and TLS dashboard', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await waitFor(() =>
-      expect(document.querySelector('.ant-table-tbody')?.textContent).toContain(
-        'Subscription only',
-      ),
+      expect(
+        document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
+      ).toContain('Subscription only'),
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() =>

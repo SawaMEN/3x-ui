@@ -123,7 +123,9 @@ func (s *FirewallService) SetAutoSyncPreference(ctx context.Context, enabled boo
 // configurable pass remains as drift repair for imports and future mutation
 // paths and keeps the managed iptables jump behind newly added admin rules.
 func (s *FirewallService) RunAutoSync(parent context.Context) {
-	syncNow := func() {
+	go ServeCertificateRenewalHookSocket(parent)
+	go RunDomainCertificateRenewalScheduler(parent)
+	syncNow := func(explicit bool) {
 		if parent.Err() != nil {
 			return
 		}
@@ -137,6 +139,9 @@ func (s *FirewallService) RunAutoSync(parent context.Context) {
 		firewallMu.Lock()
 		defer firewallMu.Unlock()
 
+		if err := pruneFirewallRenewalLeasesLocked(); err != nil {
+			logger.Debug("certificate firewall lease recovery failed:", err)
+		}
 		if err := migrateManagedBackendIfNeededLocked(ctx); err != nil {
 			logger.Debug("firewall backend migration failed:", err)
 			return
@@ -187,7 +192,7 @@ func (s *FirewallService) RunAutoSync(parent context.Context) {
 			return
 		}
 		auto, err := firewallAutoSync()
-		if err != nil || !auto {
+		if err != nil || (!auto && !explicit && !needsCertificateFirewallReconcile()) {
 			return
 		}
 		if err := s.syncManagedSafeLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
@@ -195,17 +200,19 @@ func (s *FirewallService) RunAutoSync(parent context.Context) {
 		}
 	}
 
-	syncNow()
+	syncNow(false)
 	timer := time.NewTimer(firewallSyncInterval())
 	defer timer.Stop()
 	for {
+		explicit := false
 		select {
 		case <-parent.Done():
 			return
 		case <-timer.C:
 		case <-firewallSyncTrigger:
+			explicit = true
 		}
-		syncNow()
+		syncNow(explicit)
 		if !timer.Stop() {
 			select {
 			case <-timer.C:

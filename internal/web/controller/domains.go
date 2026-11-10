@@ -22,14 +22,37 @@ func NewDomainController(g *gin.RouterGroup) {
 	a := &DomainController{}
 	g = g.Group("/domains")
 	g.GET("/status", a.status)
+	g.GET("/certificates", a.certificates)
+	g.POST("/certificates/renew", a.renewCertificate)
 	g.GET("/sni", a.sni)
 	g.POST("/apply", a.apply)
+	g.POST("/preflight", a.preflight)
 	g.POST("/check", a.check)
 	g.POST("/recommend", a.recommend)
 }
 
 func (a *DomainController) status(c *gin.Context) {
 	result, err := service.DomainFrontStatus()
+	jsonObj(c, result, err)
+}
+
+// Renew exactly one already registered local certificate, never a caller-supplied path.
+func (a *DomainController) renewCertificate(c *gin.Context) {
+	var request struct {
+		ID string `json:"id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.RenewDomainCertificate(c.Request.Context(), request.ID)
+	jsonObj(c, result, err)
+}
+
+func (a *DomainController) certificates(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	result, err := service.DomainCertificateInventory(ctx)
 	jsonObj(c, result, err)
 }
 
@@ -48,6 +71,17 @@ func (a *DomainController) apply(c *gin.Context) {
 		return
 	}
 	result, err := service.ApplyDomainFront(c.Request.Context(), cfg)
+	jsonObj(c, result, err)
+}
+
+// preflight inspects a draft configuration without persisting it or issuing certificates.
+func (a *DomainController) preflight(c *gin.Context) {
+	cfg := domainfront.DefaultConfig()
+	if err := c.ShouldBindJSON(&cfg); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.PreflightDomainFront(c.Request.Context(), cfg)
 	jsonObj(c, result, err)
 }
 

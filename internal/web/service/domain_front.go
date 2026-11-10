@@ -294,6 +294,7 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 		return domainfront.DomainFrontStatus{}, err
 	}
 	backend.ChallengeRoots = roots
+	backend.CertificateEvent = DomainCertificateFirewallEvents(cfg.HTTPPort, cfg.HTTPSPort)
 	manager := managedDomainFront()
 	if err := manager.Apply(ctx, cfg, backend); err != nil {
 		rollback()
@@ -313,6 +314,7 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	}
 	result := manager.StatusWithCertificates(cfg, files)
 	result.ExistingCertificates = s.existingDomainCertificates()
+	TriggerFirewallSync()
 	return result, nil
 }
 
@@ -338,10 +340,12 @@ func StartDomainFront() error {
 		return err
 	}
 	backend.ChallengeRoots = roots
+	backend.CertificateEvent = DomainCertificateFirewallEvents(cfg.HTTPPort, cfg.HTTPSPort)
 	if err := managedDomainFront().Apply(context.Background(), cfg, backend); err != nil {
 		rollback()
 		return err
 	}
+	TriggerFirewallSync()
 	return nil
 }
 

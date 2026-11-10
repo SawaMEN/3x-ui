@@ -11,8 +11,10 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	_ "unsafe"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/adblock/youtubeproxy"
@@ -729,6 +731,23 @@ func main() {
 		if err := gateway.CLI(os.Args[2:]); err != nil {
 			log.Fatal("gateway command failed; check the gateway configuration and arguments")
 		}
+	case "certificate-hook":
+		if len(os.Args) != 4 && len(os.Args) != 5 {
+			log.Fatal("usage: x-ui certificate-hook begin|end certbot|acme.sh [parent-pid]")
+		}
+		pid := 0
+		if len(os.Args) == 5 {
+			var err error
+			pid, err = strconv.Atoi(os.Args[4])
+			if err != nil || pid <= 1 {
+				log.Fatal("invalid certificate renewal parent process ID")
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		if err := service.InvokeCertificateRenewalHook(ctx, os.Args[2], os.Args[3], pid); err != nil {
+			log.Fatal("certificate renewal firewall hook: ", err)
+		}
 	case "core-migrate":
 		if err := coremigration.CLIWithInitializer(os.Args[2:], initNodeTokenCrypto); err != nil {
 			log.Fatal("core migration failed; check the migration configuration and arguments")
@@ -841,6 +860,7 @@ Commands:
     recovery      export, check or extract an encrypted complete recovery bundle
     encrypt-tokens encrypt node bearer tokens with the configured active key
     setting        set settings
+    certificate-hook local, root-only temporary firewall integration for renewal hooks
     gateway         configure transparent gateway mode
 `
 }
