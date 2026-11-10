@@ -196,6 +196,9 @@ func makeCertificateInventory(status domainfront.DomainFrontStatus, states []dom
 	byKey := map[string]*CertificateInventoryItem{}
 	for _, cert := range certs {
 		manager, challenge := certificateManager(cert, states)
+		if manager == "certmagic" && status.Config.DNS01Provider != "" {
+			challenge = "dns-01"
+		}
 		if cert.Source == "telemt" && manager == "remote" {
 			manager, challenge = "external", "unknown"
 		}
