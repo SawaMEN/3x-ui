@@ -28,8 +28,10 @@ type ManagedSNIDomain struct {
 	Source   string `json:"source"`
 	CertFile string `json:"certFile"`
 	KeyFile  string `json:"keyFile"`
-	NodeID   int    `json:"nodeId,omitempty"`
-	NodeName string `json:"nodeName,omitempty"`
+	NodeID    int    `json:"nodeId,omitempty"`
+	NodeName  string `json:"nodeName,omitempty"`
+	ExpiresAt int64  `json:"expiresAt,omitempty"`
+	Issuer    string `json:"issuer,omitempty"`
 }
 
 // ManagedSNIDomains reads the *main panel's* live HTTPS endpoints. Remote node
@@ -56,7 +58,7 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 			return
 		}
 		seen[name] = true
-		out = append(out, ManagedSNIDomain{Name: name, Source: source, CertFile: certFile, KeyFile: keyFile})
+		out = append(out, ManagedSNIDomain{Name: name, Source: source, CertFile: certFile, KeyFile: keyFile, ExpiresAt: leaf.NotAfter.Unix(), Issuer: leaf.Issuer.CommonName})
 	}
 	// Telemt WEB owns the cover site at public TCP 443. Prefer it when
 	// several managed certificates happen to cover the same hostname.
@@ -201,8 +203,10 @@ func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
 				Source:   "remote",
 				CertFile: site.CertFile,
 				KeyFile:  site.KeyFile,
-				NodeID:   result.NodeID,
-				NodeName: result.NodeName,
+				NodeID:     result.NodeID,
+				NodeName:   result.NodeName,
+				ExpiresAt: site.ExpiresAt,
+				Issuer:    site.Issuer,
 			})
 		}
 	}
