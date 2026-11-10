@@ -28,8 +28,9 @@ type externalRenewalHookResponse struct {
 }
 
 type externalRenewalHookLease struct {
-	id   string
-	stop chan struct{}
+	id        string
+	parentPID int
+	stop      chan struct{}
 }
 
 var externalRenewalHookMu sync.Mutex
@@ -154,8 +155,11 @@ func executeExternalCertificateHook(ctx context.Context, request externalRenewal
 		externalRenewalHookMu.Lock()
 		items := externalRenewalHookSessions[request.Manager]
 		var id string
-		if len(items) > 0 {
-			id = items[len(items)-1].id
+		for i := len(items) - 1; i >= 0; i-- {
+			if request.ParentPID <= 1 || items[i].parentPID == request.ParentPID {
+				id = items[i].id
+				break
+			}
 		}
 		externalRenewalHookMu.Unlock()
 		return releaseExternalRenewalLease(request.Manager, id)
@@ -168,7 +172,7 @@ func executeExternalCertificateHook(ctx context.Context, request externalRenewal
 	if err != nil || id == "" {
 		return err
 	}
-	lease := externalRenewalHookLease{id: id, stop: make(chan struct{})}
+	lease := externalRenewalHookLease{id: id, parentPID: request.ParentPID, stop: make(chan struct{})}
 	externalRenewalHookMu.Lock()
 	externalRenewalHookSessions[request.Manager] = append(externalRenewalHookSessions[request.Manager], lease)
 	externalRenewalHookMu.Unlock()
