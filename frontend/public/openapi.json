@@ -3760,6 +3760,9 @@
           "preset": {
             "type": "string"
           },
+          "realityTarget": {
+            "type": "string"
+          },
           "relayId": {
             "type": "integer"
           },
@@ -6268,6 +6271,7 @@
                         "nodeId": null,
                         "port": "",
                         "preset": "",
+                        "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
                         "templateId": 0
@@ -6294,6 +6298,7 @@
                         "nodeId": null,
                         "port": "",
                         "preset": "",
+                        "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
                         "templateId": 0
@@ -6556,6 +6561,7 @@
                             "nodeId": null,
                             "port": "",
                             "preset": "",
+                            "realityTarget": "",
                             "relayId": 0,
                             "sni": "",
                             "templateId": 0
@@ -6582,6 +6588,7 @@
                             "nodeId": null,
                             "port": "",
                             "preset": "",
+                            "realityTarget": "",
                             "relayId": 0,
                             "sni": "",
                             "templateId": 0
@@ -6655,6 +6662,7 @@
                         "nodeId": null,
                         "port": "",
                         "preset": "",
+                        "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
                         "templateId": 0
@@ -6681,6 +6689,7 @@
                         "nodeId": null,
                         "port": "",
                         "preset": "",
+                        "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
                         "templateId": 0
