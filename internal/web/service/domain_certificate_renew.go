@@ -41,7 +41,7 @@ func localCertificateRenewalPlan(id string, status domainfront.DomainFrontStatus
 		if challenge == "unknown" || challenge == "http-01+tls-alpn-01" {
 			return "", nil, nil, "", fmt.Errorf("certificate has no supported external challenge configuration")
 		}
-		ports := challengeFirewallPorts(challenge, 80, 443)
+		ports := item.Ports
 		switch manager {
 		case "acme.sh":
 			for _, state := range states {

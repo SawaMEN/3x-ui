@@ -4,7 +4,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
+	"path/filepath"
 )
 
 func TestCertificateChallengeClassification(t *testing.T) {
@@ -75,5 +77,33 @@ func TestRemoteCertificateReferencesDoNotExposeNodeKeys(t *testing.T) {
 	items := appendRemoteCertificateReferences(nil, sites)
 	if len(items) != 1 || items[0].NodeID != 9 || items[0].CertFile != "" || len(items[0].Ports) != 0 {
 		t.Fatalf("remote node leaked paths or ports: %+v", items)
+	}
+}
+
+func TestACMEShWebrootOpensActualLocalListener(t *testing.T) {
+	cfg := domainfront.DefaultConfig()
+	cfg.Enabled = true
+	cfg.HTTPPort = 8080
+	cfg.Domains = []domainfront.DomainFrontDomain{
+		{Name: "sub.example.org", Enabled: true, Mode: "sub_link_only", TLS: "auto"},
+	}
+	cert := domainfront.DomainFrontCertificate{
+		Name: "sub.example.org", Source: "panel", CertFile: "/tmp/sub.pem",
+		KeyFile: "/tmp/sub.key", Renewal: "acme.sh", State: "valid",
+	}
+	status := domainfront.DomainFrontStatus{Config: cfg, Running: true, Certificates: []domainfront.DomainFrontCertificate{cert}}
+	states := []domainACME{{values: map[string]string{
+		"Le_Domain": "sub.example.org",
+		"Le_RealFullChainPath": "/tmp/sub.pem",
+		"Le_Webroot": filepath.Join(config.GetDBFolderPath(), "domain-acme-webroot"),
+	}}}
+	items := makeCertificateInventory(status, states, nil)
+	if len(items) != 1 || !reflect.DeepEqual(items[0].Ports, []int{8080}) {
+		t.Fatalf("webroot renewal should open the local listener, got %+v", items)
+	}
+	status.Running = false
+	items = makeCertificateInventory(status, states, nil)
+	if len(items) != 1 || !reflect.DeepEqual(items[0].Ports, []int{80}) {
+		t.Fatalf("inactive webroot must not claim the gateway listener: %+v", items)
 	}
 }

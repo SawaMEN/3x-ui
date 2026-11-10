@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 )
 
@@ -157,6 +158,30 @@ func certificateNames(certFile string, name string) []string {
 	return names
 }
 
+// A managed acme.sh webroot is served by the gateway's local HTTP listener.
+// Public ACME HTTP-01 still uses TCP 80 (and may require NAT forwarding), but
+// the local firewall must permit the actual listener, not a fictitious :80.
+func acmeSHLocalWebrootPort(certFile string, status domainfront.DomainFrontStatus, states []domainACME) int {
+	cfg := status.Config
+	if !status.Running || !cfg.Enabled || cfg.HTTPPort < 1 || cfg.HTTPPort > 65535 {
+		return 80
+	}
+	root := filepath.Clean(filepath.Join(config.GetDBFolderPath(), "domain-acme-webroot"))
+	for _, state := range states {
+		if state.values["Le_RealFullChainPath"] != certFile ||
+			filepath.Clean(state.values["Le_Webroot"]) != root {
+			continue
+		}
+		names := strings.Split(state.values["Le_Domain"]+","+state.values["Le_Alt"], ",")
+		for _, domain := range cfg.Domains {
+			if domain.Enabled && domain.Mode != "shared_sni" && containsCertificateLabel(names, domain.Name) {
+				return cfg.HTTPPort
+			}
+		}
+	}
+	return 80
+}
+
 func makeCertificateInventory(status domainfront.DomainFrontStatus, states []domainACME, telemt *TelemtWebProxyState) []CertificateInventoryItem {
 	certs := append([]domainfront.DomainFrontCertificate{}, status.Certificates...)
 	certs = append(certs, status.ExistingCertificates...)
@@ -210,6 +235,9 @@ func makeCertificateInventory(status domainfront.DomainFrontStatus, states []dom
 			httpPort, httpsPort := 80, 443
 			if manager == "certmagic" {
 				httpPort, httpsPort = status.Config.HTTPPort, status.Config.HTTPSPort
+			}
+			if manager == "acme.sh" && challenge == "http-01" {
+				httpPort = acmeSHLocalWebrootPort(cert.CertFile, status, states)
 			}
 			item.Ports = challengeFirewallPorts(challenge, httpPort, httpsPort)
 		}
