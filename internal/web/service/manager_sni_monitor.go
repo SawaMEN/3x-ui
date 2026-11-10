@@ -152,6 +152,13 @@ func managerSNIHealthEligible(entry model.ManagerEntry) bool {
 // are retained. On any apply/persistence error the original inbound is
 // restored and the currently published subscription stays unchanged.
 func (s *ManagerService) monitorSNI(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription) error {
+	return s.monitorSNIWithProbe(ctx, op, sub, scanManagerSNI)
+}
+
+func (s *ManagerService) monitorSNIWithProbe(
+	ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription,
+	probe func(context.Context, *model.Inbound, string) (bool, error),
+) error {
 	if !sub.MonitorSNI || !sub.Enabled || len(sub.Published) == 0 {
 		op.Message = "SNI monitoring disabled or not yet published"
 		return nil
@@ -203,7 +210,7 @@ func (s *ManagerService) monitorSNI(ctx context.Context, op *model.ManagerOperat
 			len(stream.Reality.ServerNames) != 1 || !strings.EqualFold(stream.Reality.ServerNames[0], entry.SNI) {
 			return fmt.Errorf("SNI monitor refuses changed REALITY inbound %d", ib.Id)
 		}
-		ok, err := scanManagerSNI(ctx, ib, entry.SNI)
+		ok, err := probe(ctx, ib, entry.SNI)
 		if err != nil {
 			return fmt.Errorf("SNI scanner unavailable on inbound %d: %w", ib.Id, err)
 		}
@@ -217,7 +224,7 @@ func (s *ManagerService) monitorSNI(ctx context.Context, op *model.ManagerOperat
 		}
 		if shouldSwitch {
 			for _, backup := range entry.SNIBackups {
-				ok, err := scanManagerSNI(ctx, ib, backup)
+				ok, err := probe(ctx, ib, backup)
 				if err != nil {
 					return fmt.Errorf("backup SNI scanner unavailable on inbound %d: %w", ib.Id, err)
 				}
