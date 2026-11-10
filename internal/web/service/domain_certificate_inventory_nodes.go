@@ -19,10 +19,12 @@ import (
 // arbitrary warnings never leave that node or become local filesystem inputs.
 func nodeCertificateInventoryItem(nodeID int, nodeName string, cert runtime.RemoteCertificateSummary) (CertificateInventoryItem, bool) {
 	name := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(cert.Name), "."))
-	if nodeID <= 0 || len(name) < 4 || len(name) > 253 || !strings.Contains(name, ".") {
+	dnsName := strings.TrimPrefix(name, "*.")
+	if nodeID <= 0 || len(name) < 4 || len(name) > 253 ||
+		!strings.Contains(dnsName, ".") || strings.Contains(dnsName, "*") {
 		return CertificateInventoryItem{}, false
 	}
-	for _, label := range strings.Split(name, ".") {
+	for _, label := range strings.Split(dnsName, ".") {
 		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
 			return CertificateInventoryItem{}, false
 		}
