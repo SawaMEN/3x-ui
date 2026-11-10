@@ -228,7 +228,9 @@ describe('domain and TLS dashboard', () => {
     chooseSelectOption('tls', title);
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await waitFor(() =>
-      expect(document.querySelector('.domain-config-table .ant-table-tbody')?.textContent).toContain(title),
+      expect(
+        document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
+      ).toContain(title),
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() => expect(f.applied?.domains[0].tls).toBe(tlsMode));
@@ -254,7 +256,9 @@ describe('domain and TLS dashboard', () => {
     fireEvent.change(input, { target: { value: 'new.example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await waitFor(() =>
-      expect(document.querySelector('.domain-config-table .ant-table-tbody')?.textContent).toContain('new.example.com'),
+      expect(
+        document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
+      ).toContain('new.example.com'),
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() => expect(f.applied?.subscriptionDomain).toBe('new.example.com'));
@@ -513,9 +517,9 @@ describe('domain and TLS dashboard', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await waitFor(() =>
-      expect(document.querySelector('.domain-config-table .ant-table-tbody')?.textContent).toContain(
-        'Subscription only',
-      ),
+      expect(
+        document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
+      ).toContain('Subscription only'),
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() =>
