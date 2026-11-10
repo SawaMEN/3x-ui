@@ -11,6 +11,9 @@ import (
 var challengeToken = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 func (r *frontRuntime) externalChallenge(w http.ResponseWriter, req *http.Request) {
+	if r.serveHTTP01Proof(w, req) {
+		return
+	}
 	host := req.Host
 	if d, ok := r.domain(host); ok {
 		host = d.Name
