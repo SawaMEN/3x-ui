@@ -47,8 +47,11 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
   const [scanError, setScanError] = useState('');
   const [replace, setReplace] = useState(true);
   const [allowUnconfiguredTLS, setAllowUnconfiguredTLS] = useState(false);
-  const { data: certificates = [], isFetching: certsFetching, isError: certsError } =
-    useManagedSniDomains();
+  const {
+    data: certificates = [],
+    isFetching: certsFetching,
+    isError: certsError,
+  } = useManagedSniDomains();
   const [message, setMessage] = useState('');
   const t = (ru: string, en: string) => (russian ? ru : en);
 
@@ -275,15 +278,16 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                                 options={[
                                   {
                                     value: 'auto',
-                                    label: item.sniMode === 'tls'
-                                      ? t(
-                                          'Автоматически (сертификат для каждой ноды)',
-                                          'Automatic (certificate on each node)',
-                                        )
-                                      : t(
-                                          'Автоматически (по проверке ноды или из списка)',
-                                          'Automatic (node scan or domain list)',
-                                        ),
+                                    label:
+                                      item.sniMode === 'tls'
+                                        ? t(
+                                            'Автоматически (сертификат для каждой ноды)',
+                                            'Automatic (certificate on each node)',
+                                          )
+                                        : t(
+                                            'Автоматически (по проверке ноды или из списка)',
+                                            'Automatic (node scan or domain list)',
+                                          ),
                                   },
                                   ...candidates.map((domain) => ({ value: domain })),
                                 ]}
