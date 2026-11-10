@@ -165,7 +165,7 @@ describe('domain and TLS dashboard', () => {
   it('shows certificate lifetime, preserves edited settings on refresh and applies the edited configuration', async () => {
     const f = fixture();
     renderWithProviders(<DomainFrontTab />);
-    expect(await screen.findByText('Test issuer')).toBeTruthy();
+    expect(await screen.findByText('sub.example.com')).toBeTruthy();
     const email = await findDomainEmail();
     expect(screen.getByText('Days remaining: 45 days')).toBeTruthy();
     fireEvent.change(email, { target: { value: 'edited@example.com' } });
