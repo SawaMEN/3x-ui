@@ -108,9 +108,14 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
         continue;
       }
       const configuredSni = options.sniByPreset[id] || '';
+      const customTarget = (options.targetByPreset[id] || '').trim();
+      const customTargetHost = customTarget.split(':')[0];
+      // The certificate presented by a camouflage target normally covers its
+      // hostname. Do not randomly choose an unrelated SNI when a target is set.
       const sni = preset.sniMode === 'reality'
         ? (configuredSni === 'auto'
-          ? (options.verifiedSniByNode[nodeId] || (options.domains.length ? 'random' : ''))
+          ? (customTargetHost || options.verifiedSniByNode[nodeId] ||
+            (options.domains.length ? 'random' : ''))
           : configuredSni)
         : (preset.sniMode === 'tls' ? (configuredSni === 'auto' ? '' : configuredSni) : '');
       const entry = {
