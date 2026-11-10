@@ -24,6 +24,9 @@ const (
 	EventCPUHigh    EventType = "cpu.high"
 	EventMemoryHigh EventType = "memory.high"
 
+	// Certificate expiration and renewal health (transition-only).
+	EventCertificateHealth EventType = "certificate.health"
+
 	// Security
 	EventLoginAttempt EventType = "login.attempt"
 )
@@ -127,4 +130,10 @@ type LoginEventData struct {
 type SystemMetricData struct {
 	Percent   float64 // current usage percentage
 	Threshold int     // configured threshold
+}
+
+// CertificateHealthData is non-sensitive metadata for administrator notices.
+type CertificateHealthData struct {
+	Manager string
+	State string
 }
