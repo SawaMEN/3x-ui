@@ -19,23 +19,23 @@ import (
 // CertificateInventoryItem describes a certificate owned by the local panel,
 // gateway, or a remote node. Private keys and ACME account secrets are never read.
 type CertificateInventoryItem struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Names    []string `json:"names"`
-	UsedBy   []string `json:"usedBy"`
-	Manager  string   `json:"manager"`
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Names     []string `json:"names"`
+	UsedBy    []string `json:"usedBy"`
+	Manager   string   `json:"manager"`
 	Challenge string   `json:"challenge"`
-	Ports    []int    `json:"ports"`
-	Source   string   `json:"source"`
-	State    string   `json:"state"`
-	Issuer   string   `json:"issuer"`
+	Ports     []int    `json:"ports"`
+	Source    string   `json:"source"`
+	State     string   `json:"state"`
+	Issuer    string   `json:"issuer"`
 	ExpiresAt int64    `json:"expiresAt"`
-	DaysLeft int      `json:"daysLeft"`
+	DaysLeft  int      `json:"daysLeft"`
 	AutoRenew bool     `json:"autoRenew"`
-	CertFile string   `json:"certFile,omitempty"`
-	Warning  string   `json:"warning,omitempty"`
-	NodeID   int      `json:"nodeId,omitempty"`
-	NodeName string   `json:"nodeName,omitempty"`
+	CertFile  string   `json:"certFile,omitempty"`
+	Warning   string   `json:"warning,omitempty"`
+	NodeID    int      `json:"nodeId,omitempty"`
+	NodeName  string   `json:"nodeName,omitempty"`
 }
 
 type CertificateInventory struct {
