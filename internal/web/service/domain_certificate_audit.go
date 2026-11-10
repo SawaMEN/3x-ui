@@ -33,6 +33,7 @@ type CertificateAuditEntry struct {
 	Domain string `json:"domain,omitempty"`
 	Action string `json:"action"`
 	Outcome string `json:"outcome"`
+	NodeID int `json:"nodeId,omitempty"`
 }
 
 func boundedCertificateAudit(entries []CertificateAuditEntry, event CertificateAuditEntry) []CertificateAuditEntry {
@@ -122,6 +123,43 @@ func RecordCertificateAudit(manager, id, domain, action, outcome string) error {
 	return saveFirewallJSON(certificateAuditSettingKey, boundedCertificateAudit(entries, event))
 }
 
+// Node-specific audit entries are identified by the authenticated node's ID.
+// Their private filesystem paths, warning text and credentials are excluded.
+func RecordCertificateAuditWithNode(change CertificateAuditEntry) error {
+	if change.NodeID <= 0 {
+		return RecordCertificateAudit(change.Manager, change.CertificateID,
+			change.Domain, change.Action, change.Outcome)
+	}
+	if change.NodeID > 100000000 || !strings.HasPrefix(change.CertificateID, "n") ||
+		len(change.CertificateID) != 25 || change.Action != "health" {
+		return errors.New("invalid remote certificate audit metadata")
+	}
+	switch change.Manager {
+	case "certmagic", "acme.sh", "certbot", "manual", "external":
+	default:
+		return errors.New("invalid remote certificate manager")
+	}
+	switch change.Outcome {
+	case "failed", "expiring", "expired", "recovered":
+	default:
+		return errors.New("invalid remote certificate health state")
+	}
+	for _, ch := range change.CertificateID {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) {
+			return errors.New("invalid remote certificate identifier")
+		}
+	}
+	change.At = time.Now().Unix()
+	change.Domain = certificateAuditDomain(change.Domain)
+	certificateAuditMu.Lock()
+	defer certificateAuditMu.Unlock()
+	entries, err := readCertificateAudit()
+	if err != nil {
+		return err
+	}
+	return saveFirewallJSON(certificateAuditSettingKey, boundedCertificateAudit(entries, change))
+}
+
 func CertificateAuditHistory() ([]CertificateAuditEntry, error) {
 	certificateAuditMu.Lock()
 	defer certificateAuditMu.Unlock()
@@ -183,7 +221,7 @@ func DomainCertificateAuditedEventsForDNS(httpPort, httpsPort int, dnsOnly bool)
 // certificateHealthState is intentionally independent of the manager.
 // A remote node's certificate is never read or renewed by this scanner.
 func certificateHealthState(item CertificateInventoryItem, now time.Time) string {
-	if item.Manager == "remote" || item.NodeID > 0 {
+	if item.Manager == "remote" {
 		return ""
 	}
 	if item.State == "error" || item.State == "invalid" {
@@ -204,9 +242,16 @@ func certificateHealthState(item CertificateInventoryItem, now time.Time) string
 
 func changedCertificateHealth(previous map[string]string, items []CertificateInventoryItem, now time.Time) (map[string]string, []CertificateAuditEntry) {
 	next := make(map[string]string)
+	// Retain remote health transitions while nodes are temporarily offline.
+	// A missing node's absence is not proof that its certificate recovered.
+	for id, state := range previous {
+		if strings.HasPrefix(id, "n") && len(next) < 1024 {
+			next[id] = state
+		}
+	}
 	events := make([]CertificateAuditEntry, 0)
 	for _, item := range items {
-		if item.Manager == "remote" || item.NodeID > 0 || item.ID == "" {
+		if item.Manager == "remote" || item.ID == "" {
 			continue
 		}
 		state := certificateHealthState(item, now)
@@ -223,7 +268,7 @@ func changedCertificateHealth(previous map[string]string, items []CertificateInv
 		}
 		events = append(events, CertificateAuditEntry{
 			Manager: item.Manager, CertificateID: item.ID,
-			Domain: item.Name, Action: "health", Outcome: outcome,
+			Domain: item.Name, NodeID: item.NodeID, Action: "health", Outcome: outcome,
 		})
 	}
 	return next, events
@@ -237,6 +282,9 @@ func scanCertificateHealth() error {
 		return err
 	}
 	items := makeCertificateInventory(status, domainACMEStates(domainACMEHomes()), nil)
+	remoteCtx, remoteCancel := context.WithTimeout(context.Background(), 6*time.Second)
+	items = append(items, readRemoteCertificateInventories(remoteCtx)...)
+	remoteCancel()
 	raw, err := firewallSetting(certificateHealthSettingKey, "{}")
 	if err != nil {
 		return err
@@ -247,7 +295,7 @@ func scanCertificateHealth() error {
 	}
 	next, changes := changedCertificateHealth(previous, items, time.Now())
 	for _, change := range changes {
-		if err := RecordCertificateAudit(change.Manager, change.CertificateID, change.Domain, change.Action, change.Outcome); err != nil {
+		if err := RecordCertificateAuditWithNode(change); err != nil {
 			return err
 		}
 	}
@@ -262,7 +310,7 @@ func scanCertificateHealth() error {
 				Type: eventbus.EventCertificateHealth,
 				Source: certificateAuditDomain(change.Domain),
 				Data: &eventbus.CertificateHealthData{
-					Manager: change.Manager, State: change.Outcome,
+					Manager: change.Manager, State: change.Outcome, NodeID: change.NodeID,
 				},
 			})
 		}
