@@ -2620,7 +2620,15 @@
             "healthy": "Valid",
             "pending": "Awaiting certificate"
           },
-          "subtitle": "Live gateway status, certificates and domains in one workspace"
+          "subtitle": "Live gateway status, certificates and domains in one workspace",
+          "otherTypes": "Other options",
+          "navigation": "Domain management sections",
+          "section": {
+            "domains": "Domains",
+            "certificates": "Certificates",
+            "sni": "SNI and nodes",
+            "settings": "Settings"
+          }
         },
         "preflight": {
           "action": "Check readiness",
