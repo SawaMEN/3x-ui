@@ -19,6 +19,19 @@ import (
 
 type DomainController struct{}
 
+// Node-to-node bearer authentication is sufficient for read-only discovery,
+// but not for changing a gateway's DNS tokens, certificates, or listener config.
+// Those high-impact actions require an interactive panel session.
+func requireDomainAdminSession(c *gin.Context) bool {
+	if c.GetBool("api_authed") {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"success": false, "msg": "Domain mutations require an interactive administrator session",
+		})
+		return false
+	}
+	return true
+}
+
 func NewDomainController(g *gin.RouterGroup) {
 	a := &DomainController{}
 	g = g.Group("/domains")
@@ -45,6 +58,9 @@ func (a *DomainController) dnsCredential(c *gin.Context) {
 }
 
 func (a *DomainController) saveDNSCredential(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
 	c.Header("Cache-Control", "no-store")
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
 	var req struct {
@@ -74,6 +90,9 @@ func (a *DomainController) status(c *gin.Context) {
 
 // Renew exactly one already registered local certificate, never a caller-supplied path.
 func (a *DomainController) renewCertificate(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
 	var request struct {
 		ID string `json:"id" binding:"required"`
 	}
@@ -107,6 +126,9 @@ func (a *DomainController) sni(c *gin.Context) {
 }
 
 func (a *DomainController) apply(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
 	cfg := domainfront.DefaultConfig()
 	if err := c.ShouldBindJSON(&cfg); err != nil {
 		jsonObj(c, nil, err)
