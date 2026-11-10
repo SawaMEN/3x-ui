@@ -134,9 +134,11 @@ export default function DomainFrontTab({
     enabled: section === 'settings',
     retry: false,
     queryFn: async () => {
-      const response = await HttpUtil.get(`/panel/api/domains/dns/credential?provider=${draft.dns01Provider || 'cloudflare'}`, undefined, {
-        silent: true,
-      });
+      const response = await HttpUtil.get(
+        `/panel/api/domains/dns/credential?provider=${draft.dns01Provider || 'cloudflare'}`,
+        undefined,
+        { silent: true },
+      );
       if (!response?.success) throw new Error(response?.msg || 'Cannot load DNS token status');
       return response.obj as { configured: boolean; source?: string };
     },
@@ -162,7 +164,9 @@ export default function DomainFrontTab({
     try {
       const response = await HttpUtil.post(
         '/panel/api/domains/dns/credential',
-        clear ? { provider: draft.dns01Provider || 'cloudflare', clear: true } : { provider: draft.dns01Provider || 'cloudflare', token: dnsToken },
+        clear
+          ? { provider: draft.dns01Provider || 'cloudflare', clear: true }
+          : { provider: draft.dns01Provider || 'cloudflare', token: dnsToken },
         { silent: true },
       );
       if (!response?.success) throw new Error(response?.msg || label('dns01.saveError'));
