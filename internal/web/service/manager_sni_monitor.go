@@ -53,7 +53,8 @@ func managerSNIHealthBackups(entry model.ManagerEntry, selected string) []string
 	// Keep the previous working hostname available for a later recovery.
 	choices := make([]string, 0, len(entry.SNIBackups)+1)
 	for _, name := range append([]string{entry.SNI}, entry.SNIBackups...) {
-		if name != selected && !slices.Contains(choices, name) {
+		name = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), "."))
+		if name != "" && name != strings.ToLower(strings.TrimSuffix(strings.TrimSpace(selected), ".")) && !slices.Contains(choices, name) {
 			choices = append(choices, name)
 		}
 	}
@@ -263,7 +264,7 @@ func (s *ManagerService) monitorSNIWithProbe(
 					return s.rollbackManagerSNIHealth(ctx, &original, applied)
 				}
 				before := *entry
-				entry.SNI, entry.SNIBackups = backup, managerSNIHealthBackups(before, backup)
+				managerPromoteEntrySNI(entry, backup)
 				entry.SNIHealthFailures, entry.SNIHealthLastSwitchAt = 0, now
 				for i := range sub.Entries {
 					if sub.Entries[i].ActiveInboundID == entry.ActiveInboundID ||

@@ -423,8 +423,9 @@ func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, 
 	if err != nil {
 		return nil, err
 	}
-	// The published subscription must show the hostname actually deployed.
-	e.SNI = selected
+	// Keep the selected hostname out of the fallback list. Otherwise
+	// subsequent validation rejects a generated subscription after failover.
+	managerPromoteEntrySNI(e, selected)
 	if e.RelayID > 0 {
 		var r model.ManagerRelay
 		if err := db.First(&r, e.RelayID).Error; err != nil {

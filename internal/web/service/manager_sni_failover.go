@@ -50,6 +50,20 @@ func managerChooseEntrySNI(
 	return "", fmt.Errorf("no SNI candidate passed preflight: %w", errors.Join(failures...))
 }
 
+
+// managerPromoteEntrySNI keeps the generated/published entry valid when
+// preflight or live health monitoring promotes a backup to the active SNI.
+// The previous primary remains a fallback for recovery.
+func managerPromoteEntrySNI(entry *model.ManagerEntry, selected string) {
+	if entry.SNI == selected {
+		return
+	}
+	if len(entry.SNIBackups) > 0 {
+		entry.SNIBackups = managerSNIHealthBackups(*entry, selected)
+	}
+	entry.SNI = selected
+}
+
 func (s *ManagerService) prepareManagerEntrySNI(
 	ctx context.Context, owner int, ib *model.Inbound, e model.ManagerEntry,
 ) (string, error) {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -72,5 +73,31 @@ func TestManagerValidateSNIBackupOnlyForReality(t *testing.T) {
 	}
 	if _, err := svc.Save(1, *sub); err == nil {
 		t.Fatal("duplicate backups were accepted")
+	}
+}
+
+// Regression: a verified fallback must not remain in SNIBackups, because
+// ManagerService.validate rejects a backup equal to the active SNI.
+func TestManagerPromoteEntrySNIKeepsSubscriptionValid(t *testing.T) {
+	svc, inbound, sub := managerFixture(t)
+	inbound.StreamSettings = `{"network":"tcp","security":"reality","realitySettings":{"target":"example.org:443","serverNames":["primary.example.org"]}}`
+	if err := database.GetDB().Save(inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	e := &sub.Entries[0]
+	e.SNI = "PRIMARY.EXAMPLE.ORG"
+	e.SNIBackups = []string{"backup.example.org", "third.example.org"}
+	managerPromoteEntrySNI(e, "backup.example.org")
+	if e.SNI != "backup.example.org" ||
+		!slices.Equal(e.SNIBackups, []string{"primary.example.org", "third.example.org"}) {
+		t.Fatalf("promoted SNI or backup order is invalid: %+v", *e)
+	}
+	if err := svc.validate(sub); err != nil {
+		t.Fatalf("promoted generation fails revalidation: %v", err)
+	}
+	original := slices.Clone(e.SNIBackups)
+	managerPromoteEntrySNI(e, e.SNI)
+	if !slices.Equal(original, e.SNIBackups) {
+		t.Fatalf("no-op SNI promotion altered backups: %v", e.SNIBackups)
 	}
 }
