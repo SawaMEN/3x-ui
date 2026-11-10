@@ -92,10 +92,17 @@ func augmentDomainPreflightWithNodeEvidence(ctx context.Context, cfg domainfront
 		// Only the currently running gateway can answer the random proof.
 		// A new hostname is reported as not yet verifiable, never as passed.
 		token, cleanup, err := managedDomainFront().StartHTTP01Probe(name)
+		draftProof := false
+		if err != nil {
+			// Prove a new draft without applying the gateway: bind TCP 80
+			// only if it is truly free, and serve only a random challenge.
+			token, cleanup, err = domainfront.StartDraftHTTP01Probe(ctx, cfg, name)
+			draftProof = err == nil
+		}
 		if err != nil {
 			report.Checks = append(report.Checks, domainPreflightCheck{
-				Code: "http01_not_active", Severity: "info", Domain: name,
-				Message: "External HTTP-01 cannot be proved until this gateway hostname is running on port 80.",
+				Code: "http01_unavailable", Severity: "info", Domain: name,
+				Message: "External HTTP-01 could not be proved without taking over an existing port 80 listener. Verify NAT, firewall and routing on the target host.",
 			})
 			continue
 		}
@@ -143,7 +150,11 @@ func augmentDomainPreflightWithNodeEvidence(ctx context.Context, cfg domainfront
 		msg := fmt.Sprintf("The active HTTP-01 gateway was not independently verified (%d/%d observers). Review public TCP 80, NAT and firewall rules.", successes, successes+failures)
 		if successes > 0 {
 			code, severity = "http01_external_verified", "info"
-			msg = fmt.Sprintf("The active gateway returned a matching temporary HTTP-01 proof from %d independent node(s). This does not verify an unsaved configuration.", successes)
+			if draftProof {
+				msg = fmt.Sprintf("A temporary HTTP-01 listener verified this unsaved hostname from %d independent node(s); no gateway configuration was applied.", successes)
+			} else {
+				msg = fmt.Sprintf("The active gateway returned a matching HTTP-01 proof from %d independent node(s). Changes to the draft may still affect reachability.", successes)
+			}
 		}
 		report.Checks = append(report.Checks, domainPreflightCheck{
 			Code: code, Severity: severity, Domain: name, Message: msg,
