@@ -50,9 +50,9 @@ func TestManagerEntrySNIAndCamouflageTargetAreIndependent(t *testing.T) {
 	}
 	var parsed struct {
 		Reality struct {
-			Target       string   `json:"target"`
-			Dest         string   `json:"dest"`
-			ServerNames  []string `json:"serverNames"`
+			Target      string   `json:"target"`
+			Dest        string   `json:"dest"`
+			ServerNames []string `json:"serverNames"`
 		} `json:"realitySettings"`
 	}
 	if err := json.Unmarshal([]byte(ib.StreamSettings), &parsed); err != nil {
