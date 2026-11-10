@@ -222,7 +222,7 @@ func managerCheckCertificates(ib *model.Inbound) error {
 			PrivateKey  string `json:"private_key"`
 			SNI         string `json:"sni"`
 		} `json:"server"`
-		TLS         struct {
+		TLS struct {
 			Enabled         *bool  `json:"enabled"`
 			ServerName      string `json:"serverName"`
 			CertificatePath string `json:"certificatePath"`
