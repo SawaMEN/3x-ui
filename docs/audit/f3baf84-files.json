@@ -11495,8 +11495,8 @@
       "subsystem": "database",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
-      "reviewed_sha256": "2adc898db307919ca72572f6c8d555064d1c18f7583d4546ba1926f33a09574b"
+      "evidence": "Full model review refreshed after A28 JSON listen quoting and A29 raw MTProto marker-like key regression; both reproduced before patch. Complete model race, database normal and targeted MTProto compatibility tests pass.",
+      "reviewed_sha256": "7b913590c21c6d758e57a37d525d1f4b33174078433cafe971efd42ddcfb807e"
     },
     {
       "path": "internal/database/model/model_mtproto_test.go",
@@ -12528,9 +12528,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "f2cad32a6d28d5446eb2f98e1821f320be25b9d14068128aa380eb2e1a037d00"
     },
     {
       "path": "internal/hiddify/build_lock_test.go",
@@ -12539,9 +12539,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "18b2ebbb7e2c213dee20a932edc83c5669d0fbe848c3ef31367b37cd89b66f4b"
     },
     {
       "path": "internal/hiddify/compat_extension_test.go",
@@ -12616,9 +12616,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "248f55061fae112a4ad6d3dd4cb9747bb0e236773876ee8280f61603e78dfb51"
     },
     {
       "path": "internal/hiddify/process_test.go",
@@ -12627,9 +12627,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "32dde40071dcbace2e7c0f877fdf8eefc6740f2252a7b9f527dd71c01b0d41e2"
     },
     {
       "path": "internal/hiddify/protection.go",
@@ -12682,9 +12682,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "f87e185494b88c3875023823973424914da106004c83c0945111c78a2ba4a7c6"
     },
     {
       "path": "internal/hiddify/runtime_binary_test.go",
@@ -12693,9 +12693,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full loopback runtime/statistics test reviewed and attempted with verified real core; startup fails at create netlink socket: operation not permitted. Environment limitation, NOT a passed runtime test.",
+      "reviewed_sha256": "e218b017c64834559733013c17fb4f74a1e1613e0a6ba2e59a8505da5d5d13f9"
     },
     {
       "path": "internal/hiddify/runtime_test.go",
@@ -12704,9 +12704,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "fb6dc34c53ffe7012f51905b902b5495cfab50fd8a7be544176a91a13f41f488"
     },
     {
       "path": "internal/hiddify/sessions.go",
@@ -12715,9 +12715,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "abd1be66fa6567fbac694105bf2f68bd80de2cce0d09faafea19084a75553d86"
     },
     {
       "path": "internal/hiddify/sniffing.go",
@@ -12792,9 +12792,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "6f455c051750b701b26bde7ec621b9a156bf2d748ad7e405d30180d79d0593bb"
     },
     {
       "path": "internal/hiddify/stage7_dns_test.go",
@@ -12858,9 +12858,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "a2f7178002919fd1e07f2746111157b8da4b0c0e48d6c8832de59a6a627c7ca0"
     },
     {
       "path": "internal/hiddify/tun.go",
@@ -12880,9 +12880,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "dc84f7dd0c06b7bcf258be489531ce4d19a4cbb2441f4edd9325be4a8bd7158d"
     },
     {
       "path": "internal/hiddify/xhttp.go",
@@ -13639,9 +13639,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "8f977d0611a52efcee5408ea7fb146f0d4182883c9bfb6cb21c767327d8bae13"
     },
     {
       "path": "internal/singbox/clashapi.go",
@@ -13650,9 +13650,9 @@
       "deletions": 8,
       "subsystem": "core-runtime",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "41107301d2986a7402f68787f46ab8b060db044c9165abd8678cea58b2b6f48f"
     },
     {
       "path": "internal/singbox/clashapi_test.go",
@@ -13661,9 +13661,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "480b032c788329ba52da1017c4aefe6dbd1c6165a3bdc9c81ec9a7b76cc4c629"
     },
     {
       "path": "internal/singbox/config.go",
@@ -13716,9 +13716,9 @@
       "deletions": 8,
       "subsystem": "core-runtime",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "9b747b5b29a6b50e61edf69e31abd5b080bae8c098b567a7106cf0d4e82cca9e"
     },
     {
       "path": "internal/singbox/connections_test.go",
@@ -13727,9 +13727,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "5dd2896a52d22b6aa55dfd91bca4d6e28a371cb2141d72d06bbd0bb63f4db14a"
     },
     {
       "path": "internal/singbox/dns_routing_policy_test.go",
@@ -14255,9 +14255,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "056ce3ef58ae4a470ae16a1520e4124cc1673e94bc1980e3d4dcab0294cab5ed"
     },
     {
       "path": "internal/singbox/selector_e2e_test.go",
@@ -14277,9 +14277,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "5b01102e019f2ed7d3a7873394ff5caa71a660c7a53dae871acf86a982845d9a"
     },
     {
       "path": "internal/singbox/sessions.go",
@@ -14288,9 +14288,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "51b59f877817a8997d469b23a17490ec7636f20f20836f25b6a8893a30618261"
     },
     {
       "path": "internal/singbox/sessions_test.go",
@@ -14299,9 +14299,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "b189f7be06411c265de565154bfc5494a2a11f7e3478da8ebcd48d6ea8cfa52f"
     },
     {
       "path": "internal/singbox/stage4_invalid_binary_test.go",
@@ -14409,9 +14409,9 @@
       "deletions": 9,
       "subsystem": "core-runtime",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "5e8c46c6f8699a8f81e857f5c6562fdab7ac70ecebaf471bb5562b1e149a4bbf"
     },
     {
       "path": "internal/singbox/v2rayapi_wire_test.go",
@@ -14420,9 +14420,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "493134f66fad7a079035438b2e3f8a84064f5794bf34a1bc18acc0c11470506b"
     },
     {
       "path": "internal/singbox/xdrive.go",
@@ -25750,9 +25750,9 @@
       "deletions": 0,
       "subsystem": "installation-ci",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "c1b480d460102d31e9bc4663544b7cc7280fe3f74f09d6dbc1aaa96f05316920"
     },
     {
       "path": "tools/generate-native-import-options.py",
@@ -25926,9 +25926,9 @@
       "deletions": 0,
       "subsystem": "installation-ci",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
+      "reviewed_sha256": "773fd2527e026f02f1e68209c6c1c39f7556f0028b154d82f198a0df170c0a35"
     },
     {
       "path": "tools/test_official_telemt.py",

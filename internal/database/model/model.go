@@ -359,7 +359,7 @@ func (i *Inbound) GenInboundConfig() *coremodel.InboundConfig {
 	if listen == "" {
 		listen = "0.0.0.0"
 	}
-	listen = fmt.Sprintf("\"%v\"", listen)
+	listenJSON, _ := json.Marshal(listen)
 	protocol := string(i.Protocol)
 	settings := i.Settings
 	switch i.Protocol {
@@ -394,7 +394,7 @@ func (i *Inbound) GenInboundConfig() *coremodel.InboundConfig {
 		}
 	}
 	return &coremodel.InboundConfig{
-		Listen:         json_util.RawMessage(listen),
+		Listen:         json_util.RawMessage(listenJSON),
 		Port:           i.Port,
 		Protocol:       protocol,
 		Settings:       json_util.RawMessage(settings),
@@ -640,7 +640,7 @@ func mtprotoRandomMiddle() string {
 // keeps the secret stable when only the FakeTLS domain changes.
 func mtprotoSecretMiddle(secret string) string {
 	s := strings.ToLower(strings.TrimSpace(secret))
-	if strings.HasPrefix(s, "ee") || strings.HasPrefix(s, "dd") {
+	if len(s) >= 34 && (strings.HasPrefix(s, "ee") || strings.HasPrefix(s, "dd")) {
 		s = s[2:]
 	}
 	if len(s) >= 32 {
@@ -715,7 +715,7 @@ func StripMtprotoInboundAdTag(settings string) (string, bool) {
 // instead of forcing every client onto the inbound-level default.
 func mtprotoSecretDomain(secret string) string {
 	s := strings.ToLower(strings.TrimSpace(secret))
-	if strings.HasPrefix(s, "ee") || strings.HasPrefix(s, "dd") {
+	if len(s) >= 34 && (strings.HasPrefix(s, "ee") || strings.HasPrefix(s, "dd")) {
 		s = s[2:]
 	}
 	if len(s) <= 32 {

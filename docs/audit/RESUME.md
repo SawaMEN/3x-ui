@@ -5,11 +5,12 @@
 Вторая группа A11–A14 опубликована в `04f2179`.
 Группа A15–A20 исправлена и проверена; коммит с этим состоянием — законченная контрольная точка продолжения.
 Группа A21–A27 исправлена и проверена; этот коммит сохраняет очередную контрольную точку.
-Всего реализовано 27 подтверждённых исправлений, 7 из них — в последнем продолжении.
+Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
+Всего реализовано 29 подтверждённых исправлений, 9 из них — в последнем продолжении.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 68 файлов, осталось 2296; общий проход не завершён.
+Проверено вручную 92 файла, осталось 2272; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -117,5 +118,24 @@ PostgreSQL 16 проверен в отдельной временной лока
   service TestMain уже подставляет offlinePublicIPTestClient, но он не действует на
   пакеты controller/runtime, импортирующие service. Не повторять запрещённый сетевой прогон.
 - Проверить оставшиеся runtime/протоколы, подписки, services/jobs, API и UI по реестру.
-- Рассмотреть обработку JSON quoting Listen в model.GenInboundConfig: пока это только
-  вопрос следующей проверки, не доказанное и не засчитанное исправление.
+- JSON quoting Listen проверен и исправлен A28; raw MTProto marker-like key исправлен A29.
+- ConnectionAPIClient в singbox/connections.go прочитан. Текущих вызовов конструктора
+  в production internal-коде не найдено; отдельно оценить удаление legacy daemon API
+  и перенос общего ActiveSession типа, прежде чем менять этот код.
+
+## Контрольная точка A28–A29
+
+- Фиксация воспроизводимых проблем: invalid listen JSON и неожиданная ротация raw MTProto key.
+- Полный model -race, database normal, targeted mtproto и singbox/hiddify -race прошли.
+- Временное настоящее ядро `/tmp/3x-ui-audit-core/hiddify-core-linux-amd64` (рядом Cronet
+  и target.json), релиз `sawamen-1f4926dd43b9-19f378cb93b5-mask1-ciphers1-net62-sec1-stream1`.
+  Загрузка сделана штатным tools/fetch-latest-kernel.py с проверкой контрольных сумм,
+  manifest и source identity; unit-тесты fetcher 10/10.
+- С HIDDIFY_CONFIG_CHECK_BINARY прошли TestPinnedBinaryChecksGeneratedConfigurations,
+  TestPinnedProtocolTransportMatrix, TestTunTranslationOwnerCore, TestStage5XDriveXrayValidator:
+  4 теста + 75 subtests. Это config validation, не передача трафика.
+- С HIDDIFY_RUNTIME_BINARY реальный TestPinnedBinaryRawRuntimeAndStatistics не смог
+  запустить ядро: create netlink socket: operation not permitted. Не повторять без
+  изменения возможностей среды и не пытаться обходить sandbox-ограничение.
+- Документы и inventory сохраняются в том же коммите, что и код; следующие вопросы
+  выбирать из оставшихся pending, а не объявлять весь аудит законченным.
