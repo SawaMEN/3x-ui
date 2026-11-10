@@ -51,17 +51,34 @@ A scan from the server **does not prove** accessibility from the end user's
 ISP. Never mark a protocol as definitely working on an arbitrary mobile
 operator based on the server scan alone.
 
+## Implemented in the `manager` branch
+
+- Reuses the panel's existing node-local, combined SNI scanner and
+  repeated-probe DNS/IP verification; neighbor-only certificate names are
+  shown, not silently deployed as unrelated DNS destinations.
+- Keeps certificates for identical hostnames on different nodes instead of
+  collapsing them into one list entry.
+- Reuses active Domain Front and Telemt certificates, and matching existing
+  panel/subscription certificate pairs. Each item remains scoped to its
+  originating node, with issuer/expiry shown when available.
+- Xray stream-TLS recipes automatically populate SNI and file-backed
+  certificate references for each selected node; expired entries are not
+  selected. Per-node TLS domain overrides are available. If no certificate
+  is known, that node/protocol pair is skipped by default. An explicit
+  manual-only draft option still requires normal preflight.
+- Backend preflight/rollback remains in charge of actual publication.
+  The interface does not claim a server-side scan guarantees accessibility
+  from the subscriber's network.
+
 ## Next steps
 
-1. **Node-aware certificate inventory**: show certificate SAN, expiry,
-   issuance method and renewal status; distinguish panel-local vs remote-node
-   paths. Consume existing managed domain/certificate APIs rather than
-   storing private keys in the SNI catalog.
-2. **Certificate-backed recipes**: for TLS transports, require a verified
-   certificate that covers SNI on the selected node. Offer existing certificate
-   reuse, existing CertMagic-managed issuance (where DNS and HTTP-01/TLS-ALPN
-   challenges can reach the correct node), or explicit manual paths.
-   Preflight each proposed listener before mutating resources.
+1. **Finish node-aware certificate health**: the implemented inventory
+   already shows known hostnames, expiry and issuer. Extend it to report
+   renewal/issuance method and complete SAN coverage for every node.
+2. **Extend certificate-backed recipes**: Xray stream TLS now reuses known
+   certificate files on their owning node. Add carefully validated per-node
+   CertMagic issuance and native-protocol certificate mappings, using the
+   existing certificate manager rather than a parallel ACME implementation.
 3. **Verified SNI/target pairs**: allow a pinned public IP:port plus matching
    SNI for neighbor-only discoveries, but only after server-side preflight
    supports independently verifying the same IP+SNI pair. Refuse loopback,

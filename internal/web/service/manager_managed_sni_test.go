@@ -44,3 +44,16 @@ func TestManagedSNIDomainsRejectsInvalidRemoteCertificateReferences(t *testing.T
 		t.Fatalf("invalid remote certificate references were accepted: %+v", got)
 	}
 }
+
+func TestManagedSNIDomainsKeepsSeveralDomainsOnOneNode(t *testing.T) {
+	seen := map[string]bool{}
+	sites := []ManagedSNIDomain{
+		{NodeID: 4, Name: "first.example.org", Source: "remote", CertFile: "/first.crt", KeyFile: "/first.key"},
+		{NodeID: 4, Name: "second.example.org", Source: "remote", CertFile: "/second.crt", KeyFile: "/second.key"},
+		{NodeID: 5, Name: "first.example.org", Source: "remote", CertFile: "/node-5.crt", KeyFile: "/node-5.key"},
+	}
+	got := mergeNodeManagedSNIDomains(nil, sites, seen)
+	if len(got) != 3 || len(seen) != 2 {
+		t.Fatalf("distinct (node, hostname) sites collapsed: %+v", got)
+	}
+}
