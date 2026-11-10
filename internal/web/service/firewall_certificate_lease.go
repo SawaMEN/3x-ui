@@ -232,6 +232,20 @@ func DomainCertificateFirewallEvents() func(context.Context, string, map[string]
 	}
 }
 
+// Called under firewallMu; removes expired and previous-process leases so a
+// stale record cannot cause repeated full firewall rebuilds after a restart.
+func pruneFirewallRenewalLeasesLocked() error {
+	leases, err := loadFirewallRenewalLeases()
+	if err != nil {
+		return err
+	}
+	active := activeRenewalLeases(leases, time.Now())
+	if len(active) == len(leases) {
+		return nil
+	}
+	return saveFirewallJSON(firewallRenewalLeasesKey, active)
+}
+
 func needsCertificateFirewallReconcile() bool {
 	leases, err := loadFirewallRenewalLeases()
 	if err == nil && len(leases) > 0 {

@@ -138,6 +138,9 @@ func (s *FirewallService) RunAutoSync(parent context.Context) {
 		firewallMu.Lock()
 		defer firewallMu.Unlock()
 
+		if err := pruneFirewallRenewalLeasesLocked(); err != nil {
+			logger.Debug("certificate firewall lease recovery failed:", err)
+		}
 		if err := migrateManagedBackendIfNeededLocked(ctx); err != nil {
 			logger.Debug("firewall backend migration failed:", err)
 			return
