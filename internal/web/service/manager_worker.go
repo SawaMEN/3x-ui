@@ -246,7 +246,7 @@ func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation,
 		if e.Mode == "existing" {
 			ib, err = ibs.GetInbound(e.TemplateID)
 		} else {
-			ib, err = s.clone(ctx, op, sub, *e, i)
+			ib, err = s.clone(ctx, op, sub, e, i)
 		}
 		if err != nil {
 			return fmt.Errorf("entry %d: %w", i+1, err)
@@ -346,10 +346,10 @@ func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation,
 	return nil
 }
 
-func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription, e model.ManagerEntry, index int) (*model.Inbound, error) {
+func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription, e *model.ManagerEntry, index int) (*model.Inbound, error) {
 	db := database.GetDB()
 	svc := &InboundService{}
-	src, err := managerEntrySource(e, sub.UserID)
+	src, err := managerEntrySource(*e, sub.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -386,14 +386,15 @@ func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, 
 	if err := managerFreshServerKeys(ib); err != nil {
 		return nil, err
 	}
-	if err := s.applyEntrySNI(sub.UserID, ib, e); err != nil {
-		return nil, err
-	}
-	// Recheck the selected random target and certificate, not only the preview sample.
+	// Recheck the primary target and, if needed, every configured REALITY
+	// reserve. Never publish a failed candidate or change a running inbound.
 	ib.Port, _ = strconv.Atoi(e.Port)
-	if err := s.preflightTarget(ctx, ib); err != nil {
+	selected, err := s.prepareManagerEntrySNI(ctx, sub.UserID, ib, *e)
+	if err != nil {
 		return nil, err
 	}
+	// The published subscription must show the hostname actually deployed.
+	e.SNI = selected
 	if e.RelayID > 0 {
 		var r model.ManagerRelay
 		if err := db.First(&r, e.RelayID).Error; err != nil {
