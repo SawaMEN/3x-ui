@@ -338,7 +338,12 @@ func (r *frontRuntime) redirectHTTPS(w http.ResponseWriter, req *http.Request) {
 	http.Redirect(w, req, target.String(), http.StatusPermanentRedirect)
 }
 
-func (r *frontRuntime) event(_ context.Context, event string, data map[string]any) error {
+func (r *frontRuntime) event(ctx context.Context, event string, data map[string]any) error {
+	if r.backend.CertificateEvent != nil {
+		if err := r.backend.CertificateEvent(ctx, event, data); err != nil {
+			return err
+		}
+	}
 	name, _ := data["identifier"].(string)
 	if name == "" {
 		return nil

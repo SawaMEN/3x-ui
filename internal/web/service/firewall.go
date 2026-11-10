@@ -342,19 +342,23 @@ func (s *FirewallService) desiredRules(auto bool, safetyPort int) ([]FirewallRul
 	if safetyPort > 0 {
 		add(safetyPort, "tcp", "session", "Current panel connection")
 	}
-	// Certificates renewed by unattended schedulers need their validation
-	// ports kept available while in use. Remote SNI and DNS-01 open none.
+	// Serving listeners are normal permanent rules. Challenge-only ports are
+	// temporary leases and must be returned to their original state afterwards.
 	if cfg, err := settings.GetDomainFrontConfig(); err == nil {
-		all, settingErr := settings.GetAllSetting()
-		if settingErr == nil {
-			var telemt *TelemtWebProxyState
-			if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled {
-				telemt = &state
-			}
-			for _, rule := range certificateFirewallRules(cfg, all, domainACMEStates(domainACMEHomes()), telemt) {
-				addRule(rule)
-			}
+		var telemt *TelemtWebProxyState
+		if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled {
+			telemt = &state
 		}
+		for _, rule := range certificateFirewallRules(cfg, nil, nil, telemt) {
+			addRule(rule)
+		}
+	}
+	leases, err := loadFirewallRenewalLeases()
+	if err != nil {
+		return nil, err
+	}
+	for _, rule := range firewallRenewalRules(leases, time.Now()) {
+		addRule(rule)
 	}
 	for _, p := range detectSSHPorts() {
 		add(p, "tcp", "ssh", "SSH")

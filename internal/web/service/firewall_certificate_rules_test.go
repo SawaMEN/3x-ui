@@ -36,15 +36,15 @@ func TestCertificateFirewallRulesExternalWebrootAndDNS(t *testing.T) {
 		"Le_RealFullChainPath": settings.WebCertFile, "Le_Webroot": "no",
 	}}}
 	cfg := domainfront.DefaultConfig()
-	if got := firewallPorts(certificateFirewallRules(cfg, settings, states, nil)); !reflect.DeepEqual(got, []int{80}) {
-		t.Fatalf("acme.sh standalone must allow TCP 80: %v", got)
+	if got := firewallPorts(certificateFirewallRules(cfg, settings, states, nil)); len(got) != 0 {
+		t.Fatalf("no permanent HTTP-01 port must be added: %v", got)
 	}
 	states[0].values["Le_Webroot"] = "dns_cf"
 	if got := firewallPorts(certificateFirewallRules(cfg, settings, states, nil)); len(got) != 0 {
 		t.Fatalf("DNS-01 must not open any port: %v", got)
 	}
 	states[0].values["Le_Webroot"] = "alpn"
-	if got := firewallPorts(certificateFirewallRules(cfg, settings, states, nil)); !reflect.DeepEqual(got, []int{443}) {
-		t.Fatalf("TLS-ALPN-01 must allow TCP 443: %v", got)
+	if got := firewallPorts(certificateFirewallRules(cfg, settings, states, nil)); len(got) != 0 {
+		t.Fatalf("no permanent TLS-ALPN port must be added: %v", got)
 	}
 }

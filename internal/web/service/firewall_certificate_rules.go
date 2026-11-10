@@ -6,9 +6,8 @@ import (
 )
 
 // certificateFirewallRules makes explicit port requirements part of the
-// managed firewall's desired state. Standalone cron renewals cannot be
-// predicted precisely, so known challenge ports stay allowed while the
-// referenced certificate remains in use. DNS-01 does not require inbound ports.
+// managed firewall's desired state. Normal web listeners remain open while serving. Extra challenge
+// ports are leased for the duration of renewal; DNS-01 needs none.
 // Never open a firewall port on the controlling panel for shared remote SNI.
 func certificateFirewallRules(
 	cfg domainfront.DomainFrontConfig,
@@ -40,40 +39,9 @@ func certificateFirewallRules(
 		add(cfg.HTTPPort, "domain-gateway", "Domain HTTP / ACME HTTP-01")
 		add(cfg.HTTPSPort, "domain-gateway", "Domain HTTPS / TLS-ALPN-01")
 	}
-	referenced := []string{}
-	if settings != nil {
-		if settings.WebCertFile != "" && settings.WebKeyFile != "" {
-			referenced = append(referenced, settings.WebCertFile)
-		}
-		if settings.SubCertFile != "" && settings.SubKeyFile != "" {
-			referenced = append(referenced, settings.SubCertFile)
-		}
-	}
-	for _, domain := range cfg.Domains {
-		if domain.Enabled && domain.Mode != "shared_sni" && domain.TLS == "manual" && domain.CertFile != "" && domain.KeyFile != "" {
-			referenced = append(referenced, domain.CertFile)
-		}
-	}
 	if telemt != nil && telemt.Enabled {
 		add(443, "telemt", "Telemt WEB HTTPS")
-		if telemt.CertFile != "" && telemt.KeyFile != "" {
-			referenced = append(referenced, telemt.CertFile)
-		}
 	}
-	for _, certFile := range referenced {
-		challenge := ""
-		for _, state := range states {
-			if certFile == state.values["Le_RealFullChainPath"] {
-				challenge = acmeSHChallenge(state.values["Le_Webroot"])
-				break
-			}
-		}
-		if challenge == "" {
-			challenge = certbotChallenge(certFile)
-		}
-		for _, port := range challengeFirewallPorts(challenge, 80, 443) {
-			add(port, "certificate-renewal", "External certificate renewal "+challenge)
-		}
-	}
+	// External ACME challenge ports are opened only by a scoped lease.
 	return rules
 }

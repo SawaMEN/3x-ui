@@ -187,7 +187,7 @@ func (s *FirewallService) RunAutoSync(parent context.Context) {
 			return
 		}
 		auto, err := firewallAutoSync()
-		if err != nil || (!auto && !explicit) {
+		if err != nil || (!auto && !explicit && !needsCertificateFirewallReconcile()) {
 			return
 		}
 		if err := s.syncManagedSafeLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
