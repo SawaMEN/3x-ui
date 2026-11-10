@@ -2535,6 +2535,40 @@
             "dns_resolved": "DNS-записи найдены",
             "dns_timeout": "Превышено время проверки DNS"
           }
+        },
+        "certificateInventory": {
+          "title": "Реестр сертификатов",
+          "hint": "Сертификаты CertMagic, acme.sh, Certbot, ручные и сторонние. Ключи удалённых нод остаются на своих серверах. Для продления также необходим работающий обработчик проверки.",
+          "refresh": "Обновить",
+          "firewallWarning": "Проверьте файрволл",
+          "empty": "Сертификаты не найдены",
+          "domain": "Домен / SAN",
+          "manager": "Управление",
+          "validity": "Срок действия",
+          "renewal": "Проверка / продление",
+          "certificatePath": "Файл сертификата",
+          "days": "дн.",
+          "automatic": "Автопродление",
+          "externalControl": "Внешнее или ручное продление",
+          "noPorts": "Входящий порт не требуется",
+          "remotePath": "На этой панели отсутствует",
+          "node": "Нода",
+          "source": {
+            "certmagic": "CertMagic",
+            "acme.sh": "acme.sh",
+            "certbot": "Certbot",
+            "manual": "Ручной",
+            "external": "Внешний сервис",
+            "remote": "Удалённая нода"
+          },
+          "challenge": {
+            "none": "Не требуется",
+            "unknown": "Не определено",
+            "dns-01": "DNS-01",
+            "http-01": "HTTP-01",
+            "tls-alpn-01": "TLS-ALPN-01",
+            "http-01+tls-alpn-01": "HTTP-01 / TLS-ALPN-01"
+          }
         }
       },
       "subAppearanceTheme": "Тема страницы",

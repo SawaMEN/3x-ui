@@ -2656,6 +2656,40 @@
             "dns_resolved": "DNS records found",
             "dns_timeout": "DNS diagnostics timed out"
           }
+        },
+        "certificateInventory": {
+          "title": "Certificate registry",
+          "hint": "Local certificates managed by CertMagic, acme.sh, Certbot, manual TLS or external services. Remote node keys never leave their node. Automatic renewal also requires a working challenge listener.",
+          "refresh": "Refresh",
+          "firewallWarning": "Firewall status needs attention",
+          "empty": "No certificates detected",
+          "domain": "Domain / SAN",
+          "manager": "Manager",
+          "validity": "Validity",
+          "renewal": "Challenge / renewal",
+          "certificatePath": "Certificate file",
+          "days": "days",
+          "automatic": "Automatic renewal",
+          "externalControl": "External or manual renewal",
+          "noPorts": "No inbound port required",
+          "remotePath": "Not available on this panel",
+          "node": "Node",
+          "source": {
+            "certmagic": "CertMagic",
+            "acme.sh": "acme.sh",
+            "certbot": "Certbot",
+            "manual": "Manual",
+            "external": "External",
+            "remote": "Remote node"
+          },
+          "challenge": {
+            "none": "Not needed",
+            "unknown": "Not detected",
+            "dns-01": "DNS-01",
+            "http-01": "HTTP-01",
+            "tls-alpn-01": "TLS-ALPN-01",
+            "http-01+tls-alpn-01": "HTTP-01 / TLS-ALPN-01"
+          }
         }
       },
       "subAppearanceTheme": "Page theme",
