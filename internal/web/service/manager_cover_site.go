@@ -53,9 +53,12 @@ func managerCoverSiteConfig(cfg domainfront.DomainFrontConfig, req ManagerCoverS
 	if err != nil || parsedEmail.Address != email || len(email) > 254 {
 		return cfg, fmt.Errorf("a valid ACME contact email is required")
 	}
-	if cfg.Listen == "" {
-		cfg = domainfront.DefaultConfig()
+	// Older nodes without Domain Front must be upgraded before provisioning.
+	// Never overwrite an unknown node config with zero-value listener settings.
+	if cfg.HTTPSPort < 1 || cfg.HTTPPort < 1 || cfg.Listen == "" {
+		return cfg, fmt.Errorf("Domain Front configuration unavailable; upgrade or configure the selected node first")
 	}
+	cfg.Domains = append([]domainfront.DomainFrontDomain(nil), cfg.Domains...)
 	found := false
 	for i := range cfg.Domains {
 		d := &cfg.Domains[i]
