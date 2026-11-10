@@ -102,6 +102,12 @@ func RenewDomainCertificate(ctx context.Context, id string) (DomainCertificateRe
 	if err != nil {
 		return DomainCertificateRenewalResult{}, err
 	}
+	audit := func(outcome string) {
+		if auditErr := RecordCertificateAudit(manager, id, "", "renew", outcome); auditErr != nil {
+			logger.Debug("certificate renewal audit failed:", auditErr)
+		}
+	}
+	audit("started")
 	timeout, cancel := context.WithTimeout(ctx, 12*time.Minute)
 	defer cancel()
 	if err := WithRenewalFirewall(timeout, manager+":"+id, ports, func(operationCtx context.Context) error {
@@ -113,8 +119,10 @@ func RenewDomainCertificate(ctx context.Context, id string) (DomainCertificateRe
 		}
 		return nil
 	}); err != nil {
+		audit("failed")
 		return DomainCertificateRenewalResult{}, err
 	}
+	audit("succeeded")
 	return DomainCertificateRenewalResult{
 		ID: id, Manager: manager, Finished: true, CheckedAt: time.Now().Unix(),
 	}, nil
