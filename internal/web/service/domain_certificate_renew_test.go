@@ -8,11 +8,11 @@ import (
 
 func TestExternalRenewalDoesNotAcceptUnknownOrRemoteCertificate(t *testing.T) {
 	cfg := domainfront.DefaultConfig()
-	status := domainfront.DomainFrontStatus{Config: cfg, Certificates: []domainfront.DomainFrontCertificate{
+	status := domainfront.DomainFrontStatus{Config: cfg}
+	status.Certificates = []domainfront.DomainFrontCertificate{
 		{Name: "remote.example.org", Source: "remote", State: "external"},
-		{Name: "manual.example.org", Source: "manual", Renewal: "manual", Mode: "manual",
-			CertFile: "/tmp/manual.pem", KeyFile: "/tmp/manual.key"},
-	}}
+		{Name: "manual.example.org", Source: "manual", Renewal: "manual", Mode: "manual", CertFile: "/tmp/manual.pem", KeyFile: "/tmp/manual.key"},
+	}
 	items := makeCertificateInventory(status, nil, nil)
 	for _, item := range items {
 		if _, _, _, _, err := localCertificateRenewalPlan(item.ID, status, nil, nil); err == nil {

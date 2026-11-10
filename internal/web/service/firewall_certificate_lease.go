@@ -134,6 +134,11 @@ func RenewalFirewallBegin(ctx context.Context, owner string, ports []int) (strin
 	}
 	if err := (&FirewallService{}).syncManagedSafeLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
 		_ = saveFirewallJSON(firewallRenewalLeasesKey, active[:len(active)-1])
+		// The first attempt could have installed a partial UFW/firewalld rule.
+		// Try to restore synchronously before relying on background retry.
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		_ = (&FirewallService{}).syncManagedSafeLocked(cleanupCtx, backend, rememberedFirewallSafetyPort())
+		cancel()
 		TriggerFirewallSync()
 		return "", fmt.Errorf("open certificate challenge firewall: %w", err)
 	}
