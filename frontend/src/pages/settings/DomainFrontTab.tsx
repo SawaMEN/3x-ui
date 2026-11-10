@@ -1074,6 +1074,7 @@ export default function DomainFrontTab({
           </Typography.Text>
         </Space>
         <Table
+          className="domain-config-table"
           rowKey="name"
           dataSource={filteredDomains}
           pagination={{ pageSize: 10, hideOnSinglePage: true, showSizeChanger: true }}
