@@ -253,11 +253,7 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
             : '';
       const certificate =
         preset.sniMode === 'tls'
-          ? managerTLSCertificateForSni(
-              options.managedCertificates ?? [],
-              nodeId,
-              configuredSni,
-            )
+          ? managerTLSCertificateForSni(options.managedCertificates ?? [], nodeId, configuredSni)
           : null;
       if (preset.sniMode === 'tls' && !certificate && !options.allowUnconfiguredTLS) {
         skipped.push(`${preset.name} · ${nodeName}: no certificate for SNI on this node`);
