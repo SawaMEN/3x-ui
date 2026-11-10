@@ -77,6 +77,17 @@ describe('manager automatic REALITY SNI selection', () => {
     }
   });
 
+  it('ranks without changing the original scan history order', () => {
+    const reliable = result({ host: 'reliable.example.org', successes: 5 });
+    const unstable = result({ host: 'unstable.example.org', successes: 1 });
+    const original = [unstable, reliable];
+    expect(rankManagerSNISuggestions(original).map((row) => row.host)).toEqual([
+      'reliable.example.org',
+      'unstable.example.org',
+    ]);
+    expect(original[0].host).toBe('unstable.example.org');
+  });
+
   it('sorts stable results by reliability before latency', () => {
     const reliable = result({ host: 'reliable.example.org', latencyMs: 100, successes: 5 });
     const fast = result({ host: 'fast.example.org', latencyMs: 15, medianMs: 15, successes: 4 });
