@@ -932,6 +932,7 @@ export const ManagerEntrySchema = z.object({
   nodeId: z.number().int().nullable().optional(),
   port: z.string(),
   preset: z.string().optional(),
+  realityTarget: z.string().optional(),
   relayId: z.number().int(),
   sni: z.string(),
   templateId: z.number().int(),
