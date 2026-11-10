@@ -126,6 +126,14 @@ func (a *DomainController) certificates(c *gin.Context) {
 // owning node and are not transferable between hosts.
 func (a *DomainController) sni(c *gin.Context) {
 	result, err := service.ManagedSNIDomains(c.Request.Context(), c.Query("local") != "1")
+	if c.Query("summary") == "1" {
+		// Node discovery never needs absolute paths. Keep private paths on
+		// the owning host even when its parent has a valid API token.
+		for i := range result {
+			result[i].CertFile = ""
+			result[i].KeyFile = ""
+		}
+	}
 	jsonObj(c, result, err)
 }
 
