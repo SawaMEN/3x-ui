@@ -166,8 +166,9 @@ describe('domain and TLS dashboard', () => {
     const f = fixture();
     renderWithProviders(<DomainFrontTab />);
     expect(await screen.findByText('sub.example.com')).toBeTruthy();
+    await openDomainSection('Certificates');
+    expect(await screen.findByText('Days remaining: 45 days')).toBeTruthy();
     const email = await findDomainEmail();
-    expect(screen.getByText('Days remaining: 45 days')).toBeTruthy();
     fireEvent.change(email, { target: { value: 'edited@example.com' } });
     const initialReads = f.reads;
     fireEvent.click(screen.getByRole('button', { name: /Refresh status/ }));
@@ -471,6 +472,7 @@ describe('domain and TLS dashboard', () => {
         />
       </MemoryRouter>,
     );
+    await openDomainSection('Settings');
     fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
     expect(
       (await screen.findAllByText(/No suitable neighboring websites were found/)).length,
@@ -582,6 +584,7 @@ describe('domain and TLS dashboard', () => {
     fireEvent.click(await screen.findByText('Check DNS/TLS'));
     expect(await screen.findByText(/Public TLS certificate: CDN edge issuer/)).toBeTruthy();
     expect(screen.getByText('DNS addresses: 203.0.113.8')).toBeTruthy();
-    expect(screen.getByText('Test issuer')).toBeTruthy();
+    await openDomainSection('Certificates');
+    expect(await screen.findByText('Test issuer')).toBeTruthy();
   });
 });
