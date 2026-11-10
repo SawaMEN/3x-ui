@@ -2,6 +2,11 @@ import type { NodeRecord } from '@/schemas/node';
 import { nodeSupportsProtocol } from '@/lib/xray/node-protocols';
 import { createManagerPreset, MANAGER_PRESETS } from './presets';
 import { newEntry } from './schema';
+import {
+  managerConfigWithTLSCertificate,
+  managerTLSCertificateForSni,
+} from './certificate-recipes';
+import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import type { Subscription } from './schema';
 
 export type CatalogGroup = 'reality' | 'tls' | 'classic' | 'udp' | 'special';
@@ -192,6 +197,10 @@ export interface RecipeOptions {
   sniByPreset: Record<string, string>;
   targetByPreset: Record<string, string>;
   verifiedSniByNode: Record<number, string>;
+  managedCertificates?: ManagedSniDomain[];
+  // Explicit opt-in: create draft TLS recipes without managed certificates
+  // and require the administrator to configure each inbound before preflight.
+  allowUnconfiguredTLS?: boolean;
 }
 
 export interface RecipeResult {
@@ -242,15 +251,31 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
               ? ''
               : configuredSni
             : '';
+      const certificate =
+        preset.sniMode === 'tls'
+          ? managerTLSCertificateForSni(
+              options.managedCertificates ?? [],
+              nodeId,
+              configuredSni,
+            )
+          : null;
+      if (preset.sniMode === 'tls' && !certificate && !options.allowUnconfiguredTLS) {
+        skipped.push(`${preset.name} · ${nodeName}: no certificate for SNI on this node`);
+        continue;
+      }
+      const config = createManagerPreset(id);
+      const securedConfig = certificate
+        ? managerConfigWithTLSCertificate(config, certificate)
+        : config;
       const entry = {
         ...newEntry(),
         mode: 'generate' as const,
         preset: id,
-        config: createManagerPreset(id),
+        config: securedConfig,
         templateId: 0,
         nodeId,
         port: 'random',
-        sni,
+        sni: certificate?.name ?? sni,
         realityTarget:
           preset.sniMode === 'reality' ? (options.targetByPreset[id] || '').trim() : undefined,
         label: `${preset.name} · ${nodeName}`,
