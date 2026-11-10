@@ -73,8 +73,8 @@ func (s *ManagerService) validate(in *model.ManagerSubscription) error {
 		return fmt.Errorf("grace period must be 60–1440 minutes")
 	}
 	in.Name = strings.TrimSpace(in.Name)
-	if in.Name == "" || len(in.Name) > 256 || len(in.Note) > 4096 || len(in.Entries) < 1 || len(in.Entries) > 20 {
-		return fmt.Errorf("provide a name and 1–20 connections")
+	if in.Name == "" || len(in.Name) > 256 || len(in.Note) > 4096 || len(in.Entries) < 1 || len(in.Entries) > 100 {
+		return fmt.Errorf("provide a name and 1–100 connections")
 	}
 	if in.IntervalMinutes < 10 || in.IntervalMinutes > 525600 {
 		return fmt.Errorf("interval must be 10–525600 minutes")
@@ -119,6 +119,18 @@ func (s *ManagerService) validate(in *model.ManagerSubscription) error {
 		ib, err := managerEntrySource(*e, in.UserID)
 		if err != nil {
 			return fmt.Errorf("entry %d: %w", i+1, err)
+		}
+		if e.RealityTarget != "" {
+			if e.Mode == "existing" {
+				return fmt.Errorf("a REALITY target cannot override an existing inbound")
+			}
+			if _, err := managerRealityTarget(e.RealityTarget); err != nil {
+				return fmt.Errorf("entry %d: %w", i+1, err)
+			}
+			var stream struct { Security string `json:"security"` }
+			if err := json.Unmarshal([]byte(ib.StreamSettings), &stream); err != nil || stream.Security != "reality" {
+				return fmt.Errorf("entry %d: a camouflage target requires REALITY security", i+1)
+			}
 		}
 		if e.Mode == "existing" {
 			if e.NodeID != nil || e.SNI != "" || (e.Port != "" && e.Port != strconv.Itoa(ib.Port)) {
