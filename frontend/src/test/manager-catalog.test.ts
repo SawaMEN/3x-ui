@@ -102,6 +102,8 @@ describe('manager multi-node recipe builder', () => {
           'BACKUP.EXAMPLE.ORG.',
           'backup.example.org',
           'third.example.org',
+          'random',
+          'auto',
         ],
       },
       targetByPreset: {},

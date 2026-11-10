@@ -281,7 +281,10 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
       const backups = [
         ...new Set((options.backupSniByNode?.[nodeId] ?? []).map(managerCertificateName)),
       ]
-        .filter((host) => host && host !== managerCertificateName(sni))
+        .filter(
+          (host) =>
+            host && host !== 'random' && host !== 'auto' && host !== managerCertificateName(sni),
+        )
         .slice(0, 6);
       const entry = {
         ...newEntry(),

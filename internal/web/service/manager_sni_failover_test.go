@@ -142,3 +142,14 @@ func TestManagerRandomSNIInvalidResultFallsBack(t *testing.T) {
 		t.Fatalf("invalid random SNI bypassed a working backup: %q, %v", selected, err)
 	}
 }
+
+func TestManagerRandomSNIWithoutResolvedHostnameIsRejected(t *testing.T) {
+	inbound := &model.Inbound{StreamSettings: `{"security":"reality","realitySettings":{"serverNames":[]}}`}
+	entry := model.ManagerEntry{SNI: "random"}
+	selected, err := managerChooseEntrySNI(inbound, entry,
+		func(*model.Inbound, model.ManagerEntry) error { return nil },
+		func(*model.Inbound) error { return nil })
+	if err == nil || selected != "" {
+		t.Fatalf("unresolved random SNI was published: %q, %v", selected, err)
+	}
+}
