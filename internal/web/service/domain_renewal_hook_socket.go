@@ -156,6 +156,7 @@ func ServeCertificateRenewalHookSocket(ctx context.Context) {
 		logger.Warning("renewal hook socket permissions:", err)
 		return
 	}
+	go maintainCertificateRenewalHookInstall(ctx.Done())
 	stop := make(chan struct{})
 	go func() {
 		select {
