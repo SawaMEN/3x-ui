@@ -81,14 +81,7 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 		}
 	}
 	if includeNodes {
-		for _, site := range discoverNodeSNI(ctx) {
-			site.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(site.Name)), ".")
-			if site.Name == "" || !strings.Contains(site.Name, ".") || net.ParseIP(site.Name) != nil || seen[site.Name] {
-				continue
-			}
-			seen[site.Name] = true
-			out = append(out, site)
-		}
+		out = mergeNodeManagedSNIDomains(out, discoverNodeSNI(ctx), seen)
 	}
 	// Manual references survive an offline or older child node.
 	for _, domain := range status.Config.Domains {
@@ -114,6 +107,38 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
+}
+
+// Remote SNI certificates are scoped to their owning node. Do not collapse
+// entries from different nodes, or suppress a remote certificate just because
+// the controlling panel exposes the same hostname with its own certificate.
+func mergeNodeManagedSNIDomains(existing, incoming []ManagedSNIDomain, seenNames map[string]bool) []ManagedSNIDomain {
+	seen := make(map[int]map[string]bool)
+	for _, site := range existing {
+		if site.Source == "remote" && site.NodeID > 0 {
+			if seen[site.NodeID] == nil {
+				seen[site.NodeID] = make(map[string]bool)
+			}
+			seen[site.NodeID][site.Name] = true
+		}
+	}
+	for _, site := range incoming {
+		site.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(site.Name)), ".")
+		if site.Source != "remote" || site.NodeID <= 0 || site.CertFile == "" || site.KeyFile == "" ||
+			site.Name == "" || !strings.Contains(site.Name, ".") || net.ParseIP(site.Name) != nil {
+			continue
+		}
+		if seen[site.NodeID] == nil {
+			seen[site.NodeID] = make(map[string]bool)
+		}
+		if seen[site.NodeID][site.Name] {
+			continue
+		}
+		seen[site.NodeID][site.Name] = true
+		seenNames[site.Name] = true
+		existing = append(existing, site)
+	}
+	return existing
 }
 
 type nodeSNIResponse struct {
