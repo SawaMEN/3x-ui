@@ -2471,6 +2471,18 @@
           "acceptTerms": {
             "type": "boolean"
           },
+          "dns01Propagation": {
+            "type": "integer"
+          },
+          "dns01Provider": {
+            "type": "string"
+          },
+          "dns01Zone": {
+            "type": "string"
+          },
+          "dns01ZoneId": {
+            "type": "string"
+          },
           "domains": {
             "items": {
               "$ref": "#/components/schemas/DomainFrontDomain"
@@ -17642,6 +17654,10 @@
                     ],
                     "config": {
                       "acceptTerms": false,
+                      "dns01Propagation": 0,
+                      "dns01Provider": "",
+                      "dns01Zone": "",
+                      "dns01ZoneId": "",
                       "domains": [
                         {
                           "certFile": "",
@@ -17739,6 +17755,10 @@
                     ],
                     "config": {
                       "acceptTerms": false,
+                      "dns01Propagation": 0,
+                      "dns01Provider": "",
+                      "dns01Zone": "",
+                      "dns01ZoneId": "",
                       "domains": [
                         {
                           "certFile": "",
