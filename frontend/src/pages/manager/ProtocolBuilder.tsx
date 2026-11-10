@@ -235,7 +235,7 @@ export default function ProtocolBuilder({
             })}
         </Space>
       </Card>
-      {scanError && <Alert type="warning" showIcon title={scanError} closable onClose={() => setScanError('')} />}
+      {scanError && <Alert type="warning" showIcon title={scanError} closable={{ onClose: () => setScanError('') }} />}
       <Typography.Title level={5} style={{ margin: 0 }}>
         {t('3. Создание черновика', '3. Create draft')}
       </Typography.Title>
