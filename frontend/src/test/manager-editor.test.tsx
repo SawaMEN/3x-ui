@@ -34,7 +34,9 @@ describe('manager editor', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Save and generate' }));
-    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByRole('alert').some(
+      (item) => item.textContent?.includes('name: Too small'),
+    )).toBe(true));
     expect(save).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
   });
