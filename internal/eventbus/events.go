@@ -136,4 +136,5 @@ type SystemMetricData struct {
 type CertificateHealthData struct {
 	Manager string
 	State string
+	NodeID int // zero = local; a positive value identifies the owning node
 }
