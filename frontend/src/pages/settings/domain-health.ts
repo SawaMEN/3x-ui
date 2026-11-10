@@ -72,7 +72,14 @@ export function getDomainSummary(
     const result = certificateNeedsAttention(cert, now);
     return result === 'error' || result === 'expiring';
   });
+  const issueNames = new Set(
+    draft.domains
+      .filter((_, index) => health[index] === 'error' || health[index] === 'expiring')
+      .map((domain) => domain.name),
+  );
+  for (const cert of certAlerts) issueNames.add(cert.name);
   return {
+    issues: issueNames.size,
     total: draft.domains.length,
     active: draft.domains.filter((d) => d.enabled).length,
     healthy: health.filter((item) => item === 'healthy').length,

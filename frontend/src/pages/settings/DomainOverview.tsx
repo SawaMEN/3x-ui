@@ -80,7 +80,7 @@ export default function DomainOverview({
         <div className="domain-workspace-stat">
           <AlertOutlined aria-hidden />
           <Typography.Text type="secondary">{l('attention')}</Typography.Text>
-          <strong>{summary.attention + summary.certificateAlerts}</strong>
+          <strong>{summary.issues}</strong>
         </div>
         <div className="domain-workspace-stat">
           <CloudServerOutlined aria-hidden />
@@ -116,7 +116,12 @@ export default function DomainOverview({
           <Space wrap size={8} style={{ display: 'flex', marginTop: 8 }}>
             {(['subscription', 'direct', 'cdn', 'sni', 'shared'] as const).map((preset) => (
               <Tooltip key={preset} title={l('hint.' + preset)}>
-                <Button size="small" icon={<PlusOutlined />} onClick={() => onAdd(preset)}>
+                <Button
+                  size="small"
+                  icon={<PlusOutlined />}
+                  disabled={!status || loading}
+                  onClick={() => onAdd(preset)}
+                >
                   {l('preset.' + preset)}
                 </Button>
               </Tooltip>
