@@ -73,6 +73,7 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 			})
 		}
 	}
+	augmentDomainPreflightWithNodeEvidence(ctx, cfg, &report)
 	return report, nil
 }
 
