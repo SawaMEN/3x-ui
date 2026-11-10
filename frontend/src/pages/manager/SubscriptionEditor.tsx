@@ -285,6 +285,38 @@ export default function SubscriptionEditor({
                         </FormField>
                       </Col>
                     </Row>
+                    <Row gutter={16}>
+                      <Col xs={24} sm={12}>
+                        <FormField
+                          name="monitorSni"
+                          label={
+                            i18n.language.startsWith('ru')
+                              ? 'Мониторинг REALITY SNI'
+                              : 'REALITY SNI health monitoring'
+                          }
+                          valueProp="checked"
+                          extra={
+                            i18n.language.startsWith('ru')
+                              ? 'Переключение на проверенный резерв после 3 неудач; ключи сохраняются. Нужен резервный SNI.'
+                              : 'Switch to a verified backup after 3 failures; keys remain unchanged. Backup SNI required.'
+                          }
+                        >
+                          <Switch />
+                        </FormField>
+                      </Col>
+                      <Col xs={24} sm={12}>
+                        <FormField
+                          name="monitorSniIntervalMinutes"
+                          label={
+                            i18n.language.startsWith('ru')
+                              ? 'Интервал проверки SNI, мин.'
+                              : 'SNI check interval, minutes'
+                          }
+                        >
+                          <InputNumber min={5} max={1440} style={{ width: '100%' }} />
+                        </FormField>
+                      </Col>
+                    </Row>
                     <FormField name="graceMinutes" label={m('graceMinutes')} extra={m('graceHint')}>
                       <InputNumber min={60} max={1440} style={{ width: '100%' }} />
                     </FormField>

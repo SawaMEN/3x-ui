@@ -80,6 +80,29 @@ func (s *ManagerService) schedule() {
 			logger.Error("manager schedule:", err)
 		}
 	}
+	// Bounded monitoring queue; using existing operation locks prevents races
+	// with concurrent rotations or edits on the same subscription.
+	var watched []model.ManagerSubscription
+	if err := db.Where("enabled = ? AND monitor_sni = ? AND next_sni_health_check <= ?", true, true, time.Now().UnixMilli()).
+		Order("next_sni_health_check").Limit(12).Find(&watched).Error; err != nil {
+		logger.Error("manager SNI schedule:", err)
+	}
+	for _, sub := range watched {
+		if len(sub.Published) == 0 {
+			continue
+		}
+		if _, err := s.enqueue(sub.UserID, sub.ID, "sni_health"); err != nil {
+			logger.Warning("manager SNI enqueue:", err)
+			continue
+		}
+		interval := sub.MonitorSNIIntervalMinutes
+		if interval < 5 {
+			interval = 10
+		}
+		if err := db.Model(&sub).Update("next_sni_health_check", time.Now().Add(time.Duration(interval)*time.Minute).UnixMilli()).Error; err != nil {
+			logger.Error("manager SNI schedule timestamp:", err)
+		}
+	}
 	s.scheduleMaintenance()
 	if err := db.Where("finished_at > 0 AND finished_at < ?", time.Now().Add(-30*24*time.Hour).UnixMilli()).Delete(&model.ManagerOperation{}).Error; err != nil {
 		logger.Error("manager journal:", err)
@@ -106,7 +129,10 @@ func (s *ManagerService) execute(ctx context.Context, op *model.ManagerOperation
 		if v := recover(); v != nil {
 			workErr = fmt.Errorf("operation panic: %v", v)
 		}
-		op.State, op.Message = "success", "Completed"
+		op.State = "success"
+		if op.Kind != "sni_health" || op.Message == "" {
+			op.Message = "Completed"
+		}
 		if workErr != nil {
 			op.State, op.Message = "failed", workErr.Error()
 			if errors.Is(workErr, errManagerCleanupPending) {
@@ -135,6 +161,10 @@ func (s *ManagerService) execute(ctx context.Context, op *model.ManagerOperation
 	}
 	release := managerLockSubscription(&sub)
 	defer release()
+	if op.Kind == "sni_health" {
+		workErr = s.monitorSNI(ctx, op, &sub)
+		return
+	}
 	if op.Kind == "cleanup" {
 		workErr = s.cleanupGeneration(ctx, op, &sub)
 		if workErr == nil {

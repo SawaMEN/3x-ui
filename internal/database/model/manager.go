@@ -27,6 +27,9 @@ type ManagerEntry struct {
 	RelayID         int                   `json:"relayId"`
 	CustomLink      string                `json:"customLink"`
 	ActiveInboundID int                   `json:"activeInboundId"`
+	SNIHealthFailures int                 `json:"sniHealthFailures,omitempty"`
+	SNIHealthCheckedAt int64             `json:"sniHealthCheckedAt,omitempty"`
+	SNIHealthLastSwitchAt int64          `json:"sniHealthLastSwitchAt,omitempty"`
 }
 
 type ManagerRetiredGeneration struct {
@@ -46,6 +49,9 @@ type ManagerSubscription struct {
 	OwnClient       bool                       `json:"ownClient"`
 	Enabled         bool                       `json:"enabled"`
 	AutoRotate      bool                       `json:"autoRotate"`
+	MonitorSNI      bool                       `json:"monitorSni"`
+	MonitorSNIIntervalMinutes int             `json:"monitorSniIntervalMinutes"`
+	NextSNIHealthCheck int64                  `json:"nextSniHealthCheck" gorm:"index"`
 	IntervalMinutes int                        `json:"intervalMinutes"`
 	GraceMinutes    int                        `json:"graceMinutes"`
 	Retired         []ManagerRetiredGeneration `json:"-" gorm:"serializer:json;type:text"`

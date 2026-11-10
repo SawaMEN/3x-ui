@@ -27,6 +27,9 @@ export const EntrySchema = z.object({
   relayId: z.number().default(0),
   customLink: z.string().default(''),
   activeInboundId: z.number().default(0),
+  sniHealthFailures: z.number().int().min(0).optional(),
+  sniHealthCheckedAt: z.number().optional(),
+  sniHealthLastSwitchAt: z.number().optional(),
 });
 export const SubscriptionSchema = z.object({
   id: z.number().default(0),
@@ -39,6 +42,9 @@ export const SubscriptionSchema = z.object({
   ownClient: z.boolean().default(false),
   enabled: z.boolean().default(true),
   autoRotate: z.boolean().default(false),
+  monitorSni: z.boolean().default(false),
+  monitorSniIntervalMinutes: z.number().min(5).max(1440).default(10),
+  nextSniHealthCheck: z.number().default(0),
   intervalMinutes: z.number().min(10).max(525600).default(60),
   graceMinutes: z.number().min(60).max(1440).default(120),
   nextRotation: z.number().default(0),
