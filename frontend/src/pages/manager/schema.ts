@@ -20,6 +20,7 @@ export const EntrySchema = z.object({
   nodeId: z.number().optional(),
   port: z.string().default('random'),
   sni: z.string().default(''),
+  sniBackups: z.array(z.string()).max(6).optional(),
   realityTarget: z.string().max(512).optional(),
   label: z.string().max(256).default(''),
   flag: z.string().max(16).default(''),
