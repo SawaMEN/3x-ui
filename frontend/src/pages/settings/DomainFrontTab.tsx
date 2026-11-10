@@ -393,7 +393,9 @@ export default function DomainFrontTab({
         ? !sniOnly && !sharedOnly && !draft.subscriptionDomain
         : draft.subscriptionDomain === draft.domains[index].name,
     );
-    setAdvancedEditorOpen(index >= 0 && (draft.domains[index]?.tls !== 'auto' || !draft.domains[index]?.enabled));
+    setAdvancedEditorOpen(
+      index >= 0 && (draft.domains[index]?.tls !== 'auto' || !draft.domains[index]?.enabled),
+    );
     setEditing(index);
   }
   async function saveDomain() {
@@ -428,7 +430,11 @@ export default function DomainFrontTab({
     update({
       domains,
       subscriptionDomain: canonical,
-      ...(editing === -1 && domain.mode !== 'shared_sni' && !draft.domains.some((item) => item.enabled && item.mode !== 'shared_sni') ? { enabled: true } : {}),
+      ...(editing === -1 &&
+      domain.mode !== 'shared_sni' &&
+      !draft.domains.some((item) => item.enabled && item.mode !== 'shared_sni')
+        ? { enabled: true }
+        : {}),
     });
     setEditing(undefined);
   }
@@ -552,11 +558,16 @@ export default function DomainFrontTab({
         />
       )}
 
-      {section === 'domains' && draft.enabled &&
-        draft.domains.some((item) => item.enabled && item.mode !== 'shared_sni' && item.tls === 'auto') &&
+      {section === 'domains' &&
+        draft.enabled &&
+        draft.domains.some(
+          (item) => item.enabled && item.mode !== 'shared_sni' && item.tls === 'auto',
+        ) &&
         (!draft.email || !draft.acceptTerms) && (
           <Card size="small" title={label('workspace.autoTLSSetup')}>
-            <Typography.Paragraph type="secondary">{label('workspace.autoTLSHint')}</Typography.Paragraph>
+            <Typography.Paragraph type="secondary">
+              {label('workspace.autoTLSHint')}
+            </Typography.Paragraph>
             <Space wrap align="start" style={{ width: '100%' }}>
               <Input
                 type="email"
@@ -566,13 +577,27 @@ export default function DomainFrontTab({
                 onChange={(event) => update({ email: event.target.value })}
                 style={{ width: 280, maxWidth: '100%' }}
               />
-              <Checkbox checked={draft.acceptTerms} onChange={(event) => update({ acceptTerms: event.target.checked })}>
-                {label('terms')} <a href="https://letsencrypt.org/repository/" target="_blank" rel="noopener noreferrer">Let's Encrypt</a>
+              <Checkbox
+                checked={draft.acceptTerms}
+                onChange={(event) => update({ acceptTerms: event.target.checked })}
+              >
+                {label('terms')}{' '}
+                <a
+                  href="https://letsencrypt.org/repository/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Let's Encrypt
+                </a>
               </Checkbox>
             </Space>
           </Card>
         )}
-      <div className="domain-manager-nav" role="navigation" aria-label={label('workspace.navigation')}>
+      <div
+        className="domain-manager-nav"
+        role="navigation"
+        aria-label={label('workspace.navigation')}
+      >
         <Segmented
           block
           value={section}
@@ -585,603 +610,649 @@ export default function DomainFrontTab({
       </div>
       {section === 'domains' && (
         <div className="domain-manager-panel" data-testid="domain-panel-domains">
-
-      <Card
-        size="small"
-        className="domain-manager-hosts"
-        title={label('list')}
-      >
-        <Space wrap style={{ marginBottom: 12, width: '100%' }}>
-          <Input.Search
-            allowClear
-            placeholder={label('workspace.searchPlaceholder')}
-            aria-label={label('workspace.searchPlaceholder')}
-            value={domainSearch}
-            onChange={(event) => setDomainSearch(event.target.value)}
-            style={{ width: 250, maxWidth: '100%' }}
-          />
-          <Select
-            aria-label={label('workspace.filterLabel')}
-            value={domainFilter}
-            onChange={setDomainFilter}
-            style={{ minWidth: 180 }}
-            options={[
-              { value: 'all', label: label('workspace.filter.all') },
-              { value: 'attention', label: label('workspace.filter.attention') },
-              ...(['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'] as const).map((mode) => ({
-                value: mode,
-                label: label('mode.' + mode),
-              })),
-            ]}
-          />
-          <Typography.Text type="secondary">
-            {label('workspace.showing', { count: filteredDomains.length })}
-          </Typography.Text>
-        </Space>
-        <Table
-          className="domain-config-table"
-          size="small"
-          rowKey="name"
-          dataSource={filteredDomains}
-          pagination={{ pageSize: 10, hideOnSinglePage: true }}
-          scroll={{ x: 600 }}
-          locale={{ emptyText: label('empty') }}
-          columns={[
-            {
-              title: label('name'),
-              dataIndex: 'name',
-              render: (name: string, d: DomainForm) => (
-                <Space orientation="vertical" size={2}>
-                  <Typography.Text strong>{name}</Typography.Text>
-                  {!d.enabled && <Tag>{label('disabled')}</Tag>}
-                </Space>
-              ),
-            },
-            {
-              title: label('modeLabel'),
-              dataIndex: 'mode',
-              render: (value: string) => (
-                <Typography.Text type="secondary">{label('mode.' + value)}</Typography.Text>
-              ),
-            },
-            {
-              title: label('workspace.healthLabel'),
-              key: 'health',
-              render: (_value: unknown, d: DomainForm) => {
-                const saved = status?.config.domains.some(
-                  (item) => item.name === d.name && JSON.stringify(item) === JSON.stringify(d),
-                ) ?? false;
-                const health = getDomainHealth(d, status, checks[d.name], saved);
-                const cert = status?.certificates.find((item) => item.name === d.name);
-                const color = health === 'healthy' ? 'success'
-                  : health === 'error' ? 'error'
-                    : health === 'expiring' ? 'warning' : 'default';
-                return (
-                  <Space orientation="vertical" size={2}>
-                    <Tag color={color}>{label('workspace.health.' + health)}</Tag>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {cert?.expiresAt
-                        ? `${label('remaining')}: ${cert.daysLeft} ${label('days')}`
-                        : d.mode === 'shared_sni'
-                          ? label('remoteSNIInfo')
-                          : label('tls.' + d.tls)}
-                    </Typography.Text>
-                  </Space>
-                );
-              },
-            },
-            {
-              title: label('actions'),
-              render: (_value: unknown, d: DomainForm) => (
-                <Space size={4}>
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => openEditor(draft.domains.findIndex((item) => item.name === d.name))}
-                  >
-                    {label('edit')}
-                  </Button>
-                  <Dropdown
-                    trigger={['click']}
-                    menu={{
-                      items: [
-                        { key: 'check', label: label('check'), disabled: dirty || !initialized || auditing },
-                        { type: 'divider' },
-                        { key: 'remove', label: label('remove'), danger: true },
-                      ],
-                      onClick: ({ key }) => {
-                        if (key === 'check') void check(d.name);
-                        if (key === 'remove') {
-                          Modal.confirm({
-                            title: label('removeConfirm'),
-                            okText: label('remove'),
-                            okButtonProps: { danger: true },
-                            onOk: () => update({
-                              domains: draft.domains.filter((item) => item.name !== d.name),
-                              subscriptionDomain: draft.subscriptionDomain === d.name
-                                ? '' : draft.subscriptionDomain,
-                            }),
-                          });
+          <Card size="small" className="domain-manager-hosts" title={label('list')}>
+            <Space wrap style={{ marginBottom: 12, width: '100%' }}>
+              <Input.Search
+                allowClear
+                placeholder={label('workspace.searchPlaceholder')}
+                aria-label={label('workspace.searchPlaceholder')}
+                value={domainSearch}
+                onChange={(event) => setDomainSearch(event.target.value)}
+                style={{ width: 250, maxWidth: '100%' }}
+              />
+              <Select
+                aria-label={label('workspace.filterLabel')}
+                value={domainFilter}
+                onChange={setDomainFilter}
+                style={{ minWidth: 180 }}
+                options={[
+                  { value: 'all', label: label('workspace.filter.all') },
+                  { value: 'attention', label: label('workspace.filter.attention') },
+                  ...(
+                    ['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'] as const
+                  ).map((mode) => ({
+                    value: mode,
+                    label: label('mode.' + mode),
+                  })),
+                ]}
+              />
+              <Typography.Text type="secondary">
+                {label('workspace.showing', { count: filteredDomains.length })}
+              </Typography.Text>
+            </Space>
+            <Table
+              className="domain-config-table"
+              size="small"
+              rowKey="name"
+              dataSource={filteredDomains}
+              pagination={{ pageSize: 10, hideOnSinglePage: true }}
+              scroll={{ x: 600 }}
+              locale={{ emptyText: label('empty') }}
+              columns={[
+                {
+                  title: label('name'),
+                  dataIndex: 'name',
+                  render: (name: string, d: DomainForm) => (
+                    <Space orientation="vertical" size={2}>
+                      <Typography.Text strong>{name}</Typography.Text>
+                      {!d.enabled && <Tag>{label('disabled')}</Tag>}
+                    </Space>
+                  ),
+                },
+                {
+                  title: label('modeLabel'),
+                  dataIndex: 'mode',
+                  render: (value: string) => (
+                    <Typography.Text type="secondary">{label('mode.' + value)}</Typography.Text>
+                  ),
+                },
+                {
+                  title: label('workspace.healthLabel'),
+                  key: 'health',
+                  render: (_value: unknown, d: DomainForm) => {
+                    const saved =
+                      status?.config.domains.some(
+                        (item) =>
+                          item.name === d.name && JSON.stringify(item) === JSON.stringify(d),
+                      ) ?? false;
+                    const health = getDomainHealth(d, status, checks[d.name], saved);
+                    const cert = status?.certificates.find((item) => item.name === d.name);
+                    const color =
+                      health === 'healthy'
+                        ? 'success'
+                        : health === 'error'
+                          ? 'error'
+                          : health === 'expiring'
+                            ? 'warning'
+                            : 'default';
+                    return (
+                      <Space orientation="vertical" size={2}>
+                        <Tag color={color}>{label('workspace.health.' + health)}</Tag>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {cert?.expiresAt
+                            ? `${label('remaining')}: ${cert.daysLeft} ${label('days')}`
+                            : d.mode === 'shared_sni'
+                              ? label('remoteSNIInfo')
+                              : label('tls.' + d.tls)}
+                        </Typography.Text>
+                      </Space>
+                    );
+                  },
+                },
+                {
+                  title: label('actions'),
+                  render: (_value: unknown, d: DomainForm) => (
+                    <Space size={4}>
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={() =>
+                          openEditor(draft.domains.findIndex((item) => item.name === d.name))
                         }
-                      },
-                    }}
-                  >
-                    <Button
-                      icon={<MoreOutlined />}
-                      size="small"
-                      aria-label={label('workspace.moreActions')}
-                      loading={checking === d.name}
-                    />
-                  </Dropdown>
-                </Space>
-              ),
-            },
-          ]}
-          expandable={{
-            expandedRowKeys: expanded,
-            onExpandedRowsChange: (keys) => setExpanded(keys.map(String)),
-            expandedRowRender: (d) => {
-              const result = checks[d.name];
-              return result ? (
-                <Space orientation="vertical">
-                  <Typography.Text>
-                    {label('dns')}: {result.addresses.join(', ') || '—'}
-                  </Typography.Text>
-                  {result.expiresAt > 0 && (
-                    <Typography.Text>
-                      {label('publicTLS')}: {result.issuer} · {result.daysLeft} {label('days')} · {date(result.expiresAt)}
-                    </Typography.Text>
-                  )}
-                  {result.error && <Typography.Text type="danger">{result.error}</Typography.Text>}
-                  <Typography.Text type="secondary">{label('publicTLSDesc')}</Typography.Text>
-                </Space>
-              ) : (
-                <Typography.Text type="secondary">{label('checkHint')}</Typography.Text>
-              );
-            },
-          }}
-        />
-      </Card>
+                      >
+                        {label('edit')}
+                      </Button>
+                      <Dropdown
+                        trigger={['click']}
+                        menu={{
+                          items: [
+                            {
+                              key: 'check',
+                              label: label('check'),
+                              disabled: dirty || !initialized || auditing,
+                            },
+                            { type: 'divider' },
+                            { key: 'remove', label: label('remove'), danger: true },
+                          ],
+                          onClick: ({ key }) => {
+                            if (key === 'check') void check(d.name);
+                            if (key === 'remove') {
+                              Modal.confirm({
+                                title: label('removeConfirm'),
+                                okText: label('remove'),
+                                okButtonProps: { danger: true },
+                                onOk: () =>
+                                  update({
+                                    domains: draft.domains.filter((item) => item.name !== d.name),
+                                    subscriptionDomain:
+                                      draft.subscriptionDomain === d.name
+                                        ? ''
+                                        : draft.subscriptionDomain,
+                                  }),
+                              });
+                            }
+                          },
+                        }}
+                      >
+                        <Button
+                          icon={<MoreOutlined />}
+                          size="small"
+                          aria-label={label('workspace.moreActions')}
+                          loading={checking === d.name}
+                        />
+                      </Dropdown>
+                    </Space>
+                  ),
+                },
+              ]}
+              expandable={{
+                expandedRowKeys: expanded,
+                onExpandedRowsChange: (keys) => setExpanded(keys.map(String)),
+                expandedRowRender: (d) => {
+                  const result = checks[d.name];
+                  return result ? (
+                    <Space orientation="vertical">
+                      <Typography.Text>
+                        {label('dns')}: {result.addresses.join(', ') || '—'}
+                      </Typography.Text>
+                      {result.expiresAt > 0 && (
+                        <Typography.Text>
+                          {label('publicTLS')}: {result.issuer} · {result.daysLeft} {label('days')}{' '}
+                          · {date(result.expiresAt)}
+                        </Typography.Text>
+                      )}
+                      {result.error && (
+                        <Typography.Text type="danger">{result.error}</Typography.Text>
+                      )}
+                      <Typography.Text type="secondary">{label('publicTLSDesc')}</Typography.Text>
+                    </Space>
+                  ) : (
+                    <Typography.Text type="secondary">{label('checkHint')}</Typography.Text>
+                  );
+                },
+              }}
+            />
+          </Card>
         </div>
       )}
       {section === 'certificates' && (
         <div className="domain-manager-panel" data-testid="domain-panel-certificates">
-      <Alert
-        type="info"
-        showIcon
-        title={label('automation')}
-        description={label('automationDesc')}
-      />
-      <CertificateInventoryPanel />
-      {!!status?.existingCertificates?.length && (
-        <Collapse
-          items={[
-            {
-              key: 'certificates',
-              label: label('existingCertificates'),
-              children: (
-                <>
-                  <Typography.Paragraph type="secondary">
-                    {label('existingDesc')}
-                  </Typography.Paragraph>
-                  <Space orientation="vertical">
-                    {status.existingCertificates.map((cert) => (
-                      <div key={cert.name}>
-                        <Typography.Text strong>{label(`source.${cert.source}`)}</Typography.Text>
-                        {' · '}
-                        {cert.issuer}
-                        {' · '}
-                        {label('remaining')}: {cert.daysLeft} {label('days')}
-                        {' · '}
-                        {date(cert.expiresAt)}
-                        {' · '}
-                        {renewalLabel(cert.renewal)}
-                        {cert.autoRenew && <Tag color="green">{label('autoRenew')}</Tag>}
-                        <div>
-                          <Typography.Text copyable>{cert.certFile}</Typography.Text>
-                        </div>
-                        {cert.error && (
-                          <Typography.Text type="warning">
-                            {certificateError(cert.error)}
-                          </Typography.Text>
-                        )}
-                      </div>
-                    ))}
-                  </Space>
-                </>
-              ),
-            },
-          ]}
-        />
-      )}
+          <Alert
+            type="info"
+            showIcon
+            title={label('automation')}
+            description={label('automationDesc')}
+          />
+          <CertificateInventoryPanel />
+          {!!status?.existingCertificates?.length && (
+            <Collapse
+              items={[
+                {
+                  key: 'certificates',
+                  label: label('existingCertificates'),
+                  children: (
+                    <>
+                      <Typography.Paragraph type="secondary">
+                        {label('existingDesc')}
+                      </Typography.Paragraph>
+                      <Space orientation="vertical">
+                        {status.existingCertificates.map((cert) => (
+                          <div key={cert.name}>
+                            <Typography.Text strong>
+                              {label(`source.${cert.source}`)}
+                            </Typography.Text>
+                            {' · '}
+                            {cert.issuer}
+                            {' · '}
+                            {label('remaining')}: {cert.daysLeft} {label('days')}
+                            {' · '}
+                            {date(cert.expiresAt)}
+                            {' · '}
+                            {renewalLabel(cert.renewal)}
+                            {cert.autoRenew && <Tag color="green">{label('autoRenew')}</Tag>}
+                            <div>
+                              <Typography.Text copyable>{cert.certFile}</Typography.Text>
+                            </div>
+                            {cert.error && (
+                              <Typography.Text type="warning">
+                                {certificateError(cert.error)}
+                              </Typography.Text>
+                            )}
+                          </div>
+                        ))}
+                      </Space>
+                    </>
+                  ),
+                },
+              ]}
+            />
+          )}
         </div>
       )}
 
       {section === 'sni' && (
         <div className="domain-manager-panel" data-testid="domain-panel-sni">
           {telemtSites.length > 0 && (
-            <Alert type="info" showIcon title={label('telemtReuseTitle')} description={label('telemtReuseDesc')} />
+            <Alert
+              type="info"
+              showIcon
+              title={label('telemtReuseTitle')}
+              description={label('telemtReuseDesc')}
+            />
           )}
           <Card size="small" title={label('sniCertificates')}>
             <Typography.Paragraph type="secondary">{label('sniCertHint')}</Typography.Paragraph>
             <Space orientation="vertical" size={10} style={{ width: '100%' }}>
               {managedSniDomains.length === 0 &&
-                !draft.domains.some((item) => item.mode === 'sni_only' || item.mode === 'shared_sni') && (
-                  <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>
-                )}
+                !draft.domains.some(
+                  (item) => item.mode === 'sni_only' || item.mode === 'shared_sni',
+                ) && <Typography.Text type="secondary">{label('sniEmpty')}</Typography.Text>}
               {managedSniDomains.map((site) => (
                 <Space wrap key={`${site.nodeId ?? 'local'}-${site.name}-${site.source}`}>
                   <Typography.Text strong>{site.name}</Typography.Text>
-                  <Tag color={site.source === 'telemt' || site.source === 'gateway' ? 'success' : undefined}>
+                  <Tag
+                    color={
+                      site.source === 'telemt' || site.source === 'gateway' ? 'success' : undefined
+                    }
+                  >
                     {site.source === 'remote' ? label('remoteSNITag') : site.source}
                   </Tag>
-                  {site.nodeName && <Typography.Text type="secondary">{site.nodeName}</Typography.Text>}
+                  {site.nodeName && (
+                    <Typography.Text type="secondary">{site.nodeName}</Typography.Text>
+                  )}
                 </Space>
               ))}
-              {draft.domains.filter((item) => (item.mode === 'sni_only' || item.mode === 'shared_sni') &&
-                !managedSniDomains.some((site) => site.name === item.name)).map((item) => (
-                <Space wrap key={item.name}>
-                  <Typography.Text strong>{item.name}</Typography.Text>
-                  <Tag>{item.mode === 'shared_sni' ? label('remoteSNITag') : label('state.unsaved')}</Tag>
-                </Space>
-              ))}
+              {draft.domains
+                .filter(
+                  (item) =>
+                    (item.mode === 'sni_only' || item.mode === 'shared_sni') &&
+                    !managedSniDomains.some((site) => site.name === item.name),
+                )
+                .map((item) => (
+                  <Space wrap key={item.name}>
+                    <Typography.Text strong>{item.name}</Typography.Text>
+                    <Tag>
+                      {item.mode === 'shared_sni' ? label('remoteSNITag') : label('state.unsaved')}
+                    </Tag>
+                  </Space>
+                ))}
             </Space>
           </Card>
         </div>
       )}
       {section === 'settings' && (
         <div className="domain-manager-panel" data-testid="domain-panel-settings">
-      {allSetting && updateSetting && (
-        <div className="domain-redirect-settings">
-          <SettingListItem
-            paddings="small"
-            title={t('pages.settings.rootRedirectEnable')}
-            description={t('pages.settings.rootRedirectDesc')}
-          >
-            <Switch
-              checked={allSetting.rootRedirectEnable}
-              onChange={(v) =>
-                updateSetting({
-                  rootRedirectEnable: v,
-                  ...(!v && rootRedirectError(allSetting.rootRedirectURL, redirectDomains)
-                    ? { rootRedirectURL: '' }
-                    : {}),
-                })
-              }
-            />
-          </SettingListItem>
-          <Space orientation="vertical" style={{ width: '100%', padding: '8px 0 12px' }}>
-            <Space wrap>
-              <Button
-                loading={scanningRedirect}
-                disabled={busy}
-                onClick={() => void findRedirectSite()}
-                aria-label={t('pages.settings.redirectScanAction')}
+          {allSetting && updateSetting && (
+            <div className="domain-redirect-settings">
+              <SettingListItem
+                paddings="small"
+                title={t('pages.settings.rootRedirectEnable')}
+                description={t('pages.settings.rootRedirectDesc')}
               >
-                {t('pages.settings.redirectScanAction')}
-              </Button>
-              <Typography.Text type="secondary">
-                {t('pages.settings.redirectScanHint')}
-              </Typography.Text>
-            </Space>
-            {redirectScan && (
-              <>
-                <Alert
-                  type={redirectScan.recommended ? 'success' : 'warning'}
-                  showIcon
-                  title={
-                    redirectScan.recommended
-                      ? t('pages.settings.redirectScanFound', { url: redirectScan.recommended })
-                      : t('pages.settings.redirectScanEmpty')
+                <Switch
+                  checked={allSetting.rootRedirectEnable}
+                  onChange={(v) =>
+                    updateSetting({
+                      rootRedirectEnable: v,
+                      ...(!v && rootRedirectError(allSetting.rootRedirectURL, redirectDomains)
+                        ? { rootRedirectURL: '' }
+                        : {}),
+                    })
                   }
-                  description={t('pages.settings.redirectScanNote')}
                 />
-                <Table<RedirectSiteCheck>
-                  size="small"
-                  rowKey="url"
-                  pagination={{ pageSize: 6, hideOnSinglePage: true }}
-                  dataSource={redirectScan.sites}
-                  scroll={{ x: 650 }}
-                  columns={[
-                    {
-                      title: t('pages.settings.redirectScanWebsite'),
-                      dataIndex: 'url',
-                      key: 'url',
-                      render: (value: string, site) => (
-                        <Space>
-                          <Typography.Text ellipsis style={{ maxWidth: 240 }} title={value}>
-                            {value}
-                          </Typography.Text>
-                          {site.url === redirectScan.recommended && (
-                            <Tag color="green">{t('pages.settings.redirectScanBest')}</Tag>
-                          )}
-                        </Space>
-                      ),
-                    },
-                    {
-                      title: t('pages.settings.redirectScanResponse'),
-                      key: 'response',
-                      render: (_, site) => site.status || '—',
-                    },
-                    {
-                      title: t('pages.settings.redirectScanLatency'),
-                      key: 'latency',
-                      render: (_, site) => (site.available ? `${site.latencyMs} ms` : '—'),
-                    },
-                    {
-                      title: t('pages.settings.redirectScanSNI'),
-                      key: 'sni',
-                      render: (_, site) => (site.sniLatencyMs ? `${site.sniLatencyMs} ms` : '—'),
-                    },
-                    {
-                      title: '',
-                      key: 'choose',
-                      render: (_, site) => (
-                        <Button
-                          size="small"
-                          disabled={
-                            !site.available || !!rootRedirectError(site.url, redirectDomains)
-                          }
-                          onClick={() => updateSetting({ rootRedirectURL: site.url })}
-                        >
-                          {t('pages.settings.redirectScanChoose')}
-                        </Button>
-                      ),
-                    },
-                  ]}
-                />
-              </>
-            )}
-          </Space>
-          <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
-            <AutoComplete
-              status={redirectError ? 'error' : undefined}
-              maxLength={2048}
-              aria-label={t('pages.settings.rootRedirectURL')}
-              style={{ width: '100%' }}
-              value={allSetting.rootRedirectURL}
-              options={redirectSiteOptions}
-              showSearch={{
-                filterOption: (input, option) =>
-                  (option?.value ?? '').toLowerCase().includes(input.toLowerCase()),
-              }}
-              defaultActiveFirstOption={false}
-              allowClear
-              onChange={(value) => updateSetting({ rootRedirectURL: value })}
-              placeholder="https://example.com/"
-            />
-          </SettingListItem>
-          {allSetting.rootRedirectEnable && (
-            <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
-              <Alert
-                showIcon
-                type={
-                  redirectError
-                    ? 'error'
-                    : settingsDirty
-                      ? 'warning'
-                      : status?.running
-                        ? 'success'
-                        : 'warning'
-                }
-                title={
-                  redirectError ||
-                  (settingsDirty
-                    ? 'Перенаправление ещё не применено'
-                    : status?.running
-                      ? 'Доменный шлюз работает'
-                      : 'Доменный шлюз не запущен')
-                }
-                description={t('pages.settings.redirectScanRedirectDescription')}
-              />
-              {!redirectDomains.length && (
-                <Alert
-                  type="warning"
-                  showIcon
-                  title="Сначала добавьте домен и настройте TLS. Для общего доступа нужны свободные порты 80 и 443."
-                />
-              )}
-              {status?.error && <Alert type="error" showIcon title={status.error} />}
-              {!redirectError &&
-                redirectDomains.map((name) => (
-                  <Space key={name} wrap>
-                    <Typography.Text code>https://{name}/</Typography.Text>
-                    <span>→</span>
-                    <Typography.Text ellipsis style={{ maxWidth: 320 }}>
-                      {allSetting.rootRedirectURL}
-                    </Typography.Text>
-                  </Space>
-                ))}
-              <Typography.Text type="secondary">
-                При ошибке привязки портов или TLS изменение перенаправления откатывается. Сохраните
-                адрес панели перед включением.
-              </Typography.Text>
-            </Space>
-          )}
-        </div>
-      )}
-      <Card
-        loading={loading}
-        title={
-          <Space>
-            {label('gateway')}
-            <Tag color={status?.running ? 'green' : 'default'}>
-              {label(status?.running ? 'running' : 'stopped')}
-            </Tag>
-          </Space>
-        }
-      >
-        <Form layout="vertical">
-          <Form.Item label={label('enabled')} tooltip={label('enabledDesc')}>
-            <Switch
-              aria-label={label('enabled')}
-              checked={draft.enabled}
-              onChange={(v) => update({ enabled: v })}
-            />
-          </Form.Item>
-          <Form.Item label={label('email')} tooltip={label('emailDesc')}>
-            <Input
-              aria-label={label('email')}
-              type="email"
-              value={draft.email}
-              onChange={(e) => update({ email: e.target.value })}
-            />
-          </Form.Item>
-          <Checkbox
-            checked={draft.acceptTerms}
-            onChange={(e) => update({ acceptTerms: e.target.checked })}
-          >
-            {label('terms')}{' '}
-            <a href="https://letsencrypt.org/repository/" target="_blank" rel="noopener noreferrer">
-              Let’s Encrypt
-            </a>
-          </Checkbox>
-          <Tooltip title={label('termsHelp')}>
-            <QuestionCircleOutlined
-              aria-label={label('termsHelp')}
-              tabIndex={0}
-              style={{ marginInlineStart: 8 }}
-            />
-          </Tooltip>
-          <Collapse
-            style={{ marginTop: 16 }}
-            items={[
-              {
-                key: 'advanced',
-                label: label('advanced'),
-                children: (
+              </SettingListItem>
+              <Space orientation="vertical" style={{ width: '100%', padding: '8px 0 12px' }}>
+                <Space wrap>
+                  <Button
+                    loading={scanningRedirect}
+                    disabled={busy}
+                    onClick={() => void findRedirectSite()}
+                    aria-label={t('pages.settings.redirectScanAction')}
+                  >
+                    {t('pages.settings.redirectScanAction')}
+                  </Button>
+                  <Typography.Text type="secondary">
+                    {t('pages.settings.redirectScanHint')}
+                  </Typography.Text>
+                </Space>
+                {redirectScan && (
                   <>
-                    <Form.Item label={label('listen')} tooltip={label('listenHelp')}>
-                      <Input
-                        value={draft.listen}
-                        onChange={(e) => update({ listen: e.target.value })}
-                      />
-                    </Form.Item>
-                    <Space wrap>
-                      <Form.Item label={label('httpPort')} tooltip={label('httpPortHelp')}>
-                        <InputNumber
-                          min={1}
-                          max={65535}
-                          value={draft.httpPort}
-                          aria-label={label('httpPort')}
-                          onChange={(v) => {
-                            if (v != null) update({ httpPort: v });
-                          }}
-                        />
-                      </Form.Item>
-                      <Form.Item label={label('httpsPort')} tooltip={label('httpsPortHelp')}>
-                        <InputNumber
-                          min={1}
-                          max={65535}
-                          value={draft.httpsPort}
-                          aria-label={label('httpsPort')}
-                          onChange={(v) => {
-                            if (v != null)
-                              update({
-                                httpsPort: v,
-                                ...(!separatePublicPort && draft.publicPort === draft.httpsPort
-                                  ? { publicPort: v }
-                                  : {}),
-                              });
-                          }}
-                        />
-                      </Form.Item>
-                      {(separatePublicPort || draft.publicPort !== draft.httpsPort) && (
-                        <Form.Item label={label('publicPort')} tooltip={label('publicPortHelp')}>
-                          <InputNumber
-                            min={1}
-                            max={65535}
-                            value={draft.publicPort}
-                            aria-label={label('publicPort')}
-                            onChange={(v) => {
-                              if (v != null) update({ publicPort: v });
-                            }}
+                    <Alert
+                      type={redirectScan.recommended ? 'success' : 'warning'}
+                      showIcon
+                      title={
+                        redirectScan.recommended
+                          ? t('pages.settings.redirectScanFound', { url: redirectScan.recommended })
+                          : t('pages.settings.redirectScanEmpty')
+                      }
+                      description={t('pages.settings.redirectScanNote')}
+                    />
+                    <Table<RedirectSiteCheck>
+                      size="small"
+                      rowKey="url"
+                      pagination={{ pageSize: 6, hideOnSinglePage: true }}
+                      dataSource={redirectScan.sites}
+                      scroll={{ x: 650 }}
+                      columns={[
+                        {
+                          title: t('pages.settings.redirectScanWebsite'),
+                          dataIndex: 'url',
+                          key: 'url',
+                          render: (value: string, site) => (
+                            <Space>
+                              <Typography.Text ellipsis style={{ maxWidth: 240 }} title={value}>
+                                {value}
+                              </Typography.Text>
+                              {site.url === redirectScan.recommended && (
+                                <Tag color="green">{t('pages.settings.redirectScanBest')}</Tag>
+                              )}
+                            </Space>
+                          ),
+                        },
+                        {
+                          title: t('pages.settings.redirectScanResponse'),
+                          key: 'response',
+                          render: (_, site) => site.status || '—',
+                        },
+                        {
+                          title: t('pages.settings.redirectScanLatency'),
+                          key: 'latency',
+                          render: (_, site) => (site.available ? `${site.latencyMs} ms` : '—'),
+                        },
+                        {
+                          title: t('pages.settings.redirectScanSNI'),
+                          key: 'sni',
+                          render: (_, site) =>
+                            site.sniLatencyMs ? `${site.sniLatencyMs} ms` : '—',
+                        },
+                        {
+                          title: '',
+                          key: 'choose',
+                          render: (_, site) => (
+                            <Button
+                              size="small"
+                              disabled={
+                                !site.available || !!rootRedirectError(site.url, redirectDomains)
+                              }
+                              onClick={() => updateSetting({ rootRedirectURL: site.url })}
+                            >
+                              {t('pages.settings.redirectScanChoose')}
+                            </Button>
+                          ),
+                        },
+                      ]}
+                    />
+                  </>
+                )}
+              </Space>
+              <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
+                <AutoComplete
+                  status={redirectError ? 'error' : undefined}
+                  maxLength={2048}
+                  aria-label={t('pages.settings.rootRedirectURL')}
+                  style={{ width: '100%' }}
+                  value={allSetting.rootRedirectURL}
+                  options={redirectSiteOptions}
+                  showSearch={{
+                    filterOption: (input, option) =>
+                      (option?.value ?? '').toLowerCase().includes(input.toLowerCase()),
+                  }}
+                  defaultActiveFirstOption={false}
+                  allowClear
+                  onChange={(value) => updateSetting({ rootRedirectURL: value })}
+                  placeholder="https://example.com/"
+                />
+              </SettingListItem>
+              {allSetting.rootRedirectEnable && (
+                <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
+                  <Alert
+                    showIcon
+                    type={
+                      redirectError
+                        ? 'error'
+                        : settingsDirty
+                          ? 'warning'
+                          : status?.running
+                            ? 'success'
+                            : 'warning'
+                    }
+                    title={
+                      redirectError ||
+                      (settingsDirty
+                        ? 'Перенаправление ещё не применено'
+                        : status?.running
+                          ? 'Доменный шлюз работает'
+                          : 'Доменный шлюз не запущен')
+                    }
+                    description={t('pages.settings.redirectScanRedirectDescription')}
+                  />
+                  {!redirectDomains.length && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      title="Сначала добавьте домен и настройте TLS. Для общего доступа нужны свободные порты 80 и 443."
+                    />
+                  )}
+                  {status?.error && <Alert type="error" showIcon title={status.error} />}
+                  {!redirectError &&
+                    redirectDomains.map((name) => (
+                      <Space key={name} wrap>
+                        <Typography.Text code>https://{name}/</Typography.Text>
+                        <span>→</span>
+                        <Typography.Text ellipsis style={{ maxWidth: 320 }}>
+                          {allSetting.rootRedirectURL}
+                        </Typography.Text>
+                      </Space>
+                    ))}
+                  <Typography.Text type="secondary">
+                    При ошибке привязки портов или TLS изменение перенаправления откатывается.
+                    Сохраните адрес панели перед включением.
+                  </Typography.Text>
+                </Space>
+              )}
+            </div>
+          )}
+          <Card
+            loading={loading}
+            title={
+              <Space>
+                {label('gateway')}
+                <Tag color={status?.running ? 'green' : 'default'}>
+                  {label(status?.running ? 'running' : 'stopped')}
+                </Tag>
+              </Space>
+            }
+          >
+            <Form layout="vertical">
+              <Form.Item label={label('enabled')} tooltip={label('enabledDesc')}>
+                <Switch
+                  aria-label={label('enabled')}
+                  checked={draft.enabled}
+                  onChange={(v) => update({ enabled: v })}
+                />
+              </Form.Item>
+              <Form.Item label={label('email')} tooltip={label('emailDesc')}>
+                <Input
+                  aria-label={label('email')}
+                  type="email"
+                  value={draft.email}
+                  onChange={(e) => update({ email: e.target.value })}
+                />
+              </Form.Item>
+              <Checkbox
+                checked={draft.acceptTerms}
+                onChange={(e) => update({ acceptTerms: e.target.checked })}
+              >
+                {label('terms')}{' '}
+                <a
+                  href="https://letsencrypt.org/repository/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Let’s Encrypt
+                </a>
+              </Checkbox>
+              <Tooltip title={label('termsHelp')}>
+                <QuestionCircleOutlined
+                  aria-label={label('termsHelp')}
+                  tabIndex={0}
+                  style={{ marginInlineStart: 8 }}
+                />
+              </Tooltip>
+              <Collapse
+                style={{ marginTop: 16 }}
+                items={[
+                  {
+                    key: 'advanced',
+                    label: label('advanced'),
+                    children: (
+                      <>
+                        <Form.Item label={label('listen')} tooltip={label('listenHelp')}>
+                          <Input
+                            value={draft.listen}
+                            onChange={(e) => update({ listen: e.target.value })}
                           />
                         </Form.Item>
+                        <Space wrap>
+                          <Form.Item label={label('httpPort')} tooltip={label('httpPortHelp')}>
+                            <InputNumber
+                              min={1}
+                              max={65535}
+                              value={draft.httpPort}
+                              aria-label={label('httpPort')}
+                              onChange={(v) => {
+                                if (v != null) update({ httpPort: v });
+                              }}
+                            />
+                          </Form.Item>
+                          <Form.Item label={label('httpsPort')} tooltip={label('httpsPortHelp')}>
+                            <InputNumber
+                              min={1}
+                              max={65535}
+                              value={draft.httpsPort}
+                              aria-label={label('httpsPort')}
+                              onChange={(v) => {
+                                if (v != null)
+                                  update({
+                                    httpsPort: v,
+                                    ...(!separatePublicPort && draft.publicPort === draft.httpsPort
+                                      ? { publicPort: v }
+                                      : {}),
+                                  });
+                              }}
+                            />
+                          </Form.Item>
+                          {(separatePublicPort || draft.publicPort !== draft.httpsPort) && (
+                            <Form.Item
+                              label={label('publicPort')}
+                              tooltip={label('publicPortHelp')}
+                            >
+                              <InputNumber
+                                min={1}
+                                max={65535}
+                                value={draft.publicPort}
+                                aria-label={label('publicPort')}
+                                onChange={(v) => {
+                                  if (v != null) update({ publicPort: v });
+                                }}
+                              />
+                            </Form.Item>
+                          )}
+                        </Space>
+                        <Checkbox
+                          checked={separatePublicPort || draft.publicPort !== draft.httpsPort}
+                          onChange={(event) => {
+                            setSeparatePublicPort(event.target.checked);
+                            if (!event.target.checked) update({ publicPort: draft.httpsPort });
+                          }}
+                        >
+                          {label('portMapping')}
+                        </Checkbox>
+                        <Typography.Paragraph type="secondary">
+                          {label('portsHelp')}
+                        </Typography.Paragraph>
+                        <Checkbox
+                          checked={draft.staging}
+                          onChange={(e) => update({ staging: e.target.checked })}
+                        >
+                          {label('staging')}
+                        </Checkbox>
+                        <Typography.Paragraph type="secondary">
+                          {label('stagingDesc')}
+                        </Typography.Paragraph>
+                      </>
+                    ),
+                  },
+                ]}
+              />
+            </Form>
+          </Card>
+          {allSetting && updateSetting && (
+            <Collapse
+              items={[
+                {
+                  key: 'manual-tls',
+                  label: t('pages.settings.domains.manualSettings'),
+                  children: (
+                    <>
+                      <Link to="/settings#subscription">
+                        {t('pages.settings.subscriptionAccess')}
+                      </Link>
+                      {(['webCertFile', 'webKeyFile', 'subCertFile', 'subKeyFile'] as const).map(
+                        (key) => (
+                          <SettingListItem
+                            key={key}
+                            paddings="small"
+                            title={t(
+                              `pages.settings.${({ webCertFile: 'publicKeyPath', webKeyFile: 'privateKeyPath', subCertFile: 'subCertPath', subKeyFile: 'subKeyPath' } as const)[key]}`,
+                            )}
+                          >
+                            <Input
+                              value={allSetting[key]}
+                              onChange={(e) => updateSetting({ [key]: e.target.value })}
+                            />
+                          </SettingListItem>
+                        ),
                       )}
-                    </Space>
-                    <Checkbox
-                      checked={separatePublicPort || draft.publicPort !== draft.httpsPort}
-                      onChange={(event) => {
-                        setSeparatePublicPort(event.target.checked);
-                        if (!event.target.checked) update({ publicPort: draft.httpsPort });
-                      }}
-                    >
-                      {label('portMapping')}
-                    </Checkbox>
-                    <Typography.Paragraph type="secondary">
-                      {label('portsHelp')}
-                    </Typography.Paragraph>
-                    <Checkbox
-                      checked={draft.staging}
-                      onChange={(e) => update({ staging: e.target.checked })}
-                    >
-                      {label('staging')}
-                    </Checkbox>
-                    <Typography.Paragraph type="secondary">
-                      {label('stagingDesc')}
-                    </Typography.Paragraph>
-                  </>
+                    </>
+                  ),
+                },
+              ]}
+            />
+          )}
+
+          <Collapse
+            items={[
+              {
+                key: 'help',
+                label: label('help'),
+                children: (
+                  <Space orientation="vertical" size={12}>
+                    {['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only'].map((key) => (
+                      <div key={key}>
+                        <Typography.Text strong>{label(`mode.${key}`)}</Typography.Text>
+                        <Typography.Paragraph style={{ margin: 0 }}>
+                          {label(`modeDesc.${key}`)}
+                        </Typography.Paragraph>
+                      </div>
+                    ))}
+                    <Typography.Paragraph>{label('transportHelp')}</Typography.Paragraph>
+                    <Typography.Paragraph>{label('dnsHelp')}</Typography.Paragraph>
+                  </Space>
                 ),
               },
             ]}
           />
-        </Form>
-      </Card>
-      {allSetting && updateSetting && (
-        <Collapse
-          items={[
-            {
-              key: 'manual-tls',
-              label: t('pages.settings.domains.manualSettings'),
-              children: (
-                <>
-                  <Link to="/settings#subscription">{t('pages.settings.subscriptionAccess')}</Link>
-                  {(['webCertFile', 'webKeyFile', 'subCertFile', 'subKeyFile'] as const).map(
-                    (key) => (
-                      <SettingListItem
-                        key={key}
-                        paddings="small"
-                        title={t(
-                          `pages.settings.${({ webCertFile: 'publicKeyPath', webKeyFile: 'privateKeyPath', subCertFile: 'subCertPath', subKeyFile: 'subKeyPath' } as const)[key]}`,
-                        )}
-                      >
-                        <Input
-                          value={allSetting[key]}
-                          onChange={(e) => updateSetting({ [key]: e.target.value })}
-                        />
-                      </SettingListItem>
-                    ),
-                  )}
-                </>
-              ),
-            },
-          ]}
-        />
-      )}
-
-      <Collapse
-        items={[
-          {
-            key: 'help',
-            label: label('help'),
-            children: (
-              <Space orientation="vertical" size={12}>
-                {['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only'].map((key) => (
-                  <div key={key}>
-                    <Typography.Text strong>{label(`mode.${key}`)}</Typography.Text>
-                    <Typography.Paragraph style={{ margin: 0 }}>
-                      {label(`modeDesc.${key}`)}
-                    </Typography.Paragraph>
-                  </div>
-                ))}
-                <Typography.Paragraph>{label('transportHelp')}</Typography.Paragraph>
-                <Typography.Paragraph>{label('dnsHelp')}</Typography.Paragraph>
-              </Space>
-            ),
-          },
-        ]}
-      />
         </div>
       )}
       {status?.error && (
@@ -1294,72 +1365,78 @@ export default function DomainFrontTab({
             size="small"
             style={{ marginTop: 12 }}
             activeKey={advancedEditorOpen ? ['domain-advanced'] : []}
-            onChange={(keys) => setAdvancedEditorOpen(Array.isArray(keys) ? keys.includes('domain-advanced') : keys === 'domain-advanced')}
-            items={[{
-              key: 'domain-advanced',
-              label: label('workspace.editorAdvanced'),
-              forceRender: true,
-              children: (
-                <>
-          <Form.Item
-            name="enabled"
-            label={label('domainEnabled')}
-            tooltip={label('domainEnabledHelp')}
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-          {mode !== 'shared_sni' && (
-            <>
-              <Form.Item
-                name="tls"
-                label={label('tlsLabel')}
-                tooltip={label('tlsHelp')}
-                rules={[antdRule(DomainFormSchema.shape.tls, t)]}
-              >
-                <Select
-                  options={['auto', 'certmagic', 'existing', 'manual'].map((value) => ({
-                    value,
-                    label: label(`tls.${value}`),
-                  }))}
-                />
-              </Form.Item>
-              <Typography.Paragraph type="secondary">
-                {label(
-                  tls === 'manual'
-                    ? 'manualDesc'
-                    : tls === 'certmagic'
-                      ? 'certmagicDesc'
-                      : tls === 'existing'
-                        ? 'existingTLSDesc'
-                        : 'autoDesc',
-                )}
-              </Typography.Paragraph>
-            </>
-          )}
-          {mode !== 'shared_sni' && tls === 'manual' && (
-            <>
-              <Form.Item
-                name="certFile"
-                label={label('certFile')}
-                tooltip={label('certFileHelp')}
-                rules={[{ required: true }]}
-              >
-                <Input placeholder="/etc/ssl/fullchain.pem" />
-              </Form.Item>
-              <Form.Item
-                name="keyFile"
-                label={label('keyFile')}
-                tooltip={label('keyFileHelp')}
-                rules={[{ required: true }]}
-              >
-                <Input placeholder="/etc/ssl/privkey.pem" />
-              </Form.Item>
-            </>
-          )}
-                </>
-              ),
-            }]}
+            onChange={(keys) =>
+              setAdvancedEditorOpen(
+                Array.isArray(keys) ? keys.includes('domain-advanced') : keys === 'domain-advanced',
+              )
+            }
+            items={[
+              {
+                key: 'domain-advanced',
+                label: label('workspace.editorAdvanced'),
+                forceRender: true,
+                children: (
+                  <>
+                    <Form.Item
+                      name="enabled"
+                      label={label('domainEnabled')}
+                      tooltip={label('domainEnabledHelp')}
+                      valuePropName="checked"
+                    >
+                      <Switch />
+                    </Form.Item>
+                    {mode !== 'shared_sni' && (
+                      <>
+                        <Form.Item
+                          name="tls"
+                          label={label('tlsLabel')}
+                          tooltip={label('tlsHelp')}
+                          rules={[antdRule(DomainFormSchema.shape.tls, t)]}
+                        >
+                          <Select
+                            options={['auto', 'certmagic', 'existing', 'manual'].map((value) => ({
+                              value,
+                              label: label(`tls.${value}`),
+                            }))}
+                          />
+                        </Form.Item>
+                        <Typography.Paragraph type="secondary">
+                          {label(
+                            tls === 'manual'
+                              ? 'manualDesc'
+                              : tls === 'certmagic'
+                                ? 'certmagicDesc'
+                                : tls === 'existing'
+                                  ? 'existingTLSDesc'
+                                  : 'autoDesc',
+                          )}
+                        </Typography.Paragraph>
+                      </>
+                    )}
+                    {mode !== 'shared_sni' && tls === 'manual' && (
+                      <>
+                        <Form.Item
+                          name="certFile"
+                          label={label('certFile')}
+                          tooltip={label('certFileHelp')}
+                          rules={[{ required: true }]}
+                        >
+                          <Input placeholder="/etc/ssl/fullchain.pem" />
+                        </Form.Item>
+                        <Form.Item
+                          name="keyFile"
+                          label={label('keyFile')}
+                          tooltip={label('keyFileHelp')}
+                          rules={[{ required: true }]}
+                        >
+                          <Input placeholder="/etc/ssl/privkey.pem" />
+                        </Form.Item>
+                      </>
+                    )}
+                  </>
+                ),
+              },
+            ]}
           />
           <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
             {label('workspace.editorSaveHint')}
