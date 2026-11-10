@@ -342,6 +342,7 @@ func StartDomainFront() error {
 		rollback()
 		return err
 	}
+	TriggerFirewallSync()
 	return nil
 }
 

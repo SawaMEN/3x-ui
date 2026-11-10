@@ -401,6 +401,10 @@ func firewallSourcePriority(s string) int {
 		return 40
 	case "subscription":
 		return 30
+	case "domain-gateway", "telemt":
+		return 28
+	case "certificate-renewal":
+		return 26
 	case "manual":
 		return 20
 	case "inbound":

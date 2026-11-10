@@ -199,13 +199,15 @@ func (s *FirewallService) RunAutoSync(parent context.Context) {
 	timer := time.NewTimer(firewallSyncInterval())
 	defer timer.Stop()
 	for {
+		explicit := false
 		select {
 		case <-parent.Done():
 			return
 		case <-timer.C:
 		case <-firewallSyncTrigger:
+			explicit = true
 		}
-		syncNow()
+		syncNow(explicit)
 		if !timer.Stop() {
 			select {
 			case <-timer.C:
