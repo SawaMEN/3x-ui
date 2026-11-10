@@ -171,11 +171,12 @@ func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
 			if (site.Source != "telemt" && site.Source != "gateway") || site.CertFile == "" || site.KeyFile == "" {
 				continue
 			}
+			// A node confirms ownership of its own certificate. Its absolute
+			// paths are intentionally not returned to the parent or browser:
+			// the same path may refer to a different key on another machine.
 			out = append(out, ManagedSNIDomain{
 				Name:     site.Name,
 				Source:   "remote",
-				CertFile: site.CertFile,
-				KeyFile:  site.KeyFile,
 				NodeID:   result.NodeID,
 				NodeName: result.NodeName,
 			})
