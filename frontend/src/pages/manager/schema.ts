@@ -20,6 +20,7 @@ export const EntrySchema = z.object({
   nodeId: z.number().optional(),
   port: z.string().default('random'),
   sni: z.string().default(''),
+  realityTarget: z.string().max(512).optional(),
   label: z.string().max(256).default(''),
   flag: z.string().max(16).default(''),
   relayId: z.number().default(0),
@@ -43,7 +44,7 @@ export const SubscriptionSchema = z.object({
   lastRotation: z.number().default(0),
   happ: z.string().default(''),
   incy: z.string().default(''),
-  entries: z.array(EntrySchema).min(1).max(20),
+  entries: z.array(EntrySchema).min(1).max(100),
   published: z.array(EntrySchema).nullable().optional(),
 });
 export const RelaySchema = z.object({
