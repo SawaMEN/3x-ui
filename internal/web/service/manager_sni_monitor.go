@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -238,7 +239,8 @@ func (s *ManagerService) monitorSNIWithProbe(
 				if err := s.applyEntrySNI(sub.UserID, &next, proposed); err != nil {
 					return err
 				}
-				if original.Settings != next.Settings || original.Port != next.Port ||
+				if !managerSNIHealthSettingsEqual(original.Settings, next.Settings) ||
+					original.Port != next.Port ||
 					!managerSNIHealthRealityKeysEqual(original.StreamSettings, next.StreamSettings) {
 					return fmt.Errorf("SNI monitor refuses credential, port or REALITY key changes")
 				}
@@ -248,7 +250,7 @@ func (s *ManagerService) monitorSNIWithProbe(
 				}
 				managerMarkRestart(restart)
 				persisted, err := svc.GetInbound(next.Id)
-				if err != nil || persisted.Settings != original.Settings ||
+				if err != nil || !managerSNIHealthSettingsEqual(persisted.Settings, original.Settings) ||
 					persisted.Port != original.Port ||
 					!managerSNIHealthRealityKeysEqual(original.StreamSettings, persisted.StreamSettings) {
 					if err == nil {
@@ -322,4 +324,31 @@ func managerSNIHealthRealityKeysEqual(left, right string) bool {
 	}
 	return a.Security == "reality" && b.Security == "reality" &&
 		a.Reality.PrivateKey == b.Reality.PrivateKey && slices.Equal(a.Reality.ShortIDs, b.Reality.ShortIDs)
+}
+
+// managerSNIHealthSettingsEqual compares the full inbound settings by meaning,
+// rather than raw JSON formatting. An ordinary InboundService.UpdateInbound
+// serializes JSON with indentation and may fill in client timestamps.
+// Neither formatting nor these timestamps are credential changes; all other
+// fields (including each client's ID, email, password, flow and policies)
+// must match exactly or the SNI update is rolled back.
+func managerSNIHealthSettingsEqual(left, right string) bool {
+	normalize := func(raw string) (map[string]any, bool) {
+		var value map[string]any
+		if json.Unmarshal([]byte(raw), &value) != nil || value == nil {
+			return nil, false
+		}
+		if clients, ok := value["clients"].([]any); ok {
+			for _, row := range clients {
+				if client, ok := row.(map[string]any); ok {
+					delete(client, "created_at")
+					delete(client, "updated_at")
+				}
+			}
+		}
+		return value, true
+	}
+	a, okA := normalize(left)
+	b, okB := normalize(right)
+	return okA && okB && reflect.DeepEqual(a, b)
 }

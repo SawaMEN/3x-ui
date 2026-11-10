@@ -70,6 +70,9 @@ export function managerConfigWithTLSCertificate(
     tlsSettings?: { serverName?: string; certificates?: unknown[] };
   };
   const hostname = managerCertificateName(certificate.name);
+  if (stream.security === 'reality') {
+    throw new Error('This recipe does not use Xray stream TLS');
+  }
   if (stream.security === 'tls') {
     if (!stream.tlsSettings) throw new Error('Xray stream TLS settings are missing');
     stream.tlsSettings.serverName = hostname;

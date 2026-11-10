@@ -50,7 +50,8 @@ func TestManagerHealthSwitchKeepsListenerAndRealityKeys(t *testing.T) {
 	if err := database.GetDB().First(&after, inbound.Id).Error; err != nil {
 		t.Fatal(err)
 	}
-	if after.Port != beforePort || after.Settings != beforeSettings || after.Tag != inbound.Tag {
+	if after.Port != beforePort ||
+		!managerSNIHealthSettingsEqual(after.Settings, beforeSettings) || after.Tag != inbound.Tag {
 		t.Fatalf("SNI switch changed listener identity or client credentials: %+v", after)
 	}
 	if !managerSNIHealthRealityKeysEqual(inbound.StreamSettings, after.StreamSettings) ||
@@ -115,7 +116,7 @@ func TestManagerHealthSwitchRollsBackFailedCoreApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	if stored.StreamSettings != inbound.StreamSettings || stored.Port != inbound.Port ||
-		stored.Settings != inbound.Settings {
+		!managerSNIHealthSettingsEqual(stored.Settings, inbound.Settings) {
 		t.Fatalf("failed switch was persisted: %+v", stored)
 	}
 	var record model.ManagerSubscription
@@ -124,5 +125,24 @@ func TestManagerHealthSwitchRollsBackFailedCoreApply(t *testing.T) {
 	}
 	if record.Published[0].SNI != "primary.example.org" {
 		t.Fatalf("failed switch changed published SNI: %+v", record.Published)
+	}
+}
+
+func TestManagerHealthSettingsComparisonIgnoresOnlyMetadata(t *testing.T) {
+	before := `{"clients":[{"email":"alice","id":"UUID-A","flow":"xtls-rprx-vision"}],"decryption":"none"}`
+	after := `{
+		"decryption": "none",
+		"clients": [{"flow":"xtls-rprx-vision","id":"UUID-A","email":"alice","created_at":123,"updated_at":456}]
+	}`
+	if !managerSNIHealthSettingsEqual(before, after) {
+		t.Fatal("JSON formatting and client timestamps are not credential changes")
+	}
+	changed := strings.ReplaceAll(after, "UUID-A", "UUID-B")
+	if managerSNIHealthSettingsEqual(before, changed) {
+		t.Fatal("changed client UUID was silently accepted")
+	}
+	changed = strings.ReplaceAll(after, "xtls-rprx-vision", "")
+	if managerSNIHealthSettingsEqual(before, changed) {
+		t.Fatal("changed client flow was silently accepted")
 	}
 }
