@@ -67,19 +67,25 @@ func validPublicDNSName(name string) bool {
 	return true
 }
 
-func (p *CloudflareTXTProvider) validateTXT(zone string, rr libdns.RR) (string, error) {
-	if strings.ToLower(strings.TrimSuffix(zone, ".")) != p.zone ||
+// This validation is shared by all DNS-01 providers. Neither provider can
+// create arbitrary DNS records, change another zone or delete unknown IDs.
+func validateDNS01TXTName(zone string, rr libdns.RR, ownedZone string) (string, error) {
+	if strings.ToLower(strings.TrimSuffix(zone, ".")) != ownedZone ||
 		(rr.Name != "_acme-challenge" && !strings.HasPrefix(rr.Name, "_acme-challenge.")) ||
 		rr.Type != "TXT" || !cloudflareDNSValue.MatchString(rr.Data) {
 		return "", errors.New("DNS-01 provider accepts only challenge TXT records in its configured zone")
 	}
-	name := strings.ToLower(libdns.AbsoluteName(rr.Name, p.zone))
-	if !strings.HasSuffix(name, "."+p.zone) ||
+	name := strings.ToLower(libdns.AbsoluteName(rr.Name, ownedZone))
+	if !strings.HasSuffix(name, "."+ownedZone) ||
 		!strings.HasPrefix(name, "_acme-challenge.") ||
 		!validPublicDNSName(strings.TrimPrefix(name, "_acme-challenge.")) {
 		return "", errors.New("invalid ACME TXT record name")
 	}
 	return strings.TrimSuffix(name, "."), nil
+}
+
+func (p *CloudflareTXTProvider) validateTXT(zone string, rr libdns.RR) (string, error) {
+	return validateDNS01TXTName(zone, rr, p.zone)
 }
 
 type cloudflareEnvelope struct {
