@@ -615,6 +615,10 @@ export type DomainFrontCheck = z.infer<typeof DomainFrontCheckSchema>;
 
 export const DomainFrontConfigSchema = z.object({
   acceptTerms: z.boolean(),
+  dns01Propagation: z.number().int().optional(),
+  dns01Provider: z.string().optional(),
+  dns01Zone: z.string().optional(),
+  dns01ZoneId: z.string().optional(),
   domains: z.array(z.lazy(() => DomainFrontDomainSchema)),
   email: z.string(),
   enabled: z.boolean(),
