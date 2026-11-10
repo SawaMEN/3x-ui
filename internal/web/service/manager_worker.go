@@ -526,7 +526,7 @@ func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) erro
 // The value is a REALITY camouflage destination, not a web server deployed by the panel.
 func managerRealityTarget(value string) (string, error) {
 	value = strings.TrimSpace(value)
-	if value == "" || strings.ContainsAny(value, "/?#@ \\t\\r\\n") {
+	if value == "" || strings.ContainsAny(value, "/?#@ \t\r\n") {
 		return "", fmt.Errorf("REALITY target must be a hostname or hostname:port")
 	}
 	host, port, hasPort := strings.Cut(value, ":")
