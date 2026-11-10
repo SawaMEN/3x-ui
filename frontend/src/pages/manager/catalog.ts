@@ -3,6 +3,7 @@ import { nodeSupportsProtocol } from '@/lib/xray/node-protocols';
 import { createManagerPreset, MANAGER_PRESETS } from './presets';
 import { newEntry } from './schema';
 import {
+  managerConfigNeedsTLSCertificate,
   managerConfigWithTLSCertificate,
   managerTLSCertificateForSni,
 } from './certificate-recipes';
@@ -170,7 +171,11 @@ export const managerCatalog: CatalogItem[] = MANAGER_PRESETS.map((id) => {
   const configuration = createManagerPreset(id);
   const stream = JSON.parse(configuration.streamSettings) as { security?: string };
   const sniMode: SniMode =
-    stream.security === 'reality' ? 'reality' : stream.security === 'tls' ? 'tls' : 'none';
+    stream.security === 'reality'
+      ? 'reality'
+      : managerConfigNeedsTLSCertificate(configuration)
+        ? 'tls'
+        : 'none';
   const info = known[id] ?? {
     group: 'special' as CatalogGroup,
     name: id,

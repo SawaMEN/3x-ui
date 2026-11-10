@@ -43,32 +43,77 @@ export function managerTLSCertificateForSni(
   return candidates.find((site) => site.name === name) ?? null;
 }
 
-// Only Xray stream TLS uses the streamSettings.tlsSettings certificate shape.
-// Native protocols have their own TLS settings and are intentionally not
-// modified by this helper. The server's per-node preflight remains mandatory.
+// Map the certificate to the exact configuration shape consumed by the
+// protocol. A native TLS protocol must never receive Xray-only tlsSettings.
+export function managerConfigNeedsTLSCertificate(config: ManagerConfig): boolean {
+  const stream = JSON.parse(config.streamSettings) as { security?: string };
+  if (stream.security === 'tls') return true;
+  const settings = JSON.parse(config.settings) as Record<string, any>;
+  if (['tuic', 'vetroff', 'trusttunnel'].includes(config.protocol)) return true;
+  const nativeTLS = settings.tls as
+    | { enabled?: boolean; certificatePath?: string; keyPath?: string }
+    | undefined;
+  return (
+    !!nativeTLS &&
+    nativeTLS.enabled !== false &&
+    'certificatePath' in nativeTLS &&
+    'keyPath' in nativeTLS
+  );
+}
+
 export function managerConfigWithTLSCertificate(
   config: ManagerConfig,
   certificate: ManagedSniDomain,
 ): ManagerConfig {
   const stream = JSON.parse(config.streamSettings) as {
     security?: string;
-    tlsSettings?: {
-      serverName?: string;
-      certificates?: unknown[];
-    };
+    tlsSettings?: { serverName?: string; certificates?: unknown[] };
   };
-  if (stream.security !== 'tls' || !stream.tlsSettings)
-    throw new Error('This recipe does not use Xray stream TLS');
-  stream.tlsSettings.serverName = managerCertificateName(certificate.name);
-  stream.tlsSettings.certificates = [
-    {
-      certificateFile: certificate.certFile,
-      keyFile: certificate.keyFile,
-      ocspStapling: 0,
-      oneTimeLoading: false,
-      usage: 'encipherment',
-      buildChain: false,
-    },
-  ];
-  return { ...config, streamSettings: JSON.stringify(stream) };
+  const hostname = managerCertificateName(certificate.name);
+  if (stream.security === 'tls') {
+    if (!stream.tlsSettings) throw new Error('Xray stream TLS settings are missing');
+    stream.tlsSettings.serverName = hostname;
+    stream.tlsSettings.certificates = [
+      {
+        certificateFile: certificate.certFile,
+        keyFile: certificate.keyFile,
+        ocspStapling: 0,
+        oneTimeLoading: false,
+        usage: 'encipherment',
+        buildChain: false,
+      },
+    ];
+    return { ...config, streamSettings: JSON.stringify(stream) };
+  }
+  const settings = JSON.parse(config.settings) as Record<string, any>;
+  if (
+    settings.tls &&
+    settings.tls.enabled !== false &&
+    'certificatePath' in settings.tls &&
+    'keyPath' in settings.tls
+  ) {
+    settings.tls.enabled = true;
+    settings.tls.serverName = hostname;
+    settings.tls.certificatePath = certificate.certFile;
+    settings.tls.keyPath = certificate.keyFile;
+    return { ...config, settings: JSON.stringify(settings) };
+  }
+  if (config.protocol === 'tuic') {
+    const server = (settings.server ??= {});
+    server.certificate = certificate.certFile;
+    server.private_key = certificate.keyFile;
+    server.sni = hostname;
+    settings.certificate = certificate.certFile;
+    settings.private_key = certificate.keyFile;
+    settings.sni = hostname;
+    return { ...config, settings: JSON.stringify(settings) };
+  }
+  if (config.protocol === 'vetroff' || config.protocol === 'trusttunnel') {
+    settings.hostname = hostname;
+    settings.certificate = certificate.certFile;
+    settings.privateKey = certificate.keyFile;
+    if (config.protocol === 'vetroff' && settings.vetroff) settings.vetroff.autoTLS = false;
+    return { ...config, settings: JSON.stringify(settings) };
+  }
+  throw new Error('No supported TLS certificate mapping for protocol ' + config.protocol);
 }

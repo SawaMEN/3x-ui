@@ -216,6 +216,12 @@ func managerCheckCertificates(ib *model.Inbound) error {
 		Hostname    string `json:"hostname"`
 		Certificate string `json:"certificate"`
 		PrivateKey  string `json:"privateKey"`
+		SNI         string `json:"sni"`
+		Server      struct {
+			Certificate string `json:"certificate"`
+			PrivateKey  string `json:"private_key"`
+			SNI         string `json:"sni"`
+		} `json:"server"`
 		TLS         struct {
 			Enabled         *bool  `json:"enabled"`
 			ServerName      string `json:"serverName"`
@@ -225,10 +231,17 @@ func managerCheckCertificates(ib *model.Inbound) error {
 	}
 	if json.Unmarshal([]byte(ib.Settings), &native) == nil {
 		certificate, key, name := native.TLS.CertificatePath, native.TLS.KeyPath, native.TLS.ServerName
-		if ib.Protocol == model.VetroffProxy {
+		if ib.Protocol == model.VetroffProxy || ib.Protocol == model.TrustTunnel {
 			certificate, key, name = native.Certificate, native.PrivateKey, native.Hostname
 		}
-		if (ib.Protocol == model.VetroffProxy || native.TLS.Enabled == nil || *native.TLS.Enabled) && (certificate != "" || key != "") {
+		if ib.Protocol == model.TUIC {
+			certificate, key, name = native.Server.Certificate, native.Server.PrivateKey, native.Server.SNI
+			if certificate == "" && key == "" {
+				certificate, key, name = native.Certificate, native.PrivateKey, native.SNI
+			}
+		}
+		if (ib.Protocol == model.VetroffProxy || ib.Protocol == model.TrustTunnel ||
+			ib.Protocol == model.TUIC || native.TLS.Enabled == nil || *native.TLS.Enabled) && (certificate != "" || key != "") {
 			certBytes, err := recoveryReadFile(certificate)
 			if err != nil {
 				return fmt.Errorf("certificate: %w", err)

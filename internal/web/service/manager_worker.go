@@ -520,12 +520,27 @@ func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) erro
 	if json.Unmarshal([]byte(ib.Settings), &nativeSettings) == nil {
 		if tls, ok := nativeSettings["tls"].(map[string]any); ok {
 			tls["serverName"] = sni
+			nativeUpdated = true
+		}
+		switch ib.Protocol {
+		case model.TUIC:
+			server, ok := nativeSettings["server"].(map[string]any)
+			if !ok {
+				server = map[string]any{}
+				nativeSettings["server"] = server
+			}
+			server["sni"], nativeSettings["sni"] = sni, sni
+			nativeUpdated = true
+		case model.VetroffProxy, model.TrustTunnel:
+			nativeSettings["hostname"] = sni
+			nativeUpdated = true
+		}
+		if nativeUpdated {
 			raw, err := json.Marshal(nativeSettings)
 			if err != nil {
 				return err
 			}
 			ib.Settings = string(raw)
-			nativeUpdated = true
 		}
 	}
 	switch stream["security"] {
