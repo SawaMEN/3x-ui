@@ -56,6 +56,19 @@ func TestGenTuicLinkBasic(t *testing.T) {
 	}
 }
 
+func TestGenTuicLinkIgnoresMalformedExternalProxyEntries(t *testing.T) {
+	inbound := &model.Inbound{
+		Listen: "198.51.100.1", Port: 8443, Protocol: model.TUIC,
+		Settings:       `{"server":{},"clients":[{"uuid":"11111111-1111-1111-1111-111111111111","password":"secret","email":"alice"}]}`,
+		StreamSettings: `{"externalProxy":[null,"invalid",123]}`,
+	}
+	link := (&SubService{}).genTuicLink(inbound, "alice")
+	u, err := url.Parse(link)
+	if err != nil || u.Host != "198.51.100.1:8443" {
+		t.Fatalf("lost fallback endpoint: %q, %v", link, err)
+	}
+}
+
 func TestGenTuicLinkExplicitParams(t *testing.T) {
 	inbound := &model.Inbound{
 		Listen:   "198.51.100.1",

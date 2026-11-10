@@ -31,6 +31,12 @@ func TestPublicDecoyIPRejectsLocalAndReservedNetworks(t *testing.T) {
 		{"fc00::1", false},
 		{"fe80::1", false},
 		{"2001:db8::1", false},
+		{"64:ff9b::a00:1", false},
+		{"64:ff9b::7f00:1", false},
+		{"64:ff9b:1::808:808", false},
+		{"2002:7f00:1::1", false},
+		{"fec0::1", false},
+		{"64:ff9b::808:808", true},
 	} {
 		if got := publicDecoyIP(net.ParseIP(tc.address)); got != tc.allowed {
 			t.Errorf("%s public = %v, want %v", tc.address, got, tc.allowed)

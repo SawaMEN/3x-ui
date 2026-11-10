@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 )
 
 // Candidates are discovered by the existing nearby-IP SNI search.
@@ -59,7 +61,7 @@ func publicDecoyIP(ip net.IP) bool {
 		return false
 	}
 	addr = addr.Unmap()
-	if !addr.IsGlobalUnicast() || addr.IsPrivate() || addr.IsLoopback() {
+	if netsafe.IsBlockedIP(ip) {
 		return false
 	}
 	for _, prefix := range forbiddenDecoyNets {

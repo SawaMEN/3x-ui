@@ -100,4 +100,38 @@ describe('websocket bridge outbounds handler', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.clients.root() });
     unmount();
   });
+
+  it('refetches throttled traffic and client statistics', () => {
+    vi.useFakeTimers();
+    const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { unmount } = renderHook(() => useWebSocketBridge(), { wrapper });
+    const client = getSharedWebSocketClient() as unknown as ListenerMap;
+    act(() => {
+      for (const type of ['traffic', 'client_stats']) {
+        for (const handler of client.listeners.get('invalidate') ?? []) handler({ type });
+      }
+      vi.advanceTimersByTime(200);
+    });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.clients.root() });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.inbounds.root() });
+    expect(invalidate).toHaveBeenCalledTimes(2);
+    unmount();
+  });
+
+  it('disconnects the shared socket when the panel unmounts', () => {
+    const client = getSharedWebSocketClient();
+    const disconnect = vi.spyOn(client, 'disconnect');
+    const queryClient = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { unmount } = renderHook(() => useWebSocketBridge(), { wrapper });
+    unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+    disconnect.mockRestore();
+  });
 });

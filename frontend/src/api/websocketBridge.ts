@@ -11,9 +11,13 @@ export function useWebSocketBridge() {
 
   useEffect(() => {
     const client = getSharedWebSocketClient();
+    const clientKey = keys.clients.root();
+    const inboundKey = keys.inbounds.root();
     const invalidationKeys = new Map<string, readonly string[]>([
-      ['inbounds', keys.inbounds.root()],
-      ['clients', keys.clients.root()],
+      ['inbounds', inboundKey],
+      ['clients', clientKey],
+      ['client_stats', clientKey],
+      ['traffic', clientKey],
       ['nodes', keys.nodes.list()],
       ['outbounds', keys.xray.outboundsTraffic()],
     ]);
@@ -29,8 +33,14 @@ export function useWebSocketBridge() {
         invalidateTimer = null;
         const pending = new Set(pendingInvalidations);
         pendingInvalidations.clear();
+        const queries = new Set<readonly string[]>();
         for (const type of pending) {
-          void queryClient.invalidateQueries({ queryKey: invalidationKeys.get(type) });
+          const queryKey = invalidationKeys.get(type);
+          if (queryKey) queries.add(queryKey);
+          if (type === 'traffic') queries.add(inboundKey);
+        }
+        for (const queryKey of queries) {
+          void queryClient.invalidateQueries({ queryKey });
         }
       }, 200);
     };
@@ -51,7 +61,7 @@ export function useWebSocketBridge() {
     };
 
     const onConnected: Handler = () => {
-      for (const queryKey of invalidationKeys.values()) {
+      for (const queryKey of new Set(invalidationKeys.values())) {
         void queryClient.invalidateQueries({ queryKey });
       }
     };
@@ -74,6 +84,7 @@ export function useWebSocketBridge() {
         invalidateTimer = null;
       }
       pendingInvalidations.clear();
+      client.disconnect();
     };
   }, [queryClient]);
 }

@@ -25,7 +25,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          include: ['src/test/**/*.test.ts'],
+          include: ['src/**/*.test.ts'],
           environment: 'node',
           setupFiles: ['./src/test/setup.ts', './src/test/setup.msw.ts'],
         },
@@ -34,7 +34,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'components',
-          include: ['src/test/**/*.test.tsx'],
+          include: ['src/**/*.test.tsx'],
           environment: 'jsdom',
           setupFiles: ['./src/test/setup.ts', './src/test/setup.components.ts'],
         },

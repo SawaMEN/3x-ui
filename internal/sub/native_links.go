@@ -362,48 +362,27 @@ func (s *SubService) genTuicLink(inbound *model.Inbound, email string) string {
 	}
 	params["allow_insecure"] = "0"
 
-	stream := s.streamSettingsForInbound(inbound)
-	externalProxies, _ := stream["externalProxy"].([]any)
-	if len(externalProxies) > 0 {
-		links := make([]string, 0, len(externalProxies))
-		for _, externalProxy := range externalProxies {
-			ep, ok := externalProxy.(map[string]any)
-			if !ok {
-				continue
-			}
-			forceTLS, _ := ep["forceTls"].(string)
-			if strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
-				// Hysteria is TLS/QUIC only; a plaintext external endpoint
-				// cannot be represented by a valid Hysteria URI.
-				continue
-			}
-			dest, _ := ep["dest"].(string)
-			portF, okPort := ep["port"].(float64)
-			if strings.TrimSpace(dest) == "" {
-				dest = s.resolveInboundAddress(inbound)
-			}
-			if !okPort || int(portF) <= 0 {
-				portF = float64(inbound.Port)
-			}
-			epParams := cloneStringMap(params)
-			if sni, ok := externalProxySNI(ep); ok {
-				epParams["sni"] = sni
-			}
-			if alpn, ok := externalProxyALPN(ep["alpn"]); ok {
-				epParams["alpn"] = alpn
-			}
-			if ai, ok := ep["allowInsecure"].(bool); ok && ai {
-				epParams["allow_insecure"] = "1"
-			}
-			link := fmt.Sprintf("tuic://%s:%s@%s", encodeUserinfo(client.UUID), encodeUserinfo(client.Password), joinHostPort(dest, int(portF)))
-			links = append(links, buildLinkWithParams(link, epParams, s.endpointRemark(inbound, email, ep, "")))
+	endpoints := s.shareEndpointsForInbound(inbound)
+	links := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		ep := endpoint.ep
+		if strings.EqualFold(strings.TrimSpace(endpoint.ForceTls), "none") {
+			continue
 		}
-		return strings.Join(links, "\n")
+		epParams := cloneStringMap(params)
+		if sni, ok := externalProxySNI(ep); ok {
+			epParams["sni"] = sni
+		}
+		if alpn, ok := externalProxyALPN(ep["alpn"]); ok {
+			epParams["alpn"] = alpn
+		}
+		if ai, ok := ep["allowInsecure"].(bool); ok && ai {
+			epParams["allow_insecure"] = "1"
+		}
+		link := fmt.Sprintf("tuic://%s:%s@%s", encodeUserinfo(client.UUID), encodeUserinfo(client.Password), joinHostPort(endpoint.Address, endpoint.Port))
+		links = append(links, buildLinkWithParams(link, epParams, s.endpointRemark(inbound, email, ep, "")))
 	}
-
-	host := s.resolveInboundAddress(inbound)
-	link := fmt.Sprintf("tuic://%s:%s@%s", encodeUserinfo(client.UUID), encodeUserinfo(client.Password), joinHostPort(host, inbound.Port))
-	return buildLinkWithParams(link, params, s.genRemark(inbound, email, "", ""))
+	return strings.Join(links, "\n")
 }
 
 // genWireguardLink builds a per-client wireguard:// share link mirroring the

@@ -324,7 +324,7 @@ func (p *Process) validate(ctx context.Context, versionChecked bool) error {
 	cmd := exec.CommandContext(cmdCtx, binary, args...)
 	cmd.Dir = filepath.Dir(binary)
 	cmd.Env = clientlimit.Default.Environment(os.Environ())
-	output, err := cmd.CombinedOutput()
+	output, err := boundedCommandOutput(cmd)
 	if err != nil {
 		err = fmt.Errorf("%s config check failed: %w: %s", p.coreName(), err, strings.TrimSpace(string(output)))
 		p.setErr(err)
@@ -341,7 +341,7 @@ func (p *Process) Version(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(cmdCtx, binary, "version")
 	cmd.Dir = filepath.Dir(binary)
 	cmd.Env = clientlimit.Default.Environment(os.Environ())
-	output, err := cmd.CombinedOutput()
+	output, err := boundedCommandOutput(cmd)
 	if err != nil {
 		return "", fmt.Errorf("%s version failed: %w: %s", p.coreName(), err, strings.TrimSpace(string(output)))
 	}
@@ -437,6 +437,7 @@ func (p *Process) startLocked(ctx context.Context) error {
 	}
 	// The core must outlive the HTTP request that started it.
 	cmd := exec.CommandContext(context.Background(), binary, p.runCommand(), "-c", cfg)
+	cmd.WaitDelay = defaultForceStopTimeout
 	cmd.Dir = filepath.Dir(binary)
 	cmd.Env = clientlimit.Default.Environment(os.Environ())
 	output := &processOutput{}
@@ -690,11 +691,25 @@ func findRunningPID(binary string, configs ...string) int {
 	return 0
 }
 
+// boundedCommandOutput drains both pipes while retaining only recent diagnostics.
+// A broken child must not make a config/version HTTP request exhaust panel RAM.
+func boundedCommandOutput(cmd *exec.Cmd) ([]byte, error) {
+	if cmd.WaitDelay == 0 {
+		cmd.WaitDelay = defaultForceStopTimeout
+	}
+	output := &processOutput{}
+	cmd.Stdout = output
+	cmd.Stderr = output
+	err := cmd.Run()
+	return []byte(output.String()), err
+}
+
 const processOutputLimit = 64 * 1024
 
 type processOutput struct {
-	mu  sync.Mutex
-	buf []byte
+	mu   sync.Mutex
+	buf  []byte
+	head int
 }
 
 func (w *processOutput) Write(b []byte) (int, error) {
@@ -702,19 +717,36 @@ func (w *processOutput) Write(b []byte) (int, error) {
 	defer w.mu.Unlock()
 	if len(b) >= processOutputLimit {
 		w.buf = append(w.buf[:0], b[len(b)-processOutputLimit:]...)
+		w.head = 0
 		return len(b), nil
 	}
-	w.buf = append(w.buf, b...)
-	if len(w.buf) > processOutputLimit {
-		w.buf = append([]byte(nil), w.buf[len(w.buf)-processOutputLimit:]...)
+	n := len(b)
+	if len(w.buf) < processOutputLimit {
+		space := processOutputLimit - len(w.buf)
+		if len(b) <= space {
+			w.buf = append(w.buf, b...)
+			return n, nil
+		}
+		w.buf = append(w.buf, b[:space]...)
+		b = b[space:]
 	}
-	return len(b), nil
+	first := min(len(b), processOutputLimit-w.head)
+	copy(w.buf[w.head:], b[:first])
+	copy(w.buf, b[first:])
+	w.head = (w.head + len(b)) % processOutputLimit
+	return n, nil
 }
 
 func (w *processOutput) String() string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return strings.TrimSpace(string(w.buf))
+	if w.head == 0 {
+		return strings.TrimSpace(string(w.buf))
+	}
+	ordered := make([]byte, len(w.buf))
+	n := copy(ordered, w.buf[w.head:])
+	copy(ordered[n:], w.buf[:w.head])
+	return strings.TrimSpace(string(ordered))
 }
 
 func (p *Process) managedPID() int {
