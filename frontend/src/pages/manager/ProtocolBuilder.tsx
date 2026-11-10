@@ -22,7 +22,11 @@ import {
 import { runSNIScan } from '@/pages/inbounds/form/security/sni-scanner';
 import { nodeSupportsProtocol } from '@/lib/xray/node-protocols';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
-import { managerCertificateName, managerTLSCertificateForSni, managerTLSCertificatesForNode } from './certificate-recipes';
+import {
+  managerCertificateName,
+  managerTLSCertificateForSni,
+  managerTLSCertificatesForNode,
+} from './certificate-recipes';
 import { HttpUtil } from '@/utils';
 import { buildManagerRecipes, catalogGroups, managerCatalog, MAX_MANAGER_ENTRIES } from './catalog';
 import type { Subscription } from './schema';

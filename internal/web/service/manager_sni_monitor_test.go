@@ -111,3 +111,16 @@ func TestManagerCheckCertificatesNativeTLSPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestManagerSNIHealthBackupsNormalizeHostnames(t *testing.T) {
+	entry := model.ManagerEntry{
+		SNI: "PRIMARY.EXAMPLE.ORG.",
+		SNIBackups: []string{
+			"BACKUP.EXAMPLE.ORG.", "backup.example.org", "", "third.example.org",
+		},
+	}
+	got := managerSNIHealthBackups(entry, "backup.example.org")
+	if !slices.Equal(got, []string{"primary.example.org", "third.example.org"}) {
+		t.Fatalf("unexpected normalized SNI backups: %v", got)
+	}
+}

@@ -97,7 +97,12 @@ describe('manager multi-node recipe builder', () => {
       sniByPreset: { 'vless-tcp-reality': 'PRIMARY.EXAMPLE.ORG' },
       verifiedSniByNode: {},
       backupSniByNode: {
-        0: ['primary.example.org.', 'BACKUP.EXAMPLE.ORG.', 'backup.example.org', 'third.example.org'],
+        0: [
+          'primary.example.org.',
+          'BACKUP.EXAMPLE.ORG.',
+          'backup.example.org',
+          'third.example.org',
+        ],
       },
       targetByPreset: {},
     });
