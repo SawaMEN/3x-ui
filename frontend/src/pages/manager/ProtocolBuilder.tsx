@@ -47,6 +47,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
   const [scanError, setScanError] = useState('');
   const [replace, setReplace] = useState(true);
   const [allowUnconfiguredTLS, setAllowUnconfiguredTLS] = useState(false);
+  const [tlsSniByNode, setTlsSniByNode] = useState<Record<number, string>>({});
   const {
     data: certificates = [],
     isFetching: certsFetching,
@@ -74,6 +75,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
         targetByPreset,
         verifiedSniByNode,
         managedCertificates: certificates,
+        tlsSniByNode,
         allowUnconfiguredTLS,
       }),
     [
@@ -85,6 +87,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       targetByPreset,
       verifiedSniByNode,
       certificates,
+      tlsSniByNode,
       allowUnconfiguredTLS,
     ],
   );
@@ -383,6 +386,34 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                     {t('TLS-сертификаты:', 'TLS certificates:')}{' '}
                     {managerTLSCertificatesForNode(certificates, node.id).length}
                   </Tag>
+                )}
+                {selected && managerTLSCertificatesForNode(certificates, node.id).length > 0 && (
+                  <AutoComplete
+                    style={{ minWidth: 240, maxWidth: '100%' }}
+                    value={tlsSniByNode[node.id] ?? 'inherit'}
+                    onChange={(value) =>
+                      setTlsSniByNode((current) => {
+                        const next = { ...current };
+                        if (value === 'inherit') delete next[node.id];
+                        else next[node.id] = value;
+                        return next;
+                      })
+                    }
+                    options={[
+                      {
+                        value: 'inherit',
+                        label: t('TLS: настройки протокола', 'TLS: protocol selection'),
+                      },
+                      {
+                        value: 'auto',
+                        label: t('TLS: автоматически на ноде', 'TLS: automatic on node'),
+                      },
+                      ...managerTLSCertificatesForNode(certificates, node.id).map((site) => ({
+                        value: site.name,
+                        label: site.name,
+                      })),
+                    ]}
+                  />
                 )}
                 {selected && (
                   <Button
