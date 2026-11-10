@@ -2445,6 +2445,18 @@ export const SCHEMAS: Record<string, unknown> = {
       "acceptTerms": {
         "type": "boolean"
       },
+      "dns01Propagation": {
+        "type": "integer"
+      },
+      "dns01Provider": {
+        "type": "string"
+      },
+      "dns01Zone": {
+        "type": "string"
+      },
+      "dns01ZoneId": {
+        "type": "string"
+      },
       "domains": {
         "items": {
           "$ref": "#/components/schemas/DomainFrontDomain"
