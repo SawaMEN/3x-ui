@@ -116,7 +116,7 @@ func RenewalFirewallBegin(ctx context.Context, owner string, ports []int) (strin
 	if err != nil {
 		return "", err
 	}
-	if !on && !(configured && enabled && isManagedNativeFirewall(backend.name)) {
+	if !on && (!configured || !enabled || !isManagedNativeFirewall(backend.name)) {
 		return "", nil
 	}
 	all, err := loadFirewallRenewalLeases()
