@@ -186,7 +186,7 @@ export default function CertificateInventoryPanel() {
               title: label('actions'),
               key: 'actions',
               render: (_value, item) =>
-                item.manager === 'acme.sh' || item.manager === 'certbot' ? (
+                !item.nodeId && (item.manager === 'acme.sh' || item.manager === 'certbot') ? (
                   <Popconfirm
                     title={label('renewConfirm')}
                     description={label('renewDescription')}
