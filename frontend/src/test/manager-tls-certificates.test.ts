@@ -112,7 +112,8 @@ describe('manager per-node TLS certificates', () => {
   });
 
   it('refuses to change a REALITY configuration into TLS', () => {
-    expect(() => managerConfigWithTLSCertificate(createManagerPreset('vless-tcp-reality'), local))
-      .toThrow('does not use Xray stream TLS');
+    expect(() =>
+      managerConfigWithTLSCertificate(createManagerPreset('vless-tcp-reality'), local),
+    ).toThrow('does not use Xray stream TLS');
   });
 });
