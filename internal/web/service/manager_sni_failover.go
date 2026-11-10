@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -44,12 +45,34 @@ func managerChooseEntrySNI(
 			failures = append(failures, fmt.Errorf("%s: %w", sni, err))
 			continue
 		}
+		if sni == "random" {
+			// Publish the actual hostname chosen by applySNI, not its placeholder.
+			var stream struct {
+				Security string `json:"security"`
+				Reality struct {
+					ServerNames []string `json:"serverNames"`
+				} `json:"realitySettings"`
+			}
+			if err := json.Unmarshal([]byte(candidate.StreamSettings), &stream); err != nil {
+				failures = append(failures, fmt.Errorf("random SNI: %w", err))
+				continue
+			}
+			if stream.Security != "reality" || len(stream.Reality.ServerNames) != 1 {
+				failures = append(failures, errors.New("random SNI did not resolve to one REALITY hostname"))
+				continue
+			}
+			resolved, err := managerDomain(stream.Reality.ServerNames[0])
+			if err != nil {
+				failures = append(failures, fmt.Errorf("random SNI: %w", err))
+				continue
+			}
+			sni = resolved
+		}
 		*ib = candidate
 		return sni, nil
 	}
 	return "", fmt.Errorf("no SNI candidate passed preflight: %w", errors.Join(failures...))
 }
-
 
 // managerPromoteEntrySNI keeps the generated/published entry valid when
 // preflight or live health monitoring promotes a backup to the active SNI.

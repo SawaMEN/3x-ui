@@ -101,3 +101,44 @@ func TestManagerPromoteEntrySNIKeepsSubscriptionValid(t *testing.T) {
 		t.Fatalf("no-op SNI promotion altered backups: %v", e.SNIBackups)
 	}
 }
+
+func TestManagerRandomSNIReportsTheActualVerifiedHostname(t *testing.T) {
+	inbound := &model.Inbound{StreamSettings: `{"security":"reality","realitySettings":{}}`}
+	entry := model.ManagerEntry{SNI: "random", SNIBackups: []string{"backup.example.org"}}
+	selected, err := managerChooseEntrySNI(inbound, entry,
+		func(candidate *model.Inbound, try model.ManagerEntry) error {
+			if try.SNI == "random" {
+				candidate.StreamSettings = `{"security":"reality","realitySettings":{"serverNames":["chosen.example.org"]}}`
+			} else {
+				candidate.StreamSettings = `{"security":"reality","realitySettings":{"serverNames":["backup.example.org"]}}`
+			}
+			return nil
+		},
+		func(*model.Inbound) error { return nil })
+	if err != nil || selected != "chosen.example.org" {
+		t.Fatalf("random SNI was not resolved: %q, %v", selected, err)
+	}
+	managerPromoteEntrySNI(&entry, selected)
+	if entry.SNI != "chosen.example.org" ||
+		!slices.Equal(entry.SNIBackups, []string{"backup.example.org"}) {
+		t.Fatalf("random placeholder leaked into the subscription: %+v", entry)
+	}
+}
+
+func TestManagerRandomSNIInvalidResultFallsBack(t *testing.T) {
+	inbound := &model.Inbound{StreamSettings: `{"security":"reality","realitySettings":{}}`}
+	entry := model.ManagerEntry{SNI: "random", SNIBackups: []string{"backup.example.org"}}
+	selected, err := managerChooseEntrySNI(inbound, entry,
+		func(candidate *model.Inbound, try model.ManagerEntry) error {
+			if try.SNI == "random" {
+				candidate.StreamSettings = `{"security":"reality","realitySettings":{"serverNames":[]}}`
+			} else {
+				candidate.StreamSettings = `{"security":"reality","realitySettings":{"serverNames":["backup.example.org"]}}`
+			}
+			return nil
+		},
+		func(*model.Inbound) error { return nil })
+	if err != nil || selected != "backup.example.org" {
+		t.Fatalf("invalid random SNI bypassed a working backup: %q, %v", selected, err)
+	}
+}

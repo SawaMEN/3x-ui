@@ -60,7 +60,11 @@ func (s *ManagerService) Preflight(ctx context.Context, owner int, sub model.Man
 					var selected string
 					selected, err = s.prepareManagerEntrySNI(ctx, owner, ib, e)
 					if err == nil && selected != e.SNI {
-						result.Message = "Ready using backup SNI: " + selected
+						if e.SNI == "random" {
+							result.Message = "Ready with selected SNI: " + selected
+						} else {
+							result.Message = "Ready using backup SNI: " + selected
+						}
 					}
 					if ib.Port > 0 {
 						for _, prior := range ports {
