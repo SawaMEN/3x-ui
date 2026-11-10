@@ -71,6 +71,50 @@ operator based on the server scan alone.
   The interface does not claim a server-side scan guarantees accessibility
   from the subscriber's network.
 
+## Delivered workflow on this branch
+
+### Shared inbound and client creation
+- `POST /panel/api/manager/subscriptions/bulk-shared` creates 1–100
+  independent subscriptions and queues per-client credential creation against
+  selected, **existing** common inbounds. All rows/jobs are created atomically.
+- Each client gets a distinct credential and subscription token while the
+  common inbound listeners and ports are reused. The existing worker handles
+  attachment and publishes results only after its preflight/apply checks.
+- Existing manager-generated inbounds are excluded from the common pool, so
+  deleting a subscription cannot delete another subscriber's shared listener.
+- The manager UI has a bulk creation dialog. Shared inbounds are still created
+  through the normal inbound editor; automatic pool creation from checkboxes
+  is a separate operation that needs collision-safe reusable pool ownership.
+
+### HTTPS decoy and certificate issuance
+- The Domains tab offers a separate, explicit owned-website wizard:
+  `POST /panel/api/manager/domains/cover-site`. It selects the main server
+  or a directly managed, online node, an operator-controlled DNS name, and an
+  ACME contact email with acceptance of Let's Encrypt terms.
+- It reuses **the same Domain Front / CertMagic service** already in the
+  panel (including renewal). The `sni_only` site serves its generated static
+  cover content and does not expose administration, subscriptions, or inbounds.
+- Existing domains and listeners are retained. Conflicting usages, an older
+  node without the Domain Front API, missing DNS ownership or an occupied
+  HTTPS listener must fail visibly, without replacing another site's config.
+- This local website is not the external REALITY target. The latter is
+  configured separately and requires the usual SNI scanner and REALITY tests.
+
+### SNI fallback at generation time
+- A REALITY recipe can retain up to six independently verified backup SNI
+  hostnames per node. The backend validates uniqueness and DNS host syntax;
+  a pinned external REALITY target cannot be mixed with these backups.
+- During preflight, manual generation, and scheduled rotation the primary
+  candidate is checked first and backups are tried in order if necessary.
+  On complete failure the current published generation is left unchanged
+  and the existing rollback process applies. The selected candidate is
+  recorded in the new published entries.
+- This is **not** an always-on health watcher or an in-place change of a live
+  connection. A scheduled rotation can use the fallback, but REALITY keys
+  still rotate as part of the normal generation workflow. In-place
+  key-preserving automatic failover requires a separate verified and
+  idempotent update transaction, and must not be claimed as implemented.
+
 ## Next steps
 
 1. **Finish node-aware certificate health**: the implemented inventory
@@ -85,12 +129,10 @@ operator based on the server scan alone.
    supports independently verifying the same IP+SNI pair. Refuse loopback,
    private, reserved or otherwise prohibited destinations. Never silently
    switch a pinned target to DNS-based hostname resolution.
-4. **Optional health watcher**: revalidate on a per-node schedule, keep a
-   reserve pool and require repeated failed checks before proposing a switch;
-   use hysteresis to prevent flapping. Use atomic staged publication with
-   rollback and retain working inbounds on failure. Never rotate REALITY
-   private keys or short IDs merely because its external website changed.
-   Changes to subscriptions should be explicit/observable.
+4. **Optional live health watcher**: the current implementation only
+   uses reserves during generation/preflight. Add scheduled repeated failure
+   checks and in-place, key-preserving, transactional live failover with
+   hysteresis before enabling uninterrupted automatic switching.
 5. **Owned website/decoy mode**: integrate the existing domain-front manager
    to serve an optional real HTTPS page on a selected node, with validation
    of port and certificate ownership. Do not treat this as the REALITY
