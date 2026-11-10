@@ -21,6 +21,8 @@ import {
 } from './sni-suggestions';
 import { runSNIScan } from '@/pages/inbounds/form/security/sni-scanner';
 import { nodeSupportsProtocol } from '@/lib/xray/node-protocols';
+import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
+import { managerTLSCertificatesForNode } from './certificate-recipes';
 import { buildManagerRecipes, catalogGroups, managerCatalog, MAX_MANAGER_ENTRIES } from './catalog';
 import type { Subscription } from './schema';
 
@@ -44,6 +46,9 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
   const [scanning, setScanning] = useState<number | null>(null);
   const [scanError, setScanError] = useState('');
   const [replace, setReplace] = useState(true);
+  const [allowUnconfiguredTLS, setAllowUnconfiguredTLS] = useState(false);
+  const { data: certificates = [], isFetching: certsFetching, isError: certsError } =
+    useManagedSniDomains();
   const [message, setMessage] = useState('');
   const t = (ru: string, en: string) => (russian ? ru : en);
 
@@ -65,8 +70,20 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
         sniByPreset,
         targetByPreset,
         verifiedSniByNode,
+        managedCertificates: certificates,
+        allowUnconfiguredTLS,
       }),
-    [selectedPresets, nodeIds, nodes, domains, sniByPreset, targetByPreset, verifiedSniByNode],
+    [
+      selectedPresets,
+      nodeIds,
+      nodes,
+      domains,
+      sniByPreset,
+      targetByPreset,
+      verifiedSniByNode,
+      certificates,
+      allowUnconfiguredTLS,
+    ],
   );
   const total = planned.entries.length + (replace ? 0 : currentCount);
   const lacksRealitySni = selectedItems.some(
@@ -78,7 +95,14 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       nodeIds.some((id) => !verifiedSniByNode[id]),
   );
   const unavailable = planned.skipped.length;
-  const candidates = [...new Set(domains.map((v) => v.trim()).filter(Boolean))];
+  const candidates = [
+    ...new Set(
+      [...domains, ...certificates.map((site) => site.name)]
+        .filter((name): name is string => typeof name === 'string')
+        .map((name) => name.trim())
+        .filter(Boolean),
+    ),
+  ];
 
   const scanNode = async (nodeId: number) => {
     if (scanning !== null) return;
@@ -244,24 +268,23 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                               </Typography.Text>
                               <AutoComplete
                                 style={{ width: '100%' }}
-                                value={
-                                  sniByPreset[item.id] ?? (item.sniMode === 'reality' ? 'auto' : '')
-                                }
+                                value={sniByPreset[item.id] ?? 'auto'}
                                 onChange={(value) =>
                                   setSniByPreset((v) => ({ ...v, [item.id]: value }))
                                 }
                                 options={[
-                                  ...(item.sniMode === 'reality'
-                                    ? [
-                                        {
-                                          value: 'auto',
-                                          label: t(
-                                            'Автоматически (по проверке ноды или из списка)',
-                                            'Automatic (node scan or domain list)',
-                                          ),
-                                        },
-                                      ]
-                                    : []),
+                                  {
+                                    value: 'auto',
+                                    label: item.sniMode === 'tls'
+                                      ? t(
+                                          'Автоматически (сертификат для каждой ноды)',
+                                          'Automatic (certificate on each node)',
+                                        )
+                                      : t(
+                                          'Автоматически (по проверке ноды или из списка)',
+                                          'Automatic (node scan or domain list)',
+                                        ),
+                                  },
                                   ...candidates.map((domain) => ({ value: domain })),
                                 ]}
                                 placeholder={t('SNI или автоматический выбор', 'SNI or automatic')}
@@ -302,8 +325,25 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
         })}
       />
       <Typography.Title level={5} style={{ margin: 0 }}>
-        {t('2. Ноды и проверка SNI', '2. Nodes and SNI check')}
+        {t('2. Ноды, сертификаты и проверка SNI', '2. Nodes, certificates and SNI check')}
       </Typography.Title>
+      {certsError && (
+        <Alert
+          showIcon
+          type="warning"
+          title={t(
+            'Не удалось получить список управляемых сертификатов. TLS-подключения без подтверждённых сертификатов не будут добавлены.',
+            'Managed certificates are unavailable. TLS recipes without verified certificates will be skipped.',
+          )}
+        />
+      )}
+      <Typography.Text type="secondary">
+        {t(
+          'Для TLS автоматически выбирается действующий сертификат с самой ноды. Сертификаты и пути разных нод не смешиваются.',
+          'TLS recipes use a valid certificate from their own node. Paths are never shared between nodes.',
+        )}
+        {certsFetching ? ' …' : ''}
+      </Typography.Text>
       <Card size="small">
         <Space orientation="vertical" style={{ width: '100%' }}>
           {[
@@ -332,6 +372,12 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                 {selected && known && (
                   <Tag color="success">
                     {t('Проверен:', 'Verified:')} {known}
+                  </Tag>
+                )}
+                {selected && (
+                  <Tag>
+                    {t('TLS-сертификаты:', 'TLS certificates:')}{' '}
+                    {managerTLSCertificatesForNode(certificates, node.id).length}
                   </Tag>
                 )}
                 {selected && (
@@ -400,6 +446,15 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       <Typography.Title level={5} style={{ margin: 0 }}>
         {t('3. Создание черновика', '3. Create draft')}
       </Typography.Title>
+      <Checkbox
+        checked={allowUnconfiguredTLS}
+        onChange={(ev) => setAllowUnconfiguredTLS(ev.target.checked)}
+      >
+        {t(
+          'Разрешить TLS без найденного сертификата (только черновик — необходимо настроить вручную)',
+          'Allow TLS without managed certificates (draft only — manual configuration required)',
+        )}
+      </Checkbox>
       <Checkbox checked={replace} onChange={(ev) => setReplace(ev.target.checked)}>
         {t(
           'Заменить текущий список подключений (не удаляет действующие до публикации)',
