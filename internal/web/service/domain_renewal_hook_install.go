@@ -20,7 +20,7 @@ func certificateHookShellQuote(value string) string {
 
 func certificateHookScript(executable, action, manager string) string {
 	return "#!/bin/sh\n" + certificateHookMarker + "\nset -eu\nexec " +
-		certificateHookShellQuote(executable) + " certificate-hook " + action + " " + manager + "\n"
+		certificateHookShellQuote(executable) + " certificate-hook " + action + " " + manager + " \"$PPID\"\n"
 }
 
 // Never overwrite an administrator-owned script or symlink. Only replace

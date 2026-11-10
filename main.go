@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -730,12 +731,20 @@ func main() {
 			log.Fatal("gateway command failed; check the gateway configuration and arguments")
 		}
 	case "certificate-hook":
-		if len(os.Args) != 4 {
-			log.Fatal("usage: x-ui certificate-hook begin|end certbot|acme.sh")
+		if len(os.Args) != 4 && len(os.Args) != 5 {
+			log.Fatal("usage: x-ui certificate-hook begin|end certbot|acme.sh [parent-pid]")
+		}
+		pid := 0
+		if len(os.Args) == 5 {
+			var err error
+			pid, err = strconv.Atoi(os.Args[4])
+			if err != nil || pid <= 1 {
+				log.Fatal("invalid certificate renewal parent process ID")
+			}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		if err := service.InvokeCertificateRenewalHook(ctx, os.Args[2], os.Args[3]); err != nil {
+		if err := service.InvokeCertificateRenewalHook(ctx, os.Args[2], os.Args[3], pid); err != nil {
 			log.Fatal("certificate renewal firewall hook: ", err)
 		}
 	case "core-migrate":

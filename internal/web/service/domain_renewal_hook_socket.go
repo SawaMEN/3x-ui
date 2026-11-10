@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,16 +18,88 @@ import (
 )
 
 type externalRenewalHookRequest struct {
-	Action  string `json:"action"`
-	Manager string `json:"manager"`
+	Action    string `json:"action"`
+	Manager   string `json:"manager"`
+	ParentPID int    `json:"parentPid,omitempty"`
 }
 
 type externalRenewalHookResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
+type externalRenewalHookLease struct {
+	id   string
+	stop chan struct{}
+}
+
 var externalRenewalHookMu sync.Mutex
-var externalRenewalHookSessions = map[string][]string{}
+var externalRenewalHookSessions = map[string][]externalRenewalHookLease{}
+
+// Linux /proc start-time protects the watchdog from process ID reuse.
+func externalRenewalProcessStart(pid int) (string, error) {
+	if pid <= 1 {
+		return "", errors.New("invalid renewal process")
+	}
+	raw, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return "", err
+	}
+	end := strings.LastIndexByte(string(raw), ')')
+	if end < 0 || end+2 >= len(raw) {
+		return "", errors.New("invalid process statistics")
+	}
+	fields := strings.Fields(string(raw[end+2:]))
+	if len(fields) <= 19 {
+		return "", errors.New("incomplete process statistics")
+	}
+	return fields[19], nil
+}
+
+func releaseExternalRenewalLease(manager, id string) error {
+	externalRenewalHookMu.Lock()
+	items := externalRenewalHookSessions[manager]
+	found := false
+	for i, lease := range items {
+		if lease.id != id {
+			continue
+		}
+		close(lease.stop)
+		items = append(items[:i], items[i+1:]...)
+		found = true
+		break
+	}
+	if len(items) == 0 {
+		delete(externalRenewalHookSessions, manager)
+	} else {
+		externalRenewalHookSessions[manager] = items
+	}
+	externalRenewalHookMu.Unlock()
+	if !found {
+		return nil
+	}
+	return RenewalFirewallEnd(id)
+}
+
+func watchExternalRenewalProcess(manager, id string, pid int, initial string, stop <-chan struct{}) {
+	timer := time.NewTicker(2 * time.Second)
+	defer timer.Stop()
+	// Even if a native tool forks and its original process disappears, only
+	// its own temporary firewall lease is removed. Other leases remain.
+	for {
+		select {
+		case <-stop:
+			return
+		case <-timer.C:
+			start, err := externalRenewalProcessStart(pid)
+			if err != nil || start != initial {
+				if err := releaseExternalRenewalLease(manager, id); err != nil {
+					logger.Error("restore firewall after certificate process exit:", err)
+				}
+				return
+			}
+		}
+	}
+}
 
 func certificateRenewalSocketPath() string {
 	return filepath.Join(config.GetDBFolderPath(), "certificate-renewal.sock")
@@ -77,32 +150,35 @@ func executeExternalCertificateHook(ctx context.Context, request externalRenewal
 	if request.Manager != "certbot" && request.Manager != "acme.sh" {
 		return errors.New("unknown certificate renewal manager")
 	}
-	externalRenewalHookMu.Lock()
-	defer externalRenewalHookMu.Unlock()
-
 	if request.Action == "end" {
-		ids := externalRenewalHookSessions[request.Manager]
-		if len(ids) == 0 {
-			return nil
+		externalRenewalHookMu.Lock()
+		items := externalRenewalHookSessions[request.Manager]
+		var id string
+		if len(items) > 0 {
+			id = items[len(items)-1].id
 		}
-		id := ids[len(ids)-1]
-		if len(ids) == 1 {
-			delete(externalRenewalHookSessions, request.Manager)
-		} else {
-			externalRenewalHookSessions[request.Manager] = ids[:len(ids)-1]
-		}
-		return RenewalFirewallEnd(id)
+		externalRenewalHookMu.Unlock()
+		return releaseExternalRenewalLease(request.Manager, id)
 	}
 	ports, err := externalCertificateHookPortsCurrent(ctx, request.Manager)
 	if err != nil {
 		return err
 	}
 	id, err := RenewalFirewallBegin(ctx, "external-hook:"+request.Manager, ports)
-	if err != nil {
+	if err != nil || id == "" {
 		return err
 	}
-	if id != "" {
-		externalRenewalHookSessions[request.Manager] = append(externalRenewalHookSessions[request.Manager], id)
+	lease := externalRenewalHookLease{id: id, stop: make(chan struct{})}
+	externalRenewalHookMu.Lock()
+	externalRenewalHookSessions[request.Manager] = append(externalRenewalHookSessions[request.Manager], lease)
+	externalRenewalHookMu.Unlock()
+	if request.ParentPID > 1 {
+		start, startErr := externalRenewalProcessStart(request.ParentPID)
+		if startErr == nil {
+			go watchExternalRenewalProcess(request.Manager, id, request.ParentPID, start, lease.stop)
+		} else {
+			logger.Warning("cannot watch external certificate process:", startErr)
+		}
 	}
 	return nil
 }
@@ -196,7 +272,7 @@ func ServeCertificateRenewalHookSocket(ctx context.Context) {
 
 // InvokeCertificateRenewalHook is called by a root-owned native scheduler hook
 // through the x-ui CLI. It never opens a firewall or database in a new process.
-func InvokeCertificateRenewalHook(ctx context.Context, action, manager string) error {
+func InvokeCertificateRenewalHook(ctx context.Context, action, manager string, parentPID int) error {
 	if (action != "begin" && action != "end") || (manager != "certbot" && manager != "acme.sh") {
 		return errors.New("usage: certificate-hook begin|end certbot|acme.sh")
 	}
@@ -207,7 +283,7 @@ func InvokeCertificateRenewalHook(ctx context.Context, action, manager string) e
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(20 * time.Second))
-	if err := json.NewEncoder(conn).Encode(externalRenewalHookRequest{Action: action, Manager: manager}); err != nil {
+	if err := json.NewEncoder(conn).Encode(externalRenewalHookRequest{Action: action, Manager: manager, ParentPID: parentPID}); err != nil {
 		return err
 	}
 	var result externalRenewalHookResponse
