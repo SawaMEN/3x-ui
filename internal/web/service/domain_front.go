@@ -154,6 +154,18 @@ func mergeNodeManagedSNIDomains(existing, incoming []ManagedSNIDomain, seenNames
 	return existing
 }
 
+// A connected node may expose its panel, subscription or gateway identities.
+// The original source is verified on that node before the controller presents
+// its file paths as a node-local certificate inventory entry.
+func managedNodeCertificateSourceSupported(source string) bool {
+	switch source {
+	case "telemt", "gateway", "panel", "subscription":
+		return true
+	default:
+		return false
+	}
+}
+
 type nodeSNIResponse struct {
 	NodeID   int
 	NodeName string
@@ -206,7 +218,7 @@ func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
 	var out []ManagedSNIDomain
 	for result := range results {
 		for _, site := range result.Sites {
-			if (site.Source != "telemt" && site.Source != "gateway") || site.CertFile == "" || site.KeyFile == "" {
+			if !managedNodeCertificateSourceSupported(site.Source) || site.CertFile == "" || site.KeyFile == "" {
 				continue
 			}
 			out = append(out, ManagedSNIDomain{
