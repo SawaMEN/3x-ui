@@ -1025,6 +1025,9 @@ export const EXAMPLES: Record<string, unknown> = {
     "realityTarget": "",
     "relayId": 0,
     "sni": "",
+    "sniBackups": [
+      ""
+    ],
     "templateId": 0
   },
   "ManagerInboundConfig": {
@@ -1171,6 +1174,9 @@ export const EXAMPLES: Record<string, unknown> = {
             "realityTarget": "",
             "relayId": 0,
             "sni": "",
+            "sniBackups": [
+              ""
+            ],
             "templateId": 0
           }
         ],
@@ -1198,6 +1204,9 @@ export const EXAMPLES: Record<string, unknown> = {
             "realityTarget": "",
             "relayId": 0,
             "sni": "",
+            "sniBackups": [
+              ""
+            ],
             "templateId": 0
           }
         ],
@@ -1227,6 +1236,9 @@ export const EXAMPLES: Record<string, unknown> = {
         "realityTarget": "",
         "relayId": 0,
         "sni": "",
+        "sniBackups": [
+          ""
+        ],
         "templateId": 0
       }
     ],
@@ -1254,6 +1266,9 @@ export const EXAMPLES: Record<string, unknown> = {
         "realityTarget": "",
         "relayId": 0,
         "sni": "",
+        "sniBackups": [
+          ""
+        ],
         "templateId": 0
       }
     ],

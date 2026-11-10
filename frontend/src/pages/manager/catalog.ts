@@ -281,9 +281,7 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
         sni: certificate?.name ?? sni,
         sniBackups:
           preset.sniMode === 'reality' && !customTarget
-            ? (options.backupSniByNode?.[nodeId] ?? [])
-                .filter((host) => host !== sni)
-                .slice(0, 6)
+            ? (options.backupSniByNode?.[nodeId] ?? []).filter((host) => host !== sni).slice(0, 6)
             : undefined,
         realityTarget:
           preset.sniMode === 'reality' ? (options.targetByPreset[id] || '').trim() : undefined,

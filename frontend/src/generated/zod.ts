@@ -935,6 +935,7 @@ export const ManagerEntrySchema = z.object({
   realityTarget: z.string().optional(),
   relayId: z.number().int(),
   sni: z.string(),
+  sniBackups: z.array(z.string()).optional(),
   templateId: z.number().int(),
 });
 export type ManagerEntry = z.infer<typeof ManagerEntrySchema>;

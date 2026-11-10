@@ -870,6 +870,7 @@ export interface ManagerEntry {
   realityTarget?: string;
   relayId: number;
   sni: string;
+  sniBackups?: string[];
   templateId: number;
 }
 

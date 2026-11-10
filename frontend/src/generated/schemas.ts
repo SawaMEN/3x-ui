@@ -3743,6 +3743,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "sni": {
         "type": "string"
       },
+      "sniBackups": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
       "templateId": {
         "type": "integer"
       }

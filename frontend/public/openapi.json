@@ -3769,6 +3769,12 @@
           "sni": {
             "type": "string"
           },
+          "sniBackups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "templateId": {
             "type": "integer"
           }
@@ -6274,6 +6280,9 @@
                         "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
+                        "sniBackups": [
+                          ""
+                        ],
                         "templateId": 0
                       }
                     ],
@@ -6301,6 +6310,9 @@
                         "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
+                        "sniBackups": [
+                          ""
+                        ],
                         "templateId": 0
                       }
                     ],
@@ -6564,6 +6576,9 @@
                             "realityTarget": "",
                             "relayId": 0,
                             "sni": "",
+                            "sniBackups": [
+                              ""
+                            ],
                             "templateId": 0
                           }
                         ],
@@ -6591,6 +6606,9 @@
                             "realityTarget": "",
                             "relayId": 0,
                             "sni": "",
+                            "sniBackups": [
+                              ""
+                            ],
                             "templateId": 0
                           }
                         ],
@@ -6665,6 +6683,9 @@
                         "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
+                        "sniBackups": [
+                          ""
+                        ],
                         "templateId": 0
                       }
                     ],
@@ -6692,6 +6713,9 @@
                         "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
+                        "sniBackups": [
+                          ""
+                        ],
                         "templateId": 0
                       }
                     ],
