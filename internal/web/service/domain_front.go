@@ -297,7 +297,7 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 		return domainfront.DomainFrontStatus{}, err
 	}
 	backend.ChallengeRoots = roots
-	backend.CertificateEvent = DomainCertificateAuditedEvents(cfg.HTTPPort, cfg.HTTPSPort)
+	backend.CertificateEvent = DomainCertificateAuditedEventsForDNS(cfg.HTTPPort, cfg.HTTPSPort, cfg.DNS01Provider != "")
 	manager := managedDomainFront()
 	if err := manager.Apply(ctx, cfg, backend); err != nil {
 		rollback()
@@ -348,7 +348,7 @@ func StartDomainFront() error {
 		return err
 	}
 	backend.ChallengeRoots = roots
-	backend.CertificateEvent = DomainCertificateAuditedEvents(cfg.HTTPPort, cfg.HTTPSPort)
+	backend.CertificateEvent = DomainCertificateAuditedEventsForDNS(cfg.HTTPPort, cfg.HTTPSPort, cfg.DNS01Provider != "")
 	if err := managedDomainFront().Apply(context.Background(), cfg, backend); err != nil {
 		rollback()
 		return err
