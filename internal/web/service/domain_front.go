@@ -289,6 +289,9 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 		return domainfront.DomainFrontStatus{}, err
 	}
 	backend.Certificates = files
+	if err := configureDomainDNS01(cfg, &backend); err != nil {
+		return domainfront.DomainFrontStatus{}, err
+	}
 	roots, rollback, err := prepareDomainACME(cfg, files, states)
 	if err != nil {
 		return domainfront.DomainFrontStatus{}, err
@@ -308,7 +311,9 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 		rollback()
 		oldBackend, buildErr := s.domainFrontBackend(old)
 		if buildErr == nil {
-			_ = manager.Apply(ctx, old, oldBackend)
+			if tokenErr := configureDomainDNS01(old, &oldBackend); tokenErr == nil {
+				_ = manager.Apply(ctx, old, oldBackend)
+			}
 		}
 		return manager.Status(old), err
 	}
@@ -335,6 +340,9 @@ func StartDomainFront() error {
 		return err
 	}
 	backend.Certificates = files
+	if err := configureDomainDNS01(cfg, &backend); err != nil {
+		return err
+	}
 	roots, rollback, err := prepareDomainACME(cfg, files, states)
 	if err != nil {
 		return err
