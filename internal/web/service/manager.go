@@ -120,6 +120,26 @@ func (s *ManagerService) validate(in *model.ManagerSubscription) error {
 		if err != nil {
 			return fmt.Errorf("entry %d: %w", i+1, err)
 		}
+		if len(e.SNIBackups) > 0 {
+			if len(e.SNIBackups) > 6 || e.Mode == "existing" || e.RealityTarget != "" {
+				return fmt.Errorf("entry %d: SNI backups require a generated REALITY connection without a fixed target (maximum 6)", i+1)
+			}
+			var stream struct {
+				Security string `json:"security"`
+			}
+			if err := json.Unmarshal([]byte(ib.StreamSettings), &stream); err != nil || stream.Security != "reality" {
+				return fmt.Errorf("entry %d: SNI backups are available only for REALITY", i+1)
+			}
+			seen := map[string]bool{strings.ToLower(e.SNI): true}
+			for j, raw := range e.SNIBackups {
+				name, err := managerDomain(raw)
+				if err != nil || seen[name] {
+					return fmt.Errorf("entry %d: SNI backup must be a unique DNS hostname", i+1)
+				}
+				seen[name] = true
+				e.SNIBackups[j] = name
+			}
+		}
 		if e.RealityTarget != "" {
 			if e.Mode == "existing" {
 				return fmt.Errorf("a REALITY target cannot override an existing inbound")
