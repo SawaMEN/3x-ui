@@ -10,9 +10,12 @@ export const MANAGER_PRESETS = [
   'vless-xhttp-get',
   'vless-grpc-reality',
   'vless-ws',
+  'vless-tcp-tls',
   'vmess-tcp',
+  'vmess-ws-tls',
   'shadowsocks-tcp',
   'trojan-tcp-reality',
+  'trojan-tcp-tls',
   'hysteria2-udp',
   ...Object.values(Protocols).filter(
     (v) =>
@@ -27,11 +30,11 @@ export function createManagerPreset(kind: string): ManagerConfig {
       ? 'hysteria'
       : kind.startsWith('vless-')
         ? 'vless'
-        : kind === 'vmess-tcp'
+        : kind.startsWith('vmess-')
           ? 'vmess'
-          : kind === 'shadowsocks-tcp'
+          : kind.startsWith('shadowsocks-')
             ? 'shadowsocks'
-            : kind === 'trojan-tcp-reality'
+            : kind.startsWith('trojan-')
               ? 'trojan'
               : kind;
   const settings = createDefaultInboundSettings(protocol);
@@ -40,14 +43,14 @@ export function createManagerPreset(kind: string): ManagerConfig {
     ? 'xhttp'
     : kind.includes('-grpc-')
       ? 'grpc'
-      : kind === 'vless-ws'
+      : kind.includes('-ws')
         ? 'ws'
         : protocol === 'hysteria'
           ? 'hysteria'
           : 'tcp';
   const security = kind.endsWith('-reality')
     ? 'reality'
-    : kind === 'vless-ws' || protocol === 'hysteria'
+    : kind === 'vless-ws' || kind.endsWith('-tls') || protocol === 'hysteria'
       ? 'tls'
       : 'none';
   const stream = fillStreamDefaults({ network, security });
