@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/mail"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -32,6 +33,10 @@ type ManagerCoverSiteResult struct {
 	State     string `json:"state"`
 	ExpiresAt int64  `json:"expiresAt"`
 }
+
+// Serialize read-modify-apply of Domain Front configurations. This mutex is
+// separate from managerMu so certificate issuance never blocks client jobs.
+var managerCoverSiteMu sync.Mutex
 
 // managerCoverSiteConfig keeps all unrelated domains and listeners unchanged.
 // A conflicting existing domain mode must be edited via Domain Front, never
@@ -95,6 +100,8 @@ func (s *ManagerService) ProvisionCoverSite(ctx context.Context, owner int, req 
 	if owner < 1 || req.NodeID < 0 {
 		return result, fmt.Errorf("invalid node or owner")
 	}
+	managerCoverSiteMu.Lock()
+	defer managerCoverSiteMu.Unlock()
 	// Do not hold the manager operation mutex during an ACME operation:
 	// issuance may take time and must not block client creation/rotation.
 	var current domainfront.DomainFrontStatus
