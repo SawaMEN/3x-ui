@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync/atomic"
 	"strings"
 	"testing"
 
@@ -66,5 +67,62 @@ func TestManagerHealthSwitchKeepsListenerAndRealityKeys(t *testing.T) {
 		stored.Published[0].SNIHealthLastSwitchAt == 0 ||
 		!slices.Contains(stored.Published[0].SNIBackups, "primary.example.org") {
 		t.Fatalf("publication not updated safely: %+v", stored.Published)
+	}
+}
+
+type managerSNIApplyOnceFailure struct {
+	fakeNodeRuntime
+	applyCalls atomic.Int32
+}
+
+func (r *managerSNIApplyOnceFailure) ApplyConfigNow(context.Context) error {
+	if r.applyCalls.Add(1) == 1 {
+		return fmt.Errorf("simulated core apply failure")
+	}
+	return nil
+}
+
+func TestManagerHealthSwitchRollsBackFailedCoreApply(t *testing.T) {
+	svc, inbound, sub := managerFixture(t)
+	inbound.Tag = fmt.Sprintf("manager-%s-3-0", sub.Token)
+	inbound.StreamSettings = `{"network":"tcp","security":"reality","realitySettings":{"target":"primary.example.org:443","dest":"primary.example.org:443","serverNames":["primary.example.org"],"privateKey":"same-private-key","shortIds":["ac12"]}}`
+	if err := database.GetDB().Save(inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	entry := sub.Entries[0]
+	entry.ActiveInboundID = inbound.Id
+	entry.SNI = "primary.example.org"
+	entry.SNIBackups = []string{"backup.example.org"}
+	entry.SNIHealthFailures = 2
+	sub.MonitorSNI = true
+	sub.MonitorSNIIntervalMinutes = 10
+	sub.Published = []model.ManagerEntry{entry}
+	sub.Entries = []model.ManagerEntry{entry}
+	if err := database.GetDB().Save(sub).Error; err != nil {
+		t.Fatal(err)
+	}
+	runtime := &managerSNIApplyOnceFailure{}
+	useTestRuntimeManager(t).SetLocalRuntimeOverride(runtime)
+	op := &model.ManagerOperation{Kind: "sni_health", Total: 1}
+	err := svc.monitorSNIWithProbe(context.Background(), op, sub, func(_ context.Context, _ *model.Inbound, host string) (bool, error) {
+		return host == "backup.example.org", nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "rolled back") || runtime.applyCalls.Load() != 2 {
+		t.Fatalf("core failure did not trigger rollback: %v, apply calls=%d", err, runtime.applyCalls.Load())
+	}
+	var stored model.Inbound
+	if err := database.GetDB().First(&stored, inbound.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.StreamSettings != inbound.StreamSettings || stored.Port != inbound.Port ||
+		stored.Settings != inbound.Settings {
+		t.Fatalf("failed switch was persisted: %+v", stored)
+	}
+	var record model.ManagerSubscription
+	if err := database.GetDB().First(&record, sub.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if record.Published[0].SNI != "primary.example.org" {
+		t.Fatalf("failed switch changed published SNI: %+v", record.Published)
 	}
 }
