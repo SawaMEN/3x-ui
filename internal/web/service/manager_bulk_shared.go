@@ -82,9 +82,14 @@ func validateSharedInboundPool(owner int, inboundIDs []int) ([]model.ManagerEntr
 // the manager operations journal and can be retried.
 func (s *ManagerService) BulkCreateShared(owner int, req ManagerBulkSharedInput) (ManagerBulkSharedResult, error) {
 	result := ManagerBulkSharedResult{IDs: []int{}}
+	// Reject line breaks before trimming. Otherwise a crafted leading newline
+	// is silently removed and the same malformed request is accepted.
+	if strings.ContainsAny(req.NamePrefix, "\r\n") {
+		return result, fmt.Errorf("client name must not contain line breaks")
+	}
 	name := strings.TrimSpace(req.NamePrefix)
 	if owner <= 0 || req.Count < 1 || req.Count > maxManagerBulkClients ||
-		name == "" || len(name) > 220 || strings.ContainsAny(name, "\r\n") {
+		name == "" || len(name) > 220 {
 		return result, fmt.Errorf("provide a name and between 1 and 100 clients")
 	}
 	managerMu.Lock()

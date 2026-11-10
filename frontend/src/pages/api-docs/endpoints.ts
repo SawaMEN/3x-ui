@@ -245,6 +245,28 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/manager/subscriptions/bulk-shared',
+        summary: 'Create independent subscriptions for 1–100 clients on shared existing inbounds',
+        description:
+          'Queues client creation and attachment without creating or deleting the selected shared inbounds. The request must reference unique, enabled, caller-owned inbounds.',
+        requestSchema: {
+          type: 'object',
+          required: ['namePrefix', 'count', 'inboundIds'],
+          properties: {
+            namePrefix: { type: 'string', minLength: 1, maxLength: 220 },
+            count: { type: 'integer', minimum: 1, maximum: 100 },
+            inboundIds: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 100,
+              uniqueItems: true,
+              items: { type: 'integer', minimum: 1 },
+            },
+          },
+        },
+      },
+      {
+        method: 'POST',
         path: '/panel/api/manager/subscriptions/:id/rotate',
         summary: 'Queue generation',
         params: [{ name: 'id', in: 'path', type: 'integer' }],
@@ -274,6 +296,23 @@ export const sections: readonly Section[] = [
           type: 'object',
           required: ['domains'],
           properties: { domains: { type: 'string' }, replace: { type: 'boolean' } },
+        },
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/domains/cover-site',
+        summary: 'Provision an owned HTTPS cover site using existing Domain Front and CertMagic',
+        description:
+          'Requires DNS ownership, explicit ACME terms consent, and an online configured node. Existing domains with a different purpose will not be replaced.',
+        requestSchema: {
+          type: 'object',
+          required: ['nodeId', 'domain', 'email', 'acceptTerms'],
+          properties: {
+            nodeId: { type: 'integer', minimum: 0 },
+            domain: { type: 'string', minLength: 3, maxLength: 253 },
+            email: { type: 'string', format: 'email' },
+            acceptTerms: { type: 'boolean', const: true },
+          },
         },
       },
       {
