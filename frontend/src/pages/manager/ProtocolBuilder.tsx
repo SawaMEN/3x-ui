@@ -501,7 +501,9 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                         {isAutoUsableManagerSNI(row) && row.host !== known && (
                           <Button
                             size="small"
-                            type={backupSniByNode[node.id]?.includes(row.host) ? 'primary' : 'default'}
+                            type={
+                              backupSniByNode[node.id]?.includes(row.host) ? 'primary' : 'default'
+                            }
                             onClick={() =>
                               setBackupSniByNode((current) => {
                                 const list = current[node.id] || [];
