@@ -107,7 +107,7 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
         skipped.push(`${preset.name} · ${nodeName}: unsupported or offline`);
         continue;
       }
-      const configuredSni = options.sniByPreset[id] || '';
+      const configuredSni = options.sniByPreset[id] || (preset.sniMode === 'reality' ? 'auto' : '');
       const customTarget = (options.targetByPreset[id] || '').trim();
       const customTargetHost = customTarget.split(':')[0];
       // The certificate presented by a camouflage target normally covers its
