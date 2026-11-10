@@ -463,7 +463,9 @@ export default function DomainFrontTab({
           type="primary"
           loading={busy || preflighting}
           aria-label={label('apply')}
-          disabled={(!dirty && !settingsDirty) || loading || !!redirectError || preflighting || busy}
+          disabled={
+            (!dirty && !settingsDirty) || loading || !!redirectError || preflighting || busy
+          }
           onClick={() => void apply()}
         >
           {label('apply')}
@@ -486,11 +488,13 @@ export default function DomainFrontTab({
           <Space orientation="vertical" style={{ width: '100%' }}>
             <Alert
               showIcon
-              type={!preflightReport.ready
-                ? 'error'
-                : preflightReport.checks.some((check) => check.severity === 'warning')
-                  ? 'warning'
-                  : 'success'}
+              type={
+                !preflightReport.ready
+                  ? 'error'
+                  : preflightReport.checks.some((check) => check.severity === 'warning')
+                    ? 'warning'
+                    : 'success'
+              }
               title={label(preflightReport.ready ? 'preflight.ready' : 'preflight.blocked')}
             />
             <List
@@ -500,7 +504,15 @@ export default function DomainFrontTab({
                 <List.Item>
                   <Space orientation="vertical" size={2} style={{ width: '100%' }}>
                     <Space wrap>
-                      <Tag color={check.severity === 'error' ? 'red' : check.severity === 'warning' ? 'orange' : 'default'}>
+                      <Tag
+                        color={
+                          check.severity === 'error'
+                            ? 'red'
+                            : check.severity === 'warning'
+                              ? 'orange'
+                              : 'default'
+                        }
+                      >
                         {label('preflight.severity.' + check.severity)}
                       </Tag>
                       {check.domain && <Typography.Text strong>{check.domain}</Typography.Text>}

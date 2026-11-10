@@ -298,7 +298,9 @@ describe('domain and TLS dashboard', () => {
           obj: {
             ready: false,
             checkedAt: 1,
-            checks: [{ code: 'telemt_port_conflict', severity: 'error', message: 'TCP 443 is in use' }],
+            checks: [
+              { code: 'telemt_port_conflict', severity: 'error', message: 'TCP 443 is in use' },
+            ],
           },
         }),
       ),
