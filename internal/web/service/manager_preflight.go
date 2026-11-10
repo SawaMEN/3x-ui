@@ -57,7 +57,7 @@ func (s *ManagerService) Preflight(ctx context.Context, owner int, sub model.Man
 				}
 				if e.Mode != "existing" {
 					ib.Port, _ = strconv.Atoi(e.Port)
-					if err = s.applySNI(owner, ib, e.SNI); err == nil {
+					if err = s.applyEntrySNI(owner, ib, e); err == nil {
 						err = s.preflightTarget(ctx, ib)
 					}
 					if ib.Port > 0 {
