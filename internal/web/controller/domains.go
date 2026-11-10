@@ -59,7 +59,7 @@ func (a *DomainController) certificateEvents(c *gin.Context) {
 func (a *DomainController) certificates(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	result, err := service.DomainCertificateInventory(ctx)
+	result, err := service.DomainCertificateInventoryScoped(ctx, c.Query("local") != "1")
 	jsonObj(c, result, err)
 }
 
