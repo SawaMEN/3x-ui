@@ -44,7 +44,9 @@ export default function BulkSharedModal({ open, onClose, onSuccess }: Props) {
         { headers: { 'Content-Type': 'application/json' }, silent: true },
       );
       if (!result?.success) {
-        setMessage(result?.msg || t('Не удалось создать подписки', 'Failed to create subscriptions'));
+        setMessage(
+          result?.msg || t('Не удалось создать подписки', 'Failed to create subscriptions'),
+        );
         return;
       }
       const payload = result.obj as { created?: number } | undefined;
@@ -92,13 +94,24 @@ export default function BulkSharedModal({ open, onClose, onSuccess }: Props) {
           />
         </div>
         <div>
-          <Typography.Text>{t('Количество клиентов (1–100)', 'Number of clients (1–100)')}</Typography.Text>
-          <InputNumber min={1} max={100} value={count} onChange={(v) => setCount(v ?? 1)}
+          <Typography.Text>
+            {t('Количество клиентов (1–100)', 'Number of clients (1–100)')}
+          </Typography.Text>
+          <InputNumber
+            min={1}
+            max={100}
+            value={count}
+            onChange={(v) => setCount(v ?? 1)}
             style={{ width: '100%' }}
           />
         </div>
         <div>
-          <Typography.Text>{t('Общие подключения (одинаковые для всех клиентов)', 'Shared inbounds for every client')}</Typography.Text>
+          <Typography.Text>
+            {t(
+              'Общие подключения (одинаковые для всех клиентов)',
+              'Shared inbounds for every client',
+            )}
+          </Typography.Text>
           <Select
             mode="multiple"
             value={ids}
