@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
@@ -237,7 +238,23 @@ func scanCertificateHealth() error {
 			return err
 		}
 	}
-	return saveFirewallJSON(certificateHealthSettingKey, next)
+	if err := saveFirewallJSON(certificateHealthSettingKey, next); err != nil {
+		return err
+	}
+	// Persist transitions before notifying; a restart never replays the
+	// same alert. Event bus subscribers decide whether Telegram/email is on.
+	if eventBus != nil {
+		for _, change := range changes {
+			eventBus.Publish(eventbus.Event{
+				Type: eventbus.EventCertificateHealth,
+				Source: certificateAuditDomain(change.Domain),
+				Data: &eventbus.CertificateHealthData{
+					Manager: change.Manager, State: change.Outcome,
+				},
+			})
+		}
+	}
+	return nil
 }
 
 // RunCertificateHealthMonitor uses a bounded periodic scan and emits events
