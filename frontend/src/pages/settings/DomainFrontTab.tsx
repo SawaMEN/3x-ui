@@ -134,7 +134,9 @@ export default function DomainFrontTab({
     enabled: section === 'settings',
     retry: false,
     queryFn: async () => {
-      const response = await HttpUtil.get('/panel/api/domains/dns/credential', undefined, { silent: true });
+      const response = await HttpUtil.get('/panel/api/domains/dns/credential', undefined, {
+        silent: true,
+      });
       if (!response?.success) throw new Error(response?.msg || 'Cannot load DNS token status');
       return response.obj as { configured: boolean; source?: string };
     },
@@ -935,7 +937,9 @@ export default function DomainFrontTab({
                   onChange={(value) =>
                     update({
                       dns01Provider: value,
-                      ...(value === '' ? { dns01Zone: '', dns01ZoneId: '', dns01Propagation: 0 } : {}),
+                      ...(value === ''
+                        ? { dns01Zone: '', dns01ZoneId: '', dns01Propagation: 0 }
+                        : {}),
                     })
                   }
                   options={[
@@ -977,7 +981,8 @@ export default function DomainFrontTab({
                     {dnsCredential.data?.configured
                       ? label('dns01.credentialSaved')
                       : label('dns01.credentialMissing')}
-                    {dnsCredential.data?.source === 'environment' && ' · ' + label('dns01.environment')}
+                    {dnsCredential.data?.source === 'environment' &&
+                      ' · ' + label('dns01.environment')}
                   </Typography.Paragraph>
                   <Space wrap>
                     <Input.Password
@@ -997,7 +1002,10 @@ export default function DomainFrontTab({
                     </Button>
                     <Button
                       danger
-                      disabled={!dnsCredential.data?.configured || dnsCredential.data?.source === 'environment'}
+                      disabled={
+                        !dnsCredential.data?.configured ||
+                        dnsCredential.data?.source === 'environment'
+                      }
                       loading={savingDNSToken}
                       onClick={() => void updateDNSToken(true)}
                     >
