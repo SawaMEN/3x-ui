@@ -25,7 +25,7 @@ func testPreflightDeps() preflightDeps {
 		lookup: func(_ context.Context, _ string) ([]net.IPAddr, error) {
 			return []net.IPAddr{{IP: net.ParseIP("8.8.8.8")}}, nil
 		},
-		probePort: func(string, int) error { return nil },
+		probePort: func(context.Context, string, int) error { return nil },
 	}
 }
 
@@ -68,8 +68,10 @@ func TestDomainPreflightInvalidConfigBlocksAndSkipsNetwork(t *testing.T) {
 func TestDomainPreflightConflictingPortAndRemoteSNI(t *testing.T) {
 	cfg := testPreflightConfig()
 	deps := testPreflightDeps()
-	deps.probePort = func(_ string, port int) error {
-		if port == 443 { return errors.New("address in use") }
+	deps.probePort = func(_ context.Context, _ string, port int) error {
+		if port == 443 {
+			return errors.New("address in use")
+		}
 		return nil
 	}
 	report := runDomainPreflight(context.Background(), cfg, nil, domainfront.DefaultConfig(), false, deps)

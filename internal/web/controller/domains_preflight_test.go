@@ -38,10 +38,10 @@ func TestDomainPreflightAPIIsReadOnlyAndExplainsInvalidConfig(t *testing.T) {
 	router.ServeHTTP(res, req)
 	var payload struct {
 		Success bool `json:"success"`
-		Obj struct {
-			Ready bool `json:"ready"`
+		Obj     struct {
+			Ready  bool `json:"ready"`
 			Checks []struct {
-				Code string `json:"code"`
+				Code     string `json:"code"`
 				Severity string `json:"severity"`
 			} `json:"checks"`
 		} `json:"obj"`

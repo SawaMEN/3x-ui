@@ -32,7 +32,7 @@ type domainPreflightReport struct {
 
 type preflightDeps struct {
 	lookup      func(context.Context, string) ([]net.IPAddr, error)
-	probePort   func(string, int) error
+	probePort   func(context.Context, string, int) error
 	telemtCover string
 }
 
@@ -64,8 +64,9 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 	}), nil
 }
 
-func probeDomainPort(listen string, port int) error {
-	listener, err := net.Listen("tcp", net.JoinHostPort(listen, strconv.Itoa(port)))
+func probeDomainPort(ctx context.Context, listen string, port int) error {
+	var config net.ListenConfig
+	listener, err := config.Listen(ctx, "tcp", net.JoinHostPort(listen, strconv.Itoa(port)))
 	if err != nil {
 		return err
 	}
@@ -124,8 +125,8 @@ func runDomainPreflight(
 	}
 	if deps.probePort != nil {
 		for _, entry := range []struct {
-			name string
-			port int
+			name  string
+			port  int
 			owned bool
 		}{
 			{"HTTP", cfg.HTTPPort, previousRunning && old.Enabled && old.Listen == cfg.Listen && old.HTTPPort == cfg.HTTPPort},
@@ -133,7 +134,7 @@ func runDomainPreflight(
 		} {
 			if entry.owned {
 				add("port_owned", "info", "", fmt.Sprintf("%s TCP %d is already used by the running domain gateway.", entry.name, entry.port))
-			} else if err := deps.probePort(cfg.Listen, entry.port); err != nil {
+			} else if err := deps.probePort(ctx, cfg.Listen, entry.port); err != nil {
 				// Existing panel/subscription listeners may be intentionally
 				// shared with the gateway. Do not mark this as a hard error.
 				add("port_unavailable", "warning", "", fmt.Sprintf("%s TCP %d could not be bound (%s); check for a listener conflict or compatible shared listener.", entry.name, entry.port, err))
