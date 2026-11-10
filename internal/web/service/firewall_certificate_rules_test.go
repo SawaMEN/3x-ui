@@ -21,7 +21,7 @@ func TestCertificateFirewallRulesGatewayAndRemote(t *testing.T) {
 	cfg.Enabled = true
 	cfg.HTTPPort, cfg.HTTPSPort = 8080, 8443
 	cfg.Domains = []domainfront.DomainFrontDomain{{Name: "vpn.example.org", Enabled: true, Mode: "direct", TLS: "certmagic"}}
-	if got := firewallPorts(certificateFirewallRules(cfg, nil, nil, nil)); !reflect.DeepEqual(got, []int{8080, 8443}) {
+	if got := firewallPorts(certificateFirewallRules(cfg, nil, nil, nil)); !reflect.DeepEqual(got, []int{8443}) {
 		t.Fatalf("gateway ports = %v", got)
 	}
 	cfg.Domains = []domainfront.DomainFrontDomain{{Name: "remote.example.org", Enabled: true, Mode: "shared_sni", TLS: "auto"}}

@@ -294,7 +294,7 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 		return domainfront.DomainFrontStatus{}, err
 	}
 	backend.ChallengeRoots = roots
-	backend.CertificateEvent = DomainCertificateFirewallEvents()
+	backend.CertificateEvent = DomainCertificateFirewallEvents(cfg.HTTPPort, cfg.HTTPSPort)
 	manager := managedDomainFront()
 	if err := manager.Apply(ctx, cfg, backend); err != nil {
 		rollback()

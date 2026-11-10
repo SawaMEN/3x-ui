@@ -39,8 +39,11 @@ type firewallRenewalLease struct {
 }
 
 func validRenewalPorts(ports []int) bool {
+	if len(ports) > 2 {
+		return false
+	}
 	for _, port := range ports {
-		if port != 80 && port != 443 {
+		if port < 1 || port > 65535 {
 			return false
 		}
 	}
@@ -91,7 +94,7 @@ func firewallRenewalRules(all []firewallRenewalLease, now time.Time) []FirewallR
 // certificate issuer. It never turns on a firewall disabled by the operator.
 func RenewalFirewallBegin(ctx context.Context, owner string, ports []int) (string, error) {
 	if !validRenewalPorts(ports) {
-		return "", errors.New("renewal only permits TCP 80 and TCP 443")
+		return "", errors.New("invalid local TCP challenge port")
 	}
 	if len(ports) == 0 {
 		return "", nil
@@ -200,7 +203,7 @@ func WithRenewalFirewall(ctx context.Context, owner string, ports []int, operati
 
 // CertMagic emits cert_obtaining before ACME validation, and obtained/failed
 // when it completes. Separate IDs protect overlapping issuance operations.
-func DomainCertificateFirewallEvents() func(context.Context, string, map[string]any) error {
+func DomainCertificateFirewallEvents(httpPort, httpsPort int) func(context.Context, string, map[string]any) error {
 	var mu sync.Mutex
 	inFlight := map[string][]string{}
 	return func(ctx context.Context, event string, payload map[string]any) error {
@@ -210,7 +213,7 @@ func DomainCertificateFirewallEvents() func(context.Context, string, map[string]
 		}
 		switch event {
 		case "cert_obtaining":
-			id, err := RenewalFirewallBegin(ctx, "certmagic:"+name, []int{80, 443})
+			id, err := RenewalFirewallBegin(ctx, "certmagic:"+name, []int{httpPort, httpsPort})
 			if err != nil {
 				return err
 			}

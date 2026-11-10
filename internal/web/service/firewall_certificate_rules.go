@@ -36,8 +36,9 @@ func certificateFirewallRules(
 	if localGateway {
 		// These are serving ports as well as CertMagic's local ACME-01 ports;
 		// ensure the firewall reconciler never closes either unexpectedly.
-		add(cfg.HTTPPort, "domain-gateway", "Domain HTTP / ACME HTTP-01")
-		add(cfg.HTTPSPort, "domain-gateway", "Domain HTTPS / TLS-ALPN-01")
+		// HTTP is allowed only during renewal, unless another administrator
+		// rule already permits redirects. HTTPS remains open for normal service.
+		add(cfg.HTTPSPort, "domain-gateway", "Domain HTTPS")
 	}
 	if telemt != nil && telemt.Enabled {
 		add(443, "telemt", "Telemt WEB HTTPS")

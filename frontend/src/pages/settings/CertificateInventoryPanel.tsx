@@ -163,12 +163,19 @@ export default function CertificateInventoryPanel() {
                 <Space orientation="vertical" size={2}>
                   <Tag>{label('challenge.' + item.challenge)}</Tag>
                   {item.ports.length > 0 ? (
-                    <Typography.Text code>TCP {item.ports.join(', ')}</Typography.Text>
+                    <Space orientation="vertical" size={0}>
+                      <Typography.Text code>TCP {item.ports.join(', ')}</Typography.Text>
+                      <Typography.Text type="secondary">{label('temporaryPorts')}</Typography.Text>
+                    </Space>
                   ) : (
                     <Typography.Text type="secondary">{label('noPorts')}</Typography.Text>
                   )}
                   <Typography.Text type="secondary">
-                    {item.autoRenew ? label('automatic') : label('externalControl')}
+                    {item.manager === 'certbot' || item.manager === 'acme.sh'
+                      ? label('panelSchedule')
+                      : item.autoRenew
+                        ? label('automatic')
+                        : label('externalControl')}
                   </Typography.Text>
                   {item.warning && <Typography.Text type="warning">{item.warning}</Typography.Text>}
                 </Space>
