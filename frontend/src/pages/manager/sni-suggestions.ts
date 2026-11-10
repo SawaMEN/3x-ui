@@ -20,7 +20,7 @@ export function isAutoUsableManagerSNI(row: RealityScanResult): boolean {
 }
 
 function resultLatency(row: RealityScanResult): number {
-  if ((row.attempts ?? 0) >= 4 && (row.medianMs ?? 0) > 0) return row.medianMs!;
+  if ((row.attempts ?? 0) >= 4 && (row.medianMs ?? 0) > 0) return row.medianMs ?? row.latencyMs;
   return row.latencyMs > 0 ? row.latencyMs : Number.POSITIVE_INFINITY;
 }
 
@@ -34,8 +34,8 @@ export function rankManagerSNISuggestions(rows: RealityScanResult[]): RealitySca
       const readyA = isAutoUsableManagerSNI(a);
       const readyB = isAutoUsableManagerSNI(b);
       if (readyA !== readyB) return readyA ? -1 : 1;
-      const stableA = (a.attempts ?? 0) ? (a.successes ?? 0) / a.attempts! : 0;
-      const stableB = (b.attempts ?? 0) ? (b.successes ?? 0) / b.attempts! : 0;
+      const stableA = (a.attempts ?? 0) > 0 ? (a.successes ?? 0) / (a.attempts ?? 1) : 0;
+      const stableB = (b.attempts ?? 0) > 0 ? (b.successes ?? 0) / (b.attempts ?? 1) : 0;
       if (stableA !== stableB) return stableB - stableA;
       const latency = resultLatency(a) - resultLatency(b);
       if (latency) return latency;
