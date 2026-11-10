@@ -55,7 +55,7 @@ func (p *DigitalOceanTXTProvider) request(ctx context.Context, method, suffix st
 	}
 	for retry := 0; retry < 3; retry++ {
 		if retry > 0 {
-			wait := time.NewTimer(time.Duration(1 << uint(retry - 1)) * time.Second)
+			wait := time.NewTimer(time.Duration(1<<uint(retry-1)) * time.Second)
 			select {
 			case <-wait.C:
 			case <-ctx.Done():

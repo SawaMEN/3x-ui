@@ -278,8 +278,8 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 				return nil, fmt.Errorf("Cloudflare DNS-01 is not configured: %w", err)
 			}
 			issuerOptions.DNS01Solver = &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{
-				DNSProvider: provider,
-				PropagationDelay: time.Duration(cfg.DNS01Propagation) * time.Second,
+				DNSProvider:        provider,
+				PropagationDelay:   time.Duration(cfg.DNS01Propagation) * time.Second,
 				PropagationTimeout: 4 * time.Minute,
 			}}
 		case "digitalocean":
@@ -292,8 +292,8 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 				return nil, fmt.Errorf("DigitalOcean DNS-01 is not configured: %w", err)
 			}
 			issuerOptions.DNS01Solver = &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{
-				DNSProvider: provider,
-				PropagationDelay: time.Duration(cfg.DNS01Propagation) * time.Second,
+				DNSProvider:        provider,
+				PropagationDelay:   time.Duration(cfg.DNS01Propagation) * time.Second,
 				PropagationTimeout: 4 * time.Minute,
 			}}
 		default:

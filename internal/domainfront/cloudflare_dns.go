@@ -108,7 +108,7 @@ func (p *CloudflareTXTProvider) request(ctx context.Context, method, suffix stri
 	}
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
-			timer := time.NewTimer(time.Duration(1 << uint(attempt - 1)) * time.Second)
+			timer := time.NewTimer(time.Duration(1<<uint(attempt-1)) * time.Second)
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
