@@ -210,12 +210,12 @@ func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
 				continue
 			}
 			out = append(out, ManagedSNIDomain{
-				Name:     site.Name,
-				Source:   "remote",
-				CertFile: site.CertFile,
-				KeyFile:  site.KeyFile,
-				NodeID:     result.NodeID,
-				NodeName:   result.NodeName,
+				Name:      site.Name,
+				Source:    "remote",
+				CertFile:  site.CertFile,
+				KeyFile:   site.KeyFile,
+				NodeID:    result.NodeID,
+				NodeName:  result.NodeName,
 				ExpiresAt: site.ExpiresAt,
 				Issuer:    site.Issuer,
 			})
