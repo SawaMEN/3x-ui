@@ -86,6 +86,7 @@ describe('manager automatic REALITY SNI selection', () => {
       'unstable.example.org',
     ]);
     expect(original[0].host).toBe('unstable.example.org');
+    expect(original[1].host).toBe('reliable.example.org');
   });
 
   it('sorts stable results by reliability before latency', () => {

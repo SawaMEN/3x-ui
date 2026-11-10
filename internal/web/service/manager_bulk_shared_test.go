@@ -61,6 +61,7 @@ func TestManagerBulkSharedIsAtomicAndOwnerScoped(t *testing.T) {
 		{NamePrefix: "\ninjected", Count: 1, InboundIDs: []int{existing.Id}},
 		{NamePrefix: "user\rname", Count: 1, InboundIDs: []int{existing.Id}},
 		{NamePrefix: "user\n", Count: 1, InboundIDs: []int{existing.Id}},
+		{NamePrefix: " ", Count: 1, InboundIDs: []int{existing.Id}},
 		{NamePrefix: "x", Count: 2, InboundIDs: []int{existing.Id, existing.Id}},
 		{NamePrefix: "x", Count: 2, InboundIDs: []int{existing.Id, 99999}},
 		{NamePrefix: "x", Count: 2, InboundIDs: nil},
