@@ -127,7 +127,9 @@ func (s *ManagerService) validate(in *model.ManagerSubscription) error {
 			if _, err := managerRealityTarget(e.RealityTarget); err != nil {
 				return fmt.Errorf("entry %d: %w", i+1, err)
 			}
-			var stream struct { Security string `json:"security"` }
+			var stream struct {
+				Security string `json:"security"`
+			}
 			if err := json.Unmarshal([]byte(ib.StreamSettings), &stream); err != nil || stream.Security != "reality" {
 				return fmt.Errorf("entry %d: a camouflage target requires REALITY security", i+1)
 			}
