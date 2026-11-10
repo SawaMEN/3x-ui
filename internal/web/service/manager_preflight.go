@@ -57,8 +57,10 @@ func (s *ManagerService) Preflight(ctx context.Context, owner int, sub model.Man
 				}
 				if e.Mode != "existing" {
 					ib.Port, _ = strconv.Atoi(e.Port)
-					if err = s.applyEntrySNI(owner, ib, e); err == nil {
-						err = s.preflightTarget(ctx, ib)
+					var selected string
+					selected, err = s.prepareManagerEntrySNI(ctx, owner, ib, e)
+					if err == nil && selected != e.SNI {
+						result.Message = "Ready using backup SNI: " + selected
 					}
 					if ib.Port > 0 {
 						for _, prior := range ports {
