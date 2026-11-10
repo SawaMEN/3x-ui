@@ -148,6 +148,63 @@ func RenewalFirewallBegin(ctx context.Context, owner string, ports []int) (strin
 	return id, nil
 }
 
+// extendRenewalFirewallLease keeps a running challenge open beyond the default
+// lease TTL. It uses the same lock as the firewall reconciler, so expiration
+// cannot race a normal background sync while the extension is committed.
+func extendRenewalFirewallLease(id string) error {
+	if id == "" {
+		return nil
+	}
+	firewallMu.Lock()
+	defer firewallMu.Unlock()
+
+	leases, err := loadFirewallRenewalLeases()
+	if err != nil {
+		return err
+	}
+	for i := range leases {
+		if leases[i].ID != id || leases[i].Process != firewallRenewalProcess {
+			continue
+		}
+		if leases[i].ExpiresAt <= time.Now().Unix() {
+			return errors.New("certificate firewall lease has already expired")
+		}
+		leases[i].ExpiresAt = time.Now().Add(firewallRenewalLeaseTTL).Unix()
+		return saveFirewallJSON(firewallRenewalLeasesKey, leases)
+	}
+	return errors.New("certificate firewall lease is no longer active")
+}
+
+// The recurring renewal worker is only active while a certificate operation
+// is running. Cancel and wait for the goroutine before releasing its lease.
+func keepRenewalFirewallLease(parent context.Context, id string) func() {
+	if id == "" {
+		return func() {}
+	}
+	ctx, cancel := context.WithCancel(parent)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(firewallRenewalLeaseTTL / 4)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := extendRenewalFirewallLease(id); err != nil {
+					logger.Error("certificate firewall lease heartbeat failed:", err)
+					TriggerFirewallSync()
+				}
+			}
+		}
+	}()
+	return func() {
+		cancel()
+		<-done
+	}
+}
+
 // End removes only 3x-ui owned temporary rules via the usual reconciler.
 // Existing administrator rules remain unchanged.
 func RenewalFirewallEnd(id string) error {
@@ -192,7 +249,9 @@ func WithRenewalFirewall(ctx context.Context, owner string, ports []int, operati
 	if err != nil {
 		return err
 	}
+	stopHeartbeat := keepRenewalFirewallLease(ctx, id)
 	defer func() {
+		stopHeartbeat()
 		if cleanupErr := RenewalFirewallEnd(id); cleanupErr != nil {
 			logger.Error("certificate firewall restoration failed:", cleanupErr)
 			err = errors.Join(err, cleanupErr)
@@ -204,8 +263,12 @@ func WithRenewalFirewall(ctx context.Context, owner string, ports []int, operati
 // CertMagic emits cert_obtaining before ACME validation, and obtained/failed
 // when it completes. Separate IDs protect overlapping issuance operations.
 func DomainCertificateFirewallEvents(httpPort, httpsPort int) func(context.Context, string, map[string]any) error {
+	type pendingLease struct {
+		id string
+		stop func()
+	}
 	var mu sync.Mutex
-	inFlight := map[string][]string{}
+	inFlight := map[string][]pendingLease{}
 	return func(ctx context.Context, event string, payload map[string]any) error {
 		name, _ := payload["identifier"].(string)
 		if name == "" {
@@ -217,24 +280,35 @@ func DomainCertificateFirewallEvents(httpPort, httpsPort int) func(context.Conte
 			if err != nil {
 				return err
 			}
+			// Cap the heartbeat even if a third-party CertMagic event
+			// never reaches its terminal callback.
+			heartbeatCtx, cancel := context.WithTimeout(context.Background(), time.Hour)
+			stop := keepRenewalFirewallLease(heartbeatCtx, id)
 			mu.Lock()
-			inFlight[name] = append(inFlight[name], id)
+			inFlight[name] = append(inFlight[name], pendingLease{
+				id: id,
+				stop: func() {
+					cancel()
+					stop()
+				},
+			})
 			mu.Unlock()
-		case "cert_obtained", "cert_failed":
+		case "cert_obtained", "cert_renewed", "cert_failed":
 			mu.Lock()
 			ids := inFlight[name]
 			if len(ids) == 0 {
 				mu.Unlock()
 				return nil
 			}
-			id := ids[len(ids)-1]
+			lease := ids[len(ids)-1]
 			if len(ids) == 1 {
 				delete(inFlight, name)
 			} else {
 				inFlight[name] = ids[:len(ids)-1]
 			}
 			mu.Unlock()
-			return RenewalFirewallEnd(id)
+			lease.stop()
+			return RenewalFirewallEnd(lease.id)
 		}
 		return nil
 	}
