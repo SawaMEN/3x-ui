@@ -371,7 +371,10 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                           <Button
                             size="small"
                             onClick={() =>
-                              setVerifiedSniByNode((current) => ({ ...current, [node.id]: row.host }))
+                              setVerifiedSniByNode((current) => ({
+                                ...current,
+                                [node.id]: row.host,
+                              }))
                             }
                           >
                             {t('Выбрать', 'Select')}
