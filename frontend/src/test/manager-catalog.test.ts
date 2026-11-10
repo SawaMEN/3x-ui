@@ -65,6 +65,29 @@ describe('manager multi-node recipe builder', () => {
     });
   });
 
+  it('keeps separately selected verified backups only for REALITY without a pinned target', () => {
+    const opts = {
+      presets: ['vless-tcp-reality'],
+      nodeIds: [0],
+      nodes: [],
+      domains: [],
+      sniByPreset: { 'vless-tcp-reality': 'primary.example.org' },
+      verifiedSniByNode: {},
+      backupSniByNode: { 0: ['primary.example.org', 'backup.example.org'] },
+      targetByPreset: {},
+    };
+    const choices = buildManagerRecipes(opts);
+    expect(choices.entries[0]).toMatchObject({
+      sni: 'primary.example.org',
+      sniBackups: ['backup.example.org'],
+    });
+    const fixed = buildManagerRecipes({
+      ...opts,
+      targetByPreset: { 'vless-tcp-reality': 'front.example.org:443' },
+    });
+    expect(fixed.entries[0].sniBackups).toBeUndefined();
+  });
+
   it('rejects oversized plans instead of silently dropping entries', () => {
     const result = buildManagerRecipes({
       presets: ['vless-tcp-reality'],
