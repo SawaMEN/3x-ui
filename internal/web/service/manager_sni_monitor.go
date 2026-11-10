@@ -297,7 +297,7 @@ func (s *ManagerService) rollbackManagerSNIHealth(ctx context.Context, original 
 		restoreErr = s.applyGeneration(restoreCtx, []model.ManagerEntry{{ActiveInboundID: original.Id}})
 	}
 	if restoreErr != nil {
-		return fmt.Errorf("SNI switch failed: %w; rollback failed: %v", cause, restoreErr)
+		return fmt.Errorf("SNI switch failed: %w; rollback failed: %w", cause, restoreErr)
 	}
 	return fmt.Errorf("SNI switch failed and was rolled back: %w", cause)
 }
