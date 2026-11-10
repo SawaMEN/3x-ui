@@ -123,4 +123,9 @@ func TestManagerSNIHealthBackupsNormalizeHostnames(t *testing.T) {
 	if !slices.Equal(got, []string{"primary.example.org", "third.example.org"}) {
 		t.Fatalf("unexpected normalized SNI backups: %v", got)
 	}
+	entry.SNI = "random"
+	got = managerSNIHealthBackups(entry, "backup.example.org")
+	if !slices.Equal(got, []string{"third.example.org"}) {
+		t.Fatalf("random SNI placeholder leaked into fallback list: %v", got)
+	}
 }

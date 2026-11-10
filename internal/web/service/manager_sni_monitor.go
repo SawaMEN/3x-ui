@@ -54,7 +54,9 @@ func managerSNIHealthBackups(entry model.ManagerEntry, selected string) []string
 	choices := make([]string, 0, len(entry.SNIBackups)+1)
 	for _, name := range append([]string{entry.SNI}, entry.SNIBackups...) {
 		name = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), "."))
-		if name != "" && name != strings.ToLower(strings.TrimSuffix(strings.TrimSpace(selected), ".")) && !slices.Contains(choices, name) {
+		if name != "" && name != "random" && name != "auto" &&
+			name != strings.ToLower(strings.TrimSuffix(strings.TrimSpace(selected), ".")) &&
+			!slices.Contains(choices, name) {
 			choices = append(choices, name)
 		}
 	}
