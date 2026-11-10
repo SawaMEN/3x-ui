@@ -384,8 +384,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                 )}
                 {selected && (
                   <Tag>
-                    {t('TLS-сертификаты:', 'TLS certificates:')}{' '}
-                    {ownedCertificates.length}
+                    {t('TLS-сертификаты:', 'TLS certificates:')} {ownedCertificates.length}
                   </Tag>
                 )}
                 {selected && ownedCertificates.length > 0 && (
