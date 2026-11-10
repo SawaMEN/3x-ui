@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -208,6 +209,9 @@ func runDomainPreflight(
 	}
 dispatch:
 	for index := range local {
+		if strings.HasPrefix(local[index].Name, "*.") {
+			continue // wildcard DNS A record is not meaningful
+		}
 		select {
 		case jobs <- index:
 		case <-checkCtx.Done():
@@ -217,6 +221,10 @@ dispatch:
 	close(jobs)
 	workers.Wait()
 	for i, domain := range local {
+		if strings.HasPrefix(domain.Name, "*.") {
+			add("wildcard_dns01", "info", domain.Name, "DNS-01 validates the wildcard via a temporary TXT record. Individual wildcard subdomain A/AAAA records cannot be established from this draft.")
+			continue
+		}
 		answer := answers[i]
 		if answer.err != nil {
 			add("dns_lookup_failed", "warning", domain.Name, fmt.Sprintf("DNS lookup failed: %s", answer.err))
