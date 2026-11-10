@@ -223,7 +223,28 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	if cfg.Staging {
 		ca = certmagic.LetsEncryptStagingCA
 	}
-	r.issuer = certmagic.NewACMEIssuer(r.magic, certmagic.ACMEIssuer{CA: ca, Email: cfg.Email, Agreed: cfg.AcceptTerms, AltHTTPPort: cfg.HTTPPort, AltTLSALPNPort: cfg.HTTPSPort, Logger: logger})
+	issuerOptions := certmagic.ACMEIssuer{CA: ca, Email: cfg.Email, Agreed: cfg.AcceptTerms, AltHTTPPort: cfg.HTTPPort, AltTLSALPNPort: cfg.HTTPSPort, Logger: logger}
+	if cfg.DNS01Provider == "cloudflare" {
+		provider, err := NewCloudflareTXTProvider(cfg.DNS01Zone, cfg.DNS01ZoneID, backend.DNS01Token)
+		if err != nil {
+			r.cache.Stop()
+			for _, listener := range r.listeners {
+				_ = listener.Close()
+			}
+			return nil, fmt.Errorf("Cloudflare DNS-01 is not configured: %w", err)
+		}
+		// All automatic certificates use DNS-01 when explicitly configured.
+		// HTTP/TLS-ALPN challenges are disabled, so ACME never needs to open
+		// temporary firewall ports for these certificates.
+		issuerOptions.DisableHTTPChallenge = true
+		issuerOptions.DisableTLSALPNChallenge = true
+		issuerOptions.DNS01Solver = &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{
+			DNSProvider: provider,
+			PropagationDelay: time.Duration(cfg.DNS01Propagation) * time.Second,
+			PropagationTimeout: 4 * time.Minute,
+		}}
+	}
+	r.issuer = certmagic.NewACMEIssuer(r.magic, issuerOptions)
 	r.magic.Issuers = []certmagic.Issuer{r.issuer}
 	// ManageAsync also loads saved certificates asynchronously. Warm the cache
 	// before serving HTTPS so the first handshake after a restart does not race
