@@ -132,7 +132,7 @@ func (p *CloudflareTXTProvider) request(ctx context.Context, method, suffix stri
 			}
 			return "", errors.New("Cloudflare DNS request failed")
 		}
-		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 32 << 10))
+		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 32<<10))
 		_ = resp.Body.Close()
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			if attempt < 2 {

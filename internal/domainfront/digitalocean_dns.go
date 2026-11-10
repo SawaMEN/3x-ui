@@ -80,7 +80,7 @@ func (p *DigitalOceanTXTProvider) request(ctx context.Context, method, suffix st
 			}
 			return 0, errors.New("DigitalOcean DNS API request failed")
 		}
-		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 32 << 10))
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 32<<10))
 		_ = resp.Body.Close()
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			if retry < 2 {

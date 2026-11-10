@@ -63,14 +63,14 @@ func TestCloudflareDNS01RejectsOtherRecordsOrZones(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		zone string
+		zone   string
 		record libdns.RR
 	}{
-		{"another.org", libdns.RR{Type:"TXT",Name:"_acme-challenge",Data:strings.Repeat("x",43)}},
-		{"example.org", libdns.RR{Type:"TXT",Name:"_acme-challenge.evil.org.",Data:strings.Repeat("x",43)}},
-		{"example.org", libdns.RR{Type:"A",Name:"_acme-challenge",Data:strings.Repeat("x",43)}},
-		{"example.org", libdns.RR{Type:"TXT",Name:"www",Data:strings.Repeat("x",43)}},
-		{"example.org", libdns.RR{Type:"TXT",Name:"_acme-challenge",Data:"not-a-token"}},
+		{"another.org", libdns.RR{Type: "TXT", Name: "_acme-challenge", Data: strings.Repeat("x", 43)}},
+		{"example.org", libdns.RR{Type: "TXT", Name: "_acme-challenge.evil.org.", Data: strings.Repeat("x", 43)}},
+		{"example.org", libdns.RR{Type: "A", Name: "_acme-challenge", Data: strings.Repeat("x", 43)}},
+		{"example.org", libdns.RR{Type: "TXT", Name: "www", Data: strings.Repeat("x", 43)}},
+		{"example.org", libdns.RR{Type: "TXT", Name: "_acme-challenge", Data: "not-a-token"}},
 	} {
 		if _, err := p.AppendRecords(context.Background(), tc.zone, []libdns.Record{tc.record}); err == nil {
 			t.Fatalf("accepted invalid ACME record: %#v", tc)
