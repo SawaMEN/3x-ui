@@ -1,0 +1,165 @@
+.domain-workspace .ant-card-body {
+  padding: 20px;
+}
+
+.domain-workspace-heading,
+.domain-workspace-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.domain-workspace-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.domain-workspace-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: var(--xui-radius-md, 12px);
+  background: var(--xui-surface-container-high, var(--xui-surface-container));
+}
+
+.domain-workspace-stat > .anticon {
+  font-size: 19px;
+  color: var(--ant-color-primary);
+}
+
+.domain-workspace-stat strong {
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.domain-workspace-stat strong small {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--ant-color-text-secondary);
+}
+
+.domain-workspace-guidance {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 14px;
+}
+
+.domain-workspace-guidance:empty {
+  display: none;
+}
+
+.domain-workspace-actions {
+  align-items: flex-end;
+  margin-top: 16px;
+  border-top: 1px solid var(--ant-color-border-secondary);
+  padding-top: 16px;
+}
+
+.domain-workspace-audit {
+  min-width: 180px;
+}
+
+.domain-workspace-audit .ant-progress {
+  margin-top: 7px;
+}
+
+@media (max-width: 850px) {
+  .domain-workspace-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .domain-workspace-audit {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .domain-workspace .ant-card-body {
+    padding: 12px;
+  }
+
+  .domain-workspace-stat {
+    padding: 10px;
+  }
+}
+
+/* Domain manager: one primary workflow at a time, rather than a long
+   stack of unrelated gateway, DNS, certificate and redirect forms. */
+.domain-manager > .ant-space-item {
+  width: 100%;
+  min-width: 0;
+}
+.domain-manager-nav {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.domain-manager-nav .ant-segmented {
+  min-width: min(100%, 480px);
+  padding: 4px;
+}
+.domain-manager-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  width: 100%;
+}
+.domain-manager-panel .ant-card {
+  min-width: 0;
+}
+.domain-manager-panel .ant-table-wrapper {
+  min-width: 0;
+}
+.domain-workspace-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 22px;
+  row-gap: 8px;
+  margin-top: 14px;
+}
+.domain-workspace-summary strong {
+  font-variant-numeric: tabular-nums;
+}
+.domain-workspace .ant-card-body {
+  padding: 18px 20px;
+}
+.domain-workspace-actions {
+  padding-top: 12px;
+  margin-top: 14px;
+}
+.domain-workspace-guidance {
+  margin-top: 10px;
+}
+@media (max-width: 620px) {
+  .domain-manager-nav .ant-segmented {
+    min-width: 450px;
+  }
+  .domain-workspace .ant-card-body {
+    padding: 14px;
+  }
+  .domain-workspace-heading {
+    gap: 8px;
+  }
+  .domain-workspace-heading .ant-typography {
+    max-width: 100%;
+  }
+  .domain-workspace-summary {
+    column-gap: 14px;
+  }
+  .domain-workspace-actions {
+    align-items: stretch;
+  }
+  .domain-workspace-audit {
+    min-width: 0;
+    width: 100%;
+  }
+}

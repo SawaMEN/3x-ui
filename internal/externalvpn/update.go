@@ -53,20 +53,35 @@ type releaseSpec struct {
 }
 
 type BinaryStatus struct {
-	Installed       bool   `json:"installed"`
-	Version         string `json:"version"`
-	LatestVersion   string `json:"latestVersion"`
-	UpdateAvailable bool   `json:"updateAvailable"`
-	Error           string `json:"error,omitempty"`
+	Source            string `json:"source,omitempty"`
+	FallbackReason    string `json:"fallbackReason,omitempty"`
+	Supported         bool   `json:"supported"`
+	UnsupportedReason string `json:"unsupportedReason,omitempty"`
+	Installed         bool   `json:"installed"`
+	Version           string `json:"version"`
+	LatestVersion     string `json:"latestVersion"`
+	UpdateAvailable   bool   `json:"updateAvailable"`
+	Error             string `json:"error,omitempty"`
 }
 
 type UpdateStatus struct {
+	Vetroff     BinaryStatus `json:"vetroff"`
+	Hysteria2   BinaryStatus `json:"hysteria2"`
 	Pingtunnel  BinaryStatus `json:"pingtunnel"`
 	TrustTunnel BinaryStatus `json:"trusttunnel"`
 }
 
 func releaseSpecFor(protocol model.Protocol) (releaseSpec, error) {
 	switch protocol {
+	case model.VetroffProxy:
+		return releaseSpec{protocol: protocol, api: "https://api.github.com/repos/SawaMEN/VetroffProxy/releases/latest", binaryName: "vetroff", versionArgs: []string{"version"}}, nil
+	case model.Hysteria:
+		return releaseSpec{
+			protocol:    protocol,
+			api:         "https://api.github.com/repos/HyNetworks/hysteria/releases/latest",
+			binaryName:  "hysteria",
+			versionArgs: []string{"version"},
+		}, nil
 	case model.Pingtunnel:
 		return releaseSpec{
 			protocol:    protocol,
@@ -86,30 +101,46 @@ func releaseSpecFor(protocol model.Protocol) (releaseSpec, error) {
 	}
 }
 
-func GetUpdateStatus(ctx context.Context) UpdateStatus {
+func GetUpdateStatus(ctx context.Context, localOnly ...bool) UpdateStatus {
 	var status UpdateStatus
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(4)
+	go func() { defer wg.Done(); status.Vetroff = binaryStatus(ctx, model.VetroffProxy, localOnly...) }()
 	go func() {
 		defer wg.Done()
-		status.Pingtunnel = binaryStatus(ctx, model.Pingtunnel)
+		status.Pingtunnel = binaryStatus(ctx, model.Pingtunnel, localOnly...)
 	}()
 	go func() {
 		defer wg.Done()
-		status.TrustTunnel = binaryStatus(ctx, model.TrustTunnel)
+		status.TrustTunnel = binaryStatus(ctx, model.TrustTunnel, localOnly...)
+	}()
+	go func() {
+		defer wg.Done()
+		status.Hysteria2 = binaryStatus(ctx, model.Hysteria, localOnly...)
 	}()
 	wg.Wait()
 	return status
 }
 
-func binaryStatus(ctx context.Context, protocol model.Protocol) BinaryStatus {
+func binaryStatus(ctx context.Context, protocol model.Protocol, localOnly ...bool) BinaryStatus {
 	spec, err := releaseSpecFor(protocol)
 	if err != nil {
 		return BinaryStatus{Error: err.Error()}
 	}
 	path := binary(protocol)
+	if protocol == model.Hysteria {
+		path = filepath.Join(config.GetBinFolderPath(), spec.binaryName)
+	}
 	info, statErr := os.Stat(path)
-	status := BinaryStatus{Installed: statErr == nil && !info.IsDir()}
+	status := BinaryStatus{Supported: runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"), Installed: statErr == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0}
+	if !status.Supported {
+		status.Installed = false
+		status.UnsupportedReason = fmt.Sprintf("%s installation from the panel supports Linux amd64/arm64; current platform: %s/%s", protocol, runtime.GOOS, runtime.GOARCH)
+		return status
+	}
+	if len(localOnly) > 0 && localOnly[0] {
+		return status
+	}
 	if status.Installed {
 		if version, versionErr := binaryVersion(ctx, path, spec.versionArgs); versionErr == nil {
 			status.Version = version
@@ -118,6 +149,11 @@ func binaryStatus(ctx context.Context, protocol model.Protocol) BinaryStatus {
 	release, err := fetchLatestRelease(ctx, spec)
 	if err != nil {
 		status.Error = err.Error()
+		return status
+	}
+	if _, err := pickReleaseAsset(spec, release, runtime.GOARCH); err != nil {
+		status.Supported = false
+		status.UnsupportedReason = err.Error()
 		return status
 	}
 	status.LatestVersion = normalizeReleaseVersion(release.TagName)
@@ -151,6 +187,7 @@ func parseExternalVersion(value string) string {
 
 func normalizeReleaseVersion(value string) string {
 	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "app/")
 	value = strings.TrimPrefix(value, "v")
 	value = strings.TrimPrefix(value, "V")
 	return value
@@ -182,6 +219,15 @@ func fetchLatestRelease(ctx context.Context, spec releaseSpec) (githubRelease, e
 }
 
 func Update(ctx context.Context, protocol model.Protocol) error {
+	if protocol == model.VetroffProxy {
+		return installVetroff(ctx)
+	}
+	if protocol == model.OpenFlux {
+		return InstallOpenFlux(ctx)
+	}
+	if protocol == model.FPTN {
+		return InstallFPTNClient(ctx)
+	}
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("%s updater is supported only on Linux", protocol)
 	}
@@ -218,9 +264,12 @@ func Update(ctx context.Context, protocol model.Protocol) error {
 	if err := verifyReleaseDigest(archivePath, asset.Digest); err != nil {
 		return err
 	}
-	extracted, err := extractReleaseBinary(archivePath, tmpDir, spec.binaryName)
-	if err != nil {
-		return err
+	extracted := archivePath
+	if protocol != model.Hysteria {
+		extracted, err = extractReleaseBinary(archivePath, tmpDir, spec.binaryName)
+		if err != nil {
+			return err
+		}
 	}
 
 	binDir := config.GetBinFolderPath()
@@ -274,10 +323,11 @@ func Update(ctx context.Context, protocol model.Protocol) error {
 	if err := os.Rename(stagedPath, target); err != nil {
 		return fmt.Errorf("install %s: %w", protocol, err)
 	}
-	// Linux keeps a running executable mapped after an atomic rename. Stop only
-	// after the new binary is in place; the normal reconciliation job will then
-	// restart enabled inbounds with the newly installed executable.
-	GetManager().StopProtocol(protocol)
+	// Restart managed sidecars only after replacing their executable.
+	// Standalone Hysteria does not affect native sing-box connections.
+	if protocol != model.Hysteria {
+		GetManager().StopProtocol(protocol)
+	}
 	return nil
 }
 
@@ -285,6 +335,18 @@ func pickReleaseAsset(spec releaseSpec, release githubRelease, goarch string) (r
 	var expected string
 	version := normalizeReleaseVersion(release.TagName)
 	switch spec.protocol {
+	case model.VetroffProxy:
+		if goarch != "amd64" && goarch != "arm64" {
+			return releaseAsset{}, fmt.Errorf("VetroffProxy requires Linux amd64/arm64")
+		}
+		expected = fmt.Sprintf("vetroff_%s_linux_%s.tar.gz", version, goarch)
+	case model.Hysteria:
+		switch goarch {
+		case "amd64", "arm64":
+			expected = "hysteria-linux-" + goarch
+		default:
+			return releaseAsset{}, fmt.Errorf("Hysteria2 is not published for linux/%s", goarch)
+		}
 	case model.Pingtunnel:
 		switch goarch {
 		case "amd64", "arm64":

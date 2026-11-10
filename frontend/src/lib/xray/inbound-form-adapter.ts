@@ -29,6 +29,7 @@ import { tlsCertUsesFiles } from '@/schemas/protocols/security/tls';
 import { SockoptStreamSettingsSchema } from '@/schemas/protocols/stream/sockopt';
 import { XHttpStreamSettingsSchema, XHttpXmuxSchema } from '@/schemas/protocols/stream/xhttp';
 import { migrateSudokuSettings } from '@/schemas/protocols/inbound/sudoku';
+import { resolveTuicServerSettings } from '@/lib/tuic';
 
 const XMUX_DEFAULTS = XHttpXmuxSchema.parse({});
 
@@ -138,6 +139,7 @@ const NETWORK_SETTINGS_KEY: Record<string, string> = {
   grpc: 'grpcSettings',
   httpupgrade: 'httpupgradeSettings',
   xhttp: 'xhttpSettings',
+  xdrive: 'xdriveSettings',
   hysteria: 'hysteriaSettings',
 };
 
@@ -177,6 +179,9 @@ export function rawInboundToFormValues(row: RawInboundRow): InboundFormValues {
       ? migrateSudokuSettings(coerceJsonObject(row.settings))
       : row.settings,
   );
+  if (row.protocol === 'tuic') {
+    rawSettings.server = resolveTuicServerSettings(rawSettings);
+  }
   const settings = (
     isShadowTls
       ? {
@@ -316,7 +321,12 @@ function clientSchemaForProtocol(protocol: string): z.ZodType | null {
       return ShadowTlsClientSchema;
     case 'tuic':
       return TuicClientSchema;
+    case 'snell':
+    case 'masque':
     case 'naive':
+    case 'fptn':
+    case 'openflux':
+    case 'vetroff':
     case 'trusttunnel':
       return NaiveClientSchema;
     case 'mieru':
@@ -399,6 +409,15 @@ export function dropLegacyOptionalEmpties(
 
 export function formValuesToWirePayload(values: InboundFormValues): WireInboundPayload {
   const settingsPruned = (pruneEmpty(values.settings ?? {}) ?? {}) as Record<string, unknown>;
+  if (values.protocol === 'snell') {
+    if (settingsPruned.version === 5) {
+      delete settingsPruned.mode;
+      if (settingsPruned.obfsMode !== 'http') delete settingsPruned.obfsHost;
+    } else {
+      delete settingsPruned.obfsMode;
+      delete settingsPruned.obfsHost;
+    }
+  }
   const shadowTls = settingsPruned.shadowTls as Record<string, unknown> | undefined;
   const shadowTlsEnabled = shadowTls?.enabled === true;
   const legacyShadowsocksWrapper = shadowTlsEnabled && values.protocol === 'shadowsocks';
@@ -429,6 +448,10 @@ export function formValuesToWirePayload(values: InboundFormValues): WireInboundP
     streamPruned = normalizeStreamSettingsForWire(streamPruned, { side: 'inbound' });
     stripTlsCertUseFile(streamPruned);
   }
+  if (values.protocol === 'hysteria' && streamPruned) {
+    const hy = streamPruned.hysteriaSettings as { version?: unknown } | undefined;
+    if (hy?.version === 1 || hy?.version === 2) settingsPruned.version = hy.version;
+  }
   dropLegacyOptionalEmpties(settingsPruned, streamPruned);
   const payload: WireInboundPayload = {
     up: values.up,
@@ -445,7 +468,7 @@ export function formValuesToWirePayload(values: InboundFormValues): WireInboundP
     protocol: legacyShadowsocksWrapper ? 'shadowtls' : values.protocol,
     settings: JSON.stringify(settingsPruned),
     streamSettings: streamPruned ? JSON.stringify(streamPruned) : '',
-    // mtproto is mtg-served, not Xray, so sniffing never applies — emit empty
+    // mtproto is Telemt-served, not Xray, so sniffing never applies — emit empty
     // rather than the default { enabled: false } so the row carries no sniffing.
     sniffing:
       !shadowTlsEnabled && canEnableSniffing({ protocol: values.protocol })

@@ -4,136 +4,83 @@
   <img src="./media/3x-ui-cyberpunk.svg" alt="3X-UI" width="460">
 </p>
 
-**3X-UI** — веб-панель управления **Xray-core** и **sing-box** с веб-интерфейсом для управления inbound'ами, клиентами, подписками, маршрутизацией, статистикой и настройками сервера.
+Панель управления VPN-подключениями, клиентами, подписками, маршрутизацией и статистикой.
 
-Интерфейс по умолчанию использует русский язык; английский также доступен. UI построен на Ant Design и адаптирован для desktop и mobile.
+## Установка на Linux
 
-> [!IMPORTANT]
-> Проект предназначен для личного использования и тестирования. Перед эксплуатацией на реальном сервере проверьте конфигурацию, сетевые правила, доступ к панели, TLS и остальные параметры безопасности.
+Поддерживаются **amd64** и **arm64** (Ubuntu, Debian и другие Linux с systemd; Alpine с OpenRC). Для установки нужны права **root**, `bash`, `curl` и доступ к GitHub.
 
-## Быстрый старт
-
-### Установка
-
-Установочный скрипт находится в этом репозитории:
+### 1. Автоматический выбор версии
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh)
 ```
 
-По умолчанию устанавливается релиз из **SawaMEN/3x-ui**.
+Установщик выбирает последний совместимый стабильный релиз, но **может автоматически перейти на DEV**, если Stable пока не поддерживает новую миграцию ядра.
 
-Для установки конкретной версии:
+### 2. Версия для разработки (DEV)
+
+Установка последней опубликованной предварительной сборки `dev-latest`:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh) v3.9.3
+bash <(curl -fsSL https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh) dev-latest
 ```
 
-Для rolling dev-сборки:
+### 3. Определённая стабильная версия (Stable)
+
+Укажите тег нужного релиза из [GitHub Releases](https://github.com/SawaMEN/3x-ui/releases). Например, `v3.9.8`:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh) dev-latest
+bash <(curl -fsSL https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh) v3.9.8
 ```
 
-Установщик поддерживает Linux-архитектуры **amd64** и **arm64/aarch64**.
+Старые стабильные версии могут быть несовместимы с новым ядром.
 
-После установки управление панелью доступно через:
+## Обновление
 
 ```bash
-x-ui
+x-ui update                         # последний совместимый релиз (возможно DEV)
+x-ui update-dev                     # последняя DEV-сборка
+XUI_UPDATE_TAG=v3.9.8 x-ui update   # конкретный Stable-релиз
 ```
 
-Основные команды:
+Перед переключением версий сделайте резервную копию. Откат на несовместимую старую версию с новым ядром блокируется.
 
-```text
-x-ui              # меню управления
-x-ui start        # запуск
-x-ui stop         # остановка
-x-ui restart      # перезапуск
-x-ui status       # статус
-x-ui settings     # текущие настройки
-x-ui enable       # включить автозапуск
-x-ui disable      # отключить автозапуск
-x-ui log          # логи панели
-x-ui banlog        # логи Fail2ban
-x-ui update       # обновление
-x-ui install      # установка
-x-ui uninstall    # удаление
-```
-
-Результат установки сохраняется в защищённом файле:
-
-```text
-/etc/x-ui/install-result.env
-```
-
-### Обновление
-
-Обновление панели:
+## Управление
 
 ```bash
-x-ui update
+x-ui             # меню управления
+x-ui start       # запуск
+x-ui stop        # остановка
+x-ui restart     # перезапуск
+x-ui status      # состояние
+x-ui settings    # настройки
+x-ui enable      # автозапуск включить
+x-ui disable     # автозапуск отключить
+x-ui log         # журналы
+x-ui update      # обновление
+x-ui update-dev  # обновление DEV
+x-ui uninstall   # удаление
 ```
-
-Панель также предоставляет интерфейс для проверки системных обновлений и обновления управляемых компонентов **Xray**, **sing-box** и **Telemt**. Для системных обновлений поддерживается восстановление состояния панели после перезапуска во время применения обновлений.
-
-## Возможности
-
-- Управление **Xray-core** и **sing-box**, включая переключение активного ядра.
-- Создание и управление inbound'ами и клиентами.
-- Поддержка **VMess, VLESS, Trojan, Shadowsocks, WireGuard, Hysteria, HTTP, Mixed, Tunnel, TUN, MTProto, AmneziaWG, TUIC, Naive, Mieru** и **vk-turn-proxy**.
-- Локальное управление отдельным sidecar-сервисом **Mieru**; его конфигурация и процесс синхронизируются с активными inbound'ами.
-- MTProto через встроенный **mtg** и отдельный **Telemt**.
-- Лимиты трафика, срок действия, IP/HWID-лимиты и статистика.
-- Поддержка клиентских подписок, JSON/Clash-экспорта и внешних ссылок/удалённых подписок, привязанных к клиенту.
-- Управление исходящими подписками и их автоматическим обновлением.
-- Управление узлами, синхронизация конфигурации и просмотр системной статистики.
-- SQLite по умолчанию и PostgreSQL в качестве альтернативной БД.
-- Интеграции с Telegram, Discord и Fail2ban.
-- Темы: светлая, тёмная, ultra-dark, colorful и blue-gray.
-- Адаптивный интерфейс для desktop и mobile.
-- Русский интерфейс по умолчанию, английский — дополнительный язык.
-
-## Поддержка ядер
-
-### Xray-core
-
-Xray запускается панелью как отдельный процесс. Панель управляет его конфигурацией, состоянием, статистикой, логами и inbound'ами.
-
-### Sing-box
-
-Sing-box также запускается как отдельный процесс. Панель использует его native API для статистики соединений и управления активными подключениями.
-
-Периодический сбор traffic statistics оптимизирован для больших наборов соединений:
-
-- состояние трафика отдельных соединений не хранится в памяти панели между опросами;
-- для traffic polling используется облегчённый protobuf-декодер;
-- в traffic polling не декодируются поля соединения, которые не нужны для статистики;
-- события закрытых соединений не удерживаются панелью после обработки.
-
-При этом **RSS процесса sing-box и RSS панели — разные величины**. Сам sing-box может потреблять дополнительную память в зависимости от количества соединений, DNS-кэша, конфигурации маршрутизации и других факторов.
-
-
-## Язык интерфейса
-
-Русский (`ru-RU`) — основной язык интерфейса.
-
-Английский (`en-US`) — дополнительный язык.
-
-Если язык браузера не поддерживается, интерфейс использует русский.
 
 ## Благодарности
 
-Этот репозиторий является форком основного проекта [https://github.com/MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
+Особая благодарность авторам и участникам проектов, на которых основана панель и её ключевые возможности:
 
-Отдельная благодарность авторам и участникам следующих проектов:
+- [MHSanaei / 3x-ui](https://github.com/MHSanaei/3x-ui) — исходная кодовая база панели.
+- [Hiddify / hiddify-core](https://github.com/hiddify/hiddify-core) и [hiddify-sing-box](https://github.com/hiddify/hiddify-sing-box) — основа модифицированного ядра.
+- [XTLS / RealiTLScanner](https://github.com/XTLS/RealiTLScanner) — идея поиска подходящих SNI по соседним IP и проверки TLS-сертификатов.
+- [XTLS / Xray-core](https://github.com/XTLS/Xray-core) — ядро Xray, совместимость и решения для сетевого стека.
+- [SagerNet / sing-box](https://github.com/SagerNet/sing-box) — сетевое ядро и реализации протоколов.
+- [telemt / telemt](https://github.com/telemt/telemt) — сервер MTProto.
+- [Mekotofeuka / MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — идеи защиты и исправления MTProto.
+- [WINGS-N / 3x-ui](https://github.com/WINGS-N/3x-ui) — идеи и решения для интеграции VK TURN-прокси.
+- [Liafanx / MTProxyL](https://github.com/Liafanx/MTProxyL) — HTML-шаблоны сайтов-приманок.
 
-- [telemt/telemt](https://github.com/telemt/telemt) — за **Telemt**.
-- [WINGS-N/3x-ui](https://github.com/WINGS-N/3x-ui) — за **vk-turn-proxy**.
-- [Liafanx/MTProxyL](https://github.com/Liafanx/MTProxyL) — за **MTProxyL**.
-- [Mekotofeuka/MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — за фикс **MTPROTO**.
-- Основному проекту [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui) — за исходную кодовую базу и развитие проекта.
+Дополнительная благодарность авторам сторонних протоколов, интеграций и компонентов, используемых проектом:
 
-## Лицензия
+[WINGS-N / vk-turn-proxy](https://github.com/WINGS-N/vk-turn-proxy), [AmneziaWG](https://github.com/amnezia-vpn/amneziawg-go), [NaïveProxy](https://github.com/klzgrad/naiveproxy), [Mieru](https://github.com/enfein/mieru), [Sudoku](https://github.com/SUDOKU-ASCII/sudoku), [Hysteria](https://github.com/HyNetworks/hysteria), [PingTunnel](https://github.com/esrrhs/pingtunnel), [TrustTunnel](https://github.com/TrustTunnel/TrustTunnel), [DNSTT](https://github.com/NNdroid/dnstt), [OxiDNS](https://github.com/svenshi/oxidns), [TUIC](https://github.com/EAimTY/tuic), [OpenFlux](https://github.com/p1neappleXpress/OpenFlux), [FPTN](https://github.com/fptn-project/fptn).
 
-Проект распространяется по лицензии **GPL-3.0**.
+Часть проектов послужила источником идей или кода, другие интегрируются как отдельные компоненты. Лицензии и уведомления об авторстве сторонних материалов сохранены.
+
+Лицензия панели: [GPL-3.0](LICENSE).

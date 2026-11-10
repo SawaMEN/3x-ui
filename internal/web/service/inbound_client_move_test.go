@@ -3,9 +3,9 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestGetClientByEmail_AfterMoveBetweenInbounds is the #6059 regression: a
@@ -34,7 +34,7 @@ func TestGetClientByEmail_AfterMoveBetweenInbounds(t *testing.T) {
 		t.Fatalf("SyncInbound new: %v", err)
 	}
 
-	stale := xray.ClientTraffic{InboundId: oldIb.Id, Email: "moved@x", Enable: true, Up: 5, Down: 7}
+	stale := coremodel.ClientTraffic{InboundId: oldIb.Id, Email: "moved@x", Enable: true, Up: 5, Down: 7}
 	if err := db.Create(&stale).Error; err != nil {
 		t.Fatalf("seed stale traffic row: %v", err)
 	}

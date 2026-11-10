@@ -1,0 +1,285 @@
+.manager-page {
+  --bg-page: var(--xui-surface);
+  --bg-card: var(--xui-surface-container);
+  min-height: 100vh;
+  background: var(--bg-page);
+}
+
+.manager-page .ant-layout,
+.manager-page .ant-layout-content,
+.manager-page .content-shell {
+  background: transparent;
+}
+
+.manager-page .content-area {
+  padding: 24px;
+}
+
+.manager-page .ant-card {
+  border-radius: var(--xui-radius-lg, 14px);
+  box-shadow: var(--xui-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.06));
+}
+
+.manager-page .ant-typography {
+  overflow-wrap: anywhere;
+}
+
+.manager-page-header,
+.manager-subscriptions-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.manager-page-header {
+  margin-bottom: 4px;
+}
+
+.manager-page-heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.manager-page-tools,
+.manager-subscription-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.manager-page .summary-card {
+  height: 100%;
+}
+
+.manager-page .summary-card .ant-card-body {
+  padding: 18px;
+}
+
+.manager-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.manager-subscriptions-toolbar {
+  margin: 0 0 20px;
+}
+
+.manager-search {
+  width: min(100%, 340px);
+}
+
+.manager-subscription-card {
+  height: 100%;
+  overflow: hidden;
+}
+
+.manager-subscription-card .ant-card-head {
+  min-height: 54px;
+}
+
+.manager-subscription-card .ant-card-head-title {
+  min-width: 0;
+}
+
+.manager-subscription-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 270px;
+  height: calc(100% - 54px);
+  padding: 16px;
+  gap: 16px;
+}
+
+.manager-subscription-title {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 8px;
+}
+
+.manager-subscription-title > .ant-typography:first-child {
+  min-width: 0;
+}
+
+.manager-subscription-id {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.manager-subscription-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 12px;
+}
+
+.manager-subscription-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.manager-subscription-meta .ant-tag {
+  margin-inline-end: 0;
+}
+
+.manager-subscription-note.ant-typography {
+  margin-bottom: 0;
+  white-space: pre-wrap;
+}
+
+.manager-subscription-detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 4px;
+  min-width: 0;
+}
+
+.manager-subscription-detail > .ant-typography {
+  min-width: 0;
+}
+
+.manager-client-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--xui-radius-md, 10px);
+  background: var(--ant-color-fill-quaternary);
+}
+
+.manager-client-summary .ant-btn-link {
+  height: auto;
+  padding: 0;
+  white-space: normal;
+  text-align: end;
+}
+
+.manager-subscription-link {
+  padding: 10px 12px;
+  border-radius: var(--xui-radius-md, 10px);
+  border: 1px solid var(--ant-color-border-secondary);
+  background: var(--ant-color-fill-quaternary);
+}
+
+.manager-subscription-link .ant-typography {
+  margin: 4px 0 0;
+  word-break: break-all;
+}
+
+.manager-job .ant-progress,
+.manager-client-summary .ant-progress {
+  margin: 0;
+}
+
+.manager-subscription-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ant-color-border-secondary);
+}
+
+.manager-subscriptions-pagination {
+  margin: 20px 0 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.manager-empty {
+  padding: 48px 12px;
+}
+
+.manager-editor .ant-modal-content {
+  border-radius: var(--xui-radius-lg, 14px);
+}
+
+.manager-editor .ant-tabs-nav {
+  margin-bottom: 16px;
+}
+
+.manager-editor .ant-alert {
+  white-space: pre-wrap;
+}
+
+.manager-editor .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.manager-editor .ant-card {
+  border-radius: var(--xui-radius-md, 10px);
+}
+
+@media (max-width: 768px) {
+  .manager-page .content-area {
+    padding: 8px;
+  }
+
+  .manager-page-header {
+    padding: 8px 4px 0;
+  }
+
+  .manager-page-tools {
+    width: 100%;
+  }
+
+  .manager-page-tools .ant-select {
+    flex: 1 1 140px;
+  }
+
+  .manager-subscriptions-toolbar {
+    align-items: stretch;
+  }
+
+  .manager-search {
+    width: 100%;
+  }
+
+  .manager-subscription-actions {
+    width: 100%;
+  }
+
+  .manager-subscription-actions .ant-btn {
+    flex: 1 1 auto;
+  }
+
+  .manager-page .summary-card .ant-card-body {
+    padding: 12px;
+  }
+
+  .manager-subscription-footer {
+    align-items: center;
+  }
+
+  .manager-subscription-footer > .ant-space {
+    flex: 1;
+  }
+
+  .manager-subscription-card .ant-card-body {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .manager-toolbar {
+    align-items: stretch;
+  }
+
+  .manager-toolbar > * {
+    max-width: 100%;
+  }
+
+  .manager-editor .ant-modal-content {
+    padding: 16px;
+  }
+}

@@ -1,3 +1,4 @@
+import { VisionTestseedSchema } from '@/schemas/protocols/vision';
 import { z } from 'zod';
 
 import { FlowSchema, SniffingSchema } from '@/schemas/primitives';
@@ -44,6 +45,6 @@ export const VlessInboundSettingsSchema = z.object({
   decryption: z.string().min(1).default('none'),
   encryption: z.string().min(1).default('none'),
   fallbacks: z.array(VlessFallbackSchema).default([]),
-  testseed: z.array(z.number().int().positive()).length(4).optional(),
+  testseed: VisionTestseedSchema.length(4).optional(),
 });
 export type VlessInboundSettings = z.infer<typeof VlessInboundSettingsSchema>;

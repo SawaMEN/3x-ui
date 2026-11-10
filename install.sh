@@ -9,6 +9,12 @@ plain='\033[0m'
 xui_folder="${XUI_MAIN_FOLDER:=/usr/local/x-ui}"
 xui_service="${XUI_SERVICE:=/etc/systemd/system}"
 
+# Match the updater's directory contract before any download or removal.
+if [[ "$xui_folder" != /*/x-ui ]]; then
+    echo "XUI_MAIN_FOLDER must be an absolute installation path ending in /x-ui" >&2
+    exit 1
+fi
+
 # check root
 [[ $EUID -ne 0 ]] && echo -e "${red}Fatal error: ${plain} Please run this script with root privilege \n " && exit 1
 
@@ -25,15 +31,63 @@ else
 fi
 echo "The OS release is: $release"
 
-arch() {
-    case "$(uname -m)" in
-        x86_64 | x64 | amd64) echo 'amd64' ;;
-        armv8* | armv8 | arm64 | aarch64) echo 'arm64' ;;
-        *) echo -e "${green}Unsupported CPU architecture! ${plain}" && rm -f "$(realpath "$0")" && exit 1 ;;
+xui_env_file_path() {
+    case "${release}" in
+        ubuntu | debian | armbian)
+            echo "/etc/default/x-ui"
+            ;;
+        arch | manjaro | parch | alpine)
+            echo "/etc/conf.d/x-ui"
+            ;;
+        *)
+            echo "/etc/sysconfig/x-ui"
+            ;;
     esac
 }
 
-echo "Arch: $(arch)"
+load_xui_env() {
+    local env_file key had_allexport=0 env_status=0
+    local -a saved_keys=() saved_values=()
+    # Match the panel CLI: values explicitly supplied by the caller win over
+    # the service EnvironmentFile (including web update channel and paths).
+    while IFS= read -r key; do
+        [[ "$key" == XUI_* ]] || continue
+        saved_keys+=("$key")
+        saved_values+=("${!key}")
+    done < <(compgen -e)
+    [[ "$-" != *a* ]] || had_allexport=1
+    env_file="$(xui_env_file_path)"
+    if [[ -r "$env_file" ]]; then
+        set -a
+        # shellcheck disable=SC1090
+        source "$env_file" || env_status=$?
+        [[ "$had_allexport" == 1 ]] || set +a
+    fi
+    local i
+    for i in "${!saved_keys[@]}"; do
+        export "${saved_keys[$i]}=${saved_values[$i]}"
+    done
+    return "$env_status"
+}
+
+load_xui_env || { echo "Cannot load x-ui service environment" >&2; exit 1; }
+xui_folder="${XUI_MAIN_FOLDER:-/usr/local/x-ui}"
+xui_service="${XUI_SERVICE:-/etc/systemd/system}"
+if [[ "$xui_folder" != /*/x-ui ]]; then
+    echo "XUI_MAIN_FOLDER must be an absolute installation path ending in /x-ui" >&2
+    exit 1
+fi
+
+arch() {
+    case "$(uname -m)" in
+        x86_64 | x64 | amd64) echo 'amd64' ;;
+        armv8* | arm64 | aarch64) echo 'arm64' ;;
+        *) echo "Unsupported CPU architecture: $(uname -m)" >&2; return 1 ;;
+    esac
+}
+
+machine_arch=$(arch) || exit 1
+echo "Arch: ${machine_arch}"
 
 # Non-interactive mode: triggered explicitly via XUI_NONINTERACTIVE=1, or
 # implicitly when stdin is not a TTY (e.g. `curl ... | bash`, cloud-init).
@@ -75,15 +129,15 @@ acme_listen_flag() {
 is_port_in_use() {
     local port="$1"
     if command -v ss > /dev/null 2>&1; then
-        ss -ltn 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {exit 0} END {exit 1}'
+        ss -ltn 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit !found}'
         return
     fi
     if command -v netstat > /dev/null 2>&1; then
-        netstat -lnt 2> /dev/null | awk -v p=":${port} " '$4 ~ p {exit 0} END {exit 1}'
+        netstat -lnt 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit !found}'
         return
     fi
     if command -v lsof > /dev/null 2>&1; then
-        lsof -nP -iTCP:${port} -sTCP:LISTEN > /dev/null 2>&1 && return 0
+        lsof -nP -iTCP:"${port}" -sTCP:LISTEN > /dev/null 2>&1 && return 0
     fi
     return 1
 }
@@ -91,29 +145,29 @@ is_port_in_use() {
 install_base() {
     case "${release}" in
         ubuntu | debian | armbian)
-            apt-get update && apt-get install -y -q cron curl tar tzdata socat ca-certificates openssl iproute2 iptables
+            apt-get update && apt-get install -y -q cron curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux
             ;;
         fedora | amzn | virtuozzo | rhel | almalinux | rocky | ol)
-            dnf makecache -y && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables
+            dnf makecache -y && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables nftables util-linux
             ;;
         centos)
             if [[ "${VERSION_ID}" =~ ^7 ]]; then
-                yum makecache -y && yum install -y cronie curl tar tzdata socat ca-certificates openssl iproute iptables
+                yum makecache -y && yum install -y cronie curl tar tzdata socat ca-certificates openssl iproute iptables nftables util-linux
             else
-                dnf makecache -y && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables
+                dnf makecache -y && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables nftables util-linux
             fi
             ;;
         arch | manjaro | parch)
-            pacman -Syu --noconfirm --needed cronie curl tar tzdata socat ca-certificates openssl iproute2 iptables
+            pacman -Syu --noconfirm --needed cronie curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux
             ;;
         opensuse-tumbleweed | opensuse-leap)
-            zypper refresh && zypper -q install -y cron curl tar timezone socat ca-certificates openssl iproute2 iptables
+            zypper refresh && zypper -q install -y cron curl tar timezone socat ca-certificates openssl iproute2 iptables nftables util-linux
             ;;
         alpine)
-            apk update && apk add dcron curl tar tzdata socat ca-certificates openssl iproute2 iptables
+            apk update && apk add dcron curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux
             ;;
         *)
-            apt-get update && apt-get install -y -q cron curl tar tzdata socat ca-certificates openssl iproute2 iptables
+            apt-get update && apt-get install -y -q cron curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux
             ;;
     esac
 }
@@ -203,6 +257,60 @@ pg_ensure_hba_password_auth() {
     sudo -u postgres psql -tAc 'SELECT pg_reload_conf()' > /dev/null 2>&1 || true
 }
 
+# New installs get this PostgreSQL major from the official PGDG repository; distros or
+# CPU architectures PGDG does not build for fall back to the distribution's own package.
+PG_TARGET_MAJOR=18
+
+pg_has_debian_cluster() {
+    command -v pg_lsclusters > /dev/null 2>&1 && [[ -n "$(pg_lsclusters -h 2> /dev/null)" ]]
+}
+
+# Installs postgresql-${PG_TARGET_MAJOR} from apt.postgresql.org. On failure it removes the
+# repository it added, so an unsupported release cannot break later `apt-get update` runs.
+pg_apt_install_pgdg_server() {
+    local list added_lists=()
+    for list in /etc/apt/sources.list.d/pgdg.list /etc/apt/sources.list.d/pgdg.sources; do
+        [[ -e "${list}" ]] || added_lists+=("${list}")
+    done
+    if apt-get install -y -q postgresql-common ca-certificates gnupg >&2 \
+        && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >&2 \
+        && apt-get install -y -q "postgresql-${PG_TARGET_MAJOR}" >&2; then
+        return 0
+    fi
+    for list in "${added_lists[@]}"; do
+        rm -f "${list}"
+    done
+    apt-get update >&2 || true
+    echo -e "${yellow}PostgreSQL ${PG_TARGET_MAJOR} is not available for this system; installing the distribution's PostgreSQL instead.${plain}" >&2
+    return 1
+}
+
+# Installs postgresql${PG_TARGET_MAJOR}-server from the PGDG yum repository (EL 8+ only); on
+# failure it undoes the repository and module changes it made. The caller runs initdb.
+pg_el_install_pgdg_server() {
+    local elver
+    elver=$(rpm -E %rhel 2> /dev/null)
+    [[ "${elver}" =~ ^[0-9]+$ && "${elver}" -ge 8 ]] && command -v dnf > /dev/null 2>&1 || return 1
+    [[ -f /var/lib/pgsql/data/PG_VERSION ]] && return 1
+    local added_repo=false
+    if ! rpm -q pgdg-redhat-repo > /dev/null 2>&1; then
+        if dnf install -y -q "https://download.postgresql.org/pub/repos/yum/reporpms/EL-${elver}-$(uname -m)/pgdg-redhat-repo-latest.noarch.rpm" >&2; then
+            added_repo=true
+            dnf -qy module disable postgresql > /dev/null 2>&1 || true
+        fi
+    fi
+    if rpm -q pgdg-redhat-repo > /dev/null 2>&1 \
+        && dnf install -y -q "postgresql${PG_TARGET_MAJOR}-server" "postgresql${PG_TARGET_MAJOR}-contrib" >&2; then
+        return 0
+    fi
+    if [[ "${added_repo}" == "true" ]]; then
+        dnf -qy module reset postgresql > /dev/null 2>&1 || true
+        dnf remove -y -q pgdg-redhat-repo >&2 || true
+    fi
+    echo -e "${yellow}PostgreSQL ${PG_TARGET_MAJOR} is not available for this system; installing the distribution's PostgreSQL instead.${plain}" >&2
+    return 1
+}
+
 install_postgres_local() {
     local pg_user pg_pass
     pg_pass=$(gen_random_string 24)
@@ -210,21 +318,27 @@ install_postgres_local() {
     local pg_host="127.0.0.1"
     local pg_port="5432"
 
+    local pg_service="postgresql"
     case "${release}" in
         ubuntu | debian | armbian)
-            apt-get update >&2 && apt-get install -y -q postgresql >&2 || return 1
-            ;;
-        fedora | amzn | virtuozzo | rhel | almalinux | rocky | ol)
-            dnf install -y -q postgresql-server postgresql-contrib >&2 || return 1
-            [[ -d /var/lib/pgsql/data && -f /var/lib/pgsql/data/PG_VERSION ]] || postgresql-setup --initdb >&2 || return 1
-            ;;
-        centos)
-            if [[ "${VERSION_ID}" =~ ^7 ]]; then
-                yum install -y postgresql-server postgresql-contrib >&2 || return 1
-            else
-                dnf install -y -q postgresql-server postgresql-contrib >&2 || return 1
+            apt-get update >&2 || return 1
+            if pg_has_debian_cluster || ! pg_apt_install_pgdg_server; then
+                apt-get install -y -q postgresql >&2 || return 1
             fi
-            [[ -d /var/lib/pgsql/data && -f /var/lib/pgsql/data/PG_VERSION ]] || postgresql-setup --initdb >&2 || return 1
+            ;;
+        fedora | amzn | virtuozzo | rhel | almalinux | rocky | ol | centos)
+            if [[ "${release}" != "fedora" && "${release}" != "amzn" ]] && pg_el_install_pgdg_server; then
+                pg_service="postgresql-${PG_TARGET_MAJOR}"
+                [[ -f "/var/lib/pgsql/${PG_TARGET_MAJOR}/data/PG_VERSION" ]] \
+                    || "/usr/pgsql-${PG_TARGET_MAJOR}/bin/postgresql-${PG_TARGET_MAJOR}-setup" initdb >&2 || return 1
+            else
+                if [[ "${release}" == "centos" && "${VERSION_ID}" =~ ^7 ]]; then
+                    yum install -y postgresql-server postgresql-contrib >&2 || return 1
+                else
+                    dnf install -y -q postgresql-server postgresql-contrib >&2 || return 1
+                fi
+                [[ -d /var/lib/pgsql/data && -f /var/lib/pgsql/data/PG_VERSION ]] || postgresql-setup --initdb >&2 || return 1
+            fi
             ;;
         arch | manjaro | parch)
             pacman -Syu --noconfirm --needed postgresql >&2 || return 1
@@ -254,7 +368,7 @@ install_postgres_local() {
     esac
 
     if [[ "${release}" != "alpine" ]]; then
-        systemctl enable --now postgresql >&2 || return 1
+        systemctl enable --now "${pg_service}" >&2 || return 1
     fi
 
     # Wait briefly for the server to accept connections.
@@ -368,7 +482,6 @@ install_tuic_server() {
         amd64|x86_64) target_arch="x86_64-unknown-linux-musl" ;;
         arm64|aarch64) target_arch="aarch64-unknown-linux-musl" ;;
         *) return 0 ;;
-        *) return 0 ;;
     esac
 
     local tuic_url="https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0/tuic-server-1.0.0-${target_arch}"
@@ -409,20 +522,22 @@ setup_ssl_certificate() {
     echo -e "${yellow}Note: Port 80 must be open and accessible from the internet${plain}"
 
     ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force > /dev/null 2>&1
-    ~/.acme.sh/acme.sh --issue -d ${domain} $(acme_listen_flag) --standalone --httpport 80 --force
+    local listen_flag
+    listen_flag=$(acme_listen_flag)
+    ~/.acme.sh/acme.sh --issue -d "${domain}" ${listen_flag:+"$listen_flag"} --standalone --httpport 80 --force
 
     if [ $? -ne 0 ]; then
         echo -e "${yellow}Failed to issue certificate for ${domain}${plain}"
         echo -e "${yellow}Please ensure port 80 is open and try again later with: x-ui${plain}"
-        rm -rf ~/.acme.sh/${domain} ~/.acme.sh/${domain}_ecc 2> /dev/null
+        rm -rf ~/.acme.sh/"${domain}" ~/.acme.sh/"${domain}"_ecc 2> /dev/null
         rm -rf "$certPath" 2> /dev/null
         return 1
     fi
 
     # Install certificate
-    ~/.acme.sh/acme.sh --installcert --force -d ${domain} \
-        --key-file /root/cert/${domain}/privkey.pem \
-        --fullchain-file /root/cert/${domain}/fullchain.pem \
+    ~/.acme.sh/acme.sh --installcert --force -d "${domain}" \
+        --key-file /root/cert/"${domain}"/privkey.pem \
+        --fullchain-file /root/cert/"${domain}"/fullchain.pem \
         --reloadcmd "systemctl restart x-ui" > /dev/null 2>&1
 
     if [ $? -ne 0 ]; then
@@ -433,15 +548,15 @@ setup_ssl_certificate() {
     # Enable auto-renew
     ~/.acme.sh/acme.sh --upgrade --auto-upgrade > /dev/null 2>&1
     # Secure permissions: private key readable only by owner
-    chmod 600 $certPath/privkey.pem 2> /dev/null
-    chmod 644 $certPath/fullchain.pem 2> /dev/null
+    chmod 600 "$certPath"/privkey.pem 2> /dev/null
+    chmod 644 "$certPath"/fullchain.pem 2> /dev/null
 
     # Set certificate for panel
     local webCertFile="/root/cert/${domain}/fullchain.pem"
     local webKeyFile="/root/cert/${domain}/privkey.pem"
 
     if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
-        ${xui_folder}/x-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile" > /dev/null 2>&1
+        "${xui_folder}"/x-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile" > /dev/null 2>&1
         echo -e "${green}SSL certificate installed and configured successfully!${plain}"
         return 0
     else
@@ -485,9 +600,9 @@ setup_ip_certificate() {
     mkdir -p "$certDir"
 
     # Build domain arguments
-    local domain_args="-d ${ipv4}"
+    local domain_args=(-d "${ipv4}")
     if [[ -n "$ipv6" ]] && is_ipv6 "$ipv6"; then
-        domain_args="${domain_args} -d ${ipv6}"
+        domain_args+=(-d "${ipv6}")
         echo -e "${green}Including IPv6 address: ${ipv6}${plain}"
     fi
 
@@ -541,20 +656,20 @@ setup_ip_certificate() {
     [[ -n "${XUI_ACME_EMAIL:-}" ]] && ~/.acme.sh/acme.sh --register-account -m "${XUI_ACME_EMAIL}" > /dev/null 2>&1
 
     ~/.acme.sh/acme.sh --issue \
-        ${domain_args} \
+        "${domain_args[@]}" \
         --standalone \
         --server letsencrypt \
         --certificate-profile shortlived \
         --days 6 \
-        --httpport ${WebPort} \
+        --httpport "${WebPort}" \
         --force
 
     if [ $? -ne 0 ]; then
         echo -e "${red}Failed to issue IP certificate${plain}"
         echo -e "${yellow}Please ensure port ${WebPort} is reachable (or forwarded from external port 80)${plain}"
         # Cleanup acme.sh data for both IPv4 and IPv6 if specified
-        rm -rf ~/.acme.sh/${ipv4} ~/.acme.sh/${ipv4}_ecc 2> /dev/null
-        [[ -n "$ipv6" ]] && rm -rf ~/.acme.sh/${ipv6} ~/.acme.sh/${ipv6}_ecc 2> /dev/null
+        rm -rf ~/.acme.sh/"${ipv4}" ~/.acme.sh/"${ipv4}"_ecc 2> /dev/null
+        [[ -n "$ipv6" ]] && rm -rf ~/.acme.sh/"${ipv6}" ~/.acme.sh/"${ipv6}"_ecc 2> /dev/null
         rm -rf ${certDir} 2> /dev/null
         return 1
     fi
@@ -564,7 +679,7 @@ setup_ip_certificate() {
     # Install certificate
     # Note: acme.sh may report "Reload error" and exit non-zero if reloadcmd fails,
     # but the cert files are still installed. We check for files instead of exit code.
-    ~/.acme.sh/acme.sh --installcert --force -d ${ipv4} \
+    ~/.acme.sh/acme.sh --installcert --force -d "${ipv4}" \
         --key-file "${certDir}/privkey.pem" \
         --fullchain-file "${certDir}/fullchain.pem" \
         --reloadcmd "${reloadCmd}" 2>&1 || true
@@ -573,8 +688,8 @@ setup_ip_certificate() {
     if [[ ! -f "${certDir}/fullchain.pem" || ! -f "${certDir}/privkey.pem" ]]; then
         echo -e "${red}Certificate files not found after installation${plain}"
         # Cleanup acme.sh data for both IPv4 and IPv6 if specified
-        rm -rf ~/.acme.sh/${ipv4} ~/.acme.sh/${ipv4}_ecc 2> /dev/null
-        [[ -n "$ipv6" ]] && rm -rf ~/.acme.sh/${ipv6} ~/.acme.sh/${ipv6}_ecc 2> /dev/null
+        rm -rf ~/.acme.sh/"${ipv4}" ~/.acme.sh/"${ipv4}"_ecc 2> /dev/null
+        [[ -n "$ipv6" ]] && rm -rf ~/.acme.sh/"${ipv6}" ~/.acme.sh/"${ipv6}"_ecc 2> /dev/null
         rm -rf ${certDir} 2> /dev/null
         return 1
     fi
@@ -590,7 +705,7 @@ setup_ip_certificate() {
 
     # Configure panel to use the certificate
     echo -e "${green}Setting certificate paths for the panel...${plain}"
-    ${xui_folder}/x-ui cert -webCert "${certDir}/fullchain.pem" -webCertKey "${certDir}/privkey.pem"
+    "${xui_folder}"/x-ui cert -webCert "${certDir}/fullchain.pem" -webCertKey "${certDir}/privkey.pem"
 
     if [ $? -ne 0 ]; then
         echo -e "${yellow}Warning: Could not set certificate paths automatically${plain}"
@@ -609,8 +724,8 @@ setup_ip_certificate() {
 
 # Comprehensive manual SSL certificate issuance via acme.sh
 ssl_cert_issue() {
-    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep 'webBasePath:' | awk -F': ' '{print $2}' | tr -d '[:space:]' | sed 's#^/##')
-    local existing_port=$(${xui_folder}/x-ui setting -show true | grep 'port:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    local existing_webBasePath=$("${xui_folder}"/x-ui setting -show true | grep 'webBasePath:' | awk -F': ' '{print $2}' | tr -d '[:space:]' | sed 's#^/##')
+    local existing_port=$("${xui_folder}"/x-ui setting -show true | grep 'port:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
 
     # check for acme.sh first
     if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
@@ -674,7 +789,7 @@ ssl_cert_issue() {
             [[ -n "${certInfo}" ]] && echo "$certInfo"
         else
             echo -e "${yellow}Found incomplete acme.sh state for ${domain} (no valid certificate files); cleaning it up and re-issuing.${plain}"
-            rm -rf ~/.acme.sh/${domain} ~/.acme.sh/${domain}_ecc
+            rm -rf ~/.acme.sh/"${domain}" ~/.acme.sh/"${domain}"_ecc
         fi
     fi
     if [[ ${cert_exists} -eq 0 ]]; then
@@ -709,10 +824,12 @@ ssl_cert_issue() {
         # issue the certificate
         ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force
         [[ -n "${XUI_ACME_EMAIL:-}" ]] && ~/.acme.sh/acme.sh --register-account -m "${XUI_ACME_EMAIL}" > /dev/null 2>&1
-        ~/.acme.sh/acme.sh --issue -d ${domain} $(acme_listen_flag) --standalone --httpport ${WebPort} --force
+        local listen_flag
+        listen_flag=$(acme_listen_flag)
+        ~/.acme.sh/acme.sh --issue -d "${domain}" ${listen_flag:+"$listen_flag"} --standalone --httpport ${WebPort} --force
         if [ $? -ne 0 ]; then
             echo -e "${red}Issuing certificate failed, please check logs.${plain}"
-            rm -rf ~/.acme.sh/${domain} ~/.acme.sh/${domain}_ecc
+            rm -rf ~/.acme.sh/"${domain}" ~/.acme.sh/"${domain}"_ecc
             systemctl start x-ui 2> /dev/null || rc-service x-ui start 2> /dev/null
             return 1
         else
@@ -754,9 +871,9 @@ ssl_cert_issue() {
 
     # install the certificate
     local installOutput=""
-    installOutput=$(~/.acme.sh/acme.sh --installcert --force -d ${domain} \
-        --key-file /root/cert/${domain}/privkey.pem \
-        --fullchain-file /root/cert/${domain}/fullchain.pem --reloadcmd "${reloadCmd}" 2>&1)
+    installOutput=$(~/.acme.sh/acme.sh --installcert --force -d "${domain}" \
+        --key-file /root/cert/"${domain}"/privkey.pem \
+        --fullchain-file /root/cert/"${domain}"/fullchain.pem --reloadcmd "${reloadCmd}" 2>&1)
     local installRc=$?
     echo "${installOutput}"
 
@@ -770,7 +887,7 @@ ssl_cert_issue() {
     else
         echo -e "${red}Installing certificate failed, exiting.${plain}"
         if [[ ${cert_exists} -eq 0 ]]; then
-            rm -rf ~/.acme.sh/${domain} ~/.acme.sh/${domain}_ecc
+            rm -rf ~/.acme.sh/"${domain}" ~/.acme.sh/"${domain}"_ecc
         fi
         systemctl start x-ui 2> /dev/null || rc-service x-ui start 2> /dev/null
         return 1
@@ -780,16 +897,16 @@ ssl_cert_issue() {
     ~/.acme.sh/acme.sh --upgrade --auto-upgrade
     if [ $? -ne 0 ]; then
         echo -e "${yellow}Auto renew setup had issues, certificate details:${plain}"
-        ls -lah /root/cert/${domain}/
+        ls -lah /root/cert/"${domain}"/
         # Secure permissions: private key readable only by owner
-        chmod 600 $certPath/privkey.pem 2> /dev/null
-        chmod 644 $certPath/fullchain.pem 2> /dev/null
+        chmod 600 "$certPath"/privkey.pem 2> /dev/null
+        chmod 644 "$certPath"/fullchain.pem 2> /dev/null
     else
         echo -e "${green}Auto renew succeeded, certificate details:${plain}"
-        ls -lah /root/cert/${domain}/
+        ls -lah /root/cert/"${domain}"/
         # Secure permissions: private key readable only by owner
-        chmod 600 $certPath/privkey.pem 2> /dev/null
-        chmod 644 $certPath/fullchain.pem 2> /dev/null
+        chmod 600 "$certPath"/privkey.pem 2> /dev/null
+        chmod 644 "$certPath"/fullchain.pem 2> /dev/null
     fi
 
     # start panel
@@ -806,7 +923,7 @@ ssl_cert_issue() {
         local webKeyFile="/root/cert/${domain}/privkey.pem"
 
         if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
-            ${xui_folder}/x-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
+            "${xui_folder}"/x-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
             echo -e "${green}Certificate paths set for the panel${plain}"
             echo -e "${green}Certificate File: $webCertFile${plain}"
             echo -e "${green}Private Key File: $webKeyFile${plain}"
@@ -972,7 +1089,7 @@ prompt_and_setup_ssl() {
             done
 
             # 3.4 Apply Settings via x-ui binary
-            ${xui_folder}/x-ui cert -webCert "$custom_cert" -webCertKey "$custom_key" > /dev/null 2>&1
+            "${xui_folder}"/x-ui cert -webCert "$custom_cert" -webCertKey "$custom_key" > /dev/null 2>&1
 
             # Set SSL_HOST for composing Panel URL
             if [[ -n "$custom_domain" ]]; then
@@ -1006,7 +1123,7 @@ prompt_and_setup_ssl() {
                 read -rp "Bind the panel to 127.0.0.1 only? (recommended — forces SSH tunnel / reverse-proxy access) [y/N]: " bind_local
             fi
             if [[ "$bind_local" == "y" || "$bind_local" == "Y" ]]; then
-                ${xui_folder}/x-ui setting -listenIP "127.0.0.1" > /dev/null 2>&1
+                "${xui_folder}"/x-ui setting -listenIP "127.0.0.1" > /dev/null 2>&1
                 SSL_HOST="127.0.0.1"
                 echo -e "${green}✓ Panel bound to 127.0.0.1 only. It is now unreachable from the public internet.${plain}"
                 echo ""
@@ -1034,11 +1151,22 @@ prompt_and_setup_ssl() {
 }
 
 config_after_install() {
-    local existing_hasDefaultCredential=$(${xui_folder}/x-ui setting -show true | grep -Eo 'hasDefaultCredential: .+' | awk '{print $2}')
-    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}' | sed 's#^/##')
-    local existing_port=$(${xui_folder}/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    # Reading settings initializes a fresh database with random credentials.
+    # Remember whether it existed before that read, so the first install still
+    # applies the requested credentials/port and writes install-result.env.
+    local fresh_sqlite=0
+    if [[ "${XUI_DB_TYPE:-sqlite}" != "postgres" && ! -s "${XUI_DB_FOLDER:-/etc/x-ui}/x-ui.db" ]]; then
+        fresh_sqlite=1
+    fi
+    local existing_hasDefaultCredential=$("${xui_folder}"/x-ui setting -show true | grep -Eo 'hasDefaultCredential: .+' | awk '{print $2}')
+    local existing_webBasePath=$("${xui_folder}"/x-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}' | sed 's#^/##')
+    local existing_port=$("${xui_folder}"/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
     # Properly detect empty cert by checking if cert: line exists and has content after it
-    local existing_cert=$(${xui_folder}/x-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    local existing_cert=$("${xui_folder}"/x-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    if [[ "$fresh_sqlite" == 1 ]]; then
+        existing_hasDefaultCredential=true
+        existing_webBasePath=""
+    fi
     local URL_lists=(
         "https://api4.ipify.org"
         "https://ipv4.icanhazip.com"
@@ -1230,7 +1358,7 @@ EOF
                 fi
             fi
 
-            ${xui_folder}/x-ui setting -username "${config_username}" -password "${config_password}" -port "${config_port}" -webBasePath "${config_webBasePath}"
+            "${xui_folder}"/x-ui setting -username "${config_username}" -password "${config_password}" -port "${config_port}" -webBasePath "${config_webBasePath}"
 
             echo ""
             echo -e "${green}═══════════════════════════════════════════${plain}"
@@ -1244,7 +1372,7 @@ EOF
             prompt_and_setup_ssl "${config_port}" "${config_webBasePath}" "${server_ip}"
 
             # Retrieve the API token for display
-            local config_apiToken=$(${xui_folder}/x-ui setting -getApiToken | grep -Eo 'apiToken: .+' | awk '{print $2}')
+            local config_apiToken=$("${xui_folder}"/x-ui setting -getApiToken | grep -Eo 'apiToken: .+' | awk '{print $2}')
 
             # Display final credentials and access information
             echo ""
@@ -1305,7 +1433,7 @@ EOF
         else
             local config_webBasePath=$(gen_random_string 18)
             echo -e "${yellow}WebBasePath is missing or too short. Generating a new one...${plain}"
-            ${xui_folder}/x-ui setting -webBasePath "${config_webBasePath}"
+            "${xui_folder}"/x-ui setting -webBasePath "${config_webBasePath}"
             echo -e "${green}New WebBasePath: ${config_webBasePath}${plain}"
 
             # If the panel is already installed but no certificate is configured, prompt for SSL now
@@ -1329,7 +1457,7 @@ EOF
             local config_password="${XUI_PASSWORD:-$(gen_random_string 10)}"
 
             echo -e "${yellow}Default credentials detected. Security update required...${plain}"
-            ${xui_folder}/x-ui setting -username "${config_username}" -password "${config_password}"
+            "${xui_folder}"/x-ui setting -username "${config_username}" -password "${config_password}"
             echo -e "Generated new random login credentials:"
             echo -e "###############################################"
             echo -e "${green}Username: ${config_username}${plain}"
@@ -1338,7 +1466,7 @@ EOF
 
             # Persist a machine-parseable credentials file for cloud-init / MOTD.
             local config_apiToken
-            config_apiToken=$(${xui_folder}/x-ui setting -getApiToken | grep -Eo 'apiToken: .+' | awk '{print $2}')
+            config_apiToken=$("${xui_folder}"/x-ui setting -getApiToken | grep -Eo 'apiToken: .+' | awk '{print $2}')
             : "${SSL_SCHEME:=https}"
             : "${SSL_HOST:=${server_ip}}"
             write_install_result "${config_username}" "${config_password}" "${existing_port}" \
@@ -1349,7 +1477,7 @@ EOF
 
         # Existing install: if no cert configured, prompt user for SSL setup
         # Properly detect empty cert by checking if cert: line exists and has content after it
-        existing_cert=$(${xui_folder}/x-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+        existing_cert=$("${xui_folder}"/x-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
         if [[ -z "$existing_cert" ]]; then
             echo ""
             echo -e "${green}═══════════════════════════════════════════${plain}"
@@ -1364,7 +1492,7 @@ EOF
         fi
     fi
 
-    ${xui_folder}/x-ui migrate
+    "${xui_folder}"/x-ui migrate
 }
 
 # setup_fail2ban auto-installs and configures fail2ban for the IP Limit feature
@@ -1438,12 +1566,22 @@ _install_xui_service_unit() {
 # releases/latest redirect, which is not subject to the unauthenticated API's
 # 60 req/h-per-IP limit that trips shared CI/CGNAT addresses (the install then
 # fails with "Failed to fetch x-ui version"), and falls back to the API.
+# Retry a failed transport over IPv4 without mixing partial stdout with the retry.
+release_curl() {
+    local output
+    if output=$("${curl_bin:-curl}" "$@"); then
+        printf '%s' "$output"
+        return 0
+    fi
+    "${curl_bin:-curl}" -4 "$@"
+}
+
 resolve_latest_tag() {
     local url tag page
 
     # Prefer GitHub's public /releases/latest redirect. This does not require
     # the REST API and therefore avoids the unauthenticated API rate limit.
-    url=$(curl -sSLI -o /dev/null -w '%{url_effective}'         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null)
+    url=$(release_curl -sSLI -o /dev/null -w '%{url_effective}'         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null)
     tag=${url##*/tag/}
     if [[ "$tag" != "$url" && -n "$tag" && "$tag" != "latest" ]]; then
         printf '%s\n' "$tag"
@@ -1452,7 +1590,7 @@ resolve_latest_tag() {
 
     # Some proxies/CDNs do not expose the final URL for HEAD requests.
     # Fall back to the public release HTML page, still without using the API.
-    page=$(curl -fsSL         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null) || return 1
+    page=$(release_curl -fsSL         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null) || return 1
     tag=$(printf '%s' "$page"         | grep -oE '/SawaMEN/3x-ui/releases/tag/[^"?#]+'         | head -n 1         | sed 's#.*/tag/##')
     [[ -n "$tag" ]] || return 1
     printf '%s\n' "$tag"
@@ -1463,76 +1601,232 @@ resolve_latest_tag() {
 # sidecar) is tolerated with a warning.
 verify_release_checksum() {
     local url="$1" file="$2" sums="$2.sha256" code expected actual
-    rm -f "${sums}"
-    code=$(curl -sL --retry 3 --retry-delay 3 --connect-timeout 15 --max-time 60 -o "${sums}" -w '%{http_code}' "${url}.sha256")
-    if [[ "${code}" == "404" ]]; then
-        rm -f "${sums}"
-        echo -e "${yellow}No checksum published for this release, skipping verification${plain}"
-        return 0
+    rm -f -- "$sums"
+    # Missing or unreachable checksums are not evidence that an archive is
+    # authentic. Never execute a release payload without a verified digest.
+    if ! code=$(release_curl -sL --retry 3 --retry-delay 3 --connect-timeout 15 --max-time 60 -o "$sums" -w '%{http_code}' "$url.sha256"); then
+        rm -f -- "$sums"
+        echo "Cannot retrieve release SHA-256; installation unchanged." >&2
+        return 1
     fi
-    if [[ "${code}" != "200" ]]; then
-        rm -f "${sums}" "${file}"
-        echo -e "${red}Failed to download the checksum for $(basename "${file}") (HTTP ${code})${plain}"
-        exit 1
+    if [[ "$code" != 200 || ! -s "$sums" ]]; then
+        rm -f -- "$sums"
+        echo "Release SHA-256 is unavailable or invalid (HTTP $code); installation unchanged." >&2
+        return 1
     fi
-    expected=$(awk 'NR == 1 {print $1}' "${sums}")
-    actual=$(sha256sum "${file}" | awk '{print $1}')
-    rm -f "${sums}"
-    if [[ ! "${expected}" =~ ^[0-9a-f]{64}$ || "${expected}" != "${actual}" ]]; then
-        rm -f "${file}"
-        echo -e "${red}Checksum mismatch for $(basename "${file}"): expected ${expected:-<none>}, got ${actual}${plain}"
-        exit 1
+    expected=$(awk 'NR == 1 {print $1}' "$sums") || { rm -f -- "$sums"; return 1; }
+    actual=$(sha256sum -- "$file" | awk '{print $1}') || { rm -f -- "$sums"; return 1; }
+    rm -f -- "$sums"
+    if [[ ! "$expected" =~ ^[0-9a-f]{64}$ || "$expected" != "$actual" ]]; then
+        echo "Release checksum mismatch or malformed checksum sidecar; installation unchanged." >&2
+        return 1
     fi
-    echo -e "${green}Checksum verified: ${actual}${plain}"
+    echo "Release archive SHA-256 verified: $actual"
 }
-
 # Older tags predate some of these files (x-ui.rc arrived in v2.8.4). Serving
 # main's copy against an old binary is the mismatch this pinning exists to
 # prevent, so probe before anything is stopped or removed and refuse the tag.
-require_repo_files() {
-    local ref="$1" name status
-    shift
-    [[ "${ref}" == "main" ]] && return 0
-    for name in "$@"; do
-        status=$(curl -sIL --retry 3 --connect-timeout 15 -o /dev/null -w '%{http_code}' "https://raw.githubusercontent.com/SawaMEN/3x-ui/${ref}/${name}")
-        if [[ "${status}" != "200" ]]; then
-            echo -e "${red}${name} is not available for ${ref} (HTTP ${status})${plain}"
-            echo -e "${red}Install a release that ships it, or 'dev' for the rolling build. Your existing installation has not been touched.${plain}"
-            exit 1
+# The fork's old stable tags predate the core migration. Default commands
+# select a compatible build; explicitly requested versions are never substituted.
+select_release_tag() {
+    local requested="${1:-}" status
+    if [[ -z "$requested" ]]; then
+        requested=$(resolve_latest_tag) || return 1
+        status=$(release_curl -sL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
+            "https://raw.githubusercontent.com/SawaMEN/3x-ui/${requested}/scripts/migration/core-migration.sh")
+        if [[ "$status" == 404 ]]; then
+            status=$(release_curl -sL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
+                "https://raw.githubusercontent.com/SawaMEN/3x-ui/${requested}/core-migration.sh")
+        fi
+        case "$status" in
+            200) ;;
+            404)
+                echo "Latest stable ${requested} predates the current core; selecting the project's dev build (dev-latest)." >&2
+                requested=dev-latest ;;
+            *) echo "Cannot check compatibility of ${requested} (HTTP ${status}); installation unchanged." >&2; return 1 ;;
+        esac
+    fi
+    [[ "$requested" != dev ]] || requested=dev-latest
+    printf '%s\n' "$requested"
+}
+
+rewrite_release_service_paths() {
+    local file="$1" kind="$2" line temp escaped exec_path working_path
+    [[ "$xui_folder" != /usr/local/x-ui ]] || return 0
+    escaped="${xui_folder//\\/\\\\}"
+    escaped="${escaped//\"/\\\"}"
+    if [[ "$kind" == systemd ]]; then
+        escaped="${escaped//%/%%}"
+        working_path="${xui_folder//%/%%}"
+        exec_path="${escaped//\$/\$\$}"
+    else
+        escaped="${escaped//\$/\\\$}"
+        escaped="${escaped//\`/\\\`}"
+    fi
+    temp=$(mktemp "${file}.paths.XXXXXX") || return 1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$kind:$line" in
+            systemd:WorkingDirectory=*) printf 'WorkingDirectory=%s/\n' "$working_path" ;;
+            systemd:ExecStart=*) printf 'ExecStart=/usr/bin/env -- "%s/x-ui"\n' "$exec_path" ;;
+            openrc:command=*) printf 'command="%s/x-ui"\n' "$escaped" ;;
+            'openrc:    cd /usr/local/x-ui || return 1') printf '    cd "%s" || return 1\n' "$escaped" ;;
+            *) printf '%s\n' "$line" ;;
+        esac
+    done < "$file" > "$temp" || { rm -f "$temp"; return 1; }
+    mv -f "$temp" "$file"
+}
+
+prepare_release_host_files() {
+    local ref="$1" file unit
+    for file in x-ui.sh x-ui-core.sh; do
+        [[ -s "$cm_stage/x-ui/$file" ]] && bash -n "$cm_stage/x-ui/$file" || {
+            echo "Release management script is missing or invalid: $file. Installation unchanged." >&2
+            return 1
+        }
+    done
+    if [[ "$release" == alpine ]]; then
+        file="$cm_stage/x-ui/x-ui.rc"
+        if [[ ! -s "$file" ]]; then
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/deploy/openrc/x-ui.rc" "$file" ||
+                download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/x-ui.rc" "$file" || return 1
+        fi
+        [[ -s "$file" ]] && sh -n "$file" || return 1
+        rewrite_release_service_paths "$file" openrc || return 1
+        return 0
+    fi
+    case "$release" in
+        ubuntu|debian|armbian) unit=x-ui.service.debian ;;
+        arch|manjaro|parch) unit=x-ui.service.arch ;;
+        *) unit=x-ui.service.rhel ;;
+    esac
+    if [[ -s "$cm_stage/x-ui/x-ui.service" ]]; then unit=x-ui.service; fi
+    cm_service_unit="$cm_stage/x-ui/$unit"
+    if [[ ! -s "$cm_service_unit" ]]; then
+        download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/deploy/systemd/$unit" "$cm_service_unit" ||
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/$unit" "$cm_service_unit" || return 1
+    fi
+    [[ -s "$cm_service_unit" ]] && grep -q '^\[Service\]$' "$cm_service_unit" && grep -q '^ExecStart=' "$cm_service_unit" && grep -q '^WorkingDirectory=' "$cm_service_unit" || {
+        echo "Release systemd unit is missing or invalid; installation unchanged." >&2
+        return 1
+    }
+    rewrite_release_service_paths "$cm_service_unit" systemd
+}
+
+download_release_asset() {
+    local url="$1"
+    local dest="$2"
+
+    rm -f "$dest"
+    if download_http_status=$("${curl_bin:-curl}" -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url"); then
+        return 0
+    fi
+
+    echo -e "${yellow}Initial download failed; retrying GitHub over IPv4...${plain}"
+    rm -f "$dest"
+    download_http_status=$("${curl_bin:-curl}" -4 -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url")
+}
+
+prepare_release_migration() {
+    local cm_archive="$1" cm_listing cm_helper cm_installed_bin="${XUI_BIN_FOLDER:-$xui_folder/bin}"
+    [[ "$cm_installed_bin" == /* ]] || cm_installed_bin="$xui_folder/$cm_installed_bin"
+    cm_listing=$(tar -tzf "$cm_archive") || return 1
+    if grep -Fxq 'x-ui/core-migration.sh' <<< "$cm_listing"; then
+        cm_helper=$(mktemp "${xui_folder%/*}/.core-migration.XXXXXX") || return 1
+        tar -xOf "$cm_archive" x-ui/core-migration.sh > "$cm_helper" || { rm -f "$cm_helper"; return 1; }
+        source "$cm_helper"
+        rm -f "$cm_helper"
+        xui_download_archive="$cm_archive"
+        trap 'code=$?; core_migration_exit "$code" || code=1; rm -f -- "$xui_download_archive" "${xui_download_archive}.sha256" "${xui_script_temp:-}"; exit "$code"' EXIT
+        trap 'exit 143' TERM
+        trap 'exit 130' INT
+        core_migration_prepare_archive "$cm_archive" || return 1
+    else
+        if grep -Fxq "x-ui/bin/hiddify-core-linux-$(arch)" <<< "$cm_listing" ||
+            [[ -f "$cm_installed_bin/hiddify-core-linux-$(arch)" || -f "$xui_folder/bin/hiddify-core-linux-$(arch)" ]]; then
+            echo "Release is missing its migration helper or would downgrade a migrated panel; installation was not changed" >&2
+            return 1
+        fi
+        grep -Fxq 'x-ui/x-ui' <<< "$cm_listing" && grep -Fxq "x-ui/bin/xray-linux-$(arch)" <<< "$cm_listing" || {
+            echo "Release archive is missing required panel or kernel files" >&2
+            return 1
+        }
+    fi
+}
+
+# A leftover /usr/local/x-ui directory does not imply that systemd knows
+# x-ui.service (e.g. a failed first install or interrupted repair on Arch).
+# Only stop a loaded, active unit, and never overwrite a still-running binary.
+_xui_binary_running() {
+    local proc exe
+    for proc in /proc/[0-9]*/exe; do
+        exe=$(readlink "$proc" 2> /dev/null) || continue
+        if [[ "$exe" == "${xui_folder}/x-ui" || "$exe" == "${xui_folder}/x-ui (deleted)" ]]; then
+            return 0
         fi
     done
+    return 1
+}
+
+_stop_existing_xui_for_install() {
+    if [[ $release == "alpine" ]]; then
+        if [[ -f /etc/init.d/x-ui ]] && rc-service x-ui status > /dev/null 2>&1; then
+            rc-service x-ui stop || return 1
+        fi
+    else
+        # An existing unit file may not have been reloaded after a partial install.
+        if [[ -f "${xui_service}/x-ui.service" ]]; then
+            systemctl daemon-reload > /dev/null 2>&1 || return 1
+        fi
+        if systemctl cat x-ui.service > /dev/null 2>&1; then
+            if systemctl is-active --quiet x-ui.service; then
+                systemctl stop x-ui.service || return 1
+            fi
+        else
+            echo -e "${yellow}x-ui.service is not loaded; skipping service stop during installation/repair.${plain}"
+        fi
+    fi
+    if _xui_binary_running; then
+        echo -e "${red}x-ui is still running outside the managed service; stop it before replacing the installation.${plain}" >&2
+        return 1
+    fi
+    return 0
 }
 
 install_x-ui() {
-    cd ${xui_folder%/x-ui}/
+    cd "${xui_folder%/x-ui}"/ || { echo "Cannot enter installation directory" >&2; return 1; }
+
+    # Separate downloads from concurrent install/update attempts.
+    local archive
+    archive=$(mktemp "${xui_folder%/*}/.x-ui-download.XXXXXX.tar.gz") || return 1
+    xui_download_archive="$archive"
+    trap 'code=$?; rm -f -- "$xui_download_archive" "$xui_download_archive.sha256" "${xui_script_temp:-}"; exit "$code"' EXIT
 
     # Download resources
     if [ $# == 0 ]; then
-        tag_version=$(resolve_latest_tag)
+        tag_version=$(select_release_tag)
         if [[ ! -n "$tag_version" ]]; then
             echo -e "${red}Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later${plain}"
             exit 1
         fi
         echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
-        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o ${xui_folder}-linux-$(arch).tar.gz https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
+        download_release_asset "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${archive}"
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Downloading x-ui failed, please be sure that your server can access GitHub ${plain}"
             exit 1
         fi
-        if [[ ! -s ${xui_folder}-linux-$(arch).tar.gz ]]; then
-            rm ${xui_folder}-linux-$(arch).tar.gz -f
+        if [[ ! -s ${archive} ]]; then
+            rm "${archive}" -f
             echo -e "${red}Downloaded x-ui release archive is empty${plain}"
             exit 1
         fi
-        verify_release_checksum "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${xui_folder}-linux-$(arch).tar.gz"
+        verify_release_checksum "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${archive}" || exit 1
     else
-        tag_version=$1
+        tag_version=$(select_release_tag "$1") || exit 1
         # The rolling dev channel ships under a fixed, non-semver tag that is
         # force-moved to the latest main commit on every push. Accept `dev` as a
         # convenient alias and skip the numeric floor check for it.
-        if [[ "$tag_version" == "dev" || "$tag_version" == "dev-latest" ]]; then
-            tag_version="dev-latest"
-            echo -e "${yellow}Installing the rolling dev build (tag: dev-latest). This is a per-commit pre-release, not a stable version.${plain}"
+        if [[ "$tag_version" == dev-* ]]; then
+            echo -e "${yellow}Installing the rolling dev build (tag: ${tag_version}). This is a per-commit pre-release, not a stable version.${plain}"
         else
             tag_version_numeric=${tag_version#v}
             min_version="2.3.5"
@@ -1545,33 +1839,30 @@ install_x-ui() {
 
         url="https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
         echo -e "Beginning to install x-ui ${tag_version}"
-        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o ${xui_folder}-linux-$(arch).tar.gz ${url}
+        download_release_asset "${url}" "${archive}"
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Download x-ui ${tag_version} failed, please check if the version exists ${plain}"
             exit 1
         fi
-        if [[ ! -s ${xui_folder}-linux-$(arch).tar.gz ]]; then
-            rm ${xui_folder}-linux-$(arch).tar.gz -f
+        if [[ ! -s ${archive} ]]; then
+            rm "${archive}" -f
             echo -e "${red}Downloaded x-ui release archive is empty${plain}"
             exit 1
         fi
-        verify_release_checksum "${url}" "${xui_folder}-linux-$(arch).tar.gz"
+        verify_release_checksum "${url}" "${archive}" || exit 1
     fi
-    # x-ui.sh, x-ui.rc and the unit files must come from the same release as
-    # the binary; only the rolling dev build tracks main.
+    # Pin helpers to the release tag, including the rolling dev build.
+    # main can advance while the corresponding release is still building.
     local script_ref="${tag_version}"
-    if [[ "${tag_version}" == "dev-latest" ]]; then
-        script_ref="main"
-    fi
     # The unit files are only fetched when the release tarball lacks them, so
     # they are checked at that point instead of here.
-    local required_files=("x-ui.sh")
-    [[ $release == "alpine" ]] && required_files+=("x-ui.rc")
-    require_repo_files "${script_ref}" "${required_files[@]}"
+
     local xui_script_temp="/usr/bin/x-ui-temp.$$"
     rm -f "${xui_script_temp}"
-    curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh"
-    if [[ $? -ne 0 ]]; then
+    if tar -tzf "${archive}" | grep -Fxq 'x-ui/x-ui.sh'; then
+        tar -xOf "${archive}" x-ui/x-ui.sh > "${xui_script_temp}" || exit 1
+    elif ! curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/scripts/runtime/x-ui.sh" &&
+         ! curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh"; then
         rm -f "${xui_script_temp}"
         echo -e "${red}Failed to download x-ui.sh${plain}"
         exit 1
@@ -1582,23 +1873,31 @@ install_x-ui() {
         exit 1
     fi
 
-    # Stop x-ui service and remove old resources
+    # New kernel releases require their transaction helper. Older stable tags
+    # can still be installed before migration, but cannot downgrade a migrated panel.
+    prepare_release_migration "${archive}" || exit 1
+    if [[ -n "${cm_stage:-}" ]]; then
+        prepare_release_host_files "${script_ref}" || exit 1
+    fi
+
+    # Stop the existing service only if installed and running. The directory
+    # may survive an interrupted first install without any systemd unit.
     local custom_bin_backup=""
+    local telemt_was_installed=0
+    [[ -x "${xui_folder}/bin/telemt" ]] && telemt_was_installed=1
     if [[ -e ${xui_folder}/ ]]; then
-        if [[ $release == "alpine" ]]; then
-            rc-service x-ui stop
-        else
-            systemctl stop x-ui
-        fi
+        [[ -z "${cm_stage:-}" ]] || cm_stopped=1
+        _stop_existing_xui_for_install || exit 1
+        if [[ -n "${cm_stage:-}" ]]; then core_migration_begin || exit 1; fi
         # Kill any leftover mtg (MTProto) sidecars. x-ui runs them outside its own
         # lifecycle, so on Linux a stale one can survive the stop and keep holding
         # an inbound port with an outdated secret, silently breaking new clients.
-        # The freshly installed panel respawns a clean mtg per inbound on start.
+        # The new panel replaces legacy mtg sidecars with Telemt on start.
         pkill -f 'mtg-linux-[^ ]* run ' > /dev/null 2>&1 || true
         pkill -f 'tuic-server.*-c .*bin/tuic/tuic_[0-9]+\.json' > /dev/null 2>&1 || true
 
         # bin/ is about to be wiped wholesale by the tar extraction below. The
-        # release only ships known assets (xray/mtg binaries, the bundled
+        # release only ships known assets (xray/telemt binaries, the bundled
         # geoip*/geosite*.dat sets) -- anything else in bin/ was placed there
         # by the admin (e.g. a hand-added custom geoip/geosite file referenced
         # from a routing rule via "ext:<file>:<code>") and would otherwise be
@@ -1620,37 +1919,47 @@ install_x-ui() {
         # two `exit 1`s below (extraction/binary-missing failures) and an
         # interrupted update (Ctrl-C, signal) before the restore runs.
         # Cleared once the restore below finishes normally.
-        trap '[[ -n "${custom_bin_backup}" ]] && rm -rf "${custom_bin_backup}"' EXIT INT TERM
-        rm ${xui_folder}/ -rf
+        # The migration EXIT trap owns rollback; never delete its snapshots on failure.
+        rm -rf -- "${xui_folder:?}/"
     fi
 
     # Extract resources and set permissions
-    tar zxvf x-ui-linux-$(arch).tar.gz
+    tar zxvf "${archive}" "${cm_core_tar_args[@]}"
     if [[ $? -ne 0 ]]; then
-        rm x-ui-linux-$(arch).tar.gz -f
+        rm -f -- "${archive}"
         rm -f "${xui_script_temp}"
-        echo -e "${red}Failed to extract the x-ui release archive -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the installer again${plain}"
+        echo -e "${red}Failed to extract the x-ui release archive -- the previous installation will be restored when a migration snapshot is available${plain}"
         exit 1
     fi
-    rm x-ui-linux-$(arch).tar.gz -f
+    rm -f -- "${archive}"
 
-    cd x-ui
-    if [[ $? -ne 0 || ! -s x-ui ]]; then
+    if ! cd "$xui_folder" || [[ ! -s x-ui ]]; then
         rm -f "${xui_script_temp}"
-        echo -e "${red}Extracted x-ui archive is missing the x-ui binary -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the installer again${plain}"
+        echo -e "${red}Extracted x-ui archive is missing the x-ui binary -- the previous installation will be restored when a migration snapshot is available${plain}"
         exit 1
+    fi
+    if declare -F core_migration_restore_selected_core >/dev/null; then
+        core_migration_restore_selected_core || exit 1
     fi
     chmod +x x-ui
     chmod +x x-ui.sh
+    # The panel never enables Telemt just because a release archive bundles it.
+    # Preserve explicitly installed runtimes during upgrades; a fresh install
+    # exposes an Install action in Settings instead of silently adding Telemt.
+    if [[ "${telemt_was_installed}" != 1 ]]; then
+        rm -f bin/telemt
+    fi
     # Telemt is an optional standalone MTProto implementation bundled with
     # x86_64/aarch64 releases. Install its unit/config template without
     # enabling it automatically.
-    if [[ -x "bin/telemt" ]]; then
+    if [[ -f "telemt.service" ]]; then
         # Telemt is installed as a root-owned executable. The service runs as
         # root so it can bind privileged ports (for example 443) and manage
         # its own network sockets without granting extra capabilities.
-        chown root:root "${xui_folder}/bin/telemt" 2> /dev/null || true
-        chmod 0755 "${xui_folder}/bin/telemt"
+        if [[ -x "bin/telemt" ]]; then
+            chown root:root "${xui_folder}/bin/telemt" 2> /dev/null || true
+            chmod 0755 "${xui_folder}/bin/telemt"
+        fi
 
         # Install the systemd unit with explicit root ownership/read-only
         # permissions. ProtectSystem=strict + ReadWritePaths=/etc/x-ui in the
@@ -1665,18 +1974,35 @@ install_x-ui() {
         # Install the official Telemt updater. It verifies the upstream SHA256
         # checksum before replacing the binary and preserves the running service.
         if [[ -f telemt-update.sh && -f telemt-update.service && -f telemt-update.timer ]]; then
-            install -m 0755 -o root -g root telemt-update.sh "${xui_folder}/telemt-update.sh"
+            chown root:root "${xui_folder}/telemt-update.sh"
+            chmod 0755 "${xui_folder}/telemt-update.sh"
             install -m 0644 -o root -g root telemt-update.service "${xui_service}/telemt-update.service"
             install -m 0644 -o root -g root telemt-update.timer "${xui_service}/telemt-update.timer"
             systemctl daemon-reload 2> /dev/null || true
-            systemctl enable --now telemt-update.timer 2> /dev/null || true
+            if [[ -x "bin/telemt" ]]; then
+                systemctl enable --now telemt-update.timer 2> /dev/null || true
+            else
+                systemctl disable --now telemt-update.timer 2> /dev/null || true
+            fi
         fi
 
-        # Install the optional MEKO V3 TCP fix for Telemt. The service is tied
-        # to telemt.service and applies the firewall rules only while Telemt
-        # is running. It is deliberately non-fatal when xt_u32 is unavailable.
+        # Latest compatible Hiddify core is updated separately from the panel.
+        # Keep the timer installed for subsequent core-only stable releases.
+        if [[ -f hiddify-core-update.sh && -f fetch-latest-kernel.py &&
+              -f hiddify-core-update.service && -f hiddify-core-update.timer ]]; then
+            chmod 0755 hiddify-core-update.sh
+            sed "s|/usr/local/x-ui/hiddify-core-update.sh|${xui_folder}/hiddify-core-update.sh|"                 hiddify-core-update.service > "${xui_service}/hiddify-core-update.service"
+            install -m 0644 hiddify-core-update.timer "${xui_service}/hiddify-core-update.timer"
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl enable --now hiddify-core-update.timer 2>/dev/null || true
+        fi
+
+        # Install the automatic MEKO V3 helper for active MTProto sidecars.
+        # The panel initializes its state and starts it when ports appear.
+        # nftables is preferred; IPv4 iptables remains a fallback.
         if [[ -f telemt-meko-fix.sh && -f telemt-meko-fix.service ]]; then
-            install -m 0755 -o root -g root telemt-meko-fix.sh "${xui_folder}/telemt-meko-fix.sh"
+            chown root:root "${xui_folder}/telemt-meko-fix.sh"
+            chmod 0755 "${xui_folder}/telemt-meko-fix.sh"
             install -m 0644 -o root -g root telemt-meko-fix.service "${xui_service}/telemt-meko-fix.service"
             systemctl daemon-reload 2> /dev/null || true
             systemctl enable telemt-meko-fix.service 2> /dev/null || true
@@ -1695,11 +2021,11 @@ install_x-ui() {
     fi
 
     # Check the system's architecture and rename the file accordingly.
-    chmod +x x-ui bin/xray-linux-$(arch)
-    if [[ -f bin/mtg-linux-arm ]]; then
-        chmod +x bin/mtg-linux-arm
-    elif [[ -f bin/mtg-linux-$(arch) ]]; then
-        chmod +x bin/mtg-linux-$(arch)
+    chmod +x x-ui || exit 1
+    if declare -F core_migration_prepare_archive >/dev/null; then
+        chmod +x "bin/hiddify-core-linux-$(arch)" || exit 1
+    else
+        chmod +x "bin/xray-linux-$(arch)" || exit 1
     fi
     [[ -f bin/pingtunnel ]] && chmod 0755 bin/pingtunnel
     [[ -f bin/trusttunnel_endpoint ]] && chmod 0755 bin/trusttunnel_endpoint
@@ -1710,24 +2036,30 @@ install_x-ui() {
     fi
     [[ -f bin/mita ]] && chmod +x bin/mita
 
+    # Preserve the explicitly managed Telemt version, which can be newer than
+    # the binary bundled in this panel release. Its own updater owns upgrades.
+    if [[ "${telemt_was_installed}" == 1 && -n "${custom_bin_backup}" && -f "${custom_bin_backup}/telemt" ]]; then
+        install -m 0755 -o root -g root "${custom_bin_backup}/telemt" bin/telemt || exit 1
+    fi
+
     # Restore anything from the old bin/ that the fresh release doesn't ship
     # (custom geoip/geosite files, or anything else an admin hand-placed
     # there) -- never overwrites a same-named file the new release provides,
     # so bundled assets (geoip.dat, geoip_RU.dat, ...) still get the fresh
-    # per-release copy. Runs after the arch-rename above so xray-linux-arm32/
-    # mtg-linux-arm already exist under their final names there and aren't
+    # per-release copy. Modified Sing-box and telemt already exist under their final
+    # names and are not
     # mistaken for custom files needing a restore. Skips paths the panel
     # itself regenerates at runtime (config.json, mtproto/*.toml -- see
     # internal/xray/process.go, internal/mtproto/manager.go): those aren't
     # admin-placed, and restoring a stale one only resurrects dead state (an
-    # orphaned mtg config for a since-deleted inbound) or the wrong
+    # orphaned Telemt config for a since-deleted inbound) or the wrong
     # directory permissions.
     if [[ -n "${custom_bin_backup}" ]]; then
         local restored_custom_bin=()
         while IFS= read -r -d '' f; do
             local rel="${f#"${custom_bin_backup}"/}"
             case "${rel}" in
-                config.json | mtproto | mtproto/* | tuic | tuic/* | mieru | mieru/*) continue ;;
+                config.json | telemt | mtg-linux-* | mtproto | mtproto/* | tuic | tuic/* | mieru | mieru/* | optional/sudoku | optional/sudoku/*) continue ;;
             esac
             if [[ ! -e "bin/${rel}" ]]; then
                 mkdir -p "bin/$(dirname "${rel}")"
@@ -1741,7 +2073,12 @@ install_x-ui() {
             echo -e "${green}Restored custom file(s) in bin/ not shipped by this release: ${restored_custom_bin[*]}${plain}"
         fi
     fi
-    trap - EXIT INT TERM
+    # Remove only the retired bundled payload; explicitly installed Sudoku stays intact.
+    rm -rf -- bin/optional/sudoku
+    # Keep migration rollback armed until the restarted core is verified.
+
+    rm -f bin/tuic-server bin/tuic-server-* > /dev/null 2>&1 || true
+    rm -rf bin/tuic > /dev/null 2>&1 || true
 
     # Update x-ui cli and se set permission
     mv -f "${xui_script_temp}" /usr/bin/x-ui
@@ -1752,7 +2089,14 @@ install_x-ui() {
     fi
     chmod +x /usr/bin/x-ui
     mkdir -p /var/log/x-ui
-    config_after_install
+    if [[ "${cm_active:-0}" == 1 ]]; then
+        core_migration_apply || exit 1
+    else
+        if declare -F core_migration_install_managed_bin >/dev/null; then
+            core_migration_install_managed_bin || exit 1
+        fi
+        config_after_install || { echo "Database migration failed; installation did not complete." >&2; exit 1; }
+    fi
 
     # Etckeeper compatibility
     if [ -d "/etc/.git" ]; then
@@ -1771,15 +2115,20 @@ install_x-ui() {
     if [[ $release == "alpine" ]]; then
         xui_rc_temp="/etc/init.d/x-ui.tmp.$$"
         rm -f "${xui_rc_temp}"
-        curl -fLRo "${xui_rc_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.rc"
+        if [[ -n "${cm_stage:-}" ]]; then
+            cp "${cm_stage}/x-ui/x-ui.rc" "${xui_rc_temp}"
+        else
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/deploy/openrc/x-ui.rc" "${xui_rc_temp}" ||
+                download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.rc" "${xui_rc_temp}"
+        fi
         if [[ $? -ne 0 ]]; then
             rm -f "${xui_rc_temp}"
-            echo -e "${red}Failed to download x-ui.rc${plain}"
+            echo -e "${red}Failed to stage the x-ui.rc startup script${plain}"
             exit 1
         fi
         if [[ ! -s "${xui_rc_temp}" ]]; then
             rm -f "${xui_rc_temp}"
-            echo -e "${red}Downloaded x-ui.rc is empty${plain}"
+            echo -e "${red}The x-ui.rc startup script is empty${plain}"
             exit 1
         fi
         mv -f "${xui_rc_temp}" /etc/init.d/x-ui
@@ -1790,12 +2139,16 @@ install_x-ui() {
         fi
         chmod +x /etc/init.d/x-ui
         rc-update add x-ui
-        rc-service x-ui start
+        rc-service x-ui start || exit 1
     else
         # Install systemd service file
         service_installed=false
+        if [[ -n "${cm_service_unit:-}" ]]; then
+            _install_xui_service_unit "$cm_service_unit" false || exit 1
+            service_installed=true
+        fi
 
-        if [ -f "x-ui.service" ]; then
+        if [[ "$service_installed" == false && -f x-ui.service ]]; then
             echo -e "${green}Found x-ui.service in extracted files, installing...${plain}"
             if _install_xui_service_unit "x-ui.service" "false"; then
                 service_installed=true
@@ -1836,34 +2189,46 @@ install_x-ui() {
             echo -e "${yellow}Service files not found in tar.gz, downloading from GitHub...${plain}"
             case "${release}" in
                 ubuntu | debian | armbian)
-                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.debian"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/deploy/systemd/x-ui.service.debian"
                     ;;
                 arch | manjaro | parch)
-                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.arch"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/deploy/systemd/x-ui.service.arch"
                     ;;
                 *)
-                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.rhel"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/deploy/systemd/x-ui.service.rhel"
                     ;;
             esac
 
             if ! _install_xui_service_unit "$service_unit_url" "true"; then
-                echo -e "${red}Failed to install x-ui.service from GitHub (${script_ref}) -- the release tarball did not ship one either${plain}"
-                exit 1
+                # Earlier release tags stored systemd templates at the repository root.
+                service_unit_url="${service_unit_url/\/deploy\/systemd\//\/}"
+                if ! _install_xui_service_unit "$service_unit_url" "true"; then
+                    echo -e "${red}Failed to install x-ui.service from GitHub (${script_ref}) -- no usable release unit${plain}"
+                    exit 1
+                fi
             fi
             service_installed=true
         fi
 
         if [ "$service_installed" = true ]; then
             echo -e "${green}Setting up systemd unit...${plain}"
-            chown root:root ${xui_service}/x-ui.service > /dev/null 2>&1
-            chmod 644 ${xui_service}/x-ui.service > /dev/null 2>&1
+            chown root:root "${xui_service}"/x-ui.service > /dev/null 2>&1
+            chmod 644 "${xui_service}"/x-ui.service > /dev/null 2>&1
             systemctl daemon-reload
             systemctl enable x-ui
-            systemctl start x-ui
+            systemctl start x-ui || exit 1
         else
             echo -e "${red}Failed to install x-ui.service file${plain}"
             exit 1
         fi
+    fi
+
+    if [[ "${cm_active:-0}" == 1 ]]; then
+        core_migration_commit || exit 1
+    elif [[ -n "${cm_stage:-}" ]]; then
+        # A successful start command alone does not prove a fresh panel stayed
+        # up or launched its core. Report startup failures on first installs too.
+        "$xui_folder/x-ui" core-migrate --verify-running || exit 1
     fi
 
     # IP Limit relies on fail2ban; install + configure it now so the feature
@@ -1893,5 +2258,6 @@ install_x-ui() {
 }
 
 echo -e "${green}Running...${plain}"
-install_base
-install_x-ui $1
+install_base || { echo "Failed to install required dependency packages" >&2; exit 1; }
+install_x-ui "$@"
+

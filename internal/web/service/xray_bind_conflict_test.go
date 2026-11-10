@@ -207,7 +207,7 @@ func TestBindConflicts_GeneratedConfig(t *testing.T) {
 			relayPort := amneziawgnet.SOCKSPortForInbound(awg.Id)
 			seedInboundConflict(t, "user", "0.0.0.0", relayPort+tc.portOff, model.VLESS, `{"network":"tcp"}`, `{}`)
 
-			svc := &XrayService{}
+			svc := &CoreService{}
 			cfg, err := svc.GetXrayConfig()
 			if err != nil {
 				t.Fatalf("GetXrayConfig: %v", err)

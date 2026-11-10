@@ -88,7 +88,8 @@ export default function VlessFields({
                 defaultValue={def}
                 render={({ field }) => (
                   <InputNumber
-                    min={1}
+                    min={i === 2 ? 0 : 1}
+                    max={65536}
                     style={{ width: '25%' }}
                     value={field.value as number}
                     onChange={field.onChange}

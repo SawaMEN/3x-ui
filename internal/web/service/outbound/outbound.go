@@ -10,19 +10,22 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-
-	"gorm.io/gorm"
 )
 
 // OutboundService provides business logic for managing Xray outbound configurations.
 // It handles outbound traffic monitoring and statistics.
-type OutboundService struct{}
+type OutboundService struct {
+	// CoreType retains compatibility with stored callers; probes use Sing-box.
+	CoreType string
+}
 
-func (s *OutboundService) AddTraffic(traffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) (error, bool) {
+func (s *OutboundService) AddTraffic(traffics []*coremodel.Traffic, clientTraffics []*coremodel.ClientTraffic) (error, bool) {
 	err := database.GetDB().Transaction(func(tx *gorm.DB) error {
 		return s.addOutboundTraffic(tx, traffics)
 	})
@@ -39,7 +42,7 @@ func saturatingAdd(a, b int64) int64 {
 	return a + b
 }
 
-func (s *OutboundService) addOutboundTraffic(tx *gorm.DB, traffics []*xray.Traffic) error {
+func (s *OutboundService) addOutboundTraffic(tx *gorm.DB, traffics []*coremodel.Traffic) error {
 	if len(traffics) == 0 {
 		return nil
 	}
@@ -128,6 +131,9 @@ type TestOutboundResult struct {
 	TLSMs      int64 `json:"tlsMs,omitempty"`
 	TTFBMs     int64 `json:"ttfbMs,omitempty"`
 
+	DownloadMbps  float64 `json:"downloadMbps,omitempty"`
+	DownloadBytes int64   `json:"downloadBytes,omitempty"`
+
 	Endpoints []TestEndpointResult `json:"endpoints,omitempty"`
 	Egress    *TestEgressResult    `json:"egress,omitempty"`
 }
@@ -157,7 +163,7 @@ func (s *OutboundService) testOutboundTCP(outboundJSON string) (*TestOutboundRes
 	}
 	tag, _ := ob["tag"].(string)
 	protocol, _ := ob["protocol"].(string)
-	if equalsAnyFold(protocol, "blackhole", "freedom") || tag == "blocked" {
+	if equalsAnyFold(normalizedProbeProtocol(protocol), "blackhole", "block", "freedom", "direct", "dns", "loopback") || tag == "blocked" {
 		return &TestOutboundResult{Tag: tag, Mode: "tcp", Success: false, Error: "Outbound has no testable endpoint"}, nil
 	}
 
@@ -217,16 +223,26 @@ func probeTCPEndpoint(endpoint string, timeout time.Duration) TestEndpointResult
 }
 
 // outboundTransportIsUDP reports whether the outbound's proxy speaks UDP
-// (wireguard, hysteria, or a kcp/quic/hysteria stream transport). A bare
+// (WireGuard, Hysteria, Hysteria2, TUIC or a QUIC-based transport). Groups
+// also require handshake probes since they have no single TCP endpoint. A bare
 // UDP dial can't probe these — they ignore unauthenticated packets, so a
 // dial neither proves reachability nor measures latency. Such outbounds
-// must go through the real xray handshake probe instead.
+// must go through the selected core's handshake probe instead.
 func outboundTransportIsUDP(ob map[string]any) bool {
-	if protocol, _ := ob["protocol"].(string); equalsAnyFold(protocol, "hysteria", "wireguard", "amneziawg") {
+	if len(probeOutboundDependencies(ob)) > 0 {
+		return true
+	}
+	settings, _ := ob["settings"].(map[string]any)
+	transport, _ := settings["transport"].(map[string]any)
+	if kind, _ := transport["type"].(string); equalsAnyFold(kind, "quic") {
+		return true
+	}
+	if protocol, _ := ob["protocol"].(string); equalsAnyFold(normalizedProbeProtocol(protocol), "hysteria", "hysteria2", "tuic", "wireguard", "amneziawg", "fptn", "openflux", "selector", "urltest", "balancer", "mieru", "masque", "masque-client", "awg", "warp", "tailscale", "openconnect", "openvpn-client", "tunnel_client") {
 		return true
 	}
 	if stream, ok := ob["streamSettings"].(map[string]any); ok {
-		// The core resolves "kcp" and "mkcp" to the same mKCP transport.
+		// Legacy UDP transports are sent through validation and must not get
+		// a misleading success from a bare TCP connection.
 		if n, _ := stream["network"].(string); equalsAnyFold(n, "hysteria", "kcp", "mkcp", "quic") {
 			return true
 		}
@@ -247,7 +263,7 @@ func equalsAnyFold(value string, want ...string) bool {
 
 func extractOutboundEndpoints(ob map[string]any) []string {
 	protocol, _ := ob["protocol"].(string)
-	protocol = strings.ToLower(protocol)
+	protocol = normalizedProbeProtocol(protocol)
 	settings, _ := ob["settings"].(map[string]any)
 	if settings == nil {
 		return nil
@@ -258,19 +274,11 @@ func extractOutboundEndpoints(ob map[string]any) []string {
 		host, _ := addr.(string)
 		p := numAsInt(port)
 		if host != "" && p > 0 {
-			out = append(out, fmt.Sprintf("%s:%d", host, p))
+			out = append(out, net.JoinHostPort(strings.Trim(host, "[]"), strconv.Itoa(p)))
 		}
 	}
 	switch protocol {
-	case "vmess":
-		if vnext, ok := settings["vnext"].([]any); ok {
-			for _, v := range vnext {
-				if vm, ok := v.(map[string]any); ok {
-					addServer(vm["address"], vm["port"])
-				}
-			}
-		}
-	case "vless":
+	case "vmess", "vless":
 		if vnext, ok := settings["vnext"].([]any); ok {
 			for _, v := range vnext {
 				if vm, ok := v.(map[string]any); ok {
@@ -281,7 +289,7 @@ func extractOutboundEndpoints(ob map[string]any) []string {
 		if len(out) == 0 {
 			addServer(settings["address"], settings["port"])
 		}
-	case "hysteria":
+	case "hysteria", "masque":
 		addServer(settings["address"], settings["port"])
 	case "trojan", "shadowsocks", "http", "socks":
 		if servers, ok := settings["servers"].([]any); ok {
@@ -302,7 +310,18 @@ func extractOutboundEndpoints(ob map[string]any) []string {
 			}
 		}
 	}
+	if len(out) == 0 {
+		port := settings["server_port"]
+		if protocol == "ssh" && numAsInt(port) == 0 {
+			port = 22
+		}
+		addServer(settings["server"], port)
+	}
 	return out
+}
+
+func normalizedProbeProtocol(value string) string {
+	return strings.TrimPrefix(strings.ToLower(strings.TrimSpace(value)), "singbox:")
 }
 
 func numAsInt(v any) int {

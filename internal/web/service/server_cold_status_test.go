@@ -17,7 +17,7 @@ func TestCurrentStatusSamplesBeforeFirstTick(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = database.CloseDB() })
 
-	svc := &ServerService{}
+	svc := &ServerService{cachedIPv4: "203.0.113.7", noIPv6: true}
 	if svc.LastStatus() != nil {
 		t.Fatal("a fresh ServerService should hold no snapshot yet")
 	}

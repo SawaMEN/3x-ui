@@ -123,14 +123,7 @@ describe('generated OpenAPI request bodies', () => {
     expect(certSchema.anyOf?.[1].properties?.certFile).not.toHaveProperty('pattern');
     expect(certSchema.anyOf?.[1].properties?.certContent.pattern).toBe('.*\\S.*');
 
-    const routeSchema = requestBody('/panel/api/xray/routeTest').content[
-      'application/x-www-form-urlencoded'
-    ].schema;
-    expect(routeSchema.anyOf?.map((branch) => branch.required)).toEqual([['domain'], ['ip']]);
-    expect(routeSchema.anyOf?.[0].properties?.domain?.minLength).toBe(1);
-    expect(routeSchema.anyOf?.[0].properties?.ip).not.toHaveProperty('minLength');
-    expect(routeSchema.anyOf?.[1].properties?.domain).not.toHaveProperty('minLength');
-    expect(routeSchema.anyOf?.[1].properties?.ip?.minLength).toBe(1);
+    expect(paths['/panel/api/xray/routeTest']).toBeUndefined();
 
     const bulkAttach = requestBody('/panel/api/clients/bulkAttach').content['application/json'];
     expect(bulkAttach.schema.properties?.emails?.items).toEqual({ type: 'string' });

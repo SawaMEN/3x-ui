@@ -1,43 +1,20 @@
-import { Protocols } from '@/schemas/primitives';
+import { protocolCapabilities } from '@/generated/protocol-capabilities';
 
-/*
- * Protocols whose inbounds can live on a sub-node (the "Deploy To" set).
- * The remote panel can manage both core-native listeners and its local
- * sidecars, so eligibility is intentionally broader than either core's native
- * protocol list. Core-specific support is checked separately below and by the
- * backend.
- */
-export const NODE_ELIGIBLE_PROTOCOLS: Readonly<Record<string, true>> = {
-  [Protocols.VLESS]: true,
-  [Protocols.VMESS]: true,
-  [Protocols.TROJAN]: true,
-  [Protocols.SHADOWSOCKS]: true,
-  [Protocols.WIREGUARD]: true,
-  [Protocols.HYSTERIA]: true,
-  [Protocols.HTTP]: true,
-  [Protocols.MIXED]: true,
-  [Protocols.TUNNEL]: true,
-  [Protocols.TUN]: true,
-  [Protocols.MTPROTO]: true,
-  [Protocols.AMNEZIAWG]: true,
-  [Protocols.TUIC]: true,
-  [Protocols.PINGTUNNEL]: true,
-  [Protocols.TRUSTTUNNEL]: true,
-  [Protocols.NAIVE]: true,
-  [Protocols.ANYTLS]: true,
-  [Protocols.SHADOWTLS]: true,
-  [Protocols.MIERU]: true,
-  [Protocols.VK_TURN_PROXY]: true,
-  [Protocols.SUDOKU]: true,
-};
+export const NODE_ELIGIBLE_PROTOCOLS: Readonly<Record<string, true>> = Object.fromEntries(
+  Object.entries(protocolCapabilities)
+    .filter(([, v]) => v.nodeEligible)
+    .map(([k]) => [k, true as const]),
+);
 
 export interface NodeCoreInfo {
   coreType?: string | null;
   runningCore?: string | null;
+  protocolAvailability?: Record<string, { supported: boolean; ready: boolean }> | null;
 }
 
 function normalizeCore(value?: string | null): 'xray' | 'singbox' | '' {
   const normalized = (value ?? '').trim().toLowerCase().replaceAll('-', '');
+  if (normalized === 'hiddifycore' || normalized === 'singboxupstream') return 'singbox';
   if (normalized === 'singbox') return 'singbox';
   if (normalized === 'xray') return 'xray';
   return '';
@@ -51,21 +28,11 @@ export function nodeCoreType(node: NodeCoreInfo): 'xray' | 'singbox' {
 }
 
 export function nodeSupportsProtocol(node: NodeCoreInfo, protocol: string): boolean {
-  if (!NODE_ELIGIBLE_PROTOCOLS[protocol]) return false;
-
-  if (nodeCoreType(node) === 'singbox') {
-    // Keep this in sync with backend coreSupportsInboundProtocol(). WireGuard
-    // and dokodemo/tunnel are Xray-native listeners; the other entries either
-    // run natively in sing-box or through panel-managed sidecars.
-    return protocol !== Protocols.WIREGUARD && protocol !== Protocols.TUNNEL;
-  }
-
-  // These inbounds are generated only by sing-box. Sidecar protocols (TUIC,
-  // AmneziaWG, MTProto, Mieru, PingTunnel, TrustTunnel, VK Turn and Sudoku)
-  // remain valid on an Xray node because the node panel owns their processes.
-  return (
-    protocol !== Protocols.NAIVE &&
-    protocol !== Protocols.ANYTLS &&
-    protocol !== Protocols.SHADOWTLS
-  );
+  const capability = protocolCapabilities[protocol as keyof typeof protocolCapabilities];
+  if (!capability?.nodeEligible) return false;
+  const reported = node.protocolAvailability?.[protocol];
+  if (node.protocolAvailability) return reported?.supported === true && reported.ready;
+  const raw = (node.coreType || node.runningCore || '').toLowerCase().replaceAll('-', '');
+  if (raw === 'singboxupstream') return capability.upstream;
+  return nodeCoreType(node) === 'xray' ? capability.xray : capability.native;
 }

@@ -2,22 +2,23 @@ package service
 
 import (
 	"context"
+	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-// DesiredMtprotoInstances derives the mtg sidecar configs this panel should be
-// running: one instance per enabled local mtproto inbound, serving only the
+// DesiredMtprotoInstances derives the Telemt sidecar configs this panel should
+// be running: one instance per enabled local MTProto inbound, serving only the
 // secrets of clients that are both enabled in the inbound settings and not
 // depletion-disabled in client_traffics. That is the same effective client set
 // buildInboundForLocalRuntime pushes on interactive edits, so the reconcile job
-// and the push paths agree on one fingerprint — a disagreement would surface
-// as a needless mtg restart, and a job that read only the raw settings would
-// keep serving depleted clients until an unrelated restart. Inbounds whose
+// and the push paths agree on one fingerprint. A disagreement would surface as
+// a needless Telemt reload/restart, and a job that read only the raw settings
+// would keep serving depleted clients until an unrelated restart. Inbounds whose
 // every secret is filtered away are omitted so Reconcile stops their sidecar.
 func (s *InboundService) DesiredMtprotoInstances() ([]mtproto.Instance, error) {
 	db := database.GetDB()
@@ -36,8 +37,8 @@ func (s *InboundService) DesiredMtprotoInstances() ([]mtproto.Instance, error) {
 	for _, ib := range inbounds {
 		ids = append(ids, ib.Id)
 	}
-	var disabledRows []xray.ClientTraffic
-	err = db.Model(xray.ClientTraffic{}).
+	var disabledRows []coremodel.ClientTraffic
+	err = db.Model(coremodel.ClientTraffic{}).
 		Where("inbound_id IN ? AND enable = ?", ids, false).
 		Select("inbound_id", "email").
 		Find(&disabledRows).Error
@@ -54,6 +55,9 @@ func (s *InboundService) DesiredMtprotoInstances() ([]mtproto.Instance, error) {
 
 	instances := make([]mtproto.Instance, 0, len(inbounds))
 	for _, ib := range inbounds {
+		if mtproto.WebProxyInbound(ib) {
+			continue
+		}
 		inst, ok := mtproto.InstanceFromInbound(ib)
 		if !ok {
 			continue
@@ -75,15 +79,14 @@ func (s *InboundService) DesiredMtprotoInstances() ([]mtproto.Instance, error) {
 	return instances, nil
 }
 
-// applyLocalMtproto pushes a single local mtproto inbound's current client set
-// to its mtg sidecar right after a client edit commits, so an add, removal,
-// re-key or enable-toggle takes effect immediately instead of waiting up to
-// 10s for the reconcile job. With a reload-capable mtg the change is applied in
-// place without dropping other clients; older binaries fall back to a restart
-// inside the manager. It re-reads the inbound so it sees the committed settings,
-// filters depleted clients exactly like the reconcile job, and is a no-op for
-// node-owned or non-mtproto inbounds. Failures are logged and swallowed: the
-// reconcile job is the backstop, and an xray restart cannot help the sidecar.
+// applyLocalMtproto pushes a single local MTProto inbound's current client set
+// to its Telemt sidecar right after a client edit commits, so add/remove,
+// re-key and enable-toggle changes take effect immediately instead of waiting
+// for the reconcile job. Telemt reloads the generated config in place through
+// its native API; if reload fails, the manager falls back to restarting only
+// that inbound's Telemt process. The inbound is re-read after commit so this
+// path and the periodic reconcile use the same effective client set. Failures
+// are logged and swallowed because the reconcile job is the backstop.
 func (s *InboundService) applyLocalMtproto(inboundId int) {
 	inbound, err := s.GetInbound(inboundId)
 	if err != nil || inbound == nil || inbound.Protocol != model.MTProto || inbound.NodeID != nil {
@@ -95,33 +98,46 @@ func (s *InboundService) applyLocalMtproto(inboundId int) {
 	}
 	payload := inbound
 	if inbound.Enable {
-		if built, bErr := s.buildInboundForLocalRuntime(database.GetDB(), inbound); bErr == nil {
-			payload = built
+		built, bErr := s.buildInboundForLocalRuntime(database.GetDB(), inbound)
+		if bErr != nil {
+			logger.Warning("mtproto: resolving active clients failed:", bErr)
+			return
 		}
+		payload = built
 	}
 	if err := rt.UpdateInbound(context.Background(), inbound, payload); err != nil {
 		logger.Debug("mtproto: immediate client apply failed for inbound", inboundId, ":", err)
 	}
+	if mtproto.WebProxyInbound(inbound) {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+			defer cancel()
+			if err := ReconcileMtprotoWebProxy(ctx); err != nil {
+				logger.Warning("mtproto: immediate WEB client apply failed:", err)
+			}
+		}()
+	}
 }
 
 func (s *InboundService) resetMtprotoClientQuota(email string) {
-	mgr := mtproto.GetManager()
-	if !mgr.HasRunning() {
-		return
-	}
 	id, ok := s.localMtprotoInboundIdForEmail(email)
 	if !ok {
 		return
 	}
+	inbound, err := s.GetInbound(id)
+	if err == nil && mtproto.WebProxyInbound(inbound) {
+		if err := resetMtprotoWebClientQuota(id, email); err != nil {
+			logger.Warning("mtproto: reset WEB client quota failed:", err)
+		}
+		s.applyLocalMtproto(id)
+		return
+	}
 	s.applyLocalMtproto(id)
-	mgr.ResetQuota(email)
+	mtproto.GetManager().ResetQuota(email)
 }
 
 func (s *InboundService) resetAllMtprotoQuotas() {
 	mgr := mtproto.GetManager()
-	if !mgr.HasRunning() {
-		return
-	}
 	desired, err := s.DesiredMtprotoInstances()
 	if err != nil {
 		return
@@ -131,6 +147,22 @@ func (s *InboundService) resetAllMtprotoQuotas() {
 		for _, sec := range inst.Secrets {
 			mgr.ResetQuota(sec.Name)
 		}
+	}
+	web, err := mtprotoWebCandidates()
+	if err != nil {
+		return
+	}
+	for _, ib := range web {
+		inst, ok := mtproto.InstanceFromInbound(ib)
+		if !ok {
+			continue
+		}
+		for _, sec := range inst.Secrets {
+			if err := resetMtprotoWebClientQuota(ib.Id, sec.Name); err != nil {
+				logger.Warning("mtproto: reset WEB quota failed:", err)
+			}
+		}
+		s.applyLocalMtproto(ib.Id)
 	}
 }
 

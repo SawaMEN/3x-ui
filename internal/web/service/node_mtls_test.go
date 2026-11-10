@@ -10,6 +10,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
@@ -46,6 +47,7 @@ func TestNormalizeKeepsMtls(t *testing.T) {
 	}{
 		{"mtls over https preserved", model.Node{Name: "n", Address: "node.example.com", Port: 2053, Scheme: "https", TlsVerifyMode: "mtls"}, "mtls", false},
 		{"mtls over http rejected", model.Node{Name: "n", Address: "node.example.com", Port: 2053, Scheme: "http", TlsVerifyMode: "mtls"}, "", true},
+		{"pin over http rejected", model.Node{Name: "n", Address: "node.example.com", Port: 2053, Scheme: "http", TlsVerifyMode: "pin"}, "", true},
 		{"unknown mode clamped to verify", model.Node{Name: "n", Address: "node.example.com", Port: 2053, Scheme: "https", TlsVerifyMode: "bogus"}, "verify", false},
 	}
 	for _, c := range cases {
@@ -126,6 +128,18 @@ func TestSetNodeMtlsTrustCA(t *testing.T) {
 
 	if err := ns.SetNodeMtlsTrustCA("not a certificate"); err == nil {
 		t.Fatal("invalid PEM must be rejected (fail closed)")
+	}
+	leaf, err := crypto.IssueClientCert(ca, "not-a-ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ns.SetNodeMtlsTrustCA(string(leaf.CertPEM)); err == nil {
+		t.Fatal("client leaf certificate must not be trusted as a CA")
+	}
+	// An invalid replacement must not disturb the previously configured CA.
+	pool, err = settings.NodeMtlsClientCAPool()
+	if err != nil || pool == nil {
+		t.Fatalf("invalid trust replacement erased existing CA: pool=%v err=%v", pool, err)
 	}
 
 	if err := ns.SetNodeMtlsTrustCA(""); err != nil {

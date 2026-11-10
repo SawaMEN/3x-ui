@@ -11,7 +11,7 @@ import (
 
 type GroupController struct {
 	clientService service.ClientService
-	xrayService   service.XrayService
+	xrayService   service.CoreService
 }
 
 func NewGroupController(g *gin.RouterGroup) *GroupController {

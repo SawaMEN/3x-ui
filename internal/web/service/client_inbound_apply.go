@@ -8,15 +8,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+
+	"gorm.io/gorm"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-
-	"gorm.io/gorm"
 )
 
 // droppedClientNeedsRestart is what restartXrayOnClientDisable asks for: the core
@@ -57,6 +60,7 @@ func advancePushedInbound(rt runtime.Runtime, prevSettings string, ib *model.Inb
 // semantics of DelInboundClientByEmail for each removed client. needRestart is
 // the OR across all removals.
 func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId int, recs []*model.ClientRecord, keepTraffic bool) (bool, error) {
+	defer InvalidateSubData()
 	if len(recs) == 0 {
 		return false, nil
 	}
@@ -124,6 +128,9 @@ func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId 
 	}
 	prevSettings := oldInbound.Settings
 	oldInbound.Settings = string(newSettings)
+	if err := validateAdditionalVPNClients(oldInbound); err != nil {
+		return false, err
+	}
 
 	var sharedSet map[string]bool
 	if !keepTraffic {
@@ -134,7 +141,7 @@ func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId 
 			}
 		}
 		var sharedErr error
-		sharedSet, sharedErr = inboundSvc.emailsUsedByOtherInbounds(removedEmails, inboundId)
+		sharedSet, sharedErr = inboundSvc.emailsUsedByOtherInbounds(db, removedEmails, inboundId)
 		if sharedErr != nil {
 			return false, sharedErr
 		}
@@ -157,7 +164,7 @@ func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId 
 		notDepleted := false
 		if len(email) > 0 {
 			var enables []bool
-			if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).Limit(1).Pluck("enable", &enables).Error; err != nil {
+			if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).Limit(1).Pluck("enable", &enables).Error; err != nil {
 				logger.Error("Get stats error")
 				return needRestart, err
 			}
@@ -326,6 +333,8 @@ func (s *ClientService) checkEmailsExistForClients(inboundSvc *InboundService, c
 }
 
 func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model.Inbound) (bool, error) {
+	defer InvalidateSubData()
+	defer beginLocalConfigBatch()()
 	if oldInbound, err := inboundSvc.GetInbound(data.Id); err == nil && oldInbound.Protocol == model.VKTurnProxy {
 		return inboundSvc.AddVKTurnProxyClient(data)
 	}
@@ -343,7 +352,10 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 		return false, err
 	}
 
-	interfaceClients := settings["clients"].([]any)
+	interfaceClients, ok := settings["clients"].([]any)
+	if !ok {
+		return false, common.NewError("clients must be an array")
+	}
 	nowTs := time.Now().Unix() * 1000
 	for i := range interfaceClients {
 		if cm, ok := interfaceClients[i].(map[string]any); ok {
@@ -368,6 +380,9 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 
 	oldInbound, err := inboundSvc.GetInbound(data.Id)
 	if err != nil {
+		return false, err
+	}
+	if err := validateClientsKeepAlive(oldInbound.Protocol, clients); err != nil {
 		return false, err
 	}
 	if err := validateMieruInbound(oldInbound, clients); err != nil {
@@ -437,8 +452,12 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 	}
 
 	var portCtx portConflictContext
+	if err := validateAmneziaWGClientWrite(oldInbound, clients); err != nil {
+		return false, err
+	}
+
 	if oldInbound.Protocol == model.AmneziaWG {
-		portCtx, err = inboundSvc.loadPortConflictContext(database.GetDB())
+		portCtx, err = inboundSvc.loadPortConflictContext(database.GetDB(), oldInbound.NodeID)
 		if err != nil {
 			return false, err
 		}
@@ -447,8 +466,13 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 		if strings.TrimSpace(client.Email) == "" {
 			return false, common.NewError("client email is required")
 		}
+		if oldInbound.Protocol == model.MASQUE {
+			if err := masque.ValidateUsername(client.Email); err != nil {
+				return false, err
+			}
+		}
 		switch oldInbound.Protocol {
-		case "trojan", "trusttunnel", "naive", "anytls", "shadowtls", "mieru":
+		case "trojan", "vetroff", "trusttunnel", "naive", "masque", "snell", "fptn", "openflux", "anytls", "shadowtls", "mieru":
 			if client.Password == "" {
 				return false, common.NewError("client password is required")
 			}
@@ -489,6 +513,9 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 			}
 		}
 		if oldInbound.Protocol == model.AmneziaWG {
+			if err := validateAWGClientOptions(oldInbound.Settings, []model.Client{client}); err != nil {
+				return false, err
+			}
 			if hit := inboundSvc.checkForwardedPortsConflict(portCtx, client.ForwardedPorts); hit != "" {
 				return false, common.NewError("amneziawg: forwardedPorts collides with", hit)
 			}
@@ -518,6 +545,9 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 
 	prevSettings := oldInbound.Settings
 	oldInbound.Settings = string(newSettings)
+	if err := validateAdditionalVPNClients(oldInbound); err != nil {
+		return false, err
+	}
 
 	// From the stamped wire entries, not from clients: created_at / updated_at /
 	// subId are written onto interfaceClients above, after clients was parsed.
@@ -554,7 +584,7 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 			}
 		}
 		if oldInbound.Protocol == model.AmneziaWG {
-			txPortCtx, pErr := inboundSvc.loadPortConflictContext(tx)
+			txPortCtx, pErr := inboundSvc.loadPortConflictContext(tx, oldInbound.NodeID)
 			if pErr != nil {
 				return pErr
 			}
@@ -591,6 +621,10 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 	if oldInbound.NodeID == nil {
 		if !push {
 			needRestart = true
+		} else if rtUsesNativeConfig(rt) && !isLocalSidecarInbound(oldInbound.Protocol) {
+			if err := rt.UpdateInbound(context.Background(), oldInbound, oldInbound); err != nil {
+				needRestart = true
+			}
 		} else if oldInbound.Protocol == model.MTProto {
 			inboundSvc.applyLocalMtproto(oldInbound.Id)
 		} else if oldInbound.Protocol == model.AmneziaWG {
@@ -672,6 +706,8 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 }
 
 func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *model.Inbound, oldEmail string) (bool, error) {
+	defer InvalidateSubData()
+	defer beginLocalConfigBatch()()
 	if oldInbound, err := inboundSvc.GetInbound(data.Id); err == nil && oldInbound.Protocol == model.VKTurnProxy {
 		if clientID, ok := inboundSvc.vkTurnProxyClientIDByEmail(data.Id, oldEmail); ok {
 			return inboundSvc.UpdateVKTurnProxyClient(data, clientID)
@@ -685,6 +721,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	if err != nil {
 		return false, err
 	}
+	if len(clients) != 1 {
+		return false, common.NewError("client update requires exactly one client")
+	}
 
 	var settings map[string]any
 	err = json.Unmarshal([]byte(data.Settings), &settings)
@@ -692,7 +731,10 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		return false, err
 	}
 
-	interfaceClients := settings["clients"].([]any)
+	interfaceClients, ok := settings["clients"].([]any)
+	if !ok {
+		return false, common.NewError("clients must be an array")
+	}
 
 	oldInbound, err := inboundSvc.GetInbound(data.Id)
 	if err != nil {
@@ -706,10 +748,19 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	if err != nil {
 		return false, err
 	}
+	for i, client := range clients {
+		identity := client.Email
+		if i == 0 {
+			identity = oldEmail
+		}
+		if err := validateClientKeepAliveAgainstExisting(oldInbound.Protocol, client, oldClients, identity); err != nil {
+			return false, err
+		}
+	}
 
 	newClientId := ""
 	switch oldInbound.Protocol {
-	case "trojan", "trusttunnel", "naive", "anytls", "shadowtls", "mieru":
+	case "trojan", "vetroff", "trusttunnel", "naive", "masque", "snell", "fptn", "openflux", "anytls", "shadowtls", "mieru":
 		newClientId = clients[0].Password
 	case "shadowsocks":
 		newClientId = clients[0].Email
@@ -742,6 +793,11 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	}
 	if strings.TrimSpace(clients[0].Email) == "" {
 		return false, common.NewError("client email is required")
+	}
+	if oldInbound.Protocol == model.MASQUE {
+		if err := masque.ValidateUsername(clients[0].Email); err != nil {
+			return false, err
+		}
 	}
 	if oldInbound.Protocol == model.MTProto && clients[0].AdTag != "" && !model.ValidMtprotoAdTag(clients[0].AdTag) {
 		return false, common.NewError("mtproto client ad tag must be 32 hex characters")
@@ -800,6 +856,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		if clients[0].KeepAlive == nil {
 			clients[0].KeepAlive = old.KeepAlive
 		}
+		if clients[0].AWGClientOptions == nil {
+			clients[0].AWGClientOptions = old.AWGClientOptions
+		}
 		// ForwardedPorts is AmneziaWG-only (WireGuard's own inbound never
 		// reads it), same carry-forward reasoning as the fields above: a
 		// partial edit (e.g. a Telegram-bot enable/expiry toggle, or an API
@@ -809,8 +868,15 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 			clients[0].ForwardedPorts = old.ForwardedPorts
 		}
 	}
+	if err := validateAmneziaWGClientWrite(oldInbound, clients); err != nil {
+		return false, err
+	}
+
 	if oldInbound.Protocol == model.AmneziaWG {
-		portCtx, err := inboundSvc.loadPortConflictContext(database.GetDB())
+		if err := validateAWGClientOptions(oldInbound.Settings, clients); err != nil {
+			return false, err
+		}
+		portCtx, err := inboundSvc.loadPortConflictContext(database.GetDB(), oldInbound.NodeID)
 		if err != nil {
 			return false, err
 		}
@@ -861,6 +927,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 				newMap["privateKey"] = clients[0].PrivateKey
 				newMap["publicKey"] = clients[0].PublicKey
 				newMap["allowedIPs"] = clients[0].AllowedIPs
+				if clients[0].AWGClientOptions != nil {
+					newMap["awgClientOptions"] = clients[0].AWGClientOptions
+				}
 				if clients[0].PreSharedKey != "" {
 					newMap["preSharedKey"] = clients[0].PreSharedKey
 				}
@@ -914,6 +983,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 
 	prevSettings := oldInbound.Settings
 	oldInbound.Settings = string(newSettings)
+	if err := validateAdditionalVPNClients(oldInbound); err != nil {
+		return false, err
+	}
 
 	// From the stamped wire entry, not from clients[0]: created_at, the
 	// preserved subId and the WireGuard carry-forward land on interfaceClients.
@@ -947,7 +1019,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		// Same re-check-inside-the-writer rule as AddInboundClient (#6225):
 		// the pre-tx pass can race a concurrent writer on another inbound.
 		if oldInbound.Protocol == model.AmneziaWG {
-			txPortCtx, pErr := inboundSvc.loadPortConflictContext(tx)
+			txPortCtx, pErr := inboundSvc.loadPortConflictContext(tx, oldInbound.NodeID)
 			if pErr != nil {
 				return pErr
 			}
@@ -960,7 +1032,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 				emailUnchanged := strings.EqualFold(oldEmail, clients[0].Email)
 				targetExists := int64(0)
 				if !emailUnchanged {
-					if e := tx.Model(xray.ClientTraffic{}).Where("email = ?", clients[0].Email).Count(&targetExists).Error; e != nil {
+					if e := tx.Model(coremodel.ClientTraffic{}).Where("email = ?", clients[0].Email).Count(&targetExists).Error; e != nil {
 						return e
 					}
 				}
@@ -972,7 +1044,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 						return e
 					}
 				} else {
-					stillUsed, sErr := inboundSvc.emailUsedByOtherInbounds(oldEmail, data.Id)
+					stillUsed, sErr := inboundSvc.emailUsedByOtherInbounds(tx, oldEmail, data.Id)
 					if sErr != nil {
 						return sErr
 					}
@@ -994,7 +1066,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 				}
 			}
 		} else {
-			stillUsed, sErr := inboundSvc.emailUsedByOtherInbounds(oldEmail, data.Id)
+			stillUsed, sErr := inboundSvc.emailUsedByOtherInbounds(tx, oldEmail, data.Id)
 			if sErr != nil {
 				return sErr
 			}
@@ -1045,6 +1117,10 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		if oldInbound.NodeID == nil {
 			if !push {
 				needRestart = true
+			} else if rtUsesNativeConfig(rt) && !isLocalSidecarInbound(oldInbound.Protocol) {
+				if err := rt.UpdateInbound(context.Background(), oldInbound, oldInbound); err != nil {
+					needRestart = true
+				}
 			} else if oldInbound.Protocol == model.MTProto {
 				inboundSvc.applyLocalMtproto(oldInbound.Id)
 			} else if oldInbound.Protocol == model.AmneziaWG {
@@ -1121,6 +1197,8 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 }
 
 func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inboundId int, email string, keepTraffic bool, fullDelete bool) (bool, error) {
+	defer InvalidateSubData()
+	defer beginLocalConfigBatch()()
 	defer lockInbound(inboundId).Unlock()
 
 	oldInbound, err := inboundSvc.GetInbound(inboundId)
@@ -1172,8 +1250,11 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 
 	prevSettings := oldInbound.Settings
 	oldInbound.Settings = string(newSettings)
+	if err := validateAdditionalVPNClients(oldInbound); err != nil {
+		return false, err
+	}
 
-	emailShared, err := inboundSvc.emailUsedByOtherInbounds(email, inboundId)
+	emailShared, err := inboundSvc.emailUsedByOtherInbounds(db, email, inboundId)
 	if err != nil {
 		return false, err
 	}
@@ -1327,10 +1408,16 @@ func (s *ClientService) SetClientTelegramUserID(inboundSvc *InboundService, traf
 	if err != nil {
 		return false, err
 	}
-	clients := settings["clients"].([]any)
+	clients, ok := settings["clients"].([]any)
+	if !ok {
+		return false, common.NewError("clients must be an array")
+	}
 	var newClients []any
 	for client_index := range clients {
-		c := clients[client_index].(map[string]any)
+		c, ok := clients[client_index].(map[string]any)
+		if !ok || c == nil {
+			continue
+		}
 		if c["email"] == clientEmail {
 			c["tgId"] = tgId
 			c["updated_at"] = time.Now().Unix() * 1000
@@ -1426,6 +1513,7 @@ func (s *ClientService) SetClientEnableByEmail(inboundSvc *InboundService, clien
 // SyncInbound over a stale sibling would revert the edit in the normalized
 // records (#5039).
 func (s *ClientService) applyClientFieldByEmail(inboundSvc *InboundService, clientEmail string, mutate func(c map[string]any)) (bool, error) {
+	defer beginLocalConfigBatch()()
 	inboundIds, err := s.GetInboundIdsForEmail(database.GetDB(), clientEmail)
 	if err != nil {
 		return false, err
@@ -1516,4 +1604,31 @@ func (s *ClientService) ResetClientTrafficLimitByEmail(inboundSvc *InboundServic
 	return s.applyClientFieldByEmail(inboundSvc, clientEmail, func(c map[string]any) {
 		c["totalGB"] = totalGB * 1024 * 1024 * 1024
 	})
+}
+
+func validateAmneziaWGClientWrite(inbound *model.Inbound, clients []model.Client) error {
+	if inbound.Protocol != model.AmneziaWG {
+		return nil
+	}
+	var settings amneziawg.InboundSettings
+	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+		return fmt.Errorf("amneziawg: invalid settings: %w", err)
+	}
+	for _, client := range clients {
+		for _, value := range []struct{ field, value string }{
+			{"email", client.Email},
+			{"publicKey", client.PublicKey},
+			{"preSharedKey", client.PreSharedKey},
+		} {
+			if err := amneziawg.ValidateConfigValue(value.field, value.value); err != nil {
+				return fmt.Errorf("amneziawg: client %q: %w", client.Email, err)
+			}
+		}
+		for _, allowedIP := range client.AllowedIPs {
+			if err := amneziawg.ValidateConfigValue("allowedIPs", allowedIP); err != nil {
+				return fmt.Errorf("amneziawg: client %q: %w", client.Email, err)
+			}
+		}
+	}
+	return nil
 }

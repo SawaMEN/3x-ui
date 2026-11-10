@@ -37,6 +37,7 @@ type OutboundInstance struct {
 // OutboundSettings is the Settings JSON stored on an "amneziawg" outbound
 // row; flat obfuscation keys mirror ServerSettings so values paste 1:1.
 type OutboundSettings struct {
+	Native     bool     `json:"native,omitempty"`
 	MTU        int      `json:"mtu,omitempty"`
 	SecretKey  string   `json:"secretKey"`
 	Address    []string `json:"address"`
@@ -269,6 +270,12 @@ func ValidateAmneziaWGOutbound(tag string, raw []byte) error {
 	}
 	if err := validateTunnelAddresses(parsed.Address); err != nil {
 		return fmt.Errorf("amneziawg outbound %q: %w", tag, err)
+	}
+	if parsed.Native && parsed.ListenPort != 0 {
+		return fmt.Errorf("native AWG requires automatic listen port (0) when switching from the bridge")
+	}
+	if parsed.Native && parsed.DNS != "" {
+		return fmt.Errorf("native AWG uses core DNS; clear the bridge DNS field")
 	}
 	if err := ValidateDNSServer(parsed.DNS); err != nil {
 		return fmt.Errorf("amneziawg outbound %q: invalid dns: %w", tag, err)

@@ -5,11 +5,11 @@ import (
 	"path"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
-
-	"github.com/gin-gonic/gin"
 )
 
 // XUIController is the main controller for the X-UI panel, serving the SPA shell.
@@ -33,13 +33,14 @@ func NewXUIController(g *gin.RouterGroup) *XUIController {
 func (a *XUIController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/panel")
 	g.Use(a.checkLogin)
-	g.Use(middleware.CSRFMiddleware())
+	g.Use(middleware.CSRFMiddleware(getRemoteIp))
 
 	g.GET("/", a.panelSPA)
 	g.GET("/inbounds", a.panelSPA)
 	g.GET("/clients", a.panelSPA)
 	g.GET("/groups", a.panelSPA)
 	g.GET("/nodes", a.panelSPA)
+	g.GET("/manager", a.panelSPA)
 	g.GET("/settings", a.panelSPA)
 	g.GET("/xray", a.panelSPA)
 	g.GET("/outbound", a.panelSPA)

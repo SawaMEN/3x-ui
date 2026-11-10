@@ -1,11 +1,14 @@
 package sub
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
 	"net/netip"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/goccy/go-json"
@@ -19,15 +22,16 @@ import (
 )
 
 type SubClashService struct {
-	enableRouting bool
-	clashRules    string
-	SubService    *SubService
+	enableRouting  bool
+	clashRules     string
+	clashRemoteDNS bool
+	SubService     *SubService
 }
 
 var errNoLegacyClashProxies = errors.New("no Clash for Windows-compatible proxies found; use the Mihomo subscription for modern proxy types")
 
-func NewSubClashService(enableRouting bool, clashRules string, subService *SubService) *SubClashService {
-	return &SubClashService{enableRouting: enableRouting, clashRules: clashRules, SubService: subService}
+func NewSubClashService(enableRouting bool, clashRules string, subService *SubService, remoteDNS ...bool) *SubClashService {
+	return &SubClashService{enableRouting: enableRouting, clashRules: clashRules, clashRemoteDNS: len(remoteDNS) > 0 && remoteDNS[0], SubService: subService}
 }
 
 func (s *SubClashService) GetClash(subId string, host string) (string, string, error) {
@@ -52,18 +56,22 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
+
 	// Refuse partial Clash output for protocols this renderer cannot represent.
 	// Returning the format-unsupported sentinel makes auto-detection keep the
 	// complete raw subscription instead of silently dropping an inbound.
-	if containsUnsupportedClashProtocol(inbounds) || containsShadowTLSTransport(inbounds) {
+	formatInbounds, _ := subReq.partitionHostFormat(inbounds, "clash")
+	if containsUnsupportedClashProtocol(formatInbounds) || containsShadowTLSTransport(formatInbounds) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
-	if legacy && containsSubscriptionProtocol(inbounds, model.Sudoku) {
+	if legacy && containsSubscriptionProtocol(formatInbounds, model.Sudoku) {
 		return "", "", errNoLegacyClashProxies
 	}
 
 	var proxies []map[string]any
+	var ordered []orderedSubEntry[func() []map[string]any]
 	var hasInactiveExternal bool
+	var hasBoundClosed bool
 	var hasEnabledClient bool
 
 	seenEmails := make(map[string]struct{})
@@ -73,15 +81,60 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 			continue
 		}
 		subReq.projectThroughFallbackMaster(inbound)
-		if hostEps := subReq.hostEndpoints(inbound, "clash"); len(hostEps) > 0 {
-			injectExternalProxy(inbound, hostEps)
+		if eps := subReq.hostEndpoints(inbound, "clash"); eps != nil && len(eps) == 0 {
+			for _, c := range clients {
+				seenEmails[c.Email] = struct{}{}
+				hasEnabledClient = hasEnabledClient || c.Enable
+			}
+			continue
+		}
+		var baseEps []map[string]any
+		baseStream := inbound.StreamSettings
+		if !subReq.hostsFirst {
+			if baseEps = subReq.hostEndpoints(inbound, "clash"); len(baseEps) > 0 {
+				injectExternalProxy(inbound, baseEps)
+				delete(subReq.streamSettingsByInbound, inbound.Id)
+			}
 		}
 		for _, client := range clients {
 			if client.Enable {
 				hasEnabledClient = true
 			}
 			seenEmails[client.Email] = struct{}{}
-			generated := s.getProxies(subReq, inbound, client, host)
+			if !client.Enable {
+				continue
+			}
+			if subReq.hostsFirst {
+				variants, closed := subReq.clientHostVariants(inbound, client, "clash")
+				hasBoundClosed = hasBoundClosed || closed
+				for _, variant := range variants {
+					render := func() []map[string]any { return s.getProxies(subReq, variant.inbound(subReq, inbound), client, host) }
+					ordered = append(ordered, orderedSubEntry[func() []map[string]any]{variant.order, render})
+				}
+				continue
+			}
+			effective := inbound
+			if effectiveEps, bound := subReq.clientHostEndpoints(inbound, client, "clash", baseEps); bound {
+				if len(effectiveEps) == 0 {
+					hasBoundClosed = true
+					continue
+				}
+				clone := *inbound
+				clone.StreamSettings = baseStream
+				injectExternalProxy(&clone, effectiveEps)
+				effective = &clone
+				delete(subReq.streamSettingsByInbound, inbound.Id)
+			}
+			generated := s.getProxies(subReq, effective, client, host)
+			if len(generated) == 0 {
+				return "", "", errSubscriptionFormatUnsupported
+			}
+			proxies = append(proxies, generated...)
+		}
+	}
+	if subReq.hostsFirst {
+		for _, render := range orderedSubValues(ordered) {
+			generated := render()
 			if len(generated) == 0 {
 				return "", "", errSubscriptionFormatUnsupported
 			}
@@ -104,16 +157,15 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 			if name == "" {
 				name = ext.Email
 			}
-			proxy := s.clashProxyFromExternal(el.Link, name)
-			if proxy == nil {
-				// Keep quota accounting for links Clash cannot represent.
-				continue
+			if proxy := s.clashProxyFromExternal(el.Link, name); proxy != nil {
+				proxies = append(proxies, proxy)
+			} else {
+				return "", "", errSubscriptionFormatUnsupported
 			}
-			proxies = append(proxies, proxy)
 		}
 	}
 
-	if len(proxies) == 0 && !hasInactiveExternal {
+	if len(proxies) == 0 && !hasInactiveExternal && !hasBoundClosed {
 		return "", "", nil
 	}
 	if legacy {
@@ -179,7 +231,7 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 		resolved, remoteDocument, remote, resolveErr := resolveClashRoutingSource(s.clashRules)
 		if resolveErr == nil && strings.TrimSpace(resolved) != "" {
 			if remote {
-				if err := mergeRemoteClashRules(config, remoteDocument); err != nil {
+				if err := mergeRemoteClashRules(config, remoteDocument, s.clashRemoteDNS); err != nil {
 					return "", "", err
 				}
 			} else if err := mergeClashRulesYAML(config, resolved); err != nil {
@@ -237,6 +289,10 @@ func legacyClashProxy(proxy map[string]any) map[string]any {
 		tls, _ := proxy["tls"].(bool)
 		cipher = legacyShadowsocksCipher(proxy["cipher"])
 		if (network != "" && network != "tcp") || tls || cipher == "" {
+			return nil
+		}
+		// Legacy endpoints directly block obfs nodes.
+		if plugin, _ := proxy["plugin"].(string); plugin == "obfs" {
 			return nil
 		}
 		fields = []string{"name", "type", "server", "port", "password", "cipher", "udp", "plugin", "plugin-opts"}
@@ -416,6 +472,13 @@ func (s *SubClashService) getProxies(subReq *SubService, inbound *model.Inbound,
 			if v, _ := extPrxy["mihomoIpVersion"].(string); v != "" {
 				proxy["ip-version"] = v
 			}
+			// A pre-26.9.8 core accepts a plain X25519 hello, which some DPI lets
+			// through where it drops the two-segment ML-KEM one.
+			if hostX25519Only(extPrxy) {
+				if opts, ok := proxy["reality-opts"].(map[string]any); ok {
+					opts["support-x25519mlkem768"] = false
+				}
+			}
 			proxies = append(proxies, proxy)
 		}
 	}
@@ -448,9 +511,6 @@ func (s *SubClashService) buildProxy(subReq *SubService, inbound *model.Inbound,
 		"server": inbound.Listen,
 		"port":   inbound.Port,
 		"udp":    true,
-	}
-	if !s.applyTransport(proxy, network, stream) {
-		return nil
 	}
 
 	switch inbound.Protocol {
@@ -491,6 +551,10 @@ func (s *SubClashService) buildProxy(subReq *SubService, inbound *model.Inbound,
 			}
 		}
 	default:
+		return nil
+	}
+
+	if !s.applyTransport(proxy, network, stream) {
 		return nil
 	}
 
@@ -596,6 +660,11 @@ func (s *SubClashService) buildHysteriaProxy(subReq *SubService, inbound *model.
 			}
 		}
 	}
+	if tlsSettings, ok := rawStream["tlsSettings"].(map[string]any); ok {
+		if !applyClashTLSVerification(proxy, s.tlsData(tlsSettings)) {
+			return nil
+		}
+	}
 	// External proxy TLS fields override the base Hysteria client just as
 	// they do for VLESS/Trojan. The raw inbound stream remains the source for
 	// finalmask/obfs, because streamData intentionally prunes those fields.
@@ -612,8 +681,8 @@ func (s *SubClashService) buildHysteriaProxy(subReq *SubService, inbound *model.
 		proxy["skip-cert-verify"] = true
 	}
 
-	// Salamander obfs (Hysteria2). Read the same finalmask.udp[salamander]
-	// block the subscription link generator uses.
+	// Salamander obfs (Hysteria2), read from the same finalmask.udp[salamander]
+	// block as the link generator; a packetSize range is mihomo's gecko obfs.
 	if finalmask, ok := rawStream["finalmask"].(map[string]any); ok {
 		if udpMasks, ok := finalmask["udp"].([]any); ok {
 			for _, m := range udpMasks {
@@ -625,6 +694,13 @@ func (s *SubClashService) buildHysteriaProxy(subReq *SubService, inbound *model.
 				if pw, ok := settings["password"].(string); ok && pw != "" {
 					proxy["obfs"] = "salamander"
 					proxy["obfs-password"] = pw
+					packetSize, _ := settings["packetSize"].(string)
+					if gecko := parseHysteriaPacketSize(packetSize); gecko != "" {
+						minStr, maxStr := splitHysteriaPacketSize(gecko)
+						proxy["obfs"] = "gecko"
+						proxy["obfs-min-packet-size"], _ = strconv.Atoi(minStr)
+						proxy["obfs-max-packet-size"], _ = strconv.Atoi(maxStr)
+					}
 					break
 				}
 			}
@@ -635,6 +711,27 @@ func (s *SubClashService) buildHysteriaProxy(subReq *SubService, inbound *model.
 	// field (the base `port` stays as the redirect target).
 	if hopPorts := hysteriaHopPorts(rawStream); hopPorts != "" {
 		proxy["ports"] = hopPorts
+	}
+
+	version := 2
+	if proxyType == "hysteria" {
+		version = 1
+	}
+	for key, value := range hysteriaNativeURIOptions(rawStream, version) {
+		switch key {
+		case "minPacketSize":
+			n, _ := strconv.Atoi(value)
+			proxy["obfs-min-packet-size"] = n
+		case "maxPacketSize":
+			n, _ := strconv.Atoi(value)
+			proxy["obfs-max-packet-size"] = n
+		case "up_mbps":
+			proxy["up"] = value
+		case "down_mbps":
+			proxy["down"] = value
+		default:
+			proxy[key] = value
+		}
 	}
 
 	return proxy
@@ -669,7 +766,7 @@ func (s *SubClashService) buildWireguardProxy(subReq *SubService, inbound *model
 	if client.PreSharedKey != "" {
 		proxy["pre-shared-key"] = client.PreSharedKey
 	}
-	if ka := client.KeepAliveSeconds(); ka > 0 {
+	if ka, ok := keepAliveForScalarExport(client); ok {
 		proxy["persistent-keepalive"] = ka
 	}
 	for _, addr := range client.AllowedIPs {
@@ -811,7 +908,7 @@ func (s *SubClashService) buildAmneziaWGProxy(subReq *SubService, inbound *model
 	if client.PreSharedKey != "" {
 		proxy["pre-shared-key"] = client.PreSharedKey
 	}
-	if ka := client.KeepAliveSeconds(); ka > 0 {
+	if ka, ok := keepAliveForScalarExport(client); ok {
 		proxy["persistent-keepalive"] = ka
 	}
 
@@ -946,6 +1043,7 @@ func (s *SubClashService) buildAmneziaWGProxy(subReq *SubService, inbound *model
 //
 // Returns nil if no non-trivial fields are present.
 func buildXhttpClashOpts(xhttp map[string]any) map[string]any {
+	xhttp = effectiveXhttpOptions(xhttp)
 	if xhttp == nil {
 		return nil
 	}
@@ -990,6 +1088,14 @@ func buildXhttpClashOpts(xhttp map[string]any) map[string]any {
 	for _, f := range stringFields {
 		if v, ok := xhttp[f.src].(string); ok && v != "" && (f.skipValue == "" || v != f.skipValue) {
 			opts[f.dst] = v
+		}
+	}
+
+	for src, dst := range map[string]string{"xPaddingBytes": "x-padding-bytes", "scMaxEachPostBytes": "sc-max-each-post-bytes", "scMinPostsIntervalMs": "sc-min-posts-interval-ms", "sessionIDLength": "session-id-length"} {
+		if value, ok := nonZeroShareValue(xhttp[src]); ok {
+			if _, isString := value.(string); !isString {
+				opts[dst] = fmt.Sprint(value)
+			}
 		}
 	}
 
@@ -1042,8 +1148,15 @@ func buildXhttpClashOpts(xhttp map[string]any) map[string]any {
 			{"hMaxRequestTimes", "h-max-request-times"},
 			{"hMaxReusableSecs", "h-max-reusable-secs"},
 		} {
-			if v, ok := xmux[f.src].(string); ok && v != "" {
-				reuse[f.dst] = v
+			v, ok := nonZeroShareValue(xmux[f.src])
+			if !ok {
+				continue
+			}
+			if n, isFloat := v.(float64); isFloat {
+				// JSON numbers decode as float64, and %v would render 1000000 as "1e+06".
+				reuse[f.dst] = strconv.FormatFloat(n, 'f', -1, 64)
+			} else {
+				reuse[f.dst] = fmt.Sprint(v)
 			}
 		}
 		if v, ok := nonZeroShareValue(xmux["hKeepAlivePeriod"]); ok {
@@ -1084,6 +1197,19 @@ func (s *SubClashService) applyTransport(proxy map[string]any, network string, s
 			if header != nil {
 				typeStr, _ := header["type"].(string)
 				if typeStr != "" && typeStr != "none" {
+					// Mihomo's simple-obfs always sends GET /, and xray-core rejects a request whose
+					// path is not one of the header's paths, so only a "/" header maps to obfs.
+					if proxy["type"] == "ss" && typeStr == "http" && tcpHeaderAcceptsRootPath(header) {
+						proxy["plugin"] = "obfs"
+						opts := map[string]any{
+							"mode": "http",
+						}
+						if host := extractTCPHeaderHost(header); host != "" {
+							opts["host"] = host
+						}
+						proxy["plugin-opts"] = opts
+						return true
+					}
 					return false
 				}
 			}
@@ -1116,6 +1242,12 @@ func (s *SubClashService) applyTransport(proxy map[string]any, network string, s
 		grpc, _ := stream["grpcSettings"].(map[string]any)
 		grpcOpts := map[string]any{}
 		if grpc != nil {
+			if multi, _ := grpc["multiMode"].(bool); multi {
+				return false
+			}
+			if authority, _ := grpc["authority"].(string); strings.TrimSpace(authority) != "" {
+				return false
+			}
 			if serviceName, ok := grpc["serviceName"].(string); ok && serviceName != "" {
 				grpcOpts["grpc-service-name"] = serviceName
 			}
@@ -1171,11 +1303,11 @@ func (s *SubClashService) applySecurity(proxy map[string]any, security string, s
 			if serverName, ok := tlsSettings["serverName"].(string); ok && serverName != "" {
 				proxy["servername"] = serverName
 				switch proxy["type"] {
-				case "trojan":
+				case "trojan", "hysteria", "hysteria2", "tuic", "anytls":
 					proxy["sni"] = serverName
 				}
 			}
-			if fingerprint, ok := tlsSettings["fingerprint"].(string); ok && fingerprint != "" {
+			if fingerprint, ok := tlsSettings["fingerprint"].(string); ok && fingerprint != "" && proxy["type"] != "hysteria2" && proxy["type"] != "hysteria" && proxy["type"] != "tuic" {
 				proxy["client-fingerprint"] = fingerprint
 			}
 			if alpn, ok := externalProxyALPNList(tlsSettings["alpn"]); ok {
@@ -1189,13 +1321,8 @@ func (s *SubClashService) applySecurity(proxy map[string]any, security string, s
 					proxy["alpn"] = out
 				}
 			}
-			if inner, ok := tlsSettings["settings"].(map[string]any); ok {
-				if insecure, ok := inner["allowInsecure"].(bool); ok && insecure {
-					proxy["skip-cert-verify"] = true
-				}
-			}
-			if pins, ok := tlsSettings["pin-sha256"].([]any); ok && len(pins) > 0 {
-				proxy["pin-sha256"] = pins
+			if !applyClashTLSVerification(proxy, tlsSettings) {
+				return false
 			}
 		}
 		return true
@@ -1249,17 +1376,53 @@ func (s *SubClashService) streamData(stream string) map[string]any {
 }
 
 func (s *SubClashService) tlsData(tData map[string]any) map[string]any {
-	tlsData := make(map[string]any, 1)
-	tlsClientSettings, _ := tData["settings"].(map[string]any)
-	tlsData["serverName"] = tData["serverName"]
-	tlsData["alpn"] = tData["alpn"]
-	if fingerprint, ok := tlsClientSettings["fingerprint"].(string); ok {
-		tlsData["fingerprint"] = fingerprint
-	}
-	if pins, ok := tlsClientSettings["pinnedPeerCertSha256"].([]any); ok && len(pins) > 0 {
-		tlsData["pin-sha256"] = pins
+	tlsData := maps.Clone(tData)
+	inner, _ := tData["settings"].(map[string]any)
+	for _, key := range []string{"fingerprint", "allowInsecure", "verifyPeerCertByName", "pinnedPeerCertSha256"} {
+		if value, ok := inner[key]; ok {
+			tlsData[key] = value
+		}
 	}
 	return tlsData
+}
+
+// Mihomo's fingerprint pins the full certificate. Multiple Xray pins cannot
+// be represented by its single fingerprint; reject instead of removing checks.
+func applyClashTLSVerification(proxy, tls map[string]any) bool {
+	inner, _ := tls["settings"].(map[string]any)
+	insecure, exists := tls["allowInsecure"].(bool)
+	if !exists {
+		insecure, exists = inner["allowInsecure"].(bool)
+	}
+	if exists {
+		proxy["skip-cert-verify"] = insecure
+	}
+	names := clashStringList(tls["verifyPeerCertByName"])
+	if len(names) > 1 {
+		return false
+	}
+	if len(names) == 1 {
+		proxy["name-cert-verify"] = names[0]
+	}
+	pins := clashStringList(tls["pinnedPeerCertSha256"])
+	if len(pins) == 0 {
+		pins = clashStringList(tls["pin-sha256"])
+	}
+	if len(pins) > 1 {
+		return false
+	}
+	if len(pins) == 1 {
+		pin := strings.ReplaceAll(strings.TrimSpace(pins[0]), ":", "")
+		decoded, err := hex.DecodeString(pin)
+		if err != nil || len(decoded) != 32 {
+			decoded, err = base64.StdEncoding.DecodeString(strings.TrimSpace(pins[0]))
+		}
+		if err != nil || len(decoded) != 32 {
+			return false
+		}
+		proxy["fingerprint"] = hex.EncodeToString(decoded)
+	}
+	return true
 }
 
 func (s *SubClashService) realityData(rData map[string]any) map[string]any {
@@ -1271,7 +1434,9 @@ func (s *SubClashService) realityData(rData map[string]any) map[string]any {
 	if fingerprint, ok := realityClientSettings["fingerprint"].(string); ok {
 		rDataOut["fingerprint"] = fingerprint
 	}
-	if serverNames, ok := rData["serverNames"].([]any); ok && len(serverNames) > 0 {
+	if name, _ := realityClientSettings["serverName"].(string); name != "" {
+		rDataOut["serverName"] = name
+	} else if serverNames, ok := rData["serverNames"].([]any); ok && len(serverNames) > 0 {
 		rDataOut["serverName"] = fmt.Sprint(serverNames[0])
 	}
 	if shortIDs, ok := rData["shortIds"].([]any); ok && len(shortIDs) > 0 {
@@ -1321,16 +1486,22 @@ func mergeClashRulesYAML(base map[string]any, raw string) error {
 	return nil
 }
 
-// mergeRemoteClashRules lets remote update only the route graph (see
-// remoteClashAllowedKey) and never mutates remote: cached documents are shared.
-func mergeRemoteClashRules(base map[string]any, remote map[string]any) error {
+// mergeRemoteClashRules copies only keys listed in remoteClashKeyClasses and
+// never mutates remote: cached documents are shared.
+func mergeRemoteClashRules(base map[string]any, remote map[string]any, allowClientConfig bool) error {
 	if len(remote) == 0 {
 		return fmt.Errorf("remote Clash routing source must be a YAML map")
 	}
 
 	for key, value := range remote {
-		if !remoteClashAllowedKey(key) {
+		if !remoteClashKeyAllowed(key, allowClientConfig) {
 			continue
+		}
+		if remoteClashKeyClasses[key] == remoteClashClientConfig {
+			// A malformed dns or sniffer must not cost the client its routing.
+			if _, ok := value.(map[string]any); !ok {
+				continue
+			}
 		}
 		if err := validateRemoteClashValue(key, value); err != nil {
 			return err
@@ -1405,15 +1576,6 @@ func validateRemoteClashValue(key string, value any) error {
 		}
 	}
 	return nil
-}
-
-func remoteClashAllowedKey(key string) bool {
-	switch key {
-	case "proxy-groups", "rule-providers", "rules":
-		return true
-	default:
-		return false
-	}
 }
 
 func validateClashRouteGraph(config map[string]any) error {
@@ -1624,4 +1786,76 @@ func linesToClashRules(raw string) []any {
 		rules = append(rules, line)
 	}
 	return rules
+}
+
+// tcpHeaderAcceptsRootPath reports whether the inbound's HTTP header accepts "/"; xray-core
+// defaults an absent request path to "/".
+func tcpHeaderAcceptsRootPath(header map[string]any) bool {
+	request, _ := header["request"].(map[string]any)
+	paths, _ := request["path"].([]any)
+	if len(paths) == 0 {
+		return true
+	}
+	for _, p := range paths {
+		if p == "/" {
+			return true
+		}
+	}
+	return false
+}
+
+func extractTCPHeaderHost(header map[string]any) string {
+	request, _ := header["request"].(map[string]any)
+	reqHeaders, _ := request["headers"].(map[string]any)
+	return findHostInHeaders(reqHeaders)
+}
+
+func findHostInHeaders(headers map[string]any) string {
+	for k, v := range headers {
+		if strings.EqualFold(k, "host") {
+			switch val := v.(type) {
+			case string:
+				return strings.TrimSpace(val)
+			case []string:
+				if len(val) > 0 {
+					return strings.TrimSpace(val[0])
+				}
+			case []any:
+				if len(val) > 0 {
+					if h, ok := val[0].(string); ok {
+						return strings.TrimSpace(h)
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+type remoteClashKeyClass int
+
+const (
+	remoteClashRouteGraph remoteClashKeyClass = iota + 1
+	remoteClashClientConfig
+)
+
+// Client config keys steer the client's own resolver, so a remote URL may set
+// them only when the admin opts in (subClashRemoteDNS).
+var remoteClashKeyClasses = map[string]remoteClashKeyClass{
+	"proxy-groups":   remoteClashRouteGraph,
+	"rule-providers": remoteClashRouteGraph,
+	"rules":          remoteClashRouteGraph,
+	"dns":            remoteClashClientConfig,
+	"sniffer":        remoteClashClientConfig,
+}
+
+func remoteClashKeyAllowed(key string, allowClientConfig bool) bool {
+	switch remoteClashKeyClasses[key] {
+	case remoteClashRouteGraph:
+		return true
+	case remoteClashClientConfig:
+		return allowClientConfig
+	default:
+		return false
+	}
 }

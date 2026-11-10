@@ -442,63 +442,6 @@ body.theme-cyberpunk .low-power-toggle.is-active {
   }
 }
 
-.swap-settings-modal .ant-modal-body {
-  padding-top: 8px;
-}
-
-.swap-settings-modal .ant-tabs-nav {
-  margin-bottom: 12px;
-}
-
-.swap-settings-modal .ant-tabs-tab {
-  padding-top: 8px;
-  padding-bottom: 10px;
-}
-
-.swap-settings-modal .ant-card {
-  border-radius: 12px;
-}
-
-.swap-settings-modal .ant-card-head {
-  min-height: 46px;
-}
-
-.swap-settings-modal .ant-card-head-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.swap-settings-modal .ant-alert {
-  border-radius: 10px;
-}
-
-/* Swap / ZRAM modal */
-.swap-settings-modal .ant-modal-content {
-  overflow: hidden;
-  border-radius: 20px;
-}
-
-.swap-settings-modal .ant-modal-header {
-  margin-bottom: 0;
-  padding: 18px 24px 14px;
-  border-bottom: 1px solid var(--ant-color-border-secondary);
-}
-
-.swap-settings-modal .ant-modal-title {
-  font-size: 19px;
-  font-weight: 750;
-  letter-spacing: -0.015em;
-}
-
-.swap-settings-modal .ant-modal-body {
-  padding: 16px 20px 22px;
-  background: color-mix(
-    in srgb,
-    var(--ant-color-bg-container) 94%,
-    var(--ant-color-fill-quaternary)
-  );
-}
-
 .swap-settings-tabs .ant-tabs-nav {
   margin-bottom: 16px;
 }
@@ -533,40 +476,36 @@ body.theme-cyberpunk .low-power-toggle.is-active {
   border-radius: 999px;
 }
 
-.swap-settings-modal .ant-card {
+.swap-settings-panel .ant-card {
   border-radius: 14px;
 }
 
-.swap-settings-modal .ant-card-head {
+.swap-settings-panel .ant-card-head {
   min-height: 50px;
 }
 
-.swap-settings-modal .ant-table-wrapper {
+.swap-settings-panel .ant-table-wrapper {
   width: 100%;
 }
 
-.swap-settings-modal .ant-table-container {
+.swap-settings-panel .ant-table-container {
   overflow-x: hidden !important;
 }
 
-.swap-settings-modal .ant-table {
+.swap-settings-panel .ant-table {
   table-layout: auto;
 }
 
-.swap-settings-modal .ant-table-cell {
+.swap-settings-panel .ant-table-cell {
   white-space: normal;
   word-break: break-word;
 }
 
-.swap-settings-modal .ant-alert {
+.swap-settings-panel .ant-alert {
   border-radius: 12px;
 }
 
 @media (max-width: 900px) {
-  .swap-settings-modal .ant-modal-body {
-    padding: 12px 12px 16px;
-  }
-
   .swap-settings-tabs .ant-tabs-nav-wrap {
     overflow-x: visible;
   }
@@ -596,22 +535,6 @@ body.theme-cyberpunk .low-power-toggle.is-active {
 }
 
 @media (max-width: 700px) {
-  .swap-settings-modal .ant-modal-content {
-    border-radius: 14px;
-  }
-
-  .swap-settings-modal .ant-modal-header {
-    padding: 14px 16px 10px;
-  }
-
-  .swap-settings-modal .ant-modal-title {
-    font-size: 17px;
-  }
-
-  .swap-settings-modal .ant-modal-body {
-    padding: 10px 10px 14px;
-  }
-
   .swap-settings-tabs .ant-tabs-nav {
     margin-bottom: 10px;
   }
@@ -662,25 +585,25 @@ body.theme-cyberpunk .low-power-toggle.is-active {
     flex: 0 0 auto;
   }
 
-  .swap-settings-modal .ant-card {
+  .swap-settings-panel .ant-card {
     border-radius: 12px;
   }
 
-  .swap-settings-modal .ant-card-head {
+  .swap-settings-panel .ant-card-head {
     min-height: 44px;
     padding-inline: 12px;
   }
 
-  .swap-settings-modal .ant-card-body {
+  .swap-settings-panel .ant-card-body {
     padding: 12px !important;
   }
 
-  .swap-settings-modal .ant-statistic-title {
+  .swap-settings-panel .ant-statistic-title {
     font-size: 11px;
     line-height: 1.25;
   }
 
-  .swap-settings-modal .ant-statistic-content {
+  .swap-settings-panel .ant-statistic-content {
     font-size: 18px;
   }
 
@@ -718,34 +641,30 @@ body.theme-cyberpunk .low-power-toggle.is-active {
     width: 100%;
   }
 
-  .swap-settings-modal .ant-alert {
+  .swap-settings-panel .ant-alert {
     margin-bottom: 10px;
   }
 
-  .swap-settings-modal .ant-descriptions-view {
+  .swap-settings-panel .ant-descriptions-view {
     overflow-x: auto;
   }
 
-  .swap-settings-modal .ant-table-wrapper {
+  .swap-settings-panel .ant-table-wrapper {
     max-width: 100%;
     overflow-x: auto !important;
   }
 
-  .swap-settings-modal .ant-table {
+  .swap-settings-panel .ant-table {
     min-width: 680px;
   }
 }
 
 @media (max-width: 430px) {
-  .swap-settings-modal .ant-modal-body {
-    padding-inline: 8px;
-  }
-
-  .swap-settings-modal .ant-card-body {
+  .swap-settings-panel .ant-card-body {
     padding: 10px !important;
   }
 
-  .swap-settings-modal .ant-tabs-tab {
+  .swap-settings-panel .ant-tabs-tab {
     padding-inline: 9px;
   }
 }

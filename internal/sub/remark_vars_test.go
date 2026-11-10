@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const gb = int64(1024 * 1024 * 1024)
 
 // expandCtx builds a remarkContext from explicit pieces for token tests.
-func expandCtx(client model.Client, stats xray.ClientTraffic, inbound *model.Inbound) remarkContext {
+func expandCtx(client model.Client, stats coremodel.ClientTraffic, inbound *model.Inbound) remarkContext {
 	return remarkContext{client: client, stats: stats, inbound: inbound}
 }
 
@@ -28,7 +28,7 @@ func TestExpandRemarkVars(t *testing.T) {
 		CreatedAt: 1_700_000_000_000,
 	}
 	// 50GB total, 8GB used (5 up + 3 down), enabled, no expiry.
-	stats := xray.ClientTraffic{
+	stats := coremodel.ClientTraffic{
 		Enable: true,
 		Total:  50 * gb,
 		Up:     5 * gb,
@@ -77,7 +77,7 @@ func TestExpandRemarkVars(t *testing.T) {
 func TestExpandRemarkVars_EdgeCases(t *testing.T) {
 	// Unlimited total → ∞ for human forms, 0 bytes for *_BYTES left. Checked at
 	// the value layer: expandRemarkVars would drop a bare ∞ segment.
-	unlimited := expandCtx(model.Client{}, xray.ClientTraffic{Enable: true, Total: 0, Up: gb}, nil)
+	unlimited := expandCtx(model.Client{}, coremodel.ClientTraffic{Enable: true, Total: 0, Up: gb}, nil)
 	if got := remarkVarValue("TRAFFIC_TOTAL", unlimited); got != "∞" {
 		t.Errorf("unlimited TRAFFIC_TOTAL = %q, want ∞", got)
 	}
@@ -92,12 +92,12 @@ func TestExpandRemarkVars_EdgeCases(t *testing.T) {
 		t.Errorf("zero TgID = %q, want empty", got)
 	}
 	// Over-quota usage clamps left to 0, not negative.
-	over := expandCtx(model.Client{}, xray.ClientTraffic{Enable: true, Total: gb, Up: 2 * gb}, nil)
+	over := expandCtx(model.Client{}, coremodel.ClientTraffic{Enable: true, Total: gb, Up: 2 * gb}, nil)
 	if got := expandRemarkVars("{{TRAFFIC_LEFT_BYTES}}", over); got != "0" {
 		t.Errorf("over-quota TRAFFIC_LEFT_BYTES = %q, want 0", got)
 	}
 	// Delayed-start (negative expiry) gives deterministic whole days.
-	delayed := expandCtx(model.Client{}, xray.ClientTraffic{Enable: true, ExpiryTime: -864_000_000}, nil)
+	delayed := expandCtx(model.Client{}, coremodel.ClientTraffic{Enable: true, ExpiryTime: -864_000_000}, nil)
 	if got := expandRemarkVars("{{DAYS_LEFT}}", delayed); got != "10" {
 		t.Errorf("delayed-start DAYS_LEFT = %q, want 10", got)
 	}
@@ -130,7 +130,7 @@ func TestExpandRemarkVars_DropsHyphenBetweenEmptyTokens(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := expandCtx(model.Client{Email: tt.email}, xray.ClientTraffic{Enable: true}, &model.Inbound{Remark: tt.inbound})
+			ctx := expandCtx(model.Client{Email: tt.email}, coremodel.ClientTraffic{Enable: true}, &model.Inbound{Remark: tt.inbound})
 			if got := expandRemarkVars(tt.tmpl, ctx); got != tt.want {
 				t.Errorf("expandRemarkVars(%q) = %q, want %q", tt.tmpl, got, tt.want)
 			}
@@ -145,20 +145,20 @@ func TestExpandRemarkVars_DropUnlimitedSegments(t *testing.T) {
 	inbound := &model.Inbound{Remark: "host"}
 
 	// No limit at all → only the name segment survives.
-	unlimited := expandCtx(model.Client{}, xray.ClientTraffic{Enable: true}, inbound)
+	unlimited := expandCtx(model.Client{}, coremodel.ClientTraffic{Enable: true}, inbound)
 	if got := expandRemarkVars(tmpl, unlimited); got != "host" {
 		t.Errorf("fully unlimited = %q, want %q", got, "host")
 	}
 
 	// Limited traffic but no expiry → traffic stays, the expiry segment drops.
-	noExpiry := expandCtx(model.Client{}, xray.ClientTraffic{Enable: true, Total: 50 * gb, Up: 8 * gb}, inbound)
+	noExpiry := expandCtx(model.Client{}, coremodel.ClientTraffic{Enable: true, Total: 50 * gb, Up: 8 * gb}, inbound)
 	if got := expandRemarkVars(tmpl, noExpiry); got != "host|📊42.00GB" {
 		t.Errorf("no-expiry = %q, want %q", got, "host|📊42.00GB")
 	}
 
 	// A segment mixing an unlimited token with another value is kept whole,
 	// decoration and ∞ included — only all-unlimited segments drop.
-	mixed := expandCtx(model.Client{Email: "john"}, xray.ClientTraffic{Enable: true}, inbound)
+	mixed := expandCtx(model.Client{Email: "john"}, coremodel.ClientTraffic{Enable: true}, inbound)
 	if got := expandRemarkVars("{{EMAIL}} 📊{{TRAFFIC_LEFT}}", mixed); got != "john 📊∞" {
 		t.Errorf("mixed segment = %q, want %q", got, "john 📊∞")
 	}
@@ -167,7 +167,7 @@ func TestExpandRemarkVars_DropUnlimitedSegments(t *testing.T) {
 func TestExpandRemarkVars_DropEmptySegments(t *testing.T) {
 	inbound := &model.Inbound{Remark: "host"}
 
-	noComment := expandCtx(model.Client{}, xray.ClientTraffic{Enable: true}, inbound)
+	noComment := expandCtx(model.Client{}, coremodel.ClientTraffic{Enable: true}, inbound)
 	if got := expandRemarkVars("{{INBOUND}}|{{COMMENT}}", noComment); got != "host" {
 		t.Errorf("empty comment segment = %q, want %q (no trailing pipe)", got, "host")
 	}
@@ -180,13 +180,13 @@ func TestExpandRemarkVars_DropEmptySegments(t *testing.T) {
 func TestClientStatus(t *testing.T) {
 	cases := []struct {
 		name string
-		st   xray.ClientTraffic
+		st   coremodel.ClientTraffic
 		want string
 	}{
-		{"disabled", xray.ClientTraffic{Enable: false}, "disabled"},
-		{"active", xray.ClientTraffic{Enable: true}, "active"},
-		{"expired", xray.ClientTraffic{Enable: true, ExpiryTime: 1000}, "expired"}, // 1s past epoch
-		{"depleted", xray.ClientTraffic{Enable: true, Total: gb, Up: gb}, "depleted"},
+		{"disabled", coremodel.ClientTraffic{Enable: false}, "disabled"},
+		{"active", coremodel.ClientTraffic{Enable: true}, "active"},
+		{"expired", coremodel.ClientTraffic{Enable: true, ExpiryTime: 1000}, "expired"}, // 1s past epoch
+		{"depleted", coremodel.ClientTraffic{Enable: true, Total: gb, Up: gb}, "depleted"},
 	}
 	for _, c := range cases {
 		if got := clientStatus(c.st); got != c.want {
@@ -200,7 +200,7 @@ func hostRemarkService(template string) (*SubService, *model.Inbound, model.Clie
 	s := &SubService{remarkTemplate: template, subscriptionBody: true}
 	inbound := &model.Inbound{
 		Remark: "DE",
-		ClientStats: []xray.ClientTraffic{{
+		ClientStats: []coremodel.ClientTraffic{{
 			Email:      "john@example.com",
 			Enable:     true,
 			Total:      100 * gb,
@@ -351,7 +351,7 @@ func TestConnectionTokensOnEveryBodyLink(t *testing.T) {
 		Remark:         "DE",
 		Protocol:       "vless",
 		StreamSettings: `{"network":"ws","security":"tls"}`,
-		ClientStats:    []xray.ClientTraffic{{Email: "john@x", Enable: true, Total: 100 * gb, Up: 30 * gb}},
+		ClientStats:    []coremodel.ClientTraffic{{Email: "john@x", Enable: true, Total: 100 * gb, Up: 30 * gb}},
 	}
 	client := model.Client{Email: "john@x"}
 	first := s.genTemplatedRemark(inbound, client, "", "ws")
@@ -379,7 +379,7 @@ func TestConnectionTokensMixedIntoUsageSegment(t *testing.T) {
 		Remark:         "DE",
 		Protocol:       "vless",
 		StreamSettings: `{"network":"grpc","security":"reality"}`,
-		ClientStats:    []xray.ClientTraffic{{Email: "john@x", Enable: true, Total: 100 * gb, Up: 30 * gb}},
+		ClientStats:    []coremodel.ClientTraffic{{Email: "john@x", Enable: true, Total: 100 * gb, Up: 30 * gb}},
 	}
 	client := model.Client{Email: "john@x"}
 	_ = s.genTemplatedRemark(inbound, client, "", "grpc")
@@ -403,7 +403,7 @@ func TestConnectionTokensDisplayContextUnchanged(t *testing.T) {
 		Remark:         "DE",
 		Protocol:       "vless",
 		StreamSettings: `{"network":"ws","security":"tls"}`,
-		ClientStats:    []xray.ClientTraffic{{Email: "john@x", Enable: true, Total: 100 * gb, Up: 30 * gb}},
+		ClientStats:    []coremodel.ClientTraffic{{Email: "john@x", Enable: true, Total: 100 * gb, Up: 30 * gb}},
 	}
 	if got := s.genTemplatedRemark(inbound, model.Client{Email: "john@x"}, "", "ws"); got != "DE" {
 		t.Fatalf("display remark = %q, want DE (connection after usage stripped outside the body)", got)
@@ -416,7 +416,7 @@ func TestIdentityTokenBodyVsDisplay(t *testing.T) {
 		Remark:         "DE",
 		Protocol:       "vless",
 		StreamSettings: `{"network":"ws","security":"tls"}`,
-		ClientStats:    []xray.ClientTraffic{{Email: "john@x", Enable: true, Total: 100 * gb, Up: 30 * gb}},
+		ClientStats:    []coremodel.ClientTraffic{{Email: "john@x", Enable: true, Total: 100 * gb, Up: 30 * gb}},
 	}
 	client := model.Client{Email: "john@x"}
 
@@ -437,7 +437,7 @@ func TestIdentityTokenBodyVsDisplay(t *testing.T) {
 // the multi-inbound case that made {{TRAFFIC_LEFT}} show the full quota (#5443).
 func TestStatsForClient_CrossInboundFallback(t *testing.T) {
 	s := &SubService{
-		statsByEmail: map[string]xray.ClientTraffic{
+		statsByEmail: map[string]coremodel.ClientTraffic{
 			"john@example.com": {Email: "john@example.com", Total: 100 * gb, Up: 15 * gb, Down: 5 * gb},
 		},
 	}
@@ -465,13 +465,13 @@ func TestGenHostRemark_PerClient(t *testing.T) {
 
 func TestStatusEmoji(t *testing.T) {
 	cases := []struct {
-		stats xray.ClientTraffic
+		stats coremodel.ClientTraffic
 		want  string
 	}{
-		{xray.ClientTraffic{Enable: true, Total: 10 * gb, Up: gb}, "✅"},
-		{xray.ClientTraffic{Enable: true, Total: 10 * gb, Up: 10 * gb, Down: 1}, "🚫"},
-		{xray.ClientTraffic{Enable: false}, "🚫"},
-		{xray.ClientTraffic{Enable: true, ExpiryTime: 1000}, "⏳"},
+		{coremodel.ClientTraffic{Enable: true, Total: 10 * gb, Up: gb}, "✅"},
+		{coremodel.ClientTraffic{Enable: true, Total: 10 * gb, Up: 10 * gb, Down: 1}, "🚫"},
+		{coremodel.ClientTraffic{Enable: false}, "🚫"},
+		{coremodel.ClientTraffic{Enable: true, ExpiryTime: 1000}, "⏳"},
 	}
 	for _, c := range cases {
 		if got := statusEmoji(c.stats); got != c.want {
@@ -481,23 +481,23 @@ func TestStatusEmoji(t *testing.T) {
 }
 
 func TestUsagePercentage(t *testing.T) {
-	if got := usagePercentage(xray.ClientTraffic{Total: 100 * gb, Up: 25 * gb, Down: 25 * gb}); got != "50.0％" {
+	if got := usagePercentage(coremodel.ClientTraffic{Total: 100 * gb, Up: 25 * gb, Down: 25 * gb}); got != "50.0％" {
 		t.Errorf("usagePercentage 50%% = %q", got)
 	}
-	if got := usagePercentage(xray.ClientTraffic{Total: 0}); got != "" {
+	if got := usagePercentage(coremodel.ClientTraffic{Total: 0}); got != "" {
 		t.Errorf("usagePercentage unlimited = %q, want empty", got)
 	}
-	if got := usagePercentage(xray.ClientTraffic{Total: 10 * gb, Up: 10 * gb}); got != "100.0％" {
+	if got := usagePercentage(coremodel.ClientTraffic{Total: 10 * gb, Up: 10 * gb}); got != "100.0％" {
 		t.Errorf("usagePercentage 100%% = %q", got)
 	}
 	// Over-quota usage clamps to 100%, consistent with TRAFFIC_LEFT.
-	if got := usagePercentage(xray.ClientTraffic{Total: 10 * gb, Up: 25 * gb}); got != "100.0％" {
+	if got := usagePercentage(coremodel.ClientTraffic{Total: 10 * gb, Up: 25 * gb}); got != "100.0％" {
 		t.Errorf("usagePercentage over-quota = %q, want 100.0％", got)
 	}
 }
 
 func TestUsagePercentageSurvivesFragmentEncoding(t *testing.T) {
-	remark := "node " + usagePercentage(xray.ClientTraffic{Total: 100 * gb, Up: 50 * gb})
+	remark := "node " + usagePercentage(coremodel.ClientTraffic{Total: 100 * gb, Up: 50 * gb})
 	link := buildLinkWithParams("vless://id@example.test:443", nil, remark)
 	if strings.Contains(link, "%25") {
 		t.Fatalf("encoded remark contains %%25, Happ drops such remarks: %s", link)
@@ -551,7 +551,7 @@ func TestJalaliExpireDateLabel(t *testing.T) {
 func TestExpandNewTokensInTemplate(t *testing.T) {
 	inbound := &model.Inbound{Remark: "DE", Protocol: "vless"}
 	client := model.Client{Email: "alice@test.com", ID: "abc-123"}
-	stats := xray.ClientTraffic{Enable: true, Total: 100 * gb, Up: 50 * gb, Down: 0}
+	stats := coremodel.ClientTraffic{Enable: true, Total: 100 * gb, Up: 50 * gb, Down: 0}
 	ctx := remarkContext{
 		client:    client,
 		stats:     stats,
@@ -621,7 +621,7 @@ func TestTranslateUISingleBrackets(t *testing.T) {
 
 func TestExpandRemarkVars_SingleBracketUI(t *testing.T) {
 	inbound := &model.Inbound{Remark: "DE", Protocol: "vless"}
-	stats := xray.ClientTraffic{Enable: true, Total: 100 * gb, Up: 50 * gb, Down: 0}
+	stats := coremodel.ClientTraffic{Enable: true, Total: 100 * gb, Up: 50 * gb, Down: 0}
 	ctx := remarkContext{
 		client:    model.Client{Email: "alice@test.com"},
 		stats:     stats,
@@ -655,7 +655,7 @@ func TestUsageOnFirstLinkOnly_SingleBracket(t *testing.T) {
 	}
 	inbound := &model.Inbound{
 		Remark: "DE",
-		ClientStats: []xray.ClientTraffic{{
+		ClientStats: []coremodel.ClientTraffic{{
 			Email:  "alice@x",
 			Enable: true,
 			Total:  100 * gb,
@@ -682,7 +682,7 @@ func TestEmailOnFirstLinkOnly(t *testing.T) {
 	}
 	inbound := &model.Inbound{
 		Remark: "DE",
-		ClientStats: []xray.ClientTraffic{{
+		ClientStats: []coremodel.ClientTraffic{{
 			Email:  "alice@x",
 			Enable: true,
 			Total:  100 * gb,
@@ -706,7 +706,7 @@ func TestIdentityOnAllLinks(t *testing.T) {
 	const template = "{{INBOUND}}-{{EMAIL}}|{{USERNAME}}|📊{{TRAFFIC_LEFT}}|{{STATUS_EMOJI}}"
 	inbound := &model.Inbound{
 		Remark: "DE",
-		ClientStats: []xray.ClientTraffic{{
+		ClientStats: []coremodel.ClientTraffic{{
 			Email:  "alice@x",
 			Enable: true,
 			Total:  100 * gb,

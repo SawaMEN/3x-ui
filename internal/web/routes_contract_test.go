@@ -16,19 +16,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
 )
 
-/*
-frontend/src/pages/api-docs/endpoints.ts is a hand-maintained registry: an
-API route omitted there silently vanishes from the generated OpenAPI docs,
-and an entry for a removed route documents an endpoint that 404s. This test
-constructs the real router and diffs it against the registry both ways.
-
-Scope: everything under /panel/api/ plus the session-auth surface the
-registry also documents (/login, /logout, /csrf-token, /getTwoFactorEnable,
-/ws). SPA page routes are UI, not API, and stay out; registry paths that
-start with "/{" describe the standalone subscription server, which this
-engine does not serve.
-*/
-
 var contractExtraRoutes = map[string]bool{
 	"POST /login":              true,
 	"POST /logout":             true,
@@ -37,13 +24,40 @@ var contractExtraRoutes = map[string]bool{
 	"GET /ws":                  true,
 }
 
-// Host-firewall mutation and panel-only feature toggles are intentionally
+// Host-firewall mutation and panel-only feature toggles/actions are intentionally
 // internal UI surfaces rather than supported public automation APIs. Keep
 // them out of OpenAPI until they have a stable compatibility contract.
 func isInternalUIAPI(path string) bool {
 	return strings.HasPrefix(path, "/panel/api/server/firewall/") ||
 		strings.HasPrefix(path, "/panel/api/gateway/") ||
-		path == "/panel/api/telemt/subscription-proxy"
+		strings.HasPrefix(path, "/panel/api/telemt/meko/") ||
+		// Managed node-route provisioning is an authenticated UI-only operation,
+		// not a stable external automation API.
+		strings.HasPrefix(path, "/panel/api/xray/node-route/") ||
+		// Live synthetic routing tests are authenticated UI-only diagnostics.
+		path == "/panel/api/xray/routeTest" ||
+		strings.HasPrefix(path, "/panel/api/adblock/") ||
+		// Core selection/installation are administrative UI actions, not stable
+		// public endpoints for third-party automation.
+		path == "/panel/api/setting/cores" ||
+		path == "/panel/api/setting/cores/:core/install" ||
+		path == "/panel/api/setting/cores/:core/select" ||
+		path == "/panel/api/setting/cores/:core/delete" ||
+		path == "/panel/api/setting/cores/:core/update" ||
+		// Site recommendation and draft preflight are authenticated UI-only
+		// diagnostics, not stable public automation APIs. Both perform bounded
+		// network checks and preflight never persists configuration.
+		path == "/panel/api/domains/recommend" ||
+		path == "/panel/api/domains/preflight" ||
+		path == "/panel/api/domains/certificates/renew" ||
+		path == "/panel/api/domains/certificates" ||
+		// Certificate event history, scoped DNS credential administration and
+		// ephemeral HTTP-01 proof are panel-only, not stable public APIs.
+		path == "/panel/api/domains/certificates/events" ||
+		path == "/panel/api/domains/dns/credential" ||
+		path == "/panel/api/domains/probe/http01" ||
+		path == "/panel/api/telemt/subscription-proxy" ||
+		path == "/panel/api/xray/outbound-subs/:id/probe"
 }
 
 func inContractScope(method, path string) bool {
@@ -58,7 +72,7 @@ func registeredContractRoutes(t *testing.T) map[string]bool {
 	t.Cleanup(func() { _ = database.CloseDB() })
 
 	previous := global.GetWebServer()
-	s := NewServer()
+	s := NewServer(nil)
 	s.cron = cron.New(cron.WithLocation(time.Local), cron.WithSeconds())
 	global.SetWebServer(s)
 	t.Cleanup(func() {
@@ -82,16 +96,23 @@ func registeredContractRoutes(t *testing.T) map[string]bool {
 
 func documentedContractRoutes(t *testing.T) map[string]bool {
 	t.Helper()
-	source, err := os.ReadFile(filepath.Join("..", "..", "frontend", "src", "pages", "api-docs", "endpoints.ts"))
-	if err != nil {
-		t.Fatalf("read endpoints.ts: %v", err)
+	registryDir := filepath.Join("..", "..", "frontend", "src", "pages", "api-docs")
+	registryFiles := []string{"endpoints.ts", "singbox-sessions.ts"}
+	var registry strings.Builder
+	for _, name := range registryFiles {
+		source, err := os.ReadFile(filepath.Join(registryDir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		registry.Write(source)
+		registry.WriteByte('\n')
 	}
-	text := string(source)
+	text := registry.String()
 	methodRe := regexp.MustCompile(`method:\s*'(GET|POST|PUT|DELETE|PATCH|HEAD|WS)'`)
 	pathRe := regexp.MustCompile(`path:\s*'([^']+)'`)
 	methods := methodRe.FindAllStringSubmatchIndex(text, -1)
 	if declared := strings.Count(text, "method: '"); len(methods) != declared {
-		t.Fatalf("parsed %d method fields but endpoints.ts declares %d — the parser regex no longer matches the file shape", len(methods), declared)
+		t.Fatalf("parsed %d method fields but API registries declare %d — the parser regex no longer matches the file shape", len(methods), declared)
 	}
 	docs := make(map[string]bool)
 	for i, m := range methods {
@@ -101,7 +122,7 @@ func documentedContractRoutes(t *testing.T) map[string]bool {
 		}
 		pathMatch := pathRe.FindStringSubmatch(text[m[1]:segmentEnd])
 		if pathMatch == nil {
-			t.Fatalf("entry %d in endpoints.ts has a method but no path before the next entry — the parser cannot pair it", i)
+			t.Fatalf("entry %d in API registries has a method but no path before the next entry — the parser cannot pair it", i)
 		}
 		method := text[m[2]:m[3]]
 		if strings.HasPrefix(pathMatch[1], "/{") || !strings.HasPrefix(pathMatch[1], "/") {
@@ -110,7 +131,7 @@ func documentedContractRoutes(t *testing.T) map[string]bool {
 		docs[method+" "+pathMatch[1]] = true
 	}
 	if len(docs) == 0 {
-		t.Fatal("no entries parsed from endpoints.ts; the parser regex is broken")
+		t.Fatal("no entries parsed from API registries; the parser regex is broken")
 	}
 	return docs
 }
@@ -135,7 +156,7 @@ func TestRouteRegistryContract(t *testing.T) {
 		}
 		sort.Strings(missing)
 		for _, route := range missing {
-			t.Error(fmt.Errorf("route %s is registered but absent from endpoints.ts — add an entry or it vanishes from the API docs", route))
+			t.Error(fmt.Errorf("route %s is registered but absent from API registries — add an entry or it vanishes from the API docs", route))
 		}
 	})
 
@@ -148,7 +169,7 @@ func TestRouteRegistryContract(t *testing.T) {
 		}
 		sort.Strings(stale)
 		for _, route := range stale {
-			t.Error(fmt.Errorf("endpoints.ts documents %s but the server does not register it — remove or fix the entry", route))
+			t.Error(fmt.Errorf("API registries document %s but the server does not register it — remove or fix the entry", route))
 		}
 	})
 }

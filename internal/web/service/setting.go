@@ -27,8 +27,8 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/reflect_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/totp"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/uripath"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/dnsconf"
 )
 
@@ -53,8 +53,27 @@ const (
 )
 
 var defaultValueMap = map[string]string{
+	"domainFrontConfig":     "",
+	"subPublicURL":          "",
+	"subAllowedDomains":     "",
+	"subRestrictDomains":    "false",
+	"domainActivityEnabled": "false",
+	"subCDNEnable":          "false",
+
+	"rootRedirectEnable":       "false",
+	"rootRedirectURL":          "https://www.wikipedia.org/",
+	"subTelegramLocalEnable":   "true",
+	"subTelegramRemoteEnable":  "true",
+	"subTelegramWebEnable":     "true",
+	"subAppearanceTheme":       "classic",
+	"subAppearanceEnable":      "false",
+	"subAppearanceTitle":       "",
+	"subAppearanceDescription": "",
+	"subAppearanceLogoURL":     "",
+	"subAppearanceAccent":      "#808080",
+
 	"xrayTemplateConfig": xrayTemplateConfig,
-	"coreType":           "xray",
+	"coreType":           "sing-box",
 	"webListen":          "",
 	"webDomain":          "",
 	"webPort":            "2053",
@@ -84,6 +103,7 @@ var defaultValueMap = map[string]string{
 	"remarkTemplate":              DefaultRemarkTemplate,
 	"subShowIdentityOnAllLinks":   "false",
 	"subInfoNodeEnable":           "false",
+	"subHostSortMode":             "inbound-first",
 	"subCalendarExpireInclusive":  "false",
 	"subExpiredTemplate":          DefaultSubExpiredTemplate,
 	"subTrafficDepletedTemplate":  DefaultSubTrafficDepletedTemplate,
@@ -102,6 +122,8 @@ var defaultValueMap = map[string]string{
 	"twoFactorToken":              "",
 	"happLinkEnable":              "false",
 	"subEnable":                   "true",
+	"subFormatMode":               "both",
+	"subDefaultFormat":            "auto",
 	"subJsonEnable":               "false",
 	"subJsonAutoDetect":           "false",
 	"subJsonAlwaysArray":          "false",
@@ -157,6 +179,7 @@ var defaultValueMap = map[string]string{
 	"subClashURI":                 "",
 	"subClashEnableRouting":       "false",
 	"subClashRules":               "",
+	"subClashRemoteDNS":           "false",
 	"subJsonMux":                  "",
 	"subJsonRules":                "",
 	"subJsonRoutingRules":         "",
@@ -210,6 +233,8 @@ var defaultValueMap = map[string]string{
 	// Consecutive failed observatory probes before an outbound.down event fires
 	"outboundDownThreshold": "3",
 
+	"nodeDownThreshold": "1",
+
 	// Email (SMTP) notifications
 	"smtpEnable":         "false",
 	"smtpHost":           "",
@@ -221,19 +246,8 @@ var defaultValueMap = map[string]string{
 	"smtpTo":             "",
 	"smtpEncryptionType": "starttls", // no, starttls, tls
 
-	// Discord bot notifications
-	"discordBotEnable":     "false",
-	"discordBotToken":      "",
-	"discordChannelId":     "",
-	"discordAdminIds":      "",
-	"discordRunTime":       "@daily",
-	"discordBotBackup":     "false",
-	"discordCpu":           "80",
-	"discordMemory":        "80",
-	"discordLang":          "en-US",
-	"discordEnabledEvents": "login.attempt,cpu.high",
-
-	"singBoxConfigTemplate": "",
+	"singBoxUpstreamConfigTemplate": "",
+	"singBoxConfigTemplate":         "",
 }
 
 // SettingService provides business logic for application settings management.
@@ -317,6 +331,8 @@ func (s *SettingService) GetAllSetting() (*entity.AllSetting, error) {
 		allSetting.SubProfileMode = ""
 	}
 	allSetting.SubProfileMode = effectiveSubProfileMode(allSetting.SubProfileMode, allSetting.SubProfileUrl)
+	allSetting.RealityScanCandidates = expandedRealityScanCandidates(allSetting.RealityScanCandidates)
+	allSetting.CoreType = canonicalCoreType(allSetting.CoreType)
 	return allSetting, nil
 }
 
@@ -332,7 +348,6 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	view.HasWarpSecret = secretConfigured(mustString(s.GetWarp()))
 	view.HasNordSecret = secretConfigured(mustString(s.GetNord()))
 	view.HasSmtpPassword = secretConfigured(allSetting.SmtpPassword)
-	view.HasDiscordBotToken = secretConfigured(allSetting.DiscordBotToken)
 	var apiTokenCount int64
 	if err := database.GetDB().Model(model.ApiToken{}).Where("enabled = ?", true).Count(&apiTokenCount).Error; err == nil {
 		view.HasApiToken = apiTokenCount > 0
@@ -341,7 +356,6 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	view.TwoFactorToken = ""
 	view.LdapPassword = ""
 	view.SmtpPassword = ""
-	view.DiscordBotToken = ""
 	return view, nil
 }
 
@@ -391,8 +405,12 @@ func (s *SettingService) getSetting(key string) (*model.Setting, error) {
 }
 
 func (s *SettingService) saveSetting(key string, value string) error {
-	setting, err := s.getSetting(key)
-	db := database.GetDB()
+	return saveSettingIn(database.GetDB(), key, value)
+}
+
+func saveSettingIn(db *gorm.DB, key, value string) error {
+	setting := &model.Setting{}
+	err := db.Where("key = ?", key).First(setting).Error
 	if database.IsNotFound(err) {
 		return db.Create(&model.Setting{
 			Key:   key,
@@ -480,8 +498,12 @@ func (s *SettingService) SetWarpUpdateInterval(val int) error {
 }
 
 const (
-	CoreTypeXray    = "xray"
-	CoreTypeSingBox = "sing-box"
+	CoreTypeSingBoxUpstream = "sing-box-upstream"
+	CoreTypeXray            = "xray"
+	CoreTypeSingBox         = "sing-box"
+	// Deprecated: the owner kernel identifies as sing-box.
+	CoreTypeHiddify       = CoreTypeSingBox
+	legacyCoreTypeHiddify = "hiddify-core"
 )
 
 func (s *SettingService) GetCoreType() (string, error) {
@@ -489,21 +511,50 @@ func (s *SettingService) GetCoreType() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if coreType != CoreTypeXray && coreType != CoreTypeSingBox {
-		return CoreTypeXray, nil
+	coreType = canonicalCoreType(coreType)
+	if coreType == CoreTypeXray {
+		return coreType, nil
+	} // Read-only legacy value for offline migration.
+	if !isSupportedCoreType(coreType) {
+		return CoreTypeSingBox, nil
 	}
 	return coreType, nil
 }
 
+func canonicalCoreType(value string) string {
+	if value == legacyCoreTypeHiddify {
+		return CoreTypeSingBox
+	}
+	return value
+}
+
 func (s *SettingService) SetCoreType(coreType string) error {
-	if coreType != CoreTypeXray && coreType != CoreTypeSingBox {
+	coreType = canonicalCoreType(coreType)
+	if !isSupportedCoreType(coreType) {
 		return common.NewError("core type is not supported:", coreType)
 	}
-	return s.setString("coreType", coreType)
+	// Distinguish an explicit selection made by a standalone-capable panel
+	// from an old Xray database which still needs canonical-user migration.
+	if coreType != CoreTypeXray && coreType != CoreTypeSingBoxUpstream {
+		return s.setString("coreType", coreType)
+	}
+	return database.GetDB().Transaction(func(tx *gorm.DB) error {
+		if err := saveSettingIn(tx, "standaloneCoreSelection", "enabled"); err != nil {
+			return err
+		}
+		return saveSettingIn(tx, "coreType", coreType)
+	})
 }
 
 func (s *SettingService) GetXrayConfigTemplate() (string, error) {
 	return s.getString("xrayTemplateConfig")
+}
+
+// SetXrayConfigTemplate stores an already validated template. Gateway changes
+// only its own objects; it must not validate an inactive Xray template using
+// the currently selected sing-box outbound schema.
+func (s *SettingService) SetXrayConfigTemplate(raw string) error {
+	return s.setString("xrayTemplateConfig", raw)
 }
 
 func (s *SettingService) GetXrayOutboundTestUrl() (string, error) {
@@ -728,7 +779,8 @@ func (s *SettingService) GetTrustedProxyCIDRs() (string, error) {
 }
 
 func (s *SettingService) GetRealityScanCandidates() (string, error) {
-	return s.getString("realityScanCandidates")
+	csv, err := s.getString("realityScanCandidates")
+	return expandedRealityScanCandidates(csv), err
 }
 
 func (s *SettingService) GetRemarkTemplate() (string, error) {
@@ -788,13 +840,11 @@ func (s *SettingService) GetPanelGuid() (string, error) {
 }
 
 func (s *SettingService) SetBasePath(basePath string) error {
-	if !strings.HasPrefix(basePath, "/") {
-		basePath = "/" + basePath
+	normalized, err := uripath.Normalize(basePath)
+	if err != nil {
+		return err
 	}
-	if !strings.HasSuffix(basePath, "/") {
-		basePath += "/"
-	}
-	return s.setString("webBasePath", basePath)
+	return s.setString("webBasePath", normalized)
 }
 
 func (s *SettingService) GetBasePath() (string, error) {
@@ -1063,10 +1113,22 @@ func (s *SettingService) GetPageSize() (int, error) {
 }
 
 func (s *SettingService) GetSubURI() (string, error) {
+	if publicURL, err := s.GetSubPublicURL(); err != nil {
+		return "", err
+	} else if publicURL != "" {
+		path, err := s.GetSubPath()
+		return publicURL + path, err
+	}
 	return s.getString("subURI")
 }
 
 func (s *SettingService) GetSubJsonURI() (string, error) {
+	if publicURL, err := s.GetSubPublicURL(); err != nil {
+		return "", err
+	} else if publicURL != "" {
+		path, err := s.GetSubJsonPath()
+		return publicURL + path, err
+	}
 	return s.getString("subJsonURI")
 }
 
@@ -1079,6 +1141,12 @@ func (s *SettingService) GetSubClashPath() (string, error) {
 }
 
 func (s *SettingService) GetSubClashURI() (string, error) {
+	if publicURL, err := s.GetSubPublicURL(); err != nil {
+		return "", err
+	} else if publicURL != "" {
+		path, err := s.GetSubClashPath()
+		return publicURL + path, err
+	}
 	return s.getString("subClashURI")
 }
 
@@ -1191,8 +1259,17 @@ func (s *SettingService) GetIpLimitEnable() (bool, error) {
 // GetAccessLogEnable reports whether an Xray access log is configured. Used by
 // the UI for features that genuinely read the log file (the xray log viewer) —
 // distinct from IP limiting, which works without it.
+// Domain activity is opt-in and disabled until an administrator enables it.
+func (s *SettingService) GetDomainActivityEnabled() (bool, error) {
+	return s.getBool("domainActivityEnabled")
+}
+
+func (s *SettingService) SetDomainActivityEnabled(enabled bool) error {
+	return s.setBool("domainActivityEnabled", enabled)
+}
+
 func (s *SettingService) GetAccessLogEnable() (bool, error) {
-	accessLogPath, err := xray.GetAccessLogPath()
+	accessLogPath, err := selectedXrayAccessLogPath()
 	if err != nil {
 		return false, err
 	}
@@ -1284,8 +1361,6 @@ func (s *SettingService) GetLdapDefaultLimitIP() (int, error) {
 	return s.getInt("ldapDefaultLimitIP")
 }
 
-// Event bus — per-subscriber event filtering
-
 func (s *SettingService) GetTgEnabledEvents() (string, error) {
 	return s.getString("tgEnabledEvents")
 }
@@ -1301,8 +1376,6 @@ func (s *SettingService) GetSmtpEnabledEvents() (string, error) {
 func (s *SettingService) SetSmtpEnabledEvents(events string) error {
 	return s.setString("smtpEnabledEvents", events)
 }
-
-// Email (SMTP) settings
 
 func (s *SettingService) GetSmtpEnable() (bool, error) {
 	return s.getBool("smtpEnable")
@@ -1392,88 +1465,6 @@ func (s *SettingService) SetSmtpMemory(value int) error {
 	return s.setInt("smtpMemory", value)
 }
 
-// Discord bot settings
-
-func (s *SettingService) GetDiscordBotEnable() (bool, error) {
-	return s.getBool("discordBotEnable")
-}
-
-func (s *SettingService) SetDiscordBotEnable(value bool) error {
-	return s.setBool("discordBotEnable", value)
-}
-
-func (s *SettingService) GetDiscordBotToken() (string, error) {
-	return s.getString("discordBotToken")
-}
-
-func (s *SettingService) SetDiscordBotToken(value string) error {
-	return s.setString("discordBotToken", value)
-}
-
-func (s *SettingService) GetDiscordChannelId() (string, error) {
-	return s.getString("discordChannelId")
-}
-
-func (s *SettingService) SetDiscordChannelId(value string) error {
-	return s.setString("discordChannelId", value)
-}
-
-func (s *SettingService) GetDiscordAdminIds() (string, error) {
-	return s.getString("discordAdminIds")
-}
-
-func (s *SettingService) SetDiscordAdminIds(value string) error {
-	return s.setString("discordAdminIds", value)
-}
-
-func (s *SettingService) GetDiscordEnabledEvents() (string, error) {
-	return s.getString("discordEnabledEvents")
-}
-
-func (s *SettingService) SetDiscordEnabledEvents(events string) error {
-	return s.setString("discordEnabledEvents", events)
-}
-
-func (s *SettingService) GetDiscordCpu() (int, error) {
-	return s.getInt("discordCpu")
-}
-
-func (s *SettingService) SetDiscordCpu(value int) error {
-	return s.setInt("discordCpu", value)
-}
-
-func (s *SettingService) GetDiscordMemory() (int, error) {
-	return s.getInt("discordMemory")
-}
-
-func (s *SettingService) SetDiscordMemory(value int) error {
-	return s.setInt("discordMemory", value)
-}
-
-func (s *SettingService) GetDiscordRunTime() (string, error) {
-	return s.getString("discordRunTime")
-}
-
-func (s *SettingService) SetDiscordRunTime(value string) error {
-	return s.setString("discordRunTime", value)
-}
-
-func (s *SettingService) GetDiscordBotBackup() (bool, error) {
-	return s.getBool("discordBotBackup")
-}
-
-func (s *SettingService) SetDiscordBotBackup(value bool) error {
-	return s.setBool("discordBotBackup", value)
-}
-
-func (s *SettingService) GetDiscordLang() (string, error) {
-	return s.getString("discordLang")
-}
-
-func (s *SettingService) SetDiscordLang(value string) error {
-	return s.setString("discordLang", value)
-}
-
 // GetOutboundDownThreshold returns how many consecutive failed observatory
 // probes an outbound must accumulate before an outbound.down notification is
 // emitted. 1 preserves the legacy "notify on the first failed probe" behaviour.
@@ -1489,13 +1480,30 @@ func (s *SettingService) SetOutboundDownThreshold(value int) error {
 // flag, a blank submitted secret means "unchanged" (the field is always served
 // blank to the browser) and the stored value is preserved.
 type SecretClears struct {
-	TgBotToken      bool
-	LdapPassword    bool
-	SmtpPassword    bool
-	DiscordBotToken bool
+	TgBotToken   bool
+	LdapPassword bool
+	SmtpPassword bool
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears SecretClears) error {
+	if err := validateSubscriptionFormats(allSetting); err != nil {
+		return err
+	}
+	switch allSetting.SubHostSortMode {
+	case "":
+		allSetting.SubHostSortMode = "inbound-first"
+	case "inbound-first", "hosts-first":
+	default:
+		return errors.New("subscription host sort mode must be inbound-first or hosts-first")
+	}
+	if err := validateSubscriptionDomains(allSetting); err != nil {
+		return err
+	}
+	if err := validatePresentationSettings(allSetting); err != nil {
+		return err
+	}
+	allSetting.RealityScanCandidates = expandedRealityScanCandidates(allSetting.RealityScanCandidates)
+	allSetting.CoreType = canonicalCoreType(allSetting.CoreType)
 	switch allSetting.SubProfileMode {
 	case "", SubProfileModeNone, SubProfileModeBuiltin, SubProfileModeCustom:
 		allSetting.SubProfileMode = effectiveSubProfileMode(allSetting.SubProfileMode, allSetting.SubProfileUrl)
@@ -1661,13 +1669,6 @@ func (s *SettingService) preserveRedactedSecrets(allSetting *entity.AllSetting, 
 		}
 		allSetting.SmtpPassword = value
 	}
-	if !clears.DiscordBotToken && strings.TrimSpace(allSetting.DiscordBotToken) == "" {
-		value, err := s.GetDiscordBotToken()
-		if err != nil {
-			return err
-		}
-		allSetting.DiscordBotToken = value
-	}
 	return nil
 }
 
@@ -1749,11 +1750,25 @@ func (s *SettingService) UpdateSecret(key string, value string) error {
 }
 
 func (s *SettingService) GetSingBoxConfigTemplate() (string, error) {
-	return s.getString("singBoxConfigTemplate")
+	return s.getString(SelectedNativeCore().templateKey())
 }
 
 func (s *SettingService) SetSingBoxConfigTemplate(value string) error {
-	return s.setString("singBoxConfigTemplate", value)
+	return s.setString(SelectedNativeCore().templateKey(), value)
+}
+
+func (s *SettingService) GetNativeCoreConfigTemplate(core string) (string, error) {
+	if !IsNativeCore(core) {
+		return "", fmt.Errorf("unsupported native core %q", core)
+	}
+	return s.getString(NativeCore(core).templateKey())
+}
+
+func (s *SettingService) SetNativeCoreConfigTemplate(core, value string) error {
+	if !IsNativeCore(core) {
+		return fmt.Errorf("unsupported native core %q", core)
+	}
+	return s.setString(NativeCore(core).templateKey(), value)
 }
 
 func (s *SettingService) GetDefaultXrayConfig() (any, error) {
@@ -1791,6 +1806,9 @@ func extractHostname(host string) string {
 // Information page) and the subscription page so both render subscription
 // URLs identically.
 func (s *SettingService) BuildSubURIBase(host string) string {
+	if publicURL, _ := s.GetSubPublicURL(); publicURL != "" {
+		return publicURL
+	}
 	subPort, _ := s.GetSubPort()
 	subDomain, _ := s.GetSubDomain()
 	subKeyFile, _ := s.GetSubKeyFile()
@@ -1888,11 +1906,10 @@ func (s *SettingService) GetDefaultSettings(host string) (any, error) {
 }
 
 var factoryDefaultSecretKeys = map[string]bool{
-	"tgBotToken":      true,
-	"twoFactorToken":  true,
-	"ldapPassword":    true,
-	"smtpPassword":    true,
-	"discordBotToken": true,
+	"tgBotToken":     true,
+	"twoFactorToken": true,
+	"ldapPassword":   true,
+	"smtpPassword":   true,
 }
 
 /*
@@ -1916,4 +1933,66 @@ func (s *SettingService) GetFactoryDefaults() map[string]string {
 		}
 	}
 	return result
+}
+
+func (s *SettingService) GetSubHostSortMode() (string, error) {
+	return s.getString("subHostSortMode")
+}
+
+func (s *SettingService) GetSubClashRemoteDNS() (bool, error) {
+	return s.getBool("subClashRemoteDNS")
+}
+
+func (s *SettingService) GetNodeDownThreshold() (int, error) {
+	return s.getInt("nodeDownThreshold")
+}
+
+func (s *SettingService) SetNodeDownThreshold(value int) error {
+	return s.setInt("nodeDownThreshold", value)
+}
+
+func (s *SettingService) GetSubFormatMode() (string, error) { return s.getString("subFormatMode") }
+func (s *SettingService) GetSubDefaultFormat() (string, error) {
+	return s.getString("subDefaultFormat")
+}
+
+func validateSubscriptionFormats(settings *entity.AllSetting) error {
+	if settings.SubFormatMode == "" {
+		settings.SubFormatMode = "both"
+	}
+	if settings.SubDefaultFormat == "" {
+		settings.SubDefaultFormat = "auto"
+	}
+	switch settings.SubFormatMode {
+	case "both", "xray", "sing-box":
+	default:
+		return errors.New("subscription format mode must be both, xray or sing-box")
+	}
+	switch settings.SubDefaultFormat {
+	case "auto", "links", "xray", "sing-box":
+	default:
+		return errors.New("invalid default subscription format")
+	}
+	if settings.SubFormatMode != "both" && settings.SubDefaultFormat != settings.SubFormatMode {
+		return errors.New("default subscription format must be enabled")
+	}
+	return nil
+}
+
+// Read both values in one database snapshot so settings take effect together.
+func (s *SettingService) GetSubOutputFormats() (string, string, error) {
+	settings := &entity.AllSetting{SubFormatMode: "both", SubDefaultFormat: "auto"}
+	var rows []model.Setting
+	if err := database.GetDB().Where("key IN ?", []string{"subFormatMode", "subDefaultFormat"}).Find(&rows).Error; err != nil {
+		return "", "", err
+	}
+	for _, row := range rows {
+		if row.Key == "subFormatMode" {
+			settings.SubFormatMode = row.Value
+		} else {
+			settings.SubDefaultFormat = row.Value
+		}
+	}
+	err := validateSubscriptionFormats(settings)
+	return settings.SubFormatMode, settings.SubDefaultFormat, err
 }

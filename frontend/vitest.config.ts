@@ -17,7 +17,9 @@ export default defineConfig({
   test: {
     globals: false,
     // Keep jsdom-heavy form tests within the memory budget of local and CI runners.
-    maxWorkers: 2,
+    // CI has enough CPU capacity for an extra worker; retain a conservative
+    // default on developer machines. Measure peak RAM before raising further.
+    maxWorkers: process.env.CI ? 3 : 2,
     projects: [
       {
         extends: true,

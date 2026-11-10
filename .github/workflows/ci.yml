@@ -4,6 +4,13 @@ on:
   pull_request:
     paths:
       - "**.go"
+      - "deploy/speed/**"
+      - "tools/build-speed-components.py"
+      - "deploy/hiddify/**"
+      - "tools/build-hiddify-core.sh"
+      - "tools/verify-hiddify-build.py"
+      - "deploy/hiddify/fork-contract.json"
+      - "deploy/hiddify/hiddify-core-target.json"
       - "go.mod"
       - "go.sum"
       - "frontend/**"
@@ -11,11 +18,31 @@ on:
       - "Makefile"
       - "internal/config/version"
       - ".github/workflows/ci.yml"
+      - "tools/ci/**"
+      - "**.sh"
+      - "tools/test-*-shell.py"
+      - "tools/test-meko-firewall.py"
+      - "tools/telemt/**"
+      - "tools/test_official_telemt.py"
   push:
     branches:
       - main
+      - up
+      - update
+      - sub
+      - dns
+      - telemt
+      - manager
+      - domen
     paths:
       - "**.go"
+      - "deploy/speed/**"
+      - "tools/build-speed-components.py"
+      - "deploy/hiddify/**"
+      - "tools/build-hiddify-core.sh"
+      - "tools/verify-hiddify-build.py"
+      - "deploy/hiddify/fork-contract.json"
+      - "deploy/hiddify/hiddify-core-target.json"
       - "go.mod"
       - "go.sum"
       - "frontend/**"
@@ -23,17 +50,132 @@ on:
       - "Makefile"
       - "internal/config/version"
       - ".github/workflows/ci.yml"
+      - "tools/ci/**"
+      - "**.sh"
+      - "tools/test-*-shell.py"
+      - "tools/test-meko-firewall.py"
+      - "tools/telemt/**"
+      - "tools/test_official_telemt.py"
 
 permissions:
   contents: read
+
+env:
+  GOPROXY: "https://proxy.golang.org|direct"
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Classify changed files
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.scopes.outputs.backend }}
+      frontend: ${{ steps.scopes.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - name: Classify changed paths (full checks when diff is unavailable)
+        id: scopes
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          touch "$RUNNER_TEMP/ci-paths.txt"
+          if [[ -n "$BASE_SHA" && ! "$BASE_SHA" =~ ^0+$ ]] && (
+            git cat-file -e "${BASE_SHA}^{commit}" ||
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          ) && git diff --name-only "$BASE_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/ci-paths.txt"; then
+            cat "$RUNNER_TEMP/ci-paths.txt"
+          else
+            echo "Unable to prove exact diff; requiring all checks."
+          fi
+          bash tools/ci/changed-scopes.sh "$RUNNER_TEMP/ci-paths.txt"
+
+      - name: Restore previous race duration profile
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/ci/race-test-durations.json
+          key: race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-${{ github.run_id }}
+          restore-keys: |
+            race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-
+      - name: Initialize profile if no successful measurement exists
+        if: steps.scopes.outputs.backend == 'true'
+        run: |
+          if [[ ! -s tools/ci/race-test-durations.json ]]; then
+            printf '{"schema_version":1,"packages":{}}\n' > tools/ci/race-test-durations.json
+          fi
+      - name: Share immutable profile snapshot with all race shards
+        if: steps.scopes.outputs.backend == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: race-duration-base
+          path: tools/ci/race-test-durations.json
+          if-no-files-found: error
+          retention-days: 3
+
+  resolve-core:
+    name: Pin latest stable Linux core for CI
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.core.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve complete published Linux release once
+        id: core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(python3 tools/fetch-latest-kernel.py --latest-tag)
+          test -n "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Selected CI native core $tag"
+
+  shell-tests:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate installer and management scripts
+        run: |
+          for script in install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/runtime/hiddify-core-update.sh scripts/migration/core-migration.sh; do
+            bash -n "$script"
+          done
+          shellcheck --shell=bash --severity=error install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/runtime/hiddify-core-update.sh scripts/migration/core-migration.sh
+          shellcheck --shell=bash --include=SC2086,SC2046,SC2115,SC2164 install.sh update.sh scripts/runtime/x-ui.sh scripts/runtime/x-ui-core.sh scripts/migration/core-migration.sh
+      - name: Exercise release rollback and CLI failures
+        run: |
+          python3 -m unittest discover -s tools -p test_fetch_latest_kernel.py
+          python3 tools/test-core-migration-shell.py
+          python3 tools/test-management-shell.py
+          python3 -m unittest discover -s tools/ci -p 'test_*.py'
+      - name: Check pinned native core source, security and runtime contract
+        run: python3 tools/verify-hiddify-build.py
+
+  meko-firewall:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install firewall tools
+        run: sudo apt-get update && sudo apt-get install -y nftables iptables
+      - name: Test actual MEKO rules in an isolated network namespace
+        run: sudo unshare --net -- python3 tools/test-meko-firewall.py
+
   go-test:
-    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     env:
       GOPROXY: "https://proxy.golang.org|direct"
@@ -46,23 +188,79 @@ jobs:
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Download Go dependencies
-        run: |
-          for attempt in 1 2 3; do
-            if go mod download; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "go mod download failed after ${attempt} attempts" >&2
-              exit 1
-            fi
-            sleep $((attempt * 5))
-          done
+        run: bash tools/ci/download-go-modules.sh
       - name: Test
         run: |
           go test -p 12 -vet=off -shuffle=on -count=1 ./...
 
+  go-vet:
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      GOPROXY: "https://proxy.golang.org|direct"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
+      - name: Vet Go packages
+        run: go vet -p 12 ./...
+
+  native-core-integration:
+    needs: [changes, resolve-core]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      GOPROXY: "https://proxy.golang.org|direct"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
+      - name: Fetch latest stable core pinned once per CI run for AWG integration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CORE_RELEASE_TAG: ${{ needs.resolve-core.outputs.tag }}
+        run: |
+          test -n "$CORE_RELEASE_TAG"
+          python3 tools/fetch-latest-kernel.py --arch amd64 --output "$RUNNER_TEMP/awg-core" --tag "$CORE_RELEASE_TAG"
+      - name: Verify native subscription protocol exports
+        env:
+          HIDDIFY_TEST_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/sub -run '^(TestHiddify(ExtendedProtocolsSurviveMixedSubscription|MixedWireGuardKeepsEveryEndpoint)|TestAnyTLSShadowTLS(AutomaticTLSIdentityAndRoutes|SubscriptionConnections))$' -count=1 -v
+      - name: Verify live client speed limits over TCP and UDP
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/web/service -run '^TestClientSpeedLimitLiveCore$' -count=1 -v
+
+      - name: Verify real panel ingress -> remote node cascades
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/web/service -run '^TestNodeRouteLiveLocalInboundToRemoteCore$' -count=1 -v
+
+      - name: Verify native AWG configuration and TCP/UDP tunnel
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/web/service -run '^TestNativeAWG' -count=1
+      - name: Verify Hysteria2 node-route ECH with release core
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/web/service -run '^TestNodeRouteHysteriaECH' -count=1 -v
+
   postgres-durable-first:
-    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -101,10 +299,10 @@ jobs:
       - name: PostgreSQL schema and migration tests
         run: |
           set -o pipefail
-          go test -p 12 ./internal/database -run '^(TestHostAutoMigrateCreatesColumns_Postgres|TestMigrate_Postgres)$' -count=1 -v | tee /tmp/postgres-schema.log
+          go test -p 12 ./internal/database -run '^(TestHostAutoMigrateCreatesColumns_Postgres|TestMigrate_Postgres|TestPostgresSQLiteRoundTripAndBackupPreservation|TestMigrateLegacySQLiteKeepsOriginalSchema)$' -count=1 -v | tee /tmp/postgres-schema.log
           passed=$(grep -c -- '--- PASS' /tmp/postgres-schema.log || true)
-          if [ "$passed" -lt 2 ]; then
-            echo "expected 2 passing PostgreSQL schema tests, got $passed" >&2
+          if [ "$passed" -lt 4 ]; then
+            echo "expected 4 passing PostgreSQL schema tests, got $passed" >&2
             exit 1
           fi
 
@@ -127,7 +325,8 @@ jobs:
         run: git diff --exit-code -- frontend/src/generated frontend/public/openapi.json
 
   govulncheck:
-    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -143,7 +342,8 @@ jobs:
         run: govulncheck ./...
 
   race:
-    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -153,14 +353,19 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
       - name: Race detector
         run: |
           go list ./internal/... . > /tmp/race-packages.txt
           mapfile -t packages < <(grep -Ev '^github.com/SawaMEN/3x-ui/v3/internal/(web/service|sub)$' /tmp/race-packages.txt)
           go test -race -p 12 -short -vet=off -timeout 20m "${packages[@]}"
+      - name: Repeat TUIC cross-transport UDP echo under race detector
+        run: go test -race ./internal/tuic -run '^TestAudit3FirstTransportReturnsPositiveEchoAfterOppositeModePacket$' -count=8 -timeout=4m
 
   race-service:
-    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -174,11 +379,29 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
+      - name: Download one consistent race profile snapshot
+        uses: actions/download-artifact@v8
+        with:
+          name: race-duration-base
+          path: tools/ci
       - name: Service race detector (shard ${{ matrix.shard }})
+        env:
+          RACE_EVENTS_FILE: ${{ runner.temp }}/race-service-${{ matrix.shard }}.jsonl
+          RACE_FRAGMENT_FILE: ${{ runner.temp }}/race-service-${{ matrix.shard }}.json
         run: bash tools/ci/race-package-shard.sh ./internal/web/service ${{ matrix.shard }} 3
+      - name: Upload observed race-test durations
+        uses: actions/upload-artifact@v7
+        with:
+          name: race-duration-service-${{ matrix.shard }}
+          path: ${{ runner.temp }}/race-service-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 7
 
   race-sub:
-    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -192,11 +415,67 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
+      - name: Download one consistent race profile snapshot
+        uses: actions/download-artifact@v8
+        with:
+          name: race-duration-base
+          path: tools/ci
       - name: Subscription race detector (shard ${{ matrix.shard }})
+        env:
+          RACE_EVENTS_FILE: ${{ runner.temp }}/race-sub-${{ matrix.shard }}.jsonl
+          RACE_FRAGMENT_FILE: ${{ runner.temp }}/race-sub-${{ matrix.shard }}.json
         run: bash tools/ci/race-package-shard.sh ./internal/sub ${{ matrix.shard }} 2
+      - name: Upload observed race-test durations
+        uses: actions/upload-artifact@v7
+        with:
+          name: race-duration-sub-${{ matrix.shard }}
+          path: ${{ runner.temp }}/race-sub-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  race-duration-profile:
+    name: Update measured race-test durations
+    needs: [race-service, race-sub]
+    if: ${{ always() && needs.race-service.result == 'success' && needs.race-sub.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download one consistent race profile snapshot
+        uses: actions/download-artifact@v8
+        with:
+          name: race-duration-base
+          path: tools/ci
+      - name: Download successful race-shard measurements
+        uses: actions/download-artifact@v8
+        with:
+          pattern: race-duration-s*
+          path: race-fragments
+          merge-multiple: true
+      - name: Merge observed durations (EWMA 60/40)
+        run: |
+          python3 tools/ci/race-balance.py merge \
+            --previous tools/ci/race-test-durations.json \
+            --fragments race-fragments --count 5 \
+            --output tools/ci/race-test-durations.json
+      - name: Save profile for subsequent CI runs
+        uses: actions/cache/save@v4
+        with:
+          path: tools/ci/race-test-durations.json
+          key: race-duration-v1-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'tools/ci/race-balance.py') }}-${{ github.run_id }}
+      - name: Upload merged duration profile
+        uses: actions/upload-artifact@v7
+        with:
+          name: race-duration-profile
+          path: tools/ci/race-test-durations.json
+          retention-days: 14
 
   fuzz-smoke:
-    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -206,13 +485,16 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
       - name: Fuzz critical parsers (smoke)
         run: |
           go test -p 12 -run '^$' -fuzz 'FuzzParseLink$' -fuzztime=30s ./internal/util/link/
           go test -p 12 -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
 
   golangci:
-    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -222,14 +504,29 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: latest
-          args: --fix --issues-exit-code=0
+      # Retry the installer, never the linter's diagnostics: a formatting
+      # error must not trigger a full second lint pass.
+      - name: Install pinned golangci-lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/golangci-lint.tar.gz"
+          url="https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-linux-amd64.tar.gz"
+          if curl -fLsS --retry 3 --retry-all-errors --connect-timeout 15 --max-time 90 "$url" -o "$archive"; then
+            tar -xzf "$archive" -C "$RUNNER_TEMP"
+            mkdir -p "$RUNNER_TEMP/golangci-bin"
+            install -m 0755 "$RUNNER_TEMP/golangci-lint-2.15.0-linux-amd64/golangci-lint" "$RUNNER_TEMP/golangci-bin/golangci-lint"
+            echo "$RUNNER_TEMP/golangci-bin" >> "$GITHUB_PATH"
+          else
+            go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+            echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Run golangci-lint once
+        run: golangci-lint run --timeout=5m
 
   arch-linux:
-    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -241,11 +538,11 @@ jobs:
       - name: Validate Arch installer scripts
         run: |
           bash -n install.sh
-          bash -n x-ui.sh
-          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+          bash -n scripts/runtime/x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh scripts/runtime/x-ui.sh
       - name: Validate Arch systemd unit
         run: |
-          cp x-ui.service.arch /tmp/x-ui.service
+          cp deploy/systemd/x-ui.service.arch /tmp/x-ui.service
           sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
           systemd-analyze verify /tmp/x-ui.service
       - name: Guard against pacman partial upgrades
@@ -256,7 +553,8 @@ jobs:
           fi
 
   frontend:
-    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    needs: [changes]
+    if: ${{ (github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')) && needs.changes.outputs.frontend == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -279,9 +577,17 @@ jobs:
       - name: Lint
         run: npm run lint
         working-directory: frontend
+      - name: Reject deprecated frontend APIs
+        run: npm run lint:deprecated
+        working-directory: frontend
       # Keep formatting as a hard gate; formatter-only commits are still validated on PRs.
       - name: Format check
-        run: npm run format:check
+        run: |
+          if ! npm run format:check; then
+            npm run format
+            git diff -- src tools
+            exit 1
+          fi
         working-directory: frontend
       - name: Typecheck
         run: npm run typecheck
@@ -296,6 +602,12 @@ jobs:
         if: github.event_name == 'pull_request'
         run: npm run build:ci
         working-directory: frontend
+      - name: Reject MSW worker in production bundle
+        if: github.event_name == 'pull_request'
+        run: test ! -e internal/web/dist/mockServiceWorker.js
+      - name: Report frontend bundle size
+        if: github.event_name == 'pull_request'
+        run: python3 tools/ci/size_report.py --frontend internal/web/dist --summary "$GITHUB_STEP_SUMMARY"
       - name: Build Storybook
         if: github.event_name == 'pull_request'
         run: npm run build-storybook
@@ -303,3 +615,116 @@ jobs:
       - name: Audit
         run: npm audit --omit=dev --audit-level=high
         working-directory: frontend
+
+  official-telemt-native:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true'
+    name: Official Telemt integration (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: amd64
+            runner: ubuntu-latest
+          - platform: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download verified official release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/telemt/fetch.py --arch "${{ matrix.platform }}" --output "$RUNNER_TEMP/telemt-official"
+      - name: Test config, reload and WEB carrier negotiation
+        env:
+          TELEMT_TEST_BINARY: ${{ runner.temp }}/telemt-official/telemt
+        run: |
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
+          go test ./internal/mtproto ./internal/web/service -run '^Test(OfficialTelemtConfigAndReload|NativeTelemtWebCarrierConfig)$' -v -count=1
+
+  official-vetroff-native:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true'
+    name: Official VetroffProxy 0.1.0 integration (amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download and verify pinned official VetroffProxy bundle
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/vetroff_0.1.0_linux_amd64.tar.gz"
+          curl -fL --retry 5 --retry-all-errors --connect-timeout 20 -o "$archive" "https://github.com/SawaMEN/VetroffProxy/releases/download/v0.1.0/vetroff_0.1.0_linux_amd64.tar.gz"
+          printf '%s  %s\n' '492d07be1b430d8fe8cfbe486dd4d3f006e4dcd04399ada2c7091f45380998d3' "$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/vetroff-bundle"
+          tar --no-same-owner --no-same-permissions -xzf "$archive" -C "$RUNNER_TEMP/vetroff-bundle"
+          test -x "$RUNNER_TEMP/vetroff-bundle/vetroff-necko/vetroff"
+          echo "VETROFF_TEST_ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "VETROFF_TEST_BINARY=$RUNNER_TEMP/vetroff-bundle/vetroff-necko/vetroff" >> "$GITHUB_ENV"
+      - name: Verify official binary, server lifecycle and subscription import
+        run: |
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
+          go test ./internal/externalvpn -run '^(TestOfficialVetroffBundle|TestVetroffConfigurationAndLink)$' -count=1 -timeout=5m -v
+          go test ./internal/sub -run '^TestVetroffHTTPSubscriptionAndNativeBinary$' -count=1 -timeout=5m -v
+
+  telemt-web-frontends:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install WEB frontends
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y caddy haproxy
+      - name: Verify official Telemt download integrity and updater
+        run: python3 -m unittest discover -s tools -p test_official_telemt.py
+      - name: Test native HTTPS and bidirectional WebSocket routing
+        run: |
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
+          export CADDY_TEST_BINARY=$(command -v caddy)
+          export HAPROXY_TEST_BINARY=$(command -v haproxy)
+          go test ./internal/web/service -run '^TestTelemtWeb(AlternativeFrontends|CarrierSelection|RenewalRebuilds|FrontendStops)' -v -count=1
+
+  native-client-speed:
+    needs: [changes, resolve-core]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build companion protocols and fetch CI-run-pinned stable core
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CORE_RELEASE_TAG: ${{ needs.resolve-core.outputs.tag }}
+        run: |
+          make dist-stub
+          python3 tools/build-speed-components.py --output "$RUNNER_TEMP/speed-bin"
+          test -n "$CORE_RELEASE_TAG"
+          python3 tools/fetch-latest-kernel.py --arch amd64 --output "$RUNNER_TEMP/speed-core" --tag "$CORE_RELEASE_TAG"
+      - name: Exercise shared TCP budget and real Mieru Sudoku MASQUE payloads
+        env:
+          MIERU_TEST_BINARY: ${{ runner.temp }}/speed-bin/mita
+          SUDOKU_SPEED_TEST_BINARY: ${{ runner.temp }}/speed-bin/sudoku-tunnel
+          SINGBOX_TEST_BINARY: ${{ runner.temp }}/speed-core/hiddify-core-linux-amd64
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/speed-core/hiddify-core-linux-amd64
+        run: go test -race ./internal/clientlimit/... ./internal/mieru ./internal/sudoku ./internal/singbox ./internal/web/service -run '^TestNativeBroker|^TestMieruSpeedLimitLiveServer$|^TestSudokuSpeedLimits$|^TestMASQUESpeedLimits$|^TestClientSpeedLimit' -count=1 -timeout=5m
+

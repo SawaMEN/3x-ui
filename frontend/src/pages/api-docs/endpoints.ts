@@ -198,14 +198,272 @@ const hwidStatusErrorResponses = {
 
 export const sections: readonly Section[] = [
   {
+    id: 'manager',
+    title: 'Subscription manager',
+    description:
+      'Native subscription orchestration with a persistent asynchronous operation queue. Administrator access required.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/manager/subscriptions/:id',
+        summary: 'Load a full subscription recipe for editing',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+        responseSchema: 'ManagerSubscription',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/preflight',
+        summary: 'Validate a generation before creating resources',
+        requestSchema: { $ref: '#/components/schemas/ManagerSubscription' },
+        responseSchema: 'ManagerPreflight',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/inbounds/preflight',
+        summary: 'Check protocol components, certificates and port availability on the target node',
+        requestSchema: { $ref: '#/components/schemas/Inbound' },
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/manager/state',
+        summary: 'List compact subscription summaries and paginated operations',
+        responseSchema: 'ManagerSnapshot',
+        params: [
+          { name: 'subscriptionPage', in: 'query', type: 'integer', optional: true },
+          { name: 'search', in: 'query', type: 'string', optional: true },
+          { name: 'page', in: 'query', type: 'integer', optional: true },
+          { name: 'state', in: 'query', type: 'string', optional: true },
+          { name: 'kind', in: 'query', type: 'string', optional: true },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/subscriptions',
+        summary: 'Create or update a subscription',
+        requestSchema: { $ref: '#/components/schemas/ManagerSubscription' },
+        responseSchema: 'ManagerSubscription',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/subscriptions/bulk-shared',
+        summary: 'Create independent subscriptions for 1–100 clients on shared existing inbounds',
+        description:
+          'Queues client creation and attachment without creating or deleting the selected shared inbounds. The request must reference unique, enabled, caller-owned inbounds.',
+        requestSchema: {
+          type: 'object',
+          required: ['namePrefix', 'count', 'inboundIds'],
+          properties: {
+            namePrefix: { type: 'string', minLength: 1, maxLength: 220 },
+            count: { type: 'integer', minimum: 1, maximum: 100 },
+            inboundIds: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 100,
+              uniqueItems: true,
+              items: { type: 'integer', minimum: 1 },
+            },
+          },
+        },
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/subscriptions/:id/rotate',
+        summary: 'Queue generation',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/subscriptions/:id/delete',
+        summary: 'Queue deletion',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/rotate',
+        summary: 'Queue automatic subscriptions',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/operations/:id/retry',
+        summary: 'Retry a failed operation',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/domains',
+        summary: 'Import or replace SNI domains',
+        requestSchema: {
+          type: 'object',
+          required: ['domains'],
+          properties: { domains: { type: 'string' }, replace: { type: 'boolean' } },
+        },
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/domains/cover-site',
+        summary: 'Provision an owned HTTPS cover site using existing Domain Front and CertMagic',
+        description:
+          'Requires DNS ownership, explicit ACME terms consent, and an online configured node. Existing domains with a different purpose will not be replaced.',
+        requestSchema: {
+          type: 'object',
+          required: ['nodeId', 'domain', 'email', 'acceptTerms'],
+          properties: {
+            nodeId: { type: 'integer', minimum: 0 },
+            domain: { type: 'string', minLength: 3, maxLength: 253 },
+            email: { type: 'string', format: 'email' },
+            acceptTerms: { type: 'boolean', const: true },
+          },
+        },
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/relays',
+        summary: 'Save relay',
+        requestSchema: { $ref: '#/components/schemas/ManagerRelayInput' },
+        responseSchema: 'ManagerRelay',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/relays/:id/install',
+        summary: 'Install forwarding',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/relays/:id/uninstall',
+        summary: 'Remove forwarding',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/manager/relays/:id/delete',
+        summary: 'Delete relay',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+    ],
+  },
+
+  {
+    id: 'olcrtc',
+    title: 'OlcRTC',
+    description:
+      'Manage the standalone OlcRTC WebRTC service and its clients. The upstream administrator listens only on loopback; all operations use authenticated 3x-ui API routes.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/olcrtc/status',
+        summary: 'Return OlcRTC installation, version, operation and systemd status.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/olcrtc/live',
+        summary:
+          'Return running locations and peer counts without upstream keys or proxy credentials.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/olcrtc/clients',
+        summary: 'List OlcRTC clients, quotas and connection links.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/install',
+        summary: 'Start installation of the managed OlcRTC server and manager.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/update',
+        summary: 'Start an asynchronous update of the managed OlcRTC installation.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/remove',
+        summary: 'Stop and remove managed OlcRTC binaries while retaining client configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/restart',
+        summary: 'Restart the OlcRTC manager systemd service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/clients',
+        summary: 'Create an OlcRTC client with an optional generated ID, room and encryption key.',
+        body: '{ "client_id": "alice", "carrier": "jitsi", "transport": "datachannel", "room_id": "https://meet.handyweb.org/room", "dns": "1.1.1.1:53" }',
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/olcrtc/clients/:id',
+        summary: 'Update a simple OlcRTC client, preserving quota usage.',
+        params: [{ name: 'id', in: 'path', type: 'string', desc: 'OlcRTC client ID.' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/clients/:id/update',
+        summary: 'Update a simple OlcRTC client through the panel JSON-only endpoint.',
+        params: [{ name: 'id', in: 'path', type: 'string', desc: 'OlcRTC client ID.' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/clients/:id/delete',
+        summary: 'Delete an OlcRTC client and its managed locations.',
+        params: [{ name: 'id', in: 'path', type: 'string', desc: 'OlcRTC client ID.' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/clients/:id/rotate-key',
+        summary: 'Rotate encryption keys for an OlcRTC client and invalidate old links.',
+        params: [{ name: 'id', in: 'path', type: 'string', desc: 'OlcRTC client ID.' }],
+      },
+    ],
+  },
+  {
     id: 'externalvpn',
     title: 'External VPN',
     description: 'Inspect and update standalone external VPN components.',
     endpoints: [
       {
+        method: 'POST',
+        path: '/panel/api/server/externalvpn/parse-link',
+        summary: 'Parse a connection link into an outbound configuration.',
+        params: [
+          {
+            name: 'link',
+            in: 'body (json)',
+            type: 'string',
+            desc: 'Connection URL, at most 64 KiB.',
+          },
+        ],
+        body: '{"link":"snell://psk@example.com:443?version=4"}',
+        responseObjectSchema: { type: 'object', additionalProperties: true },
+      },
+      {
         method: 'GET',
         path: '/panel/api/server/externalvpn/status',
         summary: 'Return external VPN component installation and update status.',
+        params: [
+          {
+            name: 'local',
+            in: 'query',
+            type: 'boolean',
+            optional: true,
+            desc: 'Inspect only local installation state without querying upstream releases.',
+          },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/components/remove/:protocol',
+        summary:
+          'Remove an optional managed component; NaiveProxy and Hysteria inbounds fall back to sing-box. Active tunnel dependencies must be disabled first.',
+        params: [
+          {
+            name: 'protocol',
+            in: 'path',
+            type: 'string',
+            desc: 'Component: naiveproxy, hysteria2, sudoku, pingtunnel, trusttunnel or vetroff.',
+          },
+        ],
       },
       {
         method: 'POST',
@@ -216,7 +474,7 @@ export const sections: readonly Section[] = [
             name: 'protocol',
             in: 'path',
             type: 'string',
-            desc: 'External VPN protocol identifier.',
+            desc: 'Component identifier: pingtunnel, trusttunnel, hysteria2, openflux, vetroff or fptn.',
           },
         ],
       },
@@ -225,7 +483,8 @@ export const sections: readonly Section[] = [
   {
     id: 'naiveproxy',
     title: 'NaiveProxy',
-    description: 'Manage the standalone Caddy-Naive sidecar used when Xray is the selected core.',
+    description:
+      'Manage the optional Caddy-Naive server on Linux/amd64. Installed binaries automatically handle panel inbounds through authenticated sing-box routing bridges.',
     endpoints: [
       {
         method: 'GET',
@@ -273,6 +532,73 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/xray/routingPresets/del/:id',
         summary: 'Delete a routing preset owned by the current user.',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+    ],
+  },
+  {
+    id: 'routing-catalog',
+    title: 'Routing List Catalog',
+    description:
+      'Installed GeoSite categories and cached custom HTTPS domain/IP lists for server routing.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/xray/routingCatalog/categories',
+        summary: 'List built-in category tokens and their availability in installed GeoSite.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/xray/routingCatalog/list',
+        summary:
+          'List custom sources with entry counts, update interval, last successful update and error.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/xray/routingCatalog/:id/entries',
+        summary: 'Return cached domains and IP/CIDR entries without downloading the source.',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/xray/routingCatalog/save',
+        summary:
+          'Download, validate and save a custom source. Invalid downloads leave the existing source unchanged.',
+        params: [
+          {
+            name: 'id',
+            in: 'body (json)',
+            type: 'integer',
+            optional: true,
+            desc: '0 or omitted creates a source; a positive ID edits it.',
+          },
+          { name: 'name', in: 'body (json)', type: 'string' },
+          {
+            name: 'url',
+            in: 'body (json)',
+            type: 'string',
+            desc: 'HTTPS TXT/hosts domain/IP list; private destinations are blocked.',
+          },
+          {
+            name: 'updateInterval',
+            in: 'body (json)',
+            type: 'integer',
+            desc: 'Seconds: 0 for manual updates, otherwise 3600–604800.',
+          },
+        ],
+        body: '{\n  "name": "My domains",\n  "url": "https://example.com/domains.txt",\n  "updateInterval": 86400\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/xray/routingCatalog/:id/refresh',
+        summary:
+          'Refresh a source, retaining the last valid cache on failure. Returns whether its contents changed.',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/xray/routingCatalog/:id/delete',
+        summary: 'Delete a source only after its rules are removed from the saved configuration.',
         params: [{ name: 'id', in: 'path', type: 'integer' }],
       },
     ],
@@ -404,6 +730,22 @@ export const sections: readonly Section[] = [
         path: '/panel/api/inbounds/get/:id',
         summary: 'Fetch a single inbound by numeric ID.',
         params: [{ name: 'id', in: 'path', type: 'number', desc: 'Inbound ID.' }],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/inbounds/get/:id/links',
+        summary: 'Return subscription links for an inbound owned by the authenticated user.',
+        params: [
+          { name: 'id', in: 'path', type: 'number', desc: 'Inbound ID.' },
+          {
+            name: 'email',
+            in: 'query',
+            type: 'string',
+            optional: true,
+            desc: 'Filter links to one client email.',
+          },
+        ],
+        responseObjectSchema: { type: 'array', nullable: true, items: { type: 'string' } },
       },
       {
         method: 'POST',
@@ -556,7 +898,17 @@ export const sections: readonly Section[] = [
         summary:
           'Real-time machine snapshot: CPU, memory, swap, disk, network IO, load averages, open connections, Xray state. Cached and refreshed every 2 seconds in the background.',
         response:
-          '{\n  "success": true,\n  "obj": {\n    "cpu": 12.5,\n    "mem": { "current": 2147483648, "total": 8589934592 },\n    "swap": { "current": 0, "total": 4294967296 },\n    "disk": { "current": 53687091200, "total": 268435456000 },\n    "netIO": { "up": 1073741824, "down": 2147483648 },\n    "xray": { "state": "running", "version": "v25.10.31" },\n    "tcpCount": 42,\n    "load": { "load1": 0.5, "load5": 0.3, "load15": 0.2 }\n  }\n}',
+          '{\n  "success": true,\n  "obj": {\n    "cpu": 12.5,\n    "mem": { "current": 2147483648, "total": 8589934592 },\n    "swap": { "current": 0, "total": 4294967296 },\n    "disk": { "current": 53687091200, "total": 268435456000 },\n    "netIO": { "up": 1073741824, "down": 2147483648 },\n    "xray": { "state": "running", "version": "v25.10.31" },\n    "panelEdition": "sawamen",\n    "tcpCount": 42,\n    "load": { "load1": 0.5, "load5": 0.3, "load15": 0.2 }\n  }\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/domainActivity',
+        summary: 'Get the current domain activity monitor status and recent domain activity.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/domainActivity/config',
+        summary: 'Update domain activity monitoring configuration.',
       },
       {
         method: 'GET',
@@ -656,9 +1008,108 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
-        path: '/panel/api/server/getXrayVersion',
-        summary: 'List Xray binary versions available for install on this host.',
-        response: '{\n  "success": true,\n  "obj": ["v25.10.31", "v25.9.15", "v25.8.1"]\n}',
+        path: '/panel/api/server/core/capabilities',
+        summary: 'Return the selected core and its supported panel capabilities.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/dnstt/status',
+        summary: 'Read DNSTT service state and public key; the private Noise key is never exposed.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/dnstt/check-delegation',
+        summary:
+          'Check public NS delegation and nameserver IPv4 without changing DNSTT configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/install',
+        summary: 'Download checksum-verified DNSTT server without enabling the tunnel.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/setup',
+        summary:
+          'Validate the delegated DNS zone and local TCP destination, generate keys and enable DNSTT.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/disable',
+        summary: 'Stop and disable DNSTT while preserving its keys and configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/update',
+        summary: 'Upgrade DNSTT with rollback if the service fails to restart.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/remove',
+        summary: 'Stop DNSTT, disable systemd and delete the binary, settings and keys.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/oxidns/status',
+        summary: 'Read integrated OxiDNS service status and settings.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/oxidns/logs',
+        summary: 'Read recent OxiDNS systemd service logs for diagnostics.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/check',
+        summary: 'Resolve a test domain through the managed OxiDNS listener.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/validate',
+        summary:
+          'Check a custom DNS subdomain, ports and selected TLS certificate without changing the running service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/setup',
+        summary:
+          'Configure and start a previously installed OxiDNS service; validate selected DNS TLS files and connect sing-box DNS.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/disable',
+        summary: 'Disable OxiDNS and restore the configured sing-box DNS.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/install',
+        summary: 'Install official OxiDNS from verified GitHub release without starting it.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/update',
+        summary: 'Update OxiDNS to the latest verified official release and roll back on failure.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/remove',
+        summary: 'Uninstall OxiDNS, disable the service and restore native sing-box DNS.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/singbox/outbound/check',
+        summary: 'Measure the delay of a running sing-box outbound.',
+        params: [
+          { name: 'tag', in: 'body (form)', type: 'string', desc: 'Outbound tag.' },
+          { name: 'url', in: 'body (form)', type: 'string', optional: true },
+          {
+            name: 'timeout',
+            in: 'body (form)',
+            type: 'integer',
+            optional: true,
+            desc: 'Timeout in milliseconds, from 1 to 30000; defaults to 5000.',
+          },
+        ],
       },
       {
         method: 'GET',
@@ -755,22 +1206,9 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
-        path: '/panel/api/server/installXray/:version',
-        summary:
-          'Download and install the specified Xray version. Pass "latest" for the newest release.',
-        params: [
-          {
-            name: 'version',
-            in: 'path',
-            type: 'string',
-            desc: 'Xray tag (e.g. v25.10.31) or "latest".',
-          },
-        ],
-      },
-      {
-        method: 'POST',
         path: '/panel/api/server/updatePanel',
-        summary: 'Self-update the panel to the latest version. The server restarts on success.',
+        summary:
+          'Self-update the panel to the latest version. The server restarts on success. Bearer-token callers need admin or node-admin scope.',
         params: [
           {
             name: 'dev',
@@ -906,6 +1344,26 @@ export const sections: readonly Section[] = [
         responseSchema: 'AmneziaWGLogs',
       },
       {
+        method: 'GET',
+        path: '/panel/api/server/amneziawgMetrics',
+        summary:
+          'Prometheus metrics for local AmneziaWG inbounds. Accessible with monitor or admin tokens and panel sessions.',
+        description:
+          'Aggregate metrics without client emails, IP addresses or keys. RX/TX are gauges since device start. Online means a handshake in the last 180 seconds. Rolling 24h/30d activity uses shared lastOnline of users attached to AWG and may include their other protocols.',
+        responses: {
+          '200': {
+            description: 'Prometheus exposition format',
+            content: {
+              'text/plain': {
+                schema: { type: 'string' },
+                example: 'awg_inbounds_configured 1\nawg_current_online 0\n',
+              },
+            },
+          },
+          '503': { description: 'Metrics could not be collected' },
+        },
+      },
+      {
         method: 'POST',
         path: '/panel/api/server/importDB',
         summary:
@@ -1020,6 +1478,13 @@ export const sections: readonly Section[] = [
             type: 'string',
             desc: 'Remote server as domain or domain:port (default port 443), e.g. cloudflare-dns.com.',
           },
+          {
+            name: 'allowPrivate',
+            in: 'body (form)',
+            type: 'boolean',
+            optional: true,
+            desc: 'Ping a private/internal/loopback server (LAN, Docker service name). Default false (SSRF guard blocks it and the error response sets obj.privateTarget=true).',
+          },
         ],
         body: 'server=cloudflare-dns.com',
         response: '{\n  "success": true,\n  "obj": [\n    "e8e2d3..."\n  ]\n}',
@@ -1074,9 +1539,77 @@ export const sections: readonly Section[] = [
             optional: true,
             desc: 'Optional comma-separated tokens: domain[:port], IP[:port], or CIDR (e.g. 104.16.0.0/24). When omitted, the realityScanCandidates setting is probed (the built-in seed list if that setting is empty).',
           },
+          {
+            name: 'mode',
+            in: 'body (form)',
+            type: 'string',
+            optional: true,
+            desc: 'candidates (default) or nearby. Nearby scans up to 256 public IPs around targets (one server IP/domain[:port]), or the panel server public IP when targets is empty. Certificate names are verified with SNI against the discovered IP. Results are ranked by feasibility then TLS connection time from this server; IP proximity does not imply geographic proximity.',
+          },
         ],
         body: 'targets=104.16.0.0/24,www.apple.com:443',
         responseSchema: 'RealityScanResult',
+        responseSchemaArray: true,
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/sni/jobs',
+        summary:
+          'Start a queued SNI scan. JSON: mode=candidates|nearby|combined|recheck, targets, purpose=reality|tls|shadowtls|fakeTls, optional nodeId. Combined scans neighbors and the configured domain list. Recheck accepts up to 20 saved {ip,host,port} targets. The ten best candidates get five stability probes, median/spread, TCP/TLS timing, optional HTTP/2 HEAD and DNS diagnostics. Jobs are polled for incremental results and expire when polling stops for 30 seconds. Nodes must support this API; no fallback to scanning from the master.',
+        params: [
+          {
+            name: 'body',
+            in: 'body (json)',
+            type: 'object',
+            optional: false,
+            desc: 'Scan request; JSON is required for recheck arrays. Up to four queued/running jobs per panel, shared 32-connection and 16-probes/second limits.',
+          },
+        ],
+        body: '{"mode":"combined","purpose":"reality","targets":"","nodeId":0}',
+        responseSchema: 'SNIJobSnapshot',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/sni/jobs/:id',
+        summary:
+          'Poll incremental results and discovery/stability progress. Optional nodeId query must identify the same node used to start the job. Polling renews the 30-second client lease. Each execution is bounded to six minutes. Discovery reserves verification time: four minutes in a single mode, or two minutes per phase in combined mode. Phase timeouts return verified partial results with a warning; snapshot responses are not cacheable.',
+        params: [
+          { name: 'id', in: 'path', type: 'string', optional: false, desc: 'Opaque scan id.' },
+          {
+            name: 'nodeId',
+            in: 'query',
+            type: 'integer',
+            optional: true,
+            desc: 'Selected execution node; zero/omitted means local.',
+          },
+        ],
+        responseSchema: 'SNIJobSnapshot',
+      },
+      {
+        method: 'DELETE',
+        path: '/panel/api/server/sni/jobs/:id',
+        summary:
+          'Cancel queued or active scan work. Optional nodeId query targets the selected execution node.',
+        params: [
+          { name: 'id', in: 'path', type: 'string', optional: false, desc: 'Opaque scan id.' },
+        ],
+        responseSchema: 'SNIJobSnapshot',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/sni/history',
+        summary:
+          'Return the latest 20 completed scans stored in the executing panel database, with up to 20 certificate-verified targets per scan. Optional nodeId loads that node’s history. Saved timestamps and metrics are historical; recheck before applying.',
+        params: [
+          {
+            name: 'nodeId',
+            in: 'query',
+            type: 'integer',
+            optional: true,
+            desc: 'Selected execution node.',
+          },
+        ],
+        responseSchema: 'SNIJobSnapshot',
         responseSchemaArray: true,
       },
       {
@@ -1277,6 +1810,35 @@ export const sections: readonly Section[] = [
         ],
         response:
           '{\n  "success": true,\n  "obj": {\n    "client": { "id": 1, "email": "alice@example.com", ... },\n    "inboundIds": [3, 5],\n    "externalLinks": [\n      { "id": 11, "kind": "link", "value": "vless://...", "remark": "DE", "enable": true, "expiryTime": 0 },\n      { "id": 12, "kind": "subscription", "value": "https://provider.example/sub/abc", "remark": "Provider", "enable": false, "expiryTime": 1767225600000, "namePrefix": "[zjh] ", "lastFetchAt": 1767220000000, "lastFetchError": "" }\n    ]\n  }\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/clients/get/subId/:subId',
+        summary: 'Fetch clients by subscription ID.',
+        description:
+          'Matches the exact subscription ID and orders results by client ID. Returns an array of the same payloads as GET /clients/get/:email, since multiple clients can share a subscription ID. Includes disabled, expired and unattached clients. An unknown ID returns HTTP 200 with success:false, obj:null and a record-not-found message, matching the email lookup. Requires an admin token or a panel login session.',
+        params: [
+          {
+            name: 'subId',
+            in: 'path',
+            type: 'string',
+            desc: 'Exact subscription ID (URL-encoded).',
+          },
+        ],
+        responseObjectSchema: {
+          type: 'array',
+          nullable: true,
+          items: {
+            type: 'object',
+            properties: {
+              client: { $ref: '#/components/schemas/ClientRecord' },
+              inboundIds: { type: 'array', items: { type: 'integer' } },
+              externalLinks: { type: 'array', items: { type: 'object' } },
+              usedTraffic: { type: 'integer', format: 'int64' },
+              tunnelAllowedIPs: { type: 'object', additionalProperties: { type: 'string' } },
+            },
+          },
+        },
       },
       {
         method: 'GET',
@@ -1870,10 +2432,19 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/nodes/updatePanel',
         summary:
-          'Trigger the official panel self-updater on each given node (downloads the latest release and restarts). Only enabled, online nodes are updated; offline/disabled ones are reported as skipped. Set "dev": true to move the nodes to the rolling per-commit dev channel instead of the latest stable release. Returns a per-node result list.',
+          'Start the official self-updater on each enabled online node. Returns per-node launch results (including a runId), not proof of installation. Set "dev": true for the rolling dev channel; otherwise use stable. Poll updatePanelStatus/:id with the matching runId for completion.',
         body: '{\n  "ids": [1, 2, 3],\n  "dev": false\n}',
         response:
-          '{\n  "success": true,\n  "obj": [\n    { "id": 1, "name": "de-1", "ok": true },\n    { "id": 2, "name": "fr-1", "ok": false, "error": "node is offline" }\n  ]\n}',
+          '{\n  "success": true,\n  "obj": [\n    { "id": 1, "name": "de-1", "ok": true, "runId": "1735689600123456789" },\n    { "id": 2, "name": "fr-1", "ok": false, "error": "node is offline" }\n  ]\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/nodes/updatePanelStatus/:id',
+        summary:
+          'Read the remote panel installer status for a node. Requires a node-admin token on the remote node. Match obj.runId against the updatePanel launch response; state is pending, success or failed.',
+        params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],
+        response:
+          '{"success":true,"obj":{"runId":"1735689600123456789","state":"failed","exitCode":2,"message":"insufficient disk space","logFile":"/var/log/x-ui/update.log"}}',
       },
       {
         method: 'GET',
@@ -1906,6 +2477,14 @@ export const sections: readonly Section[] = [
         summary:
           'List every host across all inbounds, grouped by inbound then ordered by sort order.',
         responseSchema: 'HostGroup',
+        responseSchemaArray: true,
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/hosts/raw',
+        summary:
+          'List every host row with its numeric id, for id-based pickers such as the per-client host rule override.',
+        responseSchema: 'Host',
         responseSchemaArray: true,
       },
       {
@@ -1962,7 +2541,8 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/hosts/reorder',
-        summary: 'Set host group sort order by the position of each groupId in the array.',
+        summary:
+          'Set host group sort order by the position of each groupId in the array. IDs must be unique and refer to existing groups; omitted groups follow in their previous order.',
         body: '{\n  "ids": ["abc-123", "def-456"]\n}',
       },
       {
@@ -2008,6 +2588,35 @@ export const sections: readonly Section[] = [
     description:
       'Panel configuration and user credentials. All endpoints live under /panel/api/setting and require a logged-in session or Bearer token.',
     endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/domains/sni',
+        summary:
+          'List managed SNI cover-site domains from this panel and its connected nodes. Use ?local=1 to omit node discovery. File paths refer only to the certificate-owning host; private key contents are never returned.',
+        response:
+          '{\n  "success": true,\n  "obj": [\n    { "name": "edge.example.com", "source": "remote", "nodeId": 7, "nodeName": "US" }\n  ]\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/domains/status',
+        responseSchema: 'DomainFrontStatus',
+        summary:
+          'Read domain roles, native HTTPS gateway state, ACME certificate issuer, expiry and remaining days.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/domains/apply',
+        responseSchema: 'DomainFrontStatus',
+        summary:
+          'Validate, apply and persist domain gateway configuration with rollback on listener failure. ACME issuance and renewal run automatically in the background.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/domains/check',
+        responseSchema: 'DomainFrontCheck',
+        summary:
+          'Check DNS resolution and the public TLS certificate for one saved domain. Public CDN edge TLS is reported separately from the locally managed origin certificate.',
+      },
       {
         method: 'POST',
         path: '/panel/api/setting/all',
@@ -2078,9 +2687,10 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
-        path: '/panel/api/setting/testDiscord',
-        summary: 'Test Discord bot connection by sending a test embed to the configured channel.',
-        response: '{\n  "success": true,\n  "msg": "Test notification sent successfully"\n}',
+        path: '/panel/api/setting/tgBotCapabilities',
+        summary:
+          'Report what the configured bot can do. Inline mode is a BotFather switch, so the panel warns when it is off.',
+        responseSchema: 'TgBotCapabilities',
       },
       {
         method: 'GET',
@@ -2095,7 +2705,7 @@ export const sections: readonly Section[] = [
     id: 'api-tokens',
     title: 'API Tokens',
     description:
-      'Manage scoped Bearer tokens for programmatic auth. Tokens grant admin, monitor, or node-sync access, may expire, and are stored as SHA-256 hashes. The plaintext is returned only once at creation.',
+      'Manage scoped Bearer tokens for programmatic auth. admin grants the full panel API; monitor is read-only for status and metrics; node-sync manages node configuration without panel updates; node-admin adds panel self-update to node-sync. Tokens may expire and are stored as SHA-256 hashes. The plaintext is returned only once at creation.',
     endpoints: [
       {
         method: 'GET',
@@ -2103,7 +2713,7 @@ export const sections: readonly Section[] = [
         summary:
           'List every API token, enabled or not. The token value is never returned — only metadata.',
         response:
-          '{\n  "success": true,\n  "obj": [\n    {\n      "id": 1,\n      "name": "default",\n      "enabled": true,\n      "createdAt": 1736000000\n    }\n  ]\n}',
+          '{\n  "success": true,\n  "obj": [\n    {\n      "id": 1,\n      "name": "central-panel-a",\n      "enabled": true,\n      "createdAt": 1736000000,\n      "scope": "node-admin",\n      "expiresAt": 0\n    }\n  ]\n}',
       },
       {
         method: 'POST',
@@ -2121,7 +2731,8 @@ export const sections: readonly Section[] = [
             name: 'scope',
             in: 'body',
             type: 'string',
-            desc: 'admin (default), monitor, or node-sync.',
+            desc: 'admin (default), monitor, node-sync, or node-admin. node-admin inherits node-sync and may also start a panel update.',
+            enum: ['admin', 'monitor', 'node-sync', 'node-admin'],
             optional: true,
           },
           {
@@ -2132,7 +2743,7 @@ export const sections: readonly Section[] = [
             optional: true,
           },
         ],
-        body: '{\n  "name": "central-panel-a",\n  "scope": "node-sync",\n  "expiresAt": 1798761600000\n}',
+        body: '{\n  "name": "central-panel-a",\n  "scope": "node-admin",\n  "expiresAt": 1798761600000\n}',
         responseSchema: 'ApiTokenView',
         errorResponse:
           '{\n  "success": false,\n  "msg": "a token with that name already exists"\n}',
@@ -2417,99 +3028,6 @@ export const sections: readonly Section[] = [
         body: 'outbounds=[{"tag":"direct","protocol":"freedom","settings":{}}]&mode=http',
       },
       {
-        method: 'POST',
-        path: '/panel/api/xray/balancerStatus',
-        summary:
-          'Live state of routing balancers in the running core (RoutingService.GetBalancerInfo): current override and the targets the strategy prefers. Returns a map keyed by balancer tag.',
-        params: [
-          {
-            name: 'tags',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Comma-separated balancer tags to query (e.g. "b1,b2").',
-          },
-        ],
-        body: 'tags=b1,b2',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/balancerOverride',
-        summary:
-          'Force a balancer in the running core to always pick one outbound (RoutingService.OverrideBalancerTarget). Applied live without a restart; cleared automatically when Xray restarts.',
-        params: [
-          { name: 'tag', in: 'body (form)', type: 'string', desc: 'Balancer tag (required).' },
-          {
-            name: 'target',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Outbound tag to force. Empty clears the override and returns control to the strategy.',
-            optional: true,
-          },
-        ],
-        body: 'tag=b1&target=proxy',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/routeTest',
-        summary:
-          'Ask the running core which outbound its router would pick for a synthetic connection (RoutingService.TestRoute). No traffic is sent.',
-        bodyRequiredOneOf: ['domain', 'ip'],
-        params: [
-          {
-            name: 'domain',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Target domain. Either domain or ip is required.',
-            optional: true,
-            minLength: 1,
-          },
-          {
-            name: 'ip',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Target IP. Either domain or ip is required.',
-            optional: true,
-            minLength: 1,
-          },
-          {
-            name: 'port',
-            in: 'body (form)',
-            type: 'number',
-            desc: 'Target port (optional).',
-            optional: true,
-          },
-          {
-            name: 'network',
-            in: 'body (form)',
-            type: 'string',
-            desc: '"tcp" (default) or "udp".',
-            optional: true,
-          },
-          {
-            name: 'inboundTag',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Simulate arrival on this inbound (optional).',
-            optional: true,
-          },
-          {
-            name: 'protocol',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Sniffed protocol such as http, tls, bittorrent (optional).',
-            optional: true,
-          },
-          {
-            name: 'email',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'User attribution for user-based rules (optional).',
-            optional: true,
-          },
-        ],
-        body: 'domain=example.com&port=443&network=tcp',
-      },
-      {
         method: 'GET',
         path: '/panel/api/xray/geodata/files',
         summary:
@@ -2653,8 +3171,23 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/xray/outbound-subs/:id/refresh',
         summary:
-          'Force an immediate re-fetch of the subscription and return the parsed outbounds. Signals Xray to reload.',
-        params: [{ name: 'id', in: 'path', type: 'integer', desc: 'Subscription id.' }],
+          'Re-fetch a subscription, optionally deferring the core reload for a batch update.',
+        params: [
+          { name: 'id', in: 'path', type: 'integer', desc: 'Subscription id.' },
+          {
+            name: 'deferApply',
+            in: 'body (form)',
+            type: 'boolean',
+            desc: 'Save without immediately applying to the core; call outbound-subs/apply after the batch.',
+            optional: true,
+          },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/xray/outbound-subs/apply',
+        summary:
+          'Apply already downloaded outbound subscriptions in one core restart without fetching URLs again.',
       },
       {
         method: 'POST',
@@ -2886,6 +3419,42 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/telemt/published',
+        summary:
+          'List local MTProto profiles allowed to appear on a parent panel. Admin and node-sync authentication only.',
+        responseSchema: 'TelegramProxyProfile',
+        responseSchemaArray: true,
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/remote-proxies',
+        summary:
+          'List Telegram profiles published by enabled remote nodes. Available without a local Telemt installation.',
+        responseSchema: 'RemoteTelegramProxy',
+        responseSchemaArray: true,
+      },
+
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/subscription/:subid',
+        summary:
+          'Return existing Telegram proxy profiles for one subscription on this node. Requires admin, node-sync or node-admin authentication; does not create users.',
+        responseSchema: 'TelegramSubscription',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/install',
+        summary:
+          'Download and install checksum-verified official Telemt on demand. Does not start the proxy.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/remove',
+        summary:
+          'Uninstall Telemt runtime after disabling its service; preserve configuration and refuse while MTProto inbounds exist.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/telemt/config',
         summary: 'Return the current Telemt configuration.',
       },
@@ -2985,18 +3554,33 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/setting/cores/:core/versions',
+        summary: 'List upstream core releases with a binary compatible with this server.',
+        params: [{ name: 'core', in: 'path', type: 'string', desc: 'xray or sing-box-upstream' }],
+      },
+      {
+        method: 'GET',
         path: '/panel/api/setting/singbox/status',
         summary: 'Return sing-box installation and runtime status.',
       },
       {
         method: 'GET',
-        path: '/panel/api/setting/sudoku/status',
-        summary: 'Return Sudoku installation status.',
+        path: '/panel/api/setting/hiddify/status',
+        summary: 'Return Hiddify Core installation and runtime status.',
       },
       {
         method: 'GET',
-        path: '/panel/api/setting/singbox/versions',
-        summary: 'Return available sing-box versions.',
+        path: '/panel/api/setting/sudoku/status',
+        summary: 'Return Sudoku installation status.',
+        params: [
+          {
+            name: 'local',
+            in: 'query',
+            type: 'boolean',
+            optional: true,
+            desc: 'Inspect only local installation state without querying upstream releases.',
+          },
+        ],
       },
       {
         method: 'POST',
@@ -3045,23 +3629,8 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
-        path: '/panel/api/setting/singbox/install',
-        summary: 'Install sing-box using the configured channel.',
-      },
-      {
-        method: 'POST',
         path: '/panel/api/setting/sudoku/update',
         summary: 'Install or update the managed Sudoku tunnel binary.',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/setting/singbox/install/:version',
-        summary: 'Install a specific sing-box version.',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/setting/singbox/uninstall',
-        summary: 'Uninstall sing-box.',
       },
       {
         method: 'GET',
@@ -3072,6 +3641,11 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/setting/singbox/config',
         summary: 'Save the editable sing-box configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/singbox/import-link',
+        summary: 'Decode a supported connection share link into a native outbound without saving.',
       },
       {
         method: 'POST',
@@ -3140,13 +3714,55 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/server/domainActivity',
+        summary: 'Read domain activity statistics for authenticated operators.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/domainActivity/config',
+        summary: 'Update domain activity collection settings.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/telemt/webproxy/status',
         summary: 'Return the Telemt Web Proxy and external port 443 status.',
       },
       {
         method: 'POST',
+        path: '/panel/api/telemt/webproxy/availability',
+        summary: 'Manually check WEB Proxy cover-site HTTPS reachability from Russian probes.',
+        description:
+          'Uses up to three Globalping HTTPS HEAD probes (15-minute cache and rate limit). Does not test MTProto or cellular allowlists.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/webproxy/preflight',
+        summary:
+          'Check WEB Proxy domain, TLS, DNS, port and frontend prerequisites without applying changes.',
+        body: '{ "domain": "web.example.com", "frontend": "nginx", "carrier": "https", "carriers": [] }',
+      },
+      {
+        method: 'POST',
         path: '/panel/api/telemt/webproxy/enable',
         summary: 'Enable the Telemt Web Proxy.',
+        description:
+          'Optional site selects automatic setup, a bundled catalog page or a locally generated theme. Omit site to preserve the current selection; use mode auto to restore the default. Previously saved HTML sites remain supported for compatibility.',
+        params: [
+          {
+            name: 'site',
+            in: 'body (json)',
+            type: 'object',
+            optional: true,
+            desc: 'TelemtWebSiteOptions: mode auto|catalog|generate; catalog builtin|mtproxyl and a matching template; optional theme, title and description. Legacy html is retained for existing sites.',
+          },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/webproxy/diagnostics',
+        summary: 'Read Telemt WEB runtime diagnostics.',
+        description:
+          'Authenticated, bounded WEB availability, lifecycle and capacity counters. No session secrets are returned.',
       },
       {
         method: 'POST',

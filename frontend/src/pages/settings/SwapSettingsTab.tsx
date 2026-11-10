@@ -28,7 +28,6 @@ import {
 import { HttpUtil } from '@/utils';
 import { onNumber } from '@/utils/onNumber';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import SystemUpdateModal from './SystemUpdateModal';
 
 type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
 
@@ -266,7 +265,6 @@ export default function SwapSettingsTab() {
   const [zramLimit, setZramLimit] = useState(0);
   const [zramAlgorithm, setZramAlgorithm] = useState('');
   const [swappiness, setSwappiness] = useState(60);
-  const [systemUpdateOpen, setSystemUpdateOpen] = useState(false);
 
   const refresh = useCallback(
     async (quiet = false) => {
@@ -401,7 +399,7 @@ export default function SwapSettingsTab() {
   const installInfo = status?.zramInstall;
 
   const overviewTab = (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       <Row gutter={[12, 12]}>
         <Col xs={24} sm={12} lg={6}>
           <Card size="small">
@@ -432,7 +430,7 @@ export default function SwapSettingsTab() {
       </Row>
 
       <Card size="small" title={t('pages.settings.swap.systemTitle')}>
-        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={10} style={{ width: '100%' }}>
           <Space wrap align="end" className="swap-action-row">
             <div>
               <div>{t('pages.settings.swap.swappiness')}</div>
@@ -457,13 +455,6 @@ export default function SwapSettingsTab() {
               loading={busy}
             >
               {t('pages.settings.swap.apply')}
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => setSystemUpdateOpen(true)}
-              disabled={busy}
-            >
-              {t('pages.settings.swap.systemUpdates')}
             </Button>
           </Space>
           {status?.recommendation && (
@@ -494,7 +485,7 @@ export default function SwapSettingsTab() {
 
       {installInfo && (
         <Card size="small" title={t('pages.settings.swap.packageInfoTitle')}>
-          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={10} style={{ width: '100%' }}>
             <Alert
               type={installInfo.supported ? 'info' : 'error'}
               showIcon
@@ -570,7 +561,7 @@ export default function SwapSettingsTab() {
 
   const swapFileTab = (
     <Card size="small" title={t('pages.settings.swap.fileTitle')}>
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         {status?.swapFileConfig.enabled && (
           <Alert
             type="success"
@@ -634,7 +625,7 @@ export default function SwapSettingsTab() {
 
   const zramTab = (
     <Card size="small" title={t('pages.settings.swap.zramTitle')}>
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <Space wrap align="end">
           <div>
             <div>{t('pages.settings.swap.sizeMiB')}</div>
@@ -780,9 +771,8 @@ export default function SwapSettingsTab() {
   }
 
   return (
-    <>
+    <div className="swap-settings-panel">
       {contextHolder}
-      <SystemUpdateModal open={systemUpdateOpen} onClose={() => setSystemUpdateOpen(false)} />
       {loadError && (
         <Alert type="warning" showIcon closable style={{ marginBottom: 12 }} title={loadError} />
       )}
@@ -841,6 +831,6 @@ export default function SwapSettingsTab() {
             : undefined
         }
       />
-    </>
+    </div>
   );
 }

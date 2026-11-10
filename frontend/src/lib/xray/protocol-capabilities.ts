@@ -6,7 +6,7 @@
 // fixture without the caller projecting a whole object.
 
 const TLS_ELIGIBLE_PROTOCOLS = ['vmess', 'vless', 'trojan', 'shadowsocks'];
-const TLS_NETWORKS = ['tcp', 'ws', 'http', 'grpc', 'httpupgrade', 'xhttp'];
+const TLS_NETWORKS = ['tcp', 'kcp', 'ws', 'http', 'grpc', 'httpupgrade', 'xhttp'];
 const REALITY_ELIGIBLE_PROTOCOLS = ['vless', 'trojan'];
 const REALITY_NETWORKS = ['tcp', 'http', 'grpc', 'xhttp'];
 const STREAM_PROTOCOLS = [
@@ -38,6 +38,11 @@ export interface CapabilityShadowsocksSlice extends CapabilityProtocolSlice {
 
 export function canEnableTls(values: CapabilityProtocolSlice): boolean {
   if (values.protocol === 'hysteria') return true;
+  if (
+    values.streamSettings?.network === 'kcp' &&
+    !['vmess', 'vless', 'trojan'].includes(values.protocol)
+  )
+    return false;
   if (!TLS_ELIGIBLE_PROTOCOLS.includes(values.protocol)) return false;
   return TLS_NETWORKS.includes(values.streamSettings?.network ?? '');
 }
@@ -57,10 +62,13 @@ function hasVlessEncryption(settings: CapabilityProtocolSlice['settings']): bool
   return isSet(settings?.encryption) || isSet(settings?.decryption);
 }
 
+// xray-core 26.10.17 (#7182) refuses a VLESS flow on XDRIVE, encrypted or not.
 export function canEnableTlsFlow(values: CapabilityProtocolSlice): boolean {
   if (values.protocol !== 'vless') return false;
   const network = values.streamSettings?.network;
   const security = values.streamSettings?.security;
+
+  if (network === 'xdrive') return false;
 
   // Classic XTLS Vision: raw TCP carried over TLS or REALITY.
   if (network === 'tcp' && (security === 'tls' || security === 'reality')) return true;
@@ -84,11 +92,16 @@ export function canEnableSniffing(values: { protocol: string }): boolean {
     values.protocol !== 'amneziawg' &&
     values.protocol !== 'tuic' &&
     values.protocol !== 'pingtunnel' &&
+    values.protocol !== 'vetroff' &&
     values.protocol !== 'trusttunnel' &&
+    values.protocol !== 'fptn' &&
+    values.protocol !== 'openflux' &&
     values.protocol !== 'vk-turn-proxy' &&
+    values.protocol !== 'masque' &&
     values.protocol !== 'naive' &&
     values.protocol !== 'mieru' &&
     values.protocol !== 'sudoku' &&
+    values.protocol !== 'snell' &&
     values.protocol !== 'anytls' &&
     values.protocol !== 'shadowtls'
   );

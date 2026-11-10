@@ -31,29 +31,16 @@ type Field struct {
 }
 
 type TypeRef struct {
-	Kind    TypeKind
-	Name    string
-	Element *TypeRef
-	Key     *TypeRef
-	Value   *TypeRef
-	Inner   *TypeRef
+	Kind     TypeKind
+	Name     string
+	Element  *TypeRef
+	Key      *TypeRef
+	Value    *TypeRef
+	Inner    *TypeRef
+	Variants []TypeRef
 }
 
 type TypeKind string
-
-const (
-	KindString  TypeKind = "string"
-	KindNumber  TypeKind = "number"
-	KindInt     TypeKind = "int"
-	KindBool    TypeKind = "boolean"
-	KindArray   TypeKind = "array"
-	KindMap     TypeKind = "map"
-	KindObject  TypeKind = "object"
-	KindRef     TypeKind = "ref"
-	KindUnknown TypeKind = "unknown"
-	KindAny     TypeKind = "any"
-	KindRaw     TypeKind = "raw"
-)
 
 type ValidateRule struct {
 	Name  string
@@ -172,3 +159,18 @@ func flattenEmbedded(schemas []Schema) []Schema {
 	}
 	return out
 }
+
+const (
+	KindString  TypeKind = "string"
+	KindNumber  TypeKind = "number"
+	KindInt     TypeKind = "int"
+	KindBool    TypeKind = "boolean"
+	KindArray   TypeKind = "array"
+	KindMap     TypeKind = "map"
+	KindUnion   TypeKind = "union"
+	KindObject  TypeKind = "object"
+	KindRef     TypeKind = "ref"
+	KindUnknown TypeKind = "unknown"
+	KindAny     TypeKind = "any"
+	KindRaw     TypeKind = "raw"
+)

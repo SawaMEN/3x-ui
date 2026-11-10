@@ -3,7 +3,8 @@ import { writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { sections } from '../src/pages/api-docs/endpoints.ts';
+import { sections as baseSections } from '../src/pages/api-docs/endpoints.ts';
+import { singBoxSessionSections } from '../src/pages/api-docs/singbox-sessions.ts';
 import {
   buildWebSocketEvents,
   websocketEnvelopeSchema,
@@ -11,6 +12,7 @@ import {
 import { EXAMPLES } from '../src/generated/examples.ts';
 import { SCHEMAS } from '../src/generated/schemas.ts';
 
+const sections = [...baseSections, ...singBoxSessionSections];
 const websocketEvents = buildWebSocketEvents(EXAMPLES);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -358,7 +360,6 @@ export function buildSpec() {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const spec = buildSpec();
   writeFileSync(outPath, JSON.stringify(spec, null, 2) + '\n');
-
   const pathCount = Object.keys(spec.paths).length;
   let opCount = 0;
   for (const ops of Object.values(spec.paths)) opCount += Object.keys(ops).length;

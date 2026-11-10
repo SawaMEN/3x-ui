@@ -103,6 +103,41 @@ describe('InboundFormModal', () => {
     expect(fieldLabels().length).toBeGreaterThan(0);
   });
 
+  it('keeps MASQUE selectable when dependency status is unavailable', async () => {
+    vi.mocked(HttpUtil.get).mockResolvedValueOnce({ success: false, msg: '', obj: null });
+    renderModal();
+    await act(async () => {});
+    listSelectOptions('protocol');
+    fireEvent.change(document.querySelector('#protocol')!, { target: { value: 'masque' } });
+    expect(listSelectOptions('protocol')).toContain('masque');
+    chooseSelectOption('protocol', 'masque');
+    await act(async () => {});
+    expect(document.querySelector('#protocol')?.closest('.ant-select')?.textContent).toContain(
+      'masque',
+    );
+  });
+
+  it.each([false, true])(
+    'shows optional tunnel protocols only when installed: %s',
+    async (installed) => {
+      vi.mocked(HttpUtil.get).mockImplementation(async (path) => ({
+        success: true,
+        msg: '',
+        obj: String(path).includes('externalvpn')
+          ? { pingtunnel: { installed }, trusttunnel: { installed }, vetroff: { installed } }
+          : { installed },
+      }));
+      renderModal();
+      await act(async () => {});
+      for (const protocol of ['pingtunnel', 'trusttunnel', 'sudoku', 'vetroff']) {
+        listSelectOptions('protocol');
+        fireEvent.change(document.querySelector('#protocol')!, { target: { value: protocol } });
+        await act(async () => {});
+        expect(listSelectOptions('protocol').includes(protocol)).toBe(installed);
+      }
+    },
+  );
+
   it('field structure differs per protocol (not a vacuous snapshot loop)', async () => {
     renderModal();
     const protocols = listSelectOptions('protocol');
@@ -272,7 +307,7 @@ describe('InboundFormModal', () => {
     expect(messageError).toHaveBeenCalledWith(
       expect.stringContaining('REALITY target must include a port'),
     );
-    expect(post).not.toHaveBeenCalled();
+    expect(post.mock.calls.filter(([url]) => url.includes('/inbounds/'))).toEqual([]);
   });
 
   it('blocks adding TLS without a certificate and directs the user to Security', async () => {
@@ -294,7 +329,7 @@ describe('InboundFormModal', () => {
         expect.stringContaining('TLS certificate 1: Import a TLS certificate'),
       );
     });
-    expect(post).not.toHaveBeenCalled();
+    expect(post.mock.calls.filter(([url]) => url.includes('/inbounds/'))).toEqual([]);
   });
 
   it('submits a valid clone-like Reality inbound', async () => {
@@ -311,4 +346,43 @@ describe('InboundFormModal', () => {
       );
     });
   });
+});
+
+it('saves manager recipe settings without creating an inbound', async () => {
+  const onDraft = vi.fn();
+  const value = new DBInbound({
+    port: 41414,
+    remark: 'Recipe only',
+    protocol: 'vless',
+    enable: true,
+    settings: { clients: [], decryption: 'none', encryption: 'none', fallbacks: [] },
+    streamSettings: { network: 'tcp', security: 'none', tcpSettings: { header: { type: 'none' } } },
+    sniffing: { enabled: false },
+  });
+  const before = vi
+    .mocked(HttpUtil.post)
+    .mock.calls.filter(([path]) => String(path).includes('/inbounds/add')).length;
+  renderWithProviders(
+    <InboundFormModal
+      open
+      mode="add"
+      dbInbound={value}
+      dbInbounds={[]}
+      availableNodes={[]}
+      onClose={() => {}}
+      onSaved={() => {}}
+      onDraft={onDraft}
+    />,
+  );
+  await act(async () => {
+    fireEvent.click(primaryButton());
+  });
+  await waitFor(() =>
+    expect(onDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ protocol: 'vless', port: 41414, remark: 'Recipe only' }),
+    ),
+  );
+  expect(
+    vi.mocked(HttpUtil.post).mock.calls.filter(([path]) => String(path).includes('/inbounds/add')),
+  ).toHaveLength(before);
 });

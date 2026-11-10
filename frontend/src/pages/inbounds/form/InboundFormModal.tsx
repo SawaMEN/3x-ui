@@ -1,27 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { VetroffFields } from './protocols/vetroff';
+import { FptnFields, OpenFluxFields } from './protocols/additional-vpn';
+import { useId, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { QuestionCircleOutlined } from '@ant-design/icons';
+
 import dayjs from 'dayjs';
-import {
-  Alert,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Radio,
-  Select,
-  Switch,
-  Tabs,
-  Tooltip,
-  message,
-} from 'antd';
+import { Alert, Form, Input, InputNumber, Modal, Radio, Select, Switch, Tabs, message } from 'antd';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 
 import { HttpUtil, NumberFormatter, RandomUtil, SizeFormatter, Wireguard } from '@/utils';
 import type { RealityScanResult } from '@/generated/types';
 import { rawInboundToFormValues, formValuesToWirePayload } from '@/lib/xray/inbound-form-adapter';
 import { createDefaultInboundSettings } from '@/lib/xray/inbound-defaults';
-import { generateAwgObfuscation } from '@/lib/xray/amneziawg-obfuscation';
 import { composeInboundTag, isAutoInboundTag, type InboundTagInput } from '@/lib/xray/inbound-tag';
 import {
   canEnableReality,
@@ -45,10 +34,10 @@ import { NODE_ELIGIBLE_PROTOCOLS, nodeSupportsProtocol } from '@/lib/xray/node-p
 import { VLESS_AUTH_LABEL_KEYS, vlessEncryptionAuthKind } from '@/lib/xray/vless-encryption';
 import { SniffingSchema } from '@/schemas/primitives/sniffing';
 import { TcpStreamSettingsSchema } from '@/schemas/protocols/stream/tcp';
-import { KcpStreamSettingsSchema } from '@/schemas/protocols/stream/kcp';
 import { WsStreamSettingsSchema } from '@/schemas/protocols/stream/ws';
 import { GrpcStreamSettingsSchema } from '@/schemas/protocols/stream/grpc';
 import { HttpUpgradeStreamSettingsSchema } from '@/schemas/protocols/stream/httpupgrade';
+import { XDriveStreamSettingsSchema } from '@/schemas/protocols/stream/xdrive';
 import { XHttpStreamSettingsSchema } from '@/schemas/protocols/stream/xhttp';
 import { DateTimePicker } from '@/components/form';
 import { FinalMaskField } from '@/lib/xray/forms/fields';
@@ -59,12 +48,14 @@ import { AdvancedAllEditor, AdvancedSliceEditor } from './advanced-editors';
 import { formatInboundIssue, formatInboundValidation } from './formatValidationError';
 import {
   AmneziawgFields,
+  SnellFields,
   AnyTlsFields,
   ShadowTlsFields,
   HttpFields,
   HysteriaFields,
   MixedFields,
   MtprotoFields,
+  MasqueFields,
   NaiveFields,
   MieruFields,
   SudokuFields,
@@ -84,6 +75,7 @@ import {
   SockoptForm,
   WsForm,
   XhttpForm,
+  XDriveForm,
 } from './transport';
 import { RealityForm, TlsForm } from './security';
 import { useSecurityActions } from './useSecurityActions';
@@ -95,14 +87,6 @@ import type { DBInbound } from '@/models/dbinbound';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 
 /* Render a field label with a hover tooltip icon instead of an `extra` help line below. */
-const labelWithHint = (label: string, hint: string) => (
-  <span>
-    {label}
-    <Tooltip title={hint}>
-      <QuestionCircleOutlined style={{ marginInlineStart: 4, color: 'rgba(128,128,128,0.65)' }} />
-    </Tooltip>
-  </span>
-);
 
 const PROTOCOL_OPTIONS = Object.values(Protocols)
   .filter((p) => p !== Protocols.SHADOWTLS)
@@ -184,6 +168,7 @@ function tabForValidationPath(path: PropertyKey[]): string {
 }
 
 interface InboundFormModalProps {
+  onDraft?: (payload: ReturnType<typeof formValuesToWirePayload>) => void;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -217,21 +202,21 @@ function buildAddModeValues(): InboundFormValues {
  * Switching `network` swaps which per-network key (tcpSettings, wsSettings,
  * grpcSettings, ...) appears on the wire. Seed each network's blob with its
  * Zod schema defaults so every field inside the network sub-form has a
- * defined starting value (KCP needs MTU=1350 etc., XHTTP needs the ""
+ * defined starting value (XHTTP needs the ""
  * sentinels so the "Default" option shows instead of blank).
  */
 function newStreamSlice(n: string): Record<string, unknown> {
   switch (n) {
     case 'tcp':
       return TcpStreamSettingsSchema.parse({ header: { type: 'none' } });
-    case 'kcp':
-      return KcpStreamSettingsSchema.parse({});
     case 'ws':
       return WsStreamSettingsSchema.parse({});
     case 'grpc':
       return GrpcStreamSettingsSchema.parse({});
     case 'httpupgrade':
       return HttpUpgradeStreamSettingsSchema.parse({});
+    case 'xdrive':
+      return XDriveStreamSettingsSchema.parse({});
     case 'xhttp':
       return XHttpStreamSettingsSchema.parse({});
     default:
@@ -243,6 +228,7 @@ export default function InboundFormModal({
   open,
   onClose,
   onSaved,
+  onDraft,
   mode,
   dbInbound,
   dbInbounds,
@@ -250,6 +236,7 @@ export default function InboundFormModal({
   availableNodesFetched = true,
 }: InboundFormModalProps) {
   const { t } = useTranslation();
+  const uid = useId();
   const [messageApi, messageContextHolder] = message.useMessage();
   const [modal, modalContextHolder] = Modal.useModal();
   const methods = useForm<InboundFormValues>({ defaultValues: buildAddModeValues() });
@@ -273,19 +260,56 @@ export default function InboundFormModal({
   } = useInboundFallbacks(dbInbound, dbInbounds);
 
   const protocol = (useWatch({ control, name: 'protocol' }) ?? '') as string;
+  const mtprotoWebEnabled = useWatch({ control, name: 'settings.webProxy.enabled' });
+  const isMtprotoWeb = protocol === Protocols.MTPROTO && !!mtprotoWebEnabled;
+  useEffect(() => {
+    if (
+      !open ||
+      !isMtprotoWeb ||
+      getV('protocol') !== Protocols.MTPROTO ||
+      !getV('settings.webProxy.enabled')
+    )
+      return;
+    setV('port', 443);
+    setV('listen', '');
+  }, [open, isMtprotoWeb, getV, setV]);
   const selectableNodes = (availableNodes || []).filter(
     (n) => n.enable && nodeSupportsProtocol(n, protocol),
   );
-  const [sudokuInstalled, setSudokuInstalled] = useState(false);
+  const [installedProtocols, setInstalledProtocols] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void HttpUtil.get<{ installed?: boolean }>('/panel/api/setting/sudoku/status', undefined, {
-      silent: true,
-    }).then((msg) => {
+    setInstalledProtocols({});
+    void Promise.all([
+      HttpUtil.get<{ installed?: boolean }>(
+        '/panel/api/setting/sudoku/status?local=true',
+        undefined,
+        {
+          silent: true,
+        },
+      ),
+      HttpUtil.get<{
+        pingtunnel?: { installed?: boolean };
+        trusttunnel?: { installed?: boolean };
+        vetroff?: { installed?: boolean };
+      }>('/panel/api/server/externalvpn/status?local=true', undefined, { silent: true }),
+      HttpUtil.get<{ installed?: boolean }>('/panel/api/telemt/status', undefined, {
+        silent: true,
+      }),
+    ]).then(([sudoku, external, telemt]) => {
       if (!cancelled) {
-        setSudokuInstalled(msg?.success === true && msg.obj?.installed === true);
+        setInstalledProtocols({
+          [Protocols.MTPROTO]: telemt.success === true && telemt.obj?.installed === true,
+          [Protocols.SUDOKU]: sudoku.success === true && sudoku.obj?.installed === true,
+          [Protocols.PINGTUNNEL]:
+            external.success === true && external.obj?.pingtunnel?.installed === true,
+          [Protocols.VETROFF]:
+            external.success === true && external.obj?.vetroff?.installed === true,
+          [Protocols.TRUSTTUNNEL]:
+            external.success === true && external.obj?.trusttunnel?.installed === true,
+        });
       }
     });
     return () => {
@@ -297,11 +321,17 @@ export default function InboundFormModal({
     () =>
       PROTOCOL_OPTIONS.filter(
         (option) =>
-          option.value !== Protocols.SUDOKU ||
-          sudokuInstalled ||
-          (mode === 'edit' && protocol === Protocols.SUDOKU),
+          ![
+            Protocols.MTPROTO,
+            Protocols.SUDOKU,
+            Protocols.PINGTUNNEL,
+            Protocols.TRUSTTUNNEL,
+            Protocols.VETROFF,
+          ].some((value) => value === option.value) ||
+          installedProtocols[option.value] === true ||
+          (mode === 'edit' && protocol === option.value),
       ),
-    [mode, protocol, sudokuInstalled],
+    [mode, protocol, installedProtocols],
   );
   const isNodeEligible = !!NODE_ELIGIBLE_PROTOCOLS[protocol];
   /*
@@ -328,7 +358,7 @@ export default function InboundFormModal({
    * Wireguard (always a UDP listener) and Tunnel (dokodemo-door) expose no
    * user-selectable transport — their stream tab is just sockopt, which is all
    * Tunnel's TProxy/redirect mode needs (sockopt.tproxy). Hysteria carries its
-   * own dedicated transport form. For all of these the RAW/mKCP/WS/... network
+   * own dedicated transport form. For all of these the RAW/WS/... network
    * picker and the per-network sub-forms are hidden.
    */
   const hasSelectableTransport =
@@ -337,10 +367,15 @@ export default function InboundFormModal({
     protocol !== Protocols.TUNNEL &&
     protocol !== Protocols.TUIC &&
     protocol !== Protocols.PINGTUNNEL &&
+    protocol !== Protocols.VETROFF &&
     protocol !== Protocols.TRUSTTUNNEL &&
+    protocol !== Protocols.FPTN &&
+    protocol !== Protocols.OPENFLUX &&
+    protocol !== Protocols.MASQUE &&
     protocol !== Protocols.NAIVE &&
     protocol !== Protocols.MIERU &&
     protocol !== Protocols.SUDOKU &&
+    protocol !== Protocols.SNELL &&
     protocol !== Protocols.SHADOWTLS;
 
   const wPort = useWatch({ control, name: 'port' });
@@ -360,9 +395,14 @@ export default function InboundFormModal({
     }
 
     const autoPortProtocols = new Set<string>([
+      Protocols.MASQUE,
       Protocols.NAIVE,
       Protocols.MIERU,
       Protocols.SUDOKU,
+      Protocols.SNELL,
+      Protocols.FPTN,
+      Protocols.VETROFF,
+      Protocols.OPENFLUX,
       Protocols.ANYTLS,
       Protocols.SHADOWTLS,
     ]);
@@ -478,15 +518,6 @@ export default function InboundFormModal({
     setV('settings.server.publicKey', kp.publicKey);
   };
 
-  // Randomizes the AmneziaWG 3.1 obfuscation set client-side; the shared
-  // generator mirrors the Go backend's amneziawg.GenerateObfuscation31.
-  const regenInboundAwgObfuscation = () => {
-    const obf = generateAwgObfuscation();
-    for (const [field, value] of Object.entries(obf)) {
-      setV(`settings.server.${field}`, value);
-    }
-  };
-
   const matchesVlessAuth = (
     block: { id?: string; label?: string } | undefined | null,
     authId: string,
@@ -540,7 +571,9 @@ export default function InboundFormModal({
   useEffect(() => {
     if (!open) return;
     const initial =
-      mode === 'edit' && dbInbound ? rawInboundToFormValues(dbInbound) : buildAddModeValues();
+      (mode === 'edit' || onDraft) && dbInbound
+        ? rawInboundToFormValues(dbInbound)
+        : buildAddModeValues();
     methods.reset(initial);
     setScanResult(null);
     setActiveTab('basic');
@@ -635,7 +668,7 @@ export default function InboundFormModal({
       if (next !== Protocols.VLESS) {
         setV('disableFlow', false);
       }
-      if (next === Protocols.PINGTUNNEL) setV('port', 0);
+      if (next === Protocols.PINGTUNNEL || next === Protocols.TUN) setV('port', 0);
       if (next === Protocols.HYSTERIA) {
         setV('streamSettings', {
           network: 'hysteria',
@@ -654,7 +687,13 @@ export default function InboundFormModal({
         });
       } else if (
         next === Protocols.WIREGUARD ||
+        next === Protocols.TUN ||
         next === Protocols.TUNNEL ||
+        next === Protocols.MASQUE ||
+        next === Protocols.SNELL ||
+        next === Protocols.FPTN ||
+        next === Protocols.VETROFF ||
+        next === Protocols.OPENFLUX ||
         next === Protocols.ANYTLS ||
         next === Protocols.SHADOWTLS
       ) {
@@ -693,6 +732,11 @@ export default function InboundFormModal({
     setSaving(true);
     try {
       const payload = formValuesToWirePayload(parsed.data);
+      if (onDraft) {
+        onDraft(payload);
+        onClose();
+        return;
+      }
       const url =
         mode === 'edit' && dbInbound
           ? `/panel/api/inbounds/update/${dbInbound.id}`
@@ -731,7 +775,7 @@ export default function InboundFormModal({
   const basicTab = (
     <>
       <FormField name="enable" label={t('enable')} valueProp="checked">
-        <Switch />
+        <Switch disabled={!!onDraft} />
       </FormField>
 
       <FormField name="remark" label={t('pages.inbounds.remark')}>
@@ -757,24 +801,28 @@ export default function InboundFormModal({
       )}
 
       <FormField name="protocol" label={t('pages.inbounds.protocol')}>
-        <Select id="protocol" disabled={mode === 'edit'} options={protocolOptions} />
+        <Select
+          id="protocol"
+          disabled={mode === 'edit'}
+          showSearch={{ optionFilterProp: 'label' }}
+          options={protocolOptions}
+        />
       </FormField>
 
       <FormField
         name="listen"
-        label={labelWithHint(t('pages.inbounds.address'), t('pages.inbounds.form.listenHelp'))}
+        label={t('pages.inbounds.address')}
+        tooltip={t('pages.inbounds.form.listenHelp')}
       >
-        <Input placeholder={t('pages.inbounds.monitorDesc')} />
+        <Input disabled={isMtprotoWeb} placeholder={t('pages.inbounds.monitorDesc')} />
       </FormField>
 
       {protocol !== Protocols.MTPROTO && (
         <>
           <FormField
             name="shareAddrStrategy"
-            label={labelWithHint(
-              t('pages.inbounds.form.shareAddrStrategy'),
-              t('pages.inbounds.form.shareAddrStrategyHelp'),
-            )}
+            label={t('pages.inbounds.form.shareAddrStrategy')}
+            tooltip={t('pages.inbounds.form.shareAddrStrategyHelp')}
           >
             <Select
               options={SHARE_ADDR_STRATEGIES.filter(
@@ -789,10 +837,8 @@ export default function InboundFormModal({
           {shareAddrStrategy === 'custom' && (
             <FormField
               name="shareAddr"
-              label={labelWithHint(
-                t('pages.inbounds.form.shareAddr'),
-                t('pages.inbounds.form.shareAddrHelp'),
-              )}
+              label={t('pages.inbounds.form.shareAddr')}
+              tooltip={t('pages.inbounds.form.shareAddrHelp')}
               rules={{
                 validate: (value) =>
                   isValidShareAddrInput(String(value ?? '')) ||
@@ -807,10 +853,8 @@ export default function InboundFormModal({
 
       <FormField
         name="subSortIndex"
-        label={labelWithHint(
-          t('pages.inbounds.form.subSortIndex'),
-          t('pages.inbounds.form.subSortIndexHelp'),
-        )}
+        label={t('pages.inbounds.form.subSortIndex')}
+        tooltip={t('pages.inbounds.form.subSortIndexHelp')}
       >
         <InputNumber />
       </FormField>
@@ -819,10 +863,8 @@ export default function InboundFormModal({
         <FormField
           name="disableFlow"
           valueProp="checked"
-          label={labelWithHint(
-            t('pages.inbounds.form.disableFlow'),
-            t('pages.inbounds.form.disableFlowHelp'),
-          )}
+          label={t('pages.inbounds.form.disableFlow')}
+          tooltip={t('pages.inbounds.form.disableFlowHelp')}
         >
           <Switch />
         </FormField>
@@ -840,7 +882,13 @@ export default function InboundFormModal({
         }}
       >
         <InputNumber
-          disabled={protocol === Protocols.PINGTUNNEL || hasMieruPortBindings}
+          disabled={
+            !!onDraft ||
+            isMtprotoWeb ||
+            protocol === Protocols.PINGTUNNEL ||
+            protocol === Protocols.TUN ||
+            hasMieruPortBindings
+          }
           min={
             protocol === Protocols.PINGTUNNEL || isUdsListen
               ? 0
@@ -853,13 +901,14 @@ export default function InboundFormModal({
       </FormField>
 
       <Form.Item
-        label={
-          <Tooltip title={t('pages.inbounds.meansNoLimit')}>
-            {t('pages.inbounds.totalFlow')}
-          </Tooltip>
-        }
+        htmlFor={`${uid}-totalFlow`}
+        label={t('pages.inbounds.totalFlow')}
+        tooltip={t('pages.inbounds.meansNoLimit')}
       >
         <InputNumber
+          id={`${uid}-totalFlow`}
+          disabled={!!onDraft}
+          aria-describedby={`${uid}-totalFlow-hint`}
           value={wTotal ? Math.round((wTotal / SizeFormatter.ONE_GB) * 100) / 100 : 0}
           min={0}
           step={1}
@@ -868,10 +917,14 @@ export default function InboundFormModal({
             setV('total', bytes);
           }}
         />
+        <span id={`${uid}-totalFlow-hint`} hidden>
+          {t('pages.inbounds.meansNoLimit')}
+        </span>
       </Form.Item>
 
       <FormField name="trafficReset" label={t('pages.inbounds.periodicTrafficResetTitle')}>
         <Select
+          disabled={!!onDraft}
           options={TRAFFIC_RESETS.map((r) => ({
             value: r,
             label: t(`pages.inbounds.periodicTrafficReset.${r}`),
@@ -890,16 +943,20 @@ export default function InboundFormModal({
       )}
 
       <Form.Item
-        label={
-          <Tooltip title={t('pages.inbounds.leaveBlankToNeverExpire')}>
-            {t('pages.inbounds.expireDate')}
-          </Tooltip>
-        }
+        htmlFor={`${uid}-expiryTime`}
+        label={t('pages.inbounds.expireDate')}
+        tooltip={t('pages.inbounds.leaveBlankToNeverExpire')}
       >
         <DateTimePicker
+          id={`${uid}-expiryTime`}
+          disabled={!!onDraft}
+          aria-describedby={`${uid}-expiryTime-hint`}
           value={wExpiry > 0 ? dayjs(wExpiry) : null}
           onChange={(d) => setV('expiryTime', d ? d.valueOf() : 0)}
         />
+        <span id={`${uid}-expiryTime-hint`} hidden>
+          {t('pages.inbounds.leaveBlankToNeverExpire')}
+        </span>
       </Form.Item>
     </>
   );
@@ -922,7 +979,7 @@ export default function InboundFormModal({
         <Alert
           type="info"
           showIcon
-          message={t('pages.inbounds.form.shadowTlsProtocol', { protocol })}
+          title={t('pages.inbounds.form.shadowTlsProtocol', { protocol })}
           description={t('pages.inbounds.form.shadowTlsHint')}
         />
       )}
@@ -931,17 +988,18 @@ export default function InboundFormModal({
       )}
 
       {protocol === Protocols.AMNEZIAWG && (
-        <AmneziawgFields
-          awgPubKey={awgPubKey}
-          regenInboundAwg={regenInboundAwg}
-          regenInboundAwgObfuscation={regenInboundAwgObfuscation}
-        />
+        <AmneziawgFields awgPubKey={awgPubKey} regenInboundAwg={regenInboundAwg} />
       )}
 
       {protocol === Protocols.TUIC && <TuicFields />}
       {protocol === Protocols.PINGTUNNEL && <PingtunnelFields />}
+      {protocol === Protocols.VETROFF && <VetroffFields />}
       {protocol === Protocols.TRUSTTUNNEL && <TrustTunnelFields />}
+      {protocol === Protocols.MASQUE && <MasqueFields />}
       {protocol === Protocols.NAIVE && <NaiveFields />}
+      {protocol === Protocols.SNELL && <SnellFields />}
+      {protocol === Protocols.FPTN && <FptnFields />}
+      {protocol === Protocols.OPENFLUX && <OpenFluxFields />}
       {protocol === Protocols.ANYTLS && <AnyTlsFields />}
       {protocol === Protocols.MIERU && <MieruFields />}
       {protocol === Protocols.SUDOKU && <SudokuFields />}
@@ -976,7 +1034,7 @@ export default function InboundFormModal({
         />
       )}
 
-      {isFallbackHost && fallbacksCard}
+      {isFallbackHost && !onDraft && fallbacksCard}
       {(protocol === Protocols.VLESS || protocol === Protocols.TROJAN) &&
         network === 'tcp' &&
         !isFallbackHost && (
@@ -993,7 +1051,7 @@ export default function InboundFormModal({
   /*
    * Switching `network` swaps which per-network key appears on the wire. Clear
    * the old network's blob and seed the new one with schema defaults, plus the
-   * FinalMask mkcp-legacy UDP mask when moving to mKCP (removed otherwise).
+   * any obsolete mKCP mask when switching away from an imported legacy transport.
    */
   const onNetworkChange = (next: string) => {
     if (next === 'shadowtls') {
@@ -1035,6 +1093,7 @@ export default function InboundFormModal({
       'grpcSettings',
       'httpupgradeSettings',
       'xhttpSettings',
+      'xdriveSettings',
     ];
     const current = (getV('streamSettings') as Record<string, unknown>) ?? {};
     const cleaned: Record<string, unknown> = { ...current, network: next };
@@ -1042,27 +1101,18 @@ export default function InboundFormModal({
       if (k !== `${next}Settings`) delete cleaned[k];
     }
     cleaned[`${next}Settings`] = newStreamSlice(next);
-    if (next === 'kcp') {
-      const fm = (cleaned.finalmask as Record<string, unknown> | undefined) ?? {};
-      const udp = Array.isArray(fm.udp) ? (fm.udp as unknown[]) : [];
-      const hasMkcp = udp.some((m) => {
-        const entry = m as { type?: string };
-        return entry?.type === 'mkcp-legacy';
-      });
-      if (!hasMkcp) {
-        cleaned.finalmask = {
-          ...fm,
-          udp: [...udp, { type: 'mkcp-legacy', settings: { header: '', value: '' } }],
-        };
-      }
-    } else {
-      const fm = cleaned.finalmask as Record<string, unknown> | undefined;
-      if (fm && Array.isArray(fm.udp)) {
-        const udp = (fm.udp as unknown[]).filter(
-          (m) => (m as { type?: string })?.type !== 'mkcp-legacy',
-        );
-        cleaned.finalmask = { ...fm, udp };
-      }
+    if (next === 'xdrive') {
+      cleaned.security = 'none';
+      delete cleaned.tlsSettings;
+      delete cleaned.realitySettings;
+      delete cleaned.finalmask;
+    }
+    const fm = cleaned.finalmask as Record<string, unknown> | undefined;
+    if (next !== 'kcp' && fm && Array.isArray(fm.udp)) {
+      cleaned.finalmask = {
+        ...fm,
+        udp: (fm.udp as unknown[]).filter((m) => (m as { type?: string })?.type !== 'mkcp-legacy'),
+      };
     }
     setV('streamSettings', cleaned);
   };
@@ -1070,8 +1120,9 @@ export default function InboundFormModal({
   const streamTab = (
     <>
       {hasSelectableTransport && (
-        <Form.Item label={t('transmission')}>
+        <Form.Item htmlFor={`${uid}-network`} label={t('transmission')}>
           <Select
+            id={`${uid}-network`}
             style={{ width: '75%' }}
             value={
               shadowTlsEnabled
@@ -1084,12 +1135,17 @@ export default function InboundFormModal({
             disabled={mode === 'edit' && dbInbound?.protocol === Protocols.SHADOWTLS}
             options={[
               { value: 'tcp', label: 'RAW' },
+              ...(protocol === Protocols.VLESS
+                ? [{ value: 'xdrive', label: 'XDrive (cloud storage)' }]
+                : []),
+              ...(['vless', 'vmess', 'trojan'].includes(protocol)
+                ? [{ value: 'kcp', label: 'mKCP' }]
+                : []),
               ...(SHADOWTLS_TCP_PROTOCOLS.has(protocol)
                 ? [{ value: 'shadowtls', label: 'ShadowTLS' }]
                 : []),
               ...(!SHADOWTLS_STREAMLESS_PROTOCOLS.has(protocol)
                 ? [
-                    { value: 'kcp', label: 'mKCP' },
                     { value: 'ws', label: 'WebSocket' },
                     { value: 'grpc', label: 'gRPC' },
                     { value: 'httpupgrade', label: 'HTTPUpgrade' },
@@ -1115,16 +1171,16 @@ export default function InboundFormModal({
         !SHADOWTLS_STREAMLESS_PROTOCOLS.has(protocol) && (
           <>
             {network === 'tcp' && <RawForm />}
+            {network === 'kcp' && <KcpForm />}
 
             {network === 'ws' && <WsForm />}
 
             {network === 'grpc' && <GrpcForm />}
 
             {network === 'xhttp' && <XhttpForm />}
+            {network === 'xdrive' && <XDriveForm />}
 
             {network === 'httpupgrade' && <HttpUpgradeForm />}
-
-            {network === 'kcp' && <KcpForm />}
           </>
         )}
 
@@ -1348,11 +1404,16 @@ export default function InboundFormModal({
                     Protocols.WIREGUARD,
                     Protocols.MTPROTO,
                     Protocols.AMNEZIAWG,
+                    Protocols.SNELL,
+                    Protocols.FPTN,
+                    Protocols.VETROFF,
+                    Protocols.OPENFLUX,
                     Protocols.ANYTLS,
                     Protocols.SHADOWTLS,
                     Protocols.TUIC,
                     Protocols.PINGTUNNEL,
                     Protocols.TRUSTTUNNEL,
+                    Protocols.MASQUE,
                     Protocols.NAIVE,
                     Protocols.MIERU,
                     Protocols.SUDOKU,

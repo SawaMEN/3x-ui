@@ -15,7 +15,7 @@ const (
 
 // StatsNotifyJob sends periodic statistics reports via Telegram bot.
 type StatsNotifyJob struct {
-	xrayService  service.XrayService
+	xrayService  service.CoreService
 	tgbotService tgbot.Tgbot
 }
 
@@ -26,7 +26,7 @@ func NewStatsNotifyJob() *StatsNotifyJob {
 
 // Run sends a statistics report via Telegram bot if Xray is running.
 func (j *StatsNotifyJob) Run() {
-	if !j.xrayService.IsXrayRunning() {
+	if !j.xrayService.IsCoreRunning() {
 		return
 	}
 	j.tgbotService.SendReport()

@@ -4,14 +4,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func mkTraffic(t *testing.T, inboundId int, email string, up, down, total, expiry int64, enable bool) {
 	t.Helper()
-	row := xray.ClientTraffic{
+	row := coremodel.ClientTraffic{
 		InboundId:  inboundId,
 		Email:      email,
 		Up:         up,
@@ -25,9 +25,9 @@ func mkTraffic(t *testing.T, inboundId int, email string, up, down, total, expir
 	}
 }
 
-func trafficOf(t *testing.T, email string) xray.ClientTraffic {
+func trafficOf(t *testing.T, email string) coremodel.ClientTraffic {
 	t.Helper()
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := database.GetDB().Where("email = ?", email).First(&row).Error; err != nil {
 		t.Fatalf("load traffic %s: %v", email, err)
 	}
@@ -138,7 +138,7 @@ func TestClientDeleteKeepTrafficPreservesRowForAttachedClient(t *testing.T) {
 	}
 
 	var cnt int64
-	if err := database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", email).Count(&cnt).Error; err != nil {
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).Where("email = ?", email).Count(&cnt).Error; err != nil {
 		t.Fatalf("count traffic: %v", err)
 	}
 	if cnt != 1 {

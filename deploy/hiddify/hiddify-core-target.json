@@ -1,0 +1,187 @@
+{
+  "schema_version": 2,
+  "stage": 4,
+  "target": {
+    "repository": "https://github.com/SawaMEN/hiddify-core",
+    "commit": "4f1b5e6b9b2b4898d68f79bd6513cf28b7dbcc09",
+    "submodules": {
+      "hiddify-sing-box": "4fe303071f4f30cb2d2f0eed3e61c877cf07adfe",
+      "ray2sing": "c6368fc6adea94f7aa9ec57065aae3ad53343ac4"
+    },
+    "submodule_repositories": {
+      "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
+      "ray2sing": "https://github.com/SawaMEN/ray2sing"
+    },
+    "version": "sawamen-4f1b5e6b9b2b-4fe303071f4f-mask1-ciphers1-net62-sec1-stream1"
+  },
+  "runtime_contract": {
+    "raw_config_command": [
+      "srun",
+      "-c"
+    ],
+    "validation_cli_available": true,
+    "stats_grpc_method": "/v2ray.core.app.stats.command.StatsService/QueryStats",
+    "panel_runtime_integrated": true,
+    "automatic_migration_ready": false
+  },
+  "source_checks": [
+    {
+      "path": "cmd/cmd_sing_run.go",
+      "contains": "Use:   \"srun\""
+    },
+    {
+      "path": "cmd/cmd_xui_check.go",
+      "contains": "Use:   \"check\""
+    },
+    {
+      "path": "go.mod",
+      "contains": "go 1.27.3"
+    },
+    {
+      "path": ".gitmodules",
+      "contains": "https://github.com/SawaMEN/hiddify-sing-box"
+    },
+    {
+      "path": "hiddify-sing-box/include/registry.go",
+      "contains": "trusttunnel.RegistryInbound(registry)"
+    },
+    {
+      "path": "hiddify-sing-box/protocol/trusttunnel/inbound.go",
+      "contains": "User:              username"
+    },
+    {
+      "path": "hiddify-sing-box/option/awg.go",
+      "contains": "Username                    string"
+    },
+    {
+      "path": "hiddify-sing-box/protocol/awg/endpoint.go",
+      "contains": "metadata.User = receiver.peerUsers.Lookup(source.Addr)"
+    },
+    {
+      "path": "hiddify-sing-box/experimental/v2rayapi/stats.go",
+      "contains": "StatsService_ServiceDesc.ServiceName = \"v2ray.core.app.stats.command.StatsService\""
+    },
+    {
+      "path": "hiddify-sing-box/include/v2rayapi.go",
+      "contains": "//go:build with_v2ray_api"
+    },
+    {
+      "path": "hiddify-sing-box/include/masque.go",
+      "contains": "//go:build with_masque"
+    },
+    {
+      "path": "hiddify-sing-box/transport/v2ray/transport.go",
+      "contains": "return xhttp.NewServer"
+    },
+    {
+      "path": "hiddify-sing-box/option/vless.go",
+      "contains": "Decryption string"
+    },
+    {
+      "path": "hiddify-sing-box/protocol/mieru/inbound.go",
+      "contains": "metadata.User = userCtx.UserName()"
+    },
+    {
+      "path": "v2/hcore/hcore_service.proto",
+      "contains": "rpc HotReload"
+    },
+    {
+      "path": "hiddify-sing-box/transport/v2rayxdrive/transport.go",
+      "contains": "v2ray.RegisterXDriveConstructor(NewServer, NewClient)"
+    },
+    {
+      "path": "hiddify-sing-box/protocol/masque/server.go",
+      "contains": "SpeedScope:      tag"
+    },
+    {
+      "path": "hiddify-sing-box/transport/masque/server.go",
+      "contains": "xuispeed.New(\"masque:\""
+    },
+    {
+      "path": "hiddify-sing-box/transport/masque/session.go",
+      "contains": "waitDownload(buffer.Len())"
+    },
+    {
+      "path": "hiddify-sing-box/internal/xuispeed/client.go",
+      "contains": "Environment = \"XUI_SPEED_BROKER\""
+    }
+  ],
+  "panel_build": {
+    "tags": [
+      "with_v2ray_api",
+      "with_gvisor",
+      "with_quic",
+      "with_wireguard",
+      "with_utls",
+      "with_clash_api",
+      "with_awg",
+      "with_naive_outbound",
+      "with_purego",
+      "tfogo_checklinkname0",
+      "with_xui_panel",
+      "with_masque",
+      "with_kcp",
+      "http2legacy"
+    ],
+    "sing_box_version": "sawamen-4fe303071f4f",
+    "runtime_dependencies": [
+      "matching libcronet for Naive outbound"
+    ],
+    "activation_ready": false,
+    "toolchain": "go1.27.3",
+    "validation_cli_available": true,
+    "user_stats_api_available": true,
+    "cronet_linkage_profiles": {
+      "purego": "package pinned platform libcronet beside binary",
+      "musl": "with_musl, CGO_ENABLED=1, statically linked Cronet; release and Docker"
+    },
+    "protection_dependency_versions": {
+      "github.com/metacubex/utls": "native:4fe303071f4f30cb2d2f0eed3e61c877cf07adfe",
+      "github.com/starifly/sing-vmess": "native:4fe303071f4f30cb2d2f0eed3e61c877cf07adfe",
+      "github.com/xtls/xray-core": "native:4fe303071f4f30cb2d2f0eed3e61c877cf07adfe"
+    },
+    "security_dependencies": {
+      "golang.org/x/net": "v0.62.0",
+      "github.com/go-chi/chi/v5": "v5.3.0",
+      "github.com/google/cel-go": "v0.30.0",
+      "github.com/andybalholm/brotli": "v1.2.7",
+      "github.com/klauspost/compress": "v1.20.2",
+      "golang.org/x/crypto": "v0.58.1-0.20261009181718-2f1f834330b2"
+    },
+    "native_source_files": [
+      "cmd/cmd_xui_check.go",
+      "hiddify-sing-box/internal/xuispeed/client.go",
+      "hiddify-sing-box/internal/xuispeed/client_test.go",
+      "hiddify-sing-box/protocol/masque/server.go",
+      "hiddify-sing-box/transport/masque/server.go",
+      "hiddify-sing-box/transport/masque/session.go",
+      "hiddify-sing-box/common/tls/xui_explicit_ciphers_test.go",
+      "hiddify-sing-box/common/tls/xui_reality_mldsa_handshake_test.go",
+      "hiddify-sing-box/protocol/group/xui_balancer.go",
+      "hiddify-sing-box/protocol/group/xui_balancer_test.go",
+      "hiddify-sing-box/protocol/vless/xui_preconnect.go",
+      "hiddify-sing-box/protocol/vless/xui_handshake_test.go",
+      "hiddify-sing-box/protocol/vless/xui_reverse.go",
+      "hiddify-sing-box/protocol/vless/xui_reverse_native_test.go",
+      "hiddify-sing-box/third_party/sing-vmess/vless/xui_reverse_native_test.go",
+      "hiddify-sing-box/third_party/sing-vmess/vless/xui_vision_options.go",
+      "hiddify-sing-box/third_party/xray-core/go.mod",
+      "hiddify-sing-box/transport/trojan/xui_stream_test.go",
+      "hiddify-sing-box/transport/v2rayhttpupgrade/xui_stream_test.go",
+      "hiddify-sing-box/transport/v2rayxhttp/xui_upload_queue_native_test.go",
+      "hiddify-sing-box/transport/v2raykcp/h_kcp_test.go",
+      "hiddify-sing-box/h_xray_kcp_test.go",
+      "hiddify-sing-box/xui_inbound_finalmask_test.go",
+      "hiddify-sing-box/route/rule/xui_panel_sniff_test.go",
+      "hiddify-sing-box/experimental/clashapi/trafficontrol/xui_panel_test.go",
+      "hiddify-sing-box/option/xui_panel_http1_test.go"
+    ]
+  },
+  "verification": {
+    "platform": "linux/amd64",
+    "build": "passed",
+    "config_check": "passed",
+    "real_runtime": "blocked-netlink-permission",
+    "traffic_e2e": "not-verified"
+  }
+}

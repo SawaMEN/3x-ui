@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - up
     tags-ignore:
       - "v*"
     paths:
@@ -19,6 +20,10 @@ on:
       - "frontend/**"
   schedule:
     - cron: "18 2 * * 2"
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 jobs:
   analyze:
@@ -47,20 +52,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        if: matrix.language == 'go'
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Build frontend bundle
+      # Go packages only need an existing go:embed directory for static files.
+      # The frontend bundle is compiled and tested independently in CI/Release.
+      - name: Prepare frontend embed placeholder for Go autobuild
         if: matrix.language == 'go'
         run: |
-          npm ci
-          npm run build
-        working-directory: frontend
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4

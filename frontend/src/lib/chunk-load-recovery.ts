@@ -1,6 +1,7 @@
 const CHUNK_RELOAD_KEY = '3x-ui:chunk-reload';
 const CHUNK_RELOAD_PARAM = '_3xui_chunk_reload';
 const CHUNK_RELOAD_COOLDOWN = 10_000;
+const CHUNK_NAVIGATION_TIMEOUT_MS = 8_000;
 
 let chunkReloadScheduled = false;
 
@@ -35,7 +36,7 @@ function clearChunkReloadParam() {
 
 export function isChunkLoadError(reason: unknown): boolean {
   const message = reason instanceof Error ? reason.message : String(reason ?? '');
-  return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(
+  return /Unable to preload CSS for|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(
     message,
   );
 }
@@ -86,14 +87,40 @@ export function installChunkLoadRecovery() {
   });
 }
 
+// A successful navigation unloads this page before the deadline. If the
+// browser cannot navigate, reject instead of leaving React.lazy suspended
+// forever while the panel/backend is still healthy.
+function suspendUntilNavigation<T>(): Promise<T> {
+  return new Promise<T>((_, reject) => {
+    setTimeout(() => {
+      reject(
+        new Error(
+          'The panel could not finish reloading after a failed JS chunk import. Reload the page to retry.',
+        ),
+      );
+    }, CHUNK_NAVIGATION_TIMEOUT_MS);
+  });
+}
+
 export async function importWithChunkRecovery<T>(loader: () => Promise<T>): Promise<T> {
   try {
-    return await loader();
+    const module = await loader();
+    // When vite:preloadError is prevented, Vite resolves the import with
+    // undefined instead of rejecting it. React.lazy would then try to read
+    // undefined.default while our replacement document is still loading.
+    if (module === undefined) {
+      // A cached Vite preload may silently resolve undefined, even if
+      // vite:preloadError was swallowed by a browser extension or proxy.
+      // Recover before React.lazy attempts undefined.default.
+      if (reloadAfterChunkLoadError()) return suspendUntilNavigation<T>();
+      throw new Error('Panel JavaScript chunk was missing after a recent reload.');
+    }
+    return module;
   } catch (error) {
     if (isChunkLoadError(error) && reloadAfterChunkLoadError()) {
-      // Navigation has already been scheduled. Keep React.lazy suspended until
-      // the new document replaces this stale application instance.
-      return new Promise<T>(() => undefined);
+      // Navigation has already been scheduled. Keep React.lazy suspended while
+      // loading the replacement document, but surface a failure if it stalls.
+      return suspendUntilNavigation<T>();
     }
     throw error;
   }

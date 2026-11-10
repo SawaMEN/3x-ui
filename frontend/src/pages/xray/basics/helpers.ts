@@ -173,9 +173,26 @@ export function propagateOutboundTagRename(
 
   if (Array.isArray(t.outbounds)) {
     for (const outbound of t.outbounds) {
+      if (!outbound) continue;
       const sockopt = (outbound as { streamSettings?: { sockopt?: { dialerProxy?: string } } })
         ?.streamSettings?.sockopt;
       if (sockopt?.dialerProxy === oldTag) sockopt.dialerProxy = newTag;
+      const ob = outbound as Outbound;
+      const proxy = ob?.proxySettings as Outbound | undefined;
+      if (proxy?.tag === oldTag) proxy.tag = newTag;
+      const protocol = typeof ob.protocol === 'string' ? ob.protocol.trim().toLowerCase() : '';
+      const nativeType = protocol.replace(/^singbox:/, '');
+      const settings = ob.settings as Outbound | undefined;
+      if (!settings || typeof settings !== 'object' || Array.isArray(settings)) continue;
+      if (settings.detour === oldTag) settings.detour = newTag;
+      if (nativeType === 'selector' || nativeType === 'urltest') {
+        if (Array.isArray(settings.outbounds)) {
+          settings.outbounds = settings.outbounds.map((member) =>
+            member === oldTag ? newTag : member,
+          );
+        }
+        if (nativeType === 'selector' && settings.default === oldTag) settings.default = newTag;
+      }
     }
   }
 }

@@ -75,3 +75,7 @@ describe('TlsClientSettingsSchema fingerprint default', () => {
     expect(link).not.toContain('fm=');
   });
 });
+
+it('uses HTTP/1.1 ALPN for WebSocket TLS', () => {
+  expect(createTlsSettingsWithDefaultCert('ws').alpn).toEqual(['http/1.1']);
+});

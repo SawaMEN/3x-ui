@@ -5,24 +5,25 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/gateway"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
 	systemupdate "github.com/SawaMEN/3x-ui/v3/internal/util/systemupdate"
-	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/web/service/discord"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/email"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
-
-	"github.com/gin-gonic/gin"
 )
 
 // updateUserForm represents the form for updating user credentials.
@@ -40,15 +41,16 @@ type updateUserForm struct {
 // "unchanged", so clearing needs its own signal — see #5724).
 type updateSettingForm struct {
 	entity.AllSetting
-	TwoFactorCode        string `json:"twoFactorCode" form:"twoFactorCode"`
-	ClearTgBotToken      bool   `json:"clearTgBotToken" form:"clearTgBotToken"`
-	ClearLdapPassword    bool   `json:"clearLdapPassword" form:"clearLdapPassword"`
-	ClearSmtpPassword    bool   `json:"clearSmtpPassword" form:"clearSmtpPassword"`
-	ClearDiscordBotToken bool   `json:"clearDiscordBotToken" form:"clearDiscordBotToken"`
+	TwoFactorCode     string `json:"twoFactorCode" form:"twoFactorCode"`
+	ClearTgBotToken   bool   `json:"clearTgBotToken" form:"clearTgBotToken"`
+	ClearLdapPassword bool   `json:"clearLdapPassword" form:"clearLdapPassword"`
+	ClearSmtpPassword bool   `json:"clearSmtpPassword" form:"clearSmtpPassword"`
 }
 
 type singBoxConfigForm struct {
-	Config string `json:"config" form:"config"`
+	RemoveTag   string `json:"removeTag" form:"removeTag"`
+	Replacement string `json:"replacement" form:"replacement"`
+	Config      string `json:"config" form:"config"`
 }
 
 type swapCreateForm struct {
@@ -67,6 +69,7 @@ type zramCreateForm struct {
 type swappinessForm struct {
 	Value int `json:"value" form:"value"`
 }
+
 type validateRegexForm struct {
 	Regex string `json:"regex" form:"regex"`
 }
@@ -77,8 +80,7 @@ type SettingController struct {
 	userService     panel.UserService
 	panelService    panel.PanelService
 	apiTokenService panel.ApiTokenService
-	xrayService     service.XrayService
-	singBoxService  service.SingBoxService
+	xrayService     service.CoreService
 }
 
 // NewSettingController creates a new SettingController and initializes its routes.
@@ -93,6 +95,12 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/setting")
 
 	g.POST("/all", a.getAllSetting)
+	g.GET("/cores", a.coreStatuses)
+	g.GET("/cores/:core/versions", a.standaloneCoreVersions)
+	g.POST("/cores/:core/install", a.installStandaloneCore)
+	g.POST("/cores/:core/select", a.selectStandaloneCore)
+	g.POST("/cores/:core/delete", a.deleteStandaloneCore)
+	g.POST("/cores/:core/update", a.updateStandaloneCore)
 	g.POST("/defaultSettings", a.getDefaultSettings)
 	g.POST("/factoryDefaults", a.getFactoryDefaults)
 	g.POST("/update", a.updateSetting)
@@ -100,13 +108,11 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/updateUser", a.updateUser)
 	g.POST("/restartPanel", a.restartPanel)
 	g.GET("/singbox/status", a.singBoxStatus)
-	g.POST("/singbox/install", a.installSingBox)
-	g.GET("/singbox/versions", a.singBoxVersions)
-	g.POST("/singbox/install/:version", a.installSingBoxVersion)
-	g.POST("/singbox/uninstall", a.uninstallSingBox)
+	g.GET("/hiddify/status", a.hiddifyStatus)
 	g.GET("/singbox/config", a.singBoxConfig)
 	g.POST("/singbox/config", a.saveSingBoxConfig)
 	g.POST("/singbox/config/reset", a.resetSingBoxConfig)
+	g.POST("/singbox/import-link", a.importSingBoxLink)
 	g.GET("/swap/status", a.swapStatus)
 	g.POST("/swap/zram/install", a.installZram)
 	g.POST("/swap/zram/reinstall", a.reinstallZram)
@@ -131,7 +137,7 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/sessions/revokeOthers", a.revokeOtherSessions)
 	g.POST("/testSmtp", a.testSmtp)
 	g.POST("/testTgBot", a.testTgBot)
-	g.POST("/testDiscord", a.testDiscord)
+	g.POST("/tgBotCapabilities", a.tgBotCapabilities)
 }
 
 func (a *SettingController) validateRegex(c *gin.Context) {
@@ -181,15 +187,14 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 	allSetting := &form.AllSetting
 	oldTwoFactor, twoFactorErr := a.settingService.GetTwoFactorEnable()
 	oldPanelOutbound, _ := a.settingService.GetPanelOutbound()
+	oldRootEnabled, oldRootURL, _ := a.settingService.GetRootRedirectSettings()
+	coreManagementMu.Lock()
+	defer coreManagementMu.Unlock()
 	oldCoreType, _ := a.settingService.GetCoreType()
 	oldTgEnable, _ := a.settingService.GetTgbotEnabled()
 	oldTgToken, _ := a.settingService.GetTgBotToken()
 	oldTgChatId, _ := a.settingService.GetTgBotChatId()
 	oldTgAPIServer, _ := a.settingService.GetTgBotAPIServer()
-	oldDiscordEnable, _ := a.settingService.GetDiscordBotEnable()
-	oldDiscordToken, _ := a.settingService.GetDiscordBotToken()
-	oldDiscordChannelId, _ := a.settingService.GetDiscordChannelId()
-	oldDiscordRunTime, _ := a.settingService.GetDiscordRunTime()
 	if twoFactorErr == nil && oldTwoFactor {
 		// Rebinding the authenticator is the same class of change as turning 2FA
 		// off, so both need a current code. Blank still means "unchanged".
@@ -202,11 +207,22 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 			}
 		}
 	}
+	if oldCoreType != allSetting.CoreType && runtime.GOOS == "linux" && os.Geteuid() == 0 {
+		release, lockErr := gateway.AcquireOperation(c.Request.Context())
+		if lockErr != nil {
+			jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), lockErr)
+			return
+		}
+		defer release()
+	}
+	if oldCoreType != allSetting.CoreType {
+		finishSwitch := service.BeginCoreSwitch()
+		defer finishSwitch()
+	}
 	err := a.settingService.UpdateAllSetting(allSetting, service.SecretClears{
-		TgBotToken:      form.ClearTgBotToken,
-		LdapPassword:    form.ClearLdapPassword,
-		SmtpPassword:    form.ClearSmtpPassword,
-		DiscordBotToken: form.ClearDiscordBotToken,
+		TgBotToken:   form.ClearTgBotToken,
+		LdapPassword: form.ClearLdapPassword,
+		SmtpPassword: form.ClearSmtpPassword,
 	})
 	if err == nil && twoFactorErr == nil && !oldTwoFactor && allSetting.TwoFactorEnable {
 		if bumpErr := a.userService.BumpLoginEpoch(); bumpErr != nil {
@@ -214,48 +230,7 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 		}
 	}
 	if err == nil && oldCoreType != allSetting.CoreType {
-		compatErr := service.SyncClientCoreCompatibility(oldCoreType, allSetting.CoreType)
-		if compatErr != nil {
-			err = compatErr
-			if rollbackErr := a.settingService.SetCoreType(oldCoreType); rollbackErr != nil {
-				logger.Error("core switch failed and rollback could not be persisted:", rollbackErr)
-			}
-		} else {
-			// Switching cores is a transaction: never let two engines own the same
-			// listener, and never leave the panel configured for a core that failed
-			// to start. UpdateAllSetting already persisted the requested value, so
-			// restore the old value if the new runtime cannot start.
-			ctx := c.Request.Context()
-			if oldCoreType == service.CoreTypeSingBox {
-				_ = a.singBoxService.Stop(ctx)
-			} else {
-				_ = a.xrayService.StopXray()
-			}
-			var restartErr error
-			if allSetting.CoreType == service.CoreTypeSingBox {
-				restartErr = a.singBoxService.Restart(ctx)
-			} else {
-				restartErr = a.xrayService.RestartXray(true)
-			}
-			if restartErr != nil {
-				err = restartErr
-				if rollbackErr := a.settingService.SetCoreType(oldCoreType); rollbackErr != nil {
-					logger.Error("core switch failed and rollback could not be persisted:", rollbackErr)
-				} else {
-					if compatErr := service.SyncClientCoreCompatibility(allSetting.CoreType, oldCoreType); compatErr != nil {
-						logger.Error("failed to restore client core compatibility after core switch failure:", compatErr)
-					}
-					// Best effort: bring the previously working engine back.
-					if oldCoreType == service.CoreTypeSingBox {
-						if startErr := a.singBoxService.Restart(ctx); startErr != nil {
-							logger.Error("failed to restore sing-box after core switch failure:", startErr)
-						}
-					} else if startErr := a.xrayService.RestartXray(true); startErr != nil {
-						logger.Error("failed to restore xray after core switch failure:", startErr)
-					}
-				}
-			}
-		}
+		err = a.switchCoreWithGateway(c.Request.Context(), oldCoreType, allSetting.CoreType)
 	}
 	if err == nil && form.PanelOutbound != oldPanelOutbound && allSetting.CoreType == service.CoreTypeXray {
 		// Panel egress is currently implemented by an Xray loopback bridge.
@@ -263,6 +238,9 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 		if applyErr := a.xrayService.RestartXray(false); applyErr != nil {
 			logger.Warning("apply panel outbound change failed:", applyErr)
 		}
+	}
+	if err == nil && (oldRootEnabled != allSetting.RootRedirectEnable || oldRootURL != allSetting.RootRedirectURL) {
+		err = a.settingService.ReconcileRootRedirect(oldRootEnabled, oldRootURL)
 	}
 	// UpdateAllSetting already restored a redacted-blank token, so allSetting.TgBotToken is the effective value to compare.
 	if err == nil && reloadTgbotFunc != nil {
@@ -272,15 +250,6 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 				oldTgAPIServer != allSetting.TgBotAPIServer))
 		if tgChanged {
 			reloadTgbotFunc()
-		}
-	}
-	if err == nil && reloadDiscordFunc != nil {
-		discordChanged := oldDiscordEnable != allSetting.DiscordBotEnable ||
-			oldDiscordRunTime != allSetting.DiscordRunTime ||
-			(allSetting.DiscordBotEnable && (oldDiscordToken != allSetting.DiscordBotToken ||
-				oldDiscordChannelId != allSetting.DiscordChannelId))
-		if discordChanged {
-			reloadDiscordFunc()
 		}
 	}
 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
@@ -506,34 +475,6 @@ var emailService *email.EmailService
 // SetEmailService registers the email service for test endpoints.
 func SetEmailService(s *email.EmailService) { emailService = s }
 
-// reloadDiscordFunc is wired from the web layer to reschedule or cancel Discord notify job.
-var reloadDiscordFunc func()
-
-func SetReloadDiscordFunc(fn func()) { reloadDiscordFunc = fn }
-
-// discordService is set from web layer.
-var discordService *discord.DiscordService
-
-// SetDiscordService registers the Discord service for test endpoints.
-func SetDiscordService(s *discord.DiscordService) { discordService = s }
-
-func (a *SettingController) testDiscord(c *gin.Context) {
-	if discordService == nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.discordNotInitialized"), errors.New("discord service not available"))
-		return
-	}
-	enabled, err := a.settingService.GetDiscordBotEnable()
-	if err != nil || !enabled {
-		jsonMsg(c, I18nWeb(c, "pages.settings.discordBotNotEnabled"), errors.New("discord bot disabled"))
-		return
-	}
-	if err := discordService.SendTest(c.Request.Context()); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.discordTestFailed")+": "+err.Error(), err)
-		return
-	}
-	jsonMsg(c, I18nWeb(c, "pages.settings.discordTestSuccess"), nil)
-}
-
 func (a *SettingController) installZram(c *gin.Context) {
 	if err := systemswap.InstallZram(c.Request.Context()); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
@@ -642,7 +583,7 @@ func (a *SettingController) systemUpdateApply(c *gin.Context) {
 }
 
 func (a *SettingController) sudokuStatus(c *gin.Context) {
-	status, err := sudoku.GetStatus(c.Request.Context())
+	status, err := sudoku.GetStatus(c.Request.Context(), c.Query("local") == "true")
 	if err != nil {
 		jsonObj(c, status, err)
 		return
@@ -651,11 +592,13 @@ func (a *SettingController) sudokuStatus(c *gin.Context) {
 }
 
 func (a *SettingController) sudokuUpdate(c *gin.Context) {
-	if err := sudoku.Update(c.Request.Context()); err != nil {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Minute)
+	defer cancel()
+	if err := service.UpdateSudoku(ctx); err != nil {
 		jsonObj(c, gin.H{"updated": false}, err)
 		return
 	}
-	status, err := sudoku.GetStatus(c.Request.Context())
+	status, err := sudoku.GetStatus(c.Request.Context(), true)
 	if err != nil {
 		jsonObj(c, gin.H{"updated": true}, nil)
 		return
@@ -672,7 +615,7 @@ func (a *SettingController) systemUpdateReboot(c *gin.Context) {
 }
 
 func (a *SettingController) singBoxConfig(c *gin.Context) {
-	snapshot, err := a.singBoxService.GetEditorConfig(c.Request.Context())
+	snapshot, err := service.SelectedNativeCore().GetEditorConfig(c.Request.Context())
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
 		return
@@ -690,23 +633,30 @@ func (a *SettingController) saveSingBoxConfig(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("sing-box config is empty"))
 		return
 	}
-	if err := a.singBoxService.SaveTemplate(c.Request.Context(), form.Config); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+	if err := service.SelectedNativeCore().SaveTemplateWithRemoval(c.Request.Context(), form.Config, form.RemoveTag, form.Replacement); err != nil {
+		jsonMsg(c, "Не удалось применить настройки ядра", err)
 		return
 	}
 	jsonObj(c, gin.H{"saved": true}, nil)
 }
 
 func (a *SettingController) resetSingBoxConfig(c *gin.Context) {
-	if err := a.singBoxService.ResetTemplate(c.Request.Context()); err != nil {
+	if err := service.SelectedNativeCore().ResetTemplate(c.Request.Context()); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 		return
 	}
 	jsonObj(c, gin.H{"reset": true}, nil)
 }
 
+func (a *SettingController) hiddifyStatus(c *gin.Context) {
+	a.nativeStatus(c, service.NativeCore(service.CoreTypeSingBox))
+}
+
 func (a *SettingController) singBoxStatus(c *gin.Context) {
-	svc := &a.singBoxService
+	a.nativeStatus(c, service.SelectedNativeCore())
+}
+
+func (a *SettingController) nativeStatus(c *gin.Context, svc *service.SingBoxService) {
 	_, statErr := os.Stat(svc.BinaryPath())
 	running := svc.IsRunning()
 	connections := 0
@@ -740,47 +690,57 @@ func (a *SettingController) singBoxStatus(c *gin.Context) {
 	}, nil)
 }
 
-func (a *SettingController) singBoxVersions(c *gin.Context) {
-	versions, err := a.singBoxService.ListVersions(c.Request.Context())
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
+// importSingBoxLink only decodes a share URI; saving remains a separate action.
+func (a *SettingController) importSingBoxLink(c *gin.Context) {
+	var form struct {
+		Link  string `json:"link" form:"link" binding:"required"`
+		Batch bool   `json:"batch" form:"batch"`
+	}
+	if err := c.ShouldBind(&form); err != nil {
+		jsonObj(c, nil, err)
 		return
 	}
-	jsonObj(c, versions, nil)
+	if form.Batch {
+		result, err := service.ParseNativeOutboundImportContext(c.Request.Context(), form.Link)
+		jsonObj(c, result, err)
+		return
+	}
+	outbound, err := service.ParseNativeOutboundShareLink(form.Link)
+	jsonObj(c, outbound, err)
 }
 
-func (a *SettingController) installSingBoxVersion(c *gin.Context) {
-	version := strings.TrimSpace(c.Param("version"))
-	if version == "" {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("sing-box version is empty"))
+// tgBotCapabilities reports what the bot can do. Inline mode is a BotFather
+// switch the API can read but never set, so the panel warns when lists can't open.
+func (a *SettingController) tgBotCapabilities(c *gin.Context) {
+	enabled, err := a.settingService.GetTgbotEnabled()
+	if err != nil || !enabled {
+		jsonMsg(c, I18nWeb(c, "pages.settings.tgBotNotEnabled"), errors.New("telegram bot disabled"))
 		return
 	}
-	installed, err := a.singBoxService.InstallVersion(c.Request.Context(), version)
+	if tgCapsFunc == nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.tgBotNotRunning"), errors.New("bot not started"))
+		return
+	}
+	caps, err := tgCapsFunc()
 	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		jsonMsg(c, I18nWeb(c, "pages.settings.tgTestFailed")+": "+err.Error(), err)
 		return
 	}
-	jsonObj(c, gin.H{"version": installed}, nil)
+	jsonObj(c, caps, nil)
 }
 
-func (a *SettingController) uninstallSingBox(c *gin.Context) {
-	if err := a.singBoxService.Uninstall(c.Request.Context()); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
-		return
-	}
-	jsonObj(c, gin.H{"installed": false}, nil)
+// TgBotCapabilities is the browser-safe shape of the bot's own capabilities.
+type TgBotCapabilities struct {
+	InlineEnabled bool `json:"inlineEnabled" example:"true"`
+	// GroupPrivacy off means the bot reads every group message; when it is on,
+	// a bare /start in a group is invisible to the bot.
+	GroupPrivacy bool   `json:"groupPrivacy" example:"false"`
+	Username     string `json:"username" example:"xui_bot"`
+	Running      bool   `json:"running" example:"true"`
 }
 
-func (a *SettingController) installSingBox(c *gin.Context) {
-	// Installation is deliberately independent from configuration generation.
-	// A panel may contain Xray-only inbounds (for example a legacy or custom
-	// transport) that sing-box cannot represent yet; that must not make the
-	// binary installation itself fail. Configuration is generated and validated
-	// when the operator actually switches the running core.
-	version, err := a.singBoxService.InstallLatest(c.Request.Context())
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
-		return
-	}
-	jsonObj(c, gin.H{"version": version}, nil)
-}
+// tgCapsFunc is wired from the web layer; importing tgbot here is circular.
+var tgCapsFunc func() (TgBotCapabilities, error)
+
+// SetTgBotCapsFunc registers the capability probe.
+func SetTgBotCapsFunc(fn func() (TgBotCapabilities, error)) { tgCapsFunc = fn }

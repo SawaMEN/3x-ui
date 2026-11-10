@@ -640,3 +640,17 @@ describe('freedom outbound sockopt wire payload', () => {
     });
   });
 });
+
+describe('XHTTP Host headers', () => {
+  it('moves legacy Host out of headers because both cores reject it there', () => {
+    const raw = { path: '/audit', headers: { hOsT: 'legacy.example', 'X-Audit': 'preserved' } };
+    expect(normalizeXhttpForWire(raw, 'outbound')).toMatchObject({
+      host: 'legacy.example',
+      headers: { 'X-Audit': 'preserved' },
+    });
+    expect(raw.headers.hOsT).toBe('legacy.example');
+    expect(normalizeXhttpForWire({ ...raw, host: 'explicit.example' }, 'inbound').host).toBe(
+      'explicit.example',
+    );
+  });
+});

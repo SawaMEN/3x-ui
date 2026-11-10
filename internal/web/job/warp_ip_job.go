@@ -11,7 +11,7 @@ import (
 type WarpIpJob struct {
 	settingService service.SettingService
 	warpService    integration.WarpService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 }
 
 func NewWarpIpJob() *WarpIpJob {

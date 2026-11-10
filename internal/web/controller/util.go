@@ -9,11 +9,11 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-
-	"github.com/gin-gonic/gin"
 )
 
 // getRemoteIp extracts the real IP address from the request headers or remote address.
@@ -22,21 +22,22 @@ func getRemoteIp(c *gin.Context) string {
 	if !ok {
 		return "unknown"
 	}
-
-	if isTrustedProxy(remoteIP) {
-		if ip, ok := extractTrustedIP(c.GetHeader("X-Real-IP")); ok {
-			return ip
-		}
-
-		if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
-			for part := range strings.SplitSeq(xff, ",") {
-				if ip, ok := extractTrustedIP(part); ok {
-					return ip
-				}
-			}
-		}
+	if !isTrustedProxy(remoteIP) {
+		return remoteIP
 	}
 
+	realIP, hasRealIP := extractTrustedIP(c.GetHeader("X-Real-IP"))
+	forwardedIP, hasForwarded := forwardedForClient(c.GetHeader("X-Forwarded-For"))
+	switch {
+	case hasRealIP && hasForwarded && realIP != forwardedIP:
+		// A proxy rewrites at most one of the two, so the other is the client's
+		// own claim; neither may pick the identity the login limiter keys on.
+		return remoteIP
+	case hasForwarded:
+		return forwardedIP
+	case hasRealIP:
+		return realIP
+	}
 	return remoteIP
 }
 
@@ -50,20 +51,27 @@ func isTrustedProxy(ip string) bool {
 	if err != nil {
 		return false
 	}
+	return proxyAddrInCIDRs(addr, trustedProxyCIDRs())
+}
 
-	trusted := trustedProxyCIDRs()
-	for value := range strings.SplitSeq(trusted, ",") {
+func proxyAddrInCIDRs(addr netip.Addr, cidrs string) bool {
+	addr = addr.Unmap()
+	for value := range strings.SplitSeq(cidrs, ",") {
 		value = strings.TrimSpace(value)
 		if value == "" {
 			continue
 		}
 		if prefix, err := netip.ParsePrefix(value); err == nil {
+			// Handle IPv4-mapped prefixes consistently with unmapped peers.
+			if prefix.Addr().Is4In6() && prefix.Bits() >= 96 {
+				prefix = netip.PrefixFrom(prefix.Addr().Unmap(), prefix.Bits()-96)
+			}
 			if prefix.Contains(addr) {
 				return true
 			}
 			continue
 		}
-		if proxyIP, err := netip.ParseAddr(value); err == nil && proxyIP.Unmap() == addr.Unmap() {
+		if proxyIP, err := netip.ParseAddr(value); err == nil && proxyIP.Unmap() == addr {
 			return true
 		}
 	}
@@ -203,4 +211,22 @@ func pureJsonMsg(c *gin.Context, statusCode int, success bool, msg string) {
 // isAjax checks if the request is an AJAX request.
 func isAjax(c *gin.Context) bool {
 	return c.GetHeader("X-Requested-With") == "XMLHttpRequest"
+}
+
+// forwardedForClient walks X-Forwarded-For from the proxy end: entries a client sent
+// come first, so the first hop that is not a trusted proxy is the address one saw.
+func forwardedForClient(xff string) (string, bool) {
+	parts := strings.Split(xff, ",")
+	client := ""
+	for i := len(parts) - 1; i >= 0; i-- {
+		ip, ok := extractTrustedIP(parts[i])
+		if !ok {
+			break
+		}
+		client = ip
+		if !isTrustedProxy(ip) {
+			break
+		}
+	}
+	return client, client != ""
 }

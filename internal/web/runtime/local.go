@@ -4,74 +4,60 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 type LocalDeps struct {
-	APIPort        func() int
-	CoreType       func() string
-	RestartCore    func(context.Context) error
-	SetNeedRestart func()
+	APIPort  func() int
+	CoreType func() string
+	// RequestConfigApply queues one validated apply of committed DB state.
+	RequestConfigApply func(context.Context) error
+	RestartCore        func(context.Context) error // Compatibility for existing embedders.
+	SetNeedRestart     func()
 }
 
 type Local struct {
-	deps LocalDeps
-	mu   sync.Mutex
+	deps         LocalDeps
+	batchMu      sync.Mutex
+	batches      int
+	batchDirty   bool
+	batchVersion uint64
 }
 
 func NewLocal(deps LocalDeps) *Local { return &Local{deps: deps} }
 func (l *Local) Name() string        { return "local" }
 
-func (l *Local) isSingBox() bool {
-	return l.deps.CoreType != nil && l.deps.CoreType() == "sing-box"
-}
-
 func (l *Local) applyCoreChange(ctx context.Context) error {
-	if l.isSingBox() {
-		if l.deps.RestartCore == nil {
-			return errors.New("sing-box runtime restart is not configured")
-		}
-		return l.deps.RestartCore(ctx)
-	}
-	if l.deps.SetNeedRestart != nil {
-		l.deps.SetNeedRestart()
-	}
-	return nil
-}
-
-func (l *Local) withAPI(fn func(api *xray.XrayAPI) error) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.deps.APIPort == nil {
-		return errors.New("local xray API port is not configured")
-	}
-	port := l.deps.APIPort()
-	if port == 0 {
+	l.batchMu.Lock()
+	if l.batches > 0 {
+		l.batchDirty = true
+		l.batchMu.Unlock()
 		return nil
 	}
-	if port < 0 {
-		return errors.New("local xray is not running")
-	}
-	var api xray.XrayAPI
-	if err := api.Init(port); err != nil {
-		return err
-	}
-	defer api.Close()
-	return fn(&api)
+	l.batchMu.Unlock()
+	return l.requestNativeApply(ctx)
 }
 
 func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
+	if l.nativeSidecarSpeed(ib) {
+		return l.applyCoreChange(ctx)
+	}
+
+	if ib.Protocol == model.Sudoku {
+		// Sudoku is reconciled by its dedicated sidecar manager.
+		return nil
+	}
 	if ib.Protocol == model.Mieru {
 		inst, ok := mieru.InstanceFromInbound(ib)
 		if !ok {
@@ -79,7 +65,7 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 		}
 		return mieru.GetManager().Ensure(inst)
 	}
-	if ib.Protocol == model.Pingtunnel || ib.Protocol == model.TrustTunnel {
+	if externalvpn.IsManaged(ib.Protocol) {
 		inst, err := externalvpn.FromInbound(ib)
 		if err != nil {
 			return err
@@ -87,6 +73,10 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 		return externalvpn.GetManager().Ensure(inst)
 	}
 	if ib.Protocol == model.MTProto {
+		if mtproto.WebProxyInbound(ib) {
+			mtproto.GetManager().Remove(ib.Id)
+			return nil
+		}
 		inst, ok := mtproto.InstanceFromInbound(ib)
 		if !ok {
 			return nil
@@ -104,32 +94,27 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 		}
 		return err
 	}
-	if ib.Protocol == model.TUIC {
-		if l.isSingBox() {
-			return l.applyCoreChange(ctx)
-		}
-		inst, ok := tuic.InstanceFromInbound(ib)
-		if !ok {
-			return nil
-		}
-		return tuic.GetManager().Ensure(inst)
-	}
-	if l.isSingBox() {
-		return l.applyCoreChange(ctx)
-	}
-	body, err := json.MarshalIndent(ib.GenXrayInboundConfig(), "", "  ")
-	if err != nil {
-		return err
-	}
-	return l.withAPI(func(api *xray.XrayAPI) error { return api.AddInbound(body) })
+	return l.applyCoreChange(ctx)
 }
 
 func (l *Local) DelInbound(ctx context.Context, ib *model.Inbound) error {
+	if l.nativeSidecarSpeed(ib) {
+		if err := pauseSpeedSidecar(ib); err != nil {
+			return err
+		}
+		return l.applyCoreChange(ctx)
+	}
+
+	if ib.Protocol == model.Sudoku {
+		// The Sudoku reconcile job stops disabled/removed sidecars while keeping
+		// credentials intact for a temporary disable.
+		return nil
+	}
 	if ib.Protocol == model.Mieru {
 		mieru.GetManager().Remove(ib.Id)
 		return nil
 	}
-	if ib.Protocol == model.Pingtunnel || ib.Protocol == model.TrustTunnel {
+	if externalvpn.IsManaged(ib.Protocol) {
 		externalvpn.GetManager().Remove(ib.Id)
 		return nil
 	}
@@ -146,19 +131,24 @@ func (l *Local) DelInbound(ctx context.Context, ib *model.Inbound) error {
 	}
 	if ib.Protocol == model.TUIC {
 		tuic.GetManager().Remove(ib.Id)
-		if l.isSingBox() {
-			return l.applyCoreChange(ctx)
-		}
-		return nil
 	}
-	if l.isSingBox() {
-		return l.applyCoreChange(ctx)
-	}
-	return l.withAPI(func(api *xray.XrayAPI) error { return api.DelInbound(ib.Tag) })
+	return l.applyCoreChange(ctx)
 }
 
-func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) error {
-	if oldIb.Protocol == model.Pingtunnel || oldIb.Protocol == model.TrustTunnel || newIb.Protocol == model.Pingtunnel || newIb.Protocol == model.TrustTunnel {
+func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) (err error) {
+	finish := l.BeginConfigBatch()
+	defer func() {
+		// Sidecar transitions can add/remove an egress bridge even when the new
+		// listener is disabled. The full native configuration must follow the DB.
+		if oldIb.Protocol != newIb.Protocol || (err == nil && (l.nativeSidecarSpeed(oldIb) || l.nativeSidecarSpeed(newIb))) {
+			err = errors.Join(err, l.applyCoreChange(ctx))
+		}
+		err = errors.Join(err, finish())
+	}()
+	if oldIb.Protocol == newIb.Protocol && (l.nativeSidecarSpeed(oldIb) || l.nativeSidecarSpeed(newIb)) {
+		return pauseSpeedSidecar(oldIb)
+	}
+	if externalvpn.IsManaged(oldIb.Protocol) || externalvpn.IsManaged(newIb.Protocol) {
 		if err := l.DelInbound(ctx, oldIb); err != nil {
 			return err
 		}
@@ -167,7 +157,7 @@ func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) 
 		}
 		return nil
 	}
-	if l.isSingBox() && oldIb.Protocol != model.MTProto && oldIb.Protocol != model.AmneziaWG && oldIb.Protocol != model.Mieru && newIb.Protocol != model.MTProto && newIb.Protocol != model.AmneziaWG && newIb.Protocol != model.Mieru {
+	if oldIb.Protocol != model.MTProto && oldIb.Protocol != model.AmneziaWG && oldIb.Protocol != model.Mieru && oldIb.Protocol != model.Sudoku && newIb.Protocol != model.MTProto && newIb.Protocol != model.AmneziaWG && newIb.Protocol != model.Mieru && newIb.Protocol != model.Sudoku {
 		if oldIb.Protocol == model.TUIC {
 			tuic.GetManager().Remove(oldIb.Id)
 		}
@@ -204,6 +194,10 @@ func (l *Local) updateMtprotoInbound(ctx context.Context, oldIb, newIb *model.In
 		_ = l.DelInbound(ctx, oldIb)
 	}
 	if !newIb.Enable {
+		mtproto.GetManager().Remove(newIb.Id)
+		return nil
+	}
+	if mtproto.WebProxyInbound(newIb) {
 		mtproto.GetManager().Remove(newIb.Id)
 		return nil
 	}
@@ -244,6 +238,9 @@ func (l *Local) updateAmneziaWGInbound(ctx context.Context, oldIb, newIb *model.
 func (l *Local) updateTuicInbound(ctx context.Context, oldIb, newIb *model.Inbound) error {
 	if oldIb.Protocol == model.TUIC && newIb.Protocol != model.TUIC {
 		tuic.GetManager().Remove(oldIb.Id)
+		if l.deps.SetNeedRestart != nil {
+			l.deps.SetNeedRestart()
+		}
 		if !newIb.Enable {
 			return nil
 		}
@@ -251,10 +248,24 @@ func (l *Local) updateTuicInbound(ctx context.Context, oldIb, newIb *model.Inbou
 	}
 	if oldIb.Protocol != model.TUIC {
 		_ = l.DelInbound(ctx, oldIb)
+		if l.deps.SetNeedRestart != nil {
+			l.deps.SetNeedRestart()
+		}
+	}
+	if oldIb.Protocol == model.TUIC && newIb.Protocol == model.TUIC && oldIb.Enable && newIb.Enable && oldIb.Tag != newIb.Tag && l.deps.SetNeedRestart != nil {
+		l.deps.SetNeedRestart()
 	}
 	if !newIb.Enable {
 		tuic.GetManager().Remove(newIb.Id)
+		if oldIb.Enable && l.deps.SetNeedRestart != nil {
+			l.deps.SetNeedRestart()
+		}
 		return nil
+	}
+	if !oldIb.Enable && newIb.Enable {
+		if l.deps.SetNeedRestart != nil {
+			l.deps.SetNeedRestart()
+		}
 	}
 	inst, ok := tuic.InstanceFromInbound(newIb)
 	if !ok {
@@ -287,31 +298,43 @@ func (l *Local) updateMieruInbound(ctx context.Context, oldIb, newIb *model.Inbo
 	return mieru.GetManager().Ensure(inst)
 }
 
-func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, userMap map[string]any) error {
-	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC || ib.Protocol == model.Mieru || ib.Protocol == model.Pingtunnel || ib.Protocol == model.TrustTunnel {
-		return nil
-	}
-	if l.isSingBox() {
+func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, _ map[string]any) error {
+	if l.nativeSidecarSpeed(ib) {
 		return l.applyCoreChange(ctx)
 	}
-	return l.withAPI(func(api *xray.XrayAPI) error { return api.AddUser(string(ib.Protocol), ib.Tag, userMap) })
+
+	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
+		return nil
+	}
+	return l.applyCoreChange(ctx)
 }
 
 func (l *Local) RemoveUser(ctx context.Context, ib *model.Inbound, email string) error {
-	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC || ib.Protocol == model.Mieru || ib.Protocol == model.Pingtunnel || ib.Protocol == model.TrustTunnel {
-		return nil
-	}
-	if l.isSingBox() {
+	if l.nativeSidecarSpeed(ib) {
+		if err := pauseSpeedSidecar(ib); err != nil {
+			return err
+		}
 		return l.applyCoreChange(ctx)
 	}
-	return l.withAPI(func(api *xray.XrayAPI) error { return api.RemoveUser(ib.Tag, email) })
+
+	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
+		return nil
+	}
+	return l.applyCoreChange(ctx)
 }
 
 func (l *Local) AddClient(ctx context.Context, ib *model.Inbound, client model.Client) error {
 	if !client.Enable {
 		return nil
 	}
-	return l.AddUser(ctx, ib, map[string]any{"email": client.Email, "id": client.ID, "security": client.Security, "flow": client.Flow, "auth": client.Auth, "password": client.Password, "publicKey": client.PublicKey, "allowedIPs": client.AllowedIPs, "preSharedKey": client.PreSharedKey, "keepAlive": wgKeepAlive(client.KeepAliveSeconds())})
+
+	if (ib.Protocol == model.Mieru || ib.Protocol == model.Sudoku) && client.SpeedLimit != nil && client.SpeedLimit.Enabled {
+		if err := pauseSpeedSidecar(ib); err != nil {
+			return err
+		}
+		return l.applyCoreChange(ctx)
+	}
+	return l.AddUser(ctx, ib, nil)
 }
 
 func (l *Local) DeleteUser(ctx context.Context, ib *model.Inbound, email string) error {
@@ -327,31 +350,19 @@ func (l *Local) DeleteUser(ctx context.Context, ib *model.Inbound, email string)
 	return nil
 }
 func (l *Local) DeleteClient(context.Context, string) error { return nil }
-func (l *Local) UpdateUser(ctx context.Context, ib *model.Inbound, oldEmail string, payload model.Client) error {
-	if ib.Protocol == model.Mieru {
-		return nil // The caller reapplies the full inbound after committing its client list.
-	}
-	if l.isSingBox() {
-		// sing-box reads the client list from the database when regenerating
-		// its config. Avoid the remove+add double restart used by Xray's API.
-		return l.applyCoreChange(ctx)
-	}
-	if oldEmail != "" {
-		if err := l.RemoveUser(ctx, ib, oldEmail); err != nil && !strings.Contains(err.Error(), "not found") {
+func (l *Local) UpdateUser(ctx context.Context, ib *model.Inbound, _ string, payload model.Client) error {
+	if l.nativeSidecarSpeed(ib) || ((ib.Protocol == model.Mieru || ib.Protocol == model.Sudoku) && payload.Enable && payload.SpeedLimit != nil && payload.SpeedLimit.Enabled) {
+		if err := pauseSpeedSidecar(ib); err != nil {
 			return err
 		}
+		return l.applyCoreChange(ctx)
 	}
-	if !payload.Enable {
-		return nil
+	if ib.Protocol == model.Mieru || ib.Protocol == model.Sudoku || externalvpn.IsManaged(ib.Protocol) {
+		return nil // Full state is reapplied by the protocol-specific reconciler.
 	}
-	return l.AddUser(ctx, ib, map[string]any{"email": payload.Email, "id": payload.ID, "security": payload.Security, "flow": payload.Flow, "auth": payload.Auth, "password": payload.Password, "publicKey": payload.PublicKey, "allowedIPs": payload.AllowedIPs, "preSharedKey": payload.PreSharedKey, "keepAlive": wgKeepAlive(payload.KeepAliveSeconds())})
-}
-
-func wgKeepAlive(seconds int) string {
-	if seconds <= 0 {
-		return ""
-	}
-	return strconv.Itoa(seconds)
+	// The configured core reads committed clients when regenerating its
+	// configuration, including disabled or renamed users.
+	return l.applyCoreChange(ctx)
 }
 
 func (l *Local) RestartXray(ctx context.Context) error {
@@ -363,3 +374,42 @@ func (l *Local) ResetClientTraffic(_ context.Context, _ *model.Inbound, _ string
 func (l *Local) ResetAllTraffics(_ context.Context) error { return nil }
 
 func (l *Local) ResetInboundTraffic(_ context.Context, _ *model.Inbound) error { return nil }
+
+func (l *Local) nativeSidecarSpeed(ib *model.Inbound) bool {
+	if ib == nil || (ib.Protocol != model.Mieru && ib.Protocol != model.Sudoku) {
+		return false
+	}
+	if clientlimit.Default.Requires(string(ib.Protocol) + ":") {
+		return true
+	}
+	var settings struct {
+		Clients []model.Client `json:"clients"`
+	}
+	if json.Unmarshal([]byte(ib.Settings), &settings) != nil {
+		return false
+	}
+	for _, c := range settings.Clients {
+		if c.Enable && c.SpeedLimit != nil && c.SpeedLimit.Enabled {
+			return true
+		}
+	}
+	return false
+}
+
+func pauseSpeedSidecar(ib *model.Inbound) error {
+	switch ib.Protocol {
+	case model.Mieru:
+		return mieru.GetManager().Pause(ib.Id)
+	case model.Sudoku:
+		return sudoku.GetManager().Pause(ib.Id)
+	}
+	return nil
+}
+
+// ApplyConfigNow confirms a manager generation before publishing its subscription.
+func (l *Local) ApplyConfigNow(ctx context.Context) error {
+	if l.deps.RestartCore == nil {
+		return errors.New("synchronous core apply is not configured")
+	}
+	return l.deps.RestartCore(ctx)
+}

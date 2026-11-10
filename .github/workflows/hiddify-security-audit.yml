@@ -1,0 +1,42 @@
+name: Pinned Hiddify core release integrity audit
+
+on:
+  schedule:
+    - cron: "41 3 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pinned-hiddify-security
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify pinned release metadata and source revisions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t pins < <(python3 - <<'PY'
+          import json
+          lock=json.load(open("deploy/hiddify/hiddify-core-target.json"))
+          print(lock["target"]["version"])
+          print(lock["target"]["commit"])
+          print(lock["target"]["submodules"]["hiddify-sing-box"])
+          PY
+          )
+          test "${#pins[@]}" -eq 3
+          python3 -m unittest discover -s tools -p test_fetch_latest_kernel.py -v
+          python3 tools/fetch-latest-kernel.py --tag "${pins[0]}" \
+            --expected-core-sha "${pins[1]}" --expected-singbox-sha "${pins[2]}" \
+            --arch amd64 --output "$RUNNER_TEMP/core-security"
+          (cd "$RUNNER_TEMP/core-security" && \
+            sha256sum -c hiddify-core-linux-amd64.sha256 && \
+            sha256sum -c libcronet.so.sha256)
+          "$RUNNER_TEMP/core-security/hiddify-core-linux-amd64" version

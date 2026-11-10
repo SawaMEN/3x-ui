@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // initMutDB spins up a real temp SQLite DB for tests that exercise DB-backed
@@ -177,7 +177,7 @@ func TestAggregateTrafficByEmails_LastOnlineIsMax(t *testing.T) {
 	initMutDB(t)
 	db := database.GetDB()
 
-	rows := []xray.ClientTraffic{
+	rows := []coremodel.ClientTraffic{
 		{Email: "a@x", Up: 10, Down: 20, LastOnline: 100},
 		{Email: "b@x", Up: 1, Down: 2, LastOnline: 500}, // the max
 		{Email: "c@x", Up: 3, Down: 4, LastOnline: 300},

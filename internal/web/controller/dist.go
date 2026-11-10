@@ -6,6 +6,7 @@ import (
 	htmlpkg "html"
 	"io/fs"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -142,6 +143,12 @@ func serveDistPage(c *gin.Context, name string) {
 	inject := []byte(script)
 	inject = append(inject, csrfMeta...)
 	inject = append(inject, basePathMeta...)
+	inject = append(inject, []byte(`<meta name="panel-instance" content="`+htmlpkg.EscapeString(c.GetString("panel_instance"))+`"><meta name="panel-port-override" content="`+strconv.Itoa(c.GetInt("panel_port_override"))+`">`)...)
+
+	if port := c.GetInt("panel_port"); port > 0 {
+		addressMeta := `<meta name="panel-port" content="` + strconv.Itoa(port) + `"><meta name="panel-tls" content="` + strconv.FormatBool(c.GetBool("panel_tls")) + `">`
+		inject = append(inject, []byte(addressMeta)...)
+	}
 	inject = append(inject, pwaHeadInjection(basePath, name)...)
 	inject = append(inject, []byte(`</head>`)...)
 	out := bytes.Replace(body, []byte("</head>"), inject, 1)

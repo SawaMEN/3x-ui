@@ -38,6 +38,18 @@ describe('OutboundFormModal', () => {
     expect(fieldLabels().length).toBeGreaterThan(0);
   });
 
+  it('allows creating a VLESS reverse bridge tag', () => {
+    renderModal({ protocol: 'vless', tag: 'remote', settings: {} });
+    const label = Array.from(document.querySelectorAll('.ant-form-item-label label')).find(
+      (l) => (l.textContent ?? '').trim() === 'Reverse tag',
+    );
+    const input = label?.closest('.ant-form-item')?.querySelector('input');
+    expect(input).toBeTruthy();
+    expect(input!.readOnly).toBe(false);
+    fireEvent.change(input!, { target: { value: 'bridge' } });
+    expect(input!.value).toBe('bridge');
+  });
+
   it('field structure differs per protocol (not a vacuous snapshot loop)', async () => {
     renderModal(null);
     const protocols = listSelectOptions('protocol');
@@ -148,5 +160,119 @@ describe('OutboundFormModal', () => {
       settings: { reverse?: { tag?: string } };
     };
     expect(payload.settings.reverse?.tag).toBe('r1');
+  });
+});
+
+describe('native sing-box JSON editing', () => {
+  it('preserves an unchanged native outbound when Basic is clicked', async () => {
+    const native = {
+      protocol: 'singbox:tuic',
+      tag: 'tuic-out',
+      settings: {
+        server: 'example.com',
+        server_port: 443,
+        uuid: 'id',
+        password: 'secret',
+        tls: { enabled: true },
+      },
+    };
+    const onConfirm = vi.fn();
+    const view = renderWithProviders(
+      <OutboundFormModal
+        open
+        outbound={native}
+        existingTags={[]}
+        onClose={() => {}}
+        onConfirm={onConfirm}
+      />,
+    );
+    const activeBefore = document.querySelector('.ant-tabs-tab-active')?.textContent;
+    const basic = view
+      .getAllByRole('tab')
+      .find((tab) => tab.getAttribute('aria-selected') === 'false');
+    expect(basic).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(basic!);
+    });
+    expect(document.querySelector('.ant-tabs-tab-active')?.textContent).toBe(activeBefore);
+    await act(async () => {
+      fireEvent.click(document.querySelector('.ant-modal-footer .ant-btn-primary')!);
+    });
+    expect(onConfirm).toHaveBeenCalledWith(native);
+  });
+});
+
+describe('outbound import preserves advanced options', () => {
+  it('imports AnyTLS URI in native JSON without changing credentials', async () => {
+    const onConfirm = vi.fn();
+    const view = renderWithProviders(
+      <OutboundFormModal
+        open
+        outbound={null}
+        existingTags={[]}
+        onClose={() => {}}
+        onConfirm={onConfirm}
+      />,
+    );
+    const jsonTab = view.getAllByRole('tab').find((tab) => /JSON/.test(tab.textContent ?? ''));
+    expect(jsonTab).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(jsonTab!);
+    });
+    const input = view.getByPlaceholderText(/anytls:\/\//) as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { value: 'anytls://secret@edge.example:443?sni=cover.example#native-node' },
+    });
+    await act(async () => {
+      fireEvent.click(view.getByText('Импортировать'));
+    });
+    await act(async () => {
+      fireEvent.click(document.querySelector('.ant-modal-footer .ant-btn-primary')!);
+    });
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        protocol: 'singbox:anytls',
+        tag: 'native-node',
+        settings: expect.objectContaining({
+          server: 'edge.example',
+          password: 'secret',
+          tls: expect.objectContaining({ server_name: 'cover.example' }),
+        }),
+      }),
+    );
+  });
+
+  it('keeps a VLESS outbound with unrepresented options in JSON mode', async () => {
+    const original = {
+      protocol: 'vless',
+      tag: 'keep-extra',
+      settings: {
+        address: 'edge.example',
+        port: 443,
+        id: '11111111-2222-4333-8444-555555555555',
+        packetEncoding: 'xudp',
+      },
+    };
+    const onConfirm = vi.fn();
+    const view = renderWithProviders(
+      <OutboundFormModal
+        open
+        outbound={original}
+        existingTags={[]}
+        onClose={() => {}}
+        onConfirm={onConfirm}
+      />,
+    );
+    expect(document.querySelector('.ant-tabs-tab-active')?.textContent).toMatch(/JSON/);
+    await act(async () => {
+      fireEvent.click(
+        view.getAllByRole('tab').find((tab) => /Визуальный/.test(tab.textContent ?? ''))!,
+      );
+    });
+    expect(document.querySelector('.ant-tabs-tab-active')?.textContent).toMatch(/JSON/);
+    await act(async () => {
+      fireEvent.click(document.querySelector('.ant-modal-footer .ant-btn-primary')!);
+    });
+    expect(onConfirm).toHaveBeenCalledWith(original);
   });
 });

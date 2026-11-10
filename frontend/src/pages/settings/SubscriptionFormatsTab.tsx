@@ -158,110 +158,112 @@ export default function SubscriptionFormatsTab({
       items={[
         {
           key: '1',
-          label: catTabLabel(<SettingOutlined />, t('pages.settings.panelSettings'), isMobile),
+          label: catTabLabel(
+            <SettingOutlined aria-hidden />,
+            t('pages.settings.panelSettings'),
+            isMobile,
+          ),
           children: (
             <div className="subscription-format-sections">
-              {allSetting.subJsonEnable && (
-                <Card
-                  size="small"
-                  className="subscription-format-card"
-                  title={
-                    <span className="subscription-format-card-title">
-                      <FileTextOutlined />
-                      {t('pages.settings.subJsonEnableTitle')}
-                    </span>
-                  }
+              <Card
+                size="small"
+                className="subscription-format-card"
+                title={
+                  <span className="subscription-format-card-title">
+                    <FileTextOutlined aria-hidden />
+                    Настройки JSON · Xray / sing-box
+                  </span>
+                }
+              >
+                <SettingListItem
+                  paddings="small"
+                  title={<>JSON {t('pages.settings.subPath')}</>}
+                  description={t('pages.settings.subPathDesc')}
                 >
-                  <SettingListItem
-                    paddings="small"
-                    title={<>JSON {t('pages.settings.subPath')}</>}
-                    description={t('pages.settings.subPathDesc')}
-                  >
-                    <Input
-                      value={allSetting.subJsonPath}
-                      placeholder="/json/"
-                      onChange={(e) => updateSetting({ subJsonPath: sanitizePath(e.target.value) })}
-                      onBlur={() =>
-                        updateSetting({ subJsonPath: normalizePath(allSetting.subJsonPath) })
-                      }
-                    />
-                  </SettingListItem>
-                  <SettingListItem
-                    paddings="small"
-                    title={<>JSON {t('pages.settings.subURI')}</>}
-                    description={t('pages.settings.subURIDesc')}
-                  >
-                    <Input
-                      value={allSetting.subJsonURI}
-                      placeholder="(http|https)://domain[:port]/path/"
-                      onChange={(e) => updateSetting({ subJsonURI: e.target.value })}
-                    />
-                  </SettingListItem>
-                  <SettingListItem
-                    paddings="small"
-                    title={t('pages.settings.subJsonAlwaysArray')}
-                    description={t('pages.settings.subJsonAlwaysArrayDesc')}
-                  >
-                    <Switch
-                      checked={allSetting.subJsonAlwaysArray}
-                      onChange={(value) => updateSetting({ subJsonAlwaysArray: value })}
-                    />
-                  </SettingListItem>
-                  <SettingListItem
-                    paddings="small"
-                    title={t('pages.settings.subJsonAutoDetect')}
-                    description={t('pages.settings.subJsonAutoDetectDesc')}
-                  >
-                    <Switch
-                      checked={allSetting.subJsonAutoDetect}
-                      onChange={(v) => updateSetting({ subJsonAutoDetect: v })}
-                    />
-                  </SettingListItem>
-                  <SettingListItem
-                    paddings="small"
-                    title={t('pages.settings.subJsonUserAgentRegex')}
-                    description={t('pages.settings.subJsonUserAgentRegexDesc')}
-                  >
-                    <GoRegexInput
-                      value={allSetting.subJsonUserAgentRegex}
-                      placeholder="(?i)^myclient([ /]|$)"
-                      onChange={(value) => updateSetting({ subJsonUserAgentRegex: value })}
-                    />
-                  </SettingListItem>
-                  <SettingListItem
-                    paddings="small"
-                    title={t('pages.settings.subJsonRoutingRules')}
-                    badge={remoteSourceBadge(allSetting.subJsonRoutingRules)}
-                    description={t('pages.settings.subJsonRoutingRulesDesc')}
-                  >
-                    <Input.TextArea
-                      value={allSetting.subJsonRoutingRules}
-                      placeholder="happ://routing/onadd/... , routing JSON, or https://.../DEFAULT.JSON"
-                      onChange={(e) => updateSetting({ subJsonRoutingRules: e.target.value })}
-                      autoSize={{ minRows: 2, maxRows: 6 }}
-                    />
-                  </SettingListItem>
-                  <SettingListItem
-                    paddings="small"
-                    title={t('pages.settings.subJsonDns')}
-                    description={t('pages.settings.subJsonDnsDesc')}
-                  >
-                    <Input.TextArea
-                      value={allSetting.subJsonDns}
-                      placeholder='{"servers": ["https://dns.google/dns-query", "tls://1.1.1.1"]}'
-                      onChange={(e) => updateSetting({ subJsonDns: e.target.value })}
-                      autoSize={{ minRows: 2, maxRows: 6 }}
-                    />
-                  </SettingListItem>
-                </Card>
-              )}
+                  <Input
+                    value={allSetting.subJsonPath}
+                    placeholder="/json/"
+                    onChange={(e) => updateSetting({ subJsonPath: sanitizePath(e.target.value) })}
+                    onBlur={() =>
+                      updateSetting({ subJsonPath: normalizePath(allSetting.subJsonPath) })
+                    }
+                  />
+                </SettingListItem>
+                <SettingListItem
+                  paddings="small"
+                  title={<>JSON {t('pages.settings.subURI')}</>}
+                  description={t('pages.settings.subURIDesc')}
+                >
+                  <Input
+                    value={allSetting.subJsonURI}
+                    placeholder="(http|https)://domain[:port]/path/"
+                    onChange={(e) => updateSetting({ subJsonURI: e.target.value })}
+                  />
+                </SettingListItem>
+                <SettingListItem
+                  paddings="small"
+                  title={t('pages.settings.subJsonAlwaysArray')}
+                  description={t('pages.settings.subJsonAlwaysArrayDesc')}
+                >
+                  <Switch
+                    checked={allSetting.subJsonAlwaysArray}
+                    onChange={(value) => updateSetting({ subJsonAlwaysArray: value })}
+                  />
+                </SettingListItem>
+                <SettingListItem
+                  paddings="small"
+                  title={t('pages.settings.subJsonAutoDetect')}
+                  description={t('pages.settings.subJsonAutoDetectDesc')}
+                >
+                  <Switch
+                    checked={allSetting.subJsonAutoDetect}
+                    onChange={(v) => updateSetting({ subJsonAutoDetect: v })}
+                  />
+                </SettingListItem>
+                <SettingListItem
+                  paddings="small"
+                  title={t('pages.settings.subJsonUserAgentRegex')}
+                  description={t('pages.settings.subJsonUserAgentRegexDesc')}
+                >
+                  <GoRegexInput
+                    value={allSetting.subJsonUserAgentRegex}
+                    placeholder="(?i)^myclient([ /]|$)"
+                    onChange={(value) => updateSetting({ subJsonUserAgentRegex: value })}
+                  />
+                </SettingListItem>
+                <SettingListItem
+                  paddings="small"
+                  title={t('pages.settings.subJsonRoutingRules')}
+                  badge={remoteSourceBadge(allSetting.subJsonRoutingRules)}
+                  description={t('pages.settings.subJsonRoutingRulesDesc')}
+                >
+                  <Input.TextArea
+                    value={allSetting.subJsonRoutingRules}
+                    placeholder="happ://routing/onadd/... , routing JSON, or https://.../DEFAULT.JSON"
+                    onChange={(e) => updateSetting({ subJsonRoutingRules: e.target.value })}
+                    autoSize={{ minRows: 2, maxRows: 6 }}
+                  />
+                </SettingListItem>
+                <SettingListItem
+                  paddings="small"
+                  title={t('pages.settings.subJsonDns')}
+                  description={t('pages.settings.subJsonDnsDesc')}
+                >
+                  <Input.TextArea
+                    value={allSetting.subJsonDns}
+                    placeholder='{"servers": ["https://dns.google/dns-query", "tls://1.1.1.1"]}'
+                    onChange={(e) => updateSetting({ subJsonDns: e.target.value })}
+                    autoSize={{ minRows: 2, maxRows: 6 }}
+                  />
+                </SettingListItem>
+              </Card>
               {allSetting.subClashEnable && (
                 <Card
                   size="small"
                   className="subscription-format-card"
                   title={
                     <span className="subscription-format-card-title">
-                      <NodeIndexOutlined />
+                      <NodeIndexOutlined aria-hidden />
                       {t('pages.settings.subClashEnableTitle')}
                     </span>
                   }
@@ -322,7 +324,7 @@ export default function SubscriptionFormatsTab({
         {
           key: '2',
           label: catTabLabel(
-            <RocketOutlined />,
+            <RocketOutlined aria-hidden />,
             t('pages.settings.subFormats.finalMask'),
             isMobile,
           ),
@@ -342,7 +344,7 @@ export default function SubscriptionFormatsTab({
         },
         {
           key: '3',
-          label: catTabLabel(<PartitionOutlined />, t('pages.settings.mux'), isMobile),
+          label: catTabLabel(<PartitionOutlined aria-hidden />, t('pages.settings.mux'), isMobile),
           children: (
             <>
               <SettingListItem
@@ -396,7 +398,7 @@ export default function SubscriptionFormatsTab({
         },
         {
           key: '4',
-          label: catTabLabel(<SendOutlined />, t('pages.settings.direct'), isMobile),
+          label: catTabLabel(<SendOutlined aria-hidden />, t('pages.settings.direct'), isMobile),
           children: (
             <>
               <SettingListItem
@@ -445,7 +447,7 @@ export default function SubscriptionFormatsTab({
         },
         {
           key: '5',
-          label: catTabLabel(<StopOutlined />, t('pages.settings.block'), isMobile),
+          label: catTabLabel(<StopOutlined aria-hidden />, t('pages.settings.block'), isMobile),
           children: (
             <>
               <SettingListItem

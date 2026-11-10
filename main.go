@@ -11,13 +11,18 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	_ "unsafe"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/adblock/youtubeproxy"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremigration"
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/gateway"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/sub"
 	"github.com/SawaMEN/3x-ui/v3/internal/tunnelmonitor"
@@ -28,7 +33,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/tgbot"
-	"github.com/SawaMEN/3x-ui/v3/internal/gateway"
 
 	"github.com/joho/godotenv"
 	"github.com/op/go-logging"
@@ -73,8 +77,7 @@ func initNodeTokenCrypto() error {
 
 // runWebServer initializes and starts the web server for the 3x-ui panel.
 func runWebServer() {
-	log.Printf("Starting %v %v", config.GetName(), config.GetPanelVersion())
-
+	_ = godotenv.Load()
 	switch config.GetLogLevel() {
 	case config.Debug:
 		logger.InitLogger(logging.DEBUG)
@@ -90,7 +93,19 @@ func runWebServer() {
 		log.Fatalf("Unknown log level: %v", config.GetLogLevel())
 	}
 
-	_ = godotenv.Load()
+	defer logger.CloseLogger()
+	release, err := coremigration.AcquirePanelLease()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer release()
+	if err := logger.InitRuntimeDiagnostics(); err != nil {
+		logger.Error("Runtime diagnostics unavailable: ", err)
+	}
+	if err := coremigration.CheckPanelStartup(); err != nil {
+		log.Fatal(err)
+	}
+	logger.Infof("Starting %v %v", config.GetName(), config.GetPanelVersion())
 
 	for _, line := range sys.ApplyMemoryTuning() {
 		logger.Info(line)
@@ -109,33 +124,19 @@ func runWebServer() {
 		log.Fatalf("Error initializing node-token encryption: %v", err)
 	}
 
-	err := database.InitDB(config.GetDBPath())
+	err = database.InitDB(config.GetDBPath())
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
+	}
+	// Persist the sole core identity so fresh backups do not resemble databases
+	// from releases whose implicit default engine was Xray.
+	if err := (&service.SettingService{}).SetCoreType(service.CoreTypeSingBox); err != nil {
+		log.Fatalf("Error saving core identity: %v", err)
 	}
 	if count, err := (&service.SettingService{}).MigrateHiddifySubscriptionURLs(); err != nil {
 		logger.Warning("Could not migrate imported Hiddify subscription URLs: ", err)
 	} else if count > 0 {
 		logger.Info("Migrated imported Hiddify subscription URLs to individual clients")
-	}
-
-	server := web.NewServer()
-	global.SetWebServer(server)
-	err = server.Start()
-	if err != nil {
-		log.Fatalf("Error starting web server: %v", err)
-	}
-
-	sub.SetDistFS(web.EmbeddedDist())
-	service.RegisterSubLinkProvider(sub.NewLinkProvider())
-	subServer := sub.NewServer()
-	global.SetSubServer(subServer)
-	err = subServer.Start()
-	if err != nil {
-		log.Fatalf("Error starting sub server: %v", err)
-	}
-	if err := service.RefreshTelemtWebSubscriptionRoutes(); err != nil {
-		logger.Warning("Could not update Telemt WEB subscription routes: ", err)
 	}
 
 	sigCh := make(chan os.Signal, 8)
@@ -148,6 +149,32 @@ func runWebServer() {
 		}
 	})
 
+	defer signal.Stop(sigCh)
+	defer global.SetRestartHook(nil)
+
+	service.RegisterSubLinkProvider(sub.NewLinkProvider())
+	server := web.NewServer()
+	global.SetWebServer(server)
+	err = server.Start()
+	if err != nil {
+		log.Fatalf("Error starting web server: %v", err)
+	}
+
+	sub.SetDistFS(web.EmbeddedDist())
+	subServer := sub.NewServer()
+	global.SetSubServer(subServer)
+	err = subServer.Start()
+	if err != nil {
+		logger.Errorf("Subscription server unavailable; panel remains running: %v", err)
+	}
+	if err := service.RefreshTelemtWebSubscriptionRoutes(); err != nil {
+		logger.Warning("Could not update Telemt WEB subscription routes: ", err)
+	}
+
+	if err := service.StartDomainFront(); err != nil {
+		logger.Warning("Domain HTTPS gateway: ", err)
+	}
+
 	var stopTunnelHealthMonitor context.CancelFunc
 	monitorCfg := tunnelmonitor.ConfigFromEnv()
 	if monitorCfg.Enabled {
@@ -158,9 +185,10 @@ func runWebServer() {
 		monitorCtx, cancel := context.WithCancel(context.Background())
 		stopTunnelHealthMonitor = cancel
 
+		restartCore := server.RestartXray
 		monitor, err := tunnelmonitor.New(monitorCfg, func(_ context.Context) error {
-			logger.Warning("Tunnel health monitor threshold reached, restarting xray-core")
-			return server.RestartXray()
+			logger.Warning("Tunnel health monitor threshold reached, restarting sing-box")
+			return restartCore()
 		})
 		if err != nil {
 			logger.Warning("Tunnel health monitor disabled: ", err)
@@ -174,14 +202,15 @@ func runWebServer() {
 		switch sig {
 		case syscall.SIGHUP:
 			logger.Info("Received SIGHUP signal. Restarting servers...")
+			service.StopDomainFront()
 
-			err := server.StopPanelOnly()
-			if err != nil {
-				logger.Debug("Error stopping web server:", err)
-			}
-			err = subServer.Stop()
+			err := subServer.Stop()
 			if err != nil {
 				logger.Debug("Error stopping sub server:", err)
+			}
+			err = server.StopPanelOnly()
+			if err != nil {
+				logger.Debug("Error stopping web server:", err)
 			}
 
 			server = web.NewServer()
@@ -190,27 +219,33 @@ func runWebServer() {
 			if err != nil {
 				log.Fatalf("Error restarting web server: %v", err)
 			}
-			log.Println("Web server restarted successfully.")
+			logger.Info("Web server restarted successfully.")
 
 			sub.SetDistFS(web.EmbeddedDist())
 			subServer = sub.NewServer()
 			global.SetSubServer(subServer)
 			err = subServer.Start()
 			if err != nil {
-				log.Fatalf("Error restarting sub server: %v", err)
+				logger.Errorf("Subscription server unavailable after restart; panel remains running: %v", err)
+			}
+			if err := service.StartDomainFront(); err != nil {
+				logger.Warning("Domain HTTPS gateway: ", err)
 			}
 			if err := service.RefreshTelemtWebSubscriptionRoutes(); err != nil {
 				logger.Warning("Could not update Telemt WEB subscription routes after restart: ", err)
 			}
-			log.Println("Sub server restarted successfully.")
+			if err == nil {
+				logger.Info("Sub server restarted successfully.")
+			}
 		case sys.SIGUSR1:
-			logger.Info("Received USR1 signal, restarting xray-core...")
+			logger.Info("Received USR1 signal, restarting sing-box...")
 			err := server.RestartXray()
 			if err != nil {
-				logger.Error("Failed to restart xray-core:", err)
+				logger.Error("Failed to restart sing-box:", err)
 			}
 
 		default:
+			service.StopDomainFront()
 			if stopTunnelHealthMonitor != nil {
 				stopTunnelHealthMonitor()
 			}
@@ -219,9 +254,11 @@ func runWebServer() {
 			tgbot.StopBot()
 			// ------------------------------------------------------------
 
-			_ = server.Stop()
+			if err := server.Stop(); err != nil {
+				logger.Error("Server shutdown failed:", err)
+			}
 			_ = subServer.Stop()
-			log.Println("Shutting down servers.")
+			logger.Info("Shutting down servers.")
 			return
 		}
 	}
@@ -510,7 +547,7 @@ func GetListenIP(getListen bool) {
 	}
 }
 
-func GetApiToken(getApiToken bool, tokenName string) {
+func GetApiToken(getApiToken bool, tokenName, tokenScope string) {
 	if !getApiToken {
 		return
 	}
@@ -538,7 +575,7 @@ func GetApiToken(getApiToken bool, tokenName string) {
 		if rotated == "" {
 			rotated = cliFallbackTokenName
 		}
-		created, err := apiTokenService.RecreateByName(rotated)
+		created, err := apiTokenService.RecreateByName(rotated, tokenScope)
 		if err != nil {
 			fmt.Println("Failed to create a fallback API token:", err)
 			return
@@ -550,7 +587,7 @@ func GetApiToken(getApiToken bool, tokenName string) {
 	if name == "" {
 		name = installTokenName
 	}
-	created, err := apiTokenService.Create(name, "", 0)
+	created, err := apiTokenService.Create(name, tokenScope, 0)
 	if err != nil {
 		fmt.Println("create apiToken failed, error info:", err)
 		return
@@ -568,7 +605,9 @@ func migrateDb() {
 		log.Fatal(err)
 	}
 	fmt.Println("Start migrating database...")
-	inboundService.MigrateDB()
+	if err := inboundService.MigrateDB(); err != nil {
+		log.Fatal(err)
+	}
 	fmt.Println("Migration done!")
 }
 
@@ -592,6 +631,7 @@ func loadServiceEnvFile() {
 // It parses command-line arguments to run the web server, migrate database, or update settings.
 func main() {
 	loadServiceEnvFile()
+	service.InitializeNativeCoreRuntime()
 
 	if len(os.Args) < 2 {
 		runWebServer()
@@ -633,6 +673,7 @@ func main() {
 	var getCert bool
 	var getApiToken bool
 	var tokenName string
+	var tokenScope string
 	var resetTwoFactor bool
 	settingCmd.BoolVar(&reset, "reset", false, "Reset all settings")
 	settingCmd.BoolVar(&show, "show", false, "Display current settings")
@@ -646,6 +687,7 @@ func main() {
 	settingCmd.BoolVar(&getCert, "getCert", false, "Display current certificate settings")
 	settingCmd.BoolVar(&getApiToken, "getApiToken", false, "Print an API token for CLI use, regenerating it and invalidating the previous one; on a panel with no tokens yet it mints one instead")
 	settingCmd.StringVar(&tokenName, "tokenName", "", "Name of the token -getApiToken acts on (default: "+cliFallbackTokenName+", or "+installTokenName+" on a panel with no tokens)")
+	settingCmd.StringVar(&tokenScope, "tokenScope", "", "Scope of the token -getApiToken issues: admin, monitor or node-sync (default: the scope of the token it replaces, or admin for a new one)")
 	settingCmd.StringVar(&webCertFile, "webCert", "", "Set path to public key file for panel")
 	settingCmd.StringVar(&webKeyFile, "webCertKey", "", "Set path to private key file for panel")
 	settingCmd.StringVar(&tgbottoken, "tgbottoken", "", "Set token for Telegram bot")
@@ -666,6 +708,10 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "youtube-proxy":
+		if err := youtubeproxy.CLI(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	case "run":
 		err := runCmd.Parse(os.Args[2:])
 		if err != nil {
@@ -675,37 +721,37 @@ func main() {
 		runWebServer()
 	case "migrate":
 		migrateDb()
+	case "recovery":
+		if err := recoveryCLI(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	case "encrypt-tokens":
 		encryptNodeTokens()
 	case "gateway":
-    		if len(os.Args) < 3 {
-        		fmt.Println("usage: x-ui gateway <enable|disable|status>")
-        		return
-    		}
-
-    		switch os.Args[2] {
-    			case "enable":
-        			if err := gateway.Enable(); err != nil {
-            				fmt.Println("Gateway enable failed:", err)
-            				os.Exit(1)
-        			}
-
-    			case "disable":
-        			if err := gateway.Disable(); err != nil {
-           				fmt.Println("Gateway disable failed:", err)
-            			os.Exit(1)
-        			}
-
-    			case "status":
-        			if gateway.IsEnabled() {
-            				fmt.Println("Gateway Mode: enabled")
-        			} else {
-            				fmt.Println("Gateway Mode: disabled")
-        			}
-
-    			default:
-        			fmt.Println("usage: x-ui gateway <enable|disable|status>")
-    		}
+		if err := gateway.CLI(os.Args[2:]); err != nil {
+			log.Fatal("gateway command failed; check the gateway configuration and arguments")
+		}
+	case "certificate-hook":
+		if len(os.Args) != 4 && len(os.Args) != 5 {
+			log.Fatal("usage: x-ui certificate-hook begin|end certbot|acme.sh [parent-pid]")
+		}
+		pid := 0
+		if len(os.Args) == 5 {
+			var err error
+			pid, err = strconv.Atoi(os.Args[4])
+			if err != nil || pid <= 1 {
+				log.Fatal("invalid certificate renewal parent process ID")
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		if err := service.InvokeCertificateRenewalHook(ctx, os.Args[2], os.Args[3], pid); err != nil {
+			log.Fatal("certificate renewal firewall hook: ", err)
+		}
+	case "core-migrate":
+		if err := coremigration.CLIWithInitializer(os.Args[2:], initNodeTokenCrypto); err != nil {
+			log.Fatal("core migration failed; check the migration configuration and arguments")
+		}
 	case "migrate-db":
 		if err := migrateDbCmd.Parse(os.Args[2:]); err != nil {
 			fmt.Println(err)
@@ -733,7 +779,9 @@ func main() {
 			}
 			fmt.Printf("Restored %s -> %s\n", migrateRestore, migrateOut)
 		case migrateDsn != "":
-			if err := database.MigrateData(src, migrateDsn); err != nil {
+			// Migrate a private, schema-upgraded snapshot. A v3.9.8 database
+			// lacks newer panel tables and must not be modified in place.
+			if err := database.MigrateLegacyData(src, migrateDsn); err != nil {
 				fmt.Println("migration failed:", err)
 				os.Exit(1)
 			}
@@ -773,7 +821,7 @@ func main() {
 			GetCertificate(getCert)
 		}
 		if getApiToken {
-			GetApiToken(getApiToken, tokenName)
+			GetApiToken(getApiToken, tokenName, tokenScope)
 		}
 		if (tgbottoken != "") || (tgbotchatid != "") || (tgbotRuntime != "") {
 			updateTgbotSetting(tgbottoken, tgbotchatid, tgbotRuntime)
@@ -804,11 +852,15 @@ func main() {
 func commandHelp() string {
 	return `
 Commands:
+    youtube-proxy  run the opt-in YouTube HTTPS server filter
     run            run web panel
     migrate        migrate from other/old x-ui
+    core-migrate   migrate an offline installation to the owner sing-box (--backup-dir)
     migrate-db     SQLite <-> .dump (--dump/--restore) or copy into PostgreSQL (--dsn)
+    recovery      export, check or extract an encrypted complete recovery bundle
     encrypt-tokens encrypt node bearer tokens with the configured active key
     setting        set settings
+    certificate-hook local, root-only temporary firewall integration for renewal hooks
     gateway         configure transparent gateway mode
 `
 }

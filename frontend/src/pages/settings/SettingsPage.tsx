@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
+import { Navigate, useLocation } from 'react-router';
 import {
   Alert,
   Button,
@@ -24,26 +24,39 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons';
 
-import { HttpUtil, PromiseUtil } from '@/utils';
+import { HttpUtil } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
 import { useTheme } from '@/hooks/useTheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { AllSettingSchema } from '@/schemas/setting';
 import AppSidebar from '@/layouts/AppSidebar';
+import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
 import GeneralTab from './GeneralTab';
-import SecurityTab from './SecurityTab';
-import TelegramTab from './TelegramTab';
-import EmailTab from './EmailTab';
-import DiscordTab from './DiscordTab';
-import SubscriptionGeneralTab from './SubscriptionGeneralTab';
-import SubscriptionFormatsTab from './SubscriptionFormatsTab';
-import SubscriptionBalancersTab from './SubscriptionBalancersTab';
-import SwapSettingsTab from './SwapSettingsTab';
-import SystemUpdateModal from './SystemUpdateModal';
-import GatewayModeControl from './GatewayModeControl';
+import { panelUrlAfterRestart, waitForPanelRestart } from './panel-url';
 import './SettingsPage.css';
-import './TemporaryUiHides.css';
+import { getAdditionalSettingsTab } from './additional-settings';
+
+// The main settings screen ships only the default tab initially. Less common
+// tab content is downloaded when selected; chunk-recovery matches panel routes.
+const SecurityTab = lazy(() => importWithChunkRecovery(() => import('./SecurityTab')));
+const TelegramTab = lazy(() => importWithChunkRecovery(() => import('./TelegramTab')));
+const EmailTab = lazy(() => importWithChunkRecovery(() => import('./EmailTab')));
+const SubscriptionGeneralTab = lazy(() =>
+  importWithChunkRecovery(() => import('./SubscriptionGeneralTab')),
+);
+const SubscriptionFormatsTab = lazy(() =>
+  importWithChunkRecovery(() => import('./SubscriptionFormatsTab')),
+);
+const SubscriptionBalancersTab = lazy(() =>
+  importWithChunkRecovery(() => import('./SubscriptionBalancersTab')),
+);
+const AdditionalSettingsTab = lazy(() =>
+  importWithChunkRecovery(() => import('./AdditionalSettingsTab')),
+);
+const GatewayModeControl = lazy(() =>
+  importWithChunkRecovery(() => import('./GatewayModeControl')),
+);
 
 interface ApiMsg {
   success?: boolean;
@@ -54,28 +67,12 @@ const tabSlugs = [
   'security',
   'telegram',
   'email',
-  'discord',
   'subscription',
   'subscription-formats',
   'subscription-balancers',
   'gateway',
+  'advanced',
 ];
-
-function isIp(h: string): boolean {
-  if (typeof h !== 'string') return false;
-  const v4 = h.split('.');
-  if (v4.length === 4 && v4.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255)) return true;
-  if (!h.includes(':') || h.includes(':::')) return false;
-  const parts = h.split('::');
-  if (parts.length > 2) return false;
-  const split = (s: string) => (s ? s.split(':').filter(Boolean) : []);
-  const head = split(parts[0]);
-  const tail = split(parts[1]);
-  const valid = (seg: string) => /^[0-9a-fA-F]{1,4}$/.test(seg);
-  if (![...head, ...tail].every(valid)) return false;
-  const groups = head.length + tail.length;
-  return parts.length === 2 ? groups < 8 : groups === 8;
-}
 
 function scrollTarget() {
   return document.getElementById('content-layout') as HTMLElement;
@@ -104,16 +101,42 @@ export default function SettingsPage() {
     savePayload,
   } = useAllSettings();
 
-  const [entryHost] = useState(() => window.location.hostname);
-  const [entryPort] = useState(() => window.location.port);
-  const [entryIsIP] = useState(() => isIp(window.location.hostname));
+  useEffect(() => {
+    const onSelected = (event: Event) => {
+      const coreType = (event as CustomEvent<'xray' | 'sing-box' | 'sing-box-upstream'>).detail;
+      updateSetting({ coreType });
+    };
+    window.addEventListener('xui-core-selected', onSelected);
+    return () => window.removeEventListener('xui-core-selected', onSelected);
+  }, [updateSetting]);
+
+  const initialAddress = useRef<Parameters<typeof panelUrlAfterRestart>[1] | null>(null);
+  useEffect(() => {
+    if (!fetched || initialAddress.current) return;
+    const port = Number(
+      document.querySelector<HTMLMetaElement>('meta[name="panel-port"]')?.content,
+    );
+    const tls = document.querySelector<HTMLMetaElement>('meta[name="panel-tls"]')?.content;
+    initialAddress.current = {
+      ...allSetting,
+      ...(port > 0 ? { webPort: port } : {}),
+      ...(tls != null
+        ? {
+            webCertFile: tls === 'true' ? 'configured' : '',
+            webKeyFile: tls === 'true' ? 'configured' : '',
+          }
+        : {}),
+    };
+  }, [fetched, allSetting]);
 
   const [alertVisible, setAlertVisible] = useState(true);
-  const [swapOpen, setSwapOpen] = useState(false);
-  const [systemUpdateOpen, setSystemUpdateOpen] = useState(false);
   const location = useLocation();
   const slug = location.hash.replace(/^#/, '');
-  const activeSlug = tabSlugs.includes(slug) ? slug : 'general';
+  const activeSlug = getAdditionalSettingsTab(location.hash)
+    ? 'advanced'
+    : tabSlugs.includes(slug)
+      ? slug
+      : 'general';
 
   const activeThemeMode = lowPower ? 'dark' : mode;
 
@@ -156,31 +179,6 @@ export default function SettingsPage() {
     },
   ];
 
-  function rebuildUrlAfterRestart(): string {
-    const { webDomain, webPort, webBasePath, webCertFile, webKeyFile } = allSetting;
-    const newProtocol = webCertFile || webKeyFile ? 'https:' : 'http:';
-
-    let base = webBasePath ? webBasePath.replace(/^\//, '') : '';
-    if (base && !base.endsWith('/')) base += '/';
-
-    if (!entryIsIP) {
-      const url = new URL(window.location.href);
-      url.pathname = `/${base}panel/settings`;
-      url.protocol = newProtocol;
-      return url.toString();
-    }
-
-    let finalHost = entryHost;
-    let finalPort = entryPort || '';
-    if (webDomain && isIp(webDomain)) finalHost = webDomain;
-    if (webPort && Number(webPort) !== Number(entryPort)) finalPort = String(webPort);
-
-    const url = new URL(`${newProtocol}//${finalHost}`);
-    if (finalPort) url.port = finalPort;
-    url.pathname = `/${base}panel/settings`;
-    return url.toString();
-  }
-
   async function onSave() {
     const result = AllSettingSchema.safeParse(allSetting);
     if (!result.success) {
@@ -193,6 +191,7 @@ export default function SettingsPage() {
     const saveResult = await saveAll();
     if (saveResult?.success) {
       window.dispatchEvent(new Event('xui-core-settings-saved'));
+      return true;
     }
   }
 
@@ -206,10 +205,40 @@ export default function SettingsPage() {
       onOk: async () => {
         setSpinning(true);
         try {
+          if (!saveDisabled && !(await onSave())) return;
+          const target = panelUrlAfterRestart(
+            window.location.href,
+            initialAddress.current ?? allSetting,
+            allSetting,
+            Number(
+              document.querySelector<HTMLMetaElement>('meta[name="panel-port-override"]')?.content,
+            ) || 0,
+          );
+          let instance =
+            document.querySelector<HTMLMetaElement>('meta[name="panel-instance"]')?.content || '';
+          try {
+            const response = await fetch(window.location.href, {
+              cache: 'no-store',
+              signal: AbortSignal.timeout(2000),
+            });
+            instance = response.headers.get('X-Panel-Instance') || instance;
+          } catch {
+            /* The restart API still reports a failed connection. */
+          }
           const msg = (await HttpUtil.post('/panel/api/setting/restartPanel')) as ApiMsg;
           if (!msg?.success) return;
-          await PromiseUtil.sleep(5000);
-          window.location.replace(rebuildUrlAfterRestart());
+          if (await waitForPanelRestart(target, window.location.href, instance)) {
+            window.location.replace(target);
+          } else {
+            modal.info({
+              title: t('pages.settings.restartPanel'),
+              content: (
+                <a href={target} rel="noreferrer">
+                  {target}
+                </a>
+              ),
+            });
+          }
         } finally {
           setSpinning(false);
         }
@@ -265,7 +294,7 @@ export default function SettingsPage() {
     return classes.join(' ');
   }, [isDark, isUltra]);
 
-  const categoryBody = useMemo(() => {
+  const categoryBody = (() => {
     switch (activeSlug) {
       case 'security':
         return (
@@ -279,28 +308,43 @@ export default function SettingsPage() {
         return <TelegramTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'email':
         return <EmailTab allSetting={allSetting} updateSetting={updateSetting} />;
-      case 'discord':
-        return <DiscordTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'subscription':
         return <SubscriptionGeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'subscription-formats':
         return <SubscriptionFormatsTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'subscription-balancers':
         return <SubscriptionBalancersTab allSetting={allSetting} updateSetting={updateSetting} />;
+      case 'advanced':
+        return (
+          <AdditionalSettingsTab
+            allSetting={allSetting}
+            updateSetting={updateSetting}
+            saveSettings={onSave}
+            settingsDirty={!saveDisabled}
+          />
+        );
       case 'gateway':
         return <GatewayModeControl />;
       default:
-        return (
-          <GeneralTab
-            allSetting={allSetting}
-            updateSetting={updateSetting}
-            saveSettings={saveAll}
-            onOpenSwap={() => setSwapOpen(true)}
-            onOpenSystemUpdate={() => setSystemUpdateOpen(true)}
-          />
-        );
+        return <GeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
     }
-  }, [activeSlug, allSetting, updateSetting, saveAll, savePayload]);
+  })();
+
+  if (slug === 'olcrtc') return <Navigate to="/olcrtc" replace />;
+
+  if (slug === 'adblock') {
+    if (!fetched) return <Spin />;
+    return (
+      <Navigate
+        replace
+        to={
+          allSetting.coreType !== 'xray'
+            ? '/singbox?routingTab=adblock#routing'
+            : '/routing?routingTab=adblock'
+        }
+      />
+    );
+  }
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
@@ -342,34 +386,42 @@ export default function SettingsPage() {
                   )}
 
                   <Row gutter={[isMobile ? 8 : 16, isMobile ? 0 : 12]}>
-                    <Col span={24}>
-                      <Card hoverable>
-                        <Row className="header-row">
-                          <Col xs={24} sm={10} className="header-actions">
-                            <Space wrap>
-                              <Button type="primary" disabled={saveDisabled} onClick={onSave}>
-                                {t('pages.settings.save')}
-                              </Button>
-                              <Button
-                                type="primary"
-                                danger
-                                disabled={!saveDisabled}
-                                onClick={restartPanel}
-                              >
-                                {t('pages.settings.restartPanel')}
-                              </Button>
-                            </Space>
-                          </Col>
-                          <Col xs={24} sm={14} className="header-info">
-                            <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
-                            <Alert type="warning" showIcon title={t('pages.settings.infoDesc')} />
-                          </Col>
-                        </Row>
-                      </Card>
-                    </Col>
+                    {activeSlug !== 'gateway' && activeSlug !== 'advanced' && (
+                      <Col span={24}>
+                        <Card hoverable>
+                          <Row className="header-row">
+                            <Col xs={24} sm={10} className="header-actions">
+                              <Space wrap>
+                                <Button type="primary" disabled={saveDisabled} onClick={onSave}>
+                                  {t('pages.settings.save')}
+                                </Button>
+                                <Button
+                                  type="primary"
+                                  danger
+                                  disabled={!saveDisabled}
+                                  onClick={restartPanel}
+                                >
+                                  {t('pages.settings.restartPanel')}
+                                </Button>
+                              </Space>
+                            </Col>
+                            <Col xs={24} sm={14} className="header-info">
+                              <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
+                              <Alert type="warning" showIcon title={t('pages.settings.infoDesc')} />
+                            </Col>
+                          </Row>
+                        </Card>
+                      </Col>
+                    )}
 
                     <Col span={24}>
-                      <Card hoverable>{categoryBody}</Card>
+                      <Suspense fallback={<Spin size="large" />}>
+                        {activeSlug === 'gateway' ? (
+                          categoryBody
+                        ) : (
+                          <Card hoverable>{categoryBody}</Card>
+                        )}
+                      </Suspense>
                     </Col>
 
                     {activeSlug === 'general' && (slug === '' || slug === 'general') && (
@@ -456,25 +508,6 @@ export default function SettingsPage() {
           </Layout.Content>
         </Layout>
       </Layout>
-      <Modal
-        open={swapOpen}
-        title={t('pages.settings.swap.menu')}
-        width={isMobile ? 'calc(100vw - 16px)' : 'min(1360px, calc(100vw - 32px))'}
-        rootClassName="swap-settings-modal"
-        destroyOnClose
-        footer={null}
-        styles={{
-          body: {
-            maxHeight: 'calc(100vh - 160px)',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-          },
-        }}
-        onCancel={() => setSwapOpen(false)}
-      >
-        <SwapSettingsTab />
-      </Modal>
-      <SystemUpdateModal open={systemUpdateOpen} onClose={() => setSystemUpdateOpen(false)} />
     </ConfigProvider>
   );
 }

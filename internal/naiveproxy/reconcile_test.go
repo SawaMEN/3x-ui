@@ -3,8 +3,8 @@ package naiveproxy
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestMergeNaiveUsersPrefersNormalizedCredentials(t *testing.T) {
@@ -47,7 +47,7 @@ func TestMergeNaiveUsersHonorsTrafficDisableAndLegacyOnlyClients(t *testing.T) {
 			{Email: "alice@example.com", Password: "old-a", Enable: true},
 			{Email: "bob@example.com", Password: "b", Enable: true},
 		},
-		[]xray.ClientTraffic{
+		[]coremodel.ClientTraffic{
 			{Email: "alice@example.com", Enable: false},
 			{Email: "bob@example.com", Enable: true},
 		},

@@ -32,6 +32,12 @@ const (
 	compressRotated = true
 )
 
+type bufferedLog struct {
+	time  string
+	level logging.Level
+	log   string
+}
+
 var (
 	// InitLogger swaps the handle while other goroutines are logging, so it is
 	// published atomically — a plain assignment is an unsafe publication.
@@ -43,12 +49,9 @@ var (
 
 	// logBuffer maintains recent log entries in memory for web UI retrieval;
 	// logBufferMu guards it — written from many goroutines, read by the web UI.
-	logBufferMu sync.Mutex
-	logBuffer   []struct {
-		time  string
-		level logging.Level
-		log   string
-	}
+	logBufferMu   sync.Mutex
+	logBuffer     []bufferedLog
+	logBufferHead int // Oldest record once the buffer is full.
 )
 
 // A usable default so logging never nil-derefs before InitLogger runs — the
@@ -58,7 +61,7 @@ func init() {
 }
 
 // InitLogger initializes dual logging backends: console/syslog and file.
-// Console logging uses the specified level, file logging always uses DEBUG level.
+// Both backends use the configured level to avoid writing unwanted debug logs.
 func InitLogger(level logging.Level) {
 	newLogger := logging.MustGetLogger("x-ui")
 	backends := make([]logging.Backend, 0, 2)
@@ -69,10 +72,10 @@ func InitLogger(level logging.Level) {
 	leveledBackend.SetLevel(level, "x-ui")
 	backends = append(backends, leveledBackend)
 
-	// File backend with DEBUG level for comprehensive logging
+	// File backend follows the same level as the console.
 	if fileBackend := initFileBackend(); fileBackend != nil {
 		leveledBackend := logging.AddModuleLevel(fileBackend)
-		leveledBackend.SetLevel(logging.DEBUG, "x-ui")
+		leveledBackend.SetLevel(level, "x-ui")
 		backends = append(backends, leveledBackend)
 	}
 
@@ -116,16 +119,25 @@ func initFileBackend() logging.Backend {
 	}
 
 	logPath := filepath.Join(logDir, logFileName)
-	rotate := &lumberjack.Logger{
-		Filename:   logPath,
-		MaxSize:    maxLogFileMB,
-		MaxBackups: maxLogBackups,
-		MaxAge:     maxLogAgeDays,
-		LocalTime:  true,
-		Compress:   compressRotated,
-	}
 	fileRotateMu.Lock()
-	fileRotate = rotate
+	rotate := fileRotate
+	if rotate == nil || rotate.Filename != logPath {
+		// InitLogger can run repeatedly, including when a logging level is
+		// changed. Reusing the existing writer avoids leaking an open
+		// file descriptor on every reconfiguration.
+		if rotate != nil {
+			_ = rotate.Close()
+		}
+		rotate = &lumberjack.Logger{
+			Filename:   logPath,
+			MaxSize:    maxLogFileMB,
+			MaxBackups: maxLogBackups,
+			MaxAge:     maxLogAgeDays,
+			LocalTime:  true,
+			Compress:   compressRotated,
+		}
+		fileRotate = rotate
+	}
 	fileRotateMu.Unlock()
 
 	backend := logging.NewLogBackend(rotate, "", 0)
@@ -214,23 +226,20 @@ func Errorf(format string, args ...any) {
 
 // addToBuffer adds a log entry to the in-memory ring buffer for web UI retrieval.
 func addToBuffer(level string, newLog string) {
-	t := time.Now()
+	logLevel, _ := logging.LogLevel(level)
+	entry := bufferedLog{time: time.Now().Format(timeFormat), level: logLevel, log: newLog}
 	logBufferMu.Lock()
 	defer logBufferMu.Unlock()
-	if len(logBuffer) >= maxLogBufferSize {
-		logBuffer = logBuffer[1:]
+	if len(logBuffer) < maxLogBufferSize {
+		logBuffer = append(logBuffer, entry)
+		logBufferHead = 0
+		return
 	}
-
-	logLevel, _ := logging.LogLevel(level)
-	logBuffer = append(logBuffer, struct {
-		time  string
-		level logging.Level
-		log   string
-	}{
-		time:  t.Format(timeFormat),
-		level: logLevel,
-		log:   newLog,
-	})
+	logBuffer[logBufferHead] = entry
+	logBufferHead++
+	if logBufferHead == maxLogBufferSize {
+		logBufferHead = 0
+	}
 }
 
 // GetLogs retrieves up to c log entries from the in-memory buffer.
@@ -241,19 +250,20 @@ func GetLogs(c int, level string) []string {
 	logLevel, _ := logging.LogLevel(level)
 
 	logBufferMu.Lock()
-	snapshot := make([]struct {
-		time  string
-		level logging.Level
-		log   string
-	}, len(logBuffer))
-	copy(snapshot, logBuffer)
+	// Snapshot only the requested matching records. Formatting stays outside
+	// the lock, without copying all 4096 entries for a one-record query.
+	snapshot := make([]bufferedLog, 0, min(c, len(logBuffer)))
+	for i := len(logBuffer) - 1; i >= 0 && len(snapshot) < c; i-- {
+		entry := logBuffer[(logBufferHead+i)%len(logBuffer)]
+		if entry.level <= logLevel {
+			snapshot = append(snapshot, entry)
+		}
+	}
 	logBufferMu.Unlock()
 
-	output := make([]string, 0, min(c, len(snapshot)))
-	for i := len(snapshot) - 1; i >= 0 && len(output) < c; i-- {
-		if snapshot[i].level <= logLevel {
-			output = append(output, fmt.Sprintf("%s %s - %s", snapshot[i].time, snapshot[i].level, snapshot[i].log))
-		}
+	output := make([]string, len(snapshot))
+	for i, entry := range snapshot {
+		output[i] = entry.time + " " + entry.level.String() + " - " + entry.log
 	}
 	return output
 }
@@ -282,13 +292,21 @@ func getFileLogs(c int, logLevel logging.Level) []string {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) >= 3 {
+		// Only panel-formatted records have "date time LEVEL - message".
+		// Unstructured crash output can mention DEBUG/INFO as its third word
+		// without being a log entry of that severity; never filter it as such.
+		if len(fields) >= 4 && len(fields[0]) == len("2006/01/02") &&
+			strings.Count(fields[0], "/") == 2 && strings.Count(fields[1], ":") == 2 &&
+			fields[3] == "-" {
 			entryLevel, err := logging.LogLevel(strings.ToLower(fields[2]))
 			if err == nil && entryLevel > logLevel {
 				continue
 			}
-			output = append(output, line)
 		}
+		// Raw panic output and imported third-party diagnostics may be only
+		// one or two words long. Do not silently discard them just because
+		// they lack our normal timestamp + severity prefix.
+		output = append(output, line)
 	}
 	return output
 }

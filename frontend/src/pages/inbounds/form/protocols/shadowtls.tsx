@@ -1,6 +1,8 @@
+import { useFormContext } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Collapse, Input, InputNumber, Select, Switch, Typography } from 'antd';
 import { FormField } from '@/components/form/rhf';
+import SniSearchInput from '../security/SniSearchInput';
 
 export default function ShadowTlsFields({
   prefix = '',
@@ -10,6 +12,7 @@ export default function ShadowTlsFields({
   showPassword?: boolean;
 }) {
   const { t } = useTranslation();
+  const { setValue } = useFormContext();
   const field = (name: string) => ['settings', ...(prefix ? [prefix] : []), ...name.split('.')];
 
   return (
@@ -19,7 +22,17 @@ export default function ShadowTlsFields({
         label={t('pages.inbounds.form.shadowTlsHandshakeServer')}
         tooltip={t('pages.inbounds.form.shadowTlsHandshakeServerHint')}
       >
-        <Input placeholder="cloudflare.com" />
+        <SniSearchInput
+          purpose="shadowtls"
+          placeholder="cloudflare.com"
+          onPickTarget={(result) =>
+            setValue(field('handshake.serverPort').join('.'), result.port, {
+              shouldDirty: true,
+              shouldTouch: true,
+              shouldValidate: true,
+            })
+          }
+        />
       </FormField>
 
       <Typography.Paragraph type="secondary">

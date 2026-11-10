@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -17,7 +17,7 @@ func countClientRows(t *testing.T, db *gorm.DB, email string) (records, traffics
 	if err := db.Model(&model.ClientRecord{}).Where("email = ?", email).Count(&records).Error; err != nil {
 		t.Fatalf("count clients %q: %v", email, err)
 	}
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).Count(&traffics).Error; err != nil {
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).Count(&traffics).Error; err != nil {
 		t.Fatalf("count client_traffics %q: %v", email, err)
 	}
 	return records, traffics
@@ -30,7 +30,7 @@ func seedNodeRow(t *testing.T, db *gorm.DB, n *model.Node) {
 	}
 }
 
-func snapshotWithClients(t *testing.T, tag, settings string, stats ...xray.ClientTraffic) *runtime.TrafficSnapshot {
+func snapshotWithClients(t *testing.T, tag, settings string, stats ...coremodel.ClientTraffic) *runtime.TrafficSnapshot {
 	t.Helper()
 	return &runtime.TrafficSnapshot{
 		Inbounds: []*model.Inbound{{Tag: tag, Settings: settings, ClientStats: stats}},
@@ -46,8 +46,8 @@ func snapshotWithTwoInbounds(t *testing.T, tagA, settingsA, emailA, tagB, settin
 	t.Helper()
 	return &runtime.TrafficSnapshot{
 		Inbounds: []*model.Inbound{
-			{Tag: tagA, Settings: settingsA, ClientStats: []xray.ClientTraffic{{Email: emailA, Enable: true}}},
-			{Tag: tagB, Settings: settingsB, ClientStats: []xray.ClientTraffic{{Email: emailB, Enable: true}}},
+			{Tag: tagA, Settings: settingsA, ClientStats: []coremodel.ClientTraffic{{Email: emailA, Enable: true}}},
+			{Tag: tagB, Settings: settingsB, ClientStats: []coremodel.ClientTraffic{{Email: emailB, Enable: true}}},
 		},
 	}
 }
@@ -64,7 +64,7 @@ func TestSetRemoteTrafficRereadsConfigDirty(t *testing.T) {
 	createNodeInboundWithClient(t, db, 1, "n1-in", 41001, email)
 	settings := fmt.Sprintf(`{"clients":[{"email":%q,"enable":true}]}`, email)
 	syncNodeWithSettings(t, svc, 1, "n1-in", settings,
-		xray.ClientTraffic{Email: email, Up: 1, Down: 1, Enable: true})
+		coremodel.ClientTraffic{Email: email, Up: 1, Down: 1, Enable: true})
 
 	if rec, _ := countClientRows(t, db, email); rec != 1 {
 		t.Fatalf("setup: client not attached, got %d rows", rec)
@@ -108,7 +108,7 @@ func TestDeselectedTagIsNotSwept(t *testing.T) {
 		t.Fatalf("setup: dropped@x not seeded, clients=%d client_traffics=%d", rec, traf)
 	}
 
-	keepOnly := snapshotWithClients(t, "keep", keepSettings, xray.ClientTraffic{Email: "kept@x", Enable: true})
+	keepOnly := snapshotWithClients(t, "keep", keepSettings, coremodel.ClientTraffic{Email: "kept@x", Enable: true})
 	if _, err := svc.setRemoteTrafficLocked(1, keepOnly, false, false); err != nil {
 		t.Fatalf("post-deselect sync: %v", err)
 	}

@@ -11,10 +11,10 @@ import (
 // core that this panel currently runs. This is especially important on a
 // node: master sync writes local inbounds/clients, so marking Xray while
 // the node actually runs sing-box leaves the live sing-box config stale.
-func markSelectedCoreNeedRestart(settings *service.SettingService, xrayService *service.XrayService, singBoxService *service.SingBoxService) {
+func markSelectedCoreNeedRestart(settings *service.SettingService, xrayService *service.CoreService, singBoxService *service.SingBoxService) {
 	coreType, err := settings.GetCoreType()
-	if err == nil && coreType == service.CoreTypeSingBox {
-		singBoxService.SetToNeedRestart()
+	if err == nil && service.IsNativeCore(coreType) {
+		service.NativeCore(coreType).SetToNeedRestart()
 		return
 	}
 	xrayService.SetToNeedRestart()
@@ -24,16 +24,16 @@ func markSelectedCoreNeedRestart(settings *service.SettingService, xrayService *
 // a caller immediately depends on the new configuration. Node OutboundTag
 // changes need this stronger form: the following reachability probe must use
 // the newly created loopback egress bridge, not wait for the deferred cron.
-func restartSelectedCoreNow(ctx context.Context, settings *service.SettingService, xrayService *service.XrayService, singBoxService *service.SingBoxService) error {
+func restartSelectedCoreNow(ctx context.Context, settings *service.SettingService, xrayService *service.CoreService, singBoxService *service.SingBoxService) error {
 	coreType, err := settings.GetCoreType()
 	if err != nil {
 		return err
 	}
-	if coreType == service.CoreTypeSingBox {
-		if !singBoxService.Installed() {
-			return fmt.Errorf("sing-box is selected but not installed")
+	if service.IsNativeCore(coreType) {
+		if !service.NativeCore(coreType).Installed() {
+			return fmt.Errorf("%s is selected but not installed", coreType)
 		}
-		return singBoxService.Restart(ctx)
+		return service.NativeCore(coreType).Restart(ctx)
 	}
 	return xrayService.RestartXray(false)
 }

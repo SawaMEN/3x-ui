@@ -13,7 +13,11 @@ import (
 
 // maxDecodedConfigBytes caps a decompressed request body (defense in depth on
 // top of wirecodec's own ceiling).
-const maxDecodedConfigBytes = 8 << 20
+const (
+	maxDecodedConfigBytes = 8 << 20
+	// Import routes bypass the global body limit, so cap encoded envelopes too.
+	maxEncodedConfigBytes = 16 << 20
+)
 
 // ConfigEnvelopeMiddleware advertises node envelope support on every response
 // and, for requests that opt into the envelope, decompresses (zstd) and verifies
@@ -22,7 +26,7 @@ const maxDecodedConfigBytes = 8 << 20
 // panels and plain calls keep working (mixed-version safe).
 func ConfigEnvelopeMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header(wirecodec.CapsHeader, wirecodec.CapZstd)
+		c.Header(wirecodec.CapsHeader, wirecodec.NodeCaps)
 
 		enc := c.GetHeader("Content-Encoding")
 		sum := c.GetHeader(wirecodec.HashHeader)
@@ -39,12 +43,20 @@ func ConfigEnvelopeMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		raw, err := io.ReadAll(c.Request.Body)
+		limit := int64(maxDecodedConfigBytes)
+		if enc == wirecodec.EncodingZstd {
+			limit = maxEncodedConfigBytes
+		}
+		raw, err := io.ReadAll(io.LimitReader(c.Request.Body, limit+1))
+		_ = c.Request.Body.Close()
 		if err != nil {
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
-		_ = c.Request.Body.Close()
+		if int64(len(raw)) > limit {
+			c.AbortWithStatus(http.StatusRequestEntityTooLarge)
+			return
+		}
 
 		if enc == wirecodec.EncodingZstd {
 			decoded, derr := wirecodec.Decompress(raw, maxDecodedConfigBytes)

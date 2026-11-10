@@ -30,42 +30,34 @@ func nodeForPlainServer(t *testing.T, srv *httptest.Server, mode, token string) 
 	}
 }
 
-// TestRemoteDo_MTLSNodeNoBearer asserts that an mtls node with no API token
-// sends its request with NO Authorization header and does not trip the
-// empty-token precondition; while a non-mtls node with no token still errors.
-func TestRemoteDo_MTLSNodeNoBearer(t *testing.T) {
+// A persisted or hand-built node row with mtls over cleartext must fail closed.
+// The node create/update service already rejects this combination, but runtime
+// has to enforce the same rule when receiving a damaged configuration.
+func TestStage9RemoteDoMTLSRequiresHTTPS(t *testing.T) {
 	var reached bool
-	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reached = true
-		gotAuth = r.Header.Get("Authorization")
-		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"success":true}`))
 	}))
 	defer srv.Close()
 
-	t.Run("mtls without token sends no Authorization header", func(t *testing.T) {
-		reached, gotAuth = false, "sentinel"
-		r := NewRemote(nodeForPlainServer(t, srv, "mtls", ""), nil)
-		if _, err := r.do(context.Background(), http.MethodGet, "ping", nil); err != nil {
-			t.Fatalf("mtls node with no token must not error on the token precondition: %v", err)
-		}
-		if !reached {
-			t.Fatal("request did not reach the server")
-		}
-		if gotAuth != "" {
-			t.Fatalf("Authorization header = %q, want empty for a tokenless mtls node", gotAuth)
-		}
-	})
-
-	t.Run("non-mtls without token still errors", func(t *testing.T) {
+	for _, token := range []string{"", "legacy-token"} {
 		reached = false
-		r := NewRemote(nodeForPlainServer(t, srv, "verify", ""), nil)
+		r := NewRemote(nodeForPlainServer(t, srv, "mtls", token), nil)
 		if _, err := r.do(context.Background(), http.MethodGet, "ping", nil); err == nil {
-			t.Fatal("non-mtls node with no token must still error")
+			t.Fatal("mtls over http must be rejected before dispatch")
 		}
 		if reached {
-			t.Fatal("non-mtls tokenless request must not reach the server")
+			t.Fatal("request reached an unencrypted endpoint despite mtls setting")
 		}
-	})
+	}
+
+	reached = false
+	r := NewRemote(nodeForPlainServer(t, srv, "verify", ""), nil)
+	if _, err := r.do(context.Background(), http.MethodGet, "ping", nil); err == nil {
+		t.Fatal("non-mtls node without bearer must also fail closed")
+	}
+	if reached {
+		t.Fatal("tokenless node request reached server")
+	}
 }
