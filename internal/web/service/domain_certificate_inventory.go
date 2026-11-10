@@ -19,23 +19,23 @@ import (
 // CertificateInventoryItem describes a certificate owned by the local panel,
 // gateway, or a remote node. Private keys and ACME account secrets are never read.
 type CertificateInventoryItem struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Names       []string `json:"names"`
-	UsedBy      []string `json:"usedBy"`
-	Manager     string   `json:"manager"`
-	Challenge   string   `json:"challenge"`
-	Ports       []int    `json:"ports"`
-	Source      string   `json:"source"`
-	State       string   `json:"state"`
-	Issuer      string   `json:"issuer"`
-	ExpiresAt   int64    `json:"expiresAt"`
-	DaysLeft    int      `json:"daysLeft"`
-	AutoRenew   bool     `json:"autoRenew"`
-	CertFile    string   `json:"certFile,omitempty"`
-	Warning     string   `json:"warning,omitempty"`
-	NodeID      int      `json:"nodeId,omitempty"`
-	NodeName    string   `json:"nodeName,omitempty"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Names    []string `json:"names"`
+	UsedBy   []string `json:"usedBy"`
+	Manager  string   `json:"manager"`
+	Challenge string   `json:"challenge"`
+	Ports    []int    `json:"ports"`
+	Source   string   `json:"source"`
+	State    string   `json:"state"`
+	Issuer   string   `json:"issuer"`
+	ExpiresAt int64    `json:"expiresAt"`
+	DaysLeft int      `json:"daysLeft"`
+	AutoRenew bool     `json:"autoRenew"`
+	CertFile string   `json:"certFile,omitempty"`
+	Warning  string   `json:"warning,omitempty"`
+	NodeID   int      `json:"nodeId,omitempty"`
+	NodeName string   `json:"nodeName,omitempty"`
 }
 
 type CertificateInventory struct {
@@ -184,7 +184,7 @@ func makeCertificateInventory(status domainfront.DomainFrontStatus, states []dom
 			hash := sha256.Sum256([]byte(key))
 			item = &CertificateInventoryItem{
 				ID: hex.EncodeToString(hash[:12]), Name: cert.Name,
-				Names: certificateNames(cert.CertFile, cert.Name),
+				Names:  certificateNames(cert.CertFile, cert.Name),
 				UsedBy: []string{}, Manager: manager, Challenge: challenge,
 				Ports: []int{}, Source: cert.Source, State: cert.State,
 				Issuer: cert.Issuer, ExpiresAt: cert.ExpiresAt, DaysLeft: cert.DaysLeft,

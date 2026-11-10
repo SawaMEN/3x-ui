@@ -154,7 +154,7 @@ func runDueDomainCertificateRenewals(ctx context.Context) {
 			item.Challenge == "unknown" {
 			continue
 		}
-		if now.Unix()-attempts[item.ID] < int64((24*time.Hour).Seconds()) {
+		if now.Unix()-attempts[item.ID] < int64((24 * time.Hour).Seconds()) {
 			continue
 		}
 		attempts[item.ID] = now.Unix()

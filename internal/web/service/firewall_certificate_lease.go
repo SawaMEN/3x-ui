@@ -16,7 +16,7 @@ import (
 
 const (
 	firewallRenewalLeasesKey = "firewallCertificateRenewalLeases"
-	firewallRenewalLeaseTTL = 20 * time.Minute
+	firewallRenewalLeaseTTL  = 20 * time.Minute
 )
 
 // A new process ID invalidates stale rules immediately after a service crash.

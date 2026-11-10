@@ -61,7 +61,7 @@ type Backend struct {
 	SharedHTTPS         bool
 	Certificates        map[string]CertificateFiles
 	ChallengeRoots      map[string]string
-	CertificateEvent   func(context.Context, string, map[string]any) error
+	CertificateEvent    func(context.Context, string, map[string]any) error
 	GetRedirect         func() (string, error)
 	SubscriptionHost    string
 
