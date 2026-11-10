@@ -93,9 +93,9 @@ func TestACMEShWebrootOpensActualLocalListener(t *testing.T) {
 	}
 	status := domainfront.DomainFrontStatus{Config: cfg, Running: true, Certificates: []domainfront.DomainFrontCertificate{cert}}
 	states := []domainACME{{values: map[string]string{
-		"Le_Domain": "sub.example.org",
+		"Le_Domain":            "sub.example.org",
 		"Le_RealFullChainPath": "/tmp/sub.pem",
-		"Le_Webroot": filepath.Join(config.GetDBFolderPath(), "domain-acme-webroot"),
+		"Le_Webroot":           filepath.Join(config.GetDBFolderPath(), "domain-acme-webroot"),
 	}}}
 	items := makeCertificateInventory(status, states, nil)
 	if len(items) != 1 || !reflect.DeepEqual(items[0].Ports, []int{8080}) {
