@@ -54,7 +54,9 @@ export default function DomainOverview({
     <Card className="domain-workspace" loading={loading} size="small">
       <div className="domain-workspace-heading">
         <div>
-          <Typography.Title level={4} style={{ marginBottom: 4 }}>{l('title')}</Typography.Title>
+          <Typography.Title level={4} style={{ marginBottom: 4 }}>
+            {l('title')}
+          </Typography.Title>
           <Typography.Text type="secondary">{l('description')}</Typography.Text>
         </div>
         <Tag color={running ? 'success' : draft.enabled ? 'warning' : 'default'}>
@@ -65,7 +67,10 @@ export default function DomainOverview({
         <div className="domain-workspace-stat">
           <GlobalOutlined aria-hidden />
           <Typography.Text type="secondary">{l('active')}</Typography.Text>
-          <strong>{summary.active}<small> / {summary.total}</small></strong>
+          <strong>
+            {summary.active}
+            <small> / {summary.total}</small>
+          </strong>
         </div>
         <div className="domain-workspace-stat">
           <SafetyCertificateOutlined aria-hidden />
@@ -86,14 +91,20 @@ export default function DomainOverview({
       <div className="domain-workspace-guidance">
         {!summary.total && <Typography.Text type="secondary">{l('emptyHint')}</Typography.Text>}
         {summary.failedCertificates > 0 && (
-          <Typography.Text type="danger">{l('certError', { count: summary.failedCertificates })}</Typography.Text>
+          <Typography.Text type="danger">
+            {l('certError', { count: summary.failedCertificates })}
+          </Typography.Text>
         )}
         {summary.expiringCertificates > 0 && (
-          <Typography.Text type="warning">{l('certExpiring', { count: summary.expiringCertificates })}</Typography.Text>
+          <Typography.Text type="warning">
+            {l('certExpiring', { count: summary.expiringCertificates })}
+          </Typography.Text>
         )}
-        {draft.enabled && draft.domains.some((domain) => domain.enabled && domain.tls === 'auto') && (!draft.email || !draft.acceptTerms) && (
-          <Typography.Text type="warning">{l('acmeHint')}</Typography.Text>
-        )}
+        {draft.enabled &&
+          draft.domains.some((domain) => domain.enabled && domain.tls === 'auto') &&
+          (!draft.email || !draft.acceptTerms) && (
+            <Typography.Text type="warning">{l('acmeHint')}</Typography.Text>
+          )}
         {draft.enabled && !running && !dirty && !status?.error && (
           <Typography.Text type="warning">{l('gatewayHint')}</Typography.Text>
         )}

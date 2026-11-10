@@ -250,7 +250,9 @@ export default function DomainFrontTab({
     if (!status || dirty || busy || auditing) return;
     // Only saved domains can be checked. Limit concurrency to avoid
     // overwhelming the panel and the DNS/TLS endpoints on larger installations.
-    const names = status.config.domains.filter((domain) => domain.enabled).map((domain) => domain.name);
+    const names = status.config.domains
+      .filter((domain) => domain.enabled)
+      .map((domain) => domain.name);
     if (names.length === 0) return;
     setAuditing(true);
     setAuditTotal(names.length);
@@ -264,7 +266,11 @@ export default function DomainFrontTab({
           while (next < names.length) {
             const name = names[next++];
             try {
-              const msg = await HttpUtil.post('/panel/api/domains/check', { name }, { silent: true });
+              const msg = await HttpUtil.post(
+                '/panel/api/domains/check',
+                { name },
+                { silent: true },
+              );
               if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
               const result = DomainFrontCheckSchema.parse(msg.obj);
               if (result.error) failures++;
@@ -291,7 +297,9 @@ export default function DomainFrontTab({
         }),
       );
       if (failures > 0)
-        messageApi.warning(t('pages.settings.domains.workspace.auditWarnings', { count: failures }));
+        messageApi.warning(
+          t('pages.settings.domains.workspace.auditWarnings', { count: failures }),
+        );
       else messageApi.success(t('pages.settings.domains.workspace.auditSuccess'));
     } finally {
       setAuditing(false);
@@ -364,9 +372,10 @@ export default function DomainFrontTab({
     if (!domain.name.toLowerCase().includes(domainSearch.trim().toLowerCase())) return false;
     if (domainFilter === 'all') return true;
     if (domainFilter === 'attention') {
-      const saved = status?.config.domains.some(
-        (item) => item.name === domain.name && JSON.stringify(item) === JSON.stringify(domain),
-      ) ?? false;
+      const saved =
+        status?.config.domains.some(
+          (item) => item.name === domain.name && JSON.stringify(item) === JSON.stringify(domain),
+        ) ?? false;
       return ['error', 'expiring'].includes(
         getDomainHealth(domain, status, checks[domain.name], saved),
       );
@@ -929,7 +938,9 @@ export default function DomainFrontTab({
             options={[
               { value: 'all', label: label('workspace.filter.all') },
               { value: 'attention', label: label('workspace.filter.attention') },
-              ...(['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'] as const).map((mode) => ({
+              ...(
+                ['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'] as const
+              ).map((mode) => ({
                 value: mode,
                 label: label('mode.' + mode),
               })),
@@ -965,14 +976,19 @@ export default function DomainFrontTab({
               title: label('workspace.healthLabel'),
               key: 'health',
               render: (_, d: DomainForm) => {
-                const saved = status?.config.domains.some(
-                  (item) => item.name === d.name && JSON.stringify(item) === JSON.stringify(d),
-                ) ?? false;
+                const saved =
+                  status?.config.domains.some(
+                    (item) => item.name === d.name && JSON.stringify(item) === JSON.stringify(d),
+                  ) ?? false;
                 const health = getDomainHealth(d, status, checks[d.name], saved);
-                const color = health === 'healthy' ? 'green'
-                  : health === 'error' ? 'red'
-                  : health === 'expiring' ? 'orange'
-                  : 'default';
+                const color =
+                  health === 'healthy'
+                    ? 'green'
+                    : health === 'error'
+                      ? 'red'
+                      : health === 'expiring'
+                        ? 'orange'
+                        : 'default';
                 return <Tag color={color}>{label('workspace.health.' + health)}</Tag>;
               },
             },
@@ -1025,7 +1041,12 @@ export default function DomainFrontTab({
               title: label('actions'),
               render: (_, d) => (
                 <Space wrap>
-                  <Button size="small" onClick={() => openEditor(draft.domains.findIndex((item) => item.name === d.name))}>
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      openEditor(draft.domains.findIndex((item) => item.name === d.name))
+                    }
+                  >
                     {label('edit')}
                   </Button>
                   <Button
