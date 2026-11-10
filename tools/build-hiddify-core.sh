@@ -29,7 +29,7 @@ git -C "$task_source/core" remote add origin "${target[0]}"
 git -C "$task_source/core" fetch --depth=1 origin "${target[2]}"
 git -C "$task_source/core" checkout -q --detach FETCH_HEAD
 git -C "$task_source/core" config submodule.hiddify-sing-box.url https://github.com/SawaMEN/hiddify-sing-box.git
-git -C "$task_source/core" config submodule.ray2sing.url https://github.com/hiddify/ray2sing.git
+git -C "$task_source/core" config submodule.ray2sing.url https://github.com/SawaMEN/ray2sing.git
 git -C "$task_source/core" submodule update --init --depth=1
 # Track the independently maintained Sing-box fork even if the parent's
 # gitlink has not advanced. The lock retains the exact fetched revision.
@@ -37,11 +37,20 @@ git -C "$task_source/core/hiddify-sing-box" fetch --depth=1 origin "${target[6]}
 git -C "$task_source/core/hiddify-sing-box" checkout -q --detach FETCH_HEAD
 git -C "$task_source/core/hiddify-sing-box" submodule update --init --recursive --depth=1
 python3 "$task_root/tools/verify-hiddify-build.py" --upstream "$task_source/core"
-git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/speed/masque.patch"
-mkdir -p "$task_source/core/hiddify-sing-box/internal/xuispeed"
-cp "$task_root/internal/clientlimit/brokerclient/client.go" "$task_source/core/hiddify-sing-box/internal/xuispeed/client.go"
+# The release only uses features that are already tracked in the pinned
+# Sing-box and core repositories. Native files are checked from the lock.
+python3 - "$task_root/deploy/hiddify/hiddify-core-target.json" "$task_source/core" <<'PYNATIVE'
+import json, pathlib, sys
+lock = json.load(open(sys.argv[1]))
+root = pathlib.Path(sys.argv[2])
+sources = lock['panel_build']['native_source_files']
+assert len(sources) == len(set(sources)) and len(sources) >= 20, "native feature list incomplete"
+for path in sources:
+    candidate = root / path
+    if not candidate.is_file():
+        raise SystemExit(f"Missing reviewed native source: {path}")
+PYNATIVE
 
-: # reviewed runtime dependencies are already in native core/go.mod
 (
   cd -- "$task_source/core"
   readarray -t security_dependencies < <(python3 - "$task_root/deploy/hiddify/hiddify-core-target.json" <<'PYDEPS'
@@ -56,58 +65,9 @@ PYDEPS
   GOTOOLCHAIN="${target[5]}" go mod edit -go="${target[5]#go}" "${security_flags[@]}"
   GOTOOLCHAIN="${target[5]}" go mod download "${security_dependencies[@]}"
 )
-git -C "$task_source/core" apply "$task_root/deploy/hiddify/clash-user.patch"
-git -C "$task_source/core" apply "$task_root/deploy/hiddify/sniff-override.patch"
-git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/http1-options.patch"
-git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/hysteria-safety.patch"
-git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/inbound-finalmask.patch"
-cp -- "$task_root/deploy/hiddify/inbound_finalmask_test.go.in" "$task_source/core/hiddify-sing-box/xui_inbound_finalmask_test.go"
-cp -- "$task_root/deploy/hiddify/http1_options_test.go.in" "$task_source/core/hiddify-sing-box/option/xui_panel_http1_test.go"
-cp -- "$task_root/deploy/hiddify/cmd_xui_check.go.in" "$task_source/core/cmd/cmd_xui_check.go"
-cp -- "$task_root/deploy/hiddify/clash_user_test.go.in" "$task_source/core/hiddify-sing-box/experimental/clashapi/trafficontrol/xui_panel_test.go"
-
-cp -- "$task_root/deploy/hiddify/sniff_override_test.go.in" "$task_source/core/hiddify-sing-box/route/rule/xui_panel_sniff_test.go"
-
-# Modify verified dependency copies, never the shared Go module cache.
-task_module_cache=$(go env GOMODCACHE)
+# Reconcile pinned patched dependencies without overlay copies or external patches.
 (
   cd -- "$task_source/core"
-  GOTOOLCHAIN="${target[5]}" go mod download github.com/metacubex/utls@v1.8.8 github.com/starifly/sing-vmess@v0.2.7-mod.9 github.com/xtls/xray-core@v1.260327.1-0.20260728075948-5ca6f4b7d4dc
-)
-mkdir -p "$task_source/core/xui-dependencies"
-cp -a "$task_module_cache/github.com/metacubex/utls@v1.8.8" "$task_source/core/xui-dependencies/utls"
-cp -a "$task_module_cache/github.com/starifly/sing-vmess@v0.2.7-mod.9" "$task_source/core/xui-dependencies/sing-vmess"
-cp -a "$task_module_cache/github.com/xtls/xray-core@v1.260327.1-0.20260728075948-5ca6f4b7d4dc" "$task_source/core/xui-dependencies/xray-core"
-chmod -R u+w "$task_source/core/xui-dependencies"
-git -C "$task_source/core" apply --directory=xui-dependencies/utls "$task_root/deploy/hiddify/utls-protection.patch"
-git -C "$task_source/core" apply --directory=xui-dependencies/sing-vmess "$task_root/deploy/hiddify/sing-vmess-protection.patch"
-git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/protection-options.patch"
-git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/explicit-cipher-suites.patch"
-git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/stream-handshake.patch"
-cp -- "$task_root/deploy/hiddify/stream_upgrade_test.go.in" "$task_source/core/hiddify-sing-box/transport/v2rayhttpupgrade/xui_stream_test.go"
-cp -- "$task_root/deploy/hiddify/stream_trojan_test.go.in" "$task_source/core/hiddify-sing-box/transport/trojan/xui_stream_test.go"
-
-cp "$task_root/deploy/hiddify/explicit_cipher_suites_test.go.in" "$task_source/core/hiddify-sing-box/common/tls/xui_explicit_ciphers_test.go"
-git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/transport-balancer.patch"
-git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/vless-reverse.patch"
-git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/vless-handshake.patch"
-cp "$task_root/deploy/hiddify/vless_handshake_test.go.in" "$task_source/core/hiddify-sing-box/protocol/vless/xui_handshake_test.go"
-git -C "$task_source/core" apply --directory=xui-dependencies/sing-vmess "$task_root/deploy/hiddify/sing-vmess-reverse.patch"
-cp "$task_root/deploy/hiddify/reverse_vision_test.go.in" "$task_source/core/xui-dependencies/sing-vmess/vless/xui_reverse_test.go"
-cp "$task_root/deploy/hiddify/reverse_runtime_test.go.in" "$task_source/core/hiddify-sing-box/protocol/vless/xui_reverse_test.go"
-git -C "$task_source/core" apply --directory=xui-dependencies/xray-core "$task_root/deploy/hiddify/xray-runtime-compat.patch"
-test -f "$task_source/core/hiddify-sing-box/transport/v2raykcp/h_kcp_test.go"
-test -f "$task_source/core/hiddify-sing-box/h_xray_kcp_test.go"
-cp "$task_root/deploy/hiddify/xhttp_extension_test.go.in" "$task_source/core/hiddify-sing-box/transport/v2rayxhttp/xui_xhttp_test.go"
-cp "$task_root/deploy/hiddify/balancer_strategy_test.go.in" "$task_source/core/hiddify-sing-box/protocol/group/xui_balancer_test.go"
-cp "$task_root/deploy/hiddify/reality_protection_test.go.in" "$task_source/core/hiddify-sing-box/common/tls/xui_panel_reality_test.go"
-cp "$task_root/deploy/hiddify/vision_preconnect_test.go.in" "$task_source/core/hiddify-sing-box/protocol/vless/xui_preconnect_test.go"
-cp "$task_root/deploy/hiddify/vision_padding_test.go.in" "$task_source/core/xui-dependencies/sing-vmess/vless/xui_vision_options_test.go"
-(
-  cd -- "$task_source/core"
-  GOTOOLCHAIN="${target[5]}" go mod edit -replace github.com/metacubex/utls=./xui-dependencies/utls -replace github.com/sagernet/sing-vmess=./xui-dependencies/sing-vmess
-  GOTOOLCHAIN="${target[5]}" go mod edit -replace github.com/xtls/xray-core=./xui-dependencies/xray-core
-  # Reconcile the module graph after applying the pinned fork and overlays.
   GOTOOLCHAIN="${target[5]}" go mod tidy
 )
 
@@ -147,6 +107,17 @@ if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOST
     CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/route/rule -run '^TestXUIPanelSniffOverrideAction$' -count=1
     CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/common/tls github.com/sagernet/sing-box/protocol/vless github.com/sagernet/sing-vmess/vless -run '^TestXUIPanel(Reality|Preconnect|Vision|Reverse|Encryption|ExplicitCipher)' -count=1 -timeout=60s
     CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/transport/v2raykcp github.com/sagernet/sing-box/transport/v2rayxhttp github.com/sagernet/sing-box/protocol/group -run '^TestXUIPanel' -count=1 -timeout=90s
+  )
+fi
+# Regression coverage lives in the pinned native source tree, not in copied overlays.
+if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOSTARCH)" ]]; then
+  (
+    cd -- "$task_source/core"
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" \
+      github.com/sagernet/sing-box/internal/xuispeed \
+      github.com/sagernet/sing-box/transport/masque \
+      github.com/sagernet/sing-box/protocol/masque \
+      -run '^Test(Broker|InvalidBroker)' -count=1 -timeout=90s
   )
 fi
 (

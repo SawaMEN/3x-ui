@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate pinned runtime kernel sources, dependencies, and build overlays."""
+"""Validate pinned native kernel sources, security dependencies and runtime features."""
 
 import argparse
 import json
@@ -120,8 +120,18 @@ def verify_build(source):
     )}
     require(build["protection_dependency_versions"] == native_pins,
             "Native protection dependencies must match pinned Sing-box gitlink")
-    for key in ("check_command_overlay", "clash_user_overlay", "sniff_override_overlay", "sniff_override_test_overlay", "http1_options_overlay", "http1_options_test_overlay", "protection_options_overlay", "utls_protection_overlay", "vision_protection_overlay", "reality_protection_test_overlay", "vision_preconnect_test_overlay", "vision_padding_test_overlay", "transport_balancer_overlay", "xray_runtime_compat_overlay", "xhttp_extension_test_overlay", "balancer_strategy_test_overlay", "reverse_overlay", "reverse_protocol_overlay", "reverse_runtime_test_overlay", "reverse_vision_test_overlay", "vless_handshake_overlay", "vless_handshake_test_overlay", "explicit_cipher_overlay", "explicit_cipher_test_overlay", "stream_handshake_overlay", "stream_upgrade_test_overlay", "stream_trojan_test_overlay"):
-        require((ROOT / build[key]).is_file(), "Missing runtime overlay: " + key)
+    require(not any(key.endswith("_overlay") for key in build) and "speed_broker_sdk" not in build,
+            "Retired patch or fixture reference reappeared in native manifest")
+    native_files = build.get("native_source_files")
+    require(isinstance(native_files, list) and len(native_files) >= 20
+            and len(native_files) == len(set(native_files)),
+            "Native source evidence missing, incomplete or duplicated")
+    required_native = {"cmd/cmd_xui_check.go",
+                       "hiddify-sing-box/internal/xuispeed/client.go",
+                       "hiddify-sing-box/transport/masque/server.go",
+                       "hiddify-sing-box/protocol/vless/xui_reverse.go",
+                       "hiddify-sing-box/protocol/group/xui_balancer.go"}
+    require(required_native.issubset(native_files), "Native feature evidence lost")
     print(f"OK: stage-{lock['stage']} build/runtime identity, owner revisions, toolchain, tags and statistics profile")
     if source is None:
         return
@@ -141,6 +151,8 @@ def verify_build(source):
         require(not status.startswith(("-", "+", "U")), "Uninitialized or modified nested runtime submodule")
     for check in lock["source_checks"]:
         require(check["contains"] in (source / check["path"]).read_text(), "Runtime source evidence changed: " + check["path"])
+    for native_path in build["native_source_files"]:
+        require((source / native_path).is_file(), "Missing reviewed native source: " + native_path)
     print("OK: runtime source/gitlinks/origins and source anchors before overlays")
 
 

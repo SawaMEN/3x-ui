@@ -30,8 +30,8 @@
       "contains": "Use:   \"srun\""
     },
     {
-      "path": "cmd/cmd_check.go",
-      "contains": "// var commandCheck = &cobra.Command{"
+      "path": "cmd/cmd_xui_check.go",
+      "contains": "Use:   \"check\""
     },
     {
       "path": "go.mod",
@@ -88,6 +88,22 @@
     {
       "path": "hiddify-sing-box/transport/v2rayxdrive/transport.go",
       "contains": "v2ray.RegisterXDriveConstructor(NewServer, NewClient)"
+    },
+    {
+      "path": "hiddify-sing-box/protocol/masque/server.go",
+      "contains": "SpeedScope:      tag"
+    },
+    {
+      "path": "hiddify-sing-box/transport/masque/server.go",
+      "contains": "xuispeed.New(\"masque:\""
+    },
+    {
+      "path": "hiddify-sing-box/transport/masque/session.go",
+      "contains": "waitDownload(buffer.Len())"
+    },
+    {
+      "path": "hiddify-sing-box/internal/xuispeed/client.go",
+      "contains": "Environment = \"XUI_SPEED_BROKER\""
     }
   ],
   "panel_build": {
@@ -108,7 +124,6 @@
       "http2legacy"
     ],
     "sing_box_version": "sawamen-4fe303071f4f",
-    "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
     "runtime_dependencies": [
       "matching libcronet for Naive outbound"
     ],
@@ -116,38 +131,15 @@
     "toolchain": "go1.27.3",
     "validation_cli_available": true,
     "user_stats_api_available": true,
-    "clash_user_overlay": "deploy/hiddify/clash-user.patch",
-    "sniff_override_overlay": "deploy/hiddify/sniff-override.patch",
-    "sniff_override_test_overlay": "deploy/hiddify/sniff_override_test.go.in",
-    "http1_options_overlay": "deploy/hiddify/http1-options.patch",
-    "http1_options_test_overlay": "deploy/hiddify/http1_options_test.go.in",
     "cronet_linkage_profiles": {
       "purego": "package pinned platform libcronet beside binary",
       "musl": "with_musl, CGO_ENABLED=1, statically linked Cronet; release and Docker"
     },
-    "protection_options_overlay": "deploy/hiddify/protection-options.patch",
-    "explicit_cipher_overlay": "deploy/hiddify/explicit-cipher-suites.patch",
-    "explicit_cipher_test_overlay": "deploy/hiddify/explicit_cipher_suites_test.go.in",
-    "utls_protection_overlay": "deploy/hiddify/utls-protection.patch",
-    "vision_protection_overlay": "deploy/hiddify/sing-vmess-protection.patch",
-    "reality_protection_test_overlay": "deploy/hiddify/reality_protection_test.go.in",
-    "vision_preconnect_test_overlay": "deploy/hiddify/vision_preconnect_test.go.in",
-    "vision_padding_test_overlay": "deploy/hiddify/vision_padding_test.go.in",
     "protection_dependency_versions": {
       "github.com/metacubex/utls": "native:4fe303071f4f30cb2d2f0eed3e61c877cf07adfe",
       "github.com/starifly/sing-vmess": "native:4fe303071f4f30cb2d2f0eed3e61c877cf07adfe",
       "github.com/xtls/xray-core": "native:4fe303071f4f30cb2d2f0eed3e61c877cf07adfe"
     },
-    "transport_balancer_overlay": "deploy/hiddify/transport-balancer.patch",
-    "xray_runtime_compat_overlay": "deploy/hiddify/xray-runtime-compat.patch",
-    "xhttp_extension_test_overlay": "deploy/hiddify/xhttp_extension_test.go.in",
-    "balancer_strategy_test_overlay": "deploy/hiddify/balancer_strategy_test.go.in",
-    "vless_handshake_overlay": "deploy/hiddify/vless-handshake.patch",
-    "vless_handshake_test_overlay": "deploy/hiddify/vless_handshake_test.go.in",
-    "reverse_overlay": "deploy/hiddify/vless-reverse.patch",
-    "reverse_protocol_overlay": "deploy/hiddify/sing-vmess-reverse.patch",
-    "reverse_runtime_test_overlay": "deploy/hiddify/reverse_runtime_test.go.in",
-    "reverse_vision_test_overlay": "deploy/hiddify/reverse_vision_test.go.in",
     "security_dependencies": {
       "golang.org/x/net": "v0.62.0",
       "github.com/go-chi/chi/v5": "v5.3.0",
@@ -156,12 +148,34 @@
       "github.com/klauspost/compress": "v1.20.2",
       "golang.org/x/crypto": "v0.58.1-0.20261009181718-2f1f834330b2"
     },
-    "speed_broker_overlay": "deploy/speed/masque.patch",
-    "speed_broker_sdk": "internal/clientlimit/brokerclient/client.go",
-    "stream_handshake_overlay": "deploy/hiddify/stream-handshake.patch",
-    "hysteria_safety_overlay": "deploy/hiddify/hysteria-safety.patch",
-    "stream_upgrade_test_overlay": "deploy/hiddify/stream_upgrade_test.go.in",
-    "stream_trojan_test_overlay": "deploy/hiddify/stream_trojan_test.go.in"
+    "native_source_files": [
+      "cmd/cmd_xui_check.go",
+      "hiddify-sing-box/internal/xuispeed/client.go",
+      "hiddify-sing-box/internal/xuispeed/client_test.go",
+      "hiddify-sing-box/protocol/masque/server.go",
+      "hiddify-sing-box/transport/masque/server.go",
+      "hiddify-sing-box/transport/masque/session.go",
+      "hiddify-sing-box/common/tls/xui_explicit_ciphers_test.go",
+      "hiddify-sing-box/common/tls/xui_reality_mldsa_handshake_test.go",
+      "hiddify-sing-box/protocol/group/xui_balancer.go",
+      "hiddify-sing-box/protocol/group/xui_balancer_test.go",
+      "hiddify-sing-box/protocol/vless/xui_preconnect.go",
+      "hiddify-sing-box/protocol/vless/xui_handshake_test.go",
+      "hiddify-sing-box/protocol/vless/xui_reverse.go",
+      "hiddify-sing-box/protocol/vless/xui_reverse_native_test.go",
+      "hiddify-sing-box/third_party/sing-vmess/vless/xui_reverse_native_test.go",
+      "hiddify-sing-box/third_party/sing-vmess/vless/xui_vision_options.go",
+      "hiddify-sing-box/third_party/xray-core/go.mod",
+      "hiddify-sing-box/transport/trojan/xui_stream_test.go",
+      "hiddify-sing-box/transport/v2rayhttpupgrade/xui_stream_test.go",
+      "hiddify-sing-box/transport/v2rayxhttp/xui_upload_queue_native_test.go",
+      "hiddify-sing-box/transport/v2raykcp/h_kcp_test.go",
+      "hiddify-sing-box/h_xray_kcp_test.go",
+      "hiddify-sing-box/xui_inbound_finalmask_test.go",
+      "hiddify-sing-box/route/rule/xui_panel_sniff_test.go",
+      "hiddify-sing-box/experimental/clashapi/trafficontrol/xui_panel_test.go",
+      "hiddify-sing-box/option/xui_panel_http1_test.go"
+    ]
   },
   "verification": {
     "platform": "linux/amd64",
