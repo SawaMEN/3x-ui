@@ -47,6 +47,7 @@ function plan(
   certificates: ManagedSniDomain[],
   allowUnconfiguredTLS = false,
   requestedSni = 'auto',
+  tlsSniByNode: Record<number, string> = {},
 ) {
   return buildManagerRecipes({
     presets: ['vless-tcp-tls'],
@@ -57,6 +58,7 @@ function plan(
     targetByPreset: {},
     verifiedSniByNode: {},
     managedCertificates: certificates,
+    tlsSniByNode,
     allowUnconfiguredTLS,
   });
 }
@@ -98,6 +100,27 @@ describe('manager per-node TLS certificates', () => {
     expect(result.entries[0].nodeId).toBe(0);
     expect(result.skipped).toHaveLength(2);
     expect(result.skipped.every((s) => s.includes('no certificate'))).toBe(true);
+  });
+
+  it('allows each node to choose a different certificate for the same TLS protocol', () => {
+    const other: ManagedSniDomain = {
+      name: 'france.example.org',
+      source: 'remote',
+      nodeId: 7,
+      certFile: '/etc/france/fullchain.pem',
+      keyFile: '/etc/france/privkey.pem',
+    };
+    const entries = plan([...sites, other], false, 'vpn.example.org', {
+      7: 'france.example.org',
+      9: 'auto',
+    }).entries;
+    expect(entries).toHaveLength(3);
+    expect(entries[0].sni).toBe('vpn.example.org');
+    expect(entries[1].sni).toBe('france.example.org');
+    expect(entries[2].sni).toBe('vpn.example.org');
+    const nodeCert = JSON.parse(entries[1].config?.streamSettings || '{}').tlsSettings
+      .certificates[0];
+    expect(nodeCert.certificateFile).toBe('/etc/france/fullchain.pem');
   });
 
   it('supports explicit manual TLS drafts but still requires preflight validation', () => {
