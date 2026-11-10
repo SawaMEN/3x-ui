@@ -23,6 +23,7 @@ func NewDomainController(g *gin.RouterGroup) {
 	g = g.Group("/domains")
 	g.GET("/status", a.status)
 	g.GET("/certificates", a.certificates)
+	g.GET("/certificates/events", a.certificateEvents)
 	g.POST("/certificates/renew", a.renewCertificate)
 	g.GET("/sni", a.sni)
 	g.POST("/apply", a.apply)
@@ -46,6 +47,12 @@ func (a *DomainController) renewCertificate(c *gin.Context) {
 		return
 	}
 	result, err := service.RenewDomainCertificate(c.Request.Context(), request.ID)
+	jsonObj(c, result, err)
+}
+
+func (a *DomainController) certificateEvents(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	result, err := service.CertificateAuditHistory()
 	jsonObj(c, result, err)
 }
 
