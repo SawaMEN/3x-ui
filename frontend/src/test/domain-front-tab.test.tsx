@@ -315,7 +315,9 @@ describe('domain and TLS dashboard', () => {
     const email = await screen.findByDisplayValue('old@example.com');
     fireEvent.change(email, { target: { value: 'next@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
-    expect((await screen.findAllByText('Configuration contains blocking errors')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText('Configuration contains blocking errors')).length,
+    ).toBeGreaterThan(0);
     expect(f.applied).toBeUndefined();
   });
 
