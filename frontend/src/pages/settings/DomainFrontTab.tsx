@@ -130,11 +130,11 @@ export default function DomainFrontTab({
   const [dnsToken, setDnsToken] = useState('');
   const [savingDNSToken, setSavingDNSToken] = useState(false);
   const dnsCredential = useQuery({
-    queryKey: ['settings', 'domains', 'dns-credential'],
+    queryKey: ['settings', 'domains', 'dns-credential', draft.dns01Provider || 'cloudflare'],
     enabled: section === 'settings',
     retry: false,
     queryFn: async () => {
-      const response = await HttpUtil.get('/panel/api/domains/dns/credential', undefined, {
+      const response = await HttpUtil.get(`/panel/api/domains/dns/credential?provider=${draft.dns01Provider || 'cloudflare'}`, undefined, {
         silent: true,
       });
       if (!response?.success) throw new Error(response?.msg || 'Cannot load DNS token status');
@@ -162,7 +162,7 @@ export default function DomainFrontTab({
     try {
       const response = await HttpUtil.post(
         '/panel/api/domains/dns/credential',
-        clear ? { clear: true } : { token: dnsToken },
+        clear ? { provider: draft.dns01Provider || 'cloudflare', clear: true } : { provider: draft.dns01Provider || 'cloudflare', token: dnsToken },
         { silent: true },
       );
       if (!response?.success) throw new Error(response?.msg || label('dns01.saveError'));
@@ -934,21 +934,22 @@ export default function DomainFrontTab({
                 <Select
                   aria-label={label('dns01.provider')}
                   value={draft.dns01Provider || ''}
-                  onChange={(value) =>
+                  onChange={(value) => {
+                    setDnsToken('');
                     update({
                       dns01Provider: value,
-                      ...(value === ''
-                        ? { dns01Zone: '', dns01ZoneId: '', dns01Propagation: 0 }
-                        : {}),
-                    })
-                  }
+                      ...(value !== 'cloudflare' ? { dns01ZoneId: '' } : {}),
+                      ...(value === '' ? { dns01Zone: '', dns01Propagation: 0 } : {}),
+                    });
+                  }}
                   options={[
                     { value: '', label: label('dns01.disabled') },
                     { value: 'cloudflare', label: 'Cloudflare' },
+                    { value: 'digitalocean', label: 'DigitalOcean' },
                   ]}
                 />
               </Form.Item>
-              {draft.dns01Provider === 'cloudflare' && (
+              {(draft.dns01Provider === 'cloudflare' || draft.dns01Provider === 'digitalocean') && (
                 <>
                   <Space wrap style={{ width: '100%' }}>
                     <Form.Item label={label('dns01.zone')}>
@@ -959,14 +960,16 @@ export default function DomainFrontTab({
                         onChange={(event) => update({ dns01Zone: event.target.value })}
                       />
                     </Form.Item>
-                    <Form.Item label={label('dns01.zoneId')}>
-                      <Input
-                        aria-label={label('dns01.zoneId')}
-                        value={draft.dns01ZoneId ?? ''}
-                        placeholder="32-character Cloudflare ID"
-                        onChange={(event) => update({ dns01ZoneId: event.target.value })}
-                      />
-                    </Form.Item>
+                    {draft.dns01Provider === 'cloudflare' && (
+                      <Form.Item label={label('dns01.zoneId')}>
+                        <Input
+                          aria-label={label('dns01.zoneId')}
+                          value={draft.dns01ZoneId ?? ''}
+                          placeholder="32-character Cloudflare ID"
+                          onChange={(event) => update({ dns01ZoneId: event.target.value })}
+                        />
+                      </Form.Item>
+                    )}
                     <Form.Item label={label('dns01.propagation')}>
                       <InputNumber
                         aria-label={label('dns01.propagation')}
