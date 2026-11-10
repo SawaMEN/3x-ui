@@ -53,7 +53,7 @@ func NewDomainController(g *gin.RouterGroup) {
 // whether the server has a token; there is never a "read token" endpoint.
 func (a *DomainController) dnsCredential(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
-	result, err := service.DomainDNSCredentialState()
+	result, err := service.DomainDNSCredentialStateFor(c.DefaultQuery("provider", "cloudflare"))
 	jsonObj(c, result, err)
 }
 
@@ -64,6 +64,7 @@ func (a *DomainController) saveDNSCredential(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
 	var req struct {
+		Provider string `json:"provider"`
 		Token string `json:"token"`
 		Clear bool `json:"clear"`
 	}
@@ -75,11 +76,14 @@ func (a *DomainController) saveDNSCredential(c *gin.Context) {
 		jsonObj(c, nil, fmt.Errorf("clear and token cannot be supplied together"))
 		return
 	}
-	if err := service.SaveDomainDNSCredential(req.Token, req.Clear); err != nil {
+	if req.Provider == "" {
+		req.Provider = "cloudflare"
+	}
+	if err := service.SaveDomainDNSCredentialFor(req.Provider, req.Token, req.Clear); err != nil {
 		jsonObj(c, nil, err)
 		return
 	}
-	result, err := service.DomainDNSCredentialState()
+	result, err := service.DomainDNSCredentialStateFor(req.Provider)
 	jsonObj(c, result, err)
 }
 
