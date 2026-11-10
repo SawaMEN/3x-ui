@@ -354,8 +354,23 @@ func (r *frontRuntime) domain(host string) (DomainFrontDomain, bool) {
 		host = name
 	}
 	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	// Exact hosts take priority over a wildcard, even if the wildcard was
+	// listed first. Wildcards match exactly one DNS label, never the apex.
 	for _, d := range r.cfg.Domains {
 		if d.Enabled && d.Mode != "shared_sni" && d.Name == host {
+			return d, true
+		}
+	}
+	for _, d := range r.cfg.Domains {
+		if !d.Enabled || d.Mode == "shared_sni" || !strings.HasPrefix(d.Name, "*.") {
+			continue
+		}
+		suffix := strings.TrimPrefix(d.Name, "*.")
+		if !strings.HasSuffix(host, "."+suffix) {
+			continue
+		}
+		label := strings.TrimSuffix(host, "."+suffix)
+		if label != "" && !strings.Contains(label, ".") {
 			return d, true
 		}
 	}
@@ -381,6 +396,13 @@ func (r *frontRuntime) redirectHTTPS(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	host := d.Name
+	if strings.HasPrefix(d.Name, "*.") {
+		host = req.Host
+		if name, _, err := net.SplitHostPort(host); err == nil {
+			host = name
+		}
+		host = strings.TrimSuffix(strings.ToLower(host), ".")
+	}
 	if r.cfg.PublicPort != 443 {
 		host = net.JoinHostPort(host, strconv.Itoa(r.cfg.PublicPort))
 	}
