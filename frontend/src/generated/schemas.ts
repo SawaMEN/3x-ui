@@ -3734,6 +3734,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "preset": {
         "type": "string"
       },
+      "realityTarget": {
+        "type": "string"
+      },
       "relayId": {
         "type": "integer"
       },
