@@ -68,6 +68,9 @@ function fixture(existing = false) {
   let reads = 0;
   const checked: string[] = [];
   server.use(
+    http.get('*/panel/api/domains/certificates/events', () =>
+      HttpResponse.json({ success: true, obj: [] }),
+    ),
     http.get('*/panel/api/domains/certificates', () =>
       HttpResponse.json({
         success: true,
