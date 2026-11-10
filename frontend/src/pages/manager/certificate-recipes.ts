@@ -18,7 +18,12 @@ export function managerTLSCertificatesForNode(
   const node = nodeId > 0 ? nodeId : null;
   const distinct = new Map<string, ManagedSniDomain>();
   for (const site of sites) {
-    if (!site || typeof site.name !== 'string' || !canApplyManagedSniCertificate(site, node))
+    if (
+      !site ||
+      typeof site.name !== 'string' ||
+      !canApplyManagedSniCertificate(site, node) ||
+      (site.expiresAt !== undefined && site.expiresAt <= Date.now() / 1000)
+    )
       continue;
     const name = managerCertificateName(site.name);
     if (!name || !name.includes('.')) continue;
