@@ -3734,11 +3734,31 @@ export const SCHEMAS: Record<string, unknown> = {
       "preset": {
         "type": "string"
       },
+      "realityTarget": {
+        "type": "string"
+      },
       "relayId": {
         "type": "integer"
       },
       "sni": {
         "type": "string"
+      },
+      "sniBackups": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "sniHealthCheckedAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "sniHealthFailures": {
+        "type": "integer"
+      },
+      "sniHealthLastSwitchAt": {
+        "format": "int64",
+        "type": "integer"
       },
       "templateId": {
         "type": "integer"
@@ -4117,10 +4137,20 @@ export const SCHEMAS: Record<string, unknown> = {
         "format": "int64",
         "type": "integer"
       },
+      "monitorSni": {
+        "type": "boolean"
+      },
+      "monitorSniIntervalMinutes": {
+        "type": "integer"
+      },
       "name": {
         "type": "string"
       },
       "nextRotation": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "nextSniHealthCheck": {
         "format": "int64",
         "type": "integer"
       },
@@ -4162,8 +4192,11 @@ export const SCHEMAS: Record<string, unknown> = {
       "incy",
       "intervalMinutes",
       "lastRotation",
+      "monitorSni",
+      "monitorSniIntervalMinutes",
       "name",
       "nextRotation",
+      "nextSniHealthCheck",
       "note",
       "ownClient",
       "published",

@@ -28,6 +28,15 @@ describe('managed SNI certificate ownership', () => {
     expect(canApplyManagedSniCertificate(localSite, 7)).toBe(false);
   });
 
+  it('treats existing panel and subscription certificates as local-only files', () => {
+    for (const source of ['panel', 'subscription'] as const) {
+      const site: ManagedSniDomain = { ...localSite, source };
+      expect(canApplyManagedSniCertificate(site, null)).toBe(true);
+      expect(canApplyManagedSniCertificate(site, undefined)).toBe(true);
+      expect(canApplyManagedSniCertificate(site, 7)).toBe(false);
+    }
+  });
+
   it('reuses a foreign certificate only on its owning node', () => {
     expect(canApplyManagedSniCertificate(usSite, 7)).toBe(true);
     expect(canApplyManagedSniCertificate(usSite, 8)).toBe(false);

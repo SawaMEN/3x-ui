@@ -35,6 +35,8 @@ import { SnapshotSchema, SubscriptionSchema, newSubscription } from './schema';
 import type { Relay, Subscription } from './schema';
 import SubscriptionEditor from './SubscriptionEditor';
 import SubscriptionWorkspace from './SubscriptionWorkspace';
+import BulkSharedModal from './BulkSharedModal';
+import CoverSiteModal from './CoverSiteModal';
 import RelayEditor from './RelayEditor';
 import { runSNIScan } from '@/pages/inbounds/form/security/sni-scanner';
 import { scannedServerName } from '@/pages/inbounds/form/security/RealityTargetScannerModal';
@@ -43,7 +45,7 @@ const NodeFormModal = lazy(() => import('@/pages/nodes/NodeFormModal'));
 const InboundFormModal = lazy(() => import('@/pages/inbounds/form/InboundFormModal'));
 const Scanner = lazy(() => import('@/pages/inbounds/form/security/RealityTargetScannerModal'));
 export default function ManagerPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const m = (k: string) => t('pages.manager.' + k);
   const { antdThemeConfig } = useTheme();
   const navigate = useNavigate();
@@ -58,6 +60,8 @@ export default function ManagerPage() {
   const [relay, setRelay] = useState<Relay | null>(null);
   const [nodeOpen, setNodeOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [bulkSharedOpen, setBulkSharedOpen] = useState(false);
+  const [coverSiteOpen, setCoverSiteOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [domains, setDomains] = useState('');
   const [qr, setQr] = useState('');
@@ -244,6 +248,7 @@ export default function ManagerPage() {
                         onDelete={(id) => confirm(`/subscriptions/${id}/delete`)}
                         onQR={setQr}
                         onManageClient={() => navigate('/clients')}
+                        onBulkAdd={() => setBulkSharedOpen(true)}
                       />
                     ),
                   },
@@ -385,6 +390,11 @@ export default function ManagerPage() {
                           <Space wrap>
                             <Button icon={<SearchOutlined />} onClick={() => setScanOpen(true)}>
                               {m('scan')}
+                            </Button>
+                            <Button onClick={() => setCoverSiteOpen(true)}>
+                              {i18n.language.startsWith('ru')
+                                ? 'Сайт-заглушка и TLS'
+                                : 'Cover site & TLS'}
                             </Button>
                             <Button onClick={exportDomains}>{m('export')}</Button>
                             <Upload
@@ -555,6 +565,32 @@ export default function ManagerPage() {
           </Layout.Content>
         </Layout>
       </Layout>
+      <CoverSiteModal
+        open={coverSiteOpen}
+        nodes={nodes}
+        onClose={() => setCoverSiteOpen(false)}
+        onSuccess={(domain, state) => {
+          refresh();
+          void cache.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
+          msg.success(
+            i18n.language.startsWith('ru')
+              ? `Сайт ${domain}: ${state}`
+              : `Site ${domain}: ${state}`,
+          );
+        }}
+      />
+      <BulkSharedModal
+        open={bulkSharedOpen}
+        onClose={() => setBulkSharedOpen(false)}
+        onSuccess={(created) => {
+          refresh();
+          msg.success(
+            i18n.language.startsWith('ru')
+              ? `Создано и поставлено в очередь: ${created}`
+              : `Created and queued: ${created}`,
+          );
+        }}
+      />
       {sub && (
         <SubscriptionEditor
           key={`${sub.id}-${sub.token}`}

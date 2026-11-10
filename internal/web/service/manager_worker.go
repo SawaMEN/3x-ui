@@ -80,6 +80,29 @@ func (s *ManagerService) schedule() {
 			logger.Error("manager schedule:", err)
 		}
 	}
+	// Bounded monitoring queue; using existing operation locks prevents races
+	// with concurrent rotations or edits on the same subscription.
+	var watched []model.ManagerSubscription
+	if err := db.Where("enabled = ? AND monitor_sni = ? AND next_sni_health_check <= ?", true, true, time.Now().UnixMilli()).
+		Order("next_sni_health_check").Limit(12).Find(&watched).Error; err != nil {
+		logger.Error("manager SNI schedule:", err)
+	}
+	for _, sub := range watched {
+		if len(sub.Published) == 0 {
+			continue
+		}
+		if _, err := s.enqueue(sub.UserID, sub.ID, "sni_health"); err != nil {
+			logger.Warning("manager SNI enqueue:", err)
+			continue
+		}
+		interval := sub.MonitorSNIIntervalMinutes
+		if interval < 5 {
+			interval = 10
+		}
+		if err := db.Model(&sub).Update("next_sni_health_check", time.Now().Add(time.Duration(interval)*time.Minute).UnixMilli()).Error; err != nil {
+			logger.Error("manager SNI schedule timestamp:", err)
+		}
+	}
 	s.scheduleMaintenance()
 	if err := db.Where("finished_at > 0 AND finished_at < ?", time.Now().Add(-30*24*time.Hour).UnixMilli()).Delete(&model.ManagerOperation{}).Error; err != nil {
 		logger.Error("manager journal:", err)
@@ -106,7 +129,10 @@ func (s *ManagerService) execute(ctx context.Context, op *model.ManagerOperation
 		if v := recover(); v != nil {
 			workErr = fmt.Errorf("operation panic: %v", v)
 		}
-		op.State, op.Message = "success", "Completed"
+		op.State = "success"
+		if op.Kind != "sni_health" || op.Message == "" {
+			op.Message = "Completed"
+		}
 		if workErr != nil {
 			op.State, op.Message = "failed", workErr.Error()
 			if errors.Is(workErr, errManagerCleanupPending) {
@@ -135,6 +161,10 @@ func (s *ManagerService) execute(ctx context.Context, op *model.ManagerOperation
 	}
 	release := managerLockSubscription(&sub)
 	defer release()
+	if op.Kind == "sni_health" {
+		workErr = s.monitorSNI(ctx, op, &sub)
+		return
+	}
 	if op.Kind == "cleanup" {
 		workErr = s.cleanupGeneration(ctx, op, &sub)
 		if workErr == nil {
@@ -246,7 +276,7 @@ func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation,
 		if e.Mode == "existing" {
 			ib, err = ibs.GetInbound(e.TemplateID)
 		} else {
-			ib, err = s.clone(ctx, op, sub, *e, i)
+			ib, err = s.clone(ctx, op, sub, e, i)
 		}
 		if err != nil {
 			return fmt.Errorf("entry %d: %w", i+1, err)
@@ -346,10 +376,10 @@ func (s *ManagerService) rotate(ctx context.Context, op *model.ManagerOperation,
 	return nil
 }
 
-func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription, e model.ManagerEntry, index int) (*model.Inbound, error) {
+func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, sub *model.ManagerSubscription, e *model.ManagerEntry, index int) (*model.Inbound, error) {
 	db := database.GetDB()
 	svc := &InboundService{}
-	src, err := managerEntrySource(e, sub.UserID)
+	src, err := managerEntrySource(*e, sub.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -386,14 +416,15 @@ func (s *ManagerService) clone(ctx context.Context, op *model.ManagerOperation, 
 	if err := managerFreshServerKeys(ib); err != nil {
 		return nil, err
 	}
-	if err := s.applySNI(sub.UserID, ib, e.SNI); err != nil {
-		return nil, err
-	}
-	// Recheck the selected random target and certificate, not only the preview sample.
+	// Recheck the primary target and, if needed, every configured REALITY
+	// reserve. Never publish a failed candidate or change a running inbound.
 	ib.Port, _ = strconv.Atoi(e.Port)
-	if err := s.preflightTarget(ctx, ib); err != nil {
+	selected, err := s.prepareManagerEntrySNI(ctx, sub.UserID, ib, *e)
+	if err != nil {
 		return nil, err
 	}
+	// The published subscription must show the hostname actually deployed.
+	e.SNI = selected
 	if e.RelayID > 0 {
 		var r model.ManagerRelay
 		if err := db.First(&r, e.RelayID).Error; err != nil {
@@ -489,12 +520,27 @@ func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) erro
 	if json.Unmarshal([]byte(ib.Settings), &nativeSettings) == nil {
 		if tls, ok := nativeSettings["tls"].(map[string]any); ok {
 			tls["serverName"] = sni
+			nativeUpdated = true
+		}
+		switch ib.Protocol {
+		case model.TUIC:
+			server, ok := nativeSettings["server"].(map[string]any)
+			if !ok {
+				server = map[string]any{}
+				nativeSettings["server"] = server
+			}
+			server["sni"], nativeSettings["sni"] = sni, sni
+			nativeUpdated = true
+		case model.VetroffProxy, model.TrustTunnel:
+			nativeSettings["hostname"] = sni
+			nativeUpdated = true
+		}
+		if nativeUpdated {
 			raw, err := json.Marshal(nativeSettings)
 			if err != nil {
 				return err
 			}
 			ib.Settings = string(raw)
-			nativeUpdated = true
 		}
 	}
 	switch stream["security"] {
@@ -515,6 +561,58 @@ func (s *ManagerService) applySNI(owner int, ib *model.Inbound, sni string) erro
 			return fmt.Errorf("SNI requires TLS or Reality")
 		}
 	}
+	raw, err := json.Marshal(stream)
+	if err == nil {
+		ib.StreamSettings = string(raw)
+	}
+	return err
+}
+
+// managerRealityTarget accepts a hostname with an optional explicit TLS port.
+// The value is a REALITY camouflage destination, not a web server deployed by the panel.
+func managerRealityTarget(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.ContainsAny(value, "/?#@ \t\r\n") {
+		return "", fmt.Errorf("REALITY target must be a hostname or hostname:port")
+	}
+	host, port, hasPort := strings.Cut(value, ":")
+	if _, err := managerDomain(host); err != nil {
+		return "", fmt.Errorf("invalid REALITY target hostname: %w", err)
+	}
+	if !hasPort {
+		return strings.ToLower(host) + ":443", nil
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return "", fmt.Errorf("invalid REALITY target port")
+	}
+	return fmt.Sprintf("%s:%d", strings.ToLower(host), n), nil
+}
+
+// applyEntrySNI preserves independent per-entry SNI and camouflage target.
+func (s *ManagerService) applyEntrySNI(owner int, ib *model.Inbound, entry model.ManagerEntry) error {
+	if err := s.applySNI(owner, ib, entry.SNI); err != nil {
+		return err
+	}
+	if entry.RealityTarget == "" {
+		return nil
+	}
+	target, err := managerRealityTarget(entry.RealityTarget)
+	if err != nil {
+		return err
+	}
+	var stream map[string]any
+	if err := json.Unmarshal([]byte(ib.StreamSettings), &stream); err != nil {
+		return err
+	}
+	if stream["security"] != "reality" {
+		return fmt.Errorf("camouflage target requires REALITY security")
+	}
+	reality, ok := stream["realitySettings"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("REALITY settings are missing")
+	}
+	reality["target"], reality["dest"] = target, target
 	raw, err := json.Marshal(stream)
 	if err == nil {
 		ib.StreamSettings = string(raw)

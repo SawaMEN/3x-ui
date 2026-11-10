@@ -51,7 +51,7 @@ func TestManagerRejectsRandomPortAlreadyOwnedBySystem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.clone(context.Background(), op, sub, sub.Entries[0], 0)
+	_, err = s.clone(context.Background(), op, sub, &sub.Entries[0], 0)
 	if err == nil || !strings.Contains(err.Error(), "address already in use") {
 		t.Fatalf("manager accepted an occupied random port %d: %v", port, err)
 	}

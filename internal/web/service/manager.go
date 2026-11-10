@@ -43,6 +43,7 @@ func (s *ManagerService) Save(owner int, in model.ManagerSubscription) (*model.M
 			return nil, fmt.Errorf("client cannot be changed after creation")
 		}
 		in.Token, in.OwnClient, in.Published, in.LastRotation, in.CreatedAt, in.Retired = old.Token, old.OwnClient, old.Published, old.LastRotation, old.CreatedAt, old.Retired
+		in.NextSNIHealthCheck = old.NextSNIHealthCheck
 	} else {
 		in.Token = uuid.NewString()
 		in.OwnClient = false
@@ -57,6 +58,12 @@ func (s *ManagerService) Save(owner int, in model.ManagerSubscription) (*model.M
 	}
 	if err := s.validate(&in); err != nil {
 		return nil, err
+	}
+	if in.MonitorSNI && in.NextSNIHealthCheck <= 0 {
+		in.NextSNIHealthCheck = time.Now().Add(time.Minute).UnixMilli()
+	}
+	if !in.MonitorSNI {
+		in.NextSNIHealthCheck = 0
 	}
 	in.NextRotation = time.Now().Add(time.Duration(in.IntervalMinutes) * time.Minute).UnixMilli()
 	return &in, db.Save(&in).Error
@@ -73,8 +80,25 @@ func (s *ManagerService) validate(in *model.ManagerSubscription) error {
 		return fmt.Errorf("grace period must be 60–1440 minutes")
 	}
 	in.Name = strings.TrimSpace(in.Name)
-	if in.Name == "" || len(in.Name) > 256 || len(in.Note) > 4096 || len(in.Entries) < 1 || len(in.Entries) > 20 {
-		return fmt.Errorf("provide a name and 1–20 connections")
+	if in.Name == "" || len(in.Name) > 256 || len(in.Note) > 4096 || len(in.Entries) < 1 || len(in.Entries) > 100 {
+		return fmt.Errorf("provide a name and 1–100 connections")
+	}
+	if in.MonitorSNIIntervalMinutes == 0 {
+		in.MonitorSNIIntervalMinutes = 10
+	}
+	if in.MonitorSNIIntervalMinutes < 5 || in.MonitorSNIIntervalMinutes > 1440 {
+		return fmt.Errorf("SNI monitoring interval must be 5–1440 minutes")
+	}
+	if in.MonitorSNI {
+		valid := false
+		for _, e := range in.Entries {
+			if len(e.SNIBackups) > 0 && e.RealityTarget == "" && (e.Mode == "generate" || e.Mode == "rotate") {
+				valid = true
+			}
+		}
+		if !valid {
+			return fmt.Errorf("SNI health monitoring requires at least one generated REALITY connection with backup SNI domains")
+		}
 	}
 	if in.IntervalMinutes < 10 || in.IntervalMinutes > 525600 {
 		return fmt.Errorf("interval must be 10–525600 minutes")
@@ -119,6 +143,40 @@ func (s *ManagerService) validate(in *model.ManagerSubscription) error {
 		ib, err := managerEntrySource(*e, in.UserID)
 		if err != nil {
 			return fmt.Errorf("entry %d: %w", i+1, err)
+		}
+		if len(e.SNIBackups) > 0 {
+			if len(e.SNIBackups) > 6 || e.Mode == "existing" || e.RealityTarget != "" {
+				return fmt.Errorf("entry %d: SNI backups require a generated REALITY connection without a fixed target (maximum 6)", i+1)
+			}
+			var stream struct {
+				Security string `json:"security"`
+			}
+			if err := json.Unmarshal([]byte(ib.StreamSettings), &stream); err != nil || stream.Security != "reality" {
+				return fmt.Errorf("entry %d: SNI backups are available only for REALITY", i+1)
+			}
+			seen := map[string]bool{strings.ToLower(e.SNI): true}
+			for j, raw := range e.SNIBackups {
+				name, err := managerDomain(raw)
+				if err != nil || seen[name] {
+					return fmt.Errorf("entry %d: SNI backup must be a unique DNS hostname", i+1)
+				}
+				seen[name] = true
+				e.SNIBackups[j] = name
+			}
+		}
+		if e.RealityTarget != "" {
+			if e.Mode == "existing" {
+				return fmt.Errorf("a REALITY target cannot override an existing inbound")
+			}
+			if _, err := managerRealityTarget(e.RealityTarget); err != nil {
+				return fmt.Errorf("entry %d: %w", i+1, err)
+			}
+			var stream struct {
+				Security string `json:"security"`
+			}
+			if err := json.Unmarshal([]byte(ib.StreamSettings), &stream); err != nil || stream.Security != "reality" {
+				return fmt.Errorf("entry %d: a camouflage target requires REALITY security", i+1)
+			}
 		}
 		if e.Mode == "existing" {
 			if e.NodeID != nil || e.SNI != "" || (e.Port != "" && e.Port != strconv.Itoa(ib.Port)) {
@@ -262,7 +320,7 @@ func (s *ManagerService) Enqueue(owner, id int, kind string) (*model.ManagerOper
 }
 
 func (s *ManagerService) enqueue(owner, id int, kind string) (*model.ManagerOperation, error) {
-	if kind != "rotate" && kind != "delete" && kind != "cleanup" {
+	if kind != "rotate" && kind != "delete" && kind != "cleanup" && kind != "sni_health" {
 		return nil, fmt.Errorf("invalid operation")
 	}
 	var sub model.ManagerSubscription
@@ -270,8 +328,11 @@ func (s *ManagerService) enqueue(owner, id int, kind string) (*model.ManagerOper
 	if err := db.Where("id = ? AND user_id = ?", id, owner).First(&sub).Error; err != nil {
 		return nil, err
 	}
-	if kind == "rotate" && !sub.Enabled {
+	if (kind == "rotate" || kind == "sni_health") && !sub.Enabled {
 		return nil, fmt.Errorf("subscription is disabled")
+	}
+	if kind == "sni_health" && !sub.MonitorSNI {
+		return nil, fmt.Errorf("SNI monitoring is disabled")
 	}
 	key := fmt.Sprintf("subscription/%d", id)
 	var old model.ManagerOperation

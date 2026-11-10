@@ -1022,8 +1022,15 @@ export const EXAMPLES: Record<string, unknown> = {
     "nodeId": null,
     "port": "",
     "preset": "",
+    "realityTarget": "",
     "relayId": 0,
     "sni": "",
+    "sniBackups": [
+      ""
+    ],
+    "sniHealthCheckedAt": 0,
+    "sniHealthFailures": 0,
+    "sniHealthLastSwitchAt": 0,
     "templateId": 0
   },
   "ManagerInboundConfig": {
@@ -1167,8 +1174,15 @@ export const EXAMPLES: Record<string, unknown> = {
             "nodeId": null,
             "port": "",
             "preset": "",
+            "realityTarget": "",
             "relayId": 0,
             "sni": "",
+            "sniBackups": [
+              ""
+            ],
+            "sniHealthCheckedAt": 0,
+            "sniHealthFailures": 0,
+            "sniHealthLastSwitchAt": 0,
             "templateId": 0
           }
         ],
@@ -1178,8 +1192,11 @@ export const EXAMPLES: Record<string, unknown> = {
         "incy": "",
         "intervalMinutes": 0,
         "lastRotation": 0,
+        "monitorSni": false,
+        "monitorSniIntervalMinutes": 0,
         "name": "",
         "nextRotation": 0,
+        "nextSniHealthCheck": 0,
         "note": "",
         "ownClient": false,
         "published": [
@@ -1193,8 +1210,15 @@ export const EXAMPLES: Record<string, unknown> = {
             "nodeId": null,
             "port": "",
             "preset": "",
+            "realityTarget": "",
             "relayId": 0,
             "sni": "",
+            "sniBackups": [
+              ""
+            ],
+            "sniHealthCheckedAt": 0,
+            "sniHealthFailures": 0,
+            "sniHealthLastSwitchAt": 0,
             "templateId": 0
           }
         ],
@@ -1221,8 +1245,15 @@ export const EXAMPLES: Record<string, unknown> = {
         "nodeId": null,
         "port": "",
         "preset": "",
+        "realityTarget": "",
         "relayId": 0,
         "sni": "",
+        "sniBackups": [
+          ""
+        ],
+        "sniHealthCheckedAt": 0,
+        "sniHealthFailures": 0,
+        "sniHealthLastSwitchAt": 0,
         "templateId": 0
       }
     ],
@@ -1232,8 +1263,11 @@ export const EXAMPLES: Record<string, unknown> = {
     "incy": "",
     "intervalMinutes": 0,
     "lastRotation": 0,
+    "monitorSni": false,
+    "monitorSniIntervalMinutes": 0,
     "name": "",
     "nextRotation": 0,
+    "nextSniHealthCheck": 0,
     "note": "",
     "ownClient": false,
     "published": [
@@ -1247,8 +1281,15 @@ export const EXAMPLES: Record<string, unknown> = {
         "nodeId": null,
         "port": "",
         "preset": "",
+        "realityTarget": "",
         "relayId": 0,
         "sni": "",
+        "sniBackups": [
+          ""
+        ],
+        "sniHealthCheckedAt": 0,
+        "sniHealthFailures": 0,
+        "sniHealthLastSwitchAt": 0,
         "templateId": 0
       }
     ],
