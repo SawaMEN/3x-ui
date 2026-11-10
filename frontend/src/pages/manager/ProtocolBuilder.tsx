@@ -13,6 +13,12 @@ import {
 } from 'antd';
 import { RadarChartOutlined } from '@ant-design/icons';
 import type { NodeRecord } from '@/schemas/node';
+import type { RealityScanResult } from '@/generated/types';
+import {
+  bestManagerAutoSNI,
+  isAutoUsableManagerSNI,
+  rankManagerSNISuggestions,
+} from './sni-suggestions';
 import { runSNIScan } from '@/pages/inbounds/form/security/sni-scanner';
 import { nodeSupportsProtocol } from '@/lib/xray/node-protocols';
 import { buildManagerRecipes, catalogGroups, managerCatalog, MAX_MANAGER_ENTRIES } from './catalog';
@@ -32,6 +38,9 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
   const [sniByPreset, setSniByPreset] = useState<Record<string, string>>({});
   const [targetByPreset, setTargetByPreset] = useState<Record<string, string>>({});
   const [verifiedSniByNode, setVerifiedSniByNode] = useState<Record<number, string>>({});
+  const [scanResultsByNode, setScanResultsByNode] = useState<Record<number, RealityScanResult[]>>(
+    {},
+  );
   const [scanning, setScanning] = useState<number | null>(null);
   const [scanError, setScanError] = useState('');
   const [replace, setReplace] = useState(true);
@@ -72,38 +81,32 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
   const candidates = [...new Set(domains.map((v) => v.trim()).filter(Boolean))];
 
   const scanNode = async (nodeId: number) => {
-    if (scanning !== null || candidates.length === 0) return;
+    if (scanning !== null) return;
     setScanning(nodeId);
     setScanError('');
+    setVerifiedSniByNode((current) => {
+      const next = { ...current };
+      delete next[nodeId];
+      return next;
+    });
+    setScanResultsByNode((current) => ({ ...current, [nodeId]: [] }));
     try {
-      // The scan is executed on the selected node. Its result is a suggestion,
-      // never a guarantee that another node or network path behaves identically.
-      const results = await runSNIScan(
-        nodeId || undefined,
-        'reality',
-        candidates.join('\n'),
-        'candidates',
-      );
-      const ranked = results
-        .filter(
-          (row) =>
-            row.feasible && row.certValid && candidates.includes(row.host) && row.latencyMs >= 0,
-        )
-        .sort((a, b) => a.latencyMs - b.latencyMs);
-      if (ranked.length === 0) {
-        setVerifiedSniByNode((current) => {
-          const next = { ...current };
-          delete next[nodeId];
-          return next;
-        });
+      // Reuse the panel scanner (neighbor discovery, candidate discovery,
+      // TLS 1.3/H2/X25519 and repeated stability probes).
+      // Neighboring IPs must not be replaced by unrelated DNS destinations.
+      const results = await runSNIScan(nodeId || undefined, 'reality', '', 'combined');
+      const ranked = rankManagerSNISuggestions(results);
+      setScanResultsByNode((current) => ({ ...current, [nodeId]: ranked.slice(0, 10) }));
+      const best = bestManagerAutoSNI(ranked);
+      if (best) {
+        setVerifiedSniByNode((current) => ({ ...current, [nodeId]: best }));
+      } else {
         setScanError(
           t(
-            'Для выбранной ноды не найдено подтверждённых SNI.',
-            'No verified SNI found on this node.',
+            'Нет стабильных SNI с подтверждённым совпадением DNS и IP. Результаты поиска по соседним IP ниже; для автоматического применения необходима отдельная проверка.',
+            'No stable SNI with matching DNS and tested IP. Neighboring IP discoveries are shown below; automatic deployment requires separate verification.',
           ),
         );
-      } else {
-        setVerifiedSniByNode((current) => ({ ...current, [nodeId]: ranked[0].host }));
       }
     } catch (error) {
       setScanError(String(error));
@@ -331,7 +334,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                     {t('Проверен:', 'Verified:')} {known}
                   </Tag>
                 )}
-                {selected && candidates.length > 0 && (
+                {selected && (
                   <Button
                     size="small"
                     icon={<RadarChartOutlined />}
@@ -339,8 +342,44 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                     disabled={scanning !== null}
                     onClick={() => void scanNode(node.id)}
                   >
-                    {t('Проверить SNI', 'Scan SNI')}
+                    {t('Интеллектуальный поиск SNI', 'Intelligent SNI search')}
                   </Button>
+                )}
+                {selected && (scanResultsByNode[node.id]?.length ?? 0) > 0 && (
+                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {t(
+                        'Найденные SNI с этой ноды. Для автоматического применения требуется совпадение DNS и проверенного IP.',
+                        'SNI discovered from this node. Automatic selection requires DNS to match the verified IP.',
+                      )}
+                    </Typography.Text>
+                    {scanResultsByNode[node.id].slice(0, 5).map((row) => (
+                      <div
+                        key={`${row.host}|${row.target}`}
+                        style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}
+                      >
+                        <Tag color={isAutoUsableManagerSNI(row) ? 'success' : 'default'}>
+                          {isAutoUsableManagerSNI(row)
+                            ? t('DNS совпадает', 'DNS matches')
+                            : t('Проверен только IP', 'IP only')}
+                        </Tag>
+                        <Typography.Text style={{ fontSize: 12 }}>
+                          {row.host} · {row.ip} · {row.latencyMs} ms
+                          {row.attempts ? ` · ${row.successes ?? 0}/${row.attempts}` : ''}
+                        </Typography.Text>
+                        {isAutoUsableManagerSNI(row) && (
+                          <Button
+                            size="small"
+                            onClick={() =>
+                              setVerifiedSniByNode((current) => ({ ...current, [node.id]: row.host }))
+                            }
+                          >
+                            {t('Выбрать', 'Select')}
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             );
