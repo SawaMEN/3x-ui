@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"os"
 	"slices"
 	"testing"
@@ -67,7 +68,7 @@ func TestManagerSNIHealthHysteresisAndCooldown(t *testing.T) {
 
 func TestManagerSNIHealthPreservesPreviousHostAndCredentials(t *testing.T) {
 	entry := model.ManagerEntry{
-		SNI: "old.example.org",
+		SNI:        "old.example.org",
 		SNIBackups: []string{"next.example.org", "third.example.org"},
 	}
 	backup := managerSNIHealthBackups(entry, "next.example.org")
@@ -105,7 +106,7 @@ func TestManagerCheckCertificatesNativeTLSPaths(t *testing.T) {
 		{Protocol: model.TrustTunnel, Settings: `{"hostname":"site.example.org","certificate":"` + missing + `","privateKey":"` + missing + `"}`, StreamSettings: "{}"},
 		{Protocol: model.NaiveProxy, Settings: `{"tls":{"enabled":true,"serverName":"site.example.org","certificatePath":"` + missing + `","keyPath":"` + missing + `"}}`, StreamSettings: "{}"},
 	} {
-		if err := managerCheckCertificates(ib); !os.IsNotExist(err) {
+		if err := managerCheckCertificates(ib); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("%s missing TLS file not detected: %v", ib.Protocol, err)
 		}
 	}
