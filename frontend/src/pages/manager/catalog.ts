@@ -198,6 +198,9 @@ export interface RecipeOptions {
   targetByPreset: Record<string, string>;
   verifiedSniByNode: Record<number, string>;
   managedCertificates?: ManagedSniDomain[];
+  // Optional node-level TLS hostname override; "auto" means pick the first
+  // valid managed certificate on that node, without inheriting protocol SNI.
+  tlsSniByNode?: Record<number, string>;
   // Explicit opt-in: create draft TLS recipes without managed certificates
   // and require the administrator to configure each inbound before preflight.
   allowUnconfiguredTLS?: boolean;
@@ -234,7 +237,10 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
         skipped.push(`${preset.name} · ${nodeName}: unsupported or offline`);
         continue;
       }
-      const configuredSni = options.sniByPreset[id] || (preset.sniMode === 'reality' ? 'auto' : '');
+      const configuredSni =
+        preset.sniMode === 'tls' && options.tlsSniByNode?.[nodeId] !== undefined
+          ? options.tlsSniByNode[nodeId]
+          : options.sniByPreset[id] || (preset.sniMode === 'reality' ? 'auto' : '');
       const customTarget = (options.targetByPreset[id] || '').trim();
       const customTargetHost = customTarget.split(':')[0];
       // The certificate presented by a camouflage target normally covers its
