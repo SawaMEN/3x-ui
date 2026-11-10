@@ -260,7 +260,7 @@ describe('domain and TLS dashboard', () => {
     f.config.domains.push({ ...defaultDomain, name: 'cdn.example.org', mode: 'cdn' });
     renderWithProviders(<DomainFrontTab />);
     await screen.findByDisplayValue('old@example.com');
-    fireEvent.click(screen.getByRole('button', { name: 'Audit all DNS/TLS' }));
+    fireEvent.click(screen.getByRole('button', { name: /Audit all DNS\/TLS/ }));
     await waitFor(() =>
       expect(f.checked).toEqual(expect.arrayContaining(['sub.example.com', 'cdn.example.org'])),
     );

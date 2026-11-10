@@ -2570,7 +2570,6 @@
         "manualSettings": "Manual HTTPS and external proxy",
         "workspace": {
           "title": "Domain control center",
-          "description": "Live gateway status, certificates and domains in one workspace",
           "online": "Gateway running",
           "offline": "Gateway requires attention",
           "disabled": "Gateway disabled",
@@ -2620,7 +2619,8 @@
             "expiring": "Expiring soon",
             "healthy": "Valid",
             "pending": "Awaiting certificate"
-          }
+          },
+          "subtitle": "Live gateway status, certificates and domains in one workspace"
         }
       },
       "subAppearanceTheme": "Page theme",

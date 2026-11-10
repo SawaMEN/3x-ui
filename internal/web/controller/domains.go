@@ -24,6 +24,7 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.GET("/status", a.status)
 	g.GET("/sni", a.sni)
 	g.POST("/apply", a.apply)
+	g.POST("/preflight", a.preflight)
 	g.POST("/check", a.check)
 	g.POST("/recommend", a.recommend)
 }
@@ -48,6 +49,17 @@ func (a *DomainController) apply(c *gin.Context) {
 		return
 	}
 	result, err := service.ApplyDomainFront(c.Request.Context(), cfg)
+	jsonObj(c, result, err)
+}
+
+// preflight inspects a draft configuration without persisting it or issuing certificates.
+func (a *DomainController) preflight(c *gin.Context) {
+	cfg := domainfront.DefaultConfig()
+	if err := c.ShouldBindJSON(&cfg); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.PreflightDomainFront(c.Request.Context(), cfg)
 	jsonObj(c, result, err)
 }
 

@@ -57,7 +57,7 @@ export default function DomainOverview({
           <Typography.Title level={4} style={{ marginBottom: 4 }}>
             {l('title')}
           </Typography.Title>
-          <Typography.Text type="secondary">{l('description')}</Typography.Text>
+          <Typography.Text type="secondary">{l('subtitle')}</Typography.Text>
         </div>
         <Tag color={running ? 'success' : draft.enabled ? 'warning' : 'default'}>
           {running ? l('online') : draft.enabled ? l('offline') : l('disabled')}
