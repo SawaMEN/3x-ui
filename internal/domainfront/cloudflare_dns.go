@@ -31,8 +31,10 @@ type cloudflareTXTRecord struct {
 
 func (r cloudflareTXTRecord) RR() libdns.RR { return r.rr }
 
-var cloudflareID = regexp.MustCompile(`^[a-fA-F0-9]{32}$`)
-var cloudflareDNSValue = regexp.MustCompile(`^[A-Za-z0-9_-]{32,200}$`)
+var (
+	cloudflareID       = regexp.MustCompile(`^[a-fA-F0-9]{32}$`)
+	cloudflareDNSValue = regexp.MustCompile(`^[A-Za-z0-9_-]{32,200}$`)
+)
 
 func NewCloudflareTXTProvider(zone, zoneID, token string) (*CloudflareTXTProvider, error) {
 	zone = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(zone), "."))
@@ -106,7 +108,7 @@ func (p *CloudflareTXTProvider) request(ctx context.Context, method, suffix stri
 	}
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
-			timer := time.NewTimer(time.Duration(1<<uint(attempt-1)) * time.Second)
+			timer := time.NewTimer(time.Duration(1 << uint(attempt-1)) * time.Second)
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
@@ -130,7 +132,7 @@ func (p *CloudflareTXTProvider) request(ctx context.Context, method, suffix stri
 			}
 			return "", errors.New("Cloudflare DNS request failed")
 		}
-		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 32<<10))
+		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 32 << 10))
 		_ = resp.Body.Close()
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			if attempt < 2 {

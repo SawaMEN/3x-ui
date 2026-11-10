@@ -12,8 +12,10 @@ import (
 // A proof is deliberately ephemeral: it never becomes an ACME token and
 // cannot expose the panel. Only a running, explicitly configured hostname
 // may receive a challenge; wildcard names require DNS-01 instead.
-const externalHTTP01ProbePrefix = "3xui-reach-"
-const externalHTTP01ProbeHeader = "X-3xui-Reachability"
+const (
+	externalHTTP01ProbePrefix = "3xui-reach-"
+	externalHTTP01ProbeHeader = "X-3xui-Reachability"
+)
 
 type http01Proof struct {
 	name    string

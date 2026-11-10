@@ -38,7 +38,7 @@ func NewDigitalOceanTXTProvider(zone, token string) (*DigitalOceanTXTProvider, e
 	}
 	return &DigitalOceanTXTProvider{
 		zone: zone, token: token, endpoint: "https://api.digitalocean.com/v2",
-		client: &http.Client{Timeout: 10*time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
+		client: &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
 			return errors.New("DigitalOcean API redirect refused")
 		}},
 	}, nil
@@ -55,7 +55,7 @@ func (p *DigitalOceanTXTProvider) request(ctx context.Context, method, suffix st
 	}
 	for retry := 0; retry < 3; retry++ {
 		if retry > 0 {
-			wait := time.NewTimer(time.Duration(1<<uint(retry-1)) * time.Second)
+			wait := time.NewTimer(time.Duration(1 << uint(retry-1)) * time.Second)
 			select {
 			case <-wait.C:
 			case <-ctx.Done():
@@ -80,7 +80,7 @@ func (p *DigitalOceanTXTProvider) request(ctx context.Context, method, suffix st
 			}
 			return 0, errors.New("DigitalOcean DNS API request failed")
 		}
-		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 32<<10))
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 32 << 10))
 		_ = resp.Body.Close()
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			if retry < 2 {
