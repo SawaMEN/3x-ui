@@ -46,6 +46,7 @@ interface SubscriptionWorkspaceProps {
   onDelete: (id: number) => void;
   onQR: (url: string) => void;
   onManageClient: () => void;
+  onBulkAdd: () => void;
 }
 
 export default function SubscriptionWorkspace({
@@ -64,8 +65,9 @@ export default function SubscriptionWorkspace({
   onDelete,
   onQR,
   onManageClient,
+  onBulkAdd,
 }: SubscriptionWorkspaceProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const m = (key: string) => t('pages.manager.' + key);
   const basePath = window.X_UI_BASE_PATH || '/';
   const origin = window.location.origin;
@@ -100,6 +102,9 @@ export default function SubscriptionWorkspace({
         <Space wrap className="manager-subscription-actions">
           <Button disabled={pending} icon={<RetweetOutlined />} onClick={onRotateAll}>
             {m('rotateAll')}
+          </Button>
+          <Button disabled={pending} onClick={onBulkAdd}>
+            {i18n.language.startsWith('ru') ? 'Массово создать клиентов' : 'Bulk clients'}
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={onAdd}>
             {m('addSubscription')}
@@ -147,7 +152,7 @@ export default function SubscriptionWorkspace({
                 <div className="manager-subscription-content">
                   <div className="manager-subscription-meta">
                     <Tag variant="filled">
-                      {m('connections')}: {sub.entries.length}/20
+                      {m('connections')}: {sub.entries.length}/100
                     </Tag>
                     <Tag color={sub.autoRotate ? 'processing' : 'default'} variant="filled">
                       {sub.autoRotate

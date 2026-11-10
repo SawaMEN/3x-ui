@@ -20,12 +20,14 @@ func NewManagerController(g *gin.RouterGroup) *ManagerController {
 	g.GET("/state", a.state)
 	g.GET("/subscriptions/:id", a.detail)
 	g.POST("/subscriptions", a.save)
+	g.POST("/subscriptions/bulk-shared", a.bulkShared)
 	g.POST("/preflight", a.preflight)
 	g.POST("/subscriptions/:id/rotate", a.rotate)
 	g.POST("/subscriptions/:id/delete", a.remove)
 	g.POST("/rotate", a.rotateAll)
 	g.POST("/operations/:id/retry", a.retry)
 	g.POST("/domains", a.domains)
+	g.POST("/domains/cover-site", a.coverSite)
 	g.POST("/relays", a.relay)
 	g.POST("/relays/:id/install", a.installRelay)
 	g.POST("/relays/:id/uninstall", a.uninstallRelay)
@@ -67,6 +69,15 @@ func (a *ManagerController) save(c *gin.Context) {
 	jsonObj(c, v, err)
 }
 
+func (a *ManagerController) bulkShared(c *gin.Context) {
+	var input service.ManagerBulkSharedInput
+	if !managerBind(c, &input) {
+		return
+	}
+	result, err := a.service.BulkCreateShared(session.GetLoginUser(c).Id, input)
+	jsonObj(c, result, err)
+}
+
 func (a *ManagerController) queue(c *gin.Context, kind string) {
 	id, ok := managerID(c)
 	if !ok {
@@ -99,6 +110,15 @@ func (a *ManagerController) domains(c *gin.Context) {
 		return
 	}
 	jsonObj(c, nil, a.service.ImportDomains(session.GetLoginUser(c).Id, in.Domains, in.Replace))
+}
+
+func (a *ManagerController) coverSite(c *gin.Context) {
+	var input service.ManagerCoverSiteInput
+	if !managerBind(c, &input) {
+		return
+	}
+	result, err := a.service.ProvisionCoverSite(c.Request.Context(), session.GetLoginUser(c).Id, input)
+	jsonObj(c, result, err)
 }
 
 func (a *ManagerController) relay(c *gin.Context) {

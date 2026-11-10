@@ -24,12 +24,14 @@ import (
 )
 
 type ManagedSNIDomain struct {
-	Name     string `json:"name"`
-	Source   string `json:"source"`
-	CertFile string `json:"certFile"`
-	KeyFile  string `json:"keyFile"`
-	NodeID   int    `json:"nodeId,omitempty"`
-	NodeName string `json:"nodeName,omitempty"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	CertFile  string `json:"certFile"`
+	KeyFile   string `json:"keyFile"`
+	NodeID    int    `json:"nodeId,omitempty"`
+	NodeName  string `json:"nodeName,omitempty"`
+	ExpiresAt int64  `json:"expiresAt,omitempty"`
+	Issuer    string `json:"issuer,omitempty"`
 }
 
 // ManagedSNIDomains reads the *main panel's* live HTTPS endpoints. Remote node
@@ -56,7 +58,7 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 			return
 		}
 		seen[name] = true
-		out = append(out, ManagedSNIDomain{Name: name, Source: source, CertFile: certFile, KeyFile: keyFile})
+		out = append(out, ManagedSNIDomain{Name: name, Source: source, CertFile: certFile, KeyFile: keyFile, ExpiresAt: leaf.NotAfter.Unix(), Issuer: leaf.Issuer.CommonName})
 	}
 	// Telemt WEB owns the cover site at public TCP 443. Prefer it when
 	// several managed certificates happen to cover the same hostname.
@@ -80,15 +82,15 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 			}
 		}
 	}
+	// Existing panel and subscription certificates can also be reused on
+	// this host. Validate their SANs, dates and key pairs with the same add()
+	// check; never copy these paths to a connected node.
+	if settings, err := (&SettingService{}).GetAllSetting(); err == nil {
+		add(settings.SubDomain, "subscription", settings.SubCertFile, settings.SubKeyFile)
+		add(settings.WebDomain, "panel", settings.WebCertFile, settings.WebKeyFile)
+	}
 	if includeNodes {
-		for _, site := range discoverNodeSNI(ctx) {
-			site.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(site.Name)), ".")
-			if site.Name == "" || !strings.Contains(site.Name, ".") || net.ParseIP(site.Name) != nil || seen[site.Name] {
-				continue
-			}
-			seen[site.Name] = true
-			out = append(out, site)
-		}
+		out = mergeNodeManagedSNIDomains(out, discoverNodeSNI(ctx), seen)
 	}
 	// Manual references survive an offline or older child node.
 	for _, domain := range status.Config.Domains {
@@ -103,8 +105,12 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 			return 0
 		case "gateway":
 			return 1
-		default:
+		case "subscription":
 			return 2
+		case "panel":
+			return 3
+		default:
+			return 4
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -114,6 +120,50 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
+}
+
+// Remote SNI certificates are scoped to their owning node. Do not collapse
+// entries from different nodes, or suppress a remote certificate just because
+// the controlling panel exposes the same hostname with its own certificate.
+func mergeNodeManagedSNIDomains(existing, incoming []ManagedSNIDomain, seenNames map[string]bool) []ManagedSNIDomain {
+	seen := make(map[int]map[string]bool)
+	for _, site := range existing {
+		if site.Source == "remote" && site.NodeID > 0 {
+			if seen[site.NodeID] == nil {
+				seen[site.NodeID] = make(map[string]bool)
+			}
+			seen[site.NodeID][site.Name] = true
+		}
+	}
+	for _, site := range incoming {
+		site.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(site.Name)), ".")
+		if site.Source != "remote" || site.NodeID <= 0 || site.CertFile == "" || site.KeyFile == "" ||
+			site.Name == "" || !strings.Contains(site.Name, ".") || net.ParseIP(site.Name) != nil {
+			continue
+		}
+		if seen[site.NodeID] == nil {
+			seen[site.NodeID] = make(map[string]bool)
+		}
+		if seen[site.NodeID][site.Name] {
+			continue
+		}
+		seen[site.NodeID][site.Name] = true
+		seenNames[site.Name] = true
+		existing = append(existing, site)
+	}
+	return existing
+}
+
+// A connected node may expose its panel, subscription or gateway identities.
+// The original source is verified on that node before the controller presents
+// its file paths as a node-local certificate inventory entry.
+func managedNodeCertificateSourceSupported(source string) bool {
+	switch source {
+	case "telemt", "gateway", "panel", "subscription":
+		return true
+	default:
+		return false
+	}
 }
 
 type nodeSNIResponse struct {
@@ -168,17 +218,19 @@ func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
 	var out []ManagedSNIDomain
 	for result := range results {
 		for _, site := range result.Sites {
-			if (site.Source != "telemt" && site.Source != "gateway") || site.Name == "" {
+			if !managedNodeCertificateSourceSupported(site.Source) || site.Name == "" {
 				continue
 			}
 			// A node confirms ownership of its own certificate. Its absolute
 			// paths are intentionally not returned to the parent or browser:
 			// the same path may refer to a different key on another machine.
 			out = append(out, ManagedSNIDomain{
-				Name:     site.Name,
-				Source:   "remote",
-				NodeID:   result.NodeID,
-				NodeName: result.NodeName,
+				Name:      site.Name,
+				Source:    "remote",
+				NodeID:    result.NodeID,
+				NodeName:  result.NodeName,
+				ExpiresAt: site.ExpiresAt,
+				Issuer:    site.Issuer,
 			})
 		}
 	}

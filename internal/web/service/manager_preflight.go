@@ -57,8 +57,14 @@ func (s *ManagerService) Preflight(ctx context.Context, owner int, sub model.Man
 				}
 				if e.Mode != "existing" {
 					ib.Port, _ = strconv.Atoi(e.Port)
-					if err = s.applySNI(owner, ib, e.SNI); err == nil {
-						err = s.preflightTarget(ctx, ib)
+					var selected string
+					selected, err = s.prepareManagerEntrySNI(ctx, owner, ib, e)
+					if err == nil && selected != e.SNI {
+						if e.SNI == "random" {
+							result.Message = "Ready with selected SNI: " + selected
+						} else {
+							result.Message = "Ready using backup SNI: " + selected
+						}
 					}
 					if ib.Port > 0 {
 						for _, prior := range ports {
@@ -214,7 +220,13 @@ func managerCheckCertificates(ib *model.Inbound) error {
 		Hostname    string `json:"hostname"`
 		Certificate string `json:"certificate"`
 		PrivateKey  string `json:"privateKey"`
-		TLS         struct {
+		SNI         string `json:"sni"`
+		Server      struct {
+			Certificate string `json:"certificate"`
+			PrivateKey  string `json:"private_key"`
+			SNI         string `json:"sni"`
+		} `json:"server"`
+		TLS struct {
 			Enabled         *bool  `json:"enabled"`
 			ServerName      string `json:"serverName"`
 			CertificatePath string `json:"certificatePath"`
@@ -223,10 +235,17 @@ func managerCheckCertificates(ib *model.Inbound) error {
 	}
 	if json.Unmarshal([]byte(ib.Settings), &native) == nil {
 		certificate, key, name := native.TLS.CertificatePath, native.TLS.KeyPath, native.TLS.ServerName
-		if ib.Protocol == model.VetroffProxy {
+		if ib.Protocol == model.VetroffProxy || ib.Protocol == model.TrustTunnel {
 			certificate, key, name = native.Certificate, native.PrivateKey, native.Hostname
 		}
-		if (ib.Protocol == model.VetroffProxy || native.TLS.Enabled == nil || *native.TLS.Enabled) && (certificate != "" || key != "") {
+		if ib.Protocol == model.TUIC {
+			certificate, key, name = native.Server.Certificate, native.Server.PrivateKey, native.Server.SNI
+			if certificate == "" && key == "" {
+				certificate, key, name = native.Certificate, native.PrivateKey, native.SNI
+			}
+		}
+		if (ib.Protocol == model.VetroffProxy || ib.Protocol == model.TrustTunnel ||
+			ib.Protocol == model.TUIC || native.TLS.Enabled == nil || *native.TLS.Enabled) && (certificate != "" || key != "") {
 			certBytes, err := recoveryReadFile(certificate)
 			if err != nil {
 				return fmt.Errorf("certificate: %w", err)

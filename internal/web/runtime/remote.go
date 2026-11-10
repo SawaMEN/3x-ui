@@ -794,10 +794,12 @@ type WebCertFiles struct {
 // RemoteManagedSNI identifies a cover site on the node. Its certificate
 // file paths are checked on that node and must never be copied to another.
 type RemoteManagedSNI struct {
-	Name     string `json:"name"`
-	Source   string `json:"source"`
-	CertFile string `json:"certFile"`
-	KeyFile  string `json:"keyFile"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	CertFile  string `json:"certFile"`
+	KeyFile   string `json:"keyFile"`
+	ExpiresAt int64  `json:"expiresAt,omitempty"`
+	Issuer    string `json:"issuer,omitempty"`
 }
 
 // RemoteCertificateSummary is the node's read-only certificate metadata.

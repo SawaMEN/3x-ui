@@ -13,18 +13,23 @@ type ManagerInboundConfig struct {
 }
 
 type ManagerEntry struct {
-	Preset          string                `json:"preset,omitempty"`
-	Config          *ManagerInboundConfig `json:"config,omitempty"`
-	TemplateID      int                   `json:"templateId"`
-	Mode            string                `json:"mode"`
-	NodeID          *int                  `json:"nodeId,omitempty"`
-	Port            string                `json:"port"`
-	SNI             string                `json:"sni"`
-	Label           string                `json:"label"`
-	Flag            string                `json:"flag"`
-	RelayID         int                   `json:"relayId"`
-	CustomLink      string                `json:"customLink"`
-	ActiveInboundID int                   `json:"activeInboundId"`
+	Preset                string                `json:"preset,omitempty"`
+	Config                *ManagerInboundConfig `json:"config,omitempty"`
+	TemplateID            int                   `json:"templateId"`
+	Mode                  string                `json:"mode"`
+	NodeID                *int                  `json:"nodeId,omitempty"`
+	Port                  string                `json:"port"`
+	SNI                   string                `json:"sni"`
+	SNIBackups            []string              `json:"sniBackups,omitempty"`
+	RealityTarget         string                `json:"realityTarget,omitempty"`
+	Label                 string                `json:"label"`
+	Flag                  string                `json:"flag"`
+	RelayID               int                   `json:"relayId"`
+	CustomLink            string                `json:"customLink"`
+	ActiveInboundID       int                   `json:"activeInboundId"`
+	SNIHealthFailures     int                   `json:"sniHealthFailures,omitempty"`
+	SNIHealthCheckedAt    int64                 `json:"sniHealthCheckedAt,omitempty"`
+	SNIHealthLastSwitchAt int64                 `json:"sniHealthLastSwitchAt,omitempty"`
 }
 
 type ManagerRetiredGeneration struct {
@@ -33,28 +38,31 @@ type ManagerRetiredGeneration struct {
 }
 
 type ManagerSubscription struct {
-	ID              int                        `json:"id" gorm:"primaryKey"`
-	UserID          int                        `json:"-" gorm:"index;not null"`
-	Token           string                     `json:"token" gorm:"uniqueIndex;not null"`
-	Name            string                     `json:"name"`
-	Note            string                     `json:"note"`
-	SupportURL      string                     `json:"supportUrl"`
-	WebsiteURL      string                     `json:"websiteUrl"`
-	ClientID        int                        `json:"clientId"`
-	OwnClient       bool                       `json:"ownClient"`
-	Enabled         bool                       `json:"enabled"`
-	AutoRotate      bool                       `json:"autoRotate"`
-	IntervalMinutes int                        `json:"intervalMinutes"`
-	GraceMinutes    int                        `json:"graceMinutes"`
-	Retired         []ManagerRetiredGeneration `json:"-" gorm:"serializer:json;type:text"`
-	NextRotation    int64                      `json:"nextRotation" gorm:"index"`
-	LastRotation    int64                      `json:"lastRotation"`
-	Happ            string                     `json:"happ"`
-	Incy            string                     `json:"incy"`
-	Entries         []ManagerEntry             `json:"entries" gorm:"serializer:json;type:text"`
-	Published       []ManagerEntry             `json:"published" gorm:"serializer:json;type:text"`
-	CreatedAt       int64                      `json:"createdAt" gorm:"autoCreateTime:milli"`
-	UpdatedAt       int64                      `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+	ID                        int                        `json:"id" gorm:"primaryKey"`
+	UserID                    int                        `json:"-" gorm:"index;not null"`
+	Token                     string                     `json:"token" gorm:"uniqueIndex;not null"`
+	Name                      string                     `json:"name"`
+	Note                      string                     `json:"note"`
+	SupportURL                string                     `json:"supportUrl"`
+	WebsiteURL                string                     `json:"websiteUrl"`
+	ClientID                  int                        `json:"clientId"`
+	OwnClient                 bool                       `json:"ownClient"`
+	Enabled                   bool                       `json:"enabled"`
+	AutoRotate                bool                       `json:"autoRotate"`
+	MonitorSNI                bool                       `json:"monitorSni"`
+	MonitorSNIIntervalMinutes int                        `json:"monitorSniIntervalMinutes"`
+	NextSNIHealthCheck        int64                      `json:"nextSniHealthCheck" gorm:"index"`
+	IntervalMinutes           int                        `json:"intervalMinutes"`
+	GraceMinutes              int                        `json:"graceMinutes"`
+	Retired                   []ManagerRetiredGeneration `json:"-" gorm:"serializer:json;type:text"`
+	NextRotation              int64                      `json:"nextRotation" gorm:"index"`
+	LastRotation              int64                      `json:"lastRotation"`
+	Happ                      string                     `json:"happ"`
+	Incy                      string                     `json:"incy"`
+	Entries                   []ManagerEntry             `json:"entries" gorm:"serializer:json;type:text"`
+	Published                 []ManagerEntry             `json:"published" gorm:"serializer:json;type:text"`
+	CreatedAt                 int64                      `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt                 int64                      `json:"updatedAt" gorm:"autoUpdateTime:milli"`
 }
 
 type ManagerOperation struct {

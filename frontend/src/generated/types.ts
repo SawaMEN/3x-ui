@@ -871,8 +871,13 @@ export interface ManagerEntry {
   nodeId?: number | null;
   port: string;
   preset?: string;
+  realityTarget?: string;
   relayId: number;
   sni: string;
+  sniBackups?: string[];
+  sniHealthCheckedAt?: number;
+  sniHealthFailures?: number;
+  sniHealthLastSwitchAt?: number;
   templateId: number;
 }
 
@@ -971,8 +976,11 @@ export interface ManagerSubscription {
   incy: string;
   intervalMinutes: number;
   lastRotation: number;
+  monitorSni: boolean;
+  monitorSniIntervalMinutes: number;
   name: string;
   nextRotation: number;
+  nextSniHealthCheck: number;
   note: string;
   ownClient: boolean;
   published: ManagerEntry[];

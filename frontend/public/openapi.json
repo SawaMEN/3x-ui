@@ -3772,11 +3772,31 @@
           "preset": {
             "type": "string"
           },
+          "realityTarget": {
+            "type": "string"
+          },
           "relayId": {
             "type": "integer"
           },
           "sni": {
             "type": "string"
+          },
+          "sniBackups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sniHealthCheckedAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sniHealthFailures": {
+            "type": "integer"
+          },
+          "sniHealthLastSwitchAt": {
+            "format": "int64",
+            "type": "integer"
           },
           "templateId": {
             "type": "integer"
@@ -4155,10 +4175,20 @@
             "format": "int64",
             "type": "integer"
           },
+          "monitorSni": {
+            "type": "boolean"
+          },
+          "monitorSniIntervalMinutes": {
+            "type": "integer"
+          },
           "name": {
             "type": "string"
           },
           "nextRotation": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "nextSniHealthCheck": {
             "format": "int64",
             "type": "integer"
           },
@@ -4200,8 +4230,11 @@
           "incy",
           "intervalMinutes",
           "lastRotation",
+          "monitorSni",
+          "monitorSniIntervalMinutes",
           "name",
           "nextRotation",
+          "nextSniHealthCheck",
           "note",
           "ownClient",
           "published",
@@ -6280,8 +6313,15 @@
                         "nodeId": null,
                         "port": "",
                         "preset": "",
+                        "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
+                        "sniBackups": [
+                          ""
+                        ],
+                        "sniHealthCheckedAt": 0,
+                        "sniHealthFailures": 0,
+                        "sniHealthLastSwitchAt": 0,
                         "templateId": 0
                       }
                     ],
@@ -6291,8 +6331,11 @@
                     "incy": "",
                     "intervalMinutes": 0,
                     "lastRotation": 0,
+                    "monitorSni": false,
+                    "monitorSniIntervalMinutes": 0,
                     "name": "",
                     "nextRotation": 0,
+                    "nextSniHealthCheck": 0,
                     "note": "",
                     "ownClient": false,
                     "published": [
@@ -6306,8 +6349,15 @@
                         "nodeId": null,
                         "port": "",
                         "preset": "",
+                        "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
+                        "sniBackups": [
+                          ""
+                        ],
+                        "sniHealthCheckedAt": 0,
+                        "sniHealthFailures": 0,
+                        "sniHealthLastSwitchAt": 0,
                         "templateId": 0
                       }
                     ],
@@ -6568,8 +6618,15 @@
                             "nodeId": null,
                             "port": "",
                             "preset": "",
+                            "realityTarget": "",
                             "relayId": 0,
                             "sni": "",
+                            "sniBackups": [
+                              ""
+                            ],
+                            "sniHealthCheckedAt": 0,
+                            "sniHealthFailures": 0,
+                            "sniHealthLastSwitchAt": 0,
                             "templateId": 0
                           }
                         ],
@@ -6579,8 +6636,11 @@
                         "incy": "",
                         "intervalMinutes": 0,
                         "lastRotation": 0,
+                        "monitorSni": false,
+                        "monitorSniIntervalMinutes": 0,
                         "name": "",
                         "nextRotation": 0,
+                        "nextSniHealthCheck": 0,
                         "note": "",
                         "ownClient": false,
                         "published": [
@@ -6594,8 +6654,15 @@
                             "nodeId": null,
                             "port": "",
                             "preset": "",
+                            "realityTarget": "",
                             "relayId": 0,
                             "sni": "",
+                            "sniBackups": [
+                              ""
+                            ],
+                            "sniHealthCheckedAt": 0,
+                            "sniHealthFailures": 0,
+                            "sniHealthLastSwitchAt": 0,
                             "templateId": 0
                           }
                         ],
@@ -6667,8 +6734,15 @@
                         "nodeId": null,
                         "port": "",
                         "preset": "",
+                        "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
+                        "sniBackups": [
+                          ""
+                        ],
+                        "sniHealthCheckedAt": 0,
+                        "sniHealthFailures": 0,
+                        "sniHealthLastSwitchAt": 0,
                         "templateId": 0
                       }
                     ],
@@ -6678,8 +6752,11 @@
                     "incy": "",
                     "intervalMinutes": 0,
                     "lastRotation": 0,
+                    "monitorSni": false,
+                    "monitorSniIntervalMinutes": 0,
                     "name": "",
                     "nextRotation": 0,
+                    "nextSniHealthCheck": 0,
                     "note": "",
                     "ownClient": false,
                     "published": [
@@ -6693,8 +6770,15 @@
                         "nodeId": null,
                         "port": "",
                         "preset": "",
+                        "realityTarget": "",
                         "relayId": 0,
                         "sni": "",
+                        "sniBackups": [
+                          ""
+                        ],
+                        "sniHealthCheckedAt": 0,
+                        "sniHealthFailures": 0,
+                        "sniHealthLastSwitchAt": 0,
                         "templateId": 0
                       }
                     ],
@@ -6702,6 +6786,74 @@
                     "token": "",
                     "updatedAt": 0,
                     "websiteUrl": ""
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/manager/subscriptions/bulk-shared": {
+      "post": {
+        "tags": [
+          "Subscription manager"
+        ],
+        "summary": "Create independent subscriptions for 1–100 clients on shared existing inbounds",
+        "operationId": "post_panel_api_manager_subscriptions_bulk_shared",
+        "description": "Queues client creation and attachment without creating or deleting the selected shared inbounds. The request must reference unique, enabled, caller-owned inbounds.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "namePrefix",
+                  "count",
+                  "inboundIds"
+                ],
+                "properties": {
+                  "namePrefix": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 220
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "inboundIds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
                   }
                 }
               }
@@ -6885,6 +7037,72 @@
                   },
                   "replace": {
                     "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/manager/domains/cover-site": {
+      "post": {
+        "tags": [
+          "Subscription manager"
+        ],
+        "summary": "Provision an owned HTTPS cover site using existing Domain Front and CertMagic",
+        "operationId": "post_panel_api_manager_domains_cover_site",
+        "description": "Requires DNS ownership, explicit ACME terms consent, and an online configured node. Existing domains with a different purpose will not be replaced.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "nodeId",
+                  "domain",
+                  "email",
+                  "acceptTerms"
+                ],
+                "properties": {
+                  "nodeId": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "domain": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 253
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "acceptTerms": {
+                    "type": "boolean",
+                    "const": true
                   }
                 }
               }
