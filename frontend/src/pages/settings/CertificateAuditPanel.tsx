@@ -22,7 +22,8 @@ export default function CertificateAuditPanel() {
       const response = await HttpUtil.get('/panel/api/domains/certificates/events', undefined, {
         silent: true,
       });
-      if (!response?.success) throw new Error(response?.msg || 'Unable to load certificate history');
+      if (!response?.success)
+        throw new Error(response?.msg || 'Unable to load certificate history');
       return z.array(auditEntry).parse(response.obj);
     },
     refetchInterval: 60000,
@@ -33,12 +34,7 @@ export default function CertificateAuditPanel() {
     <Card size="small" title={label('title')} style={{ marginTop: 12 }}>
       <Typography.Paragraph type="secondary">{label('description')}</Typography.Paragraph>
       {history.error && (
-        <Alert
-          type="error"
-          showIcon
-          title={history.error.message}
-          style={{ marginBottom: 12 }}
-        />
+        <Alert type="error" showIcon title={history.error.message} style={{ marginBottom: 12 }} />
       )}
       <Table
         rowKey="key"
@@ -61,15 +57,31 @@ export default function CertificateAuditPanel() {
           {
             title: label('domain'),
             render: (_value, item) =>
-              item.domain || <Typography.Text type="secondary">{label('unspecified')}</Typography.Text>,
+              item.domain || (
+                <Typography.Text type="secondary">{label('unspecified')}</Typography.Text>
+              ),
           },
           { title: label('manager'), dataIndex: 'manager' },
-          { title: label('action'), dataIndex: 'action', render: (value: string) => label('actions.' + value) },
+          {
+            title: label('action'),
+            dataIndex: 'action',
+            render: (value: string) => label('actions.' + value),
+          },
           {
             title: label('outcome'),
             dataIndex: 'outcome',
             render: (value: string) => (
-              <Tag color={value === 'failed' || value === 'expired' ? 'error' : value === 'expiring' ? 'warning' : value === 'succeeded' || value === 'recovered' ? 'success' : undefined}>
+              <Tag
+                color={
+                  value === 'failed' || value === 'expired'
+                    ? 'error'
+                    : value === 'expiring'
+                      ? 'warning'
+                      : value === 'succeeded' || value === 'recovered'
+                        ? 'success'
+                        : undefined
+                }
+              >
                 {label('outcomes.' + value)}
               </Tag>
             ),
