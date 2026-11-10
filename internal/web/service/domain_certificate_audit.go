@@ -138,9 +138,18 @@ func CertificateAuditHistory() ([]CertificateAuditEntry, error) {
 // Keep CertMagic event journaling separate from temporary firewall leases.
 // An audit failure must never interrupt certificate issuance or renewal.
 func DomainCertificateAuditedEvents(httpPort, httpsPort int) func(context.Context, string, map[string]any) error {
+	return DomainCertificateAuditedEventsForDNS(httpPort, httpsPort, false)
+}
+
+// DNS-01 does not need public HTTP/HTTPS challenge ports; never acquire a
+// temporary firewall lease for an issuance using a DNS-only solver.
+func DomainCertificateAuditedEventsForDNS(httpPort, httpsPort int, dnsOnly bool) func(context.Context, string, map[string]any) error {
 	firewallEvents := DomainCertificateFirewallEvents(httpPort, httpsPort)
 	return func(ctx context.Context, event string, payload map[string]any) error {
-		err := firewallEvents(ctx, event, payload)
+		var err error
+		if !dnsOnly {
+			err = firewallEvents(ctx, event, payload)
+		}
 		name, _ := payload["identifier"].(string)
 		if name != "" {
 			action, outcome := "", ""
