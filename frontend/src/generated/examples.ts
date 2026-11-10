@@ -1022,6 +1022,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "nodeId": null,
     "port": "",
     "preset": "",
+    "realityTarget": "",
     "relayId": 0,
     "sni": "",
     "templateId": 0
@@ -1167,6 +1168,7 @@ export const EXAMPLES: Record<string, unknown> = {
             "nodeId": null,
             "port": "",
             "preset": "",
+            "realityTarget": "",
             "relayId": 0,
             "sni": "",
             "templateId": 0
@@ -1193,6 +1195,7 @@ export const EXAMPLES: Record<string, unknown> = {
             "nodeId": null,
             "port": "",
             "preset": "",
+            "realityTarget": "",
             "relayId": 0,
             "sni": "",
             "templateId": 0
@@ -1221,6 +1224,7 @@ export const EXAMPLES: Record<string, unknown> = {
         "nodeId": null,
         "port": "",
         "preset": "",
+        "realityTarget": "",
         "relayId": 0,
         "sni": "",
         "templateId": 0
@@ -1247,6 +1251,7 @@ export const EXAMPLES: Record<string, unknown> = {
         "nodeId": null,
         "port": "",
         "preset": "",
+        "realityTarget": "",
         "relayId": 0,
         "sni": "",
         "templateId": 0
