@@ -94,6 +94,18 @@ describe('manager per-node TLS certificates', () => {
     }
   });
 
+  it('never automatically selects a reported certificate that has expired', () => {
+    const expired: ManagedSniDomain = {
+      ...remote,
+      expiresAt: Math.floor(Date.now() / 1000) - 60,
+    };
+    const selected = managerTLSCertificatesForNode([expired, local], 7);
+    expect(selected).toHaveLength(0);
+    const built = plan([expired, local]);
+    expect(built.entries).toHaveLength(1);
+    expect(built.skipped).toHaveLength(2);
+  });
+
   it('skips nodes without a compatible certificate instead of borrowing paths', () => {
     const result = plan([local]);
     expect(result.entries).toHaveLength(1);
