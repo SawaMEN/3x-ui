@@ -51,7 +51,10 @@ export default function SubscriptionEditor({
   const { t, i18n } = useTranslation();
   const m = (k: string) => t('pages.manager.' + k);
   const form = useForm<Subscription>({ defaultValues: value });
-  const { fields, append, remove, replace } = useFieldArray({ control: form.control, name: 'entries' });
+  const { fields, append, remove, replace } = useFieldArray({
+    control: form.control,
+    name: 'entries',
+  });
   const [editingConfig, setEditingConfig] = useState<number | null>(null);
   const entries = useWatch({ control: form.control, name: 'entries' });
   const { data: templates = [] } = useInboundOptions();
@@ -212,7 +215,9 @@ export default function SubscriptionEditor({
             items={[
               {
                 key: 'builder',
-                label: i18n.language.startsWith('ru') ? 'Конструктор протоколов' : 'Protocol builder',
+                label: i18n.language.startsWith('ru')
+                  ? 'Конструктор протоколов'
+                  : 'Protocol builder',
                 children: (
                   <ProtocolBuilder
                     nodes={nodes}
@@ -498,16 +503,22 @@ export default function SubscriptionEditor({
                                       </FormField>
                                     </Col>
                                     {e?.mode === 'generate' &&
-                                      e.config?.streamSettings?.includes('"security":"reality"') && (
+                                      e.config?.streamSettings?.includes(
+                                        '"security":"reality"',
+                                      ) && (
                                         <Col xs={24} sm={12}>
                                           <FormField
                                             name={`entries.${i}.realityTarget`}
-                                            label={i18n.language.startsWith('ru')
-                                              ? 'Сайт-заглушка (REALITY Target)'
-                                              : 'Camouflage website (REALITY Target)'}
-                                            extra={i18n.language.startsWith('ru')
-                                              ? 'Домен:порт; если пусто, используется SNI.'
-                                              : 'Hostname:port; empty uses SNI.'}
+                                            label={
+                                              i18n.language.startsWith('ru')
+                                                ? 'Сайт-заглушка (REALITY Target)'
+                                                : 'Camouflage website (REALITY Target)'
+                                            }
+                                            extra={
+                                              i18n.language.startsWith('ru')
+                                                ? 'Домен:порт; если пусто, используется SNI.'
+                                                : 'Hostname:port; empty uses SNI.'
+                                            }
                                           >
                                             <Input placeholder="example.com:443" />
                                           </FormField>
