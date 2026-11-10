@@ -141,7 +141,17 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 			d.InboundIDs = []int{}
 		}
 		d.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(d.Name)), ".")
-		name, err := netsafe.NormalizeHost(d.Name)
+		// A wildcard covers precisely one subdomain label. Its issuance
+		// requires DNS-01; the normal HTTP challenge cannot validate it.
+		wildcard := strings.HasPrefix(d.Name, "*.")
+		base := d.Name
+		if wildcard {
+			base = strings.TrimPrefix(base, "*.")
+			if c.DNS01Provider == "" || (d.TLS != "auto" && d.TLS != "certmagic") {
+				return fmt.Errorf("%s: wildcard certificates require automatic DNS-01 validation", d.Name)
+			}
+		}
+		name, err := netsafe.NormalizeHost(base)
 		if err != nil || net.ParseIP(name) != nil || !strings.Contains(name, ".") {
 			return fmt.Errorf("a public DNS hostname is required: %s", d.Name)
 		}
