@@ -113,11 +113,17 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 	c.DNS01Zone = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(c.DNS01Zone), "."))
 	c.DNS01ZoneID = strings.TrimSpace(c.DNS01ZoneID)
 	if c.DNS01Provider != "" {
-		if c.DNS01Provider != "cloudflare" {
+		if c.DNS01Provider != "cloudflare" && c.DNS01Provider != "digitalocean" {
 			return fmt.Errorf("unsupported DNS-01 provider")
 		}
-		if !validPublicDNSName(c.DNS01Zone) || !cloudflareID.MatchString(c.DNS01ZoneID) {
-			return fmt.Errorf("DNS-01 requires a valid DNS zone and Cloudflare zone ID")
+		if !validPublicDNSName(c.DNS01Zone) {
+			return fmt.Errorf("DNS-01 requires a valid public DNS zone")
+		}
+		if c.DNS01Provider == "cloudflare" && !cloudflareID.MatchString(c.DNS01ZoneID) {
+			return fmt.Errorf("DNS-01 requires a valid Cloudflare zone ID")
+		}
+		if c.DNS01Provider == "digitalocean" && c.DNS01ZoneID != "" {
+			return fmt.Errorf("DigitalOcean DNS-01 does not use a zone ID")
 		}
 		if c.DNS01Propagation < 0 || c.DNS01Propagation > 180 {
 			return fmt.Errorf("DNS-01 propagation delay must be between 0 and 180 seconds")
