@@ -197,6 +197,7 @@ export interface RecipeOptions {
   sniByPreset: Record<string, string>;
   targetByPreset: Record<string, string>;
   verifiedSniByNode: Record<number, string>;
+  backupSniByNode?: Record<number, string[]>;
   managedCertificates?: ManagedSniDomain[];
   // Optional node-level TLS hostname override; "auto" means pick the first
   // valid managed certificate on that node, without inheriting protocol SNI.
@@ -278,6 +279,12 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
         nodeId,
         port: 'random',
         sni: certificate?.name ?? sni,
+        sniBackups:
+          preset.sniMode === 'reality' && !customTarget
+            ? (options.backupSniByNode?.[nodeId] ?? [])
+                .filter((host) => host !== sni)
+                .slice(0, 6)
+            : undefined,
         realityTarget:
           preset.sniMode === 'reality' ? (options.targetByPreset[id] || '').trim() : undefined,
         label: `${preset.name} · ${nodeName}`,
