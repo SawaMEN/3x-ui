@@ -9,5 +9,5 @@
 | limits | 10 | 10 | 0 | 0 |
 | protocols-utilities | 301 | 0 | 301 | 0 |
 | services-nodes-jobs | 665 | 3 | 662 | 0 |
-| subscriptions | 111 | 23 | 88 | 0 |
-| TOTAL | 2364 | 118 | 2246 | 0 |
+| subscriptions | 111 | 32 | 79 | 0 |
+| TOTAL | 2364 | 127 | 2237 | 0 |

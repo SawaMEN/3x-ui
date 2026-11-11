@@ -14530,9 +14530,9 @@
       "deletions": 6,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A40-A43: full manual read of these sources/tests; complete subscription package passed on Go 1.27.4 (43.775s); reviewed output routing, proxy CIDRs, calendar expiry, orphan statistics and page link splitting. service.go remains pending because only relevant regions were read.",
+      "reviewed_sha256": "409f90f3eda2bf65d2af449f73dfd1d5534700179b8ed25fda43149cbe2671ce"
     },
     {
       "path": "internal/sub/clash_endpoint_test.go",
@@ -14739,9 +14739,9 @@
       "deletions": 5,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A40-A43: full manual read of these sources/tests; complete subscription package passed on Go 1.27.4 (43.775s); reviewed output routing, proxy CIDRs, calendar expiry, orphan statistics and page link splitting. service.go remains pending because only relevant regions were read.",
+      "reviewed_sha256": "d805ea58b76927744490b5764530495e6a2a19242a99ac88dcc3d197d847164a"
     },
     {
       "path": "internal/sub/forwarded_trust_test.go",
@@ -14750,9 +14750,9 @@
       "deletions": 11,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A40-A43: full manual read of these sources/tests; complete subscription package passed on Go 1.27.4 (43.775s); reviewed output routing, proxy CIDRs, calendar expiry, orphan statistics and page link splitting. service.go remains pending because only relevant regions were read.",
+      "reviewed_sha256": "6d5acd9cdc6dfdfdb0b797e77bd4a4f7f155bfb7ae89e90c335d3d5d332ec5d8"
     },
     {
       "path": "internal/sub/hiddify_legacy_test.go",
@@ -15003,9 +15003,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A40-A43: full manual read of these sources/tests; complete subscription package passed on Go 1.27.4 (43.775s); reviewed output routing, proxy CIDRs, calendar expiry, orphan statistics and page link splitting. service.go remains pending because only relevant regions were read.",
+      "reviewed_sha256": "b7b86cf102c69c8062f6287888ea4ebfe0202080b5c5dc8ea18b002f6e92c5ad"
     },
     {
       "path": "internal/sub/links.go",
@@ -15091,9 +15091,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A40-A43: full manual read of these sources/tests; complete subscription package passed on Go 1.27.4 (43.775s); reviewed output routing, proxy CIDRs, calendar expiry, orphan statistics and page link splitting. service.go remains pending because only relevant regions were read.",
+      "reviewed_sha256": "1e68ed6ff4a5eaf0cb42d95bbb87958f24f05b87f398b754c7a776622def49f9"
     },
     {
       "path": "internal/sub/output_format_test.go",
@@ -15102,9 +15102,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A40-A43: full manual read of these sources/tests; complete subscription package passed on Go 1.27.4 (43.775s); reviewed output routing, proxy CIDRs, calendar expiry, orphan statistics and page link splitting. service.go remains pending because only relevant regions were read.",
+      "reviewed_sha256": "d5368eaf5d0cc953693fac08d0926743bf0abe1d034957b449a3c8f80332f1b0"
     },
     {
       "path": "internal/sub/page_data_test.go",
@@ -15113,9 +15113,9 @@
       "deletions": 3,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A40-A43: full manual read of these sources/tests; complete subscription package passed on Go 1.27.4 (43.775s); reviewed output routing, proxy CIDRs, calendar expiry, orphan statistics and page link splitting. service.go remains pending because only relevant regions were read.",
+      "reviewed_sha256": "82ef81c5ea309ccd68c973780d2ff9bd68313f6deacc643b1ca0dfb71356b007"
     },
     {
       "path": "internal/sub/placeholders.go",
@@ -15267,9 +15267,9 @@
       "deletions": 3,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A40-A43: full manual read of these sources/tests; complete subscription package passed on Go 1.27.4 (43.775s); reviewed output routing, proxy CIDRs, calendar expiry, orphan statistics and page link splitting. service.go remains pending because only relevant regions were read.",
+      "reviewed_sha256": "cf52dfde06c234bd0df0efad3b8620cf0950d1d599b2fca347a028a17393f535"
     },
     {
       "path": "internal/sub/service_sharelink_test.go",
@@ -15322,9 +15322,9 @@
       "deletions": 2,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A40-A43: full manual read of these sources/tests; complete subscription package passed on Go 1.27.4 (43.775s); reviewed output routing, proxy CIDRs, calendar expiry, orphan statistics and page link splitting. service.go remains pending because only relevant regions were read.",
+      "reviewed_sha256": "cd5eba0f4770e729b09c23b5b924d0bf610bf75a5338817f833cfecd8b39fac0"
     },
     {
       "path": "internal/sub/service_wireguard_test.go",

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"net"
 	"net/url"
 	"slices"
@@ -833,6 +834,10 @@ func (s *SubService) AggregateTrafficByEmails(emails []string) (coremodel.Client
 	if len(emails) == 0 {
 		return agg, 0
 	}
+	// SQL IN deduplicates naturally; the preloaded path must do the same.
+	emails = slices.Clone(emails)
+	slices.Sort(emails)
+	emails = slices.Compact(emails)
 	db := database.GetDB()
 	var rows []coremodel.ClientTraffic
 	missing := emails
@@ -863,11 +868,22 @@ func (s *SubService) AggregateTrafficByEmails(emails []string) (coremodel.Client
 	// table to keep the Subscription-Userinfo header in sync with the UI (#4645).
 	limits := make(map[string]model.ClientRecord, len(emails))
 	var records []model.ClientRecord
-	if err := db.Model(&model.ClientRecord{}).Where("email IN ?", emails).Find(&records).Error; err != nil {
+	if err := db.Model(&model.ClientRecord{}).Select("email", "total_gb", "expiry_time", "reset_day").Where("email IN ?", emails).Find(&records).Error; err != nil {
 		logger.Warning("SubService - AggregateTrafficByEmails: load client limits:", err)
 	} else {
 		for _, r := range records {
 			limits[r.Email] = r
+		}
+	}
+	// A newly created or remote client may not have reported traffic yet.
+	// Its configured quota and expiry still belong in the subscription header.
+	reported := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		reported[row.Email] = true
+	}
+	for _, record := range records {
+		if !reported[record.Email] {
+			rows = append(rows, coremodel.ClientTraffic{Email: record.Email})
 		}
 	}
 
@@ -891,23 +907,23 @@ func (s *SubService) AggregateTrafficByEmails(emails []string) (coremodel.Client
 			resetDay = 0
 		}
 		if first {
-			agg.Up = ct.Up
-			agg.Down = ct.Down
+			agg.Up = common.TrafficUsage(ct.Up)
+			agg.Down = common.TrafficUsage(ct.Down)
 			agg.Total = total
 			agg.ExpiryTime = subscriptionExpiryFromClient(now, expiry)
 			agg.ResetDay = resetDay
 			first = false
 			continue
 		}
-		agg.Up += ct.Up
-		agg.Down += ct.Down
+		agg.Up = common.TrafficUsage(agg.Up, ct.Up)
+		agg.Down = common.TrafficUsage(agg.Down, ct.Down)
 		if resetDay != agg.ResetDay {
 			agg.ResetDay = 0
 		}
 		if agg.Total == 0 || total == 0 {
 			agg.Total = 0
 		} else {
-			agg.Total += total
+			agg.Total = common.TrafficUsage(agg.Total, total)
 		}
 		normalized := subscriptionExpiryFromClient(now, expiry)
 		if normalized != agg.ExpiryTime {
@@ -922,7 +938,10 @@ func subscriptionExpiryFromClient(nowMs, expiryTime int64) int64 {
 		return expiryTime
 	}
 	if expiryTime < 0 {
-		return nowMs + (-expiryTime)
+		if nowMs > math.MaxInt64+expiryTime {
+			return math.MaxInt64
+		}
+		return nowMs - expiryTime
 	}
 	return 0
 }
@@ -3307,7 +3326,6 @@ func (s *SubService) loadInboundsBySubId(subId string) ([]*model.Inbound, error)
 			inbound.Settings = settings
 		}
 	}
-	s.indexStatsBySubId(subId)
 	return inbounds, nil
 }
 
