@@ -27,6 +27,8 @@ export const DomainFormSchema = DomainResponseSchema.extend({
   mode: DomainModeSchema,
   tls: DomainTLSModeSchema,
   inboundIds: z.array(z.number().int().positive()),
+  siteCatalog: z.string().optional(),
+  siteTemplate: z.string().optional(),
 });
 export type DomainForm = z.infer<typeof DomainFormSchema>;
 export const DomainConfigFormSchema = ConfigResponseSchema.extend({
@@ -72,4 +74,6 @@ export const defaultDomain: DomainForm = {
   tls: 'auto',
   certFile: '',
   keyFile: '',
+  siteCatalog: '',
+  siteTemplate: '',
 };

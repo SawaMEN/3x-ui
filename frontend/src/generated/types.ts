@@ -556,6 +556,8 @@ export interface DomainFrontCertificate {
   expiresAt: number;
   issuer: string;
   keyFile: string;
+  siteCatalog?: string;
+  siteTemplate?: string;
   mode: string;
   name: string;
   renewal: string;

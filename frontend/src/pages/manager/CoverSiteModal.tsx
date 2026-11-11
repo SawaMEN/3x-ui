@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Checkbox, Input, Modal, Select, Space, Typography } from 'antd';
 import type { NodeRecord } from '@/schemas/node';
 import { HttpUtil } from '@/utils';
+import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
 
 interface Props {
   open: boolean;
@@ -18,6 +19,8 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   const [nodeId, setNodeId] = useState(0);
   const [domain, setDomain] = useState('');
   const [email, setEmail] = useState('');
+  const [siteCatalog, setSiteCatalog] = useState<'builtin' | 'mtproxyl'>('builtin');
+  const [siteTemplate, setSiteTemplate] = useState('notes');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -31,7 +34,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
     try {
       const result = await HttpUtil.post(
         '/panel/api/manager/domains/cover-site',
-        { nodeId, domain: domain.trim(), email: email.trim(), acceptTerms },
+        { nodeId, domain: domain.trim(), email: email.trim(), acceptTerms, siteCatalog, siteTemplate },
         { headers: { 'Content-Type': 'application/json' }, silent: true },
       );
       if (!result?.success) {
@@ -41,6 +44,8 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       const value = result.obj as { domain?: string; state?: string } | undefined;
       onSuccess(value?.domain || domain.trim(), value?.state || 'pending');
       setDomain('');
+      setSiteCatalog('builtin');
+      setSiteTemplate('notes');
       setAcceptTerms(false);
       onClose();
     } catch (err) {
@@ -96,6 +101,37 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             placeholder="decoy.example.org"
             maxLength={253}
           />
+        </div>
+        <div>
+          <Typography.Text>{t('Каталог сайта-заглушки', 'Cover site catalog')}</Typography.Text>
+          <Select
+            value={siteCatalog}
+            onChange={(value) => {
+              setSiteCatalog(value);
+              setSiteTemplate(value === 'builtin' ? 'notes' : 'stub');
+            }}
+            style={{ width: '100%' }}
+            options={Object.entries(TelemtWebCatalogs).map(([value, entry]) => ({
+              value,
+              label: ru ? entry.ru : entry.en,
+            }))}
+          />
+        </div>
+        <div>
+          <Typography.Text>{t('Какой сайт создать', 'Website template')}</Typography.Text>
+          <Select
+            value={siteTemplate}
+            onChange={setSiteTemplate}
+            style={{ width: '100%' }}
+            options={TelemtWebCatalogs[siteCatalog].templates.map((entry) => ({
+              value: entry.id,
+              label: ru ? entry.ru : entry.en,
+              title: ru ? entry.descriptionRu : entry.descriptionEn,
+            }))}
+          />
+          <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
+            {t('Для изменения существующей заглушки укажите ту же ноду и домен и выберите другой сайт.', 'To edit an existing cover site, select the same node and domain with a different template.')}
+          </Typography.Text>
         </div>
         <div>
           <Typography.Text>{t('Контактный email для ACME', 'ACME contact email')}</Typography.Text>

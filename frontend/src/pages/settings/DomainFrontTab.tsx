@@ -53,6 +53,7 @@ import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import { redirectSiteOptions } from './redirect-sites';
 import { onNumber } from '@/utils/onNumber';
 import { rootRedirectError } from './root-redirect';
+import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
 
 type DomainSection = 'domains' | 'certificates' | 'sni' | 'settings';
 
@@ -146,6 +147,7 @@ export default function DomainFrontTab({
   const [form] = Form.useForm<DomainForm>();
   const [messageApi, holder] = message.useMessage();
   const mode = Form.useWatch('mode', form);
+  const siteCatalog = Form.useWatch('siteCatalog', form);
   const tls = Form.useWatch('tls', form);
   const label = (key: string, values?: Record<string, string | number>) =>
     t(`pages.settings.domains.${key}`, values);
@@ -424,8 +426,18 @@ export default function DomainFrontTab({
             ...defaultDomain,
             mode: sharedOnly ? 'shared_sni' : sniOnly ? 'sni_only' : 'sub_link_only',
             tls: sniOnly ? 'certmagic' : 'auto',
+            siteCatalog: sniOnly ? 'builtin' : '',
+            siteTemplate: sniOnly ? 'notes' : '',
           }
-        : draft.domains[index],
+        : {
+            ...draft.domains[index],
+            ...(draft.domains[index].mode === 'sni_only'
+              ? {
+                  siteCatalog: draft.domains[index].siteCatalog || 'builtin',
+                  siteTemplate: draft.domains[index].siteTemplate || 'notes',
+                }
+              : {}),
+          },
     );
     setPrimaryDomain(
       index < 0
@@ -454,6 +466,8 @@ export default function DomainFrontTab({
           ? []
           : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
+      siteCatalog: value.mode === 'sni_only' ? (value.siteCatalog || '') : '',
+      siteTemplate: value.mode === 'sni_only' ? (value.siteTemplate || '') : '',
       certFile: value.tls === 'manual' && value.mode !== 'shared_sni' ? value.certFile : '',
       keyFile: value.tls === 'manual' && value.mode !== 'shared_sni' ? value.keyFile : '',
     });
@@ -1436,6 +1450,11 @@ export default function DomainFrontTab({
                     origin: '',
                     tls: value === 'shared_sni' ? 'auto' : form.getFieldValue('tls'),
                   });
+                  if (value === 'sni_only') {
+                    form.setFieldsValue({ siteCatalog: 'builtin', siteTemplate: 'notes' });
+                  } else {
+                    form.setFieldsValue({ siteCatalog: '', siteTemplate: '' });
+                  }
                   if (value === 'sni_only' || value === 'shared_sni') setPrimaryDomain(false);
                 } else if (value !== 'relay') form.setFieldsValue({ origin: '' });
               }}
@@ -1450,6 +1469,34 @@ export default function DomainFrontTab({
           <Typography.Paragraph type="secondary">
             {mode && label(`modeDesc.${mode}`)}
           </Typography.Paragraph>
+          {mode === 'sni_only' && (
+            <>
+              <Form.Item name="siteCatalog" label={i18n.language.startsWith('ru') ? 'Каталог сайта-заглушки' : 'Cover site catalog'}>
+                <Select
+                  options={Object.entries(TelemtWebCatalogs).map(([value, entry]) => ({
+                    value,
+                    label: i18n.language.startsWith('ru') ? entry.ru : entry.en,
+                  }))}
+                  onChange={(value: 'builtin' | 'mtproxyl') =>
+                    form.setFieldValue('siteTemplate', value === 'builtin' ? 'notes' : 'stub')
+                  }
+                />
+              </Form.Item>
+              <Form.Item
+                name="siteTemplate"
+                label={i18n.language.startsWith('ru') ? 'Какой сайт создать' : 'Website template'}
+                rules={[{ required: true }]}
+              >
+                <Select
+                  options={TelemtWebCatalogs[siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'].templates.map((entry) => ({
+                    value: entry.id,
+                    label: i18n.language.startsWith('ru') ? entry.ru : entry.en,
+                    title: i18n.language.startsWith('ru') ? entry.descriptionRu : entry.descriptionEn,
+                  }))}
+                />
+              </Form.Item>
+            </>
+          )}
           {mode === 'relay' && (
             <Form.Item
               name="origin"

@@ -14,6 +14,7 @@ func TestManagerCoverSiteConfigUsesExistingCertMagic(t *testing.T) {
 	}}
 	out, err := managerCoverSiteConfig(cfg, ManagerCoverSiteInput{
 		NodeID: 0, Domain: "DECOY.EXAMPLE.ORG.", Email: "owner@example.org", AcceptTerms: true,
+		SiteCatalog: "builtin", SiteTemplate: "coffee",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -23,6 +24,7 @@ func TestManagerCoverSiteConfigUsesExistingCertMagic(t *testing.T) {
 		out.Domains[1].Name != "decoy.example.org" ||
 		out.Domains[1].Mode != "sni_only" ||
 		out.Domains[1].TLS != "certmagic" ||
+		out.Domains[1].SiteCatalog != "builtin" || out.Domains[1].SiteTemplate != "coffee" ||
 		!out.Domains[1].Enabled || out.Domains[1].Panel {
 		t.Fatalf("unsafe cover configuration: %+v", out)
 	}
@@ -31,8 +33,9 @@ func TestManagerCoverSiteConfigUsesExistingCertMagic(t *testing.T) {
 	}
 	again, err := managerCoverSiteConfig(out, ManagerCoverSiteInput{
 		Domain: "decoy.example.org", Email: "owner@example.org", AcceptTerms: true,
+		SiteCatalog: "mtproxyl", SiteTemplate: "catrunner",
 	})
-	if err != nil || len(again.Domains) != 2 {
+	if err != nil || len(again.Domains) != 2 || again.Domains[1].SiteTemplate != "catrunner" {
 		t.Fatalf("same cover domain was duplicated: %+v, %v", again, err)
 	}
 }
@@ -55,6 +58,8 @@ func TestManagerCoverSiteConfigRefusesUnsafeOrConflictingDomain(t *testing.T) {
 		{Domain: "https://site.example.org/path", Email: req.Email, AcceptTerms: true},
 		{Domain: "127.0.0.1", Email: req.Email, AcceptTerms: true},
 		{Domain: req.Domain, Email: "not-an-email", AcceptTerms: true},
+		{Domain: req.Domain, Email: req.Email, AcceptTerms: true, SiteCatalog: "builtin", SiteTemplate: "unknown"},
+		{Domain: req.Domain, Email: req.Email, AcceptTerms: true, SiteCatalog: "mtproxyl"},
 	} {
 		if _, err := managerCoverSiteConfig(cfg, input); err == nil {
 			t.Errorf("invalid domain provisioning was accepted: %+v", input)

@@ -594,6 +594,8 @@ export const DomainFrontCertificateSchema = z.object({
   expiresAt: z.number().int(),
   issuer: z.string(),
   keyFile: z.string(),
+  siteCatalog: z.string().optional(),
+  siteTemplate: z.string().optional(),
   mode: z.string(),
   name: z.string(),
   renewal: z.string(),

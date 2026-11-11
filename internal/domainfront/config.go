@@ -23,6 +23,8 @@ type DomainFrontDomain struct {
 	TLS        string `json:"tls" example:"auto"`
 	CertFile   string `json:"certFile"`
 	KeyFile    string `json:"keyFile"`
+	SiteCatalog string `json:"siteCatalog,omitempty"`
+	SiteTemplate string `json:"siteTemplate,omitempty"`
 }
 
 type DomainFrontConfig struct {
@@ -182,6 +184,13 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		case "direct", "cdn", "relay", "sub_link_only", "sni_only", "shared_sni":
 		default:
 			return fmt.Errorf("unknown domain mode: %s", d.Mode)
+		}
+		if d.Mode == "sni_only" {
+			if (d.SiteCatalog == "") != (d.SiteTemplate == "") {
+				return fmt.Errorf("%s: cover site catalog and template must be selected together", d.Name)
+			}
+		} else if d.SiteCatalog != "" || d.SiteTemplate != "" {
+			return fmt.Errorf("%s: only SNI-only domains can select a cover site template", d.Name)
 		}
 		switch d.TLS {
 		case "auto", "certmagic", "existing":
