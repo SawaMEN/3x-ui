@@ -49,20 +49,21 @@ export default function TuicFields() {
 
   const managedDomain = (name: string) => nodeCertificateForSni(managedDomains, name, nodeId);
 
-  const applyManagedDomain = (domain: ManagedSniDomain) => {
+  const applyManagedDomain = (domain: ManagedSniDomain, preserveManual = false) => {
     updateServerValue('sni', domain.name);
+    if (!canUseManagedSniCertificate(domain, nodeId)) return;
     if (
-      canUseManagedSniCertificate(domain, nodeId) &&
-      mayReplaceCertificatePair(
+      preserveManual &&
+      !mayReplaceCertificatePair(
         String(getValues('settings.server.certificate') || ''),
         String(getValues('settings.server.private_key') || ''),
         managedDomains,
         nodeId,
       )
-    ) {
-      updateServerValue('certificate', domain.certFile);
-      updateServerValue('private_key', domain.keyFile);
-    }
+    )
+      return;
+    updateServerValue('certificate', domain.certFile);
+    updateServerValue('private_key', domain.keyFile);
   };
 
   const handleSniChange = (newSni: string) => {
@@ -71,7 +72,7 @@ export default function TuicFields() {
     if (!cleanSni) return;
     const managed = managedDomain(cleanSni);
     if (managed) {
-      applyManagedDomain(managed);
+      applyManagedDomain(managed, true);
       return;
     }
     // Unknown certificate file paths cannot be inferred from a hostname.
@@ -285,7 +286,7 @@ export default function TuicFields() {
           value={sni}
           placeholder="example.com"
           onChange={handleSniChange}
-          onPickManagedDomain={applyManagedDomain}
+          onPickManagedDomain={(domain) => applyManagedDomain(domain)}
         />
         <span id={`${uid}-sni-hint`} hidden>
           {t('pages.xray.tuic.sniHint')}

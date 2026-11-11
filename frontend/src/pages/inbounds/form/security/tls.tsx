@@ -397,30 +397,6 @@ export default function TlsForm({
 
   const onManagedSni = (domain: ManagedSniDomain) => {
     if (!canUseManagedSniCertificate(domain, nodeId)) return;
-    const current = getValues('streamSettings.tlsSettings.certificates.0') as
-      | {
-          useFile?: boolean;
-          certificateFile?: string;
-          keyFile?: string;
-          certificate?: string[];
-          key?: string[];
-        }
-      | undefined;
-    if (
-      current &&
-      !current.useFile &&
-      ((current.certificate?.length ?? 0) > 0 || (current.key?.length ?? 0) > 0)
-    )
-      return;
-    if (
-      !mayReplaceCertificatePair(
-        current?.certificateFile || '',
-        current?.keyFile || '',
-        managedSites,
-        nodeId,
-      )
-    )
-      return;
     // Server-side TLS files can only be applied on the node that stores them.
     const opts = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
     const row = {
