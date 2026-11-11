@@ -123,6 +123,10 @@ func runDomainPreflight(
 		if !domain.Enabled {
 			continue
 		}
+		if domain.Mode == "cert_only" {
+			add("certificate_only", "info", domain.Name, "CertMagic issues and renews this certificate via DNS-01 on the controlling node without binding HTTP or HTTPS.")
+			continue
+		}
 		if domain.Mode == "shared_sni" {
 			add("remote_sni", "info", domain.Name, "This SNI is managed on another node; its private key stays on that node.")
 			continue

@@ -19,16 +19,18 @@ import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import {
-  canApplyManagedSniCertificate,
-  type ManagedSniDomain,
-} from '@/api/queries/useManagedSniDomains';
+  canUseManagedSniCertificate,
+  mayReplaceCertificatePair,
+  nodeCertificateForSni,
+} from '../security/local-certificate';
+import { type ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import { HttpUtil } from '@/utils';
 
 export default function TuicFields() {
   const { t } = useTranslation();
   const uid = useId();
   const [messageApi, messageContextHolder] = message.useMessage();
-  const { control, setValue, getValues } = useFormContext();
+  const { control, getValues, setValue } = useFormContext();
   const { data: managedDomains = [] } = useManagedSniDomains();
   const [loadingPanelCert, setLoadingPanelCert] = useState(false);
 
@@ -45,14 +47,23 @@ export default function TuicFields() {
     });
   };
 
-  const managedDomain = (name: string) => managedDomains.find((domain) => domain.name === name);
+  const managedDomain = (name: string) => nodeCertificateForSni(managedDomains, name, nodeId);
 
-  const applyManagedDomain = (domain: ManagedSniDomain) => {
+  const applyManagedDomain = (domain: ManagedSniDomain, preserveManual = false) => {
     updateServerValue('sni', domain.name);
-    if (canApplyManagedSniCertificate(domain, nodeId)) {
-      updateServerValue('certificate', domain.certFile);
-      updateServerValue('private_key', domain.keyFile);
-    }
+    if (!canUseManagedSniCertificate(domain, nodeId)) return;
+    if (
+      preserveManual &&
+      !mayReplaceCertificatePair(
+        String(getValues('settings.server.certificate') || ''),
+        String(getValues('settings.server.private_key') || ''),
+        managedDomains,
+        nodeId,
+      )
+    )
+      return;
+    updateServerValue('certificate', domain.certFile);
+    updateServerValue('private_key', domain.keyFile);
   };
 
   const handleSniChange = (newSni: string) => {
@@ -61,27 +72,10 @@ export default function TuicFields() {
     if (!cleanSni) return;
     const managed = managedDomain(cleanSni);
     if (managed) {
-      applyManagedDomain(managed);
+      applyManagedDomain(managed, true);
       return;
     }
-    // Paths on a child node are unknown unless discovered on that same node.
-    if (nodeId != null) return;
-
-    const currentCert = String(getValues('settings.server.certificate') || '');
-    const currentKey = String(getValues('settings.server.private_key') || '');
-
-    const usedManagedCert = managedDomains.some(
-      (entry) => entry.certFile !== '' && entry.certFile === currentCert,
-    );
-    if (!currentCert || currentCert.startsWith('/root/cert/') || usedManagedCert) {
-      updateServerValue('certificate', `/root/cert/${cleanSni}/fullchain.pem`);
-    }
-    const usedManagedKey = managedDomains.some(
-      (entry) => entry.keyFile !== '' && entry.keyFile === currentKey,
-    );
-    if (!currentKey || currentKey.startsWith('/root/cert/') || usedManagedKey) {
-      updateServerValue('private_key', `/root/cert/${cleanSni}/privkey.pem`);
-    }
+    // Unknown certificate file paths cannot be inferred from a hostname.
   };
 
   const autofillFromSni = () => {
@@ -99,10 +93,9 @@ export default function TuicFields() {
       applyManagedDomain(managed);
     } else {
       updateServerValue('sni', cleanSni);
-      if (nodeId == null) {
-        updateServerValue('certificate', `/root/cert/${cleanSni}/fullchain.pem`);
-        updateServerValue('private_key', `/root/cert/${cleanSni}/privkey.pem`);
-      }
+      messageApi.info(
+        'Сертификат для SNI не найден на этой ноде. Выпустите его через DNS-01 или укажите существующие пути.',
+      );
     }
     // Keep the TLS certificate name and client SNI consistent.
     updateServerValue('congestion_control', 'bbr');
@@ -120,7 +113,7 @@ export default function TuicFields() {
     setLoadingPanelCert(true);
     try {
       const msg =
-        typeof nodeId === 'number'
+        typeof nodeId === 'number' && nodeId > 0
           ? await HttpUtil.get(`/panel/api/nodes/webCert/${nodeId}`, undefined, { silent: true })
           : await HttpUtil.post('/panel/api/setting/all', undefined, { silent: true });
       if (!msg?.success) {
@@ -146,21 +139,12 @@ export default function TuicFields() {
     }
   };
 
-  const certOptions = sni
-    ? [
-        { value: `/root/cert/${sni}/fullchain.pem` },
-        { value: `/etc/letsencrypt/live/${sni}/fullchain.pem` },
-        { value: '/root/cert.pem' },
-      ]
-    : [{ value: '/root/cert.pem' }];
-
-  const keyOptions = sni
-    ? [
-        { value: `/root/cert/${sni}/privkey.pem` },
-        { value: `/etc/letsencrypt/live/${sni}/privkey.pem` },
-        { value: '/root/privkey.pem' },
-      ]
-    : [{ value: '/root/privkey.pem' }];
+  const certOptions = managedDomains
+    .filter((site) => canUseManagedSniCertificate(site, nodeId))
+    .map((site) => ({ value: site.certFile }));
+  const keyOptions = managedDomains
+    .filter((site) => canUseManagedSniCertificate(site, nodeId))
+    .map((site) => ({ value: site.keyFile }));
 
   const advancedItems = [
     {
@@ -302,7 +286,7 @@ export default function TuicFields() {
           value={sni}
           placeholder="example.com"
           onChange={handleSniChange}
-          onPickManagedDomain={applyManagedDomain}
+          onPickManagedDomain={(domain) => applyManagedDomain(domain)}
         />
         <span id={`${uid}-sni-hint`} hidden>
           {t('pages.xray.tuic.sniHint')}

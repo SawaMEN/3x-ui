@@ -640,6 +640,8 @@ export const DomainFrontDomainSchema = z.object({
   name: z.string(),
   origin: z.string(),
   panel: z.boolean(),
+  siteCatalog: z.string().optional(),
+  siteTemplate: z.string().optional(),
   tls: z.string(),
 });
 export type DomainFrontDomain = z.infer<typeof DomainFrontDomainSchema>;

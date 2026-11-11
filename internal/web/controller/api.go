@@ -117,6 +117,7 @@ var nodeSyncScopeAllow = map[string]map[string]struct{}{
 	"/domains/probe/http01":                       {http.MethodPost: {}},
 	"/inbounds/preflight":                         {http.MethodPost: {}},
 	"/server/status":                              {http.MethodGet: {}},
+	"/server/domainActivity":                      {http.MethodGet: {}},
 	"/inbounds/list":                              {http.MethodGet: {}},
 	"/inbounds/add":                               {http.MethodPost: {}},
 	"/inbounds/del/:id":                           {http.MethodPost: {}},

@@ -1,7 +1,9 @@
 package service
 
 import (
+	"fmt"
 	"net"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -110,8 +112,22 @@ func aggregateRecentDomainActivity(logs []LogEntry, now time.Time) []DomainActiv
 
 // GetRecentDomainActivity reads a bounded tail of the existing Xray access log.
 // It adds no database, background collector or persistent history.
-func (s *ServerService) GetRecentDomainActivity(now time.Time) []DomainActivityEntry {
+func (s *ServerService) GetRecentDomainActivity(now time.Time) ([]DomainActivityEntry, error) {
+	path, err := selectedXrayAccessLogPath()
+	if err != nil {
+		return nil, err
+	}
+	if path == "" || path == "none" {
+		return nil, nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("Xray access log %q: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("Xray access log %q is not a regular file", path)
+	}
 	freedoms, blackholes := s.GetDefaultLogOutboundTags()
 	logs := s.GetXrayLogs("2000", "", "true", "false", "true", freedoms, blackholes)
-	return aggregateRecentDomainActivity(logs, now)
+	return aggregateRecentDomainActivity(logs, now), nil
 }

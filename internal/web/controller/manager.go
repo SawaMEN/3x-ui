@@ -28,6 +28,7 @@ func NewManagerController(g *gin.RouterGroup) *ManagerController {
 	g.POST("/operations/:id/retry", a.retry)
 	g.POST("/domains", a.domains)
 	g.POST("/domains/cover-site", a.coverSite)
+	g.POST("/domains/local-certificate", a.localCertificate)
 	g.POST("/relays", a.relay)
 	g.POST("/relays/:id/install", a.installRelay)
 	g.POST("/relays/:id/uninstall", a.uninstallRelay)
@@ -118,6 +119,15 @@ func (a *ManagerController) coverSite(c *gin.Context) {
 		return
 	}
 	result, err := a.service.ProvisionCoverSite(c.Request.Context(), session.GetLoginUser(c).Id, input)
+	jsonObj(c, result, err)
+}
+
+func (a *ManagerController) localCertificate(c *gin.Context) {
+	var input service.ManagerLocalCertificateInput
+	if !managerBind(c, &input) {
+		return
+	}
+	result, err := a.service.ProvisionLocalCertificate(c.Request.Context(), session.GetLoginUser(c).Id, input)
 	jsonObj(c, result, err)
 }
 

@@ -54,6 +54,31 @@ func TestDomainRolesRejectUnsafeCombinations(t *testing.T) {
 	}
 }
 
+func TestCertificateOnlyRequiresDNS01AndDoesNotExposeSite(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled, cfg.AcceptTerms = true, true
+	cfg.Domains = []DomainFrontDomain{{Name: "example.org", Mode: "cert_only", TLS: "certmagic", Enabled: true}}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("accepted certificate-only without DNS-01")
+	}
+	cfg.DNS01Provider, cfg.DNS01Zone, cfg.DNS01ZoneID = "cloudflare", "example.org", "0123456789abcdef0123456789abcdef"
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.HasPublicSites() {
+		t.Fatal("certificate-only must not bind public ports")
+	}
+	cfg.Domains[0].InboundIDs = []int{1}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("certificate-only exposed an inbound")
+	}
+	cfg.Domains[0].InboundIDs = nil
+	cfg.Domains[0].Mode = "sni_only"
+	if err := cfg.Validate(); err != nil || !cfg.HasPublicSites() {
+		t.Fatalf("SNI-only needs public listener: %v", err)
+	}
+}
+
 func TestSharedSNIDomainDoesNotRequireLocalACME(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Enabled = true

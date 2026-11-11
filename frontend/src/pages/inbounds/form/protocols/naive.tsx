@@ -1,10 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import { Select, Switch } from 'antd';
+import { Input, Select, Switch } from 'antd';
 import { FormField } from '@/components/form/rhf';
+import { useFormContext, useWatch } from 'react-hook-form';
 import SniSearchInput from '../security/SniSearchInput';
 
 export default function NaiveFields() {
   const { t } = useTranslation();
+  const { control } = useFormContext();
+  const network = useWatch({ control, name: 'settings.network' });
 
   return (
     <>
@@ -16,6 +19,18 @@ export default function NaiveFields() {
           ]}
         />
       </FormField>
+
+      {network === 'udp' && (
+        <FormField name={['settings', 'quicCongestionControl']} label="QUIC congestion control">
+          <Select
+            options={[
+              { value: 'bbr', label: 'BBR' },
+              { value: 'cubic', label: 'CUBIC' },
+              { value: 'reno', label: 'Reno' },
+            ]}
+          />
+        </FormField>
+      )}
 
       <FormField
         name={['settings', 'shareLinkFormat']}
@@ -35,6 +50,18 @@ export default function NaiveFields() {
 
       <FormField name={['settings', 'tls', 'serverName']} label="SNI">
         <SniSearchInput placeholder="example.com" />
+      </FormField>
+      <FormField
+        name={['settings', 'tls', 'certificatePath']}
+        label="TLS: путь к сертификату (fullchain.pem)"
+      >
+        <Input placeholder="/etc/letsencrypt/live/example.com/fullchain.pem" />
+      </FormField>
+      <FormField
+        name={['settings', 'tls', 'keyPath']}
+        label="TLS: путь к приватному ключу (privkey.pem)"
+      >
+        <Input placeholder="/etc/letsencrypt/live/example.com/privkey.pem" />
       </FormField>
 
       <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12, marginTop: 4 }}>

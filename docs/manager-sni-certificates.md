@@ -161,6 +161,39 @@ operator based on the server scan alone.
   Inbounds editor; the Manager bulk flow creates up to 100 independent
   clients against such shared listeners rather than one listener per client.
 
+## Cover-site templates and main-node TLS
+
+- SNI-only websites can choose one of the existing built-in/MTProxyL
+  cover templates in the Manager create/update form and Domains & TLS editor.
+  The catalog/template selection is saved per hostname, and rendered through
+  Telemt's existing validated immutable site snapshots.
+- When the site is hosted on a remote node, **Issue on main node** optionally
+  registers a separate `cert_only` domain on the controlling panel.
+  CertMagic uses the main node's Cloudflare/DigitalOcean DNS-01 credentials
+  to issue and renew its local certificate. No remote private key is exported
+  and no extra HTTP/HTTPS listener is opened on the main node.
+- Configure the main panel's DNS-01 provider, zone and credential first.
+  Issuance is asynchronous. Once the certificate is valid, its local
+  `certFile` and `keyFile` are available in the certificate inventory and
+  managed TLS/SNI listing. Paths remain node-local.
+- Partial success is reported: a remote site may be created even if issuing
+  the certificate on the main node fails.
+
+## Automatic SNI-to-certificate binding
+
+- The inbound TLS selector searches for a valid certificate matching the
+  selected SNI **on the inbound node itself**. It auto-fills paths for
+  supported Xray/native protocols, preserving manually entered paths.
+- Where main-node TLS files are missing, the form offers opt-in DNS-01
+  issuance with email and explicit ACME terms acceptance. The Manager
+  builder invokes this main-node endpoint instead of creating an unwanted
+  public HTTPS cover site.
+- NaiveProxy has certificate/key inputs, TrustTunnel has managed SNI selection,
+  and TUIC no longer invents paths based on the domain name.
+- The Manager builder supports per-protocol, per-node manual cert/key paths,
+  subject to preflight verification on the selected node.
+- External REALITY and ShadowTLS targets do not require a local certificate.
+
 ## Exclusions and checks
 
 - No bulk third-party cert downloads/private key extraction.
@@ -171,3 +204,23 @@ operator based on the server scan alone.
 - No use of old Hiddify Reality Scanner tooling as a prerequisite; its own
   published instructions say that the older standalone scanner is not
   maintained for HiddifyManager v13/v14.
+
+## Protocol settings audit (26 inbound protocols)
+
+- Audited the 26 inbound protocol schemas and their corresponding forms,
+  including the shared TLS, REALITY and transport configuration sections.
+- Restored editable NaiveProxy QUIC congestion control, PingTunnel upstream
+  forwarding, FPTN hostname/certificate/private-key file and PEM pairs,
+  metrics key and container image, and OpenFlux transport context.
+- For VetroffProxy, TLS is mandatory in all transport modes; `autoTLS`
+  finds a valid matching certificate, while disabling it exposes manual
+  certificate and private-key paths. Selecting a managed SNI only fills a
+  valid same-node pair and does not replace custom files.
+- The TUIC, NaiveProxy, AnyTLS, MASQUE and Xray TLS editors likewise preserve
+  imported/manual certificate paths, reject expired managed certificates,
+  and treat the local node identifier `0` as the main node.
+- FPTN is distinct: it needs an **RSA** server certificate for its RS256
+  access tokens. The general SNI TLS picker must not silently install an
+  arbitrary ECDSA certificate for FPTN; the FPTN-specific advanced form
+  accepts explicit RSA certificate/key files or PEM material.
+- REALITY and ShadowTLS camouflage require no local server certificate.

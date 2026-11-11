@@ -54,6 +54,9 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
   const [replace, setReplace] = useState(true);
   const [allowUnconfiguredTLS, setAllowUnconfiguredTLS] = useState(false);
   const [tlsSniByNode, setTlsSniByNode] = useState<Record<number, string>>({});
+  const [certificateFilesByPair, setCertificateFilesByPair] = useState<
+    Record<string, { certFile: string; keyFile: string }>
+  >({});
   const [acmeEmail, setAcmeEmail] = useState('');
   const [acmeConsent, setAcmeConsent] = useState(false);
   const [issuingCertificates, setIssuingCertificates] = useState(false);
@@ -87,6 +90,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
         verifiedSniByNode,
         backupSniByNode,
         managedCertificates: certificates,
+        certificateFilesByPair,
         tlsSniByNode,
         allowUnconfiguredTLS,
       }),
@@ -100,6 +104,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       verifiedSniByNode,
       backupSniByNode,
       certificates,
+      certificateFilesByPair,
       tlsSniByNode,
       allowUnconfiguredTLS,
     ],
@@ -214,7 +219,9 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       for (const target of targets.values()) {
         try {
           const result = await HttpUtil.post(
-            '/panel/api/manager/domains/cover-site',
+            target.nodeId === 0
+              ? '/panel/api/manager/domains/local-certificate'
+              : '/panel/api/manager/domains/cover-site',
             {
               nodeId: target.nodeId,
               domain: target.domain,
@@ -504,7 +511,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                     {t('TLS-сертификаты:', 'TLS certificates:')} {ownedCertificates.length}
                   </Tag>
                 )}
-                {selected && ownedCertificates.length > 0 && (
+                {selected && selectedItems.some((item) => item.sniMode === 'tls') && (
                   <AutoComplete
                     style={{ minWidth: 240, maxWidth: '100%' }}
                     value={tlsSniByNode[node.id] ?? 'inherit'}
@@ -525,9 +532,16 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                         value: 'auto',
                         label: t('TLS: автоматически на ноде', 'TLS: automatic on node'),
                       },
-                      ...ownedCertificates.map((site) => ({
-                        value: site.name,
-                        label: site.name,
+                      ...[
+                        ...new Set([
+                          ...ownedCertificates.map((site) => site.name),
+                          ...certificates
+                            .filter((site) => site.source === 'remote')
+                            .map((site) => site.name),
+                        ]),
+                      ].map((name) => ({
+                        value: name,
+                        label: name,
                       })),
                     ]}
                   />
@@ -559,6 +573,63 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                       {ownedCertificates.length > 6 && <Tag>+{ownedCertificates.length - 6}</Tag>}
                     </div>
                   </div>
+                )}
+                {selected && selectedItems.some((item) => item.sniMode === 'tls') && (
+                  <Collapse
+                    size="small"
+                    style={{ width: '100%' }}
+                    items={selectedItems
+                      .filter((item) => item.sniMode === 'tls')
+                      .map((item) => {
+                        const key = `${item.id}|${node.id}`;
+                        const manual = certificateFilesByPair[key] || { certFile: '', keyFile: '' };
+                        const requestedSni =
+                          tlsSniByNode[node.id] ?? sniByPreset[item.id] ?? 'auto';
+                        const matched = managerTLSCertificateForSni(
+                          certificates,
+                          node.id,
+                          requestedSni,
+                        );
+                        const setFile = (field: 'certFile' | 'keyFile', value: string) =>
+                          setCertificateFilesByPair((prev) => ({
+                            ...prev,
+                            [key]: { ...prev[key], [field]: value },
+                          }));
+                        return {
+                          key,
+                          label: item.name,
+                          children: (
+                            <Space orientation="vertical" style={{ width: '100%' }}>
+                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                {t(
+                                  'Пути проверяются на выбранной ноде при предварительной проверке. Не указывайте пути с другого сервера.',
+                                  'File paths are validated during preflight on the selected node. Do not use paths from another host.',
+                                )}
+                              </Typography.Text>
+                              <Typography.Text type="secondary">certFile</Typography.Text>
+                              <Input
+                                aria-label={`${item.name} certificate path #${node.id}`}
+                                value={manual.certFile}
+                                onChange={(event) => setFile('certFile', event.target.value)}
+                                placeholder={
+                                  matched?.certFile ||
+                                  t('Путь к fullchain.pem', 'Path to fullchain.pem')
+                                }
+                              />
+                              <Typography.Text type="secondary">keyFile</Typography.Text>
+                              <Input
+                                aria-label={`${item.name} private key path #${node.id}`}
+                                value={manual.keyFile}
+                                onChange={(event) => setFile('keyFile', event.target.value)}
+                                placeholder={
+                                  matched?.keyFile || t('Путь к privkey.pem', 'Path to privkey.pem')
+                                }
+                              />
+                            </Space>
+                          ),
+                        };
+                      })}
+                  />
                 )}
                 {selected && (
                   <Button
@@ -651,8 +722,8 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
         <Space orientation="vertical" style={{ width: '100%' }}>
           <Typography.Text type="secondary">
             {t(
-              'Для TLS без сертификата укажите домен (общий для протокола или отдельный для ноды). CertMagic выпустит и будет продлевать сертификат на нужной ноде через существующий Domain Front. Нужны DNS и доступные ACME-порты; конфликт 80/443 не изменит работающий VPN.',
-              'For TLS without a certificate choose a hostname per protocol or node. Existing Domain Front/CertMagic will issue and renew on the selected node. DNS and reachable ACME challenge ports are required; port 80/443 conflicts do not replace a running VPN.',
+              'Для TLS выберите домен. Основная нода выпускает собственный сертификат через DNS-01 без занятия портов 80/443; удалённые ноды используют Domain Front. Приватные ключи между серверами не копируются.',
+              'Choose a TLS hostname per protocol or node. The main node issues its own certificate via DNS-01 without public ports 80/443; remote nodes use Domain Front. Private keys are never copied.',
             )}
           </Typography.Text>
           <Input

@@ -320,7 +320,7 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	defer domainFrontState.Unlock()
 	hasLocalDomain := false
 	for _, domain := range cfg.Domains {
-		if domain.Enabled && domain.Mode != "shared_sni" {
+		if domain.Enabled && domain.Mode != "shared_sni" && domain.Mode != "cert_only" {
 			hasLocalDomain = true
 			break
 		}
@@ -475,14 +475,18 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		backend.SubscriptionHost = certificateHost(settings.SubCertFile, settings.SubDomain)
 	}
 	for _, d := range cfg.Domains {
-		if !d.Enabled || d.Mode == "shared_sni" {
+		if !d.Enabled || d.Mode == "shared_sni" || d.Mode == "cert_only" {
 			continue
 		}
 		if d.Mode == "sni_only" {
 			// Reuse Telemt's existing decoy-site renderer and atomic file writer
 			// instead of maintaining a second set of website templates.
 			sitePath := filepath.Join(config.GetDBFolderPath(), "domain-tls", "sni-sites", fmt.Sprintf("%x", sha256.Sum256([]byte(d.Name))))
-			dir, siteErr := prepareTelemtWebSite(d.Name, filepath.Join(sitePath, "default"), filepath.Join(sitePath, "snapshots"), nil)
+			var site *TelemtWebSiteOptions
+			if d.SiteCatalog != "" || d.SiteTemplate != "" {
+				site = &TelemtWebSiteOptions{Mode: "catalog", Catalog: d.SiteCatalog, Template: d.SiteTemplate}
+			}
+			dir, siteErr := prepareTelemtWebSite(d.Name, filepath.Join(sitePath, "default"), filepath.Join(sitePath, "snapshots"), site)
 			if siteErr != nil {
 				return backend, fmt.Errorf("SNI site %s: %w", d.Name, siteErr)
 			}

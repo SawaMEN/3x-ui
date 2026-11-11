@@ -1,8 +1,11 @@
 package controller
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
+
+	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 
@@ -64,6 +67,40 @@ func (a *ServerController) domainActivityState() (domainActivityResponse, error)
 // Existing panel API authentication, token scopes and CSRF middleware apply.
 func (a *ServerController) getDomainActivity(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
+	nodeID, err := singBoxSessionNodeIDFromQuery(c)
+	if err != nil {
+		jsonMsg(c, "Invalid domain activity node", err)
+		return
+	}
+	if nodeID != nil {
+		// Node-sync credentials may read only their local state; the shared
+		// node-target parser rejects any attempt to proxy via another panel.
+		manager := webruntime.GetManager()
+		if manager == nil {
+			jsonMsg(c, "Unable to read node domain activity", errors.New("runtime manager is not initialized"))
+			return
+		}
+		reader, err := manager.DomainActivityReaderFor(nodeID)
+		if err != nil {
+			jsonMsg(c, "Unable to read node domain activity", err)
+			return
+		}
+		payload, err := reader.DomainActivity(c.Request.Context())
+		if err != nil {
+			jsonMsg(c, "Unable to read node domain activity", err)
+			return
+		}
+		var remote domainActivityResponse
+		if err := json.Unmarshal(payload, &remote); err != nil {
+			jsonMsg(c, "Invalid node domain activity response", err)
+			return
+		}
+		if remote.Entries == nil {
+			remote.Entries = make([]service.DomainActivityEntry, 0)
+		}
+		jsonObj(c, remote, nil)
+		return
+	}
 	state, err := a.domainActivityState()
 	if err != nil {
 		jsonMsg(c, "Cannot read domain activity settings", err)
@@ -77,7 +114,11 @@ func (a *ServerController) getDomainActivity(c *gin.Context) {
 				return
 			}
 		} else if state.AccessLogEnabled {
-			state.Entries = a.serverService.GetRecentDomainActivity(time.Now())
+			state.Entries, err = a.serverService.GetRecentDomainActivity(time.Now())
+			if err != nil {
+				jsonMsgObj(c, "Unable to read Xray domain activity", state, err)
+				return
+			}
 		}
 	}
 	jsonObj(c, state, nil)

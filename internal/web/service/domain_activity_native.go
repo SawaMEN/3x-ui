@@ -10,8 +10,9 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
-// aggregateNativeDomainActivity converts an authenticated sing-box session
-// snapshot into a per-client domain summary. Only live sessions from the core
+// aggregateNativeDomainActivity converts a sing-box session snapshot into a
+// domain summary. Sessions without user metadata remain unattributed, never
+// assigned to another client. Only live sessions from the core
 // are considered; no DNS requests, IP addresses, or URL paths are retained.
 func aggregateNativeDomainActivity(sessions []singbox.ActiveSession, now time.Time) []DomainActivityEntry {
 	const maxEntries = 300
@@ -25,7 +26,7 @@ func aggregateNativeDomainActivity(sessions []singbox.ActiveSession, now time.Ti
 			break
 		}
 		user := strings.TrimSpace(session.User)
-		if session.ID == "" || user == "" || len(user) > 254 {
+		if session.ID == "" || len(user) > 254 {
 			continue
 		}
 		if _, exists := seenIDs[session.ID]; exists {

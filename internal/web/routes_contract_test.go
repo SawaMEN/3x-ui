@@ -55,6 +55,9 @@ func isInternalUIAPI(path string) bool {
 		// ephemeral HTTP-01 proof are panel-only, not stable public APIs.
 		path == "/panel/api/domains/certificates/events" ||
 		path == "/panel/api/domains/dns/credential" ||
+		// Main-node DNS-01 certificate issuance is an owner-only UI action,
+		// not a stable third-party automation endpoint.
+		path == "/panel/api/manager/domains/local-certificate" ||
 		path == "/panel/api/domains/probe/http01" ||
 		path == "/panel/api/telemt/subscription-proxy" ||
 		path == "/panel/api/xray/outbound-subs/:id/probe"

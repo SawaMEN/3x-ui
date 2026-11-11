@@ -11,6 +11,7 @@ export const DomainModeSchema = z.enum([
   'sub_link_only',
   'sni_only',
   'shared_sni',
+  'cert_only',
 ]);
 export const DomainTLSModeSchema = z.enum(['auto', 'certmagic', 'existing', 'manual']);
 const hostname = z
@@ -27,6 +28,8 @@ export const DomainFormSchema = DomainResponseSchema.extend({
   mode: DomainModeSchema,
   tls: DomainTLSModeSchema,
   inboundIds: z.array(z.number().int().positive()),
+  siteCatalog: z.string().optional(),
+  siteTemplate: z.string().optional(),
 });
 export type DomainForm = z.infer<typeof DomainFormSchema>;
 export const DomainConfigFormSchema = ConfigResponseSchema.extend({
@@ -72,4 +75,6 @@ export const defaultDomain: DomainForm = {
   tls: 'auto',
   certFile: '',
   keyFile: '',
+  siteCatalog: '',
+  siteTemplate: '',
 };

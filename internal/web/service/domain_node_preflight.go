@@ -62,7 +62,7 @@ func augmentDomainPreflightWithNodeEvidence(ctx context.Context, cfg domainfront
 	// observation is needed or that the draft will be reachable.
 	var names []string
 	for _, d := range cfg.Domains {
-		if !d.Enabled || d.Mode == "shared_sni" || strings.HasPrefix(d.Name, "*.") ||
+		if !d.Enabled || d.Mode == "shared_sni" || d.Mode == "cert_only" || strings.HasPrefix(d.Name, "*.") ||
 			(d.TLS != "auto" && d.TLS != "certmagic") || cfg.DNS01Provider != "" {
 			continue
 		}

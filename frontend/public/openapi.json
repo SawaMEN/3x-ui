@@ -2562,6 +2562,12 @@
           "panel": {
             "type": "boolean"
           },
+          "siteCatalog": {
+            "type": "string"
+          },
+          "siteTemplate": {
+            "type": "string"
+          },
           "tls": {
             "example": "auto",
             "type": "string"
@@ -17888,6 +17894,8 @@
                           "name": "sub.example.com",
                           "origin": "",
                           "panel": false,
+                          "siteCatalog": "",
+                          "siteTemplate": "",
                           "tls": "auto"
                         }
                       ],
@@ -17989,6 +17997,8 @@
                           "name": "sub.example.com",
                           "origin": "",
                           "panel": false,
+                          "siteCatalog": "",
+                          "siteTemplate": "",
                           "tls": "auto"
                         }
                       ],

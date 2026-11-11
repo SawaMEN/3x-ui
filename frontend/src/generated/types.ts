@@ -599,6 +599,8 @@ export interface DomainFrontDomain {
   name: string;
   origin: string;
   panel: boolean;
+  siteCatalog?: string;
+  siteTemplate?: string;
   tls: string;
 }
 

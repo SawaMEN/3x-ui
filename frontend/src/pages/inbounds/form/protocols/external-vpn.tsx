@@ -5,6 +5,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import { HttpUtil } from '@/utils';
+import SniSearchInput from '../security/SniSearchInput';
 
 export function PingtunnelFields() {
   const { t } = useTranslation();
@@ -46,6 +47,9 @@ export function PingtunnelFields() {
         label={t('pages.inbounds.form.pingtunnelConnectTimeout')}
       >
         <InputNumber min={0} suffix="ms" />
+      </FormField>
+      <FormField name={['settings', 'forward']} label="SOCKS5 / HTTP forward">
+        <Input placeholder="socks5://127.0.0.1:1080" />
       </FormField>
       <FormField
         name={['settings', 'congestion']}
@@ -113,7 +117,7 @@ export function TrustTunnelFields() {
     setLoadingPanelCert(true);
     try {
       const response =
-        typeof nodeId === 'number'
+        typeof nodeId === 'number' && nodeId > 0
           ? await HttpUtil.get(`/panel/api/nodes/webCert/${nodeId}`, undefined, { silent: true })
           : await HttpUtil.post('/panel/api/setting/all', undefined, { silent: true });
       if (!response?.success) {
@@ -150,7 +154,7 @@ export function TrustTunnelFields() {
         label={t('pages.inbounds.form.trusttunnelHostname')}
         tooltip={t('pages.inbounds.form.trusttunnelHostnameHint')}
       >
-        <Input placeholder="vpn.example.com" />
+        <SniSearchInput placeholder="vpn.example.com" />
       </FormField>
       <Space wrap style={{ marginTop: -12, marginBottom: 12 }}>
         <Button onClick={autofillHostname}>

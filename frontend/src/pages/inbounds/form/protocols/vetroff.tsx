@@ -4,10 +4,8 @@ import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
-import {
-  canApplyManagedSniCertificate,
-  type ManagedSniDomain,
-} from '@/api/queries/useManagedSniDomains';
+import { canUseManagedSniCertificate } from '../security/local-certificate';
+import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import {
   VETROFF_TRANSPORTS,
   VetroffOptionsSchema,
@@ -103,7 +101,7 @@ export function VetroffFields() {
         <SniSearchInput
           placeholder={label('automatic')}
           onPickManagedDomain={(domain: ManagedSniDomain) => {
-            if (canApplyManagedSniCertificate(domain, nodeId)) {
+            if (canUseManagedSniCertificate(domain, nodeId)) {
               setValue(`${prefix}.autoTLS`, false, { shouldDirty: true });
               setValue('settings.certificate', domain.certFile, { shouldDirty: true });
               setValue('settings.privateKey', domain.keyFile, { shouldDirty: true });

@@ -636,6 +636,8 @@ export const EXAMPLES: Record<string, unknown> = {
         "name": "sub.example.com",
         "origin": "",
         "panel": false,
+        "siteCatalog": "",
+        "siteTemplate": "",
         "tls": "auto"
       }
     ],
@@ -659,6 +661,8 @@ export const EXAMPLES: Record<string, unknown> = {
     "name": "sub.example.com",
     "origin": "",
     "panel": false,
+    "siteCatalog": "",
+    "siteTemplate": "",
     "tls": "auto"
   },
   "DomainFrontStatus": {
@@ -696,6 +700,8 @@ export const EXAMPLES: Record<string, unknown> = {
           "name": "sub.example.com",
           "origin": "",
           "panel": false,
+          "siteCatalog": "",
+          "siteTemplate": "",
           "tls": "auto"
         }
       ],

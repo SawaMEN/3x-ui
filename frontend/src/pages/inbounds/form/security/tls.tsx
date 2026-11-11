@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -25,9 +25,12 @@ import DynamicEchHelper from '@/components/form/DynamicEchHelper';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from './SniSearchInput';
 import {
-  canApplyManagedSniCertificate,
-  type ManagedSniDomain,
-} from '@/api/queries/useManagedSniDomains';
+  canUseManagedSniCertificate,
+  nodeCertificateForSni,
+  mayReplaceCertificatePair,
+} from './local-certificate';
+import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
+import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import {
   ALPN_OPTION,
   DOMAIN_STRATEGY_OPTION,
@@ -325,8 +328,13 @@ export default function TlsForm({
 }: TlsFormProps) {
   const { t } = useTranslation();
   const uid = useId();
-  const { control, setValue } = useFormContext();
+  const { control, setValue, getValues } = useFormContext();
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
+  const serverName = String(
+    useWatch({ control, name: 'streamSettings.tlsSettings.serverName' }) || '',
+  );
+  const { data: managedSites = [] } = useManagedSniDomains();
+  const selectedSite = nodeCertificateForSni(managedSites, serverName, nodeId);
   const { fields, append, remove } = useFieldArray({
     control,
     name: 'streamSettings.tlsSettings.certificates',
@@ -336,8 +344,59 @@ export default function TlsForm({
     control,
     name: 'streamSettings.tlsSettings.settings.fingerprint',
   });
+  useEffect(() => {
+    if (!selectedSite) return;
+    const current = getValues('streamSettings.tlsSettings.certificates.0') as
+      | {
+          useFile?: boolean;
+          certificateFile?: string;
+          keyFile?: string;
+          certificate?: string[];
+          key?: string[];
+        }
+      | undefined;
+    if (
+      current &&
+      !current.useFile &&
+      ((current.certificate?.length ?? 0) || (current.key?.length ?? 0))
+    )
+      return;
+    if (
+      !mayReplaceCertificatePair(
+        current?.certificateFile || '',
+        current?.keyFile || '',
+        managedSites,
+        nodeId,
+      )
+    )
+      return;
+    if (
+      current?.certificateFile === selectedSite.certFile &&
+      current.keyFile === selectedSite.keyFile
+    )
+      return;
+    const next = {
+      useFile: true,
+      certificateFile: selectedSite.certFile,
+      keyFile: selectedSite.keyFile,
+      certificate: [],
+      key: [],
+      ocspStapling: 0,
+      oneTimeLoading: false,
+      usage: 'encipherment',
+      buildChain: false,
+    };
+    if (fields.length === 0) append(next);
+    else
+      for (const [key, value] of Object.entries(next))
+        setValue(`streamSettings.tlsSettings.certificates.0.${key}`, value, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+  }, [append, fields.length, getValues, managedSites, nodeId, selectedSite, setValue]);
+
   const onManagedSni = (domain: ManagedSniDomain) => {
-    if (!canApplyManagedSniCertificate(domain, nodeId)) return;
+    if (!canUseManagedSniCertificate(domain, nodeId)) return;
     // Server-side TLS files can only be applied on the node that stores them.
     const opts = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
     const row = {

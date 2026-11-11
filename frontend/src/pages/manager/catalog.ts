@@ -205,6 +205,9 @@ export interface RecipeOptions {
   verifiedSniByNode: Record<number, string>;
   backupSniByNode?: Record<number, string[]>;
   managedCertificates?: ManagedSniDomain[];
+  // Explicit absolute file paths on the selected host. They are verified during
+  // the node's preflight and must never be inherited by a different node.
+  certificateFilesByPair?: Record<string, { certFile: string; keyFile: string }>;
   // Optional node-level TLS hostname override; "auto" means pick the first
   // valid managed certificate on that node, without inheriting protocol SNI.
   tlsSniByNode?: Record<number, string>;
@@ -264,10 +267,37 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
               ? ''
               : configuredSni
             : '';
-      const certificate =
+      const override = options.certificateFilesByPair?.[`${id}|${nodeId}`];
+      let certificate =
         preset.sniMode === 'tls'
           ? managerTLSCertificateForSni(options.managedCertificates ?? [], nodeId, configuredSni)
           : null;
+      if (
+        preset.sniMode === 'tls' &&
+        override &&
+        (override.certFile.trim() || override.keyFile.trim())
+      ) {
+        if (!override.certFile.trim() || !override.keyFile.trim()) {
+          skipped.push(
+            `${preset.name} · ${nodeName}: both TLS certificate and private key paths are required`,
+          );
+          continue;
+        }
+        const name = managerCertificateName(configuredSni);
+        if (!name || name === 'auto' || name === 'inherit') {
+          skipped.push(
+            `${preset.name} · ${nodeName}: select an explicit SNI for manual TLS file paths`,
+          );
+          continue;
+        }
+        certificate = {
+          name,
+          source: nodeId === 0 ? 'gateway' : 'remote',
+          ...(nodeId > 0 ? { nodeId } : {}),
+          certFile: override.certFile.trim(),
+          keyFile: override.keyFile.trim(),
+        };
+      }
       if (preset.sniMode === 'tls' && !certificate && !options.allowUnconfiguredTLS) {
         skipped.push(`${preset.name} · ${nodeName}: no certificate for SNI on this node`);
         continue;

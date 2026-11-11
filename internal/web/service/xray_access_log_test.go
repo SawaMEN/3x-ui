@@ -1,6 +1,9 @@
 package service
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestParseXrayAccessLogConfig(t *testing.T) {
 	for _, tc := range []struct {
@@ -23,5 +26,23 @@ func TestParseXrayAccessLogConfig(t *testing.T) {
 				t.Fatalf("log path = %q; want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestResolveXrayAccessLogPath(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bin", "xray.json")
+	for _, tc := range []struct {
+		input string
+		want  string
+	}{
+		{"./access.log", filepath.Join(filepath.Dir(configPath), "access.log")},
+		{"logs/access.log", filepath.Join(filepath.Dir(configPath), "logs", "access.log")},
+		{"none", "none"},
+		{"", ""},
+		{"/var/log/xray/access.log", "/var/log/xray/access.log"},
+	} {
+		if got := resolveXrayAccessLogPath(tc.input, configPath); got != tc.want {
+			t.Errorf("resolveXrayAccessLogPath(%q) = %q, want %q", tc.input, got, tc.want)
+		}
 	}
 }

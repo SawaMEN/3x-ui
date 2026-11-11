@@ -14,15 +14,17 @@ import (
 )
 
 type DomainFrontDomain struct {
-	Name       string `json:"name" example:"sub.example.com"`
-	Mode       string `json:"mode" example:"sub_link_only"`
-	Enabled    bool   `json:"enabled"`
-	Panel      bool   `json:"panel"`
-	InboundIDs []int  `json:"inboundIds"`
-	Origin     string `json:"origin"`
-	TLS        string `json:"tls" example:"auto"`
-	CertFile   string `json:"certFile"`
-	KeyFile    string `json:"keyFile"`
+	Name         string `json:"name" example:"sub.example.com"`
+	Mode         string `json:"mode" example:"sub_link_only"`
+	Enabled      bool   `json:"enabled"`
+	Panel        bool   `json:"panel"`
+	InboundIDs   []int  `json:"inboundIds"`
+	Origin       string `json:"origin"`
+	TLS          string `json:"tls" example:"auto"`
+	CertFile     string `json:"certFile"`
+	KeyFile      string `json:"keyFile"`
+	SiteCatalog  string `json:"siteCatalog,omitempty"`
+	SiteTemplate string `json:"siteTemplate,omitempty"`
 }
 
 type DomainFrontConfig struct {
@@ -40,6 +42,20 @@ type DomainFrontConfig struct {
 	DNS01Propagation   int                 `json:"dns01Propagation,omitempty"`
 	SubscriptionDomain string              `json:"subscriptionDomain"`
 	Domains            []DomainFrontDomain `json:"domains"`
+}
+
+// HasPublicSites is false for DNS-01 certificate-only and foreign SNI records.
+// Such records must not bind public HTTP/HTTPS listeners.
+func (c DomainFrontConfig) HasPublicSites() bool {
+	if !c.Enabled {
+		return false
+	}
+	for _, d := range c.Domains {
+		if d.Enabled && d.Mode != "shared_sni" && d.Mode != "cert_only" {
+			return true
+		}
+	}
+	return false
 }
 
 type Route struct {
@@ -179,9 +195,16 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 			continue
 		}
 		switch d.Mode {
-		case "direct", "cdn", "relay", "sub_link_only", "sni_only", "shared_sni":
+		case "direct", "cdn", "relay", "sub_link_only", "sni_only", "cert_only":
 		default:
 			return fmt.Errorf("unknown domain mode: %s", d.Mode)
+		}
+		if d.Mode == "sni_only" {
+			if (d.SiteCatalog == "") != (d.SiteTemplate == "") {
+				return fmt.Errorf("%s: cover site catalog and template must be selected together", d.Name)
+			}
+		} else if d.SiteCatalog != "" || d.SiteTemplate != "" {
+			return fmt.Errorf("%s: only SNI-only domains can select a cover site template", d.Name)
 		}
 		switch d.TLS {
 		case "auto", "certmagic", "existing":
@@ -196,6 +219,14 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 			}
 		default:
 			return fmt.Errorf("TLS must be auto, certmagic, existing or manual")
+		}
+		if d.Mode == "cert_only" {
+			if d.TLS != "certmagic" || (c.Enabled && d.Enabled && c.DNS01Provider == "") {
+				return fmt.Errorf("%s: certificate-only domains require CertMagic and DNS-01", d.Name)
+			}
+			if d.Panel || len(d.InboundIDs) != 0 || strings.TrimSpace(d.Origin) != "" {
+				return fmt.Errorf("%s: certificate-only domains cannot expose sites, panel, VPN inbounds or origins", d.Name)
+			}
 		}
 		if d.Mode == "sub_link_only" && (d.Panel || len(d.InboundIDs) > 0) {
 			return fmt.Errorf("subscription-only domains cannot expose the panel or VPN inbounds")
@@ -260,7 +291,7 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 	if c.SubscriptionDomain != "" {
 		found := false
 		for _, d := range c.Domains {
-			if d.Enabled && d.Mode != "sni_only" && d.Mode != "shared_sni" && d.Name == c.SubscriptionDomain {
+			if d.Enabled && d.Mode != "sni_only" && d.Mode != "shared_sni" && d.Mode != "cert_only" && d.Name == c.SubscriptionDomain {
 				found = true
 			}
 		}

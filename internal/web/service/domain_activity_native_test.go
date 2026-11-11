@@ -20,15 +20,18 @@ func TestAggregateNativeDomainActivity(t *testing.T) {
 		{ID: "", User: "alice", Domain: "invalid.example"},
 	}
 	got := aggregateNativeDomainActivity(sessions, now)
-	if len(got) != 2 {
-		t.Fatalf("entries = %d, want 2: %+v", len(got), got)
+	if len(got) != 3 {
+		t.Fatalf("entries = %d, want 3: %+v", len(got), got)
 	}
-	if got[0].Email != "alice" || got[0].Domain != "youtube.com" ||
-		got[0].Count != 2 || !got[0].LastSeen.Equal(now) {
-		t.Errorf("unexpected first row: %+v", got[0])
+	if got[0].Email != "" || got[0].Domain != "unattributed.example" || got[0].Count != 1 {
+		t.Errorf("unattributed session must not be silently dropped: %+v", got[0])
 	}
-	if got[1].Email != "bob" || got[1].Domain != "github.com" || got[1].Count != 1 {
-		t.Errorf("unexpected second row: %+v", got[1])
+	if got[1].Email != "alice" || got[1].Domain != "youtube.com" ||
+		got[1].Count != 2 || !got[1].LastSeen.Equal(now) {
+		t.Errorf("unexpected alice row: %+v", got[1])
+	}
+	if got[2].Email != "bob" || got[2].Domain != "github.com" || got[2].Count != 1 {
+		t.Errorf("unexpected bob row: %+v", got[2])
 	}
 }
 
