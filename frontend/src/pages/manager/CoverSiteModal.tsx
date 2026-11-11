@@ -38,26 +38,38 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
     try {
       const response = await HttpUtil.get('/panel/api/domains/sni', undefined, { silent: true });
       if (!response?.success || !Array.isArray(response.obj)) {
-        throw new Error(response?.msg || t('Не удалось обновить сертификат', 'Could not refresh certificate'));
+        throw new Error(
+          response?.msg || t('Не удалось обновить сертификат', 'Could not refresh certificate'),
+        );
       }
-      const matching = (response.obj as Array<{
-        name: string;
-        nodeId?: number;
-        certFile?: string;
-        keyFile?: string;
-      }>).find((entry) =>
-        entry.name === mainCertificate.domain && !entry.nodeId &&
-        entry.certFile && entry.keyFile,
+      const matching = (
+        response.obj as Array<{
+          name: string;
+          nodeId?: number;
+          certFile?: string;
+          keyFile?: string;
+        }>
+      ).find(
+        (entry) =>
+          entry.name === mainCertificate.domain && !entry.nodeId && entry.certFile && entry.keyFile,
       );
       if (matching) {
-        setMainCertificate((current) => current && ({
-          ...current,
-          state: 'valid',
-          certFile: matching.certFile || '',
-          keyFile: matching.keyFile || '',
-        }));
+        setMainCertificate(
+          (current) =>
+            current && {
+              ...current,
+              state: 'valid',
+              certFile: matching.certFile || '',
+              keyFile: matching.keyFile || '',
+            },
+        );
       } else {
-        setError(t('Сертификат ещё не готов. Проверьте DNS-01 и повторите позже.', 'Certificate is not ready yet. Check DNS-01 and retry later.'));
+        setError(
+          t(
+            'Сертификат ещё не готов. Проверьте DNS-01 и повторите позже.',
+            'Certificate is not ready yet. Check DNS-01 and retry later.',
+          ),
+        );
       }
     } catch (err) {
       setError(String(err));
@@ -75,21 +87,31 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
     try {
       const result = await HttpUtil.post(
         '/panel/api/manager/domains/cover-site',
-        { nodeId, domain: domain.trim(), email: email.trim(), acceptTerms, siteCatalog, siteTemplate, issueOnMain: nodeId > 0 && issueOnMain },
+        {
+          nodeId,
+          domain: domain.trim(),
+          email: email.trim(),
+          acceptTerms,
+          siteCatalog,
+          siteTemplate,
+          issueOnMain: nodeId > 0 && issueOnMain,
+        },
         { headers: { 'Content-Type': 'application/json' }, silent: true },
       );
       if (!result?.success) {
         setError(result?.msg || t('Не удалось создать сайт', 'Failed to provision the website'));
         return;
       }
-      const value = result.obj as {
-        domain?: string;
-        state?: string;
-        mainError?: string;
-        mainState?: string;
-        mainCertFile?: string;
-        mainKeyFile?: string;
-      } | undefined;
+      const value = result.obj as
+        | {
+            domain?: string;
+            state?: string;
+            mainError?: string;
+            mainState?: string;
+            mainCertFile?: string;
+            mainKeyFile?: string;
+          }
+        | undefined;
       onSuccess(value?.domain || domain.trim(), value?.state || 'pending');
       if (nodeId > 0 && issueOnMain) {
         setMainCertificate({
@@ -100,7 +122,12 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
         });
       }
       if (value?.mainError) {
-        setError(t('Удалённый сайт создан, но выпуск на основной ноде не удался: ', 'Remote site succeeded, but main-node certificate failed: ') + value.mainError);
+        setError(
+          t(
+            'Удалённый сайт создан, но выпуск на основной ноде не удался: ',
+            'Remote site succeeded, but main-node certificate failed: ',
+          ) + value.mainError,
+        );
         return;
       }
       if (nodeId > 0 && issueOnMain) return;
@@ -123,11 +150,17 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
         'Собственный сайт-заглушка с автоматическим TLS',
         'Owned HTTPS cover site with automatic TLS',
       )}
-      okText={mainCertificate ? t('Закрыть', 'Close') : t('Настроить сайт и сертификат', 'Provision site and certificate')}
-      onOk={() => mainCertificate ? onClose() : void submit()}
+      okText={
+        mainCertificate
+          ? t('Закрыть', 'Close')
+          : t('Настроить сайт и сертификат', 'Provision site and certificate')
+      }
+      onOk={() => (mainCertificate ? onClose() : void submit())}
       onCancel={onClose}
       confirmLoading={saving}
-      okButtonProps={{ disabled: !mainCertificate && (!domain.trim() || !email.trim() || !acceptTerms) }}
+      okButtonProps={{
+        disabled: !mainCertificate && (!domain.trim() || !email.trim() || !acceptTerms),
+      }}
       destroyOnHidden
     >
       <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
@@ -192,7 +225,10 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             }))}
           />
           <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
-            {t('Для изменения существующей заглушки укажите ту же ноду и домен и выберите другой сайт.', 'To edit an existing cover site, select the same node and domain with a different template.')}
+            {t(
+              'Для изменения существующей заглушки укажите ту же ноду и домен и выберите другой сайт.',
+              'To edit an existing cover site, select the same node and domain with a different template.',
+            )}
           </Typography.Text>
         </div>
         <div>
@@ -207,7 +243,10 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
         </div>
         {nodeId > 0 && (
           <Checkbox checked={issueOnMain} onChange={(ev) => setIssueOnMain(ev.target.checked)}>
-            {t('Дополнительно выпустить сертификат на основной ноде (DNS-01)', 'Also issue a certificate on the main node (DNS-01)')}
+            {t(
+              'Дополнительно выпустить сертификат на основной ноде (DNS-01)',
+              'Also issue a certificate on the main node (DNS-01)',
+            )}
           </Checkbox>
         )}
         {nodeId > 0 && issueOnMain && (
@@ -238,7 +277,8 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             description={
               <Space orientation="vertical" size="small">
                 <Typography.Text>
-                  {t('Сертификат на основной ноде:', 'Main-node certificate:')} {mainCertificate.state}
+                  {t('Сертификат на основной ноде:', 'Main-node certificate:')}{' '}
+                  {mainCertificate.state}
                 </Typography.Text>
                 {mainCertificate.certFile && mainCertificate.keyFile ? (
                   <>

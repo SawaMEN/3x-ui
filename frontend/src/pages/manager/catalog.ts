@@ -272,15 +272,22 @@ export function buildManagerRecipes(options: RecipeOptions): RecipeResult {
         preset.sniMode === 'tls'
           ? managerTLSCertificateForSni(options.managedCertificates ?? [], nodeId, configuredSni)
           : null;
-      if (preset.sniMode === 'tls' && override &&
-        (override.certFile.trim() || override.keyFile.trim())) {
+      if (
+        preset.sniMode === 'tls' &&
+        override &&
+        (override.certFile.trim() || override.keyFile.trim())
+      ) {
         if (!override.certFile.trim() || !override.keyFile.trim()) {
-          skipped.push(`${preset.name} · ${nodeName}: both TLS certificate and private key paths are required`);
+          skipped.push(
+            `${preset.name} · ${nodeName}: both TLS certificate and private key paths are required`,
+          );
           continue;
         }
         const name = managerCertificateName(configuredSni);
         if (!name || name === 'auto' || name === 'inherit') {
-          skipped.push(`${preset.name} · ${nodeName}: select an explicit SNI for manual TLS file paths`);
+          skipped.push(
+            `${preset.name} · ${nodeName}: select an explicit SNI for manual TLS file paths`,
+          );
           continue;
         }
         certificate = {

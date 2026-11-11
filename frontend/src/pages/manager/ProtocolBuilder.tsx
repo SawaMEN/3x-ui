@@ -532,10 +532,14 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                         value: 'auto',
                         label: t('TLS: автоматически на ноде', 'TLS: automatic on node'),
                       },
-                      ...[...new Set([
-                        ...ownedCertificates.map((site) => site.name),
-                        ...certificates.filter((site) => site.source === 'remote').map((site) => site.name),
-                      ])].map((name) => ({
+                      ...[
+                        ...new Set([
+                          ...ownedCertificates.map((site) => site.name),
+                          ...certificates
+                            .filter((site) => site.source === 'remote')
+                            .map((site) => site.name),
+                        ]),
+                      ].map((name) => ({
                         value: name,
                         label: name,
                       })),
@@ -579,8 +583,13 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                       .map((item) => {
                         const key = `${item.id}|${node.id}`;
                         const manual = certificateFilesByPair[key] || { certFile: '', keyFile: '' };
-                        const requestedSni = tlsSniByNode[node.id] ?? sniByPreset[item.id] ?? 'auto';
-                        const matched = managerTLSCertificateForSni(certificates, node.id, requestedSni);
+                        const requestedSni =
+                          tlsSniByNode[node.id] ?? sniByPreset[item.id] ?? 'auto';
+                        const matched = managerTLSCertificateForSni(
+                          certificates,
+                          node.id,
+                          requestedSni,
+                        );
                         const setFile = (field: 'certFile' | 'keyFile', value: string) =>
                           setCertificateFilesByPair((prev) => ({
                             ...prev,
@@ -602,14 +611,19 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                                 aria-label={`${item.name} certificate path #${node.id}`}
                                 value={manual.certFile}
                                 onChange={(event) => setFile('certFile', event.target.value)}
-                                placeholder={matched?.certFile || t('Путь к fullchain.pem', 'Path to fullchain.pem')}
+                                placeholder={
+                                  matched?.certFile ||
+                                  t('Путь к fullchain.pem', 'Path to fullchain.pem')
+                                }
                               />
                               <Typography.Text type="secondary">keyFile</Typography.Text>
                               <Input
                                 aria-label={`${item.name} private key path #${node.id}`}
                                 value={manual.keyFile}
                                 onChange={(event) => setFile('keyFile', event.target.value)}
-                                placeholder={matched?.keyFile || t('Путь к privkey.pem', 'Path to privkey.pem')}
+                                placeholder={
+                                  matched?.keyFile || t('Путь к privkey.pem', 'Path to privkey.pem')
+                                }
                               />
                             </Space>
                           ),

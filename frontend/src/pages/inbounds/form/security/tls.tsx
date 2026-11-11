@@ -330,7 +330,9 @@ export default function TlsForm({
   const uid = useId();
   const { control, setValue, getValues } = useFormContext();
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
-  const serverName = String(useWatch({ control, name: 'streamSettings.tlsSettings.serverName' }) || '');
+  const serverName = String(
+    useWatch({ control, name: 'streamSettings.tlsSettings.serverName' }) || '',
+  );
   const { data: managedSites = [] } = useManagedSniDomains();
   const selectedSite = nodeCertificateForSni(managedSites, serverName, nodeId);
   const { fields, append, remove } = useFieldArray({
@@ -344,37 +346,21 @@ export default function TlsForm({
   });
   useEffect(() => {
     if (!selectedSite) return;
-    const current = getValues('streamSettings.tlsSettings.certificates.0') as {
-      useFile?: boolean; certificateFile?: string; keyFile?: string;
-      certificate?: string[]; key?: string[];
-    } | undefined;
-    if (current && !current.useFile && ((current.certificate?.length ?? 0) || (current.key?.length ?? 0))) return;
-    if (!mayReplaceCertificatePair(current?.certificateFile || '', current?.keyFile || '', managedSites, nodeId)) return;
-    if (current?.certificateFile === selectedSite.certFile && current.keyFile === selectedSite.keyFile) return;
-    const next = {
-      useFile: true, certificateFile: selectedSite.certFile, keyFile: selectedSite.keyFile,
-      certificate: [], key: [], ocspStapling: 0, oneTimeLoading: false,
-      usage: 'encipherment', buildChain: false,
-    };
-    if (fields.length === 0) append(next);
-    else for (const [key, value] of Object.entries(next))
-      setValue(`streamSettings.tlsSettings.certificates.0.${key}`, value, { shouldDirty: true, shouldValidate: true });
-  }, [append, fields.length, getValues, managedSites, nodeId, selectedSite, setValue]);
-
-  const onManagedSni = (domain: ManagedSniDomain) => {
-    if (!canUseManagedSniCertificate(domain, nodeId)) return;
-    const current = getValues('streamSettings.tlsSettings.certificates.0') as {
-      useFile?: boolean;
-      certificateFile?: string;
-      keyFile?: string;
-      certificate?: string[];
-      key?: string[];
-    } | undefined;
+    const current = getValues('streamSettings.tlsSettings.certificates.0') as
+      | {
+          useFile?: boolean;
+          certificateFile?: string;
+          keyFile?: string;
+          certificate?: string[];
+          key?: string[];
+        }
+      | undefined;
     if (
       current &&
       !current.useFile &&
-      ((current.certificate?.length ?? 0) > 0 || (current.key?.length ?? 0) > 0)
-    ) return;
+      ((current.certificate?.length ?? 0) || (current.key?.length ?? 0))
+    )
+      return;
     if (
       !mayReplaceCertificatePair(
         current?.certificateFile || '',
@@ -382,7 +368,59 @@ export default function TlsForm({
         managedSites,
         nodeId,
       )
-    ) return;
+    )
+      return;
+    if (
+      current?.certificateFile === selectedSite.certFile &&
+      current.keyFile === selectedSite.keyFile
+    )
+      return;
+    const next = {
+      useFile: true,
+      certificateFile: selectedSite.certFile,
+      keyFile: selectedSite.keyFile,
+      certificate: [],
+      key: [],
+      ocspStapling: 0,
+      oneTimeLoading: false,
+      usage: 'encipherment',
+      buildChain: false,
+    };
+    if (fields.length === 0) append(next);
+    else
+      for (const [key, value] of Object.entries(next))
+        setValue(`streamSettings.tlsSettings.certificates.0.${key}`, value, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+  }, [append, fields.length, getValues, managedSites, nodeId, selectedSite, setValue]);
+
+  const onManagedSni = (domain: ManagedSniDomain) => {
+    if (!canUseManagedSniCertificate(domain, nodeId)) return;
+    const current = getValues('streamSettings.tlsSettings.certificates.0') as
+      | {
+          useFile?: boolean;
+          certificateFile?: string;
+          keyFile?: string;
+          certificate?: string[];
+          key?: string[];
+        }
+      | undefined;
+    if (
+      current &&
+      !current.useFile &&
+      ((current.certificate?.length ?? 0) > 0 || (current.key?.length ?? 0) > 0)
+    )
+      return;
+    if (
+      !mayReplaceCertificatePair(
+        current?.certificateFile || '',
+        current?.keyFile || '',
+        managedSites,
+        nodeId,
+      )
+    )
+      return;
     // Server-side TLS files can only be applied on the node that stores them.
     const opts = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
     const row = {

@@ -11,13 +11,27 @@ export type LocalCertificateFields = {
 
 // Only server-side TLS protocols use a locally stored certificate.
 // REALITY/ShadowTLS, upstream SNI and certificate pinning are not server identities.
-export function localCertificateFields(protocol: string, streamSecurity: string): LocalCertificateFields | null {
-  if (protocol === 'tuic') return { cert: 'settings.server.certificate', key: 'settings.server.private_key' };
-  if (protocol === 'vetroff') return { cert: 'settings.certificate', key: 'settings.privateKey', autoTLS: 'settings.vetroff.autoTLS' };
-  if (protocol === 'trusttunnel') return { cert: 'settings.certificate', key: 'settings.privateKey' };
+export function localCertificateFields(
+  protocol: string,
+  streamSecurity: string,
+): LocalCertificateFields | null {
+  if (protocol === 'tuic')
+    return { cert: 'settings.server.certificate', key: 'settings.server.private_key' };
+  if (protocol === 'vetroff')
+    return {
+      cert: 'settings.certificate',
+      key: 'settings.privateKey',
+      autoTLS: 'settings.vetroff.autoTLS',
+    };
+  if (protocol === 'trusttunnel')
+    return { cert: 'settings.certificate', key: 'settings.privateKey' };
   if (['naive', 'anytls', 'masque'].includes(protocol))
     return { cert: 'settings.tls.certificatePath', key: 'settings.tls.keyPath' };
-  if (streamSecurity === 'tls') return { cert: 'streamSettings.tlsSettings.certificates.0.certificateFile', key: 'streamSettings.tlsSettings.certificates.0.keyFile' };
+  if (streamSecurity === 'tls')
+    return {
+      cert: 'streamSettings.tlsSettings.certificates.0.certificateFile',
+      key: 'streamSettings.tlsSettings.certificates.0.keyFile',
+    };
   return null;
 }
 
@@ -38,9 +52,10 @@ export function nodeCertificateForSni(
 ): ManagedSniDomain | undefined {
   const name = sni.trim().toLowerCase().replace(/\.$/, '');
   if (!name || !name.includes('.')) return undefined;
-  return sites.find((site) =>
-    site.name.trim().toLowerCase().replace(/\.$/, '') === name &&
-    canUseManagedSniCertificate(site, nodeId),
+  return sites.find(
+    (site) =>
+      site.name.trim().toLowerCase().replace(/\.$/, '') === name &&
+      canUseManagedSniCertificate(site, nodeId),
   );
 }
 
@@ -52,9 +67,10 @@ export function mayReplaceCertificatePair(
 ): boolean {
   if (!currentCert && !currentKey) return true;
   // Never replace custom, imported or partially filled paths silently.
-  return sites.some((site) =>
-    canUseManagedSniCertificate(site, nodeId) &&
-    site.certFile === currentCert &&
-    site.keyFile === currentKey,
+  return sites.some(
+    (site) =>
+      canUseManagedSniCertificate(site, nodeId) &&
+      site.certFile === currentCert &&
+      site.keyFile === currentKey,
   );
 }

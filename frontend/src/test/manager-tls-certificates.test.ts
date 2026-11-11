@@ -70,13 +70,28 @@ describe('manager per-node TLS certificates', () => {
     const result = buildManagerRecipes({
       presets: ['naive'],
       nodeIds: [0, 7],
-      nodes: [{ ...nodes[0], protocolAvailability: { naive: { ready: true, supported: true, version: 'test', component: '', speedLimit: true } } }],
+      nodes: [
+        {
+          ...nodes[0],
+          protocolAvailability: {
+            naive: {
+              ready: true,
+              supported: true,
+              version: 'test',
+              component: '',
+              speedLimit: true,
+            },
+          },
+        },
+      ],
       domains: [],
       sniByPreset: { naive: 'vpn.example.org' },
       targetByPreset: {},
       verifiedSniByNode: {},
       managedCertificates: [],
-      certificateFilesByPair: { 'naive|0': { certFile: '/main/fullchain.pem', keyFile: '/main/privkey.pem' } },
+      certificateFilesByPair: {
+        'naive|0': { certFile: '/main/fullchain.pem', keyFile: '/main/privkey.pem' },
+      },
     });
     expect(result.entries).toHaveLength(1);
     const settings = JSON.parse(result.entries[0].config!.settings);
