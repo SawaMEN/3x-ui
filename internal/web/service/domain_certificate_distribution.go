@@ -100,7 +100,7 @@ func readDistributedSource(path string) ([]byte, error) {
 // DistributeTLSCertificate sends only a locally registered certificate for an
 // owned hostname. A node with HTTP or skip-verification is refused because
 // forwarding a private key over such transport would expose the TLS identity.
-func DistributeTLSCertificate(ctx context.Context, nodeID int, domain string) (DistributedTLSCertificate, error) {
+func DistributeTLSCertificate(ctx context.Context, nodeID int, domain string, rsaOnly bool) (DistributedTLSCertificate, error) {
 	var empty DistributedTLSCertificate
 	name, err := distributionDomain(domain)
 	if err != nil {
@@ -131,8 +131,11 @@ func DistributeTLSCertificate(ctx context.Context, nodeID int, domain string) (D
 		}
 	}
 	if source == nil {
-		return empty, errors.New("main node has no valid managed certificate for this SNI")
-	}
+        return empty, errors.New("main node has no valid managed certificate for this SNI")
+    }
+    if rsaOnly && !managedCertificateSupportsRSA(source.CertFile, source.KeyFile) {
+        return empty, errors.New("FPTN requires an RSA certificate and matching RSA private key")
+    }
 	cert, err := readDistributedSource(source.CertFile)
 	if err != nil {
 		return empty, err
