@@ -4081,8 +4081,8 @@
       "subsystem": "frontend",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A64–A66 full-file reads: pathless SNI merge/discovery, certificate metadata and preflight, domain API role/method matrix, node-only local redaction/no recursion, runtime RPC query contract, frontend hook and owning-node selection. Reproduced empty merged metadata, 403 for legitimate discovery and actual AntD selecting the wrong same-name node before fixes. Offline TLS-file and loopback RPC regressions, controller/service race, frontend component/ownership tests and typecheck. Related domain_front.go is left pending for unresolved rollback review despite full read; large frontend TLS forms and sni-search suite were not marked from partial reads.",
-      "reviewed_sha256": "d4f3f9578c61814007a59737b87a2460f98e9ed0b5d279309c481574021862d3"
+      "evidence": "Complete query/type module reread after concurrent 9741214 adds distributed certificate source union; request contract and normalized defaults unchanged.",
+      "reviewed_sha256": "58cd1b206d20fc5b33aa29dbe2807929434209dfae1058aae9650e1bbcc68bba"
     },
     {
       "path": "frontend/src/api/queries/useNodeMutations.ts",

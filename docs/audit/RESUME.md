@@ -734,3 +734,10 @@ URL, порт, путь, credentials/query/fragment. Это исправлени
 Всего 71 исправление; reviewed 216/2364, осталось 2148, stale 0.
 
 A71: оба TestCertificateDistribution* прошли с -race (1.132s).
+
+A69–A71 опубликованы в 4864d8c29b3f45d359a5061cdd601929f72b2947.
+Последние независимые frontend commits 55ea87a/9741214 сохранены как родители.
+После синхронизации обнаружен изменившийся reviewed hash useManagedSniDomains.ts;
+все 48 строк повторно прочитаны, расширение union source на distributed учтено.
+Этот служебный checkpoint обновляет реестр: 216 reviewed, 2148 pending, 0 stale.
+CI 4864d8c запущен, на момент сохранения ещё не завершён.
