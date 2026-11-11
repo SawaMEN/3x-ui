@@ -45,6 +45,7 @@ func NewDomainController(g *gin.RouterGroup) {
 	g = g.Group("/domains")
 	g.GET("/status", a.status)
 	g.GET("/certificates", a.certificates)
+	g.GET("/cover-sites", a.coverSites)
 	g.GET("/certificates/events", a.certificateEvents)
 	g.POST("/certificates/distribute", a.distributeCertificate)
 	g.POST("/certificates/resolve", a.resolveCertificate)
@@ -59,6 +60,15 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.POST("/probe/http01", a.probeHTTP01)
 	g.POST("/check", a.check)
 	g.POST("/recommend", a.recommend)
+}
+
+// coverSites exposes only names and built-in templates for editable owned
+// HTTPS cover sites. A remote node's private gateway config is never returned.
+func (a *DomainController) coverSites(c *gin.Context) {
+    if (!requireDomainAdminSession(c) { return }
+    c.Header("Cache-Control", "no-store")
+    sites, err := service.ManagedCoverSites(c.Request.Context())
+    jsonObj(c, sites, err)
 }
 
 // resolveCertificate is a read-only, administrator-specific lookup for the
