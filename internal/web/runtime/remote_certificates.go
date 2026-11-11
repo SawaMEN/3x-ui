@@ -1,42 +1,42 @@
 package runtime
 
 import (
-    "context"
-    "encoding/json"
-    "errors"
-    "net/http"
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
 )
 
 // TLSCertificateInstall carries a certificate and its matching private key
 // only inside a verified node-to-node HTTPS request. Never log or return the
 // contents to the browser.
 type TLSCertificateInstall struct {
-    Domain         string `json:"domain"`
-    CertificatePEM string `json:"certificatePem"`
-    PrivateKeyPEM  string `json:"privateKeyPem"`
+	Domain         string `json:"domain"`
+	CertificatePEM string `json:"certificatePem"`
+	PrivateKeyPEM  string `json:"privateKeyPem"`
 }
 
 type InstalledTLSCertificate struct {
-    Domain    string `json:"domain"`
-    CertFile  string `json:"certFile"`
-    KeyFile   string `json:"keyFile"`
-    ExpiresAt int64  `json:"expiresAt"`
+	Domain    string `json:"domain"`
+	CertFile  string `json:"certFile"`
+	KeyFile   string `json:"keyFile"`
+	ExpiresAt int64  `json:"expiresAt"`
 }
 
 func (r *Remote) InstallTLSCertificate(ctx context.Context, payload TLSCertificateInstall) (InstalledTLSCertificate, error) {
-    var installed InstalledTLSCertificate
-    if r.node == nil || r.node.Scheme != "https" || r.node.TlsVerifyMode == "skip" {
-        return installed, errors.New("certificate distribution requires a verified HTTPS node connection (verify, pin or mTLS)")
-    }
-    env, err := r.do(ctx, http.MethodPost, "panel/api/domains/certificates/install", payload)
-    if err != nil {
-        return installed, err
-    }
-    if err := json.Unmarshal(env.Obj, &installed); err != nil {
-        return InstalledTLSCertificate{}, errors.New("invalid node certificate installation response")
-    }
-    if installed.Domain != payload.Domain || installed.CertFile == "" || installed.KeyFile == "" {
-        return InstalledTLSCertificate{}, errors.New("node returned incomplete certificate paths")
-    }
-    return installed, nil
+	var installed InstalledTLSCertificate
+	if r.node == nil || r.node.Scheme != "https" || r.node.TlsVerifyMode == "skip" {
+		return installed, errors.New("certificate distribution requires a verified HTTPS node connection (verify, pin or mTLS)")
+	}
+	env, err := r.do(ctx, http.MethodPost, "panel/api/domains/certificates/install", payload)
+	if err != nil {
+		return installed, err
+	}
+	if err := json.Unmarshal(env.Obj, &installed); err != nil {
+		return InstalledTLSCertificate{}, errors.New("invalid node certificate installation response")
+	}
+	if installed.Domain != payload.Domain || installed.CertFile == "" || installed.KeyFile == "" {
+		return InstalledTLSCertificate{}, errors.New("node returned incomplete certificate paths")
+	}
+	return installed, nil
 }

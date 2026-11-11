@@ -79,6 +79,7 @@ type frontRuntime struct {
 	routing        atomic.Pointer[http.Handler]
 	handlerHTTP    http.Handler
 	tlsConfig      *tls.Config
+	proxyPools     []interface{ CloseIdleConnections() }
 }
 
 func NewManager(cachePath string) *Manager { return &Manager{cachePath: cachePath} }
@@ -169,6 +170,7 @@ func (m *Manager) Stop() {
 
 func (r *frontRuntime) close() {
 	r.cancel()
+	r.closeProxyPools()
 	for _, listener := range r.listeners {
 		_ = listener.Close()
 	}
@@ -356,14 +358,29 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	snapshot := &frontRuntime{cfg: cfg, backend: backend}
 	handler, err := snapshot.handler()
 	if err != nil {
+		snapshot.closeProxyPools()
 		for _, listener := range r.listeners {
 			_ = listener.Close()
 		}
 		r.cache.Stop()
 		return nil, err
 	}
+	r.proxyPools = snapshot.proxyPools
 	r.routing.Store(&handler)
-	r.handlerHTTPS = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) { (*r.routing.Load()).ServeHTTP(w, req) })
+	runCtx, cancel := context.WithCancel(context.Background())
+	r.cancel = cancel
+	r.handlerHTTPS = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Header.Get("Upgrade") != "" {
+			// Server.Shutdown does not own hijacked connections. Cancelling the
+			// upgrade request makes ReverseProxy close both tunnel endpoints.
+			ctx, cancelRequest := context.WithCancel(req.Context())
+			stop := context.AfterFunc(runCtx, cancelRequest)
+			defer cancelRequest()
+			defer stop()
+			req = req.WithContext(ctx)
+		}
+		(*r.routing.Load()).ServeHTTP(w, req)
+	})
 	r.tlsConfig = tlsCfg
 	r.handlerHTTP = r.issuer.HTTPChallengeHandler(http.HandlerFunc(r.externalChallenge))
 	r.httpServer = &http.Server{Handler: r.handlerHTTP, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 1 << 20}
@@ -372,8 +389,6 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	r.httpsServer.Protocols.SetHTTP1(true)
 	r.httpsServer.Protocols.SetHTTP2(true)
 
-	runCtx, cancel := context.WithCancel(context.Background())
-	r.cancel = cancel
 	if plain != nil {
 		go func() { _ = network.ServeHTTP(r.httpServer, plain, "Domain HTTP server") }()
 	}
@@ -618,6 +633,23 @@ func proxy(target, host string, h2c bool) (*httputil.ReverseProxy, error) {
 	}}, nil
 }
 
+func (r *frontRuntime) ownedProxy(target, host string, h2c bool) (*httputil.ReverseProxy, error) {
+	upstream, err := proxy(target, host, h2c)
+	if err == nil {
+		if pool, ok := upstream.Transport.(interface{ CloseIdleConnections() }); ok {
+			r.proxyPools = append(r.proxyPools, pool)
+		}
+	}
+	return upstream, err
+}
+
+func (r *frontRuntime) closeProxyPools() {
+	for _, pool := range r.proxyPools {
+		pool.CloseIdleConnections()
+	}
+	r.proxyPools = nil
+}
+
 func (r *frontRuntime) handler() (http.Handler, error) {
 	handlers := map[string]http.Handler{}
 	for _, d := range r.cfg.Domains {
@@ -721,7 +753,7 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 		subTarget = d.Origin
 		subHost = ""
 	}
-	subscriptionProxy, err := proxy(subTarget, subHost, false)
+	subscriptionProxy, err := r.ownedProxy(subTarget, subHost, false)
 	if err != nil {
 		return nil, err
 	}
@@ -752,7 +784,7 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 			target = d.Origin
 			host = ""
 		}
-		handler, err := proxy(target, host, route.H2C && d.Mode != "relay")
+		handler, err := r.ownedProxy(target, host, route.H2C && d.Mode != "relay")
 		if err != nil {
 			return nil, err
 		}

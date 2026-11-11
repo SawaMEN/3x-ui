@@ -11890,9 +11890,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A67/A69/A70 complete source review including concurrent cert-only main changes: transactional commit rollback retains complete old backend; RefreshRoutes preserves certificate-event and DNS credential metadata; owned reverse-proxy pools close on replacement/stop/failure; upgraded request cancellation follows runtime lifetime without cancelling them on route refresh. Failing-before loopback tests prove callback loss, idle upstream sockets retained after refresh/stop, and upgraded tunnel retained after stop. Whole domainfront suite with race covers TLS, gRPC/H2C, trailers, WebSocket, cached certs, routing and new lifecycle cases. Source files read in full, fixed hashes current.",
+      "reviewed_sha256": "c1c89911c879506a4cb868ed1643cddb0a577282316a2cc084b451e9e1ad68b6"
     },
     {
       "path": "internal/domainfront/manager_test.go",
@@ -11956,9 +11956,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A67/A69/A70 complete source review including concurrent cert-only main changes: transactional commit rollback retains complete old backend; RefreshRoutes preserves certificate-event and DNS credential metadata; owned reverse-proxy pools close on replacement/stop/failure; upgraded request cancellation follows runtime lifetime without cancelling them on route refresh. Failing-before loopback tests prove callback loss, idle upstream sockets retained after refresh/stop, and upgraded tunnel retained after stop. Whole domainfront suite with race covers TLS, gRPC/H2C, trailers, WebSocket, cached certs, routing and new lifecycle cases. Source files read in full, fixed hashes current.",
+      "reviewed_sha256": "04ec8ebceaaa15c4784cd703afe655cf0bbe5ad59fce08582113ddecac008cc7"
     },
     {
       "path": "internal/domainfront/wildcard_dns_test.go",
@@ -16632,8 +16632,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A67–A68 on main after concurrent 0468d86: re-reviewed changed API allowlist, complete domain activity controller/test and shared node-target parser, SNI selector with new local-certificate helper dependencies, cert-only preflight diff. SQL commit rollback reproduced with live inherited TLS, including cancelled request; ApplyAndCommit retains full old backend and closes failed listeners. Real bearer/scoped controller regression rejects node-admin relay for domain activity and session disconnect while admin remains allowed. domain_front.go fully read and R06 fixed. Unmodified prior full-file reads underpin refreshed hashes; domainfront manager/shared lifecycle review remains pending for separate connection ownership work.",
-      "reviewed_sha256": "d49b888c4d3c802dd943cd6d1accba88250c530aaa758ad58e04676d6c09811f"
+      "evidence": "Previously reviewed files rechecked against concurrent cb2ba67..d74ba23 TLS distribution changes, including complete new RPC and distribution service; preserved dedicated node-sync install scope, session-only distribution and local path-only inventory.",
+      "reviewed_sha256": "23e63d1dd1598e52b1bd55eba5c0d2c662839abd4d2079d5aaeebe7782e26651"
     },
     {
       "path": "internal/web/controller/api_auth_test.go",
@@ -16643,8 +16643,8 @@
       "subsystem": "api-gateway",
       "kind": "test-fixture",
       "status": "reviewed",
-      "evidence": "A67–A68 on main after concurrent 0468d86: re-reviewed changed API allowlist, complete domain activity controller/test and shared node-target parser, SNI selector with new local-certificate helper dependencies, cert-only preflight diff. SQL commit rollback reproduced with live inherited TLS, including cancelled request; ApplyAndCommit retains full old backend and closes failed listeners. Real bearer/scoped controller regression rejects node-admin relay for domain activity and session disconnect while admin remains allowed. domain_front.go fully read and R06 fixed. Unmodified prior full-file reads underpin refreshed hashes; domainfront manager/shared lifecycle review remains pending for separate connection ownership work.",
-      "reviewed_sha256": "ab96a5dd2e53cae021601390ec5703e83c5cd49083b2b4fab10935fc08061118"
+      "evidence": "Previously reviewed files rechecked against concurrent cb2ba67..d74ba23 TLS distribution changes, including complete new RPC and distribution service; preserved dedicated node-sync install scope, session-only distribution and local path-only inventory.",
+      "reviewed_sha256": "2dc8b8d981e8e5405cf71565036708685c137b43c0ac6be5f7883e8340468a7c"
     },
     {
       "path": "internal/web/controller/api_background_test.go",
@@ -16775,8 +16775,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A64–A66 full-file reads: pathless SNI merge/discovery, certificate metadata and preflight, domain API role/method matrix, node-only local redaction/no recursion, runtime RPC query contract, frontend hook and owning-node selection. Reproduced empty merged metadata, 403 for legitimate discovery and actual AntD selecting the wrong same-name node before fixes. Offline TLS-file and loopback RPC regressions, controller/service race, frontend component/ownership tests and typecheck. Related domain_front.go is left pending for unresolved rollback review despite full read; large frontend TLS forms and sni-search suite were not marked from partial reads.",
-      "reviewed_sha256": "722db9b97356a1d94882ccfb5ab19939abf947f5ba7cd958c76a63d332361adc"
+      "evidence": "Rechecked certificate install/distribute routes and session/node authentication after concurrent main additions and gofumpt formatting; no policy changes in formatting pass.",
+      "reviewed_sha256": "c5bcb921f8a9a7af4c5298a0d9ba1249664dc0c0bdf05c4f6638c4355e34f47b"
     },
     {
       "path": "internal/web/controller/domains_preflight_test.go",
@@ -19525,8 +19525,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A64–A66 full-file reads: pathless SNI merge/discovery, certificate metadata and preflight, domain API role/method matrix, node-only local redaction/no recursion, runtime RPC query contract, frontend hook and owning-node selection. Reproduced empty merged metadata, 403 for legitimate discovery and actual AntD selecting the wrong same-name node before fixes. Offline TLS-file and loopback RPC regressions, controller/service race, frontend component/ownership tests and typecheck. Related domain_front.go is left pending for unresolved rollback review despite full read; large frontend TLS forms and sni-search suite were not marked from partial reads.",
-      "reviewed_sha256": "8be811fa44d1897b1bce9738ed156d655d62ef5e87af833211f9eb9542876047"
+      "evidence": "Rechecked concurrent distributed-certificate inventory integration and lint-only gofumpt formatting; node summaries still omit key material and paths.",
+      "reviewed_sha256": "4f6c5dff9386ceea8af02f58380b28b9c4c2d6fcf9b6fd276c023240435d33ee"
     },
     {
       "path": "internal/web/service/domain_certificate_inventory_nodes.go",
@@ -19624,8 +19624,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A67–A68 on main after concurrent 0468d86: re-reviewed changed API allowlist, complete domain activity controller/test and shared node-target parser, SNI selector with new local-certificate helper dependencies, cert-only preflight diff. SQL commit rollback reproduced with live inherited TLS, including cancelled request; ApplyAndCommit retains full old backend and closes failed listeners. Real bearer/scoped controller regression rejects node-admin relay for domain activity and session disconnect while admin remains allowed. domain_front.go fully read and R06 fixed. Unmodified prior full-file reads underpin refreshed hashes; domainfront manager/shared lifecycle review remains pending for separate connection ownership work.",
-      "reviewed_sha256": "3d7851b9e2069c479fab2345588fc39839dc58d0cbaf28c55a3dce06a11a1f97"
+      "evidence": "Previously reviewed files rechecked against concurrent cb2ba67..d74ba23 TLS distribution changes, including complete new RPC and distribution service; preserved dedicated node-sync install scope, session-only distribution and local path-only inventory.",
+      "reviewed_sha256": "6c34d4aa679b445fdfcf378cc1859f43b7774b8b86282e9aad609e00fd22ad5b"
     },
     {
       "path": "internal/web/service/domain_front_test.go",

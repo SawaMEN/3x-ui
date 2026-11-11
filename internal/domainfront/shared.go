@@ -78,13 +78,21 @@ func (m *Manager) RefreshRoutes(backend Backend) error {
 	}
 	backend.Certificates = m.runtime.backend.Certificates
 	backend.ChallengeRoots = m.runtime.backend.ChallengeRoots
+	backend.CertificateEvent = m.runtime.backend.CertificateEvent
+	backend.DNS01Token = m.runtime.backend.DNS01Token
 	backend.SharedHTTP, backend.SharedHTTPS = m.runtime.backend.SharedHTTP, m.runtime.backend.SharedHTTPS
 	snapshot := &frontRuntime{cfg: m.runtime.cfg, backend: backend}
 	handler, err := snapshot.handler()
 	if err != nil {
+		snapshot.closeProxyPools()
 		return err
 	}
+	oldPools := m.runtime.proxyPools
 	m.runtime.routing.Store(&handler)
+	m.runtime.proxyPools = snapshot.proxyPools
 	m.runtime.backend = backend
+	for _, pool := range oldPools {
+		pool.CloseIdleConnections()
+	}
 	return nil
 }

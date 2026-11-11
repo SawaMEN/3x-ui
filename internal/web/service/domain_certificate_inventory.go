@@ -326,13 +326,13 @@ func localCertificateInventory() (CertificateInventory, error) {
 	for _, imported := range LocalDistributedTLSCertificates() {
 		fingerprint := sha256.Sum256([]byte("distributed|" + imported.Domain))
 		items = append(items, CertificateInventoryItem{
-			ID: hex.EncodeToString(fingerprint[:12]),
+			ID:   hex.EncodeToString(fingerprint[:12]),
 			Name: imported.Domain, Names: []string{imported.Domain},
 			UsedBy: []string{"node"}, Source: "distributed",
 			Manager: "external", Challenge: "none", Ports: []int{},
 			State: "valid", CertFile: imported.CertFile,
 			ExpiresAt: imported.ExpiresAt,
-			DaysLeft: int((imported.ExpiresAt - time.Now().Unix()) / 86400),
+			DaysLeft:  int((imported.ExpiresAt - time.Now().Unix()) / 86400),
 		})
 	}
 	return CertificateInventory{Items: items}, nil
