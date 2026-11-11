@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Input, Modal, Space, Switch, Table, Typography } from 'antd';
+import { Alert, Button, Input, Modal, Select, Space, Switch, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined } from '@ant-design/icons';
 
 import { useRefreshRequest } from '@/hooks/useRefreshRequest';
 import { HttpUtil } from '@/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useNodesQuery } from '@/api/queries/useNodesQuery';
 
 interface DomainActivityEntry {
   email: string;
@@ -24,6 +25,7 @@ interface DomainActivityState {
   error?: string;
   windowSeconds: number;
   entries: DomainActivityEntry[];
+  nodeId?: number; // client-side request identity; never inferred from node metadata
 }
 
 interface DomainActivityModalProps {
@@ -40,6 +42,7 @@ const EMPTY: DomainActivityState = {
   mode: 'recent',
   windowSeconds: 120,
   entries: [],
+  nodeId: 0,
 };
 
 export default function DomainActivityModal({
@@ -49,43 +52,52 @@ export default function DomainActivityModal({
 }: DomainActivityModalProps) {
   const { t } = useTranslation();
   const { isMobile } = useMediaQuery();
+  const { nodes } = useNodesQuery();
+  const [nodeId, setNodeId] = useState(0);
+  const nodeOptions = useMemo(
+    () => [
+      { value: 0, label: t('pages.index.domainActivityLocalNode') },
+      ...nodes
+        .filter((node) => node.enable && !node.transitive)
+        .map((node) => ({ value: node.id, label: node.name || node.address || String(node.id) })),
+    ],
+    [nodes, t],
+  );
   const [clientFilter, setClientFilter] = useState(initialClient);
   const [domainFilter, setDomainFilter] = useState('');
   const [updating, setUpdating] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
-  const lastSnapshot = useRef<DomainActivityState>(EMPTY);
 
-  useEffect(() => {
-    if (!open) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [open]);
-
-  const load = useCallback(async (signal: AbortSignal) => {
-    const msg = await HttpUtil.get<DomainActivityState>(
-      '/panel/api/server/domainActivity',
-      undefined,
-      { signal, silent: true },
-    );
-    if (signal.aborted) return undefined;
-    if (msg.success && msg.obj && Array.isArray(msg.obj.entries)) {
-      lastSnapshot.current = msg.obj;
-      return msg.obj;
+  const load = useCallback(async (signal: AbortSignal): Promise<DomainActivityState | undefined> => {
+    try {
+      const url =
+        '/panel/api/server/domainActivity' + (nodeId === 0 ? '' : '?nodeId=' + nodeId);
+      const msg = await HttpUtil.get<DomainActivityState>(url, undefined, {
+        signal,
+        silent: true,
+      });
+      if (signal.aborted) return undefined;
+      if (msg.success && msg.obj && Array.isArray(msg.obj.entries)) {
+        return { ...msg.obj, nodeId };
+      }
+      return { ...EMPTY, nodeId, error: msg.msg || 'Request failed' };
+    } catch (error) {
+      if (signal.aborted) return undefined;
+      return {
+        ...EMPTY,
+        nodeId,
+        error: error instanceof Error ? error.message : 'Request failed',
+      };
     }
-    // Clear potentially sensitive stale results when a request fails rather
-    // than displaying old connections as if they were still live.
-    return {
-      ...lastSnapshot.current,
-      entries: [],
-      error: msg.msg || 'Request failed',
-    };
-  }, []);
+  }, [nodeId]);
 
   // The backend returns only a short rolling window; polling stops when closed
   // or when the document is hidden. No client-side activity history is retained.
   const { data, loading, refresh } = useRefreshRequest(open, load, EMPTY, 3000);
+  // A source change must never display an old node's activity as a live result.
+  const viewData = data.nodeId === nodeId ? data : EMPTY;
 
   const toggle = async (enabled: boolean) => {
+    if (nodeId !== 0) return;
     setUpdating(true);
     try {
       const msg = await HttpUtil.post(
@@ -102,17 +114,14 @@ export default function DomainActivityModal({
   const entries = useMemo(() => {
     const client = clientFilter.trim().toLowerCase();
     const domain = domainFilter.trim().toLowerCase();
-    const cutoff = now - (data.mode === 'active' ? 15000 : data.windowSeconds * 1000);
-    return data.entries.filter((entry) => {
-      const lastSeen = Date.parse(entry.lastSeen);
-      return (
-        Number.isFinite(lastSeen) &&
-        lastSeen >= cutoff &&
-        entry.email.toLowerCase().includes(client) &&
-        entry.domain.toLowerCase().includes(domain)
-      );
-    });
-  }, [data.entries, data.mode, data.windowSeconds, clientFilter, domainFilter, now]);
+    // The backend already applies the Xray time window. Rechecking against
+    // the browser clock hides valid rows when the user's clock is inaccurate.
+    return viewData.entries.filter(
+      (entry) =>
+        (entry.email ?? '').toLowerCase().includes(client) &&
+        entry.domain.toLowerCase().includes(domain),
+    );
+  }, [viewData.entries, clientFilter, domainFilter]);
 
   const columns: ColumnsType<DomainActivityEntry> = [
     {
@@ -120,6 +129,7 @@ export default function DomainActivityModal({
       dataIndex: 'email',
       key: 'email',
       ellipsis: true,
+      render: (value: string) => value || t('pages.index.domainActivityUnattributed'),
     },
     {
       title: t('pages.index.domainActivityDomain'),
@@ -129,7 +139,7 @@ export default function DomainActivityModal({
     },
     {
       title: t(
-        data.mode === 'active'
+        viewData.mode === 'active'
           ? 'pages.index.domainActivityCheckedAt'
           : 'pages.index.domainActivityLastSeen',
       ),
@@ -143,7 +153,7 @@ export default function DomainActivityModal({
     },
     {
       title: t(
-        data.mode === 'active'
+        viewData.mode === 'active'
           ? 'pages.index.domainActivityActiveConnections'
           : 'pages.index.domainActivityConnections',
       ),
@@ -163,37 +173,50 @@ export default function DomainActivityModal({
       destroyOnHidden
     >
       <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+        {nodeOptions.length > 1 && (
+          <Select<number>
+            aria-label={t('pages.index.domainActivityNode')}
+            value={nodeId}
+            options={nodeOptions}
+            style={{ width: isMobile ? '100%' : 300 }}
+            onChange={setNodeId}
+          />
+        )}
+        {nodeId !== 0 && (
+          <Alert type="info" showIcon description={t('pages.index.domainActivityRemoteSetting')} />
+        )}
         <Alert
           type="info"
           showIcon
           description={
-            data.mode === 'active'
+            viewData.mode === 'active'
               ? t('pages.index.domainActivityActiveDescription')
-              : t('pages.index.domainActivityDescription', { seconds: data.windowSeconds })
+              : t('pages.index.domainActivityDescription', { seconds: viewData.windowSeconds })
           }
         />
-        {!data.supported && (
+        {!viewData.supported && (
           <Alert type="warning" showIcon title={t('pages.index.domainActivityUnavailable')} />
         )}
-        {!!data.error && (
+        {!!viewData.error && (
           <Alert
             type="error"
             showIcon
             title={t('pages.index.domainActivityReadError')}
-            description={data.error}
+            description={viewData.error}
           />
         )}
-        {data.mode === 'recent' && data.supported && !data.accessLogEnabled && (
+        {viewData.mode === 'recent' && viewData.supported && !viewData.accessLogEnabled && (
           <Alert type="warning" showIcon title={t('pages.index.domainActivityEnableLog')} />
         )}
         <Space align="center" wrap>
           <Typography.Text>{t('pages.index.domainActivityToggle')}</Typography.Text>
           <Switch
-            checked={data.enabled}
+            checked={viewData.enabled}
             disabled={
               updating ||
-              (!data.enabled &&
-                (!data.supported || (data.mode === 'recent' && !data.accessLogEnabled)))
+              nodeId !== 0 ||
+              (!viewData.enabled &&
+                (!viewData.supported || (viewData.mode === 'recent' && !viewData.accessLogEnabled)))
             }
             loading={updating}
             onChange={(value) => void toggle(value)}
@@ -203,7 +226,7 @@ export default function DomainActivityModal({
             {t('refresh')}
           </Button>
         </Space>
-        {data.enabled && data.supported && (data.mode === 'active' || data.accessLogEnabled) ? (
+        {viewData.enabled && viewData.supported && (viewData.mode === 'active' || viewData.accessLogEnabled) ? (
           <>
             <Space wrap>
               <Input
@@ -232,7 +255,7 @@ export default function DomainActivityModal({
               scroll={{ x: 680, y: 420 }}
               locale={{
                 emptyText: t(
-                  data.mode === 'active'
+                  viewData.mode === 'active'
                     ? 'pages.index.domainActivityNoActiveData'
                     : 'pages.index.domainActivityNoData',
                 ),

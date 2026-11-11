@@ -903,7 +903,7 @@ export const sections: readonly Section[] = [
       {
         method: 'GET',
         path: '/panel/api/server/domainActivity',
-        summary: 'Get the current domain activity monitor status and recent domain activity.',
+        summary: 'Read opted-in local or selected node domain activity (optional nodeId query parameter).',
       },
       {
         method: 'POST',

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
@@ -30,7 +32,11 @@ func selectedXrayAccessLogPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return parseXrayAccessLogConfig(raw)
+	path, err := parseXrayAccessLogConfig(raw)
+	if err != nil {
+		return "", err
+	}
+	return resolveXrayAccessLogPath(path, configPath), nil
 }
 
 func parseXrayAccessLogConfig(raw []byte) (string, error) {
@@ -43,4 +49,14 @@ func parseXrayAccessLogConfig(raw []byte) (string, error) {
 		return "", err
 	}
 	return cfg.Log.Access, nil
+}
+
+// resolveXrayAccessLogPath uses the process working directory, not the
+// panel service's directory, for Xray's relative access-log filenames.
+func resolveXrayAccessLogPath(logPath, configPath string) string {
+	logPath = strings.TrimSpace(logPath)
+	if logPath == "" || logPath == "none" || filepath.IsAbs(logPath) {
+		return logPath
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(configPath), logPath))
 }
