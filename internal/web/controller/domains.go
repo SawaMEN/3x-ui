@@ -46,6 +46,9 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.GET("/status", a.status)
 	g.GET("/certificates", a.certificates)
 	g.GET("/cover-sites", a.coverSites)
+	g.GET("/cover-sites/local", a.localCoverSites)
+	g.POST("/cover-sites/change-template", a.changeCoverSiteTemplate)
+	g.POST("/cover-sites/template", a.nodeCoverSiteTemplate)
 	g.GET("/certificates/events", a.certificateEvents)
 	g.POST("/certificates/distribute", a.distributeCertificate)
 	g.POST("/certificates/resolve", a.resolveCertificate)
@@ -60,6 +63,47 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.POST("/probe/http01", a.probeHTTP01)
 	g.POST("/check", a.check)
 	g.POST("/recommend", a.recommend)
+}
+
+func requireNodeCoverSitePush(c *gin.Context) bool {
+    if nodeDomainDiscovery(c) && c.GetHeader(wirecodec.MasterPushHeader) == "1" {
+        return true
+    }
+    c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+        "success": false, "msg": "cover-site node API requires an authenticated master push",
+    })
+    return false
+}
+
+func (a *DomainController) localCoverSites(c *gin.Context) {
+    if !requireNodeCoverSitePush(c) { return }
+    c.Header("Cache-Control", "no-store")
+    sites, err := service.LocalManagedCoverSites()
+    jsonObj(c, sites, err)
+}
+
+func (a *DomainController) changeCoverSiteTemplate(c *gin.Context) {
+    if !requireDomainAdminSession(c) { return }
+    c.Header("Cache-Control", "no-store")
+    c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+    var req service.ManagedCoverSiteChange
+    if err := c.ShouldBindJSON(&req); err != nil { jsonObj(c, nil, err); return }
+    result, err := service.ChangeManagedCoverSiteTemplate(c.Request.Context(), req)
+    jsonObj(c, result, err)
+}
+
+func (a *DomainController) nodeCoverSiteTemplate(c *gin.Context) {
+    if !requireNodeCoverSitePush(c) { return }
+    c.Header("Cache-Control", "no-store")
+    c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+    var req service.ManagedCoverSiteChange
+    if err := c.ShouldBindJSON(&req); err != nil { jsonObj(c, nil, err); return }
+    if req.NodeID != 0 {
+        jsonObj(c, nil, fmt.Errorf("node may update only its own SNI cover sites"))
+        return
+    }
+    result, err := service.ChangeLocalCoverSiteTemplate(c.Request.Context(), req)
+    jsonObj(c, result, err)
 }
 
 // coverSites exposes only names and built-in templates for editable owned
