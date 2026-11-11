@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useFormContext, useWatch } from 'react-hook-form';
@@ -49,6 +49,7 @@ export default function LocalCertificateAssistant({
   const keyField = fields?.key;
   const autoTLSField = fields?.autoTLS;
   const local = nodeId == null || nodeId === 0;
+  const rsaOnly = protocol === 'fptn';
   const localCertificate = nodeCertificateForSni(sites, sni, nodeId);
   const normalized = sni.trim().toLowerCase().replace(/\.$/, '');
   const mainCertificate = sites.find(
@@ -66,41 +67,50 @@ export default function LocalCertificateAssistant({
   // Remote inventory deliberately hides filesystem paths. Resolve only the
   // currently selected (node, SNI), through a scoped master-to-node API.
   const remoteLookup = useQuery({
-    queryKey: ['tls-node-certificate', nodeId ?? 0, normalized],
-    enabled: !local && !!fields && validSni && !disabled,
+    queryKey: ['tls-node-certificate', nodeId ?? 0, normalized, rsaOnly],
+    enabled: (!local || rsaOnly) && !!fields && validSni && !disabled,
     staleTime: 60_000,
     retry: false,
     queryFn: async (): Promise<ResolvedCertificate | null> => {
       const response = await HttpUtil.post(
         '/panel/api/domains/certificates/resolve',
-        { nodeId, domain: normalized },
+        { nodeId: nodeId ?? 0, domain: normalized, rsaOnly },
         { headers: { 'Content-Type': 'application/json' }, silent: true },
       );
       if (!response?.success) return null;
       const found = response.obj as ResolvedCertificate;
       if (
         found?.domain !== normalized ||
-        found?.nodeId !== nodeId ||
+        (found?.nodeId ?? 0) !== (nodeId ?? 0) ||
         !found.certFile ||
         !found.keyFile
       ) return null;
       return found;
     },
   });
-  const certificate: ResolvedCertificate | null = localCertificate && local
-    ? {
-        domain: localCertificate.name,
-        certFile: localCertificate.certFile,
-        keyFile: localCertificate.keyFile,
-        expiresAt: localCertificate.expiresAt || 0,
-        nodeId: 0,
-      }
-    : remoteLookup.data ?? null;
+  const certificate: ResolvedCertificate | null = useMemo(
+    () =>
+      local && !rsaOnly && localCertificate
+        ? {
+            domain: localCertificate.name,
+            certFile: localCertificate.certFile,
+            keyFile: localCertificate.keyFile,
+            expiresAt: localCertificate.expiresAt || 0,
+            nodeId: 0,
+          }
+        : remoteLookup.data ?? null,
+    [local, localCertificate, remoteLookup.data, rsaOnly],
+  );
   // Reuse only a verified certificate on the chosen machine. Never replace
   // a manually entered pair; a pair filled by this assistant may rotate.
   useEffect(() => {
     if (!fields || !certField || !keyField || !certificate || !validSni || disabled) return;
     if (certificate.domain && certificate.domain !== normalized) return;
+    if (
+      rsaOnly &&
+      (String(getValues('settings.certificatePEM') || '') ||
+        String(getValues('settings.privateKeyPEM') || ''))
+    ) return;
     const pair = { certFile: certificate.certFile, keyFile: certificate.keyFile };
     if (!pair.certFile || !pair.keyFile) return;
     const savedNode = nodeId ?? 0;
@@ -155,13 +165,32 @@ export default function LocalCertificateAssistant({
       if (autoTLSField && getValues(autoTLSField) !== false)
         setValue(autoTLSField, false, opts);
     }
-    lastAutomatic.current = { ...pair, domain: normalized, expiresAt: certificate.expiresAt || 0, nodeId: savedNode };
-  }, [autoTLSField, certField, certificate, disabled, fields, getValues, keyField, local, nodeId, normalized, setValue, sites, validSni]);
+    lastAutomatic.current = {
+      ...pair,
+      domain: normalized,
+      expiresAt: certificate.expiresAt || 0,
+      nodeId: savedNode,
+    };
+  }, [
+    autoTLSField, certField, certificate, disabled, fields, getValues, keyField,
+    local, nodeId, normalized, rsaOnly, setValue, sites, validSni,
+  ]);
 
   if (!fields || !validSni || disabled) return null;
 
   const transfer = async () => {
     if (local || !nodeId || transferring || !mainCertificate || !certField || !keyField) return;
+    if (
+      rsaOnly &&
+      (String(getValues('settings.certificatePEM') || '') ||
+        String(getValues('settings.privateKeyPEM') || ''))
+    ) {
+      setError(t(
+        'Сначала очистите встроенный PEM-сертификат FPTN.',
+        'Clear the embedded FPTN PEM certificate before transferring.',
+      ));
+      return;
+    }
     setError('');
     setTransferred('');
     const currentCert = String(getValues(certField) || '');
@@ -195,7 +224,7 @@ export default function LocalCertificateAssistant({
     try {
       const response = await HttpUtil.post(
         '/panel/api/domains/certificates/distribute',
-        { nodeId, domain: normalized },
+        { nodeId, domain: normalized, rsaOnly },
         { headers: { 'Content-Type': 'application/json' }, silent: true },
       );
       if (!response?.success) throw new Error(response?.msg || 'Certificate transfer failed');
@@ -233,7 +262,7 @@ export default function LocalCertificateAssistant({
       }
       lastAutomatic.current = { ...result, nodeId };
       await queryClient.invalidateQueries({
-        queryKey: ['tls-node-certificate', nodeId, normalized],
+        queryKey: ['tls-node-certificate', nodeId, normalized, rsaOnly],
       });
       setTransferred(
         t(
