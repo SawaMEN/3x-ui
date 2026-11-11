@@ -67,28 +67,30 @@ export default function DomainActivityModal({
   const [domainFilter, setDomainFilter] = useState('');
   const [updating, setUpdating] = useState(false);
 
-  const load = useCallback(async (signal: AbortSignal): Promise<DomainActivityState | undefined> => {
-    try {
-      const url =
-        '/panel/api/server/domainActivity' + (nodeId === 0 ? '' : '?nodeId=' + nodeId);
-      const msg = await HttpUtil.get<DomainActivityState>(url, undefined, {
-        signal,
-        silent: true,
-      });
-      if (signal.aborted) return undefined;
-      if (msg.success && msg.obj && Array.isArray(msg.obj.entries)) {
-        return { ...msg.obj, nodeId };
+  const load = useCallback(
+    async (signal: AbortSignal): Promise<DomainActivityState | undefined> => {
+      try {
+        const url = '/panel/api/server/domainActivity' + (nodeId === 0 ? '' : '?nodeId=' + nodeId);
+        const msg = await HttpUtil.get<DomainActivityState>(url, undefined, {
+          signal,
+          silent: true,
+        });
+        if (signal.aborted) return undefined;
+        if (msg.success && msg.obj && Array.isArray(msg.obj.entries)) {
+          return { ...msg.obj, nodeId };
+        }
+        return { ...EMPTY, nodeId, error: msg.msg || 'Request failed' };
+      } catch (error) {
+        if (signal.aborted) return undefined;
+        return {
+          ...EMPTY,
+          nodeId,
+          error: error instanceof Error ? error.message : 'Request failed',
+        };
       }
-      return { ...EMPTY, nodeId, error: msg.msg || 'Request failed' };
-    } catch (error) {
-      if (signal.aborted) return undefined;
-      return {
-        ...EMPTY,
-        nodeId,
-        error: error instanceof Error ? error.message : 'Request failed',
-      };
-    }
-  }, [nodeId]);
+    },
+    [nodeId],
+  );
 
   // The backend returns only a short rolling window; polling stops when closed
   // or when the document is hidden. No client-side activity history is retained.
@@ -226,7 +228,9 @@ export default function DomainActivityModal({
             {t('refresh')}
           </Button>
         </Space>
-        {viewData.enabled && viewData.supported && (viewData.mode === 'active' || viewData.accessLogEnabled) ? (
+        {viewData.enabled &&
+        viewData.supported &&
+        (viewData.mode === 'active' || viewData.accessLogEnabled) ? (
           <>
             <Space wrap>
               <Input
