@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
@@ -321,7 +322,20 @@ func localCertificateInventory() (CertificateInventory, error) {
 	if telemt, readErr := readTelemtWebState(); readErr == nil && telemt.Enabled {
 		state = &telemt
 	}
-	return CertificateInventory{Items: makeCertificateInventory(status, domainACMEStates(domainACMEHomes()), state)}, nil
+	items := makeCertificateInventory(status, domainACMEStates(domainACMEHomes()), state)
+	for _, imported := range LocalDistributedTLSCertificates() {
+		fingerprint := sha256.Sum256([]byte("distributed|" + imported.Domain))
+		items = append(items, CertificateInventoryItem{
+			ID: hex.EncodeToString(fingerprint[:12]),
+			Name: imported.Domain, Names: []string{imported.Domain},
+			UsedBy: []string{"node"}, Source: "distributed",
+			Manager: "external", Challenge: "none", Ports: []int{},
+			State: "valid", CertFile: imported.CertFile,
+			ExpiresAt: imported.ExpiresAt,
+			DaysLeft: int((imported.ExpiresAt - time.Now().Unix()) / 86400),
+		})
+	}
+	return CertificateInventory{Items: items}, nil
 }
 
 // DomainCertificateInventoryScoped disables child discovery when the request
