@@ -3,9 +3,11 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
-import { mayReplaceCertificatePair } from '../security/local-certificate';
 import {
-  canApplyManagedSniCertificate,
+  canUseManagedSniCertificate,
+  mayReplaceCertificatePair,
+} from '../security/local-certificate';
+import {
   useManagedSniDomains,
   type ManagedSniDomain,
 } from '@/api/queries/useManagedSniDomains';
@@ -87,7 +89,7 @@ export default function MasqueFields() {
           placeholder="example.com"
           onPickManagedDomain={(domain: ManagedSniDomain) => {
             if (
-              canApplyManagedSniCertificate(domain, nodeId === 0 ? null : nodeId) &&
+              canUseManagedSniCertificate(domain, nodeId) &&
               mayReplaceCertificatePair(
                 String(getValues('settings.tls.certificatePath') || ''),
                 String(getValues('settings.tls.keyPath') || ''),
