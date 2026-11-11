@@ -54,6 +54,9 @@ func isInternalUIAPI(path string) bool {
 		// not a supported public API contract.
 		path == "/panel/api/domains/certificates/distribute" ||
 		path == "/panel/api/domains/cover-sites" ||
+		path == "/panel/api/domains/cover-sites/local" ||
+		path == "/panel/api/domains/cover-sites/change-template" ||
+		path == "/panel/api/domains/cover-sites/template" ||
 		path == "/panel/api/domains/certificates/resolve" ||
 		path == "/panel/api/domains/certificates/resolve-local" ||
 		path == "/panel/api/domains/certificates/install" ||
