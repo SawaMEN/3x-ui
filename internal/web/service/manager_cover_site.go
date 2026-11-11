@@ -26,6 +26,7 @@ type ManagerCoverSiteInput struct {
 	AcceptTerms bool   `json:"acceptTerms"`
 	SiteCatalog string `json:"siteCatalog"`
 	SiteTemplate string `json:"siteTemplate"`
+	IssueOnMain bool `json:"issueOnMain"`
 }
 
 type ManagerCoverSiteResult struct {
@@ -34,6 +35,10 @@ type ManagerCoverSiteResult struct {
 	Running   bool   `json:"running"`
 	State     string `json:"state"`
 	ExpiresAt int64  `json:"expiresAt"`
+	MainState string `json:"mainState,omitempty"`
+	MainCertFile string `json:"mainCertFile,omitempty"`
+	MainKeyFile string `json:"mainKeyFile,omitempty"`
+	MainError string `json:"mainError,omitempty"`
 }
 
 // Serialize read-modify-apply of Domain Front configurations. This mutex is
@@ -104,6 +109,39 @@ func managerCoverSiteConfig(cfg domainfront.DomainFrontConfig, req ManagerCoverS
 	return cfg, nil
 }
 
+// managerMainCertificateConfig sets up main-node DNS-01 issuance without a
+// second public website. A foreign shared_sni reference can be explicitly
+// upgraded, but real sites and manual TLS settings must never be overwritten.
+func managerMainCertificateConfig(cfg domainfront.DomainFrontConfig, domain, email string) (domainfront.DomainFrontConfig, error) {
+	if cfg.DNS01Provider == "" {
+		return cfg, fmt.Errorf("configure Cloudflare or DigitalOcean DNS-01 on the main node first")
+	}
+	if cfg.DNS01Zone == "" || (domain != cfg.DNS01Zone && !strings.HasSuffix(domain, "."+cfg.DNS01Zone)) {
+		return cfg, fmt.Errorf("the main node DNS-01 zone does not cover %s", domain)
+	}
+	cfg.Domains = append([]domainfront.DomainFrontDomain(nil), cfg.Domains...)
+	for i := range cfg.Domains {
+		d := &cfg.Domains[i]
+		if d.Name != domain {
+			continue
+		}
+		if d.Mode != "cert_only" && d.Mode != "shared_sni" {
+			return cfg, fmt.Errorf("%s already has another purpose on the main node", domain)
+		}
+		*d = domainfront.DomainFrontDomain{Name: domain, Mode: "cert_only", TLS: "certmagic", Enabled: true, InboundIDs: []int{}}
+		if cfg.Email == "" { cfg.Email = email }
+		cfg.Enabled, cfg.AcceptTerms = true, true
+		return cfg, nil
+	}
+	if len(cfg.Domains) >= 100 {
+		return cfg, fmt.Errorf("domain gateway limit of 100 sites reached")
+	}
+	cfg.Domains = append(cfg.Domains, domainfront.DomainFrontDomain{Name: domain, Mode: "cert_only", TLS: "certmagic", Enabled: true, InboundIDs: []int{}})
+	if cfg.Email == "" { cfg.Email = email }
+	cfg.Enabled, cfg.AcceptTerms = true, true
+	return cfg, nil
+}
+
 // ProvisionCoverSite is opt-in only. If a node runs a conflicting HTTPS
 // listener or DNS is not delegated, the existing Domain Front operation fails
 // safely with its built-in rollback; the panel never fabricates a certificate.
@@ -114,6 +152,40 @@ func (s *ManagerService) ProvisionCoverSite(ctx context.Context, owner int, req 
 	}
 	managerCoverSiteMu.Lock()
 	defer managerCoverSiteMu.Unlock()
+	// Plan the local DNS-01 operation before writing anything to the remote
+	// node. Existing locally verified certificates require no new ACME order.
+	var mainPlan *domainfront.DomainFrontConfig
+	if req.NodeID > 0 && req.IssueOnMain {
+		mainCerts, err := ManagedSNIDomains(ctx, false)
+		if err != nil {
+			return result, err
+		}
+		name, err := managerDomain(strings.TrimSpace(req.Domain))
+		if err != nil {
+			return result, err
+		}
+		for _, cert := range mainCerts {
+			if cert.Name == name && cert.CertFile != "" && cert.KeyFile != "" {
+				result.MainState, result.MainCertFile, result.MainKeyFile = "valid", cert.CertFile, cert.KeyFile
+				break
+			}
+		}
+		if result.MainState == "" {
+			mainStatus, err := DomainFrontStatus()
+			if err != nil {
+				return result, err
+			}
+			plan, err := managerMainCertificateConfig(mainStatus.Config, name, strings.TrimSpace(req.Email))
+			if err != nil {
+				return result, err
+			}
+			credential, err := DomainDNSCredentialStateFor(plan.DNS01Provider)
+			if err != nil || !credential.Configured {
+				return result, fmt.Errorf("main node DNS-01 credentials are not configured")
+			}
+			mainPlan = &plan
+		}
+	}
 	// Do not hold the manager operation mutex during an ACME operation:
 	// issuance may take time and must not block client creation/rotation.
 	var current domainfront.DomainFrontStatus
@@ -169,6 +241,22 @@ func (s *ManagerService) ProvisionCoverSite(ctx context.Context, owner int, req 
 		return result, err
 	}
 	result.Domain = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(req.Domain)), ".")
+	if mainPlan != nil {
+		local, localErr := ApplyDomainFront(ctx, *mainPlan)
+		if localErr != nil {
+			// The remote cover site was created. Return its success plus a
+			// separate local failure to avoid misleading users.
+			result.MainError = localErr.Error()
+		} else {
+			result.MainState = "pending"
+			for _, cert := range local.Certificates {
+				if cert.Name == result.Domain {
+					result.MainState, result.MainCertFile, result.MainKeyFile = cert.State, cert.CertFile, cert.KeyFile
+					break
+				}
+			}
+		}
+	}
 	result.Running = updated.Running
 	result.State = "pending"
 	for _, cert := range updated.Certificates {
