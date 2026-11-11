@@ -27,6 +27,9 @@ export default function LocalCertificateAssistant({ sni, disabled }: { sni: stri
   const [error, setError] = useState('');
   const [pending, setPending] = useState('');
   const fields = localCertificateFields(protocol, security);
+  const certField = fields?.cert;
+  const keyField = fields?.key;
+  const autoTLSField = fields?.autoTLS;
   const local = nodeId == null || nodeId === 0;
   const certificate = nodeCertificateForSni(sites, sni, nodeId);
   const normalized = sni.trim().toLowerCase().replace(/\.$/, '');
@@ -35,18 +38,18 @@ export default function LocalCertificateAssistant({ sni, disabled }: { sni: stri
   // Reuse only a verified certificate on the same machine. Preserve manual paths.
   // Xray stream TLS is managed by TlsForm's useFieldArray and its own callback.
   useEffect(() => {
-    if (!fields || !certificate || !local || fields.cert.startsWith('streamSettings.')) return;
-    const currentCert = String(getValues(fields.cert) || '');
-    const currentKey = String(getValues(fields.key) || '');
+    if (!certField || !keyField || !certificate || !local || certField.startsWith('streamSettings.')) return;
+    const currentCert = String(getValues(certField) || '');
+    const currentKey = String(getValues(keyField) || '');
     if (!mayReplaceCertificatePair(currentCert, currentKey, sites, nodeId)) return;
     if (currentCert !== certificate.certFile) {
-      setValue(fields.cert, certificate.certFile, { shouldDirty: true, shouldValidate: true });
+      setValue(certField, certificate.certFile, { shouldDirty: true, shouldValidate: true });
     }
     if (currentKey !== certificate.keyFile) {
-      setValue(fields.key, certificate.keyFile, { shouldDirty: true, shouldValidate: true });
+      setValue(keyField, certificate.keyFile, { shouldDirty: true, shouldValidate: true });
     }
-    if (fields.autoTLS) setValue(fields.autoTLS, false, { shouldDirty: true });
-  }, [certificate, fields?.cert, fields?.key, fields?.autoTLS, getValues, local, nodeId, setValue, sites]);
+    if (autoTLSField) setValue(autoTLSField, false, { shouldDirty: true });
+  }, [autoTLSField, certField, certificate, getValues, keyField, local, nodeId, setValue, sites]);
 
   if (!local || !fields || !validSni || disabled) return null;
 

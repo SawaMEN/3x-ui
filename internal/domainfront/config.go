@@ -14,16 +14,16 @@ import (
 )
 
 type DomainFrontDomain struct {
-	Name       string `json:"name" example:"sub.example.com"`
-	Mode       string `json:"mode" example:"sub_link_only"`
-	Enabled    bool   `json:"enabled"`
-	Panel      bool   `json:"panel"`
-	InboundIDs []int  `json:"inboundIds"`
-	Origin     string `json:"origin"`
-	TLS        string `json:"tls" example:"auto"`
-	CertFile   string `json:"certFile"`
-	KeyFile    string `json:"keyFile"`
-	SiteCatalog string `json:"siteCatalog,omitempty"`
+	Name         string `json:"name" example:"sub.example.com"`
+	Mode         string `json:"mode" example:"sub_link_only"`
+	Enabled      bool   `json:"enabled"`
+	Panel        bool   `json:"panel"`
+	InboundIDs   []int  `json:"inboundIds"`
+	Origin       string `json:"origin"`
+	TLS          string `json:"tls" example:"auto"`
+	CertFile     string `json:"certFile"`
+	KeyFile      string `json:"keyFile"`
+	SiteCatalog  string `json:"siteCatalog,omitempty"`
 	SiteTemplate string `json:"siteTemplate,omitempty"`
 }
 

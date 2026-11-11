@@ -20,25 +20,25 @@ import (
 // REALITY external camouflage target, this website is actually hosted by
 // the selected node and requires control over its public DNS and ACME ports.
 type ManagerCoverSiteInput struct {
-	NodeID      int    `json:"nodeId"`
-	Domain      string `json:"domain"`
-	Email       string `json:"email"`
-	AcceptTerms bool   `json:"acceptTerms"`
-	SiteCatalog string `json:"siteCatalog"`
+	NodeID       int    `json:"nodeId"`
+	Domain       string `json:"domain"`
+	Email        string `json:"email"`
+	AcceptTerms  bool   `json:"acceptTerms"`
+	SiteCatalog  string `json:"siteCatalog"`
 	SiteTemplate string `json:"siteTemplate"`
-	IssueOnMain bool `json:"issueOnMain"`
+	IssueOnMain  bool   `json:"issueOnMain"`
 }
 
 type ManagerCoverSiteResult struct {
-	NodeID    int    `json:"nodeId"`
-	Domain    string `json:"domain"`
-	Running   bool   `json:"running"`
-	State     string `json:"state"`
-	ExpiresAt int64  `json:"expiresAt"`
-	MainState string `json:"mainState,omitempty"`
+	NodeID       int    `json:"nodeId"`
+	Domain       string `json:"domain"`
+	Running      bool   `json:"running"`
+	State        string `json:"state"`
+	ExpiresAt    int64  `json:"expiresAt"`
+	MainState    string `json:"mainState,omitempty"`
 	MainCertFile string `json:"mainCertFile,omitempty"`
-	MainKeyFile string `json:"mainKeyFile,omitempty"`
-	MainError string `json:"mainError,omitempty"`
+	MainKeyFile  string `json:"mainKeyFile,omitempty"`
+	MainError    string `json:"mainError,omitempty"`
 }
 
 // Serialize read-modify-apply of Domain Front configurations. This mutex is
@@ -129,7 +129,9 @@ func managerMainCertificateConfig(cfg domainfront.DomainFrontConfig, domain, ema
 			return cfg, fmt.Errorf("%s already has another purpose on the main node", domain)
 		}
 		*d = domainfront.DomainFrontDomain{Name: domain, Mode: "cert_only", TLS: "certmagic", Enabled: true, InboundIDs: []int{}}
-		if cfg.Email == "" { cfg.Email = email }
+		if cfg.Email == "" {
+			cfg.Email = email
+		}
 		cfg.Enabled, cfg.AcceptTerms = true, true
 		return cfg, nil
 	}
@@ -137,7 +139,9 @@ func managerMainCertificateConfig(cfg domainfront.DomainFrontConfig, domain, ema
 		return cfg, fmt.Errorf("domain gateway limit of 100 sites reached")
 	}
 	cfg.Domains = append(cfg.Domains, domainfront.DomainFrontDomain{Name: domain, Mode: "cert_only", TLS: "certmagic", Enabled: true, InboundIDs: []int{}})
-	if cfg.Email == "" { cfg.Email = email }
+	if cfg.Email == "" {
+		cfg.Email = email
+	}
 	cfg.Enabled, cfg.AcceptTerms = true, true
 	return cfg, nil
 }
