@@ -204,3 +204,23 @@ operator based on the server scan alone.
 - No use of old Hiddify Reality Scanner tooling as a prerequisite; its own
   published instructions say that the older standalone scanner is not
   maintained for HiddifyManager v13/v14.
+
+## Protocol settings audit (26 inbound protocols)
+
+- Audited the 26 inbound protocol schemas and their corresponding forms,
+  including the shared TLS, REALITY and transport configuration sections.
+- Restored editable NaiveProxy QUIC congestion control, PingTunnel upstream
+  forwarding, FPTN hostname/certificate/private-key file and PEM pairs,
+  metrics key and container image, and OpenFlux transport context.
+- For VetroffProxy, TLS is mandatory in all transport modes; `autoTLS`
+  finds a valid matching certificate, while disabling it exposes manual
+  certificate and private-key paths. Selecting a managed SNI only fills a
+  valid same-node pair and does not replace custom files.
+- The TUIC, NaiveProxy, AnyTLS, MASQUE and Xray TLS editors likewise preserve
+  imported/manual certificate paths, reject expired managed certificates,
+  and treat the local node identifier `0` as the main node.
+- FPTN is distinct: it needs an **RSA** server certificate for its RS256
+  access tokens. The general SNI TLS picker must not silently install an
+  arbitrary ECDSA certificate for FPTN; the FPTN-specific advanced form
+  accepts explicit RSA certificate/key files or PEM material.
+- REALITY and ShadowTLS camouflage require no local server certificate.

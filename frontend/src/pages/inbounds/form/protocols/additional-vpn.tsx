@@ -180,6 +180,9 @@ export function OpenFluxFields() {
         </Button>
         <InstallVPNButton protocol="openflux" />
       </Space>
+      <FormField name={['settings', 'context']} label="OpenFlux context">
+        <Input.TextArea rows={2} />
+      </FormField>
       {transports.fields.map((field, i) => (
         <Space key={field.id} wrap align="start">
           <FormField
