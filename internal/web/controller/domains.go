@@ -80,9 +80,10 @@ func (a *DomainController) resolveCertificate(c *gin.Context) {
     var req struct {
         NodeID int `json:"nodeId"`
         Domain string `json:"domain" binding:"required"`
+        RSAOnly bool `json:"rsaOnly,omitempty"`
     }
     if err := c.ShouldBindJSON(&req); err != nil { jsonObj(c, nil, err); return }
-    result, err := service.ResolveTLSCertificate(c.Request.Context(), req.NodeID, req.Domain)
+    result, err := service.ResolveTLSCertificate(c.Request.Context(), req.NodeID, req.Domain, req.RSAOnly)
     jsonObj(c, result, err)
 }
 
@@ -100,9 +101,12 @@ func (a *DomainController) resolveLocalCertificate(c *gin.Context) {
     }
     c.Header("Cache-Control", "no-store")
     c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
-    var req struct { Domain string `json:"domain" binding:"required"` }
+    var req struct {
+        Domain string `json:"domain" binding:"required"`
+        RSAOnly bool `json:"rsaOnly,omitempty"`
+    }
     if err := c.ShouldBindJSON(&req); err != nil { jsonObj(c, nil, err); return }
-    result, err := service.ResolveLocalTLSCertificate(c.Request.Context(), req.Domain)
+    result, err := service.ResolveLocalTLSCertificate(c.Request.Context(), req.Domain, req.RSAOnly)
     jsonObj(c, result, err)
 }
 
@@ -118,12 +122,13 @@ func (a *DomainController) distributeCertificate(c *gin.Context) {
 	var request struct {
 		NodeID int    `json:"nodeId" binding:"required"`
 		Domain string `json:"domain" binding:"required"`
+		RSAOnly bool `json:"rsaOnly,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		jsonObj(c, nil, err)
 		return
 	}
-	result, err := service.DistributeTLSCertificate(c.Request.Context(), request.NodeID, request.Domain)
+	result, err := service.DistributeTLSCertificate(c.Request.Context(), request.NodeID, request.Domain, request.RSAOnly)
 	jsonObj(c, result, err)
 }
 
