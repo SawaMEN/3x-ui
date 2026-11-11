@@ -117,7 +117,7 @@ export function TrustTunnelFields() {
     setLoadingPanelCert(true);
     try {
       const response =
-        typeof nodeId === 'number'
+        typeof nodeId === 'number' && nodeId > 0
           ? await HttpUtil.get(`/panel/api/nodes/webCert/${nodeId}`, undefined, { silent: true })
           : await HttpUtil.post('/panel/api/setting/all', undefined, { silent: true });
       if (!response?.success) {

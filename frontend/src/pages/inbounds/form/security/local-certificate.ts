@@ -21,6 +21,16 @@ export function localCertificateFields(protocol: string, streamSecurity: string)
   return null;
 }
 
+export function canUseManagedSniCertificate(
+  site: ManagedSniDomain,
+  nodeId: number | null | undefined,
+): boolean {
+  return (
+    canApplyManagedSniCertificate(site, nodeId === 0 ? null : nodeId) &&
+    (!site.expiresAt || site.expiresAt > Date.now() / 1000)
+  );
+}
+
 export function nodeCertificateForSni(
   sites: ManagedSniDomain[],
   sni: string,
@@ -30,8 +40,7 @@ export function nodeCertificateForSni(
   if (!name || !name.includes('.')) return undefined;
   return sites.find((site) =>
     site.name.trim().toLowerCase().replace(/\.$/, '') === name &&
-    canApplyManagedSniCertificate(site, nodeId === 0 ? null : nodeId) &&
-    (!site.expiresAt || site.expiresAt > Date.now() / 1000),
+    canUseManagedSniCertificate(site, nodeId),
   );
 }
 
@@ -44,7 +53,7 @@ export function mayReplaceCertificatePair(
   if (!currentCert && !currentKey) return true;
   // Never replace custom, imported or partially filled paths silently.
   return sites.some((site) =>
-    canApplyManagedSniCertificate(site, nodeId === 0 ? null : nodeId) &&
+    canUseManagedSniCertificate(site, nodeId) &&
     site.certFile === currentCert &&
     site.keyFile === currentKey,
   );

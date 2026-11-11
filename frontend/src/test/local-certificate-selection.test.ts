@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import {
   localCertificateFields,
+  canUseManagedSniCertificate,
   nodeCertificateForSni,
   mayReplaceCertificatePair,
 } from '@/pages/inbounds/form/security/local-certificate';
@@ -29,7 +30,12 @@ describe('local TLS certificate binding', () => {
     expect(localCertificateFields('fptn', 'none')).toBeNull();
     expect(localCertificateFields('shadowtls', 'none')).toBeNull();
   });
-  it('ignores expired local certificates', () => {
+  it('ignores expired local certificates and never applies remote paths on the main node', () => {
     expect(nodeCertificateForSni([{ ...local, expiresAt: 1 }], local.name, 0)).toBeUndefined();
+    expect(canUseManagedSniCertificate({ ...local, expiresAt: 1 }, 0)).toBe(false);
+    expect(canUseManagedSniCertificate(local, 0)).toBe(true);
+    expect(canUseManagedSniCertificate(remote, 0)).toBe(false);
+    expect(canUseManagedSniCertificate(remote, 5)).toBe(true);
+    expect(mayReplaceCertificatePair(remote.certFile, remote.keyFile, [remote], 0)).toBe(false);
   });
 });

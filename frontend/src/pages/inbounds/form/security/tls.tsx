@@ -24,12 +24,13 @@ import { CipherSuitesSelect } from '@/components/form';
 import DynamicEchHelper from '@/components/form/DynamicEchHelper';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from './SniSearchInput';
-import { nodeCertificateForSni, mayReplaceCertificatePair } from './local-certificate';
-import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import {
-  canApplyManagedSniCertificate,
-  type ManagedSniDomain,
-} from '@/api/queries/useManagedSniDomains';
+  canUseManagedSniCertificate,
+  nodeCertificateForSni,
+  mayReplaceCertificatePair,
+} from './local-certificate';
+import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
+import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import {
   ALPN_OPTION,
   DOMAIN_STRATEGY_OPTION,
@@ -361,7 +362,27 @@ export default function TlsForm({
   }, [append, fields.length, getValues, managedSites, nodeId, selectedSite, setValue]);
 
   const onManagedSni = (domain: ManagedSniDomain) => {
-    if (!canApplyManagedSniCertificate(domain, nodeId)) return;
+    if (!canUseManagedSniCertificate(domain, nodeId)) return;
+    const current = getValues('streamSettings.tlsSettings.certificates.0') as {
+      useFile?: boolean;
+      certificateFile?: string;
+      keyFile?: string;
+      certificate?: string[];
+      key?: string[];
+    } | undefined;
+    if (
+      current &&
+      !current.useFile &&
+      ((current.certificate?.length ?? 0) > 0 || (current.key?.length ?? 0) > 0)
+    ) return;
+    if (
+      !mayReplaceCertificatePair(
+        current?.certificateFile || '',
+        current?.keyFile || '',
+        managedSites,
+        nodeId,
+      )
+    ) return;
     // Server-side TLS files can only be applied on the node that stores them.
     const opts = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
     const row = {
