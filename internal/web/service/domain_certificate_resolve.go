@@ -2,6 +2,8 @@ package service
 
 import (
     "context"
+    "crypto/rsa"
+    "crypto/tls"
     "errors"
     "fmt"
     "path/filepath"
@@ -14,7 +16,16 @@ import (
 
 // ResolveLocalTLSCertificate reports paths only for verified, locally usable
 // TLS certificate/key pairs. It never reads or exports the private key.
-func ResolveLocalTLSCertificate(ctx context.Context, domain string) (DistributedTLSCertificate, error) {
+func managedCertificateSupportsRSA(certFile, keyFile string) bool {
+    pair, err := tls.LoadX509KeyPair(certFile, keyFile)
+    if err != nil {
+        return false
+    }
+    _, ok := pair.PrivateKey.(*rsa.PrivateKey)
+    return ok
+}
+
+func ResolveLocalTLSCertificate(ctx context.Context, domain string, rsaOnly bool) (DistributedTLSCertificate, error) {
     name, err := distributionDomain(domain)
     if err != nil {
         return DistributedTLSCertificate{}, err
@@ -26,7 +37,8 @@ func ResolveLocalTLSCertificate(ctx context.Context, domain string) (Distributed
     for _, site := range sites {
         if site.Name == name && site.CertFile != "" && site.KeyFile != "" &&
             site.ExpiresAt > time.Now().Unix() &&
-            filepath.IsAbs(site.CertFile) && filepath.IsAbs(site.KeyFile) {
+            filepath.IsAbs(site.CertFile) && filepath.IsAbs(site.KeyFile) &&
+            (!rsaOnly || managedCertificateSupportsRSA(site.CertFile, site.KeyFile)) {
             return DistributedTLSCertificate{
                 Domain: name, CertFile: site.CertFile, KeyFile: site.KeyFile,
                 ExpiresAt: site.ExpiresAt,
@@ -39,13 +51,13 @@ func ResolveLocalTLSCertificate(ctx context.Context, domain string) (Distributed
 // ResolveTLSCertificate selects only the chosen inbound node. No general
 // remote inventory leaks private filesystem paths; an administrator requests
 // this one matching pair specifically while editing an inbound.
-func ResolveTLSCertificate(ctx context.Context, nodeID int, domain string) (DistributedTLSCertificate, error) {
+func ResolveTLSCertificate(ctx context.Context, nodeID int, domain string, rsaOnly bool) (DistributedTLSCertificate, error) {
     name, err := distributionDomain(domain)
     if err != nil {
         return DistributedTLSCertificate{}, err
     }
     if nodeID == 0 {
-        return ResolveLocalTLSCertificate(ctx, name)
+        return ResolveLocalTLSCertificate(ctx, name, rsaOnly)
     }
     if nodeID < 0 || database.GetDB() == nil {
         return DistributedTLSCertificate{}, errors.New("invalid node")
@@ -65,7 +77,7 @@ func ResolveTLSCertificate(ctx context.Context, nodeID int, domain string) (Dist
     if err != nil {
         return DistributedTLSCertificate{}, err
     }
-    resolved, err := remote.ResolveLocalTLSCertificate(ctx, name)
+    resolved, err := remote.ResolveLocalTLSCertificate(ctx, name, rsaOnly)
     if err != nil {
         return DistributedTLSCertificate{}, fmt.Errorf("node certificate lookup failed: %w", err)
     }
