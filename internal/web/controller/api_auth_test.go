@@ -195,6 +195,7 @@ func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 		"/server/sni/jobs/:id":                        {http.MethodGet: {}, http.MethodDelete: {}},
 		"/server/sni/history":                         {http.MethodGet: {}},
 		"/server/status":                              {http.MethodGet: {}},
+		"/server/domainActivity":                      {http.MethodGet: {}},
 		"/inbounds/list":                              {http.MethodGet: {}},
 		"/inbounds/add":                               {http.MethodPost: {}},
 		"/inbounds/del/:id":                           {http.MethodPost: {}},
