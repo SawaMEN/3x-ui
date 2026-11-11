@@ -8513,9 +8513,9 @@
       "deletions": 0,
       "subsystem": "frontend",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full test reviewed; baseline CI run 42914364746 frontend job reproduces two disconnect TypeErrors. Mock updated to current lifecycle and both tests assert disconnect on unmount. Both pass under identical React/jsdom/setupFiles with a component-only config; changed-file oxfmt/oxlint pass. Full frontend remains for GitHub CI.",
+      "reviewed_sha256": "6cd22b049524c21e0fe3ecd01131bf3322ca9f92d6b48a4301c0d2c582b53ddf"
     },
     {
       "path": "frontend/src/test/cat-tab-label.test.tsx",
@@ -11275,8 +11275,8 @@
       "subsystem": "database",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Read full source and checked persistence/defaults, protocol capability and compatibility contracts. Reviewed database migrations/seeders and fixed dump streaming, identifier/schema preservation, NULL traffic and log disclosure. Database/model tests pass; final database regression/race results recorded separately in RESUME.md.",
-      "reviewed_sha256": "2aa358b1be36573d2088532b70161eee5b175652c2d6e95e1425d1f97aaf9850"
+      "evidence": "Reviewed serializer changes after CI errcheck diagnostics; all buffered header/DDL/COMMIT writes now return failures immediately. Full database normal tests pass (9.713s); pinned golangci-lint 2.15.0 returns 0 issues.",
+      "reviewed_sha256": "ba99b663e4055b11db6377e5357656c9cae98c786f283e0f0e41deba4cd390dd"
     },
     {
       "path": "internal/database/dump_sqlite_test.go",
@@ -14475,9 +14475,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "95af1df6461c767f2ab7bfb3ff2dc45572b0e27b5338e0904237b842157b7172"
     },
     {
       "path": "internal/sub/anytls_shadowtls_automation_test.go",
@@ -14508,9 +14508,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "7f3c46be0c371aa03db7c47476379cdebd3946ac606ec9efa4f90602a48b9ea2"
     },
     {
       "path": "internal/sub/calendar_expire.go",
@@ -14519,9 +14519,9 @@
       "deletions": 2,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "ff3127db75e8804b4e48f6556307d9d664dfa8e406cf565c8d154d68797c1b38"
     },
     {
       "path": "internal/sub/calendar_expire_test.go",
@@ -14684,9 +14684,9 @@
       "deletions": 17,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "aae0424adafd8f98f2caf1b80255ba6558ae35bbb565c85e0fc3f793cb62705e"
     },
     {
       "path": "internal/sub/external_config_test.go",
@@ -14695,9 +14695,9 @@
       "deletions": 1,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "0c87d687f37b9c37d9e91d3240f22fe7154ce6b91105e90d1bba5d85fdf2db40"
     },
     {
       "path": "internal/sub/external_only_sub_test.go",
@@ -14717,9 +14717,9 @@
       "deletions": 13,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "97a21a2b87c310ff8ec0d95081314baeb065d0e0b85e472873018c32dffede8e"
     },
     {
       "path": "internal/sub/external_subscription_test.go",
@@ -14728,9 +14728,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "5067ffd538bf4c4fbf9f25acece6609baa871a3d7b10d9d8fb5b13e534221c35"
     },
     {
       "path": "internal/sub/forwarded_trust.go",
@@ -14794,9 +14794,9 @@
       "deletions": 1,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "080b975fec16c2ae4c91d3506ac4bf58c6813eb824d4f9d046611d12c053dfc7"
     },
     {
       "path": "internal/sub/host_cidr.go",
@@ -14805,9 +14805,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "38d789e4ed86d32cfcdd9481f63a40344ee8cd627b619881fbb1cc1e421817e8"
     },
     {
       "path": "internal/sub/host_cidr_test.go",
@@ -14816,9 +14816,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "e802c784f7d689c726531f3f1f8b632019e7e9af5c35a8921bf407237964850b"
     },
     {
       "path": "internal/sub/host_order.go",
@@ -14827,9 +14827,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "bc121584ac302fcc9fca839506fbd6b4eef80d0034961355446fa758bdf1b57d"
     },
     {
       "path": "internal/sub/host_order_test.go",
@@ -14838,9 +14838,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "56d59eae0c7c26da2634a2652181e3958e615cdebe503116c3898d4a57a7978e"
     },
     {
       "path": "internal/sub/host_sub.go",
@@ -14849,9 +14849,9 @@
       "deletions": 24,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "fdc0f17e4528373cb514bc279c4188d5b8a6f26ec797c84be4faa4751b75e3ca"
     },
     {
       "path": "internal/sub/host_sub_test.go",
@@ -14871,9 +14871,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "4ed488ab7024a331050d512b822715ef5739d10354847e0042dd87121880143b"
     },
     {
       "path": "internal/sub/hysteria_geco_uri_test.go",
@@ -14915,9 +14915,9 @@
       "deletions": 4,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "d35389d4e254173903846f46cedad42a1a3b0c4d402567707ec94578b412b774"
     },
     {
       "path": "internal/sub/incy_client.go",
@@ -15014,9 +15014,9 @@
       "deletions": 6,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "45c2a1c0cc118055000b1390a8c2a9a896ac59295bd7db2c5eac7e663a813f33"
     },
     {
       "path": "internal/sub/manager_subscription_test.go",
@@ -15069,9 +15069,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "d2d88cdbde459d588cd07a325e1ab282c66eaa0bc1430488a8213a87b946de79"
     },
     {
       "path": "internal/sub/native_links.go",
@@ -15344,9 +15344,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "a32a5f86e208fba3e18a3215fc8eb656fcdd40d692cfb92fd706725739d407dd"
     },
     {
       "path": "internal/sub/settings_cache_test.go",
@@ -15355,9 +15355,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "c2e97db8c142ff11ced9dad677915e1981401a171ce8ae9033884ece00b24a9a"
     },
     {
       "path": "internal/sub/singbox_subscription.go",
@@ -15520,9 +15520,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "ca629832a45447f0f7ee548aa4aac5d1a4e94aefb333170505715ca82f1bffdc"
     },
     {
       "path": "internal/sub/telemt_subscription.go",
@@ -15531,9 +15531,9 @@
       "deletions": 50,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "756370b51ca478981fc11e119ee302b4d529fa4dc173f6a640f4bce37d806b2b"
     },
     {
       "path": "internal/sub/telemt_subscription_test.go",
@@ -15542,9 +15542,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "d9fa5b985f39e154d0275a04847251064002681f0fa9e9d8c02440a199c45fee"
     },
     {
       "path": "internal/sub/vetroff_mixed_subscription_test.go",
@@ -18952,9 +18952,9 @@
       "deletions": 10,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "2e58cf01b0a8e8be5cfa809e4b10563f5a1a6a9f6529ec329ee2293fb01bfb6a"
     },
     {
       "path": "internal/web/service/client_identity_normalized_test.go",
@@ -23418,9 +23418,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full source/test review for A30-A36. Whole internal/sub test package passes (41.154s); HWID/external-link service tests pass (1.123s). PostgreSQL HWID 0->N race and cap/savepoint tests passed with race detector (11.196s) before temporary environment reset; SQLite HWID race suite passed (12.944s). New tests reproduce malformed VMess, unknown-sub device writes, host exclusions, purge generations, credential errors and both public Telegram gate bypasses.",
+      "reviewed_sha256": "941fe0f05e376193742cd11541da9f292b8fcd2cc0ee9a2f99a8f33b1cd06f17"
     },
     {
       "path": "internal/web/service/stage6_native_test.go",

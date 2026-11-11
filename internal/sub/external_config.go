@@ -205,7 +205,7 @@ func applyVmessRemark(rawLink, remark string) string {
 		return rawLink
 	}
 	var j map[string]any
-	if err := json.Unmarshal(raw, &j); err != nil {
+	if err := json.Unmarshal(raw, &j); err != nil || j == nil {
 		return rawLink
 	}
 	j["ps"] = remark

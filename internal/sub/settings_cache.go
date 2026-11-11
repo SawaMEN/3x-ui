@@ -40,13 +40,16 @@ func (c *inboundSettingsCache) settingsFor(inboundId int, load func() (string, e
 	if settings, ok := c.lookup(inboundId); ok {
 		return settings, nil
 	}
-	v, err, _ := c.group.Do(strconv.Itoa(inboundId), func() (any, error) {
+	c.mu.Lock()
+	generation := c.generation
+	c.mu.Unlock()
+	// A request after a panel edit must not join a pre-edit load. Keep each
+	// generation's in-flight work separate as well as its stored entries.
+	key := strconv.Itoa(inboundId) + ":" + strconv.FormatUint(generation, 10)
+	v, err, _ := c.group.Do(key, func() (any, error) {
 		if settings, ok := c.lookup(inboundId); ok {
 			return settings, nil
 		}
-		c.mu.Lock()
-		generation := c.generation
-		c.mu.Unlock()
 		raw, err := load()
 		if err != nil {
 			return "", err

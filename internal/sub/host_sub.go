@@ -530,7 +530,7 @@ func (s *SubService) clientHostVariants(inbound *model.Inbound, client model.Cli
 	state, hosts := s.clientHostBinding(inbound, client)
 	switch state {
 	case hostBindingNone:
-		return all, false
+		return all, len(all) == 0
 	case hostBindingClosed:
 		return nil, true
 	}

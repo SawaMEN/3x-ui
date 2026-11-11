@@ -7,17 +7,22 @@ import { keys } from '@/api/queryKeys';
 import { useClients } from '@/hooks/useClients';
 import { HttpUtil, Msg } from '@/utils';
 
-const listeners = vi.hoisted(() => new Map<string, (...args: unknown[]) => void>());
+const { listeners, disconnect } = vi.hoisted(() => ({
+  listeners: new Map<string, (...args: unknown[]) => void>(),
+  disconnect: vi.fn(),
+}));
 vi.mock('@/api/websocket', () => ({
   getSharedWebSocketClient: () => ({
     on: (event: string, fn: (...args: unknown[]) => void) => listeners.set(event, fn),
     off: (event: string) => listeners.delete(event),
     connect: () => {},
+    disconnect,
   }),
 }));
 afterEach(() => {
   vi.useRealTimers();
   listeners.clear();
+  disconnect.mockClear();
   vi.restoreAllMocks();
 });
 
@@ -51,6 +56,7 @@ it('does not lose a different admin mutation immediately after a local save', as
   });
   expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.inbounds.root() });
   unmount();
+  expect(disconnect).toHaveBeenCalledOnce();
 });
 
 it('refreshes cached data after a websocket outage', () => {
@@ -61,4 +67,5 @@ it('refreshes cached data after a websocket outage', () => {
   expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.nodes.list() });
   expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.xray.outboundsTraffic() });
   unmount();
+  expect(disconnect).toHaveBeenCalledOnce();
 });

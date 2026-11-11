@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"testing"
 
 	"gorm.io/gorm"
@@ -62,7 +63,7 @@ func TestPostgresResyncDoesNotChangeSequenceOnRollback(t *testing.T) {
 			return err
 		}
 		return gorm.ErrInvalidTransaction
-	}); err != gorm.ErrInvalidTransaction {
+	}); !errors.Is(err, gorm.ErrInvalidTransaction) {
 		t.Fatalf("rollback: %v", err)
 	}
 	var row auditSequenceRow

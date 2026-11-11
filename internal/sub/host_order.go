@@ -94,15 +94,20 @@ func hostOrderGroupID(h *model.Host) string {
 
 func (s *SubService) subscriptionHostVariants(inbound *model.Inbound, format string) []subscriptionHostVariant {
 	var variants []subscriptionHostVariant
+	hasEnabled := false
 	for _, h := range s.hostsByInbound[inbound.Id] {
-		if h.IsDisabled || slices.Contains(h.ExcludeFromSubTypes, format) {
+		if h.IsDisabled {
+			continue
+		}
+		hasEnabled = true
+		if slices.Contains(h.ExcludeFromSubTypes, format) {
 			continue
 		}
 		order := s.hostGroupOrders[hostOrderGroupID(h)]
 		order.inboundSort, order.inboundID, order.hostID = inbound.SubSortIndex, inbound.Id, h.Id
 		variants = append(variants, subscriptionHostVariant{h, &order})
 	}
-	if len(variants) == 0 {
+	if !hasEnabled {
 		return []subscriptionHostVariant{{}}
 	}
 	return variants

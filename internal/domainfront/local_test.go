@@ -28,7 +28,7 @@ func TestLocalSubscriptionPreservesHTTPBehavior(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
-			localHandler(tc.handle, "", true).ServeHTTP(recorder, httptest.NewRequest("GET", "http://example.com/sub/token", nil))
+			localHandler(tc.handle, "", true).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "http://example.com/sub/token", nil))
 			response := recorder.Result()
 			defer response.Body.Close()
 			if response.StatusCode != tc.status || response.Header.Get("Content-Type") != tc.contentType {

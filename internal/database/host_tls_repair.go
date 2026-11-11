@@ -1,8 +1,9 @@
 package database
 
 import (
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"gorm.io/gorm"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 // Repair only rows still exactly equal to the old importer output and alone in

@@ -3,6 +3,7 @@ package sub
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -132,7 +133,17 @@ func recordExternalSubscriptionFetch(rawURL string, fetchErr error) {
 	}
 	lastFetchError := ""
 	if fetchErr != nil {
-		lastFetchError = fetchErr.Error()
+		// net/http embeds the full URL in url.Error, including subscription
+		// tokens in the path/query. Store the transport cause, not credentials.
+		var requestErr *url.Error
+		if errors.As(fetchErr, &requestErr) {
+			lastFetchError = "external subscription request failed"
+			if requestErr.Err != nil {
+				lastFetchError = requestErr.Err.Error()
+			}
+		} else {
+			lastFetchError = fetchErr.Error()
+		}
 	}
 	if err := database.GetDB().
 		Model(&model.ClientExternalLink{}).
@@ -141,7 +152,7 @@ func recordExternalSubscriptionFetch(rawURL string, fetchErr error) {
 			"last_fetch_at":    time.Now().UnixMilli(),
 			"last_fetch_error": lastFetchError,
 		}).Error; err != nil {
-		logger.Warningf("sub: recording fetch status for external subscription %q: %v", rawURL, err)
+		logger.Warningf("sub: recording external subscription fetch status failed: %v", err)
 	}
 }
 

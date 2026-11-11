@@ -74,8 +74,9 @@ func dumpSQLiteTo(srcPath string, out io.Writer) error {
 	defer func() { _ = tx.Rollback() }()
 
 	b := bufio.NewWriter(out)
-	b.WriteString("PRAGMA foreign_keys=OFF;\n")
-	b.WriteString("BEGIN TRANSACTION;\n")
+	if _, err := b.WriteString("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n"); err != nil {
+		return err
+	}
 
 	// Tables in creation order, each followed by its data.
 	type object struct{ name, ddl string }
@@ -97,8 +98,9 @@ func dumpSQLiteTo(srcPath string, out io.Writer) error {
 	}
 
 	for _, t := range tables {
-		b.WriteString(t.ddl)
-		b.WriteString(";\n")
+		if _, err := b.WriteString(t.ddl + ";\n"); err != nil {
+			return err
+		}
 		if err := dumpTableData(tx, t.name, b); err != nil {
 			return err
 		}
@@ -106,7 +108,9 @@ func dumpSQLiteTo(srcPath string, out io.Writer) error {
 
 	// AUTOINCREMENT bookkeeping, restored verbatim like the sqlite3 CLI does.
 	if sqliteTableExists(tx, "sqlite_sequence") {
-		b.WriteString("DELETE FROM sqlite_sequence;\n")
+		if _, err := b.WriteString("DELETE FROM sqlite_sequence;\n"); err != nil {
+			return err
+		}
 		if err := dumpTableData(tx, "sqlite_sequence", b); err != nil {
 			return err
 		}
@@ -123,14 +127,17 @@ func dumpSQLiteTo(srcPath string, out io.Writer) error {
 		if err := rows2.Scan(&ddl); err != nil {
 			return err
 		}
-		b.WriteString(ddl)
-		b.WriteString(";\n")
+		if _, err := b.WriteString(ddl + ";\n"); err != nil {
+			return err
+		}
 	}
 	if err := rows2.Err(); err != nil {
 		return err
 	}
 
-	b.WriteString("COMMIT;\n")
+	if _, err := b.WriteString("COMMIT;\n"); err != nil {
+		return err
+	}
 
 	if err := tx.Commit(); err != nil {
 		return err

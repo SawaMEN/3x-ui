@@ -44,6 +44,18 @@ func serveTelemtSubscription(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
+	// Both public Telegram routes expose connection credentials and must use
+	// the same device gate as raw/JSON/Clash subscription bodies.
+	clients := service.ClientService{}
+	allowed, err := clients.CheckSubscriptionDevice(c.Writer, c.Request, subID)
+	if err != nil {
+		writeSubError(c, err)
+		return
+	}
+	if !allowed {
+		c.Status(http.StatusNotFound)
+		return
+	}
 
 	resolver := NewSubService("")
 	_, host, _, _ := resolver.ResolveRequest(c)
