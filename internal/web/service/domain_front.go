@@ -320,7 +320,7 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	defer domainFrontState.Unlock()
 	hasLocalDomain := false
 	for _, domain := range cfg.Domains {
-		if domain.Enabled && domain.Mode != "shared_sni" {
+		if domain.Enabled && domain.Mode != "shared_sni" && domain.Mode != "cert_only" {
 			hasLocalDomain = true
 			break
 		}
@@ -475,7 +475,7 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		backend.SubscriptionHost = certificateHost(settings.SubCertFile, settings.SubDomain)
 	}
 	for _, d := range cfg.Domains {
-		if !d.Enabled || d.Mode == "shared_sni" {
+		if !d.Enabled || d.Mode == "shared_sni" || d.Mode == "cert_only" {
 			continue
 		}
 		if d.Mode == "sni_only" {

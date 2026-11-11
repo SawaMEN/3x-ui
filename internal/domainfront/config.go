@@ -44,6 +44,20 @@ type DomainFrontConfig struct {
 	Domains            []DomainFrontDomain `json:"domains"`
 }
 
+// HasPublicSites is false for DNS-01 certificate-only and foreign SNI records.
+// Such records must not bind public HTTP/HTTPS listeners.
+func (c DomainFrontConfig) HasPublicSites() bool {
+	if !c.Enabled {
+		return false
+	}
+	for _, d := range c.Domains {
+		if d.Enabled && d.Mode != "shared_sni" && d.Mode != "cert_only" {
+			return true
+		}
+	}
+	return false
+}
+
 type Route struct {
 	Path   string
 	Target string
@@ -181,7 +195,7 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 			continue
 		}
 		switch d.Mode {
-		case "direct", "cdn", "relay", "sub_link_only", "sni_only", "shared_sni":
+		case "direct", "cdn", "relay", "sub_link_only", "sni_only", "cert_only":
 		default:
 			return fmt.Errorf("unknown domain mode: %s", d.Mode)
 		}
@@ -205,6 +219,14 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 			}
 		default:
 			return fmt.Errorf("TLS must be auto, certmagic, existing or manual")
+		}
+		if d.Mode == "cert_only" {
+			if d.TLS != "certmagic" || (c.Enabled && d.Enabled && c.DNS01Provider == "") {
+				return fmt.Errorf("%s: certificate-only domains require CertMagic and DNS-01", d.Name)
+			}
+			if d.Panel || len(d.InboundIDs) != 0 || strings.TrimSpace(d.Origin) != "" {
+				return fmt.Errorf("%s: certificate-only domains cannot expose sites, panel, VPN inbounds or origins", d.Name)
+			}
 		}
 		if d.Mode == "sub_link_only" && (d.Panel || len(d.InboundIDs) > 0) {
 			return fmt.Errorf("subscription-only domains cannot expose the panel or VPN inbounds")
@@ -269,7 +291,7 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 	if c.SubscriptionDomain != "" {
 		found := false
 		for _, d := range c.Domains {
-			if d.Enabled && d.Mode != "sni_only" && d.Mode != "shared_sni" && d.Name == c.SubscriptionDomain {
+			if d.Enabled && d.Mode != "sni_only" && d.Mode != "shared_sni" && d.Mode != "cert_only" && d.Name == c.SubscriptionDomain {
 				found = true
 			}
 		}

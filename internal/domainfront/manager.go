@@ -233,17 +233,19 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 		}
 		r.manual[d.Name] = &pair
 	}
+	// DNS-01 certificate-only mode must not claim HTTP/HTTPS ports.
+	hasPublicSites := cfg.HasPublicSites()
 	var lc net.ListenConfig
 	var plain, secure net.Listener
 	var err error
-	if !backend.SharedHTTP {
+	if hasPublicSites && !backend.SharedHTTP {
 		plain, err = lc.Listen(ctx, "tcp", net.JoinHostPort(cfg.Listen, strconv.Itoa(cfg.HTTPPort)))
 		if err != nil {
 			return nil, fmt.Errorf("HTTP listener: %w", err)
 		}
 		r.listeners = append(r.listeners, plain)
 	}
-	if !backend.SharedHTTPS {
+	if hasPublicSites && !backend.SharedHTTPS {
 		secure, err = lc.Listen(ctx, "tcp", net.JoinHostPort(cfg.Listen, strconv.Itoa(cfg.HTTPSPort)))
 		if err != nil {
 			for _, listener := range r.listeners {
@@ -388,12 +390,12 @@ func (r *frontRuntime) domain(host string) (DomainFrontDomain, bool) {
 	// Exact hosts take priority over a wildcard, even if the wildcard was
 	// listed first. Wildcards match exactly one DNS label, never the apex.
 	for _, d := range r.cfg.Domains {
-		if d.Enabled && d.Mode != "shared_sni" && d.Name == host {
+		if d.Enabled && d.Mode != "shared_sni" && d.Mode != "cert_only" && d.Name == host {
 			return d, true
 		}
 	}
 	for _, d := range r.cfg.Domains {
-		if !d.Enabled || d.Mode == "shared_sni" || !strings.HasPrefix(d.Name, "*.") {
+		if !d.Enabled || d.Mode == "shared_sni" || d.Mode == "cert_only" || !strings.HasPrefix(d.Name, "*.") {
 			continue
 		}
 		suffix := strings.TrimPrefix(d.Name, "*.")
@@ -607,7 +609,7 @@ func proxy(target, host string, h2c bool) (*httputil.ReverseProxy, error) {
 func (r *frontRuntime) handler() (http.Handler, error) {
 	handlers := map[string]http.Handler{}
 	for _, d := range r.cfg.Domains {
-		if !d.Enabled || d.Mode == "shared_sni" {
+		if !d.Enabled || d.Mode == "shared_sni" || d.Mode == "cert_only" {
 			continue
 		}
 		h, err := r.domainHandler(d)
