@@ -1,9 +1,17 @@
 import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Checkbox, Input, Modal, Select, Space, Typography } from 'antd';
 import type { NodeRecord } from '@/schemas/node';
 import { HttpUtil } from '@/utils';
 import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
+
+type EditableCoverSite = {
+  nodeId: number;
+  domain: string;
+  siteCatalog: string;
+  siteTemplate: string;
+};
 
 interface Props {
   open: boolean;
@@ -14,9 +22,23 @@ interface Props {
 
 export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Props) {
   const { i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const ru = i18n.language.startsWith('ru');
   const t = (russian: string, english: string) => (ru ? russian : english);
   const [nodeId, setNodeId] = useState(0);
+  const { data: existingSites = [] } = useQuery({
+    queryKey: ['manager', 'cover-sites'],
+    enabled: open,
+    staleTime: 30_000,
+    retry: false,
+    queryFn: async (): Promise<EditableCoverSite[]> => {
+      const result = await HttpUtil.get('/panel/api/domains/cover-sites', undefined, {
+        silent: true,
+      });
+      if (!result?.success || !Array.isArray(result.obj)) return [];
+      return result.obj as EditableCoverSite[];
+    },
+  });
   const [domain, setDomain] = useState('');
   const [email, setEmail] = useState('');
   const [siteCatalog, setSiteCatalog] = useState<'builtin' | 'mtproxyl'>('builtin');
@@ -77,6 +99,28 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       setCheckingCertificate(false);
     }
   };
+  const selectedExisting = existingSites.find(
+    (site) => site.nodeId === nodeId && site.domain === domain.trim().toLowerCase(),
+  );
+  const nodeSites = existingSites.filter((site) => site.nodeId === nodeId);
+  const chooseExisting = (value?: string) => {
+    const selected = nodeSites.find((site) => site.domain === value);
+    if (!selected) {
+      setDomain('');
+      return;
+    }
+    const catalog = selected.siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin';
+    const template = TelemtWebCatalogs[catalog].templates.some(
+      (item) => item.id === selected.siteTemplate,
+    )
+      ? selected.siteTemplate
+      : catalog === 'builtin'
+        ? 'notes'
+        : 'stub';
+    setDomain(selected.domain);
+    setSiteCatalog(catalog);
+    setSiteTemplate(template);
+  };
   const online = nodes.filter(
     (node) => node.id > 0 && node.enable && node.status === 'online' && !node.transitive,
   );
@@ -113,6 +157,8 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
           }
         | undefined;
       onSuccess(value?.domain || domain.trim(), value?.state || 'pending');
+      void queryClient.invalidateQueries({ queryKey: ['manager', 'cover-sites'] });
+      void queryClient.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
       if (nodeId > 0 && issueOnMain) {
         setMainCertificate({
           domain: value?.domain || domain.trim().toLowerCase().replace(/\.$/, ''),
@@ -153,7 +199,9 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       okText={
         mainCertificate
           ? t('Закрыть', 'Close')
-          : t('Настроить сайт и сертификат', 'Provision site and certificate')
+          : selectedExisting
+            ? t('Сменить сайт-заглушку', 'Change cover site')
+            : t('Настроить сайт и сертификат', 'Provision site and certificate')
       }
       onOk={() => (mainCertificate ? onClose() : void submit())}
       onCancel={onClose}
@@ -180,13 +228,41 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
           <Typography.Text>{t('Нода', 'Node')}</Typography.Text>
           <Select
             value={nodeId}
-            onChange={setNodeId}
+            onChange={(nextNode: number) => {
+              setNodeId(nextNode);
+              setDomain('');
+              setSiteCatalog('builtin');
+              setSiteTemplate('notes');
+              setIssueOnMain(false);
+            }}
             style={{ width: '100%' }}
             options={[
               { value: 0, label: t('Главный сервер', 'Main server') },
               ...online.map((node) => ({ value: node.id, label: node.name || `#${node.id}` })),
             ]}
           />
+        </div>
+        <div>
+          <Typography.Text>
+            {t('Изменить существующий SNI-сайт', 'Change an existing SNI website')}
+          </Typography.Text>
+          <Select
+            allowClear
+            showSearch
+            style={{ width: '100%' }}
+            placeholder={t('Выберите уже созданную заглушку', 'Select an existing cover site')}
+            value={selectedExisting?.domain}
+            options={nodeSites.map((site) => ({ value: site.domain, label: site.domain }))}
+            onChange={(value) => chooseExisting(value)}
+          />
+          {selectedExisting && (
+            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
+              {t(
+                'Выберите другой шаблон ниже. Домен и сертификат сохранятся.',
+                'Choose a new template below. The domain and its certificate stay unchanged.',
+              )}
+            </Typography.Text>
+          )}
         </div>
         <div>
           <Typography.Text>{t('Мой домен', 'My DNS hostname')}</Typography.Text>
@@ -213,7 +289,11 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
           />
         </div>
         <div>
-          <Typography.Text>{t('Какой сайт создать', 'Website template')}</Typography.Text>
+          <Typography.Text>
+            {selectedExisting
+              ? t('На какой сайт заменить заглушку', 'Replacement website template')
+              : t('Какой сайт создать', 'Website template')}
+          </Typography.Text>
           <Select
             value={siteTemplate}
             onChange={setSiteTemplate}
