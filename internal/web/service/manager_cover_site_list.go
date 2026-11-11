@@ -2,7 +2,6 @@ package service
 
 import (
     "context"
-    "encoding/json"
     "sort"
     "sync"
     "time"
@@ -73,16 +72,22 @@ func ManagedCoverSites(ctx context.Context) ([]ManagedCoverSiteSummary, error) {
                     if err != nil {
                         return
                     }
-                    raw, err := remote.ReadDomainFrontStatus(remoteCtx)
+                    remoteSites, err := remote.ListLocalCoverSites(remoteCtx)
                     if err != nil {
                         return
                     }
-                    var response struct {
-                        Config domainfront.DomainFrontConfig `json:"config"`
+                    batch := make([]ManagedCoverSiteSummary, 0, len(remoteSites))
+                    for _, site := range remoteSites {
+                        domain, err := managerDomain(site.Domain)
+                        if err != nil || domain != site.Domain {
+                            continue
+                        }
+                        batch = append(batch, ManagedCoverSiteSummary{
+                            NodeID: node.Id, Domain: domain,
+                            SiteCatalog: site.SiteCatalog, SiteTemplate: site.SiteTemplate,
+                        })
                     }
-                    if json.Unmarshal(raw, &response) == nil {
-                        results <- coverSiteSummariesFromConfig(node.Id, response.Config)
-                    }
+                    results <- batch
                 }(node)
             }
             wg.Wait()
