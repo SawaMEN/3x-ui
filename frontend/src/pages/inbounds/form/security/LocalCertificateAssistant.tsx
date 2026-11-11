@@ -44,8 +44,7 @@ export default function LocalCertificateAssistant({
   const mainCertificate = sites.find((site) =>
     site.name.trim().toLowerCase().replace(/\.$/, '') === normalized &&
     site.source !== 'remote' && site.source !== 'distributed' &&
-    !!site.certFile && !!site.keyFile &&
-    (!site.expiresAt || site.expiresAt > Date.now() / 1000),
+    !!site.certFile && !!site.keyFile,
   );
   const validSni =
     !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) &&
