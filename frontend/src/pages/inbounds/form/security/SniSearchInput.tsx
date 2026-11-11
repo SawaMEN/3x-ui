@@ -11,6 +11,7 @@ import type { SNIScanCallback } from './sni-scanner';
 import type { RealityScanResult } from '@/generated/types';
 import RealityTargetScannerModal, { scannedServerName } from './RealityTargetScannerModal';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
+import LocalCertificateAssistant from './LocalCertificateAssistant';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import type { SniScanPurpose } from './RealityTargetScannerModal';
 
@@ -103,6 +104,7 @@ export default function SniSearchInput({
           {t('pages.inbounds.form.sniSearch')}
         </Button>
       </Space.Compact>
+      {purpose === 'tls' && <LocalCertificateAssistant sni={value || ''} disabled={disabled} />}
       <RealityTargetScannerModal
         open={open}
         onClose={() => setOpen(false)}

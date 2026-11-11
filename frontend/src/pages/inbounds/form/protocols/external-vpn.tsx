@@ -5,6 +5,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import { HttpUtil } from '@/utils';
+import SniSearchInput from '../security/SniSearchInput';
 
 export function PingtunnelFields() {
   const { t } = useTranslation();
@@ -150,7 +151,7 @@ export function TrustTunnelFields() {
         label={t('pages.inbounds.form.trusttunnelHostname')}
         tooltip={t('pages.inbounds.form.trusttunnelHostnameHint')}
       >
-        <Input placeholder="vpn.example.com" />
+        <SniSearchInput placeholder="vpn.example.com" />
       </FormField>
       <Space wrap style={{ marginTop: -12, marginBottom: 12 }}>
         <Button onClick={autofillHostname}>
