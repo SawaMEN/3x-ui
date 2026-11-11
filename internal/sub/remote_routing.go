@@ -592,7 +592,9 @@ func (r *remoteRoutingResolver) ensurePersistedLoaded() {
 	if err != nil || sqlDB.Ping() != nil {
 		return
 	}
-	r.loadPersisted()
+	if !r.loadPersisted() {
+		return
+	}
 	r.mu.Lock()
 	r.loaded = true
 	r.mu.Unlock()
@@ -622,16 +624,29 @@ func (r *remoteRoutingResolver) triggerPersistedLoad() {
 	})
 }
 
-func (r *remoteRoutingResolver) loadPersisted() {
+func (r *remoteRoutingResolver) loadPersisted() bool {
+	complete := true
 	loaded := make(map[remoteRoutingKey]remoteRoutingCacheEntry, 2)
 	for _, kind := range []remoteRoutingKind{remoteRoutingHapp, remoteRoutingJson, remoteRoutingClash} {
 		var setting model.Setting
 		err := database.GetDB().Where("key = ?", remoteRoutingSettingKey(kind)).First(&setting).Error
 		if err != nil {
+			if !database.IsNotFound(err) {
+				complete = false
+			}
 			continue
 		}
 		var entry remoteRoutingCacheEntry
 		if json.Unmarshal([]byte(setting.Value), &entry) != nil || entry.Source == "" || entry.Content == "" || entry.FetchedAt <= 0 {
+			continue
+		}
+		// Persisted last-good data must obey the same input caps as a fresh
+		// response, before handing it to the YAML/JSON content parsers.
+		limit := remoteRoutingHappMaxBody
+		if kind == remoteRoutingClash {
+			limit = remoteRoutingClashMaxBody
+		}
+		if len(entry.Content) > limit {
 			continue
 		}
 		if _, remote, err := common.ParseRemoteRoutingURL(entry.Source); err != nil || !remote {
@@ -656,6 +671,7 @@ func (r *remoteRoutingResolver) loadPersisted() {
 		}
 	}
 	r.mu.Unlock()
+	return complete
 }
 
 func (r *remoteRoutingResolver) persistEntry(kind remoteRoutingKind, entry remoteRoutingCacheEntry) {

@@ -7,9 +7,8 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
-// Clash has no shadowsocks tcp/http header, so the inbound path drops the node
-// (applyTransport returns false) and the external-link path must drop it too,
-// instead of handing mihomo a proxy that connects with the wrong obfuscation.
+// Inbound and external-link exports must agree on Shadowsocks transport and
+// security options, including TCP HTTP headers supported by the adapter.
 func TestClashExternalShadowsocksMatchesInboundPath(t *testing.T) {
 	const settings = `{"method":"aes-256-gcm","password":"inboundpw","clients":[{"password":"clientpw","email":"user"}]}`
 	// base64("aes-256-gcm:clientpw") — the SIP002 userinfo of the links below.

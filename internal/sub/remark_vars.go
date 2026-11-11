@@ -672,17 +672,28 @@ func inboundSecurity(inbound *model.Inbound) string {
 func (s *SubService) genTemplatedRemark(inbound *model.Inbound, client model.Client, hostRemark string, transport string) string {
 	ctx := remarkContext{
 		client:     client,
-		stats:      s.statsForClient(inbound, client),
 		inbound:    inbound,
 		hostRemark: hostRemark,
 		transport:  transport,
-		security:   inboundSecurity(inbound),
 	}
 	var tmpl string
 	if s.subscriptionBody {
 		tmpl = s.effectiveTemplate(client)
 	} else {
 		tmpl = filterRemarkTemplate(translateUISingleBrackets(s.remarkTemplate), displayRemoveTokens)
+	}
+	// Display/repeated-link templates usually contain names only. Avoid a
+	// traffic lookup and decoding stream settings for values they never use.
+	var needTraffic, needSecurity bool
+	for _, token := range remarkTokens(tmpl) {
+		needTraffic = needTraffic || usageInfoTokens[token.name]
+		needSecurity = needSecurity || token.name == "SECURITY"
+	}
+	if needTraffic {
+		ctx.stats = s.statsForClient(inbound, client)
+	}
+	if needSecurity {
+		ctx.security = inboundSecurity(inbound)
 	}
 	if out := expandRemarkVars(tmpl, ctx); strings.TrimSpace(out) != "" {
 		return out

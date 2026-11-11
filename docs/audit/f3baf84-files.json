@@ -14552,9 +14552,9 @@
       "deletions": 14,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
+      "reviewed_sha256": "7d9237ba4d92440fff31a79097543b2516d4819408c413a8c5bc0c7315a2a517"
     },
     {
       "path": "internal/sub/clash_external_quota_test.go",
@@ -14563,9 +14563,9 @@
       "deletions": 16,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
+      "reviewed_sha256": "3841b8ac21606c75a5bbdb2732a62c7e797eb1924d1e380af003cced4febda30"
     },
     {
       "path": "internal/sub/clash_external_shadowsocks_test.go",
@@ -14574,9 +14574,9 @@
       "deletions": 2,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Complete read; inbound/external Shadowsocks parity cases passed in full subscription suite; corrected obsolete comment claiming supported HTTP headers must be dropped. No behavior change.",
+      "reviewed_sha256": "3e7be71ad2d04af5a782f7a2c14e247aa3aad32324b07c293d20432ed167a2d3"
     },
     {
       "path": "internal/sub/clash_info_node_test.go",
@@ -14629,9 +14629,9 @@
       "deletions": 2,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
+      "reviewed_sha256": "4e3926c20f2d9cb787d4504087c60c81665f2bc300c6a5977d3b1f2919171c2f"
     },
     {
       "path": "internal/sub/clash_yaml_sudoku_test.go",
@@ -14640,9 +14640,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
+      "reviewed_sha256": "25d0976877d22f0ff4fd4abef585a34e3374153b197d4b84d1b4066865de145e"
     },
     {
       "path": "internal/sub/controller.go",
@@ -14926,9 +14926,9 @@
       "deletions": 0,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
+      "reviewed_sha256": "f6fa93b5e5c584fdaa2157820547211877abde12a79b24e52e03085d0b14dc22"
     },
     {
       "path": "internal/sub/incy_client_test.go",
@@ -15135,9 +15135,9 @@
       "deletions": 3,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
+      "reviewed_sha256": "cc622f0e2af5f1bf57b16b3020dbe6ad56ebaa4696a85ac3e92b0bfa7599dbd4"
     },
     {
       "path": "internal/sub/profile_mode_test.go",
@@ -15169,8 +15169,8 @@
       "subsystem": "subscriptions",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A44-A46: read complete remark/token/calendar/statistics and metadata placeholder sources; reproduced mismatched remark/header limits, frozen original Gregorian-Jalali outputs, optimized date benchmark 162619 to 560 ns/op, max-int64 expiry regression passed. Full subscription package before final calendar optimization passed 39.626s; final results in RESUME.",
-      "reviewed_sha256": "214025e74a39bda13cac134a80586311fea822c3bbcb5a6abcb8af1e003f2b0e"
+      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
+      "reviewed_sha256": "0b8c72343b3c5ba8e5cd465cdd0b9ed3abd7206bc1a75e769857fd9c306f4690"
     },
     {
       "path": "internal/sub/remark_vars_test.go",
@@ -15190,9 +15190,9 @@
       "deletions": 5,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
+      "reviewed_sha256": "deca770fcf399d503e24aa6744d6c8356d96f80f5caba7825cc293051eafa6ff"
     },
     {
       "path": "internal/sub/remote_routing_test.go",
@@ -15201,9 +15201,9 @@
       "deletions": 6,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
+      "reviewed_sha256": "865f11f52b83d5732e336725e226c0d58166fbdeef0125fd4f8ec9a1799851e7"
     },
     {
       "path": "internal/sub/service.go",
