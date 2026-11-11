@@ -47,6 +47,8 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.GET("/certificates", a.certificates)
 	g.GET("/certificates/events", a.certificateEvents)
 	g.POST("/certificates/distribute", a.distributeCertificate)
+	g.POST("/certificates/resolve", a.resolveCertificate)
+	g.POST("/certificates/resolve-local", a.resolveLocalCertificate)
 	g.POST("/certificates/install", a.installCertificate)
 	g.GET("/dns/credential", a.dnsCredential)
 	g.POST("/dns/credential", a.saveDNSCredential)
@@ -57,6 +59,41 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.POST("/probe/http01", a.probeHTTP01)
 	g.POST("/check", a.check)
 	g.POST("/recommend", a.recommend)
+}
+
+// resolveCertificate is a read-only, administrator-specific lookup for the
+// active inbound node. The browser receives local file paths, never PEM keys.
+func (a *DomainController) resolveCertificate(c *gin.Context) {
+    if (!requireDomainAdminSession(c) { return }
+    c.Header("Cache-Control", "no-store")
+    c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+    var req struct {
+        NodeID int `json:"nodeId"`
+        Domain string `json:"domain" binding:"required"`
+    }
+    if err := c.ShouldBindJSON(&req); err != nil { jsonObj(c, nil, err); return }
+    result, err := service.ResolveTLSCertificate(c.Request.Context(), req.NodeID, req.Domain)
+    jsonObj(c, result, err)
+}
+
+// resolveLocalCertificate serves only a node's already validated paths to the
+// authenticated master, not an arbitrary path supplied in the request.
+func (a *DomainController) resolveLocalCertificate(c *gin.Context) {
+    scope := c.GetString("api_token_scope")
+    if !c.GetBool("api_authed") ||
+        (scope != model.ApiScopeNodeSync && scope != model.ApiScopeNodeAdmin) ||
+        c.GetHeader(wirecodec.MasterPushHeader) != "1" {
+        c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+            "success": false, "msg": "node certificate lookup requires an authenticated master push",
+        })
+        return
+    }
+    c.Header("Cache-Control", "no-store")
+    c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+    var req struct { Domain string `json:"domain" binding:"required"` }
+    if err := c.ShouldBindJSON(&req); err != nil { jsonObj(c, nil, err); return }
+    result, err := service.ResolveLocalTLSCertificate(c.Request.Context(), req.Domain)
+    jsonObj(c, result, err)
 }
 
 // distributeCertificate requires an interactive administrator. Private keys
