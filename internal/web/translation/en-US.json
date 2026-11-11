@@ -2474,7 +2474,7 @@
         "addSharedSni": "Use external SNI",
         "remoteSNITag": "Foreign node",
         "remoteSNIInfo": "The HTTPS site and its certificate are on another node; no local private key is stored here.",
-        "remoteSNITLSWarning": "The hostname is selected as SNI. Standard TLS needs a matching certificate on this VPN server; the foreign site's private key is not copied.",
+        "remoteSNITLSWarning": "The hostname is selected as SNI. Standard TLS requires a matching certificate and private key on the selected node. If you control this domain and its certificate is on the main node, use “Transfer certificate from main node”. A third-party site's private key cannot be retrieved.",
         "sniCertificates": "SNI certificates",
         "sniCertHint": "Copy these paths into protocol TLS settings",
         "sniEmpty": "No SNI-only sites yet",
