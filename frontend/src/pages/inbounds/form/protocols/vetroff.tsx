@@ -4,8 +4,10 @@ import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
+import { mayReplaceCertificatePair } from '../security/local-certificate';
 import {
   canApplyManagedSniCertificate,
+  useManagedSniDomains,
   type ManagedSniDomain,
 } from '@/api/queries/useManagedSniDomains';
 import {
@@ -20,6 +22,7 @@ export function VetroffFields() {
   const { control, getValues, setValue } = useFormContext();
   const options = useWatch({ control, name: prefix });
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
+  const { data: managedDomains = [] } = useManagedSniDomains();
   const nodes = useFieldArray({ control, name: `${prefix}.nodes` });
   const policies = useFieldArray({ control, name: `${prefix}.userPolicies` });
   const set = (key: string, value: unknown) =>
@@ -103,7 +106,15 @@ export function VetroffFields() {
         <SniSearchInput
           placeholder={label('automatic')}
           onPickManagedDomain={(domain: ManagedSniDomain) => {
-            if (canApplyManagedSniCertificate(domain, nodeId)) {
+            if (
+              canApplyManagedSniCertificate(domain, nodeId === 0 ? null : nodeId) &&
+              mayReplaceCertificatePair(
+                String(getValues('settings.certificate') || ''),
+                String(getValues('settings.privateKey') || ''),
+                managedDomains,
+                nodeId,
+              )
+            ) {
               setValue(`${prefix}.autoTLS`, false, { shouldDirty: true });
               setValue('settings.certificate', domain.certFile, { shouldDirty: true });
               setValue('settings.privateKey', domain.keyFile, { shouldDirty: true });

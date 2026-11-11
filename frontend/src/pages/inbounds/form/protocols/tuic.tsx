@@ -18,7 +18,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
-import { nodeCertificateForSni } from '../security/local-certificate';
+import { mayReplaceCertificatePair, nodeCertificateForSni } from '../security/local-certificate';
 import {
   canApplyManagedSniCertificate,
   type ManagedSniDomain,
@@ -29,7 +29,7 @@ export default function TuicFields() {
   const { t } = useTranslation();
   const uid = useId();
   const [messageApi, messageContextHolder] = message.useMessage();
-  const { control, setValue } = useFormContext();
+  const { control, getValues, setValue } = useFormContext();
   const { data: managedDomains = [] } = useManagedSniDomains();
   const [loadingPanelCert, setLoadingPanelCert] = useState(false);
 
@@ -50,7 +50,15 @@ export default function TuicFields() {
 
   const applyManagedDomain = (domain: ManagedSniDomain) => {
     updateServerValue('sni', domain.name);
-    if (canApplyManagedSniCertificate(domain, nodeId)) {
+    if (
+      canApplyManagedSniCertificate(domain, nodeId === 0 ? null : nodeId) &&
+      mayReplaceCertificatePair(
+        String(getValues('settings.server.certificate') || ''),
+        String(getValues('settings.server.private_key') || ''),
+        managedDomains,
+        nodeId,
+      )
+    ) {
       updateServerValue('certificate', domain.certFile);
       updateServerValue('private_key', domain.keyFile);
     }

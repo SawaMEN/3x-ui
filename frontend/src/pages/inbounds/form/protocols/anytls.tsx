@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { CloudDownloadOutlined } from '@ant-design/icons';
 import { Alert, Button, Collapse, Form, Input, message } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
+import { mayReplaceCertificatePair } from '../security/local-certificate';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
 import {
   canApplyManagedSniCertificate,
+  useManagedSniDomains,
   type ManagedSniDomain,
 } from '@/api/queries/useManagedSniDomains';
 import { HttpUtil } from '@/utils';
@@ -14,13 +16,22 @@ import { ANYTLS_DEFAULT_PADDING_SCHEME } from '@/schemas/protocols/inbound/anytl
 
 export default function AnyTlsFields() {
   const { t } = useTranslation();
-  const { control, setValue } = useFormContext();
+  const { control, getValues, setValue } = useFormContext();
+  const { data: managedDomains = [] } = useManagedSniDomains();
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
   const [loadingPanelSettings, setLoadingPanelSettings] = useState(false);
   const [messageApi, messageContextHolder] = message.useMessage();
 
   const onManagedSni = (domain: ManagedSniDomain) => {
-    if (!canApplyManagedSniCertificate(domain, nodeId)) return;
+    if (!canApplyManagedSniCertificate(domain, nodeId === 0 ? null : nodeId)) return;
+    if (
+      !mayReplaceCertificatePair(
+        String(getValues('settings.tls.certificatePath') || ''),
+        String(getValues('settings.tls.keyPath') || ''),
+        managedDomains,
+        nodeId,
+      )
+    ) return;
     const options = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
     setValue('settings.tls.certificatePath', domain.certFile, options);
     setValue('settings.tls.keyPath', domain.keyFile, options);
