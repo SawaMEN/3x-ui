@@ -23,6 +23,8 @@ export function localCertificateFields(
       key: 'settings.privateKey',
       autoTLS: 'settings.vetroff.autoTLS',
     };
+  // FPTN accepts only RSA certificates; the lookup API enforces RSA.
+  if (protocol === 'fptn') return { cert: 'settings.certificate', key: 'settings.privateKey' };
   if (protocol === 'trusttunnel')
     return { cert: 'settings.certificate', key: 'settings.privateKey' };
   if (['naive', 'anytls', 'masque'].includes(protocol))
