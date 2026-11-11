@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 66 подтверждённых исправлений панели; A64–A66 — текущая группа из 3 исправлений и дополнения A62.
+Всего реализовано 68 подтверждённых исправлений панели; A67–A68 — текущая группа из 2 исправлений.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 211 файлов, осталось 2153; общий проход не завершён.
+Проверено вручную 214 файлов, осталось 2150; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -612,3 +612,62 @@ Release 3X-UI и CodeQL тоже success. DNS blocker прежних запус�
 не воспроизводится на этой контрольной точке; новые изменения A64–A66 ещё
 должны пройти свой CI после публикации.
 R04/R05 внешнего ядра и запрет полного локального go test ./... сохраняются.
+
+
+## Контрольная точка A67–A68: rollback и граница полномочий узла
+
+A64–A66 опубликованы в 501c657776f2fd56bb5baaf92d8bb6e61fbb351f.
+Пока шла работа, main получил независимый 0468d8650de2da8bab60cf2084a041ac09e4c8f6
+(cover-site templates, local TLS, domain activity). Наши 4 незавершённых файла
+сохранены stash, main fast-forward, stash восстановлен без конфликтов. Новые
+возможности этого коммита не перезаписаны. Результаты старого запуска, загружавшего
+packages во время смены дерева, не засчитывались: выполнены свежие проверки.
+Среда /tmp и /home/agent снова сбросилась; Go 1.27.4 и golangci 2.15.0 восстановлены
+с проверкой официальных archive SHA-256, normal/race cache разнесены.
+
+- A67 закрывает R06. При SQL failure domainFrontConfig прежний existing-TLS
+  gateway оставался остановленным: service строил неполный oldBackend, а
+  обратный Apply с отменённым request context мог тоже отказать. Новые tests
+  запустили реальный localhost TLS со своим сертификатом, затем запретили UPDATE
+  настройки (в вариантах с отменой запроса и без). До правки оба потеряли listener.
+  Manager.ApplyAndCommit сохраняет actual old cfg/backend до успешного commit;
+  при ошибке закрывает новый runtime и восстанавливает полный старый backend
+  отдельным context. Callback не должен reenter Manager. Ошибки commit и rollback
+  обёрнуты %w, оба доступны через errors.Is. Service больше не собирает усечённый
+  rollback и не скрывает ошибку обратного старта. Добавлены проверки освобождения
+  обоих портов при неудачном первом commit, запрета commit invalid config и
+  сохранения старого runtime при таком invalid draft.
+- A68: normalizeSingBoxSessionNodeTarget ограничивал только node-sync, но
+  node-admin тоже является transport credential с update authority, не общим
+  администратором. Его можно было использовать для relay чужого domain activity
+  и session commands. Real authenticated controller regression воспроизвёл
+  success=true и вызов чужого runtime. Теперь обе node scopes local-only;
+  полноценный admin по-прежнему может обращаться к дочернему runtime. Проверены
+  GET domainActivity и POST disconnect-users, query и body nodeId.
+
+Группа: требуется 2 новых исправления, реализовано 2, осталось 0 реализации.
+Всего 68; reviewed 214/2364, pending 2150, stale 0. 6 hashes, изменённых 0468d86,
+повторно просмотрены/обновлены; ещё 3 исходных файла закрыты. Новый runtime
+DomainActivity и UI certificate helpers прочитаны как зависимости вне original diff.
+
+Проверки на объединённом main:
+- A67 targeted normal domainfront/service: PASS 0.008s / 0.194s;
+- A68 scoped controller normal: PASS 0.132s;
+- полный internal/domainfront на объединённом main: PASS 0.062s;
+- targeted race domainfront/service/controller: PASS 1.022s / 2.580s / 2.385s;
+- полный golangci-lint 2.15.0: 0 issues;
+- go build -p 3 ./...: PASS;
+- diff --check и inventory check: PASS.
+
+Первая проверка до объединения дерева не прошла compile из-за изменения исходников
+во время package load (новые SiteCatalog/SiteTemplate с прежним cache dependency).
+После завершения merge повторный запуск прошёл; это не считается дефектом main.
+Целевые TLS/RPC тесты используют временную SQLite, self-signed fixture и loopback,
+не выпускают ACME сертификаты и не применяют host firewall rules.
+
+DomainFrontService теперь reviewed и R06 закрыт. domainfront/manager.go и shared.go
+ещё оставить pending до проверки двух новых подозрительных lifecycle контрактов:
+RefreshRoutes заменяет CertificateEvent/DNS01Token вместе с routing; transport pools
+старых reverse proxies не закрываются при RefreshRoutes/Stop. Сначала воспроизвести
+callback loss и реальные localhost idle connections, затем исправлять. API/jobs/
+subscriptions общий аудит не закрыт. Source diff всё ещё фиксирован f3baf84.

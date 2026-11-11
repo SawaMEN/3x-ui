@@ -21,8 +21,8 @@ type singBoxDisconnectSessionsRequest struct {
 	Users   []string `json:"users" form:"users"`
 }
 
-// The same endpoints are also the transport used by runtime.Remote. Node-sync
-// tokens may call only the node-local form (without nodeId); otherwise a node
+// The same endpoints are also the transport used by runtime.Remote. Node
+// transport tokens may call only the node-local form (without nodeId); otherwise a node
 // could use its transport credential to relay session commands through another
 // panel runtime.
 func init() {
@@ -54,8 +54,8 @@ func normalizeSingBoxSessionNodeTarget(c *gin.Context, nodeID *int) (*int, error
 	if err != nil || nodeID == nil {
 		return nodeID, err
 	}
-	if scope, ok := c.Get("api_token_scope"); ok && scope == model.ApiScopeNodeSync {
-		return nil, errors.New("node-sync session requests may target only the local runtime")
+	if scope, ok := c.Get("api_token_scope"); ok && (scope == model.ApiScopeNodeSync || scope == model.ApiScopeNodeAdmin) {
+		return nil, errors.New("node-scoped requests may target only the local runtime")
 	}
 	return nodeID, nil
 }

@@ -84,6 +84,12 @@ type frontRuntime struct {
 func NewManager(cachePath string) *Manager { return &Manager{cachePath: cachePath} }
 
 func (m *Manager) Apply(ctx context.Context, cfg DomainFrontConfig, backend Backend) error {
+	return m.ApplyAndCommit(ctx, cfg, backend, nil)
+}
+
+// ApplyAndCommit keeps the previous live configuration and its complete backend
+// until commit succeeds. The commit callback must not reenter this manager.
+func (m *Manager) ApplyAndCommit(ctx context.Context, cfg DomainFrontConfig, backend Backend, commit func() error) error {
 	if err := cfg.ValidateWithCertificates(backend.Certificates); err != nil {
 		return err
 	}
@@ -97,16 +103,22 @@ func (m *Manager) Apply(ctx context.Context, cfg DomainFrontConfig, backend Back
 		old.close()
 	}
 	next, err := m.start(ctx, cfg, backend)
+	if err == nil && commit != nil {
+		err = commit()
+	}
 	if err != nil {
-		m.lastError = err.Error()
+		if next != nil {
+			next.close()
+		}
 		if old != nil {
 			restored, restoreErr := m.start(context.Background(), old.cfg, old.backend)
 			m.runtime = restored
 			if restoreErr != nil {
-				m.lastError += "; rollback: " + restoreErr.Error()
+				err = fmt.Errorf("%w; rollback: %w", err, restoreErr)
 			}
 		}
-		return errors.New(m.lastError)
+		m.lastError = err.Error()
+		return err
 	}
 	m.runtime = next
 	m.lastError = ""

@@ -357,22 +357,14 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	backend.ChallengeRoots = roots
 	backend.CertificateEvent = DomainCertificateAuditedEventsForDNS(cfg.HTTPPort, cfg.HTTPSPort, cfg.DNS01Provider != "")
 	manager := managedDomainFront()
-	if err := manager.Apply(ctx, cfg, backend); err != nil {
-		rollback()
-		return manager.Status(old), err
-	}
-	raw, err := json.Marshal(cfg)
-	if err == nil {
-		err = s.setString("domainFrontConfig", string(raw))
-	}
-	if err != nil {
-		rollback()
-		oldBackend, buildErr := s.domainFrontBackend(old)
-		if buildErr == nil {
-			if tokenErr := configureDomainDNS01(old, &oldBackend); tokenErr == nil {
-				_ = manager.Apply(ctx, old, oldBackend)
-			}
+	if err := manager.ApplyAndCommit(ctx, cfg, backend, func() error {
+		raw, err := json.Marshal(cfg)
+		if err != nil {
+			return err
 		}
+		return s.setString("domainFrontConfig", string(raw))
+	}); err != nil {
+		rollback()
 		return manager.Status(old), err
 	}
 	result := manager.StatusWithCertificates(cfg, files)
