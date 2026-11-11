@@ -87,7 +87,15 @@ export default function LocalCertificateAssistant({
       return found;
     },
   });
-  const certificate = local ? localCertificate : remoteLookup.data;
+  const certificate: ResolvedCertificate | null = localCertificate && local
+    ? {
+        domain: localCertificate.name,
+        certFile: localCertificate.certFile,
+        keyFile: localCertificate.keyFile,
+        expiresAt: localCertificate.expiresAt || 0,
+        nodeId: 0,
+      }
+    : remoteLookup.data ?? null;
   // Reuse only a verified certificate on the chosen machine. Never replace
   // a manually entered pair; a pair filled by this assistant may rotate.
   useEffect(() => {
