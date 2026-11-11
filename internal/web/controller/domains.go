@@ -14,8 +14,10 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/wirecodec"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
 type DomainController struct{}
@@ -44,6 +46,8 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.GET("/status", a.status)
 	g.GET("/certificates", a.certificates)
 	g.GET("/certificates/events", a.certificateEvents)
+	g.POST("/certificates/distribute", a.distributeCertificate)
+	g.POST("/certificates/install", a.installCertificate)
 	g.GET("/dns/credential", a.dnsCredential)
 	g.POST("/dns/credential", a.saveDNSCredential)
 	g.POST("/certificates/renew", a.renewCertificate)
@@ -53,6 +57,43 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.POST("/probe/http01", a.probeHTTP01)
 	g.POST("/check", a.check)
 	g.POST("/recommend", a.recommend)
+}
+
+// distributeCertificate requires an interactive administrator. Private keys
+// never appear in its input or output: the server reads only local managed
+// certificates and sends them to the explicitly selected node.
+func (a *DomainController) distributeCertificate(c *gin.Context) {
+    if !requireDomainAdminSession(c) { return }
+    c.Header("Cache-Control", "no-store")
+    c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+    var request struct {
+        NodeID int `json:"nodeId" binding:"required"`
+        Domain string `json:"domain" binding:"required"`
+    }
+    if err := c.ShouldBindJSON(&request); err != nil { jsonObj(c, nil, err); return }
+    result, err := service.DistributeTLSCertificate(c.Request.Context(), request.NodeID, request.Domain)
+    jsonObj(c, result, err)
+}
+
+// installCertificate is a narrow node-sync operation. Unlike arbitrary file
+// uploads, it accepts no destination path and validates the TLS identity
+// before writing to the panel's private certificate store.
+func (a *DomainController) installCertificate(c *gin.Context) {
+    scope := c.GetString("api_token_scope")
+    if !c.GetBool("api_authed") ||
+        (scope != model.ApiScopeNodeSync && scope != model.ApiScopeNodeAdmin) ||
+        c.GetHeader(wirecodec.MasterPushHeader) != "1" {
+        c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+            "success": false, "msg": "certificate installation requires an authenticated node push",
+        })
+        return
+    }
+    c.Header("Cache-Control", "no-store")
+    c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 160<<10)
+    var request runtime.TLSCertificateInstall
+    if err := c.ShouldBindJSON(&request); err != nil { jsonObj(c, nil, err); return }
+    result, err := service.InstallDistributedTLSCertificate(request)
+    jsonObj(c, result, err)
 }
 
 // DNS API tokens are write-only. Authenticated clients can inspect only
