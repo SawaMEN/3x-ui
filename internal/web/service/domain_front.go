@@ -90,6 +90,11 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 		add(settings.SubDomain, "subscription", settings.SubCertFile, settings.SubKeyFile)
 		add(settings.WebDomain, "panel", settings.WebCertFile, settings.WebKeyFile)
 	}
+	// Installed copies are local files on THIS host, not paths borrowed
+	// from the controller. Their stable symlink follows certificate updates.
+	for _, imported := range LocalDistributedTLSCertificates() {
+		add(imported.Domain, "distributed", imported.CertFile, imported.KeyFile)
+	}
 	if includeNodes {
 		out = mergeNodeManagedSNIDomains(out, discoverNodeSNI(ctx), seen)
 	}
@@ -164,7 +169,7 @@ func mergeNodeManagedSNIDomains(existing, incoming []ManagedSNIDomain, seenNames
 // its file paths as a node-local certificate inventory entry.
 func managedNodeCertificateSourceSupported(source string) bool {
 	switch source {
-	case "telemt", "gateway", "panel", "subscription":
+	case "telemt", "gateway", "panel", "subscription", "distributed":
 		return true
 	default:
 		return false
