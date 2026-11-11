@@ -128,6 +128,24 @@ def verify_source_pin(manifest, expected_core_sha=None, expected_singbox_sha=Non
             raise ValueError("Kernel " + name + " differs from pinned source")
 
 
+def verify_build_tags(tags, origin):
+    if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+        raise ValueError(origin + " has invalid build tags")
+    missing = TAGS - set(tags)
+    if missing:
+        raise ValueError(origin + " is missing mandatory build tags: " + ", ".join(sorted(missing)))
+    if not {"with_purego", "with_musl"} & set(tags):
+        raise ValueError(origin + " is missing a supported Cronet linkage tag")
+
+
+def verify_executable_version(version, source):
+    if (not version.startswith("hiddify-core version " + source["version"] + " ")
+            or not re.search(r"^Revision:\s*" + re.escape(source["commit"]) + r"\s*$", version, re.MULTILINE)):
+        raise ValueError("Kernel executable does not match manifest identity")
+    tags = re.search(r"^Tags:[ \t]*(.*)$", version, re.MULTILINE)
+    verify_build_tags(re.split(r"[,\s]+", tags.group(1).strip()) if tags else [], "Kernel executable")
+
+
 def install(release, arch, destination, expected_core_sha=None, expected_singbox_sha=None):
     tag = release["tag_name"]
     name = f"sing-box-linux-{arch}.tar.gz"
@@ -162,8 +180,7 @@ def install(release, arch, destination, expected_core_sha=None, expected_singbox
         source = manifest["target"]
         if source["repository"] != "https://github.com/SawaMEN/hiddify-core" or source["version"] != tag:
             raise ValueError("Kernel version/source differs from release")
-        if not TAGS.issubset(profile["tags"]) or not ({"with_purego", "with_musl"} & set(profile["tags"])):
-            raise ValueError("Kernel build is missing mandatory panel features")
+        verify_build_tags(profile["tags"], "Kernel manifest")
         with open(temp / binary, "rb") as executable:
             header = executable.read(20)
         if len(header) != 20 or header[:6] != b"\x7fELF\x02\x01" or struct.unpack_from("<H", header, 18)[0] != {"amd64": 62, "arm64": 183}[arch]:
@@ -171,9 +188,7 @@ def install(release, arch, destination, expected_core_sha=None, expected_singbox
         (temp / binary).chmod(0o755)
         if sys.platform == "linux" and {"x86_64": "amd64", "aarch64": "arm64"}.get(platform.machine()) == arch:
             version = subprocess.check_output([str(temp / binary), "version"], text=True, cwd=temp, timeout=30)
-            if (not version.startswith("hiddify-core version " + tag + " ")
-                    or "Revision: " + source["commit"] not in version):
-                raise ValueError("Kernel executable does not match manifest identity")
+            verify_executable_version(version, source)
         for file in selected:
             os.replace(temp / file, destination / file)
         print(f"Included verified core {tag} ({arch})", file=sys.stderr)

@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """Regression checks: panel builds must only consume the official latest stable core."""
 import importlib.util
+import hashlib
+import io
+import json
 from pathlib import Path
+import re
+import struct
+import tarfile
+import tempfile
 import unittest
 from unittest import mock
 
@@ -107,6 +114,68 @@ class SourcePinsTest(unittest.TestCase):
             selector.verify_source_pin(self.manifest(), "../main", self.SING)
         with self.assertRaises(ValueError):
             selector.verify_source_pin(self.manifest(), self.CORE, "short")
+
+
+class ExecutableFeaturesTests(unittest.TestCase):
+    CORE, SING, TAG = ReleaseIdentityTests.CORE, ReleaseIdentityTests.SING, ReleaseIdentityTests.TAG
+    manifest = ReleaseIdentityTests.manifest
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.output = Path(self.directory.name) / "installed"
+        self.output.mkdir()
+        self.binary = "hiddify-core-linux-amd64"
+        (self.output / self.binary).write_bytes(b"previous-good-kernel")
+        manifest = self.manifest()
+        manifest["panel_build"] = {"tags": sorted(selector.TAGS | {"with_purego"})}
+        elf = bytearray(20)
+        elf[:6] = b"\x7fELF\x02\x01"
+        struct.pack_into("<H", elf, 18, 62)
+        members = {self.binary: bytes(elf), "libcronet.so": b"test-cronet", "target.json": json.dumps(manifest).encode()}
+        for name in (self.binary, "libcronet.so"):
+            members[name + ".sha256"] = f"{hashlib.sha256(members[name]).hexdigest()}  {name}\n".encode()
+        archive = io.BytesIO()
+        with tarfile.open(fileobj=archive, mode="w:gz") as package:
+            for name, body in members.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(body)
+                package.addfile(info, io.BytesIO(body))
+        name = "sing-box-linux-amd64.tar.gz"
+        self.assets = {name: archive.getvalue()}
+        self.assets[name + ".sha256"] = f"{hashlib.sha256(archive.getvalue()).hexdigest()}  {name}\n".encode()
+        self.release = {"tag_name": self.TAG, "target_commitish": self.CORE, "assets": [
+            {"name": name, "browser_download_url": selector.PREFIX + self.TAG + "/" + name}
+            for name in self.assets
+        ]}
+
+    def install(self, tags):
+        version = f"hiddify-core version {self.TAG} test\nTags: {','.join(sorted(tags))}\nRevision: {self.CORE}\n"
+        def download(url, destination):
+            Path(destination).write_bytes(self.assets[url.rsplit("/", 1)[-1]])
+        with mock.patch.object(selector, "fetch", side_effect=download), \
+             mock.patch.object(selector.subprocess, "check_output", return_value=version), \
+             mock.patch.object(selector.sys, "platform", "linux"), \
+             mock.patch.object(selector.platform, "machine", return_value="x86_64"):
+            selector.install(self.release, "amd64", self.output, self.CORE, self.SING)
+
+    def test_installer_rejects_binary_without_manifest_features(self):
+        for tags in ((selector.TAGS - {"http2legacy"}) | {"with_purego"}, selector.TAGS):
+            with self.subTest(tags=tags), self.assertRaisesRegex(ValueError, "tags|linkage"):
+                self.install(tags)
+            self.assertEqual((self.output / self.binary).read_bytes(), b"previous-good-kernel")
+
+    def test_installer_accepts_binary_with_required_features(self):
+        self.install(selector.TAGS | {"with_purego"})
+        self.assertEqual((self.output / self.binary).read_bytes()[:4], b"\x7fELF")
+
+    def test_requirements_match_panel_runtime_and_build_lock(self):
+        root = Path(__file__).resolve().parents[1]
+        process = (root / "internal/hiddify/process.go").read_text()
+        block = re.search(r"var requiredBuildTags = \[\]string\{([^}]+)\}", process)
+        self.assertIsNotNone(block)
+        self.assertEqual(selector.TAGS, set(re.findall(r'"([^"\n]+)"', block.group(1))))
+        lock = json.loads((root / "deploy/hiddify/hiddify-core-target.json").read_text())
+        selector.verify_build_tags(lock["panel_build"]["tags"], "Pinned build lock")
 
 
 if __name__ == "__main__":

@@ -239,6 +239,10 @@ jobs:
         env:
           HIDDIFY_TEST_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
         run: go test ./internal/sub -run '^(TestHiddify(ExtendedProtocolsSurviveMixedSubscription|MixedWireGuardKeepsEveryEndpoint)|TestAnyTLSShadowTLS(AutomaticTLSIdentityAndRoutes|SubscriptionConnections))$' -count=1 -v
+      - name: Verify all native adapter configuration contracts
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/hiddify -count=1 -timeout=5m -v
       - name: Verify live client speed limits over TCP and UDP
         env:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64

@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 46 подтверждённых исправлений; A44–A46 — текущая группа из 3 исправлений.
+Всего реализовано 49 подтверждённых исправлений панели; A47–A49 — текущая группа из 3 исправлений.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 130 файлов, осталось 2234; общий проход не завершён.
+Проверено вручную 137 файлов, осталось 2227; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -283,3 +283,59 @@ Audit/host-order/calendar regression tests с -race — PASS (25,222 с), вес
 Повторный полный golangci-lint 2.15.0 завершился успешно: **0 issues**.
 Для дальнейших проверок использовать GOCACHE=/tmp/3x-ui-go1274-cache: старый
 /home/agent/.cache/go-build очищен после переполнения, новый кэш уже прогрет.
+
+## Контрольная точка A47–A49
+
+- A44–A46 опубликованы в `60a9ec1`. CI run 42968629282, Release и CodeQL прошли.
+  Отдельный Pinned Hiddify core release integrity audit run 43012089228 упал:
+  job 130493967750, missing mandatory panel features.
+- A47: проверен настоящий старый закреплённый архив 4f1b5e6b9b2b/4fe303071f4f.
+  Его SHA256 корректен, но packaged tags не содержат http2legacy, уже обязательный
+  в панели. Активный build lock и TargetVersion/TargetRevision обновлены на
+  официальный stable 1f4926dd43b9/19f378cb93b5. Historical fork-contract не менялся.
+  Проверки версий/тегов не ослаблены.
+- Последний stable скачан для AMD64 и ARM64; оба архива, оба внутренних checksum,
+  release/source pins, manifest capabilities и ELF-архитектура проверены.
+  AMD64 executable version проверен запуском. ARM64 на AMD64 не исполнялся.
+  SHA256 AMD64 archive: 1a21f905a472365cded299b99c18012a9dfa50690ae0aaaade70edb93a5693f0.
+  SHA256 ARM64 archive: 6140943d3d5d074855370aa787c14e3e096ff1a5fee06dd22aac4cf4de8eb247.
+- Аудит закреплённого релиза теперь запускается по связанным push и проверяет
+  матрицу AMD64/ARM64. Новый обычный CI также проверяет весь internal/hiddify
+  с HIDDIFY_CONFIG_CHECK_BINARY, а не только прежний набор config-тестов.
+- A48: изготовленный checksum-valid пакет с правильным manifest и бинарником,
+  чья version строка не содержит http2legacy/поддерживаемой linkage, принимался
+  и заменял прежний kernel. Воспроизведено unit-тестом до исправления.
+  Теперь tags проверяются и в executable version до публикации файлов;
+  несовместимость не меняет прежний binary. Ошибка manifest перечисляет missing tags.
+  Добавлен контракт равенства обязательных Go/Python tags.
+- A49: полный native-core config прогон выявил, что mKCP выдавал устаревшие
+  transport.seed/header/legacy/final_mask. Core schema принимает там только
+  numeric options. Legacy outbound теперь использует top-level final_mask,
+  seed/checksum идёт перед header, wechat-video -> wechat. Explicit UDP chains
+  сохраняются; конфликты и повреждённые типы отвергаются, input не меняется.
+- R05: реальное ядро отдельно отвергает inbound UDP FinalMask: поддержаны только
+  TCP listener masks. Входящий legacy mKCP НЕ объявлять заработавшим: панель
+  теперь возвращает понятную ошибку до native serialization; для поддержки нужен
+  отдельный этап внешнего ядра. Native mKCP без legacy масок проходит проверку конфигурации.
+- R04 остаётся открыт: version скачанного stable подтверждает Go 1.27.3.
+  Обновление исходного compiler/runtime внешнего ядра и новый security release
+  не выполнены этим этапом. Не выдавать A47 за исправление его стандартной библиотеки.
+- Python fetcher: 13/13 tests PASS; tools/ci: 39/39 PASS; YAML обоих workflows
+  parsed; static build/fork verifier PASS без optional checkout внешних sources.
+- Полный internal/hiddify с настоящим CONFIG_CHECK binary PASS (3,026 с).
+  Дополнительная KCP matrix (20 cases) PASS (0,392 с). Это config validation,
+  не реальный трафик: R05 и прежний netlink sandbox не обходились.
+- go build -p 3 ./... PASS. Первый lint нашёл unused assignment в новом test branch;
+  исправлен, финальный lint записать после завершения.
+- Среда снова сбросилась: восстановлены Go 1.27.4, modules и golangci 2.15.0.
+  GOCACHE=/tmp/3x-ui-go1274-cache; core — /tmp/3x-ui-latest-core-audit/verified.
+- Полностью проверено ещё 7 исходных файлов, 2 review marks обновлены после правок.
+  Ручной охват: 137/2364, осталось 2227. ci.yml прочитан только в затронутом
+  участке и остаётся pending. Подтверждённых исправлений панели: 49.
+
+Финальный golangci-lint 2.15.0: **0 issues**. Аудит release matrix использует
+native runners ubuntu-24.04 и ubuntu-24.04-arm, чтобы в CI проверять executable
+version и tags на обеих архитектурах. Локальный ARM64 запуск не засчитывается.
+Схема mKCP сверена с owner source 19f378cb93b5:
+- https://github.com/SawaMEN/hiddify-sing-box/blob/19f378cb93b58a5ac0d0b70183e1b0e92d9553c9/option/h_v2ray_kcp.go
+- https://github.com/SawaMEN/hiddify-sing-box/blob/19f378cb93b58a5ac0d0b70183e1b0e92d9553c9/hiddify/finalmask/xray_conf.go

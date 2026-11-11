@@ -2,6 +2,7 @@ package hiddify
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -16,7 +17,11 @@ func TestKCPTranslationBothDirections(t *testing.T) {
 		var out map[string]any
 		var err error
 		if inbound {
-			out, err = TranslateInbound(raw)
+			_, err = TranslateInbound(raw)
+			if err == nil || !strings.Contains(err.Error(), "UDP listener mask support") {
+				t.Fatalf("unsupported inbound legacy masks must be rejected before native serialization: %v", err)
+			}
+			continue
 		} else {
 			out, err = TranslateOutbound(raw)
 		}
@@ -29,8 +34,15 @@ func TestKCPTranslationBothDirections(t *testing.T) {
 		}
 		checkProtectionConfig(t, direction, out)
 		transport := object(out, "transport")
-		if transport["type"] != "kcp" || transport["seed"] != "secret" || transport["header"] != "srtp" || transport["legacy"] != true || transport["tti"] != uint32(20) {
+		if transport["type"] != "kcp" || transport["seed"] != nil || transport["header"] != nil || transport["legacy"] != nil || transport["tti"] != uint32(20) {
 			t.Fatalf("mKCP options lost: %#v", transport)
+		}
+		wantMask := map[string]any{"udp": []any{
+			map[string]any{"type": "mkcp-legacy", "settings": map[string]any{"value": "secret"}},
+			map[string]any{"type": "mkcp-legacy", "settings": map[string]any{"header": "srtp"}},
+		}}
+		if !reflect.DeepEqual(out["final_mask"], wantMask) {
+			t.Fatalf("legacy wire masks lost/reordered: %#v", out["final_mask"])
 		}
 	}
 }

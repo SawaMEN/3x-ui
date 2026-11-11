@@ -6,8 +6,14 @@ import (
 	"strings"
 )
 
-func translateKCP(stream map[string]any) (map[string]any, error) {
+func translateKCP(stream map[string]any) (map[string]any, map[string]any, error) {
 	transport := map[string]any{"type": "kcp"}
+	if value := stream["kcpSettings"]; value != nil {
+		if _, ok := value.(map[string]any); !ok {
+			return nil, nil, fmt.Errorf("mKCP settings must be an object")
+		}
+	}
+	var seed, headerType string
 	options := object(stream, "kcpSettings")
 	fields := map[string]string{"mtu": "mtu", "tti": "tti", "uplinkCapacity": "uplink_capacity", "downlinkCapacity": "downlink_capacity", "cwndMultiplier": "cwnd_multiplier", "maxSendingWindow": "max_sending_window"}
 	for key, value := range options {
@@ -15,7 +21,7 @@ func translateKCP(stream map[string]any) (map[string]any, error) {
 			data, _ := json.Marshal(value)
 			var n uint32
 			if json.Unmarshal(data, &n) != nil {
-				return nil, fmt.Errorf("invalid mKCP %s", key)
+				return nil, nil, fmt.Errorf("invalid mKCP %s", key)
 			}
 			transport[native] = n
 			continue
@@ -23,44 +29,68 @@ func translateKCP(stream map[string]any) (map[string]any, error) {
 		switch key {
 		case "seed":
 			if _, ok := value.(string); !ok {
-				return nil, fmt.Errorf("mKCP seed must be a string")
+				return nil, nil, fmt.Errorf("mKCP seed must be a string")
 			}
-			transport["seed"] = value
+			seed = value.(string)
 		case "header":
 			header, ok := value.(map[string]any)
 			if !ok {
-				return nil, fmt.Errorf("mKCP header must be an object")
+				return nil, nil, fmt.Errorf("mKCP header must be an object")
 			}
 			for field, v := range header {
 				if field != "type" && meaningful(v) {
-					return nil, fmt.Errorf("unsupported mKCP header.%s", field)
+					return nil, nil, fmt.Errorf("unsupported mKCP header.%s", field)
 				}
 			}
 			kind, ok := header["type"].(string)
 			if !ok && header["type"] != nil {
-				return nil, fmt.Errorf("mKCP header.type must be a string")
+				return nil, nil, fmt.Errorf("mKCP header.type must be a string")
 			}
-			transport["header"] = strings.ToLower(strings.TrimSpace(kind))
+			headerType = strings.ToLower(strings.TrimSpace(kind))
+			switch headerType {
+			case "", "none", "dns", "dtls", "srtp", "utp", "wechat", "wireguard":
+			case "wechat-video":
+				headerType = "wechat"
+			default:
+				return nil, nil, fmt.Errorf("unsupported mKCP header type %q", kind)
+			}
 		default:
 			if meaningful(value) {
-				return nil, fmt.Errorf("mKCP setting %q has no equivalent in the current transport", key)
+				return nil, nil, fmt.Errorf("mKCP setting %q has no equivalent in the current transport", key)
 			}
+		}
+	}
+	if value := stream["finalmask"]; value != nil {
+		if _, ok := value.(map[string]any); !ok {
+			return nil, nil, fmt.Errorf("mKCP finalmask must be an object")
 		}
 	}
 	mask := object(stream, "finalmask")
+	if value := mask["udp"]; value != nil {
+		if _, ok := value.([]any); !ok {
+			return nil, nil, fmt.Errorf("mKCP finalmask.udp must be an array")
+		}
+	}
+	var nativeMask map[string]any
 	if meaningful(mask["tcp"]) {
-		return nil, fmt.Errorf("mKCP supports UDP finalmask only")
+		return nil, nil, fmt.Errorf("mKCP supports UDP finalmask only")
 	}
 	if meaningful(mask["udp"]) {
-		if meaningful(transport["seed"]) || meaningful(transport["header"]) && transport["header"] != "none" {
-			return nil, fmt.Errorf("mKCP seed/header cannot be combined with explicit UDP masks")
+		if seed != "" || headerType != "" && headerType != "none" {
+			return nil, nil, fmt.Errorf("mKCP seed/header cannot be combined with explicit UDP masks")
 		}
-		transport["final_mask"] = mask
-	} else if _, seed := options["seed"]; seed || options["header"] != nil {
-		transport["legacy"] = true
+		nativeMask = mask
+	} else if _, hasSeed := options["seed"]; hasSeed || options["header"] != nil {
+		// Legacy mKCP always has the checksum/encryption layer, even with an
+		// empty seed. The header wraps that layer on the wire and comes last.
+		udp := []any{map[string]any{"type": "mkcp-legacy", "settings": map[string]any{"value": seed}}}
+		if headerType != "" && headerType != "none" {
+			udp = append(udp, map[string]any{"type": "mkcp-legacy", "settings": map[string]any{"header": headerType}})
+		}
+		nativeMask = map[string]any{"udp": udp}
 	}
 	delete(stream, "finalmask")
 	delete(stream, "kcpSettings")
 	stream["network"] = "tcp"
-	return transport, nil
+	return transport, nativeMask, nil
 }

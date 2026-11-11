@@ -230,9 +230,9 @@
       "deletions": 0,
       "subsystem": "installation-ci",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A47: full YAML reviewed and parsed; push paths cover pin/capability/fetch changes, independent native AMD64/ARM64 jobs check exact source pins/checksums and execute version on matching host. ARM runner label already used by successful existing CI/release.",
+      "reviewed_sha256": "f255b207e4ca8895dca9ae432941fe8a69ce6f96abf04fffbf425c30b5990d4a"
     },
     {
       "path": ".github/workflows/hysteria-compat.yml",
@@ -483,9 +483,9 @@
       "deletions": 0,
       "subsystem": "installation-ci",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A47-A49: complete source/manual review; real pinned release rejection (missing http2legacy); verified stable AMD64/ARM64 archives by SHA256/source identity/tags/ELF, native AMD64 version; full internal/hiddify with HIDDIFY_CONFIG_CHECK_BINARY PASS 3.026s; fetcher 13 tests and CI tools 39 tests PASS; static lock verifier PASS without optional source checkout. Inbound legacy KCP masks explicitly unsupported by current external core, tracked R05; core Go1.27.3 tracked R04.",
+      "reviewed_sha256": "2f4c570defda8c808ddf5d2e7b4faea219cd614b0dccab03a8483e7123e5aa13"
     },
     {
       "path": "deploy/marketplace/hetzner/README.md",
@@ -12550,9 +12550,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A49: full file read, native core rejects unsupported inbound UDP masks explicitly, validates corrected outbound KCP mask chain. Removed unused test assignment reported by staticcheck; regression/native checks passed.",
+      "reviewed_sha256": "d03c91a70ee2019816c717ed19aa2ae66396f8a88a3125fa09358098e7d4cd30"
     },
     {
       "path": "internal/hiddify/config.go",
@@ -12605,9 +12605,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A47-A49: complete source/manual review; real pinned release rejection (missing http2legacy); verified stable AMD64/ARM64 archives by SHA256/source identity/tags/ELF, native AMD64 version; full internal/hiddify with HIDDIFY_CONFIG_CHECK_BINARY PASS 3.026s; fetcher 13 tests and CI tools 39 tests PASS; static lock verifier PASS without optional source checkout. Inbound legacy KCP masks explicitly unsupported by current external core, tracked R05; core Go1.27.3 tracked R04.",
+      "reviewed_sha256": "10c2db67c1072073ec8a664903a36641a9222bea5ab85ca4f4f566c366fff562"
     },
     {
       "path": "internal/hiddify/process.go",
@@ -12836,9 +12836,9 @@
       "deletions": 0,
       "subsystem": "core-runtime",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A47-A49: complete source/manual review; real pinned release rejection (missing http2legacy); verified stable AMD64/ARM64 archives by SHA256/source identity/tags/ELF, native AMD64 version; full internal/hiddify with HIDDIFY_CONFIG_CHECK_BINARY PASS 3.026s; fetcher 13 tests and CI tools 39 tests PASS; static lock verifier PASS without optional source checkout. Inbound legacy KCP masks explicitly unsupported by current external core, tracked R05; core Go1.27.3 tracked R04.",
+      "reviewed_sha256": "8ba9529285505ec940a0d4b341895d75216c8c864d736212ddc95fc30681428f"
     },
     {
       "path": "internal/hiddify/translate_test.go",
@@ -25541,9 +25541,9 @@
       "deletions": 0,
       "subsystem": "installation-ci",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A47-A49: complete source/manual review; real pinned release rejection (missing http2legacy); verified stable AMD64/ARM64 archives by SHA256/source identity/tags/ELF, native AMD64 version; full internal/hiddify with HIDDIFY_CONFIG_CHECK_BINARY PASS 3.026s; fetcher 13 tests and CI tools 39 tests PASS; static lock verifier PASS without optional source checkout. Inbound legacy KCP masks explicitly unsupported by current external core, tracked R05; core Go1.27.3 tracked R04.",
+      "reviewed_sha256": "1fceb5289a1ffbba0961ce01b69ef96c14f1ff04cf5ad6fe4603ce9eb0774dac"
     },
     {
       "path": "tools/build-speed-components.py",
@@ -25751,8 +25751,8 @@
       "subsystem": "installation-ci",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
-      "reviewed_sha256": "c1b480d460102d31e9bc4663544b7cc7280fe3f74f09d6dbc1aaa96f05316920"
+      "evidence": "A47-A49: complete source/manual review; real pinned release rejection (missing http2legacy); verified stable AMD64/ARM64 archives by SHA256/source identity/tags/ELF, native AMD64 version; full internal/hiddify with HIDDIFY_CONFIG_CHECK_BINARY PASS 3.026s; fetcher 13 tests and CI tools 39 tests PASS; static lock verifier PASS without optional source checkout. Inbound legacy KCP masks explicitly unsupported by current external core, tracked R05; core Go1.27.3 tracked R04.",
+      "reviewed_sha256": "6813092f73bf7d0df0716c7a06e9fac3821abaf22aa1b5170040ea5a981b1da8"
     },
     {
       "path": "tools/generate-native-import-options.py",
@@ -25927,8 +25927,8 @@
       "subsystem": "installation-ci",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Full source/test review. singbox/hiddify offline package tests pass with race detector; actual verified core passes config matrix (including VLESS/VMess/Trojan transports and TLS/TUN/XDrive validation); fetcher unit tests and real checksum/manifest-verified download pass. Live process test is separately blocked by environment netlink denial.",
-      "reviewed_sha256": "773fd2527e026f02f1e68209c6c1c39f7556f0028b154d82f198a0df170c0a35"
+      "evidence": "A47-A49: complete source/manual review; real pinned release rejection (missing http2legacy); verified stable AMD64/ARM64 archives by SHA256/source identity/tags/ELF, native AMD64 version; full internal/hiddify with HIDDIFY_CONFIG_CHECK_BINARY PASS 3.026s; fetcher 13 tests and CI tools 39 tests PASS; static lock verifier PASS without optional source checkout. Inbound legacy KCP masks explicitly unsupported by current external core, tracked R05; core Go1.27.3 tracked R04.",
+      "reviewed_sha256": "4ae9c233f6e333c7bf6afb17b58c7f99bb9b0fc97587dbbfb18fde7a6491ed48"
     },
     {
       "path": "tools/test_official_telemt.py",
@@ -25948,9 +25948,9 @@
       "deletions": 0,
       "subsystem": "installation-ci",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A47-A49: complete source/manual review; real pinned release rejection (missing http2legacy); verified stable AMD64/ARM64 archives by SHA256/source identity/tags/ELF, native AMD64 version; full internal/hiddify with HIDDIFY_CONFIG_CHECK_BINARY PASS 3.026s; fetcher 13 tests and CI tools 39 tests PASS; static lock verifier PASS without optional source checkout. Inbound legacy KCP masks explicitly unsupported by current external core, tracked R05; core Go1.27.3 tracked R04.",
+      "reviewed_sha256": "590d83c04bdd138b62788f93b957d5de1dee82f6513d458c018ffbfb581b1ab3"
     },
     {
       "path": "update.sh",

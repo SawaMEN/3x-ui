@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	TargetVersion    = "sawamen-4f1b5e6b9b2b-4fe303071f4f-mask1-ciphers1-net62-sec1-stream1"
-	TargetRevision   = "4f1b5e6b9b2b4898d68f79bd6513cf28b7dbcc09"
+	TargetVersion    = "sawamen-1f4926dd43b9-19f378cb93b5-mask1-ciphers1-net62-sec1-stream1"
+	TargetRevision   = "1f4926dd43b9a0c77f8170713ab170b5ddb891b1"
 	StatsQueryMethod = "/v2ray.core.app.stats.command.StatsService/QueryStats"
 )
 
@@ -73,15 +73,18 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 			return nil, err
 		}
 	}
-	var transport map[string]any
+	var transport, kcpMask map[string]any
 	network, _ := stream["network"].(string)
 	if strings.EqualFold(strings.TrimSpace(network), "kcp") {
 		if protocol != "vless" && protocol != "vmess" && protocol != "trojan" {
 			return nil, fmt.Errorf("%s: mKCP is unsupported for %s", label, protocol)
 		}
-		transport, err = translateKCP(stream)
+		transport, kcpMask, err = translateKCP(stream)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", label, err)
+		}
+		if inbound && kcpMask != nil {
+			return nil, fmt.Errorf("%s: the pinned core cannot preserve inbound mKCP UDP masks; legacy seed/header require UDP listener mask support", label)
 		}
 	}
 	if strings.EqualFold(strings.TrimSpace(network), "xhttp") {
@@ -155,6 +158,9 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	}
 	if mask != nil {
 		out["final_mask"] = mask
+	}
+	if kcpMask != nil {
+		out["final_mask"] = kcpMask
 	}
 	if err := applyReverseExtensions(out, reverseOptions, inbound); err != nil {
 		return nil, err

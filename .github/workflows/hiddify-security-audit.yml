@@ -1,6 +1,14 @@
 name: Pinned Hiddify core release integrity audit
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - deploy/hiddify/hiddify-core-target.json
+      - internal/hiddify/process.go
+      - tools/fetch-latest-kernel.py
+      - tools/test_fetch_latest_kernel.py
+      - .github/workflows/hiddify-security-audit.yml
   schedule:
     - cron: "41 3 * * 3"
   workflow_dispatch:
@@ -14,13 +22,22 @@ concurrency:
 
 jobs:
   audit:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
       - name: Verify pinned release metadata and source revisions
         env:
           GH_TOKEN: ${{ github.token }}
+          KERNEL_ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
           mapfile -t pins < <(python3 - <<'PY'
@@ -35,8 +52,8 @@ jobs:
           python3 -m unittest discover -s tools -p test_fetch_latest_kernel.py -v
           python3 tools/fetch-latest-kernel.py --tag "${pins[0]}" \
             --expected-core-sha "${pins[1]}" --expected-singbox-sha "${pins[2]}" \
-            --arch amd64 --output "$RUNNER_TEMP/core-security"
+            --arch "$KERNEL_ARCH" --output "$RUNNER_TEMP/core-security"
           (cd "$RUNNER_TEMP/core-security" && \
-            sha256sum -c hiddify-core-linux-amd64.sha256 && \
+            sha256sum -c "hiddify-core-linux-$KERNEL_ARCH.sha256" && \
             sha256sum -c libcronet.so.sha256)
-          "$RUNNER_TEMP/core-security/hiddify-core-linux-amd64" version
+          "$RUNNER_TEMP/core-security/hiddify-core-linux-$KERNEL_ARCH" version

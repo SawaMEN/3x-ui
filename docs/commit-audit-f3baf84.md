@@ -9,7 +9,7 @@
 1. Зафиксировать исходную точку и инвентаризировать изменения — выполнено.
 2. Проверить подсистемы, записать воспроизводимые дефекты — в работе.
 3. Исправить подтверждённые дефекты, добавить регрессионные сценарии — в работе.
-4. Запустить проверки, записать результаты и опубликовать исправления — группы A01–A46 исправлены; общий этап продолжается.
+4. Запустить проверки, записать результаты и опубликовать исправления — группы A01–A49 исправлены; общий этап продолжается.
 
 ## Подтверждённые проблемы первой проверки
 
@@ -315,3 +315,32 @@ Audit/host-order/calendar regression tests с -race — PASS (25,222 с), вес
 Повторный полный golangci-lint 2.15.0 завершился успешно: **0 issues**.
 Для дальнейших проверок использовать GOCACHE=/tmp/3x-ui-go1274-cache: старый
 /home/agent/.cache/go-build очищен после переполнения, новый кэш уже прогрет.
+
+## Продолжение: A47–A49, совместимость пакета ядра и mKCP
+
+| ID | Воспроизведённая проблема | Изменение панели |
+|---|---|---|
+| A47 | Закреплённый официальный архив не содержит обязательный http2legacy, хотя локальный lock уже требует его; scheduled audit упал | Закреплён проверенный текущий stable; согласованы source pins, dependency identities и runtime constants; добавлен push-аудит обеих архитектур |
+| A48 | Верные checksum/manifest не мешали принять бинарник без обязательных executable tags и заменить предыдущий файл | Реальные tags и Cronet linkage проверяются до публикации файлов, missing tags видны в диагностике |
+| A49 | Legacy mKCP сериализовался в неподдерживаемые поля transport.header/seed/legacy/final_mask | Исправлен outbound перевод в top-level UDP mask chain; unsupported inbound корректно отклоняется до запуска |
+
+Оба stable архива проверены по внешним и внутренним checksum, source identity,
+обязательным tags и ELF architecture. AMD64 version выполнен, ARM64 не исполнялся.
+Полный internal/hiddify с реальным config validator прошёл (3,026 с), дополнительная
+KCP matrix — 20 случаев (0,392 с). Fetcher tests — 13, tools/ci — 39, все прошли.
+Workflow YAML разобран; статический lock verifier и сборка всей панели прошли.
+Финальный lint и подробные fingerprint/условия воспроизведения — в RESUME.md.
+
+**Открытые ограничения внешнего ядра:** R04 (stable собран Go 1.27.3) и R05
+(UDP masks на inbound listener отсутствуют). Этот этап не пересобирает внешнее
+ядро и не обещает работающий входящий legacy mKCP. Outbound сохранён без потери seed/header.
+
+Сделано 3 исправления панели в этой группе, всего **49**. Полностью проверено
+**137 из 2364 файлов**, осталось **2227**. Общий аудит не завершён.
+
+Финальный golangci-lint 2.15.0: **0 issues**. Аудит release matrix использует
+native runners ubuntu-24.04 и ubuntu-24.04-arm, чтобы в CI проверять executable
+version и tags на обеих архитектурах. Локальный ARM64 запуск не засчитывается.
+Схема mKCP сверена с owner source 19f378cb93b5:
+- https://github.com/SawaMEN/hiddify-sing-box/blob/19f378cb93b58a5ac0d0b70183e1b0e92d9553c9/option/h_v2ray_kcp.go
+- https://github.com/SawaMEN/hiddify-sing-box/blob/19f378cb93b58a5ac0d0b70183e1b0e92d9553c9/hiddify/finalmask/xray_conf.go
