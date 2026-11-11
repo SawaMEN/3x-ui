@@ -41,10 +41,13 @@ export default function LocalCertificateAssistant({
   const local = nodeId == null || nodeId === 0;
   const certificate = nodeCertificateForSni(sites, sni, nodeId);
   const normalized = sni.trim().toLowerCase().replace(/\.$/, '');
-  const mainCertificate = sites.find((site) =>
-    site.name.trim().toLowerCase().replace(/\.$/, '') === normalized &&
-    site.source !== 'remote' && site.source !== 'distributed' &&
-    !!site.certFile && !!site.keyFile,
+  const mainCertificate = sites.find(
+    (site) =>
+      site.name.trim().toLowerCase().replace(/\.$/, '') === normalized &&
+      site.source !== 'remote' &&
+      site.source !== 'distributed' &&
+      !!site.certFile &&
+      !!site.keyFile,
   );
   const validSni =
     !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) &&
@@ -82,10 +85,12 @@ export default function LocalCertificateAssistant({
     const currentCert = String(getValues(certField) || '');
     const currentKey = String(getValues(keyField) || '');
     if (!mayReplaceCertificatePair(currentCert, currentKey, sites, nodeId)) {
-      setError(t(
-        'Уже заданы пользовательские файлы сертификата. Очистите их перед передачей.',
-        'Custom certificate paths are already set. Clear them before transferring.',
-      ));
+      setError(
+        t(
+          'Уже заданы пользовательские файлы сертификата. Очистите их перед передачей.',
+          'Custom certificate paths are already set. Clear them before transferring.',
+        ),
+      );
       return;
     }
     if (certField.startsWith('streamSettings.')) {
@@ -95,10 +100,12 @@ export default function LocalCertificateAssistant({
         [key: string]: unknown;
       }>;
       if (rows[0]?.certificate?.length || rows[0]?.key?.length) {
-        setError(t(
-          'В форме есть встроенный PEM-сертификат. Удалите его перед передачей.',
-          'An embedded PEM certificate is configured. Remove it before transferring.',
-        ));
+        setError(
+          t(
+            'В форме есть встроенный PEM-сертификат. Удалите его перед передачей.',
+            'An embedded PEM certificate is configured. Remove it before transferring.',
+          ),
+        );
         return;
       }
     }
@@ -111,19 +118,30 @@ export default function LocalCertificateAssistant({
       );
       if (!response?.success) throw new Error(response?.msg || 'Certificate transfer failed');
       const result = response.obj as {
-        domain: string; certFile: string; keyFile: string; expiresAt: number;
+        domain: string;
+        certFile: string;
+        keyFile: string;
+        expiresAt: number;
       };
       if (result.domain !== normalized || !result.certFile || !result.keyFile) {
         throw new Error('Incomplete certificate installation response');
       }
       const opts = { shouldDirty: true, shouldValidate: true, shouldTouch: true };
       if (certField.startsWith('streamSettings.')) {
-        const rows = (getValues('streamSettings.tlsSettings.certificates') || []) as Array<Record<string, unknown>>;
+        const rows = (getValues('streamSettings.tlsSettings.certificates') || []) as Array<
+          Record<string, unknown>
+        >;
         const row = {
           ...(rows[0] || {}),
-          useFile: true, certificateFile: result.certFile, keyFile: result.keyFile,
-          certificate: [], key: [], ocspStapling: 0, oneTimeLoading: false,
-          usage: 'encipherment', buildChain: false,
+          useFile: true,
+          certificateFile: result.certFile,
+          keyFile: result.keyFile,
+          certificate: [],
+          key: [],
+          ocspStapling: 0,
+          oneTimeLoading: false,
+          usage: 'encipherment',
+          buildChain: false,
         };
         setValue('streamSettings.tlsSettings.certificates', [row, ...rows.slice(1)], opts);
       } else {
@@ -131,10 +149,12 @@ export default function LocalCertificateAssistant({
         setValue(keyField, result.keyFile, opts);
         if (autoTLSField) setValue(autoTLSField, false, opts);
       }
-      setTransferred(t(
-        'Сертификат установлен на выбранной ноде. Сохраните подключение.',
-        'Certificate installed on the selected node. Save the inbound.',
-      ));
+      setTransferred(
+        t(
+          'Сертификат установлен на выбранной ноде. Сохраните подключение.',
+          'Certificate installed on the selected node. Save the inbound.',
+        ),
+      );
     } catch (e) {
       setError(String(e));
     } finally {
