@@ -4,7 +4,8 @@ import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
-import { canUseManagedSniCertificate } from '../security/local-certificate';
+import { canUseManagedSniCertificate, mayReplaceCertificatePair } from '../security/local-certificate';
+import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import {
   VETROFF_TRANSPORTS,
@@ -17,6 +18,7 @@ export function VetroffFields() {
   const { t } = useTranslation();
   const { control, getValues, setValue } = useFormContext();
   const options = useWatch({ control, name: prefix });
+  const { data: managedDomains = [] } = useManagedSniDomains();
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
   const nodes = useFieldArray({ control, name: `${prefix}.nodes` });
   const policies = useFieldArray({ control, name: `${prefix}.userPolicies` });
@@ -101,7 +103,15 @@ export function VetroffFields() {
         <SniSearchInput
           placeholder={label('automatic')}
           onPickManagedDomain={(domain: ManagedSniDomain) => {
-            if (canUseManagedSniCertificate(domain, nodeId)) {
+            if (
+              canUseManagedSniCertificate(domain, nodeId) &&
+              mayReplaceCertificatePair(
+                String(getValues('settings.certificate') || ''),
+                String(getValues('settings.privateKey') || ''),
+                managedDomains,
+                nodeId,
+              )
+            ) {
               setValue(`${prefix}.autoTLS`, false, { shouldDirty: true });
               setValue('settings.certificate', domain.certFile, { shouldDirty: true });
               setValue('settings.privateKey', domain.keyFile, { shouldDirty: true });
@@ -109,16 +119,37 @@ export function VetroffFields() {
           }}
         />
       </FormField>
-      {!options?.autoTLS && (
-        <>
-          <FormField name="settings.certificate" label={t('pages.inbounds.form.trusttunnelCert')}>
-            <Input placeholder="/etc/ssl/vetroff/fullchain.pem" />
-          </FormField>
-          <FormField name="settings.privateKey" label={t('pages.inbounds.form.trusttunnelKey')}>
-            <Input placeholder="/etc/ssl/vetroff/privkey.pem" />
-          </FormField>
-        </>
-      )}
+      <Alert
+        type="info"
+        showIcon
+        description={
+          options?.autoTLS
+            ? t('pages.inbounds.form.vetroffManualTLSHint', {
+                defaultValue: 'To use certificate files, enter their paths below. This disables automatic TLS.',
+              })
+            : t('pages.inbounds.form.vetroffManualTLSActive', {
+                defaultValue: 'TLS certificate and private key paths are editable. Leave both empty to use automatic TLS.',
+              })
+        }
+      />
+      <FormField
+        name="settings.certificate"
+        label={t('pages.inbounds.form.trusttunnelCert')}
+        onAfterChange={(value) => {
+          if (value) setValue(`${prefix}.autoTLS`, false, { shouldDirty: true });
+        }}
+      >
+        <Input placeholder="/etc/ssl/vetroff/fullchain.pem" />
+      </FormField>
+      <FormField
+        name="settings.privateKey"
+        label={t('pages.inbounds.form.trusttunnelKey')}
+        onAfterChange={(value) => {
+          if (value) setValue(`${prefix}.autoTLS`, false, { shouldDirty: true });
+        }}
+      >
+        <Input placeholder="/etc/ssl/vetroff/privkey.pem" />
+      </FormField>
       <Collapse
         ghost
         items={[
