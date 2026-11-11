@@ -50,6 +50,10 @@ func isInternalUIAPI(path string) bool {
 		path == "/panel/api/domains/recommend" ||
 		path == "/panel/api/domains/preflight" ||
 		path == "/panel/api/domains/certificates/renew" ||
+		// TLS key material distribution is an internal admin-to-node operation,
+		// not a supported public API contract.
+		path == "/panel/api/domains/certificates/distribute" ||
+		path == "/panel/api/domains/certificates/install" ||
 		path == "/panel/api/domains/certificates" ||
 		// Certificate event history, scoped DNS credential administration and
 		// ephemeral HTTP-01 proof are panel-only, not stable public APIs.
