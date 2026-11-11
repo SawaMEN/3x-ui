@@ -142,6 +142,80 @@ func managerMainCertificateConfig(cfg domainfront.DomainFrontConfig, domain, ema
 	return cfg, nil
 }
 
+// ManagerLocalCertificateInput requests local DNS-01 issuance for an owned
+// hostname, including an SNI whose public website lives on another node.
+type ManagerLocalCertificateInput struct {
+	Domain      string `json:"domain"`
+	Email       string `json:"email"`
+	AcceptTerms bool   `json:"acceptTerms"`
+}
+
+type ManagerLocalCertificateResult struct {
+	Domain    string `json:"domain"`
+	State     string `json:"state"`
+	CertFile  string `json:"certFile,omitempty"`
+	KeyFile   string `json:"keyFile,omitempty"`
+	ExpiresAt int64  `json:"expiresAt,omitempty"`
+}
+
+func (s *ManagerService) ProvisionLocalCertificate(ctx context.Context, owner int, req ManagerLocalCertificateInput) (ManagerLocalCertificateResult, error) {
+	result := ManagerLocalCertificateResult{}
+	if owner < 1 || !req.AcceptTerms {
+		return result, fmt.Errorf("administrator and explicit Let's Encrypt consent required")
+	}
+	input := strings.TrimSpace(req.Domain)
+	if input == "" || strings.ContainsAny(input, "/:@?#\\\\") {
+		return result, fmt.Errorf("enter a DNS hostname, not a URL")
+	}
+	name, err := managerDomain(input)
+	if err != nil {
+		return result, err
+	}
+	result.Domain = name
+	email := strings.TrimSpace(req.Email)
+	contact, err := mail.ParseAddress(email)
+	if err != nil || contact.Address != email || len(email) > 254 {
+		return result, fmt.Errorf("a valid ACME contact email is required")
+	}
+	managerCoverSiteMu.Lock()
+	defer managerCoverSiteMu.Unlock()
+	// A valid local pair is reusable. Remote certificate paths are never used.
+	known, err := ManagedSNIDomains(ctx, false)
+	if err != nil {
+		return result, err
+	}
+	for _, item := range known {
+		if item.Name == name && item.CertFile != "" && item.KeyFile != "" {
+			result.State, result.CertFile, result.KeyFile, result.ExpiresAt = "valid", item.CertFile, item.KeyFile, item.ExpiresAt
+			return result, nil
+		}
+	}
+	current, err := DomainFrontStatus()
+	if err != nil {
+		return result, err
+	}
+	cfg, err := managerMainCertificateConfig(current.Config, name, email)
+	if err != nil {
+		return result, err
+	}
+	credential, err := DomainDNSCredentialStateFor(cfg.DNS01Provider)
+	if err != nil || !credential.Configured {
+		return result, fmt.Errorf("main node DNS-01 credentials are not configured")
+	}
+	updated, err := ApplyDomainFront(ctx, cfg)
+	if err != nil {
+		return result, err
+	}
+	result.State = "pending"
+	for _, item := range updated.Certificates {
+		if item.Name == name {
+			result.State, result.CertFile, result.KeyFile, result.ExpiresAt = item.State, item.CertFile, item.KeyFile, item.ExpiresAt
+			break
+		}
+	}
+	return result, nil
+}
+
 // ProvisionCoverSite is opt-in only. If a node runs a conflicting HTTPS
 // listener or DNS is not delegated, the existing Domain Front operation fails
 // safely with its built-in rollback; the panel never fabricates a certificate.

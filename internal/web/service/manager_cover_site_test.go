@@ -70,6 +70,17 @@ func TestManagerCoverSiteConfigRefusesUnsafeOrConflictingDomain(t *testing.T) {
 	}
 }
 
+func TestManagerMainCertificateRejectsPublicSiteOverwrite(t *testing.T) {
+	cfg := domainfront.DefaultConfig()
+	cfg.DNS01Provider, cfg.DNS01Zone, cfg.DNS01ZoneID = "cloudflare", "example.org", "0123456789abcdef0123456789abcdef"
+	cfg.Domains = []domainfront.DomainFrontDomain{{
+		Name: "cover.example.org", Mode: "sni_only", TLS: "certmagic", Enabled: true,
+	}}
+	if _, err := managerMainCertificateConfig(cfg, "cover.example.org", "admin@example.org"); err == nil {
+		t.Fatal("certificate-only issuance overwrote an existing public website")
+	}
+}
+
 func TestManagerMainCertificateConfig(t *testing.T) {
 	cfg := domainfront.DefaultConfig()
 	cfg.DNS01Provider, cfg.DNS01Zone, cfg.DNS01ZoneID = "cloudflare", "example.org", "0123456789abcdef0123456789abcdef"
