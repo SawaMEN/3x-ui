@@ -84,21 +84,33 @@ func TestManagerMainCertificateRejectsPublicSiteOverwrite(t *testing.T) {
 func TestManagerMainCertificateConfig(t *testing.T) {
 	cfg := domainfront.DefaultConfig()
 	cfg.DNS01Provider, cfg.DNS01Zone, cfg.DNS01ZoneID = "cloudflare", "example.org", "0123456789abcdef0123456789abcdef"
-	cfg.Domains = []domainfront.DomainFrontDomain{{Name:"remote.example.org", Mode:"shared_sni", TLS:"auto", Enabled:true}}
+	cfg.Domains = []domainfront.DomainFrontDomain{{Name: "remote.example.org", Mode: "shared_sni", TLS: "auto", Enabled: true}}
 	out, err := managerMainCertificateConfig(cfg, "remote.example.org", "owner@example.org")
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !out.Enabled || !out.AcceptTerms || len(out.Domains) != 1 || out.Domains[0].Mode != "cert_only" || out.Domains[0].TLS != "certmagic" {
 		t.Fatalf("certificate-only plan invalid: %+v", out)
 	}
-	if len(cfg.Domains) != 1 || cfg.Domains[0].Mode != "shared_sni" { t.Fatal("original config mutated") }
-	if err := out.Validate(); err != nil { t.Fatalf("DNS-01 certificate-only config invalid: %v", err) }
+	if len(cfg.Domains) != 1 || cfg.Domains[0].Mode != "shared_sni" {
+		t.Fatal("original config mutated")
+	}
+	if err := out.Validate(); err != nil {
+		t.Fatalf("DNS-01 certificate-only config invalid: %v", err)
+	}
 	out2, err := managerMainCertificateConfig(out, "remote.example.org", "owner@example.org")
-	if err != nil || len(out2.Domains) != 1 { t.Fatalf("duplicate cert-only domain: %+v, %v", out2, err) }
+	if err != nil || len(out2.Domains) != 1 {
+		t.Fatalf("duplicate cert-only domain: %+v, %v", out2, err)
+	}
 	for _, bad := range []string{"other.example.net", "evil-example.org"} {
-		if _, err := managerMainCertificateConfig(cfg, bad, "owner@example.org"); err == nil { t.Errorf("accepted foreign zone %s", bad) }
+		if _, err := managerMainCertificateConfig(cfg, bad, "owner@example.org"); err == nil {
+			t.Errorf("accepted foreign zone %s", bad)
+		}
 	}
 	cfg.DNS01Provider = ""
-	if _, err := managerMainCertificateConfig(cfg, "remote.example.org", "owner@example.org"); err == nil { t.Fatal("accepted missing DNS-01") }
+	if _, err := managerMainCertificateConfig(cfg, "remote.example.org", "owner@example.org"); err == nil {
+		t.Fatal("accepted missing DNS-01")
+	}
 }
 
 func TestManagerCoverSiteConfigRetainsPreexistingManagedWebsite(t *testing.T) {
