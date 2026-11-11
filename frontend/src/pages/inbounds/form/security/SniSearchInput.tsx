@@ -12,6 +12,7 @@ import type { RealityScanResult } from '@/generated/types';
 import RealityTargetScannerModal, { scannedServerName } from './RealityTargetScannerModal';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import LocalCertificateAssistant from './LocalCertificateAssistant';
+import { nodeCertificateForSni } from './local-certificate';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import type { SniScanPurpose } from './RealityTargetScannerModal';
 
@@ -90,7 +91,7 @@ export default function SniSearchInput({
               if (!domain) return;
               onChange?.(domain.name);
               onPickManagedDomain?.(domain);
-              if (domain.source === 'remote' && domain.nodeId !== nodeId && purpose === 'tls') {
+              if (domain.source === 'remote' && domain.nodeId !== nodeId && purpose === 'tls' && !nodeCertificateForSni(managedDomains, domain.name, nodeId)) {
                 messageApi.info(t('pages.settings.domains.remoteSNITLSWarning'));
               }
             }}

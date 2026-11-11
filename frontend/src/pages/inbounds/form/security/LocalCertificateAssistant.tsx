@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { Alert, Button, Checkbox, Input, Modal, Space, Typography } from 'antd';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
@@ -13,6 +14,8 @@ type IssueResult = { domain: string; state: string; certFile?: string; keyFile?:
 
 export default function LocalCertificateAssistant({ sni, disabled }: { sni: string; disabled?: boolean }) {
   const { control, getValues, setValue } = useFormContext();
+  const { i18n } = useTranslation();
+  const t = (ru: string, en: string) => i18n.language.startsWith('ru') ? ru : en;
   const protocol = String(useWatch({ control, name: 'protocol' }) || '');
   const security = String(useWatch({ control, name: 'streamSettings.security' }) || '');
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
@@ -27,7 +30,7 @@ export default function LocalCertificateAssistant({ sni, disabled }: { sni: stri
   const local = nodeId == null || nodeId === 0;
   const certificate = nodeCertificateForSni(sites, sni, nodeId);
   const normalized = sni.trim().toLowerCase().replace(/\.$/, '');
-  const validSni = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(normalized);
+  const validSni = !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) && /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(normalized);
 
   // Reuse only a verified certificate on the same machine. Preserve manual paths.
   // Xray stream TLS is managed by TlsForm's useFieldArray and its own callback.
@@ -76,18 +79,18 @@ export default function LocalCertificateAssistant({ sni, disabled }: { sni: stri
       ) : (
         <Space wrap>
           <Typography.Text type="warning" style={{ fontSize: 12 }}>
-            Нет действующего сертификата для {normalized} на основной ноде.
+            {t('Нет действующего сертификата на основной ноде:', 'No valid certificate on the main node:')} {normalized}
           </Typography.Text>
-          <Button size="small" onClick={() => setOpen(true)}>Выпустить сертификат (DNS-01)</Button>
-          {pending && <Button size="small" onClick={() => void refetch()}>Проверить выпуск ({pending})</Button>}
+          <Button size="small" onClick={() => setOpen(true)}>{t('Выпустить сертификат (DNS-01)', 'Issue certificate (DNS-01)')}</Button>
+          {pending && <Button size="small" onClick={() => void refetch()}>{t('Проверить выпуск', 'Check issuance')} ({pending})</Button>}
         </Space>
       )}
       <Modal
         open={open}
-        title="TLS-сертификат на основной ноде"
+        title={t('TLS-сертификат на основной ноде', 'TLS certificate on the main node')}
         onCancel={() => setOpen(false)}
         onOk={() => void issue()}
-        okText="Выпустить через DNS-01"
+        okText={t('Выпустить через DNS-01', 'Issue via DNS-01')}
         confirmLoading={issuing}
         okButtonProps={{ disabled: !email.trim() || !consent }}
       >
@@ -95,12 +98,12 @@ export default function LocalCertificateAssistant({ sni, disabled }: { sni: stri
           <Alert
             type="info"
             showIcon
-            description="Используется DNS-01 провайдер основной ноды. Файл сертификата и приватный ключ будут храниться локально, без копирования с другого сервера. DNS-01 нужно настроить в разделе «Домены и TLS»."
+            description={t('Используется DNS-01 основной ноды. Сертификат и ключ будут храниться локально. Настройте DNS-01 в разделе «Домены и TLS».', 'The certificate and key are issued and stored on the main node. Configure DNS-01 under Domains & TLS.')}
           />
           <Typography.Text>{normalized}</Typography.Text>
           <Input type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email для Let's Encrypt" />
           <Checkbox checked={consent} onChange={(e) => setConsent(e.target.checked)}>
-            Я владею доменом и принимаю условия Let’s Encrypt.
+            {t('Я владею доменом и принимаю условия Let’s Encrypt.', 'I control this domain and accept the Let’s Encrypt terms.')}
           </Checkbox>
           {error && <Alert showIcon type="error" title={error} />}
         </Space>
