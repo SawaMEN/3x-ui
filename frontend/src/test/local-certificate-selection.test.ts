@@ -51,7 +51,10 @@ describe('local TLS certificate binding', () => {
       cert: 'streamSettings.tlsSettings.certificates.0.certificateFile',
     });
     expect(localCertificateFields('vless', 'reality')).toBeNull();
-    expect(localCertificateFields('fptn', 'none')).toBeNull();
+    expect(localCertificateFields('fptn', 'none')).toMatchObject({
+      cert: 'settings.certificate',
+      key: 'settings.privateKey',
+    });
     expect(localCertificateFields('shadowtls', 'none')).toBeNull();
   });
   it('ignores expired local certificates and never applies remote paths on the main node', () => {
