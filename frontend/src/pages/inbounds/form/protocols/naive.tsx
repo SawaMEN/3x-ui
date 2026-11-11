@@ -21,10 +21,7 @@ export default function NaiveFields() {
       </FormField>
 
       {network === 'udp' && (
-        <FormField
-          name={['settings', 'quicCongestionControl']}
-          label="QUIC congestion control"
-        >
+        <FormField name={['settings', 'quicCongestionControl']} label="QUIC congestion control">
           <Select
             options={[
               { value: 'bbr', label: 'BBR' },
@@ -54,10 +51,16 @@ export default function NaiveFields() {
       <FormField name={['settings', 'tls', 'serverName']} label="SNI">
         <SniSearchInput placeholder="example.com" />
       </FormField>
-      <FormField name={['settings', 'tls', 'certificatePath']} label="TLS: путь к сертификату (fullchain.pem)">
+      <FormField
+        name={['settings', 'tls', 'certificatePath']}
+        label="TLS: путь к сертификату (fullchain.pem)"
+      >
         <Input placeholder="/etc/letsencrypt/live/example.com/fullchain.pem" />
       </FormField>
-      <FormField name={['settings', 'tls', 'keyPath']} label="TLS: путь к приватному ключу (privkey.pem)">
+      <FormField
+        name={['settings', 'tls', 'keyPath']}
+        label="TLS: путь к приватному ключу (privkey.pem)"
+      >
         <Input placeholder="/etc/letsencrypt/live/example.com/privkey.pem" />
       </FormField>
 

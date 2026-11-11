@@ -91,7 +91,12 @@ export default function SniSearchInput({
               if (!domain) return;
               onChange?.(domain.name);
               onPickManagedDomain?.(domain);
-              if (domain.source === 'remote' && domain.nodeId !== nodeId && purpose === 'tls' && !nodeCertificateForSni(managedDomains, domain.name, nodeId)) {
+              if (
+                domain.source === 'remote' &&
+                domain.nodeId !== nodeId &&
+                purpose === 'tls' &&
+                !nodeCertificateForSni(managedDomains, domain.name, nodeId)
+              ) {
                 messageApi.info(t('pages.settings.domains.remoteSNITLSWarning'));
               }
             }}

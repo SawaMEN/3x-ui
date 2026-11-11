@@ -23,9 +23,7 @@ import {
   mayReplaceCertificatePair,
   nodeCertificateForSni,
 } from '../security/local-certificate';
-import {
-  type ManagedSniDomain,
-} from '@/api/queries/useManagedSniDomains';
+import { type ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import { HttpUtil } from '@/utils';
 
 export default function TuicFields() {
@@ -94,7 +92,9 @@ export default function TuicFields() {
       applyManagedDomain(managed);
     } else {
       updateServerValue('sni', cleanSni);
-      messageApi.info('Сертификат для SNI не найден на этой ноде. Выпустите его через DNS-01 или укажите существующие пути.');
+      messageApi.info(
+        'Сертификат для SNI не найден на этой ноде. Выпустите его через DNS-01 или укажите существующие пути.',
+      );
     }
     // Keep the TLS certificate name and client SNI consistent.
     updateServerValue('congestion_control', 'bbr');

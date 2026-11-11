@@ -7,10 +7,7 @@ import {
   canUseManagedSniCertificate,
   mayReplaceCertificatePair,
 } from '../security/local-certificate';
-import {
-  useManagedSniDomains,
-  type ManagedSniDomain,
-} from '@/api/queries/useManagedSniDomains';
+import { useManagedSniDomains, type ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import { MasqueInboundSettingsSchema } from '@/schemas/protocols/inbound/masque';
 
 export default function MasqueFields() {

@@ -12,10 +12,16 @@ import {
 
 type IssueResult = { domain: string; state: string; certFile?: string; keyFile?: string };
 
-export default function LocalCertificateAssistant({ sni, disabled }: { sni: string; disabled?: boolean }) {
+export default function LocalCertificateAssistant({
+  sni,
+  disabled,
+}: {
+  sni: string;
+  disabled?: boolean;
+}) {
   const { control, getValues, setValue } = useFormContext();
   const { i18n } = useTranslation();
-  const t = (ru: string, en: string) => i18n.language.startsWith('ru') ? ru : en;
+  const t = (ru: string, en: string) => (i18n.language.startsWith('ru') ? ru : en);
   const protocol = String(useWatch({ control, name: 'protocol' }) || '');
   const security = String(useWatch({ control, name: 'streamSettings.security' }) || '');
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
@@ -33,12 +39,21 @@ export default function LocalCertificateAssistant({ sni, disabled }: { sni: stri
   const local = nodeId == null || nodeId === 0;
   const certificate = nodeCertificateForSni(sites, sni, nodeId);
   const normalized = sni.trim().toLowerCase().replace(/\.$/, '');
-  const validSni = !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) && /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(normalized);
+  const validSni =
+    !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) &&
+    /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(normalized);
 
   // Reuse only a verified certificate on the same machine. Preserve manual paths.
   // Xray stream TLS is managed by TlsForm's useFieldArray and its own callback.
   useEffect(() => {
-    if (!certField || !keyField || !certificate || !local || certField.startsWith('streamSettings.')) return;
+    if (
+      !certField ||
+      !keyField ||
+      !certificate ||
+      !local ||
+      certField.startsWith('streamSettings.')
+    )
+      return;
     const currentCert = String(getValues(certField) || '');
     const currentKey = String(getValues(keyField) || '');
     if (!mayReplaceCertificatePair(currentCert, currentKey, sites, nodeId)) return;
@@ -58,9 +73,15 @@ export default function LocalCertificateAssistant({ sni, disabled }: { sni: stri
     setIssuing(true);
     setError('');
     try {
-      const response = await HttpUtil.post('/panel/api/manager/domains/local-certificate', {
-        domain: normalized, email: email.trim(), acceptTerms: true,
-      }, { headers: { 'Content-Type': 'application/json' }, silent: true });
+      const response = await HttpUtil.post(
+        '/panel/api/manager/domains/local-certificate',
+        {
+          domain: normalized,
+          email: email.trim(),
+          acceptTerms: true,
+        },
+        { headers: { 'Content-Type': 'application/json' }, silent: true },
+      );
       if (!response?.success) throw new Error(response?.msg || 'Certificate issuance failed');
       const result = response.obj as IssueResult;
       setPending(result.state === 'valid' ? '' : result.state || 'pending');
@@ -82,10 +103,20 @@ export default function LocalCertificateAssistant({ sni, disabled }: { sni: stri
       ) : (
         <Space wrap>
           <Typography.Text type="warning" style={{ fontSize: 12 }}>
-            {t('Нет действующего сертификата на основной ноде:', 'No valid certificate on the main node:')} {normalized}
+            {t(
+              'Нет действующего сертификата на основной ноде:',
+              'No valid certificate on the main node:',
+            )}{' '}
+            {normalized}
           </Typography.Text>
-          <Button size="small" onClick={() => setOpen(true)}>{t('Выпустить сертификат (DNS-01)', 'Issue certificate (DNS-01)')}</Button>
-          {pending && <Button size="small" onClick={() => void refetch()}>{t('Проверить выпуск', 'Check issuance')} ({pending})</Button>}
+          <Button size="small" onClick={() => setOpen(true)}>
+            {t('Выпустить сертификат (DNS-01)', 'Issue certificate (DNS-01)')}
+          </Button>
+          {pending && (
+            <Button size="small" onClick={() => void refetch()}>
+              {t('Проверить выпуск', 'Check issuance')} ({pending})
+            </Button>
+          )}
         </Space>
       )}
       <Modal
@@ -101,12 +132,24 @@ export default function LocalCertificateAssistant({ sni, disabled }: { sni: stri
           <Alert
             type="info"
             showIcon
-            description={t('Используется DNS-01 основной ноды. Сертификат и ключ будут храниться локально. Настройте DNS-01 в разделе «Домены и TLS».', 'The certificate and key are issued and stored on the main node. Configure DNS-01 under Domains & TLS.')}
+            description={t(
+              'Используется DNS-01 основной ноды. Сертификат и ключ будут храниться локально. Настройте DNS-01 в разделе «Домены и TLS».',
+              'The certificate and key are issued and stored on the main node. Configure DNS-01 under Domains & TLS.',
+            )}
           />
           <Typography.Text>{normalized}</Typography.Text>
-          <Input type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email для Let's Encrypt" />
+          <Input
+            type="email"
+            maxLength={254}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email для Let's Encrypt"
+          />
           <Checkbox checked={consent} onChange={(e) => setConsent(e.target.checked)}>
-            {t('Я владею доменом и принимаю условия Let’s Encrypt.', 'I control this domain and accept the Let’s Encrypt terms.')}
+            {t(
+              'Я владею доменом и принимаю условия Let’s Encrypt.',
+              'I control this domain and accept the Let’s Encrypt terms.',
+            )}
           </Checkbox>
           {error && <Alert showIcon type="error" title={error} />}
         </Space>

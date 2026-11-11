@@ -8,10 +8,7 @@ import {
   canUseManagedSniCertificate,
   mayReplaceCertificatePair,
 } from '../security/local-certificate';
-import {
-  useManagedSniDomains,
-  type ManagedSniDomain,
-} from '@/api/queries/useManagedSniDomains';
+import { useManagedSniDomains, type ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import {
   VETROFF_TRANSPORTS,
   VetroffOptionsSchema,
