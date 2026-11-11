@@ -584,7 +584,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                         const setFile = (field: 'certFile' | 'keyFile', value: string) =>
                           setCertificateFilesByPair((prev) => ({
                             ...prev,
-                            [key]: { ...manual, [field]: value },
+                            [key]: { ...prev[key], [field]: value },
                           }));
                         return {
                           key,
@@ -597,19 +597,19 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                                   'File paths are validated during preflight on the selected node. Do not use paths from another host.',
                                 )}
                               </Typography.Text>
+                              <Typography.Text type="secondary">certFile</Typography.Text>
                               <Input
                                 aria-label={`${item.name} certificate path #${node.id}`}
                                 value={manual.certFile}
                                 onChange={(event) => setFile('certFile', event.target.value)}
                                 placeholder={matched?.certFile || t('Путь к fullchain.pem', 'Path to fullchain.pem')}
-                                addonBefore="certFile"
                               />
+                              <Typography.Text type="secondary">keyFile</Typography.Text>
                               <Input
                                 aria-label={`${item.name} private key path #${node.id}`}
                                 value={manual.keyFile}
                                 onChange={(event) => setFile('keyFile', event.target.value)}
                                 placeholder={matched?.keyFile || t('Путь к privkey.pem', 'Path to privkey.pem')}
-                                addonBefore="keyFile"
                               />
                             </Space>
                           ),
