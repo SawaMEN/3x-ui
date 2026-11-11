@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { Alert, Button, Checkbox, Input, Modal, Space, Typography } from 'antd';
@@ -11,6 +12,13 @@ import {
 } from './local-certificate';
 
 type IssueResult = { domain: string; state: string; certFile?: string; keyFile?: string };
+type ResolvedCertificate = {
+  domain: string;
+  certFile: string;
+  keyFile: string;
+  expiresAt: number;
+  nodeId?: number;
+};
 
 export default function LocalCertificateAssistant({
   sni,
@@ -20,6 +28,8 @@ export default function LocalCertificateAssistant({
   disabled?: boolean;
 }) {
   const { control, getValues, setValue } = useFormContext();
+  const queryClient = useQueryClient();
+  const lastAutomatic = useRef<ResolvedCertificate & { nodeId: number } | null>(null);
   const { i18n } = useTranslation();
   const t = (ru: string, en: string) => (i18n.language.startsWith('ru') ? ru : en);
   const protocol = String(useWatch({ control, name: 'protocol' }) || '');
@@ -39,7 +49,7 @@ export default function LocalCertificateAssistant({
   const keyField = fields?.key;
   const autoTLSField = fields?.autoTLS;
   const local = nodeId == null || nodeId === 0;
-  const certificate = nodeCertificateForSni(sites, sni, nodeId);
+  const localCertificate = nodeCertificateForSni(sites, sni, nodeId);
   const normalized = sni.trim().toLowerCase().replace(/\.$/, '');
   const mainCertificate = sites.find(
     (site) =>
@@ -53,28 +63,92 @@ export default function LocalCertificateAssistant({
     !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) &&
     /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(normalized);
 
-  // Reuse only a verified certificate on the same machine. Preserve manual paths.
-  // Xray stream TLS is managed by TlsForm's useFieldArray and its own callback.
+  // Remote inventory deliberately hides filesystem paths. Resolve only the
+  // currently selected (node, SNI), through a scoped master-to-node API.
+  const remoteLookup = useQuery({
+    queryKey: ['tls-node-certificate', nodeId ?? 0, normalized],
+    enabled: !local && !!fields && validSni && !disabled,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async (): Promise<ResolvedCertificate | null> => {
+      const response = await HttpUtil.post(
+        '/panel/api/domains/certificates/resolve',
+        { nodeId, domain: normalized },
+        { headers: { 'Content-Type': 'application/json' }, silent: true },
+      );
+      if (!response?.success) return null;
+      const found = response.obj as ResolvedCertificate;
+      if (
+        found?.domain !== normalized ||
+        found?.nodeId !== nodeId ||
+        !found.certFile ||
+        !found.keyFile
+      ) return null;
+      return found;
+    },
+  });
+  const certificate = local ? localCertificate : remoteLookup.data;
+  // Reuse only a verified certificate on the chosen machine. Never replace
+  // a manually entered pair; a pair filled by this assistant may rotate.
   useEffect(() => {
-    if (
-      !certField ||
-      !keyField ||
-      !certificate ||
-      !local ||
-      certField.startsWith('streamSettings.')
-    )
-      return;
-    const currentCert = String(getValues(certField) || '');
-    const currentKey = String(getValues(keyField) || '');
-    if (!mayReplaceCertificatePair(currentCert, currentKey, sites, nodeId)) return;
-    if (currentCert !== certificate.certFile) {
-      setValue(certField, certificate.certFile, { shouldDirty: true, shouldValidate: true });
+    if (!fields || !certField || !keyField || !certificate || !validSni || disabled) return;
+    if (certificate.domain && certificate.domain !== normalized) return;
+    const pair = { certFile: certificate.certFile, keyFile: certificate.keyFile };
+    if (!pair.certFile || !pair.keyFile) return;
+    const savedNode = nodeId ?? 0;
+    const previous = lastAutomatic.current;
+    const canReplace = (cert: string, key: string) =>
+      mayReplaceCertificatePair(cert, key, sites, nodeId) ||
+      (previous?.nodeId === savedNode && previous.certFile === cert && previous.keyFile === key);
+
+    const opts = { shouldDirty: true, shouldValidate: true };
+    if (certField.startsWith('streamSettings.')) {
+      // TlsForm handles locally discovered Xray pairs through its field array.
+      if (local) return;
+      const rows = (getValues('streamSettings.tlsSettings.certificates') || []) as Array<{
+        useFile?: boolean;
+        certificate?: string[];
+        key?: string[];
+        certificateFile?: string;
+        keyFile?: string;
+        [key: string]: unknown;
+      }>;
+      const first = rows[0];
+      if (first && !first.useFile && (first.certificate?.length || first.key?.length))
+        return;
+      if (!canReplace(first?.certificateFile || '', first?.keyFile || '')) return;
+      if (first?.certificateFile !== pair.certFile || first?.keyFile !== pair.keyFile) {
+        setValue(
+          'streamSettings.tlsSettings.certificates',
+          [
+            {
+              ...(first || {}),
+              useFile: true,
+              certificateFile: pair.certFile,
+              keyFile: pair.keyFile,
+              certificate: [],
+              key: [],
+              ocspStapling: first?.ocspStapling ?? 0,
+              oneTimeLoading: false,
+              usage: first?.usage ?? 'encipherment',
+              buildChain: first?.buildChain ?? false,
+            },
+            ...rows.slice(1),
+          ],
+          opts,
+        );
+      }
+    } else {
+      const currentCert = String(getValues(certField) || '');
+      const currentKey = String(getValues(keyField) || '');
+      if (!canReplace(currentCert, currentKey)) return;
+      if (currentCert !== pair.certFile) setValue(certField, pair.certFile, opts);
+      if (currentKey !== pair.keyFile) setValue(keyField, pair.keyFile, opts);
+      if (autoTLSField && getValues(autoTLSField) !== false)
+        setValue(autoTLSField, false, opts);
     }
-    if (currentKey !== certificate.keyFile) {
-      setValue(keyField, certificate.keyFile, { shouldDirty: true, shouldValidate: true });
-    }
-    if (autoTLSField) setValue(autoTLSField, false, { shouldDirty: true });
-  }, [autoTLSField, certField, certificate, getValues, keyField, local, nodeId, setValue, sites]);
+    lastAutomatic.current = { ...pair, domain: normalized, expiresAt: certificate.expiresAt || 0, nodeId: savedNode };
+  }, [autoTLSField, certField, certificate, disabled, fields, getValues, keyField, local, nodeId, normalized, setValue, sites, validSni]);
 
   if (!fields || !validSni || disabled) return null;
 
@@ -149,6 +223,10 @@ export default function LocalCertificateAssistant({
         setValue(keyField, result.keyFile, opts);
         if (autoTLSField) setValue(autoTLSField, false, opts);
       }
+      lastAutomatic.current = { ...result, nodeId };
+      await queryClient.invalidateQueries({
+        queryKey: ['tls-node-certificate', nodeId, normalized],
+      });
       setTransferred(
         t(
           'Сертификат установлен на выбранной ноде. Сохраните подключение.',
