@@ -170,14 +170,57 @@ operator based on the server scan alone.
 - When the site is hosted on a remote node, **Issue on main node** optionally
   registers a separate `cert_only` domain on the controlling panel.
   CertMagic uses the main node's Cloudflare/DigitalOcean DNS-01 credentials
-  to issue and renew its local certificate. No remote private key is exported
-  and no extra HTTP/HTTPS listener is opened on the main node.
+  to issue and renew its local certificate. Certificate issuance itself does
+  not export a key; the explicitly initiated distribution operation below
+  transfers a controlled domain's certificate and matching private key.
+  No extra HTTP/HTTPS listener is opened on the main node.
 - Configure the main panel's DNS-01 provider, zone and credential first.
   Issuance is asynchronous. Once the certificate is valid, its local
   `certFile` and `keyFile` are available in the certificate inventory and
   managed TLS/SNI listing. Paths remain node-local.
 - Partial success is reported: a remote site may be created even if issuing
   the certificate on the main node fails.
+
+## Transfer an owned TLS certificate from the main node to a node
+
+The inbound TLS editor offers **Transfer certificate from main node** when
+a direct remote node and an SNI with a currently valid, locally managed
+certificate are selected. This is an **explicit administrative action**.
+The server, not the browser, reads the full certificate chain and matching
+private key from the main node's known certificate registry.
+
+- `POST /panel/api/domains/certificates/distribute` accepts only
+  `{"nodeId": 123, "domain": "vpn.example.com"}` under an interactive
+  administrator session. It refuses disabled/transitive nodes and connections
+  using HTTP or `skip` TLS verification.
+- The controller posts the pair over the existing authenticated node channel
+  (system CA validation, certificate pinning or mTLS). The node-sync-only
+  `POST /panel/api/domains/certificates/install` requires the master-push
+  header, a matching key and SAN, valid dates and a chain trusted by the
+  node's system CA store. Its input has a strict size limit and supplies
+  **no destination path**.
+- The recipient stores immutable pair versions under the panel's private
+  `distributed-tls` folder, with private-key permissions `0600`, and
+  atomically swaps a stable `current` symlink. The response returns **only**
+  node-local certificate/key paths to populate the current inbound form.
+  It does not return the private key or change an existing inbound.
+- Installed certificates survive restarts and are included in the
+  recipient's locally validated SNI/certificate inventory. Ordinary remote
+  discovery remains metadata-only; it never exposes an arbitrary remote
+  private-key path. The specific installation response is an intentional,
+  scoped exception for the editor creating an inbound on that node.
+
+**Important:** this feature works only for domains whose certificate
+and private key are controlled by the main node. It cannot extract a
+third-party website's private key or clone that site's TLS identity.
+A REALITY camouflage target does not need certificate distribution.
+
+**Renewals:** the main node continues renewing its own certificate via its
+existing ACME manager, but this initial distribution endpoint is manual.
+After a renewal, run distribution again for each target node and reload/reapply
+affected TLS listeners as required by the core. Automatic enrollment and
+renewal fan-out with bounded retries are not implemented in this change.
+Do not treat successful initial installation as automatic renewal.
 
 ## Automatic SNI-to-certificate binding
 
