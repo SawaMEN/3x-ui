@@ -82,7 +82,7 @@ export function FptnFields() {
         <Switch />
       </FormField>
       <FormField name={['settings', 'allowedSni']} label="SNI">
-        <SniSearchInput placeholder="www.bing.com" />
+        <SniSearchInput placeholder="www.bing.com" showCertificateAssistant={false} />
       </FormField>
       <Collapse
         ghost
