@@ -43,13 +43,14 @@ func (r *Remote) InstallTLSCertificate(ctx context.Context, payload TLSCertifica
 
 type TLSCertificateLookup struct {
     Domain string `json:"domain"`
+    RSAOnly bool `json:"rsaOnly,omitempty"`
 }
 
 // ResolveLocalTLSCertificate asks the selected node to resolve its own files.
 // Only paths for its locally validated, public TLS identity are returned.
-func (r *Remote) ResolveLocalTLSCertificate(ctx context.Context, domain string) (InstalledTLSCertificate, error) {
+func (r *Remote) ResolveLocalTLSCertificate(ctx context.Context, domain string, rsaOnly bool) (InstalledTLSCertificate, error) {
     env, err := r.do(ctx, http.MethodPost, "panel/api/domains/certificates/resolve-local",
-        TLSCertificateLookup{Domain: domain})
+        TLSCertificateLookup{Domain: domain, RSAOnly: rsaOnly})
     if err != nil {
         return InstalledTLSCertificate{}, err
     }
