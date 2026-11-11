@@ -16631,9 +16631,9 @@
       "deletions": 53,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A53–A57: full-file review of API auth/scopes, login/CSRF responses, cookie/session helpers and API token creation/rotation. Reproduced scheme/principal/name/session-failure/no-store defects before fixes; offline sentinel HTTP, database failure injection, Unicode boundaries, scope matrix and middleware/session package regressions. Related session files read separately outside original diff.",
+      "reviewed_sha256": "76f1973fc63b924b6bb2f5ed31d8ccf18bb8000cb7cb670d81a649665d76e4c7"
     },
     {
       "path": "internal/web/controller/api_auth_test.go",
@@ -16642,9 +16642,9 @@
       "deletions": 27,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A53–A57: full-file review of API auth/scopes, login/CSRF responses, cookie/session helpers and API token creation/rotation. Reproduced scheme/principal/name/session-failure/no-store defects before fixes; offline sentinel HTTP, database failure injection, Unicode boundaries, scope matrix and middleware/session package regressions. Related session files read separately outside original diff.",
+      "reviewed_sha256": "18ae02a765bd5a2f9017ac2c48fabf381c193ac280988bf16e360b53b87bd8c0"
     },
     {
       "path": "internal/web/controller/api_background_test.go",
@@ -16939,9 +16939,9 @@
       "deletions": 3,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A53–A57: full-file review of API auth/scopes, login/CSRF responses, cookie/session helpers and API token creation/rotation. Reproduced scheme/principal/name/session-failure/no-store defects before fixes; offline sentinel HTTP, database failure injection, Unicode boundaries, scope matrix and middleware/session package regressions. Related session files read separately outside original diff.",
+      "reviewed_sha256": "26eee88799d17dc4ca84d21aff21a01b31928c74861eb67121fe36f5b1302bec"
     },
     {
       "path": "internal/web/controller/manager.go",
@@ -17280,9 +17280,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A53–A57: full-file review of API auth/scopes, login/CSRF responses, cookie/session helpers and API token creation/rotation. Reproduced scheme/principal/name/session-failure/no-store defects before fixes; offline sentinel HTTP, database failure injection, Unicode boundaries, scope matrix and middleware/session package regressions. Related session files read separately outside original diff.",
+      "reviewed_sha256": "d35a6c0bee38afcd1ba2882900f48193ed0ed2d051fb737b024d40a4f79abddb"
     },
     {
       "path": "internal/web/controller/standalone_core.go",
@@ -17918,9 +17918,9 @@
       "deletions": 4,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A53–A57: full-file review of API auth/scopes, login/CSRF responses, cookie/session helpers and API token creation/rotation. Reproduced scheme/principal/name/session-failure/no-store defects before fixes; offline sentinel HTTP, database failure injection, Unicode boundaries, scope matrix and middleware/session package regressions. Related session files read separately outside original diff.",
+      "reviewed_sha256": "ec6981a1e53e7c0b9f0db5b474b47ad434133d52d903f9a51c5a802939ed5a5e"
     },
     {
       "path": "internal/web/middleware/config_envelope_test.go",
@@ -17929,9 +17929,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A53–A57: full-file review of API auth/scopes, login/CSRF responses, cookie/session helpers and API token creation/rotation. Reproduced scheme/principal/name/session-failure/no-store defects before fixes; offline sentinel HTTP, database failure injection, Unicode boundaries, scope matrix and middleware/session package regressions. Related session files read separately outside original diff.",
+      "reviewed_sha256": "babbcec3abab924f9e815c69900fc14050329287259123a42ee5c4e4557f3191"
     },
     {
       "path": "internal/web/middleware/core_management_deadline.go",
@@ -18028,9 +18028,9 @@
       "deletions": 7,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A53–A57: full-file review of API auth/scopes, login/CSRF responses, cookie/session helpers and API token creation/rotation. Reproduced scheme/principal/name/session-failure/no-store defects before fixes; offline sentinel HTTP, database failure injection, Unicode boundaries, scope matrix and middleware/session package regressions. Related session files read separately outside original diff.",
+      "reviewed_sha256": "6c2d2b29eba37958eaaab3f1a05bd37fab26fcab92edbaeb88a33542c80a86d3"
     },
     {
       "path": "internal/web/middleware/security_test.go",
@@ -18039,9 +18039,9 @@
       "deletions": 4,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A53–A57: full-file review of API auth/scopes, login/CSRF responses, cookie/session helpers and API token creation/rotation. Reproduced scheme/principal/name/session-failure/no-store defects before fixes; offline sentinel HTTP, database failure injection, Unicode boundaries, scope matrix and middleware/session package regressions. Related session files read separately outside original diff.",
+      "reviewed_sha256": "45a82b1ae93d70f0d75026f018d2626027790c5d1b807429a1e3e629001b40b5"
     },
     {
       "path": "internal/web/middleware/sni_scan_deadline.go",
@@ -22340,9 +22340,9 @@
       "deletions": 23,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A53–A57: full-file review of API auth/scopes, login/CSRF responses, cookie/session helpers and API token creation/rotation. Reproduced scheme/principal/name/session-failure/no-store defects before fixes; offline sentinel HTTP, database failure injection, Unicode boundaries, scope matrix and middleware/session package regressions. Related session files read separately outside original diff.",
+      "reviewed_sha256": "684ee78eaed55ff2f62e8a384724df10911302502ea63b42bfe030560d2c07cc"
     },
     {
       "path": "internal/web/service/panel/api_token_scope_test.go",
@@ -22351,9 +22351,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A53–A57: full-file review of API auth/scopes, login/CSRF responses, cookie/session helpers and API token creation/rotation. Reproduced scheme/principal/name/session-failure/no-store defects before fixes; offline sentinel HTTP, database failure injection, Unicode boundaries, scope matrix and middleware/session package regressions. Related session files read separately outside original diff.",
+      "reviewed_sha256": "a17b91584554e62e4dafdc71e4f1ce95f99521476ceada0bdeab64d3260a917c"
     },
     {
       "path": "internal/web/service/panel/api_token_test.go",

@@ -112,6 +112,12 @@ func (a *IndexController) login(c *gin.Context) {
 		return
 	}
 
+	if err := session.SetLoginUser(c, user); err != nil {
+		logger.Warning("Unable to save session:", err)
+		pureJsonMsg(c, http.StatusServiceUnavailable, false, I18nWeb(c, "somethingWentWrong"))
+		return
+	}
+
 	defaultLoginLimiter.registerSuccess(remoteIP, form.Username)
 	logger.Infof("logged in successfully: username=%q, IP=%q", form.Username, remoteIP)
 	a.tgbot.UserLoginNotify(tgbot.LoginAttempt{
@@ -120,11 +126,6 @@ func (a *IndexController) login(c *gin.Context) {
 		Time:     timeStr,
 		Status:   tgbot.LoginSuccess,
 	})
-
-	if err := session.SetLoginUser(c, user); err != nil {
-		logger.Warning("Unable to save session:", err)
-		return
-	}
 
 	jsonMsg(c, I18nWeb(c, "pages.login.toasts.successLogin"), nil)
 }
@@ -151,6 +152,7 @@ func (a *IndexController) logout(c *gin.Context) {
 // csrfToken returns the session CSRF token. Public — the login page
 // needs a token before authenticating.
 func (a *IndexController) csrfToken(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
 	token, err := session.EnsureCSRFToken(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": err.Error()})

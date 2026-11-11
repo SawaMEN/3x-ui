@@ -43,16 +43,22 @@ func NewAPIController(g *gin.RouterGroup, settingService service.SettingService)
 }
 
 func (a *APIController) checkAPIAuth(c *gin.Context) {
-	setAuthenticated := func(scope string) {
-		if u, err := a.userService.GetFirstUser(); err == nil {
-			session.SetAPIAuthUser(c, u)
+	setAuthenticated := func(scope string) bool {
+		u, err := a.userService.GetFirstUser()
+		if err != nil || u == nil {
+			c.AbortWithStatus(http.StatusServiceUnavailable)
+			return false
 		}
+		session.SetAPIAuthUser(c, u)
 		c.Set("api_authed", true)
 		c.Set("api_token_scope", scope)
+		return true
 	}
 	matchedScope := ""
-	if after, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer "); ok {
-		if row, matched := a.apiTokenService.MatchToken(after); matched {
+	scheme, credential, _ := strings.Cut(strings.TrimSpace(c.GetHeader("Authorization")), " ")
+	isBearer := strings.EqualFold(scheme, "Bearer")
+	if isBearer {
+		if row, matched := a.apiTokenService.MatchToken(strings.TrimSpace(credential)); matched {
 			matchedScope = row.Scope
 		}
 	}
@@ -63,21 +69,22 @@ func (a *APIController) checkAPIAuth(c *gin.Context) {
 		if matchedScope == model.ApiScopeNodeAdmin {
 			scope = model.ApiScopeNodeAdmin
 		}
-		setAuthenticated(scope)
-		c.Next()
+		if setAuthenticated(scope) {
+			c.Next()
+		}
 		return
 	}
 	if matchedScope != "" {
-		setAuthenticated(matchedScope)
-		c.Next()
+		if setAuthenticated(matchedScope) {
+			c.Next()
+		}
 		return
 	}
 	if !session.IsLogin(c) {
 		// A presented Bearer token is not an anonymous scan: return 401 so
 		// callers can distinguish a bad/disabled token from a wrong base path
 		// (NoRoute still 404s). XHR keeps 401; bare unauthenticated stays 404.
-		authHdr := c.GetHeader("Authorization")
-		if strings.HasPrefix(authHdr, "Bearer ") || c.GetHeader("X-Requested-With") == "XMLHttpRequest" {
+		if isBearer || c.GetHeader("X-Requested-With") == "XMLHttpRequest" {
 			c.AbortWithStatus(http.StatusUnauthorized)
 		} else {
 			c.AbortWithStatus(http.StatusNotFound)

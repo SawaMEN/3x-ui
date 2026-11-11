@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 
@@ -84,7 +85,7 @@ func (s *ApiTokenService) Create(name, scope string, expiresAt int64) (*ApiToken
 	if name == "" {
 		return nil, common.NewError("token name is required")
 	}
-	if len(name) > 64 {
+	if utf8.RuneCountInString(name) > 64 {
 		return nil, common.NewError("token name must be 64 characters or fewer")
 	}
 	normScope, err := NormalizeScope(scope)
@@ -126,7 +127,7 @@ func (s *ApiTokenService) RecreateByName(name, scope string) (*ApiTokenView, err
 		return nil, common.NewError("token name is required")
 	}
 	// Same column, same limit as Create: the CLI now feeds this operator input.
-	if len(name) > 64 {
+	if utf8.RuneCountInString(name) > 64 {
 		return nil, common.NewError("token name must be 64 characters or fewer")
 	}
 	givenScope := ""
