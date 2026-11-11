@@ -65,7 +65,7 @@ func NewDomainController(g *gin.RouterGroup) {
 // coverSites exposes only names and built-in templates for editable owned
 // HTTPS cover sites. A remote node's private gateway config is never returned.
 func (a *DomainController) coverSites(c *gin.Context) {
-    if (!requireDomainAdminSession(c) { return }
+    if !requireDomainAdminSession(c) { return }
     c.Header("Cache-Control", "no-store")
     sites, err := service.ManagedCoverSites(c.Request.Context())
     jsonObj(c, sites, err)
@@ -74,7 +74,7 @@ func (a *DomainController) coverSites(c *gin.Context) {
 // resolveCertificate is a read-only, administrator-specific lookup for the
 // active inbound node. The browser receives local file paths, never PEM keys.
 func (a *DomainController) resolveCertificate(c *gin.Context) {
-    if (!requireDomainAdminSession(c) { return }
+    if !requireDomainAdminSession(c) { return }
     c.Header("Cache-Control", "no-store")
     c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
     var req struct {
