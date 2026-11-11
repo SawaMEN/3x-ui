@@ -800,6 +800,19 @@ export default function DomainFrontTab({
                       >
                         {label('edit')}
                       </Button>
+                      {d.mode === 'sni_only' && (
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={() =>
+                            openEditor(draft.domains.findIndex((item) => item.name === d.name))
+                          }
+                        >
+                          {i18n.language.startsWith('ru')
+                            ? 'Сменить сайт-заглушку'
+                            : 'Change cover site'}
+                        </Button>
+                      )}
                       <Dropdown
                         trigger={['click']}
                         menu={{
