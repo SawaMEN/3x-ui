@@ -38,6 +38,16 @@ func coverSiteSummariesFromConfig(nodeID int, cfg domainfront.DomainFrontConfig)
     return sites
 }
 
+// LocalManagedCoverSites exposes only the already enabled SNI-only domains on
+// this node. It never exposes the full Domain Front configuration.
+func LocalManagedCoverSites() ([]ManagedCoverSiteSummary, error) {
+    status, err := DomainFrontStatus()
+    if err != nil {
+        return nil, err
+    }
+    return coverSiteSummariesFromConfig(0, status.Config), nil
+}
+
 // ManagedCoverSites lists editable own websites on the main and direct nodes.
 // It is administrative UI metadata only, never a general remote API.
 func ManagedCoverSites(ctx context.Context) ([]ManagedCoverSiteSummary, error) {
