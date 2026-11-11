@@ -190,6 +190,7 @@ func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 		"/domains/sni":                                {http.MethodGet: {}},
 		"/domains/certificates":                       {http.MethodGet: {}},
 		"/domains/certificates/install":               {http.MethodPost: {}},
+		"/domains/certificates/resolve-local":         {http.MethodPost: {}},
 		"/domains/probe/http01":                       {http.MethodPost: {}},
 		"/inbounds/preflight":                         {http.MethodPost: {}},
 		"/server/sni/jobs":                            {http.MethodPost: {}},
