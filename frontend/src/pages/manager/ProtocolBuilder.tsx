@@ -54,6 +54,9 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
   const [replace, setReplace] = useState(true);
   const [allowUnconfiguredTLS, setAllowUnconfiguredTLS] = useState(false);
   const [tlsSniByNode, setTlsSniByNode] = useState<Record<number, string>>({});
+  const [certificateFilesByPair, setCertificateFilesByPair] = useState<
+    Record<string, { certFile: string; keyFile: string }>
+  >({});
   const [acmeEmail, setAcmeEmail] = useState('');
   const [acmeConsent, setAcmeConsent] = useState(false);
   const [issuingCertificates, setIssuingCertificates] = useState(false);
@@ -87,6 +90,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
         verifiedSniByNode,
         backupSniByNode,
         managedCertificates: certificates,
+        certificateFilesByPair,
         tlsSniByNode,
         allowUnconfiguredTLS,
       }),
@@ -100,6 +104,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       verifiedSniByNode,
       backupSniByNode,
       certificates,
+      certificateFilesByPair,
       tlsSniByNode,
       allowUnconfiguredTLS,
     ],
@@ -565,10 +570,57 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                     </div>
                   </div>
                 )}
+                {selected && selectedItems.some((item) => item.sniMode === 'tls') && (
+                  <Collapse
+                    size="small"
+                    style={{ width: '100%' }}
+                    items={selectedItems
+                      .filter((item) => item.sniMode === 'tls')
+                      .map((item) => {
+                        const key = `${item.id}|${node.id}`;
+                        const manual = certificateFilesByPair[key] || { certFile: '', keyFile: '' };
+                        const requestedSni = tlsSniByNode[node.id] ?? sniByPreset[item.id] ?? 'auto';
+                        const matched = managerTLSCertificateForSni(certificates, node.id, requestedSni);
+                        const setFile = (field: 'certFile' | 'keyFile', value: string) =>
+                          setCertificateFilesByPair((prev) => ({
+                            ...prev,
+                            [key]: { ...manual, [field]: value },
+                          }));
+                        return {
+                          key,
+                          label: item.name,
+                          children: (
+                            <Space orientation="vertical" style={{ width: '100%' }}>
+                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                {t(
+                                  'Пути проверяются на выбранной ноде при предварительной проверке. Не указывайте пути с другого сервера.',
+                                  'File paths are validated during preflight on the selected node. Do not use paths from another host.',
+                                )}
+                              </Typography.Text>
+                              <Input
+                                aria-label={`${item.name} certificate path #${node.id}`}
+                                value={manual.certFile}
+                                onChange={(event) => setFile('certFile', event.target.value)}
+                                placeholder={matched?.certFile || t('Путь к fullchain.pem', 'Path to fullchain.pem')}
+                                addonBefore="certFile"
+                              />
+                              <Input
+                                aria-label={`${item.name} private key path #${node.id}`}
+                                value={manual.keyFile}
+                                onChange={(event) => setFile('keyFile', event.target.value)}
+                                placeholder={matched?.keyFile || t('Путь к privkey.pem', 'Path to privkey.pem')}
+                                addonBefore="keyFile"
+                              />
+                            </Space>
+                          ),
+                        };
+                      })}
+                  />
+                )}
                 {selected && (
                   <Button
                     size="small"
-                    icon={<RadarChartOutlined />}
+                    icon={<RadarChartOutlined />
                     loading={scanning === node.id}
                     disabled={scanning !== null}
                     onClick={() => void scanNode(node.id)}

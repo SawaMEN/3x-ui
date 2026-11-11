@@ -66,6 +66,41 @@ function plan(
 }
 
 describe('manager per-node TLS certificates', () => {
+  it('accepts explicit node-local cert/key paths for each TLS protocol without borrowing from other nodes', () => {
+    const result = buildManagerRecipes({
+      presets: ['naive'],
+      nodeIds: [0, 7],
+      nodes: [{ ...nodes[0], protocolAvailability: { naive: { ready: true, supported: true, version: 'test', component: '', speedLimit: true } } }],
+      domains: [],
+      sniByPreset: { naive: 'vpn.example.org' },
+      targetByPreset: {},
+      verifiedSniByNode: {},
+      managedCertificates: [],
+      certificateFilesByPair: { 'naive|0': { certFile: '/main/fullchain.pem', keyFile: '/main/privkey.pem' } },
+    });
+    expect(result.entries).toHaveLength(1);
+    const settings = JSON.parse(result.entries[0].config!.settings);
+    expect(settings.tls.certificatePath).toBe('/main/fullchain.pem');
+    expect(result.skipped).toHaveLength(1);
+  });
+
+  it('refuses a half-filled explicit certificate override instead of deploying a broken pair', () => {
+    const result = buildManagerRecipes({
+      presets: ['vless-tcp-tls'],
+      nodeIds: [0],
+      nodes: [],
+      domains: [],
+      sniByPreset: { 'vless-tcp-tls': 'vpn.example.org' },
+      targetByPreset: {},
+      verifiedSniByNode: {},
+      managedCertificates: sites,
+      certificateFilesByPair: { 'vless-tcp-tls|0': { certFile: '/my/fullchain.pem', keyFile: '' } },
+      allowUnconfiguredTLS: true,
+    });
+    expect(result.entries).toHaveLength(0);
+    expect(result.skipped[0]).toContain('both TLS certificate and private key');
+  });
+
   it('normalizes case and trailing dots before matching an SNI certificate', () => {
     expect(managerCertificateName(' VPN.EXAMPLE.ORG. ')).toBe('vpn.example.org');
   });
