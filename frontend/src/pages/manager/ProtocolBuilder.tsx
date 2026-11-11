@@ -620,7 +620,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                 {selected && (
                   <Button
                     size="small"
-                    icon={<RadarChartOutlined />
+                    icon={<RadarChartOutlined />}
                     loading={scanning === node.id}
                     disabled={scanning !== null}
                     onClick={() => void scanNode(node.id)}
