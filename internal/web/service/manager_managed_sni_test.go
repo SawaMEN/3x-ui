@@ -18,14 +18,18 @@ func TestManagedSNIDomainsSameHostnameAcrossNodes(t *testing.T) {
 		{NodeID: 0, Name: "vpn.example.org", Source: "remote", CertFile: "/unowned.pem", KeyFile: "/unowned.key"},
 	}
 	got := mergeNodeManagedSNIDomains(panel, remote, seen)
-	if len(got) != 3 {
-		t.Fatalf("expected panel and 2 distinct node certificates, got %+v", got)
+	if len(got) != 4 {
+		t.Fatalf("expected panel and 3 distinct node summaries, got %+v", got)
 	}
 	if got[0].CertFile != "/panel/cert.pem" ||
-		got[1].NodeID != 7 || got[1].CertFile != "/node-7/cert.pem" ||
-		got[2].NodeID != 9 || got[2].CertFile != "/node-9/cert.pem" ||
+		got[1].NodeID != 7 || got[2].NodeID != 9 || got[3].NodeID != 10 ||
 		got[2].ExpiresAt != 2000000000 || got[2].Issuer != "Test CA" {
-		t.Fatalf("certificate paths were mixed, lost or duplicated: %+v", got)
+		t.Fatalf("certificate metadata was mixed, lost or duplicated: %+v", got)
+	}
+	for _, site := range got[1:] {
+		if site.CertFile != "" || site.KeyFile != "" {
+			t.Fatalf("node certificate paths escaped: %+v", site)
+		}
 	}
 	if !seen["vpn.example.org"] {
 		t.Fatal("manual domain fallback must not supersede an active certificate")
@@ -38,7 +42,9 @@ func TestManagedSNIDomainsRejectsInvalidRemoteCertificateReferences(t *testing.T
 		{NodeID: 3, Name: "127.0.0.1", Source: "remote", CertFile: "/a", KeyFile: "/b"},
 		{NodeID: 3, Name: "bad", Source: "remote", CertFile: "/a", KeyFile: "/b"},
 		{NodeID: 3, Name: "valid.example.org", Source: "local", CertFile: "/a", KeyFile: "/b"},
-		{NodeID: 3, Name: "valid.example.org", Source: "remote", CertFile: "/a", KeyFile: ""},
+		{NodeID: 3, Name: "invalid..example.org", Source: "remote"},
+		{NodeID: 3, Name: "invalid.example.org/path", Source: "remote"},
+		{NodeID: 3, Name: "-invalid.example.org", Source: "remote"},
 	}, seen)
 	if len(got) != 0 || len(seen) != 0 {
 		t.Fatalf("invalid remote certificate references were accepted: %+v", got)
@@ -78,7 +84,7 @@ func TestManagedSNIDomainsNormalizesRemoteHostnames(t *testing.T) {
 		{NodeID: 6, Name: "vpn.example.org", Source: "remote", CertFile: "/two.crt", KeyFile: "/two.key"},
 	}
 	got := mergeNodeManagedSNIDomains(nil, sites, seen)
-	if len(got) != 1 || got[0].Name != "vpn.example.org" || got[0].CertFile != "/one.crt" {
+	if len(got) != 1 || got[0].Name != "vpn.example.org" || got[0].CertFile != "" || got[0].KeyFile != "" {
 		t.Fatalf("case-variant remote hostname was duplicated: %+v", got)
 	}
 }

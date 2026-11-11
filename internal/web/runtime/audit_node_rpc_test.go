@@ -202,3 +202,30 @@ func TestAuditRemoteMutationForgetsOldTagAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditRemoteFullUpdateForgetsRenamedAdoptedTag(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeOKEnvelope(w)
+	}))
+	defer server.Close()
+	remote := remoteForTestServer(t, server)
+	old := &model.Inbound{Tag: "n1-managed", Protocol: model.VLESS, Settings: `{"clients":[]}`}
+	remote.AdoptInboundAlias(old, RemoteInboundOption{Id: 7, Tag: "deployed"})
+	next := *old
+	next.Settings = `{"clients":[{"email":"new"}]}`
+	if err := remote.UpdateInbound(context.Background(), old, &next); err != nil {
+		t.Fatal(err)
+	}
+	if aliases := remote.AdoptedInboundAliases(); len(aliases) != 0 {
+		t.Fatalf("full update renamed deployed tag but retained aliases: %v", aliases)
+	}
+	if _, found := remote.cacheGet("deployed"); found {
+		t.Fatal("full update retained previous deployed tag")
+	}
+	if id, found := remote.cacheGetTag(next.Tag); !found || id != 7 {
+		t.Fatal("full update lost central tag association")
+	}
+	if pushed, err := remote.ReconcileInbound(context.Background(), &next, true); err != nil || pushed {
+		t.Fatalf("updated payload must retain fingerprint skip: pushed=%v err=%v", pushed, err)
+	}
+}

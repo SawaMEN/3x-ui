@@ -112,6 +112,9 @@ var monitorScopeAllow = map[string]struct{}{
 
 // nodeSyncScopeAllow is the node-sync route/method allowlist relative to /panel/api; Gin patterns prevent concrete parameters broadening authority.
 var nodeSyncScopeAllow = map[string]map[string]struct{}{
+	"/domains/sni":                                {http.MethodGet: {}},
+	"/domains/certificates":                       {http.MethodGet: {}},
+	"/domains/probe/http01":                       {http.MethodPost: {}},
 	"/inbounds/preflight":                         {http.MethodPost: {}},
 	"/server/status":                              {http.MethodGet: {}},
 	"/inbounds/list":                              {http.MethodGet: {}},

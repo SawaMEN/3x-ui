@@ -559,7 +559,12 @@ func (r *Remote) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound)
 	if _, err := r.do(ctx, http.MethodPost, "panel/api/inbounds/update/"+strconv.Itoa(id), payload); err != nil {
 		return err
 	}
-	if oldIb.Tag != newIb.Tag {
+	r.mu.RLock()
+	adoptedTag, adopted := r.adoptedAliases[oldIb.Tag]
+	r.mu.RUnlock()
+	// A full push also renames an adopted node tag to the wire tag, even
+	// when the central tag itself has not changed.
+	if oldIb.Tag != newIb.Tag || (adopted && adoptedTag != payload.Get("tag")) {
 		r.forgetRemoteInbound(oldIb.Tag, id)
 	}
 	r.cacheSet(newIb.Tag, id)
@@ -900,7 +905,7 @@ func (r *Remote) ProbePublicHTTP01(ctx context.Context, name, token string) (Rem
 }
 
 func (r *Remote) ListCertificateSummaries(ctx context.Context) ([]RemoteCertificateSummary, error) {
-	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/certificates?local=1", nil)
+	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/certificates?local=1&summary=1", nil)
 	if err != nil {
 		return nil, err
 	}

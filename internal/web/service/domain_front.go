@@ -20,6 +20,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
@@ -136,11 +137,15 @@ func mergeNodeManagedSNIDomains(existing, incoming []ManagedSNIDomain, seenNames
 		}
 	}
 	for _, site := range incoming {
-		site.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(site.Name)), ".")
-		if site.Source != "remote" || site.NodeID <= 0 || site.CertFile == "" || site.KeyFile == "" ||
-			site.Name == "" || !strings.Contains(site.Name, ".") || net.ParseIP(site.Name) != nil {
+		name, err := netsafe.NormalizeHost(strings.ToLower(site.Name))
+		if err != nil || site.Source != "remote" || site.NodeID <= 0 ||
+			!strings.Contains(name, ".") || net.ParseIP(name) != nil {
 			continue
 		}
+		site.Name = name
+		// Discovery deliberately carries metadata only. Requiring node-local
+		// paths discards every summary; accepting old peers must not expose paths.
+		site.CertFile, site.KeyFile = "", ""
 		if seen[site.NodeID] == nil {
 			seen[site.NodeID] = make(map[string]bool)
 		}

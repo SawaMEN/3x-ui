@@ -15,6 +15,29 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
+// LocalDomainCertificateSummaries serves parent discovery without child fanout,
+// filesystem paths, diagnostics, or a needless host-firewall inspection.
+func LocalDomainCertificateSummaries() ([]runtime.RemoteCertificateSummary, error) {
+	inventory, err := localCertificateInventory()
+	if err != nil {
+		return nil, err
+	}
+	items := make([]runtime.RemoteCertificateSummary, 0, len(inventory.Items))
+	for _, cert := range inventory.Items {
+		name := cert.Name
+		if (name == "panel" || name == "subscription") && len(cert.Names) > 0 {
+			name = cert.Names[0]
+		}
+		items = append(items, runtime.RemoteCertificateSummary{
+			ID: cert.ID, Name: name, Names: cert.Names,
+			Manager: cert.Manager, Challenge: cert.Challenge, State: cert.State,
+			Issuer: cert.Issuer, ExpiresAt: cert.ExpiresAt, DaysLeft: cert.DaysLeft,
+			AutoRenew: cert.AutoRenew,
+		})
+	}
+	return items, nil
+}
+
 // nodeCertificateInventoryItem accepts metadata only. A node's paths and
 // arbitrary warnings never leave that node or become local filesystem inputs.
 func nodeCertificateInventoryItem(nodeID int, nodeName string, cert runtime.RemoteCertificateSummary) (CertificateInventoryItem, bool) {

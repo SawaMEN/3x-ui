@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 63 подтверждённых исправления панели; A60–A63 — текущая группа из 4 исправлений.
+Всего реализовано 66 подтверждённых исправлений панели; A64–A66 — текущая группа из 3 исправлений и дополнения A62.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 197 файлов, осталось 2167; общий проход не завершён.
+Проверено вручную 211 файлов, осталось 2153; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -548,3 +548,67 @@ R04/R05 внешнего core остаются открытыми.
 пока требует их; node-sync allowlist не включает discovery domains routes.
 Не расширять mutation scope: domain writes требуют interactive session.
 В API остаётся 82 pending, services/nodes/jobs 640, subscriptions 67.
+
+
+## Контрольная точка A64–A66: межузловое обнаружение и выбор SNI
+
+A60–A63 опубликованы в 563a1bd417dc58fffa9d24b7df4aca301f6f5062.
+Группа A64–A66: требуется 3 новых исправления, реализовано 3, осталось 0.
+Всего 66. Охват 211/2364 исходных файлов, осталось 2153.
+
+- A64: discoverNodeSNI намеренно удалял certificate/key paths, но merge требовал
+  оба пути и отбрасывал все remote summaries. Теперь merge принимает metadata
+  без путей, нормализует hostname общим валидатором, отвергает IP/invalid labels,
+  сохраняет (nodeID, hostname) и очищает пути, присланные устаревшим peer.
+  До правки реальный loopback discovery выдавал sites=1, merged=0.
+- A65: node-sync/node-admin/mTLS получали 403 на SNI/certificate discovery и
+  HTTP-01 observation. Добавлены ровно GET /domains/sni, GET /domains/certificates,
+  POST /domains/probe/http01. Для node scopes SNI/certificates всегда local-only
+  и metadata-only независимо от query flags. Отдельный local certificate summary
+  не обращается к firewall и не пересылает warnings, file paths или child nodes.
+  Generic panel/subscription labels заменяются DNS SAN для совместимости с
+  parent validation. Remote cert RPC явно просит summary=1. Monitor scope,
+  /domains/status и domain mutations не расширены; записи требуют interactive
+  admin session, включая запрос с полным admin bearer.
+- A66: SniSearchInput использовал hostname и как Select.value, и как find key.
+  При одинаковом SNI у нескольких владельцев клик по второму узлу возвращал
+  первую локальную запись. Идентификатор option теперь включает source, nodeID,
+  hostname; наружу по-прежнему передаётся чистый SNI и выбранная metadata record.
+  Реальный AntD component test воспроизвёл неправильного владельца до правки.
+
+Дополнен A62 без увеличения счётчика: full push adopted inbound меняет deployed
+wire tag и при неизменном central tag. Такой successful update тоже сбрасывает
+obsolete alias; новая регрессия сначала упала и после правки проверяет сохранение
+canonical mapping и reconcile skip. Финальный полный runtime -race PASS 8.518s.
+
+Проверки A64–A66:
+- targeted service discovery/metadata and related summaries: PASS 0.448s;
+- controller auth/scope + actual Remote-to-Gin RPC: PASS 2.791s;
+- scoped controller/service -race: PASS 14.597s / 6.032s;
+- финальный actual RPC controller -race: PASS 4.914s;
+- полный runtime после summary query: PASS 1.775s;
+- AntD ownership regression + managed-SNI ownership: 6/6 PASS;
+- SNI protocol forms + ownership + new selection regression: 43/43 PASS,
+  3 files, 50.43s. Использован временный component-only Vitest config с теми же
+  React/jsdom/setupFiles; Storybook browser project локально не загружался.
+  Это не полный frontend suite. Временный config удалён, тесты сохранены.
+- frontend tsc --noEmit: PASS; oxfmt/oxlint для changed files: PASS;
+- сборка всей панели: PASS;
+- финальный полный Go lint после дополнения A62: PASS, 0 issues;
+- diff --check/inventory check: PASS, 0 stale.
+
+14 новых исходных файлов отмечены reviewed; 3 изменённых review hashes обновлены.
+Большой frontend sni-search.test.tsx прочитан фрагментами и не засчитан.
+DomainFrontService целиком прочитан, но domain_front.go оставлен pending:
+R06 — проверить rollback при ошибке записи domainFrontConfig: oldBackend собирается
+без Certificates/ChallengeRoots и ошибка обратного Apply сейчас игнорируется.
+Нужен regression с локальным TLS existing-certificate и SQL failure; не считать
+это исправленным до воспроизведения. Отдельно не расширять remote domain writes
+ради Manager ProvisionCoverSite: они намеренно требуют interactive session.
+
+CI 563a1bd run 43062443040: все 26 jobs success, включая telemt-web-frontends
+130670344809, frontend, все race shards, PostgreSQL, native core/client-speed.
+Release 3X-UI и CodeQL тоже success. DNS blocker прежних запусков больше
+не воспроизводится на этой контрольной точке; новые изменения A64–A66 ещё
+должны пройти свой CI после публикации.
+R04/R05 внешнего ядра и запрет полного локального go test ./... сохраняются.

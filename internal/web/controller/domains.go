@@ -12,12 +12,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 type DomainController struct{}
+
+func nodeDomainDiscovery(c *gin.Context) bool {
+	scope := c.GetString("api_token_scope")
+	return c.GetBool("api_authed") && (scope == model.ApiScopeNodeSync || scope == model.ApiScopeNodeAdmin)
+}
 
 // Node-to-node bearer authentication is sufficient for read-only discovery,
 // but not for changing a gateway's DNS tokens, certificates, or listener config.
@@ -115,6 +121,12 @@ func (a *DomainController) certificateEvents(c *gin.Context) {
 }
 
 func (a *DomainController) certificates(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	if nodeDomainDiscovery(c) || c.Query("summary") == "1" {
+		items, err := service.LocalDomainCertificateSummaries()
+		jsonObj(c, gin.H{"items": items}, err)
+		return
+	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 	result, err := service.DomainCertificateInventoryScoped(ctx, c.Query("local") != "1")
@@ -125,8 +137,10 @@ func (a *DomainController) certificates(c *gin.Context) {
 // local and remotely managed inbounds. File paths belong to each site's
 // owning node and are not transferable between hosts.
 func (a *DomainController) sni(c *gin.Context) {
-	result, err := service.ManagedSNIDomains(c.Request.Context(), c.Query("local") != "1")
-	if c.Query("summary") == "1" {
+	c.Header("Cache-Control", "no-store")
+	nodeDiscovery := nodeDomainDiscovery(c)
+	result, err := service.ManagedSNIDomains(c.Request.Context(), !nodeDiscovery && c.Query("local") != "1")
+	if nodeDiscovery || c.Query("summary") == "1" {
 		// Node discovery never needs absolute paths. Keep private paths on
 		// the owning host even when its parent has a valid API token.
 		for i := range result {

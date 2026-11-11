@@ -312,9 +312,7 @@ func DomainCertificateInventory(ctx context.Context) (CertificateInventory, erro
 	return DomainCertificateInventoryScoped(ctx, true)
 }
 
-// DomainCertificateInventoryScoped disables child discovery when the request
-// came from an authenticated parent panel, preventing recursive fanout.
-func DomainCertificateInventoryScoped(ctx context.Context, includeNodes bool) (CertificateInventory, error) {
+func localCertificateInventory() (CertificateInventory, error) {
 	status, err := DomainFrontStatus()
 	if err != nil {
 		return CertificateInventory{}, err
@@ -323,7 +321,16 @@ func DomainCertificateInventoryScoped(ctx context.Context, includeNodes bool) (C
 	if telemt, readErr := readTelemtWebState(); readErr == nil && telemt.Enabled {
 		state = &telemt
 	}
-	inventory := CertificateInventory{Items: makeCertificateInventory(status, domainACMEStates(domainACMEHomes()), state)}
+	return CertificateInventory{Items: makeCertificateInventory(status, domainACMEStates(domainACMEHomes()), state)}, nil
+}
+
+// DomainCertificateInventoryScoped disables child discovery when the request
+// came from an authenticated parent panel, preventing recursive fanout.
+func DomainCertificateInventoryScoped(ctx context.Context, includeNodes bool) (CertificateInventory, error) {
+	inventory, err := localCertificateInventory()
+	if err != nil {
+		return CertificateInventory{}, err
+	}
 	if includeNodes {
 		inventory.Items = append(inventory.Items, readRemoteCertificateInventories(ctx)...)
 		if sites, sitesErr := ManagedSNIDomains(ctx, true); sitesErr == nil {

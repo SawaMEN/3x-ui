@@ -23,6 +23,10 @@ interface SniSearchInputProps extends Omit<InputProps, 'value' | 'onChange'> {
   onPickManagedDomain?: (domain: ManagedSniDomain) => void;
 }
 
+function managedDomainKey(domain: ManagedSniDomain): string {
+  return JSON.stringify([domain.source, domain.nodeId ?? null, domain.name]);
+}
+
 // String-valued control works with FormField and keeps protocol-specific SNI
 // handlers (e.g. TUIC certificate paths) identical for typing and picking.
 export default function SniSearchInput({
@@ -78,10 +82,10 @@ export default function SniSearchInput({
             showSearch={{ optionFilterProp: 'label' }}
             options={managedDomains.map((domain) => ({
               label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? domain.nodeName || t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
-              value: domain.name,
+              value: managedDomainKey(domain),
             }))}
-            onChange={(name) => {
-              const domain = managedDomains.find((item) => item.name === name);
+            onChange={(key) => {
+              const domain = managedDomains.find((item) => managedDomainKey(item) === key);
               if (!domain) return;
               onChange?.(domain.name);
               onPickManagedDomain?.(domain);
