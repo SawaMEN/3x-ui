@@ -214,7 +214,9 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
       for (const target of targets.values()) {
         try {
           const result = await HttpUtil.post(
-            '/panel/api/manager/domains/cover-site',
+            target.nodeId === 0
+              ? '/panel/api/manager/domains/local-certificate'
+              : '/panel/api/manager/domains/cover-site',
             {
               nodeId: target.nodeId,
               domain: target.domain,
@@ -504,7 +506,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                     {t('TLS-сертификаты:', 'TLS certificates:')} {ownedCertificates.length}
                   </Tag>
                 )}
-                {selected && ownedCertificates.length > 0 && (
+                {selected && selectedItems.some((item) => item.sniMode === 'tls') && (
                   <AutoComplete
                     style={{ minWidth: 240, maxWidth: '100%' }}
                     value={tlsSniByNode[node.id] ?? 'inherit'}
@@ -525,9 +527,12 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
                         value: 'auto',
                         label: t('TLS: автоматически на ноде', 'TLS: automatic on node'),
                       },
-                      ...ownedCertificates.map((site) => ({
-                        value: site.name,
-                        label: site.name,
+                      ...[...new Set([
+                        ...ownedCertificates.map((site) => site.name),
+                        ...certificates.filter((site) => site.source === 'remote').map((site) => site.name),
+                      ])].map((name) => ({
+                        value: name,
+                        label: name,
                       })),
                     ]}
                   />
@@ -651,8 +656,8 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
         <Space orientation="vertical" style={{ width: '100%' }}>
           <Typography.Text type="secondary">
             {t(
-              'Для TLS без сертификата укажите домен (общий для протокола или отдельный для ноды). CertMagic выпустит и будет продлевать сертификат на нужной ноде через существующий Domain Front. Нужны DNS и доступные ACME-порты; конфликт 80/443 не изменит работающий VPN.',
-              'For TLS without a certificate choose a hostname per protocol or node. Existing Domain Front/CertMagic will issue and renew on the selected node. DNS and reachable ACME challenge ports are required; port 80/443 conflicts do not replace a running VPN.',
+              'Для TLS выберите домен. Основная нода выпускает собственный сертификат через DNS-01 без занятия портов 80/443; удалённые ноды используют Domain Front. Приватные ключи между серверами не копируются.',
+              'Choose a TLS hostname per protocol or node. The main node issues its own certificate via DNS-01 without public ports 80/443; remote nodes use Domain Front. Private keys are never copied.',
             )}
           </Typography.Text>
           <Input
