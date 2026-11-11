@@ -191,7 +191,7 @@ export default function DomainFrontTab({
         ...draft.domains
           .filter(
             (domain) =>
-              domain.enabled && domain.mode !== 'sni_only' && domain.mode !== 'shared_sni' && domain.mode !== 'cert_only' && domain.mode !== 'cert_only',
+              domain.enabled && domain.mode !== 'sni_only' && domain.mode !== 'shared_sni' && domain.mode !== 'cert_only',
           )
           .map((domain) => domain.name),
         allSetting?.webDomain || '',
@@ -682,10 +682,10 @@ export default function DomainFrontTab({
                   { value: 'all', label: label('workspace.filter.all') },
                   { value: 'attention', label: label('workspace.filter.attention') },
                   ...(
-                    ['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'] as const
+                    ['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni', 'cert_only'] as const
                   ).map((mode) => ({
                     value: mode,
-                    label: label('mode.' + mode),
+                    label: mode === 'cert_only' ? (i18n.language.startsWith('ru') ? 'Только сертификат (DNS-01)' : 'Certificate only (DNS-01)') : label('mode.' + mode),
                   })),
                 ]}
               />

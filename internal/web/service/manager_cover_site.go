@@ -202,6 +202,21 @@ func (s *ManagerService) ProvisionLocalCertificate(ctx context.Context, owner in
 	if err != nil || !credential.Configured {
 		return result, fmt.Errorf("main node DNS-01 credentials are not configured")
 	}
+	// Repeated UI checks must not restart the gateway or duplicate an ACME order.
+	if current.Running {
+		for _, domain := range current.Config.Domains {
+			if domain.Name == name && domain.Mode == "cert_only" && domain.Enabled {
+				result.State = "pending"
+				for _, cert := range current.Certificates {
+					if cert.Name == name {
+						result.State, result.CertFile, result.KeyFile, result.ExpiresAt = cert.State, cert.CertFile, cert.KeyFile, cert.ExpiresAt
+						break
+					}
+				}
+				return result, nil
+			}
+		}
+	}
 	updated, err := ApplyDomainFront(ctx, cfg)
 	if err != nil {
 		return result, err

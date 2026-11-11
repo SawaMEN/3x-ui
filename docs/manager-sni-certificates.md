@@ -179,6 +179,21 @@ operator based on the server scan alone.
 - Partial success is reported: a remote site may be created even if issuing
   the certificate on the main node fails.
 
+## Automatic SNI-to-certificate binding
+
+- The inbound TLS selector searches for a valid certificate matching the
+  selected SNI **on the inbound node itself**. It auto-fills paths for
+  supported Xray/native protocols, preserving manually entered paths.
+- Where main-node TLS files are missing, the form offers opt-in DNS-01
+  issuance with email and explicit ACME terms acceptance. The Manager
+  builder invokes this main-node endpoint instead of creating an unwanted
+  public HTTPS cover site.
+- NaiveProxy has certificate/key inputs, TrustTunnel has managed SNI selection,
+  and TUIC no longer invents paths based on the domain name.
+- The Manager builder supports per-protocol, per-node manual cert/key paths,
+  subject to preflight verification on the selected node.
+- External REALITY and ShadowTLS targets do not require a local certificate.
+
 ## Exclusions and checks
 
 - No bulk third-party cert downloads/private key extraction.
