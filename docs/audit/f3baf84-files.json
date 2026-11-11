@@ -15124,9 +15124,9 @@
       "deletions": 17,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A44-A46: read complete remark/token/calendar/statistics and metadata placeholder sources; reproduced mismatched remark/header limits, frozen original Gregorian-Jalali outputs, optimized date benchmark 162619 to 560 ns/op, max-int64 expiry regression passed. Full subscription package before final calendar optimization passed 39.626s; final results in RESUME.",
+      "reviewed_sha256": "4eaf581ca516eaa34b88cbeedde243dc0240f9dbeb44176707398346fe0ef75c"
     },
     {
       "path": "internal/sub/placeholders_test.go",
@@ -15168,9 +15168,9 @@
       "deletions": 12,
       "subsystem": "subscriptions",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A44-A46: read complete remark/token/calendar/statistics and metadata placeholder sources; reproduced mismatched remark/header limits, frozen original Gregorian-Jalali outputs, optimized date benchmark 162619 to 560 ns/op, max-int64 expiry regression passed. Full subscription package before final calendar optimization passed 39.626s; final results in RESUME.",
+      "reviewed_sha256": "214025e74a39bda13cac134a80586311fea822c3bbcb5a6abcb8af1e003f2b0e"
     },
     {
       "path": "internal/sub/remark_vars_test.go",
@@ -15179,9 +15179,9 @@
       "deletions": 37,
       "subsystem": "subscriptions",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Read all 765 lines; token, quota/status, UI-bracket, cross-inbound, first-link identity and Gregorian/Jalali regression cases reviewed; full package PASS 40.210s and extended race PASS 25.222s after A44-A46.",
+      "reviewed_sha256": "2327a77a83975d31ac679d83280791e5bc1a2d6e94fdff3b9c0d233b2642da19"
     },
     {
       "path": "internal/sub/remote_routing.go",

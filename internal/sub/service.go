@@ -584,9 +584,14 @@ func (s *SubService) resolveInfoNodeRemark(subId string, uniqueEmails []string, 
 }
 
 func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel.ClientTraffic, error) {
+	type renderedLink struct {
+		link  string
+		email string
+	}
 	var result []string
-	var ordered []orderedSubEntry[func() string]
+	var ordered []orderedSubEntry[func() renderedLink]
 	var emails []string
+	var unlinkedEmails []string
 	var traffic coremodel.ClientTraffic
 	var hasEnabledClient bool
 	inbounds, err := s.getInboundsBySubId(subId)
@@ -627,7 +632,7 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 				hasEnabledClient = true
 			}
 			if !telegramInboundOnPage(inbound, visibility) {
-				emails = append(emails, client.Email)
+				unlinkedEmails = append(unlinkedEmails, client.Email)
 				seenEmails[client.Email] = struct{}{}
 				if result == nil {
 					result = []string{}
@@ -642,13 +647,13 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 					continue
 				}
 				for _, variant := range variants {
-					render := func() string {
+					render := func() renderedLink {
 						if variant.host != nil {
-							return s.linkFromHosts(inbound, client, variant.endpoint(s, inbound))
+							return renderedLink{s.linkFromHosts(inbound, client, variant.endpoint(s, inbound)), client.Email}
 						}
-						return s.GetLink(inbound, client.Email)
+						return renderedLink{s.GetLink(inbound, client.Email), client.Email}
 					}
-					ordered = append(ordered, orderedSubEntry[func() string]{variant.order, render})
+					ordered = append(ordered, orderedSubEntry[func() renderedLink]{variant.order, render})
 				}
 			} else if effectiveEps, bound := s.clientHostEndpoints(inbound, client, "raw", hostEps); (bound || effectiveEps != nil) && len(effectiveEps) == 0 {
 				seenEmails[client.Email] = struct{}{}
@@ -661,17 +666,25 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 			} else {
 				link = s.GetLink(inbound, client.Email)
 			}
-			if !s.hostsFirst && strings.TrimSpace(link) != "" {
-				result = append(result, link)
+			if !s.hostsFirst {
+				if strings.TrimSpace(link) != "" {
+					result = append(result, link)
+					emails = append(emails, client.Email)
+				} else {
+					unlinkedEmails = append(unlinkedEmails, client.Email)
+				}
 			}
-			emails = append(emails, client.Email)
 			seenEmails[client.Email] = struct{}{}
 		}
 	}
 	if s.hostsFirst {
 		for _, render := range orderedSubValues(ordered) {
-			if link := render(); strings.TrimSpace(link) != "" {
-				result = append(result, link)
+			entry := render()
+			if strings.TrimSpace(entry.link) != "" {
+				result = append(result, entry.link)
+				emails = append(emails, entry.email)
+			} else {
+				unlinkedEmails = append(unlinkedEmails, entry.email)
 			}
 		}
 	}
@@ -702,6 +715,9 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 		}
 	}
 
+	// Keep link owners in render order. Clients without a raw URI still
+	// contribute subscription identity/online metadata after those pairs.
+	emails = append(emails, unlinkedEmails...)
 	uniqueEmails := make([]string, 0, len(seenEmails))
 	for e := range seenEmails {
 		uniqueEmails = append(uniqueEmails, e)

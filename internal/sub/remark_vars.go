@@ -414,15 +414,25 @@ func jalaliExpireDateLabel(expiryMs int64) string {
 // (2024-01-01 = 1402-10-11 JAL) and walks the Jalali calendar forward/backward.
 func gregorianToJalali(gy, gm, gd int) (jy, jm, jd int) {
 	// Compute Julian Day Number for the input Gregorian date
-	a := (14 - gm) / 12
-	y := gy + 4800 - a
-	m := gm + 12*a - 3
-	jdn := gd + (153*m+2)/5 + 365*y + y/4 - y/100 + y/400 - 32045
+	// int64 intermediates also keep distant int64-millisecond expiries valid
+	// on 32-bit panel builds.
+	a := (14 - int64(gm)) / 12
+	y := int64(gy) + 4800 - a
+	m := int64(gm) + 12*a - 3
+	jdn := int64(gd) + (153*m+2)/5 + 365*y + y/4 - y/100 + y/400 - 32045
 
 	// Reference: 2024-01-01 = JDN 2460311 = 1402-10-11 JAL
-	refJDN := 2460311
-	days := int64(jdn - refJDN)
+	const refJDN = 2460311
+	days := jdn - refJDN
 	jy, jm, jd = 1402, 10, 11
+	// The existing calendar repeats after 33 years (8 leap days). Skip whole
+	// cycles so a far-future expiry cannot require billions of month steps.
+	if days > 0 {
+		const cycleDays = 33*365 + 8
+		cycles := days / cycleDays
+		jy += int(cycles) * 33
+		days %= cycleDays
+	}
 
 	// Walk forward
 	for days > 0 {
@@ -482,8 +492,19 @@ func isJalaliLeap(y int) bool {
 // synthesized from the client (enable/expiry/total) when no live stats exist —
 // so expiry/total/status tokens still resolve on links that have no counters yet.
 func (s *SubService) statsForClient(inbound *model.Inbound, client model.Client) coremodel.ClientTraffic {
-	if stats, ok := s.findClientStats(inbound, client.Email); ok {
+	// Node snapshots can omit configured limits. Use the same zero-value
+	// fallback as Subscription-Userinfo, retaining runtime usage and status.
+	withConfiguredLimits := func(stats coremodel.ClientTraffic) coremodel.ClientTraffic {
+		if stats.Total == 0 {
+			stats.Total = client.TotalGB
+		}
+		if stats.ExpiryTime == 0 {
+			stats.ExpiryTime = client.ExpiryTime
+		}
 		return stats
+	}
+	if stats, ok := s.findClientStats(inbound, client.Email); ok {
+		return withConfiguredLimits(stats)
 	}
 	// client_traffics.email is globally unique, so a client shared across several
 	// inbounds of one subscription has a single traffic row owned by exactly one
@@ -491,14 +512,14 @@ func (s *SubService) statsForClient(inbound *model.Inbound, client model.Client)
 	// the per-request map built from all the subscription's inbounds so
 	// {{TRAFFIC_*}} reflect real usage instead of the full quota (#5443).
 	if stats, ok := s.statsByEmail[client.Email]; ok {
-		return stats
+		return withConfiguredLimits(stats)
 	}
 	// Both in-memory paths key off client_traffics.inbound_id, which goes stale
 	// when an inbound is deleted and recreated, orphaning the row from every
 	// loaded inbound. Fall back to a direct lookup by the globally-unique email
 	// so usage still resolves for clients predating that recreation (#5567).
 	if stats, ok := s.statsByEmailFromDB(client.Email); ok {
-		return stats
+		return withConfiguredLimits(stats)
 	}
 	return coremodel.ClientTraffic{
 		Enable:     client.Enable,
