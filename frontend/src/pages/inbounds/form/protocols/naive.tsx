@@ -1,10 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import { Input, Select, Switch } from 'antd';
 import { FormField } from '@/components/form/rhf';
+import { useFormContext, useWatch } from 'react-hook-form';
 import SniSearchInput from '../security/SniSearchInput';
 
 export default function NaiveFields() {
   const { t } = useTranslation();
+  const { control } = useFormContext();
+  const network = useWatch({ control, name: 'settings.network' });
 
   return (
     <>
@@ -16,6 +19,21 @@ export default function NaiveFields() {
           ]}
         />
       </FormField>
+
+      {network === 'udp' && (
+        <FormField
+          name={['settings', 'quicCongestionControl']}
+          label="QUIC congestion control"
+        >
+          <Select
+            options={[
+              { value: 'bbr', label: 'BBR' },
+              { value: 'cubic', label: 'CUBIC' },
+              { value: 'reno', label: 'Reno' },
+            ]}
+          />
+        </FormField>
+      )}
 
       <FormField
         name={['settings', 'shareLinkFormat']}

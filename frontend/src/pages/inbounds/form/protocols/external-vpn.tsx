@@ -48,6 +48,9 @@ export function PingtunnelFields() {
       >
         <InputNumber min={0} suffix="ms" />
       </FormField>
+      <FormField name={['settings', 'forward']} label="SOCKS5 / HTTP forward">
+        <Input placeholder="socks5://127.0.0.1:1080" />
+      </FormField>
       <FormField
         name={['settings', 'congestion']}
         label={t('pages.inbounds.form.pingtunnelCongestion')}

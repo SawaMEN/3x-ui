@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Button, Input, InputNumber, Select, Space, Switch, message } from 'antd';
+import { Alert, Button, Collapse, Input, InputNumber, Select, Space, Switch, message } from 'antd';
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
@@ -84,6 +84,45 @@ export function FptnFields() {
       <FormField name={['settings', 'allowedSni']} label="SNI">
         <SniSearchInput placeholder="www.bing.com" />
       </FormField>
+      <Collapse
+        ghost
+        items={[
+          {
+            key: 'fptn-tls',
+            label: t('pages.inbounds.advancedTitle'),
+            children: (
+              <>
+                <Alert
+                  showIcon
+                  type="info"
+                  description="FPTN requires an RSA TLS certificate matching the hostname. Use a certificate/key file pair or a PEM pair; leave both pairs empty for the server-managed certificate."
+                />
+                <FormField name={['settings', 'hostname']} label="FPTN TLS hostname (SNI)">
+                  <SniSearchInput placeholder="vpn.example.com" />
+                </FormField>
+                <FormField name={['settings', 'certificate']} label="RSA certificate file">
+                  <Input placeholder="/etc/ssl/vpn/fullchain.pem" />
+                </FormField>
+                <FormField name={['settings', 'privateKey']} label="RSA private key file">
+                  <Input placeholder="/etc/ssl/vpn/privkey.pem" />
+                </FormField>
+                <FormField name={['settings', 'certificatePEM']} label="RSA certificate (PEM)">
+                  <Input.TextArea rows={3} />
+                </FormField>
+                <FormField name={['settings', 'privateKeyPEM']} label="RSA private key (PEM)">
+                  <Input.TextArea rows={3} />
+                </FormField>
+                <FormField name={['settings', 'metricsKey']} label="Metrics access key">
+                  <Input.Password autoComplete="new-password" />
+                </FormField>
+                <FormField name={['settings', 'image']} label="FPTN container image">
+                  <Input placeholder="fptnvpn/fptn-vpn-server:0.4.4" />
+                </FormField>
+              </>
+            ),
+          },
+        ]}
+      />
       <FormField
         name={['settings', 'adsFilter']}
         label={t('pages.inbounds.form.fptnAds')}
