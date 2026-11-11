@@ -11,6 +11,7 @@ export const DomainModeSchema = z.enum([
   'sub_link_only',
   'sni_only',
   'shared_sni',
+  'cert_only',
 ]);
 export const DomainTLSModeSchema = z.enum(['auto', 'certmagic', 'existing', 'manual']);
 const hostname = z

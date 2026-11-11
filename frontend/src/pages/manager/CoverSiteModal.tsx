@@ -21,6 +21,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   const [email, setEmail] = useState('');
   const [siteCatalog, setSiteCatalog] = useState<'builtin' | 'mtproxyl'>('builtin');
   const [siteTemplate, setSiteTemplate] = useState('notes');
+  const [issueOnMain, setIssueOnMain] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -34,19 +35,24 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
     try {
       const result = await HttpUtil.post(
         '/panel/api/manager/domains/cover-site',
-        { nodeId, domain: domain.trim(), email: email.trim(), acceptTerms, siteCatalog, siteTemplate },
+        { nodeId, domain: domain.trim(), email: email.trim(), acceptTerms, siteCatalog, siteTemplate, issueOnMain: nodeId > 0 && issueOnMain },
         { headers: { 'Content-Type': 'application/json' }, silent: true },
       );
       if (!result?.success) {
         setError(result?.msg || t('Не удалось создать сайт', 'Failed to provision the website'));
         return;
       }
-      const value = result.obj as { domain?: string; state?: string } | undefined;
+      const value = result.obj as { domain?: string; state?: string; mainError?: string; mainState?: string } | undefined;
       onSuccess(value?.domain || domain.trim(), value?.state || 'pending');
+      if (value?.mainError) {
+        setError(t('Удалённый сайт создан, но выпуск на основной ноде не удался: ', 'Remote site succeeded, but main-node certificate failed: ') + value.mainError);
+        return;
+      }
       setDomain('');
       setSiteCatalog('builtin');
       setSiteTemplate('notes');
       setAcceptTerms(false);
+      setIssueOnMain(false);
       onClose();
     } catch (err) {
       setError(String(err));
@@ -143,6 +149,25 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             maxLength={254}
           />
         </div>
+        {nodeId > 0 && (
+          <Checkbox checked={issueOnMain} onChange={(ev) => setIssueOnMain(ev.target.checked)}>
+            {t('Дополнительно выпустить сертификат на основной ноде (DNS-01)', 'Also issue a certificate on the main node (DNS-01)')}
+          </Checkbox>
+        )}
+        {nodeId > 0 && issueOnMain && (
+          <Alert
+            type="info"
+            showIcon
+            title={t(
+              'Настройте DNS-01 (Cloudflare или DigitalOcean) на основной ноде в «Домены и TLS».',
+              'Configure DNS-01 (Cloudflare or DigitalOcean) on the main node under Domains & TLS.',
+            )}
+            description={t(
+              'Сертификат и приватный ключ создаются на основном сервере без копирования с удалённого и без занятия портов 80/443. После выпуска локальные пути доступны в списке сертификатов и TLS/SNI.',
+              'The certificate and private key are issued locally without copying from the remote server or binding ports 80/443. After issuance, local paths are available in the certificate and TLS/SNI lists.',
+            )}
+          />
+        )}
         <Checkbox checked={acceptTerms} onChange={(ev) => setAcceptTerms(ev.target.checked)}>
           {t(
             'Я контролирую этот домен и принимаю условия Let’s Encrypt.',

@@ -191,7 +191,7 @@ export default function DomainFrontTab({
         ...draft.domains
           .filter(
             (domain) =>
-              domain.enabled && domain.mode !== 'sni_only' && domain.mode !== 'shared_sni',
+              domain.enabled && domain.mode !== 'sni_only' && domain.mode !== 'shared_sni' && domain.mode !== 'cert_only' && domain.mode !== 'cert_only',
           )
           .map((domain) => domain.name),
         allSetting?.webDomain || '',
@@ -462,7 +462,7 @@ export default function DomainFrontTab({
       ...value,
       panel: false,
       inboundIds:
-        value.mode === 'sub_link_only' || value.mode === 'sni_only' || value.mode === 'shared_sni'
+        value.mode === 'sub_link_only' || value.mode === 'sni_only' || value.mode === 'shared_sni' || value.mode === 'cert_only'
           ? []
           : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
@@ -475,7 +475,7 @@ export default function DomainFrontTab({
     if (editing != null && editing >= 0) domains[editing] = domain;
     else domains.push(domain);
     const canonical =
-      primaryDomain && domain.enabled && domain.mode !== 'sni_only' && domain.mode !== 'shared_sni'
+      primaryDomain && domain.enabled && domain.mode !== 'sni_only' && domain.mode !== 'shared_sni' && domain.mode !== 'cert_only'
         ? domain.name
         : draft.subscriptionDomain === old?.name
           ? ''
@@ -716,7 +716,7 @@ export default function DomainFrontTab({
                   title: label('modeLabel'),
                   dataIndex: 'mode',
                   render: (value: string) => (
-                    <Typography.Text type="secondary">{label('mode.' + value)}</Typography.Text>
+                    <Typography.Text type="secondary">{value === 'cert_only' ? (i18n.language.startsWith('ru') ? 'Только сертификат (DNS-01)' : 'Certificate only (DNS-01)') : label('mode.' + value)}</Typography.Text>
                   ),
                 },
                 {
@@ -1444,30 +1444,30 @@ export default function DomainFrontTab({
           >
             <Select
               onChange={(value) => {
-                if (value === 'sub_link_only' || value === 'sni_only' || value === 'shared_sni') {
+                if (value === 'sub_link_only' || value === 'sni_only' || value === 'shared_sni' || value === 'cert_only') {
                   form.setFieldsValue({
                     inboundIds: [],
                     origin: '',
-                    tls: value === 'shared_sni' ? 'auto' : form.getFieldValue('tls'),
+                    tls: value === 'cert_only' ? 'certmagic' : value === 'shared_sni' ? 'auto' : form.getFieldValue('tls'),
                   });
                   if (value === 'sni_only') {
                     form.setFieldsValue({ siteCatalog: 'builtin', siteTemplate: 'notes' });
                   } else {
                     form.setFieldsValue({ siteCatalog: '', siteTemplate: '' });
                   }
-                  if (value === 'sni_only' || value === 'shared_sni') setPrimaryDomain(false);
+                  if (value === 'sni_only' || value === 'shared_sni' || value === 'cert_only') setPrimaryDomain(false);
                 } else if (value !== 'relay') form.setFieldsValue({ origin: '' });
               }}
-              options={['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni'].map(
+              options={['direct', 'cdn', 'relay', 'sub_link_only', 'sni_only', 'shared_sni', 'cert_only'].map(
                 (value) => ({
                   value,
-                  label: label(`mode.${value}`),
+                  label: value === 'cert_only' ? (i18n.language.startsWith('ru') ? 'Только сертификат (DNS-01)' : 'Certificate only (DNS-01)') : label(`mode.${value}`),
                 }),
               )}
             />
           </Form.Item>
           <Typography.Paragraph type="secondary">
-            {mode && label(`modeDesc.${mode}`)}
+            {mode === 'cert_only' ? (i18n.language.startsWith('ru') ? 'Сертификат выпускается и продлевается через DNS-01 на основной ноде, без сайта и портов 80/443.' : 'Issues and renews a certificate via DNS-01 on this node without a website or public listeners.') : mode && label(`modeDesc.${mode}`)}
           </Typography.Paragraph>
           {mode === 'sni_only' && (
             <>
@@ -1508,7 +1508,7 @@ export default function DomainFrontTab({
               <Input placeholder="https://origin.example.com" />
             </Form.Item>
           )}
-          {mode !== 'sub_link_only' && mode !== 'sni_only' && mode !== 'shared_sni' && (
+          {mode !== 'sub_link_only' && mode !== 'sni_only' && mode !== 'shared_sni' && mode !== 'cert_only' && (
             <>
               <Form.Item
                 name="inboundIds"
@@ -1526,7 +1526,7 @@ export default function DomainFrontTab({
               </Form.Item>
             </>
           )}
-          {mode !== 'sni_only' && mode !== 'shared_sni' && (
+          {mode !== 'sni_only' && mode !== 'shared_sni' && mode !== 'cert_only' && (
             <Form.Item
               label={label('useForSubscription')}
               tooltip={label('useForSubscriptionHelp')}
@@ -1591,7 +1591,7 @@ export default function DomainFrontTab({
                         </Typography.Paragraph>
                       </>
                     )}
-                    {mode !== 'shared_sni' && tls === 'manual' && (
+                    {mode !== 'shared_sni' && mode !== 'cert_only' && tls === 'manual' && (
                       <>
                         <Form.Item
                           name="certFile"

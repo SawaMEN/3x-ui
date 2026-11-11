@@ -161,6 +161,24 @@ operator based on the server scan alone.
   Inbounds editor; the Manager bulk flow creates up to 100 independent
   clients against such shared listeners rather than one listener per client.
 
+## Cover-site templates and main-node TLS
+
+- SNI-only websites can choose one of the existing built-in/MTProxyL
+  cover templates in the Manager create/update form and Domains & TLS editor.
+  The catalog/template selection is saved per hostname, and rendered through
+  Telemt's existing validated immutable site snapshots.
+- When the site is hosted on a remote node, **Issue on main node** optionally
+  registers a separate `cert_only` domain on the controlling panel.
+  CertMagic uses the main node's Cloudflare/DigitalOcean DNS-01 credentials
+  to issue and renew its local certificate. No remote private key is exported
+  and no extra HTTP/HTTPS listener is opened on the main node.
+- Configure the main panel's DNS-01 provider, zone and credential first.
+  Issuance is asynchronous. Once the certificate is valid, its local
+  `certFile` and `keyFile` are available in the certificate inventory and
+  managed TLS/SNI listing. Paths remain node-local.
+- Partial success is reported: a remote site may be created even if issuing
+  the certificate on the main node fails.
+
 ## Exclusions and checks
 
 - No bulk third-party cert downloads/private key extraction.
