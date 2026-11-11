@@ -40,3 +40,25 @@ func (r *Remote) InstallTLSCertificate(ctx context.Context, payload TLSCertifica
 	}
 	return installed, nil
 }
+
+type TLSCertificateLookup struct {
+    Domain string `json:"domain"`
+}
+
+// ResolveLocalTLSCertificate asks the selected node to resolve its own files.
+// Only paths for its locally validated, public TLS identity are returned.
+func (r *Remote) ResolveLocalTLSCertificate(ctx context.Context, domain string) (InstalledTLSCertificate, error) {
+    env, err := r.do(ctx, http.MethodPost, "panel/api/domains/certificates/resolve-local",
+        TLSCertificateLookup{Domain: domain})
+    if err != nil {
+        return InstalledTLSCertificate{}, err
+    }
+    var result InstalledTLSCertificate
+    if err := json.Unmarshal(env.Obj, &result); err != nil {
+        return InstalledTLSCertificate{}, errors.New("invalid node TLS certificate lookup response")
+    }
+    if result.Domain != domain || result.CertFile == "" || result.KeyFile == "" {
+        return InstalledTLSCertificate{}, errors.New("node returned an incomplete TLS certificate reference")
+    }
+    return result, nil
+}
