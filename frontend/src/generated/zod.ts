@@ -594,8 +594,6 @@ export const DomainFrontCertificateSchema = z.object({
   expiresAt: z.number().int(),
   issuer: z.string(),
   keyFile: z.string(),
-  siteCatalog: z.string().optional(),
-  siteTemplate: z.string().optional(),
   mode: z.string(),
   name: z.string(),
   renewal: z.string(),
@@ -642,6 +640,8 @@ export const DomainFrontDomainSchema = z.object({
   name: z.string(),
   origin: z.string(),
   panel: z.boolean(),
+  siteCatalog: z.string().optional(),
+  siteTemplate: z.string().optional(),
   tls: z.string(),
 });
 export type DomainFrontDomain = z.infer<typeof DomainFrontDomainSchema>;

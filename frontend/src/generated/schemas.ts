@@ -2536,6 +2536,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "panel": {
         "type": "boolean"
       },
+      "siteCatalog": {
+        "type": "string"
+      },
+      "siteTemplate": {
+        "type": "string"
+      },
       "tls": {
         "example": "auto",
         "type": "string"
