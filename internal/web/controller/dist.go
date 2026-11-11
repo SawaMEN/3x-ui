@@ -107,20 +107,14 @@ func serveDistPage(c *gin.Context, name string) {
 	}
 
 	if basePath != "/" {
-		body = bytes.ReplaceAll(body, []byte(`src="/assets/`), []byte(`src="`+basePath+`assets/`))
-		body = bytes.ReplaceAll(body, []byte(`href="/assets/`), []byte(`href="`+basePath+`assets/`))
+		assetPrefix := htmlpkg.EscapeString(basePath + "assets/")
+		body = bytes.ReplaceAll(body, []byte(`src="/assets/`), []byte(`src="`+assetPrefix))
+		body = bytes.ReplaceAll(body, []byte(`href="/assets/`), []byte(`href="`+assetPrefix))
 	}
 
-	jsEscape := strings.NewReplacer(
-		`\`, `\\`,
-		`"`, `\"`,
-		"\n", `\n`,
-		"\r", `\r`,
-		"<", `<`,
-		">", `>`,
-		"&", `&`,
-	)
-	escapedBase := jsEscape.Replace(basePath)
+	// JSON string encoding also escapes HTML delimiters: a configured path
+	// containing </script> must remain data inside the inline script.
+	escapedBase, _ := json.Marshal(basePath)
 	csrfToken, err := session.EnsureCSRFToken(c)
 	if err != nil {
 		logger.Warning("Unable to mint CSRF token for", name+":", err)
@@ -133,11 +127,12 @@ func serveDistPage(c *gin.Context, name string) {
 	if nonce := c.GetString("csp_nonce"); nonce != "" {
 		nonceAttr = ` nonce="` + htmlpkg.EscapeString(nonce) + `"`
 	}
-	script := `<script data-cfasync="false"` + nonceAttr + `>window.X_UI_BASE_PATH="` + escapedBase + `"`
+	script := `<script data-cfasync="false"` + nonceAttr + `>window.X_UI_BASE_PATH=` + string(escapedBase)
 	if name != "login.html" {
-		escapedVer := jsEscape.Replace(config.GetPanelVersion())
-		script += `;window.X_UI_CUR_VER="` + escapedVer + `"`
-		script += `;window.X_UI_DB_TYPE="` + config.GetDBKind() + `"`
+		escapedVer, _ := json.Marshal(config.GetPanelVersion())
+		escapedDBKind, _ := json.Marshal(config.GetDBKind())
+		script += `;window.X_UI_CUR_VER=` + string(escapedVer)
+		script += `;window.X_UI_DB_TYPE=` + string(escapedDBKind)
 	}
 	script += `;</script>`
 	inject := []byte(script)

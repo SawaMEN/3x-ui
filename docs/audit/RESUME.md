@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 57 подтверждённых исправлений панели; A53–A57 — текущая группа из 5 исправлений.
+Всего реализовано 59 подтверждённых исправлений панели; A58–A59 — текущая группа из 2 исправлений и дополнения A57.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 156 файлов, осталось 2208; общий проход не завершён.
+Проверено вручную 176 файлов, осталось 2188; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -438,3 +438,55 @@ Release ada035e оба build job тоже упали на apt DNS (amd64 1306009
 
 Далее: оставшиеся api-gateway 101 файла, особенно WS, публичные HTTP gateways,
 мультиузловая авторизация, затем services/jobs. Сохранить исходную точку f3baf84.
+
+
+## Контрольная точка A58–A59: WebSocket shutdown и HTML страницы
+
+A53–A57 опубликованы в e01e5bc952d2aa7196e8cf9993a98f805a313ee6.
+Новая группа: нужно 2 подтверждённых исправления, реализовано 2, осталось 0.
+Дополнительно завершён A57 для второго маршрута /panel/csrf-token: это та же
+проблема, её не считать ещё одним новым исправлением. Всего 59.
+
+- A58: shutdown закрывал только h.clients, но не регистрации в h.ops; при
+  отмене Register просто возвращал управление с незакрытым Send. HandleConnection
+  всё равно запускал write/read pumps, поэтому поздний или ещё не обработанный
+  клиент мог продолжать жить после остановки hub. Теперь shutdown забирает и
+  закрывает pending registrations, а Register закрывает канал при отмене даже
+  если enqueue совпал с завершением drain. Закрытие защищено тем же h.mu, что
+  и fanout, с closeOnce. Старую FIFO-семантику Register/Unregister не менять.
+- A59: Normalize допускает кавычки и HTML delimiters в URI prefix, но dist.go
+  вставлял prefix в asset attributes без HTML escaping, а ручной jsEscape
+  оставлял </script> нетронутым. DOM терял asset URLs и получал лишние script
+  элементы. Теперь asset prefix HTML-escaped, значения inline JS encoded через
+  json.Marshal (включая версию и DB kind). Новый тест проверяет реальный HTML
+  parse tree: ровно три script nodes, оба asset URLs и decoded base path.
+  Не заявлять удалённый обход CSP: доказан дефект обработки настроенного URI.
+
+До правок: 3 shutdown regression tests падали с незакрытыми каналами; HTML test
+показывал 4 scripts вместо 3, 0 intact assets вместо 2 и оборванную JS string.
+После правок:
+- полный websocket package: PASS, 0.596s;
+- полный panel: PASS, 1.555s; session 0.223s; middleware 0.106s;
+  util/uripath 0.002s;
+- scoped controller auth/login/CSRF/DOM/SPA/origin: PASS, 0.510s;
+- полный websocket + panel -race до добавления final DOM check: 1.686s / 18.399s;
+- итоговый scoped -race: controller 15.684s, panel 7.227s, websocket 1.045s;
+- реальный loopback WebSocket при остановленном hub немедленно получает close
+  frame (вместо Read timeout), PASS 0.019s;
+- go build -p 3 ./...: PASS; golangci-lint: 0 issues;
+- inventory check и git diff --check: PASS, 0 stale.
+
+Полностью дочитаны ещё 20 исходных файлов: hub/tests/pumps/origin, dist/SPA,
+recovery/root redirect/deadlines и uripath. Охват 176/2364, осталось 2188.
+Вне original diff также прочитаны notifier.go и spa_test.go — в счётчик не вошли.
+
+CI e01e5bc run 43050203515: CodeQL, lint, vet, frontend, race/sub, PostgreSQL,
+оба native integrations и official service integrations уже прошли; go-test и
+service race ещё выполнялись при проверке. telemt-web-frontends 130625013622
+снова остановлен apt DNS azure.archive.ubuntu.com до тестов. Это ограничение
+не закрыто сменой runner и не считается успешным тестом. Внешний core R04/R05
+и локальный запрет полного go test ./... по-прежнему открыты.
+
+Следующий приоритет: api-gateway 85 pending, nodes/background services;
+subscriptions 67 pending остаются отдельной очередью, не объявлять закрытыми.
+Рабочая ветка main, исходный diff f3baf84 неизменен.

@@ -16499,9 +16499,9 @@
       "deletions": 0,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "fbc05a0238c8e0a499a8bb9fbaefd26005c4b6373d742f9b7e3e3b2c2fc49f99"
     },
     {
       "path": "internal/util/uripath/path_test.go",
@@ -16510,9 +16510,9 @@
       "deletions": 0,
       "subsystem": "protocols-utilities",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "2764321f96f44af64bafac744aa0fed9daaa04ee2bf063f20b7a432ee3e8a59e"
     },
     {
       "path": "internal/util/version/version.go",
@@ -16719,9 +16719,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "2402e910b12ab296d818e906abbf5711fce0c584ef520f489c779fe6da7e1aaf"
     },
     {
       "path": "internal/web/controller/dist_test.go",
@@ -16730,9 +16730,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "1c3ddf21814f2158a71a485076529c8bbf1cacd7c852e8455f60af04baa4cdc7"
     },
     {
       "path": "internal/web/controller/dnstt.go",
@@ -17247,9 +17247,9 @@
       "deletions": 3,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "51b5aaa0391e57c7ce95c34b24cb85473e639e545f9a9ac56cc55fa34424c429"
     },
     {
       "path": "internal/web/controller/stage10_websocket_origin_test.go",
@@ -17258,9 +17258,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "ee76354c85ed0b490c19351f6b5265344b574966e3f35b5b8c6f85835ce4d0db"
     },
     {
       "path": "internal/web/controller/stage4_switch_test.go",
@@ -17346,9 +17346,9 @@
       "deletions": 15,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "ac5f05352d9993ea5d434c2104fb619e115c6824f404bf182d9477527b862163"
     },
     {
       "path": "internal/web/controller/xray_setting.go",
@@ -17940,9 +17940,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "c718fbb52d5b059c4e00292e9b8a88002bf056261d136f2bf1dde2b9248b1a24"
     },
     {
       "path": "internal/web/middleware/core_management_deadline_test.go",
@@ -17951,9 +17951,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "6005a5f54bd41e8f36519035432b4867b21160ace8b301199dd4afa231b02bfe"
     },
     {
       "path": "internal/web/middleware/domainValidator.go",
@@ -17984,9 +17984,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "c28dd0aaa9d3250b5f9b2f6ca3b396f1a712690b7db99ca56161ebcb5d86a22a"
     },
     {
       "path": "internal/web/middleware/recovery_test.go",
@@ -17995,9 +17995,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "16460dd42b7a22d71e4ecaab2084fc687abd7539248255eb3b8790d53940e6b0"
     },
     {
       "path": "internal/web/middleware/root_redirect.go",
@@ -18006,9 +18006,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "5382fd561d93eb7b78d5d5705bb7b445b61d6375b6187435a98cce2184eb3855"
     },
     {
       "path": "internal/web/middleware/root_redirect_test.go",
@@ -18017,9 +18017,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "047c0835539a78b1a1d038b57c96ab60d224262e4fb48bfcaa4fdb5fcbe3cbf1"
     },
     {
       "path": "internal/web/middleware/security.go",
@@ -18050,9 +18050,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "285348cf9aaa824b383e89aee23341cc6b020a26c8f7a674ec37dcb7373487af"
     },
     {
       "path": "internal/web/middleware/sni_scan_deadline_test.go",
@@ -18061,9 +18061,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "04c0bb7bb35625804b4d8d3513056ff64531b5ac28544c4afbf332946084c432"
     },
     {
       "path": "internal/web/network/certificate.go",
@@ -22428,9 +22428,9 @@
       "deletions": 6,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "12e5ab5897d7a5632076afc55c6a74478e433f54d0c7a695a8bcbf5101245fe2"
     },
     {
       "path": "internal/web/service/panel/websocket_panic_test.go",
@@ -22439,9 +22439,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "060f0b11c9d7d92aa2878672462cf4fb7619eeb98f1fd5d05a53b94976a17f52"
     },
     {
       "path": "internal/web/service/port_conflict.go",
@@ -25101,9 +25101,9 @@
       "deletions": 24,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "c021f9223b18f1cc254bd51dcbb87ea7eaebe5cf1d7e0480d344072655cb0655"
     },
     {
       "path": "internal/web/websocket/hub_test.go",
@@ -25112,9 +25112,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "3792dc82e8035e8b00521073526c5c947b9c4914fb50e3ef46bac314d6191d25"
     },
     {
       "path": "internal/web/websocket/stage12_concurrency_test.go",
@@ -25123,9 +25123,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
+      "reviewed_sha256": "84798fd3fe108a84b856377dbee040df2cc05206c1889fcd3c017854687a3da0"
     },
     {
       "path": "internal/xray/api.go",

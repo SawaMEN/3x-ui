@@ -196,15 +196,26 @@ func (h *Hub) runOnce() (stopped bool) {
 	}
 }
 
-// shutdown closes all client send channels and clears the registry.
+// shutdown closes registered clients and registrations still queued when Run
+// observes cancellation. Both already own a connection's write pump.
 func (h *Hub) shutdown() {
 	h.mu.Lock()
 	for c := range h.clients {
 		c.closeOnce.Do(func() { close(c.Send) })
 	}
 	h.clients = make(map[*Client]struct{})
-	h.mu.Unlock()
-	logger.Info("WebSocket hub stopped")
+	for {
+		select {
+		case op := <-h.ops:
+			if op.kind == opRegister && op.c != nil {
+				op.c.closeOnce.Do(func() { close(op.c.Send) })
+			}
+		default:
+			h.mu.Unlock()
+			logger.Info("WebSocket hub stopped")
+			return
+		}
+	}
 }
 
 // removeClient deletes a client and closes its send channel exactly once.
@@ -348,9 +359,19 @@ func (h *Hub) Register(c *Client) {
 	if h == nil || c == nil {
 		return
 	}
-	select {
-	case h.ops <- clientOp{kind: opRegister, c: c}:
-	case <-h.ctx.Done():
+	if h.ctx.Err() == nil {
+		select {
+		case h.ops <- clientOp{kind: opRegister, c: c}:
+		case <-h.ctx.Done():
+		}
+	}
+	// Cancellation may race the enqueue, including after shutdown drained ops.
+	// Close under the same lock as fanout so the write pump always terminates
+	// and a concurrent send cannot race channel closure.
+	if h.ctx.Err() != nil {
+		h.mu.Lock()
+		c.closeOnce.Do(func() { close(c.Send) })
+		h.mu.Unlock()
 	}
 }
 

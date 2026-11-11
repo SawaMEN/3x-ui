@@ -59,11 +59,25 @@ func TestAuditLoginSessionFailureResponse(t *testing.T) {
 }
 
 func TestAuditCSRFTokenResponseDoesNotCache(t *testing.T) {
+	for _, handler := range []struct {
+		name  string
+		serve gin.HandlerFunc
+	}{
+		{"public", (&IndexController{}).csrfToken},
+		{"panel", (&XUIController{}).csrfToken},
+	} {
+		t.Run(handler.name, func(t *testing.T) {
+			auditCSRFTokenResponseDoesNotCache(t, handler.serve)
+		})
+	}
+}
+
+func auditCSRFTokenResponseDoesNotCache(t *testing.T, handler gin.HandlerFunc) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(sessions.Sessions("3x-ui", cookie.NewStore([]byte("audit-csrf-cookie-secret"))))
-	a := &IndexController{}
-	router.GET("/csrf-token", a.csrfToken)
+	router.GET("/csrf-token", handler)
 	first := httptest.NewRecorder()
 	router.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/csrf-token", nil))
 	req := httptest.NewRequest(http.MethodGet, "/csrf-token", nil)

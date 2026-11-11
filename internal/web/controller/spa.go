@@ -143,6 +143,7 @@ func acceptsHTML(accept string) bool {
 // The endpoint is GET (a safe method) so it bypasses CSRFMiddleware itself,
 // but checkLogin still gates the response — anonymous callers get 401/redirect.
 func (a *XUIController) csrfToken(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
 	token, err := session.EnsureCSRFToken(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, entity.Msg{Success: false, Msg: err.Error()})
