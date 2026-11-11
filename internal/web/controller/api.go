@@ -115,6 +115,7 @@ var nodeSyncScopeAllow = map[string]map[string]struct{}{
 	"/domains/sni":                                {http.MethodGet: {}},
 	"/domains/certificates":                       {http.MethodGet: {}},
 	"/domains/certificates/install":               {http.MethodPost: {}},
+	"/domains/certificates/resolve-local":         {http.MethodPost: {}},
 	"/domains/probe/http01":                       {http.MethodPost: {}},
 	"/inbounds/preflight":                         {http.MethodPost: {}},
 	"/server/status":                              {http.MethodGet: {}},
