@@ -10163,9 +10163,9 @@
       "deletions": 33,
       "subsystem": "installation-ci",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "Full module manifest reviewed. CI identified reachable GO-2026-6859 in Go 1.27.3 net/http; official Go release 1.27.4 verified and minimum directive raised. Build/vet pass on 1.27.4; govulncheck 1.9.0 reports 0 called-code and 0 imported-package vulnerabilities, with only an unimported openpgp module advisory retained explicitly.",
+      "reviewed_sha256": "a7f351fe4102943a393aa4336d85efc3d69790d7831589a4ac24b96198743fcd"
     },
     {
       "path": "go.sum",
