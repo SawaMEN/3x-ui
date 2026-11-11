@@ -16983,9 +16983,9 @@
       "deletions": 1,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "094a3af2a8b0f0dbbc6bdbd0ec2e5427d4020a07032b0b1287e5697a896dc29d"
     },
     {
       "path": "internal/web/controller/node_route.go",
@@ -16994,9 +16994,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "b1d0000a3153a4c8840da1179220b4d3debe95c2b79fd0fab66194d05f4302ed"
     },
     {
       "path": "internal/web/controller/node_update_batch_test.go",
@@ -17005,9 +17005,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "34849ab551460df2032f32115b7447b687565cc7ed1e3e86d41ed8d774108614"
     },
     {
       "path": "internal/web/controller/olcrtc.go",
@@ -17665,9 +17665,9 @@
       "deletions": 68,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "03ce169bf6a84469e7f115bfae3e52f8c1d6d4b993db3a56fe32b84237be6b70"
     },
     {
       "path": "internal/web/job/node_traffic_sync_job.go",
@@ -17676,9 +17676,9 @@
       "deletions": 11,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "7184dc8db7db287446f1772f909e4e6938007ab5ae9b8fa4796a2bbab564f81a"
     },
     {
       "path": "internal/web/job/node_traffic_sync_online_prune_test.go",
@@ -17687,9 +17687,9 @@
       "deletions": 2,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "cac5f6882918b81d72b954fa388e2268effbb54602a175d53f278dcf95498a88"
     },
     {
       "path": "internal/web/job/node_transition_burst_test.go",
@@ -17698,9 +17698,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "586cbc0a9a72ffd14bed40d147b8dceeb7b27d4db9b5875184e79d8a9f1412f4"
     },
     {
       "path": "internal/web/job/outbound_auto_balancer_job.go",
@@ -18237,9 +18237,9 @@
       "deletions": 3,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "0d4004dff1054d63e5fe7519b8a62a609cd8e8fa39ce7ba7b7e79d6a6d05ce97"
     },
     {
       "path": "internal/web/runtime/manager_egress_reentrant_test.go",
@@ -18248,9 +18248,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "ef9c9f1a8ff83519034256b103a1ade6e2f8ae51097866b7826405cf67dbd4f4"
     },
     {
       "path": "internal/web/runtime/reconcile_skip_test.go",
@@ -18259,9 +18259,9 @@
       "deletions": 2,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "b2f5e61d95fe34d728c312669aee44f2b36ff12db28270314d60dad739686769"
     },
     {
       "path": "internal/web/runtime/remote.go",
@@ -18270,9 +18270,9 @@
       "deletions": 8,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "a5625230b523be5e05f67508a62c5ab5901e749ae25ac2ede7859345e1416861"
     },
     {
       "path": "internal/web/runtime/remote_domainfront.go",
@@ -18281,9 +18281,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "de06e059b9fd8bdeefed73f18c84c685089d1b2db0475d2fc0b162322f61f3fe"
     },
     {
       "path": "internal/web/runtime/remote_mtls_test.go",
@@ -18292,9 +18292,9 @@
       "deletions": 26,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "4e7144576c5a7f7f6d14ba6fa0f2375429a98634a034284beadbae869730a915"
     },
     {
       "path": "internal/web/runtime/remote_panel_update_test.go",
@@ -18314,9 +18314,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "b8693888318a79fa9a653d422954a9c593ab9cb679f070c0154261e3bfc42e6d"
     },
     {
       "path": "internal/web/runtime/remote_sni_test.go",
@@ -18325,9 +18325,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "a32640d2182ad70cab7c25140274baf344dc5b4cc5b69d70880646ee01711246"
     },
     {
       "path": "internal/web/runtime/remote_telemt.go",
@@ -18336,9 +18336,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "06daf87aa9b9e3ae2498dfa4e893b6aa2c60c52579d1a6ea84a812385f0f9521"
     },
     {
       "path": "internal/web/runtime/sessions.go",
@@ -18347,9 +18347,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "1696858730f53c23a0a9b0a823ea416c9eea0ce014b6507c96b0562a060f0aa8"
     },
     {
       "path": "internal/web/runtime/stage9_multinode_security_test.go",
@@ -18358,9 +18358,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "4776b23858bb8cfaad33d2eb71a4452fee7f5b43aae5be14df1cab616dd77217"
     },
     {
       "path": "internal/web/runtime/stage9_node_proxy_test.go",
@@ -18369,9 +18369,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "6ffce22bed9af008a1ea9413b6737bb709997132e93fb73f23db1784a9bdc734"
     },
     {
       "path": "internal/web/runtime/stage9_node_security_test.go",
@@ -18380,9 +18380,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "e05a65b2d00e484f0a60e3137866136fe96d0ed98ff69aa04e9a38507d5a6813"
     },
     {
       "path": "internal/web/runtime/tls_client.go",
@@ -18391,9 +18391,9 @@
       "deletions": 4,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A60–A63 full-file audit: node controller routes, remote RPC/status/body bounds, inbound lookup/cache/fingerprint and aliases, dynamic egress manager, TLS/pin/mTLS/proxy safeguards, node heartbeat/traffic jobs. Reproduced lookup error mutation/silent delete, false legacy restart, stale aliases and stale resolver before fixes. Complete runtime suite and race plus scoped loopback heartbeat/traffic regressions; related tests outside original diff read separately.",
+      "reviewed_sha256": "0c949ce6d2c8cc76a5aaf3043f2cdf9ac44ab4ff74dd2b5cd7e98f96262be643"
     },
     {
       "path": "internal/web/runtime/tls_client_test.go",

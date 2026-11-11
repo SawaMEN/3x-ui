@@ -17,6 +17,10 @@ import (
 func TestReconcileInbound_SkipsUnchanged(t *testing.T) {
 	var pushes atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/panel/api/inbounds/list" {
+			_, _ = w.Write([]byte(`{"success":true,"obj":[]}`))
+			return
+		}
 		if r.Method == http.MethodPost && (strings.Contains(r.URL.Path, "/panel/api/inbounds/update/") ||
 			strings.Contains(r.URL.Path, "/panel/api/inbounds/add")) {
 			pushes.Add(1)
@@ -77,6 +81,9 @@ func newCountingNodeServer(t *testing.T, clientsResp string) (*httptest.Server, 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case r.URL.Path == "/panel/api/inbounds/list":
+			_, _ = w.Write([]byte(`{"success":true,"obj":[]}`))
+			return
 		case strings.Contains(r.URL.Path, "/panel/api/inbounds/add"):
 			counts.adds.Add(1)
 		case strings.Contains(r.URL.Path, "/panel/api/inbounds/update/"):

@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 59 подтверждённых исправлений панели; A58–A59 — текущая группа из 2 исправлений и дополнения A57.
+Всего реализовано 63 подтверждённых исправления панели; A60–A63 — текущая группа из 4 исправлений.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 176 файлов, осталось 2188; общий проход не завершён.
+Проверено вручную 197 файлов, осталось 2167; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -490,3 +490,61 @@ service race ещё выполнялись при проверке. telemt-web-f
 Следующий приоритет: api-gateway 85 pending, nodes/background services;
 subscriptions 67 pending остаются отдельной очередью, не объявлять закрытыми.
 Рабочая ветка main, исходный diff f3baf84 неизменен.
+
+
+## Контрольная точка A60–A63: RPC и согласование узлов
+
+Предыдущая группа A58–A59 опубликована в dd6e13848271d951e55bf5cda2f4608a24d67253.
+Новая группа: требуется 4 подтверждённых исправления, реализовано 4, осталось 0.
+Всего 63; просмотрено 197/2364 исходных файлов, осталось 2167.
+
+- A60: resolveRemoteID отличает подтверждённое отсутствие inbound от ошибки
+  списка (HTTP, success=false, некорректный JSON). Update не делает Add при
+  ошибке чтения, Delete её больше не скрывает. Пустой корректный список сохраняет
+  upsert и идемпотентность удаления. Добавлен errors.Is sentinel not-found.
+- A61: RestartXray выбирал legacy fallback по словам HTTP 404/405 в Error(),
+  включая ответ 500 или success=false, провоцируя второй restart. Добавлен
+  remoteHTTPError с реальным status и IsRemoteHTTPStatus с errors.As. Только
+  настоящие 404/405 вызывают fallback. Два таких же текстовых сравнения в
+  traffic job переведены на этот predicate, чтобы не скрывать реальные failures.
+  Ограничение snippet 8KiB и escaping недоверенного диагностического текста сохранены.
+- A62: удаление/переименование инвалидировало только точный central tag, оставляя
+  bare/prefixed/adopted mappings и fingerprint. Теперь все aliases одного ID
+  очищаются под Remote.mu; новые/посторонние mappings сохраняются. Подтверждённое
+  отсутствие при повторном Delete тоже удаляет fingerprint/adopted association,
+  не задевая другие отсутствующие теги (id=0 не является wildcard).
+- A63: Remote запоминал resolver, установленный при создании, поэтому не видел
+  позднюю установку/замену/отключение egress. Managed Remote получает Manager как
+  динамический resolver; callback выполняется без manager lock. Проверены смена
+  URL, отключение (refuse direct), восстановление и reentrant callback.
+
+Новые tests воспроизвели все 4 дефекта до правок; дополнительная ветка absent
+Delete также воспроизведена до расширения A62. Два старых reconcile fixtures
+возвращали success=true без obj для /inbounds/list и полагались на дефект A60:
+теперь они возвращают корректный пустой список. Тесты реального lookup failure
+сохранены отдельно и требуют error без мутации.
+
+Проверки:
+- полный internal/web/runtime после A60–A63: PASS, 2.355s;
+- финальный полный runtime -race после всех правок и reentrant test: PASS, 8.143s;
+- scoped job heartbeat/traffic/atomic/adoption: PASS, 13.083s;
+- сборка всего проекта go build -p 3 ./...: PASS;
+- финальный полный golangci-lint 2.15.0: PASS, 0 issues;
+- diff --check и inventory check: PASS, 0 stale.
+
+Среда /tmp и /home/agent сбросилась между запросами; восстановлены Go 1.27.4
+из official dl.google.com с проверкой SHA-256 и golangci-lint 2.15.0.
+Обычный GOCACHE /tmp/3x-ui-go1274-cache, race /home/agent/.cache/3x-ui-audit-race.
+Полный go test ./... не повторяли; offline runtime не импортирует service,
+выбранные job tests используют только временную DB и loopback nodes.
+
+CI dd6e138 run 43051558265: все jobs, кроме telemt-web-frontends (130630042201),
+прошли; CodeQL success, release failure. Предыдущий DNS blocker пока не закрыт,
+лог этого job прочитан: подтверждён тот же apt DNS azure.archive.ubuntu.com до тестов.
+R04/R05 внешнего core остаются открытыми.
+
+Следующий участок: SNI/certificate discovery nodes. Есть два подозрительных
+контракта для воспроизведения: discoverNodeSNI убирает file paths, а merge
+пока требует их; node-sync allowlist не включает discovery domains routes.
+Не расширять mutation scope: domain writes требуют interactive session.
+В API остаётся 82 pending, services/nodes/jobs 640, subscriptions 67.

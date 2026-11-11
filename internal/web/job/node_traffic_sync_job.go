@@ -2,7 +2,7 @@ package job
 
 import (
 	"context"
-	"strings"
+	"net/http"
 	"sync"
 	"time"
 
@@ -380,7 +380,7 @@ func (j *NodeTrafficSyncJob) maybePushGlobals(mgr *runtime.Manager, nodes []*mod
 			if err := remote.PushGlobalClientTraffics(ctx, masterGuid, traffics); err != nil {
 				// An old-build node without the endpoint answers 404 — not worth a
 				// warning every cycle.
-				if strings.Contains(err.Error(), "HTTP 404") {
+				if runtime.IsRemoteHTTPStatus(err, http.StatusNotFound) {
 					logger.Debugf("node traffic sync: node %s has no global-traffic endpoint (old build)", n.Name)
 				} else {
 					logger.Warningf("node traffic sync: push globals to %s failed: %v", n.Name, err)
@@ -501,7 +501,7 @@ func (j *NodeTrafficSyncJob) syncOne(mgr *runtime.Manager, n *model.Node, doIpSy
 	// IP is on. Old nodes without the endpoint return HTTP 404 every cycle — note
 	// it once per node (re-armed on recovery) instead of flooding the log.
 	if guidTrees, err := rt.FetchClientIpsByGuid(ipCtx); err != nil {
-		if strings.Contains(err.Error(), "HTTP 404") {
+		if runtime.IsRemoteHTTPStatus(err, http.StatusNotFound) {
 			if _, seen := j.noGuidIpEndpoint.LoadOrStore(n.Id, true); !seen {
 				logger.Debugf("node traffic sync: node %s has no client-IP attribution endpoint (old build)", n.Name)
 			}

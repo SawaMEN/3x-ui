@@ -49,6 +49,29 @@ const errBodyDiagBytes = 8 << 10 // 8 KiB
 // errRemoteResponseTooLarge is returned when a node response exceeds the cap.
 var errRemoteResponseTooLarge = errors.New("remote response exceeds size limit")
 
+// Only a successful inventory lookup can establish that an inbound is absent.
+var errRemoteInboundNotFound = errors.New("remote inbound not found")
+
+type remoteHTTPError struct {
+	method, path string
+	status       int
+	snippet      string
+}
+
+func (e *remoteHTTPError) Error() string {
+	if e.snippet != "" {
+		return fmt.Sprintf("%s %s: HTTP %d: %q", e.method, e.path, e.status, e.snippet)
+	}
+	return fmt.Sprintf("%s %s: HTTP %d", e.method, e.path, e.status)
+}
+
+// IsRemoteHTTPStatus distinguishes a response status from the text of a node
+// API failure or transport error, including errors wrapped by callers.
+func IsRemoteHTTPStatus(err error, status int) bool {
+	var httpErr *remoteHTTPError
+	return errors.As(err, &httpErr) && httpErr.status == status
+}
+
 // readCappedBody reads all of r but rejects bodies larger than limit, returning
 // errRemoteResponseTooLarge. It reads at most limit+1 bytes so a body of exactly
 // limit is accepted and the first oversize byte is detected without buffering
@@ -300,12 +323,7 @@ func (r *Remote) doWithTimeout(ctx context.Context, method, path string, body an
 	// to buffer a large body just to return an HTTP error.
 	if resp.StatusCode != http.StatusOK {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, errBodyDiagBytes))
-		if msg := bytes.TrimSpace(snippet); len(msg) > 0 {
-			// %q quotes/escapes the untrusted node body so control characters or
-			// newlines in it can't garble or inject into the error/log output.
-			return nil, fmt.Errorf("%s %s: HTTP %d: %q", method, path, resp.StatusCode, msg)
-		}
-		return nil, fmt.Errorf("%s %s: HTTP %d", method, path, resp.StatusCode)
+		return nil, &remoteHTTPError{method: method, path: path, status: resp.StatusCode, snippet: string(bytes.TrimSpace(snippet))}
 	}
 
 	// Fast-fail on an honestly-declared oversize body; the LimitReader below is
@@ -343,7 +361,7 @@ func (r *Remote) resolveRemoteID(ctx context.Context, tag string) (int, error) {
 	if id, ok := r.cacheGetTag(tag); ok {
 		return id, nil
 	}
-	return 0, fmt.Errorf("remote inbound with tag %q not found on node %s", tag, r.node.Name)
+	return 0, fmt.Errorf("%w: tag %q on node %s", errRemoteInboundNotFound, tag, r.node.Name)
 }
 
 // nodeInboundTagPrefix is the central-panel alias for an inbound on nodeID.
@@ -394,6 +412,33 @@ func (r *Remote) cacheDel(tag string) {
 	defer r.mu.Unlock()
 	delete(r.remoteIDByTag, tag)
 	delete(r.pushedFP, tag)
+}
+
+// forgetRemoteInbound removes all aliases of one mutated/deleted remote ID.
+// Prefix and adopted forms can both outlive the central tag's cache entry.
+func (r *Remote) forgetRemoteInbound(tag string, id int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	prefix := nodeInboundTagPrefix(r.node.Id)
+	bareTag := strings.TrimPrefix(tag, prefix)
+	forgetFingerprint := func(tag string) {
+		bare := strings.TrimPrefix(tag, prefix)
+		delete(r.pushedFP, bare)
+		delete(r.pushedFP, prefix+bare)
+	}
+	for central, deployed := range r.adoptedAliases {
+		if strings.TrimPrefix(central, prefix) == bareTag || (id > 0 && (r.remoteIDByTag[central] == id || r.remoteIDByTag[deployed] == id)) {
+			delete(r.adoptedAliases, central)
+			forgetFingerprint(central)
+		}
+	}
+	for cachedTag, cachedID := range r.remoteIDByTag {
+		if strings.TrimPrefix(cachedTag, prefix) == bareTag || (id > 0 && cachedID == id) {
+			delete(r.remoteIDByTag, cachedTag)
+			forgetFingerprint(cachedTag)
+		}
+	}
+	forgetFingerprint(tag)
 }
 
 // forgetTag drops every tag form cacheGetTag would match, once the node reports
@@ -489,27 +534,33 @@ func (r *Remote) AddInbound(ctx context.Context, ib *model.Inbound) error {
 func (r *Remote) DelInbound(ctx context.Context, ib *model.Inbound) error {
 	id, err := r.resolveRemoteID(ctx, ib.Tag)
 	if err != nil {
-		logger.Warning("remote DelInbound: tag", ib.Tag, "not found on", r.node.Name)
-		return nil
+		if errors.Is(err, errRemoteInboundNotFound) {
+			r.forgetRemoteInbound(ib.Tag, 0)
+			return nil
+		}
+		return err
 	}
 	if _, err := r.do(ctx, http.MethodPost, "panel/api/inbounds/del/"+strconv.Itoa(id), nil); err != nil {
 		return err
 	}
-	r.cacheDel(ib.Tag)
+	r.forgetRemoteInbound(ib.Tag, id)
 	return nil
 }
 
 func (r *Remote) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) error {
 	id, err := r.resolveRemoteID(ctx, oldIb.Tag)
 	if err != nil {
-		return r.AddInbound(ctx, newIb)
+		if errors.Is(err, errRemoteInboundNotFound) {
+			return r.AddInbound(ctx, newIb)
+		}
+		return err
 	}
 	payload := wireInbound(newIb, r.node.Id)
 	if _, err := r.do(ctx, http.MethodPost, "panel/api/inbounds/update/"+strconv.Itoa(id), payload); err != nil {
 		return err
 	}
 	if oldIb.Tag != newIb.Tag {
-		r.cacheDel(oldIb.Tag)
+		r.forgetRemoteInbound(oldIb.Tag, id)
 	}
 	r.cacheSet(newIb.Tag, id)
 	r.recordPushedInbound(newIb)
@@ -707,8 +758,7 @@ func (r *Remote) RestartXray(ctx context.Context) error {
 	// Older nodes predate restartCoreService and only expose restartXrayService.
 	// Fall back only when the endpoint itself is missing; a real 5xx/core error
 	// from a new node must be surfaced rather than hidden by a second restart.
-	msg := err.Error()
-	if !strings.Contains(msg, "HTTP 404") && !strings.Contains(msg, "HTTP 405") {
+	if !IsRemoteHTTPStatus(err, http.StatusNotFound) && !IsRemoteHTTPStatus(err, http.StatusMethodNotAllowed) {
 		return err
 	}
 	_, legacyErr := r.do(ctx, http.MethodPost, "panel/api/server/restartXrayService", nil)

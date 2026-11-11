@@ -106,7 +106,7 @@ func (m *Manager) RuntimeFor(nodeID *int) (Runtime, error) {
 	if !n.Enable {
 		return nil, errors.New("node " + n.Name + " is disabled")
 	}
-	rt := NewRemote(n, m.egressResolver)
+	rt := NewRemote(n, m)
 	m.remotes[*nodeID] = rt
 	return rt, nil
 }
@@ -135,11 +135,11 @@ func (m *Manager) RemoteFor(node *model.Node) (*Remote, error) {
 			return rt, nil
 		}
 	} else {
-		rt := NewRemote(cloneRemoteNode(node), m.egressResolver)
+		rt := NewRemote(cloneRemoteNode(node), m)
 		m.remotes[node.Id] = rt
 		return rt, nil
 	}
-	rt := NewRemote(cloneRemoteNode(node), m.egressResolver)
+	rt := NewRemote(cloneRemoteNode(node), m)
 	m.remotes[node.Id] = rt
 	return rt, nil
 }
