@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Checkbox, Input, Modal, Select, Space, Typography } from 'antd';
+import { Alert, Button, Checkbox, Input, Modal, Select, Space, Typography } from 'antd';
 import type { NodeRecord } from '@/schemas/node';
 import { HttpUtil } from '@/utils';
 import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
@@ -25,11 +25,51 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [mainCertificate, setMainCertificate] = useState<{
+    domain: string;
+    state: string;
+    certFile: string;
+    keyFile: string;
+  } | null>(null);
+  const [checkingCertificate, setCheckingCertificate] = useState(false);
+  const checkMainCertificate = async () => {
+    if (!mainCertificate || checkingCertificate) return;
+    setCheckingCertificate(true);
+    try {
+      const response = await HttpUtil.get('/panel/api/domains/sni', undefined, { silent: true });
+      if (!response?.success || !Array.isArray(response.obj)) {
+        throw new Error(response?.msg || t('Не удалось обновить сертификат', 'Could not refresh certificate'));
+      }
+      const matching = (response.obj as Array<{
+        name: string;
+        nodeId?: number;
+        certFile?: string;
+        keyFile?: string;
+      }>).find((entry) =>
+        entry.name === mainCertificate.domain && !entry.nodeId &&
+        entry.certFile && entry.keyFile,
+      );
+      if (matching) {
+        setMainCertificate((current) => current && ({
+          ...current,
+          state: 'valid',
+          certFile: matching.certFile || '',
+          keyFile: matching.keyFile || '',
+        }));
+      } else {
+        setError(t('Сертификат ещё не готов. Проверьте DNS-01 и повторите позже.', 'Certificate is not ready yet. Check DNS-01 and retry later.'));
+      }
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setCheckingCertificate(false);
+    }
+  };
   const online = nodes.filter(
     (node) => node.id > 0 && node.enable && node.status === 'online' && !node.transitive,
   );
   const submit = async () => {
-    if (saving || !domain.trim() || !email.trim() || !acceptTerms) return;
+    if (saving || mainCertificate || !domain.trim() || !email.trim() || !acceptTerms) return;
     setSaving(true);
     setError('');
     try {
@@ -42,12 +82,28 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
         setError(result?.msg || t('Не удалось создать сайт', 'Failed to provision the website'));
         return;
       }
-      const value = result.obj as { domain?: string; state?: string; mainError?: string; mainState?: string } | undefined;
+      const value = result.obj as {
+        domain?: string;
+        state?: string;
+        mainError?: string;
+        mainState?: string;
+        mainCertFile?: string;
+        mainKeyFile?: string;
+      } | undefined;
       onSuccess(value?.domain || domain.trim(), value?.state || 'pending');
+      if (nodeId > 0 && issueOnMain) {
+        setMainCertificate({
+          domain: value?.domain || domain.trim().toLowerCase().replace(/\.$/, ''),
+          state: value?.mainState || 'pending',
+          certFile: value?.mainCertFile || '',
+          keyFile: value?.mainKeyFile || '',
+        });
+      }
       if (value?.mainError) {
         setError(t('Удалённый сайт создан, но выпуск на основной ноде не удался: ', 'Remote site succeeded, but main-node certificate failed: ') + value.mainError);
         return;
       }
+      if (nodeId > 0 && issueOnMain) return;
       setDomain('');
       setSiteCatalog('builtin');
       setSiteTemplate('notes');
@@ -67,11 +123,11 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
         'Собственный сайт-заглушка с автоматическим TLS',
         'Owned HTTPS cover site with automatic TLS',
       )}
-      okText={t('Настроить сайт и сертификат', 'Provision site and certificate')}
-      onOk={() => void submit()}
+      okText={mainCertificate ? t('Закрыть', 'Close') : t('Настроить сайт и сертификат', 'Provision site and certificate')}
+      onOk={() => mainCertificate ? onClose() : void submit()}
       onCancel={onClose}
       confirmLoading={saving}
-      okButtonProps={{ disabled: !domain.trim() || !email.trim() || !acceptTerms }}
+      okButtonProps={{ disabled: !mainCertificate && (!domain.trim() || !email.trim() || !acceptTerms) }}
       destroyOnHidden
     >
       <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
@@ -174,6 +230,34 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             'I control this hostname and accept the Let’s Encrypt terms.',
           )}
         </Checkbox>
+        {mainCertificate && (
+          <Alert
+            type="success"
+            showIcon
+            title={t('Сайт-заглушка создан на удалённой ноде', 'Cover site created on remote node')}
+            description={
+              <Space orientation="vertical" size="small">
+                <Typography.Text>
+                  {t('Сертификат на основной ноде:', 'Main-node certificate:')} {mainCertificate.state}
+                </Typography.Text>
+                {mainCertificate.certFile && mainCertificate.keyFile ? (
+                  <>
+                    <Typography.Text copyable={{ text: mainCertificate.certFile }}>
+                      certFile: {mainCertificate.certFile}
+                    </Typography.Text>
+                    <Typography.Text copyable={{ text: mainCertificate.keyFile }}>
+                      keyFile: {mainCertificate.keyFile}
+                    </Typography.Text>
+                  </>
+                ) : (
+                  <Button loading={checkingCertificate} onClick={() => void checkMainCertificate()}>
+                    {t('Проверить выпуск сертификата', 'Check certificate issuance')}
+                  </Button>
+                )}
+              </Space>
+            }
+          />
+        )}
         {error && <Alert type="error" showIcon title={error} />}
       </Space>
     </Modal>

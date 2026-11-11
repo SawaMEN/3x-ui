@@ -468,8 +468,8 @@ export default function DomainFrontTab({
       origin: value.mode === 'relay' ? value.origin : '',
       siteCatalog: value.mode === 'sni_only' ? (value.siteCatalog || '') : '',
       siteTemplate: value.mode === 'sni_only' ? (value.siteTemplate || '') : '',
-      certFile: value.tls === 'manual' && value.mode !== 'shared_sni' ? value.certFile : '',
-      keyFile: value.tls === 'manual' && value.mode !== 'shared_sni' ? value.keyFile : '',
+      certFile: value.tls === 'manual' && value.mode !== 'shared_sni' && value.mode !== 'cert_only' ? value.certFile : '',
+      keyFile: value.tls === 'manual' && value.mode !== 'shared_sni' && value.mode !== 'cert_only' ? value.keyFile : '',
     });
     const domains = [...draft.domains];
     if (editing != null && editing >= 0) domains[editing] = domain;
@@ -1563,7 +1563,7 @@ export default function DomainFrontTab({
                     >
                       <Switch />
                     </Form.Item>
-                    {mode !== 'shared_sni' && (
+                    {mode !== 'shared_sni' && mode !== 'cert_only' && (
                       <>
                         <Form.Item
                           name="tls"
