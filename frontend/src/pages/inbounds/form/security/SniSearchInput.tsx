@@ -21,6 +21,7 @@ interface SniSearchInputProps extends Omit<InputProps, 'value' | 'onChange'> {
   onChange?: (value: string) => void;
   ref?: Ref<InputRef>;
   purpose?: Exclude<SniScanPurpose, 'reality'>;
+  showCertificateAssistant?: boolean;
   onPickTarget?: (result: RealityScanResult) => void;
   onPickManagedDomain?: (domain: ManagedSniDomain) => void;
 }
@@ -36,6 +37,7 @@ export default function SniSearchInput({
   onChange,
   ref,
   purpose = 'tls',
+  showCertificateAssistant = true,
   onPickTarget,
   onPickManagedDomain,
   disabled,
@@ -110,7 +112,9 @@ export default function SniSearchInput({
           {t('pages.inbounds.form.sniSearch')}
         </Button>
       </Space.Compact>
-      {purpose === 'tls' && <LocalCertificateAssistant sni={value || ''} disabled={disabled} />}
+      {purpose === 'tls' && showCertificateAssistant && (
+        <LocalCertificateAssistant sni={value || ''} disabled={disabled} />
+      )}
       <RealityTargetScannerModal
         open={open}
         onClose={() => setOpen(false)}
