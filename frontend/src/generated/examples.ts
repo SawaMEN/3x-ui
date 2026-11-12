@@ -637,6 +637,7 @@ export const EXAMPLES: Record<string, unknown> = {
         "origin": "",
         "panel": false,
         "siteCatalog": "",
+        "siteHtml": "",
         "siteTemplate": "",
         "tls": "auto"
       }
@@ -662,6 +663,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "origin": "",
     "panel": false,
     "siteCatalog": "",
+    "siteHtml": "",
     "siteTemplate": "",
     "tls": "auto"
   },
@@ -701,6 +703,7 @@ export const EXAMPLES: Record<string, unknown> = {
           "origin": "",
           "panel": false,
           "siteCatalog": "",
+          "siteHtml": "",
           "siteTemplate": "",
           "tls": "auto"
         }

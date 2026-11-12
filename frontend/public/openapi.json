@@ -2565,6 +2565,9 @@
           "siteCatalog": {
             "type": "string"
           },
+          "siteHtml": {
+            "type": "string"
+          },
           "siteTemplate": {
             "type": "string"
           },
@@ -17895,6 +17898,7 @@
                           "origin": "",
                           "panel": false,
                           "siteCatalog": "",
+                          "siteHtml": "",
                           "siteTemplate": "",
                           "tls": "auto"
                         }
@@ -17998,6 +18002,7 @@
                           "origin": "",
                           "panel": false,
                           "siteCatalog": "",
+                          "siteHtml": "",
                           "siteTemplate": "",
                           "tls": "auto"
                         }

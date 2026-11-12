@@ -1603,7 +1603,7 @@ export default function DomainFrontTab({
                     if (value === 'custom' && !form.getFieldValue('siteHtml')) {
                       form.setFieldValue('siteHtml', starterCoverSiteHTML);
                     }
-                  }
+                  }}
                 />
               </Form.Item>
               <Form.Item
@@ -1636,14 +1636,7 @@ export default function DomainFrontTab({
                       : Promise.resolve(),
                   }]}
                 >
-                  <Form.Item noStyle shouldUpdate={(previous, current) => previous.siteHtml !== current.siteHtml}>
-                    {() => (
-                      <CoverSiteHTMLEditor
-                        value={form.getFieldValue('siteHtml') || ''}
-                        onChange={(value) => form.setFieldValue('siteHtml', value)}
-                      />
-                    )}
-                  </Form.Item>
+                  <CoverSiteHTMLEditor />
                 </Form.Item>
               )}
             </>

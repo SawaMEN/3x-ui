@@ -2539,10 +2539,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "siteCatalog": {
         "type": "string"
       },
-      "siteTemplate": {
+      "siteHtml": {
         "type": "string"
       },
-      "siteHtml": {
+      "siteTemplate": {
         "type": "string"
       },
       "tls": {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Card, Checkbox, Input, Modal, Segmented, Select, Space, Typography } from 'antd';
@@ -45,7 +45,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   const [email, setEmail] = useState('');
   const [siteCatalog, setSiteCatalog] = useState<'builtin' | 'mtproxyl' | 'custom'>('builtin');
   const [siteTemplate, setSiteTemplate] = useState('notes');
-  const [siteHTML, setSiteHTML] = useState(starterCoverSiteHTML);
+  const [editedHTML, setEditedHTML] = useState<string | null>(null);
   const [issueOnMain, setIssueOnMain] = useState(false);
   const dns01 = useMainNodeDNS01Readiness(domain);
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -108,7 +108,6 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   );
   const nodeSites = existingSites.filter((site) => site.nodeId === nodeId);
   const isCustom = siteCatalog === 'custom';
-  const htmlError = isCustom ? coverSiteHTMLValidation(siteHTML) : null;
   const { data: savedContent, isFetching: loadingContent, error: contentError } = useQuery({
     queryKey: ['manager', 'cover-site-content', nodeId, selectedExisting?.domain],
     enabled: open && selectedExisting?.siteCatalog === 'custom',
@@ -128,13 +127,12 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       return { nodeId: selected.nodeId, domain: selected.domain, html: response.obj.html };
     },
   });
-  useEffect(() => {
-    if (savedContent && selectedExisting?.domain === savedContent.domain && nodeId === savedContent.nodeId) {
-      setSiteHTML(savedContent.html);
-    }
-  }, [savedContent, selectedExisting?.domain, nodeId]);
+  const siteHTML = editedHTML ?? (selectedExisting?.siteCatalog === 'custom' ? savedContent?.html ?? '' : starterCoverSiteHTML);
+  const htmlError = isCustom ? coverSiteHTMLValidation(siteHTML) : null;
+  const setSiteHTML = setEditedHTML;
 
   const chooseExisting = (value?: string) => {
+    setEditedHTML(null);
     const selected = nodeSites.find((site) => site.domain === value);
     if (!selected) {
       setDomain('');
@@ -143,7 +141,6 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
     if (selected.siteCatalog === 'custom' && selected.siteTemplate === 'html') {
       setSiteCatalog('custom');
       setSiteTemplate('html');
-      setSiteHTML('');
     } else {
       const catalog = selected.siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin';
       const template = TelemtWebCatalogs[catalog].templates.some(
@@ -155,7 +152,6 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
           : 'stub';
       setSiteCatalog(catalog);
       setSiteTemplate(template);
-      setSiteHTML(starterCoverSiteHTML);
     }
     setDomain(selected.domain);
   };
@@ -182,6 +178,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
           );
         }
         void queryClient.invalidateQueries({ queryKey: ['manager', 'cover-sites'] });
+        void queryClient.invalidateQueries({ queryKey: ['manager', 'cover-site-content', nodeId, selectedExisting.domain] });
         void queryClient.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
         onSuccess(selectedExisting.domain, 'valid');
         setDomain('');
@@ -240,7 +237,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       setDomain('');
       setSiteCatalog('builtin');
       setSiteTemplate('notes');
-      setSiteHTML(starterCoverSiteHTML);
+      setEditedHTML(null);
       setAcceptTerms(false);
       setIssueOnMain(false);
       onClose();
@@ -300,7 +297,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
               setDomain('');
               setSiteCatalog('builtin');
               setSiteTemplate('notes');
-              setSiteHTML(starterCoverSiteHTML);
+              setEditedHTML(null);
               setIssueOnMain(false);
             }}
             style={{ width: '100%' }}

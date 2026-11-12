@@ -29,7 +29,7 @@ export const starterCoverSiteHTML = `<!doctype html>
 </html>`;
 
 export function coverSiteHTMLValidation(html: string): string | null {
-  if (!html.trim() || !/<html(?:\\s|>)/i.test(html) || html.includes('\\0')) {
+  if (!html.trim() || !/<html(?:\s|>)/i.test(html) || html.includes('\0')) {
     return 'document';
   }
   if (new TextEncoder().encode(html).length > COVER_SITE_HTML_MAX_BYTES) {
@@ -39,12 +39,12 @@ export function coverSiteHTMLValidation(html: string): string | null {
 }
 
 interface Props {
-  value: string;
-  onChange: (value: string) => void;
+  value?: string;
+  onChange?: (value: string) => void;
   disabled?: boolean;
 }
 
-export default function CoverSiteHTMLEditor({ value, onChange, disabled }: Props) {
+export default function CoverSiteHTMLEditor({ value = '', onChange = () => {}, disabled }: Props) {
   const { i18n } = useTranslation();
   const ru = i18n.language.startsWith('ru');
   const [preview, setPreview] = useState(false);

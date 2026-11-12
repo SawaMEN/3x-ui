@@ -600,8 +600,8 @@ export interface DomainFrontDomain {
   origin: string;
   panel: boolean;
   siteCatalog?: string;
-  siteTemplate?: string;
   siteHtml?: string;
+  siteTemplate?: string;
   tls: string;
 }
 
