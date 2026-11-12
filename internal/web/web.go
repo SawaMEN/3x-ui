@@ -30,6 +30,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/cronspec"
@@ -471,7 +472,7 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	// Outbound subscription auto-refresh (respects per-sub updateInterval)
 	_, _ = s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob(s.ctx))
 	_, _ = s.cron.AddJob("@every 1m", job.NewRoutingCatalogJob(s.ctx))
-	_, _ = s.cron.AddJob("@every 10s", job.NewOutboundAutoBalancerJob())
+	_, _ = s.cron.AddJob("@every 10s", job.NewOutboundAutoBalancerJob(s.ctx))
 
 	_, _ = s.cron.AddJob(cadenceReapOrphans, job.NewReapSyncOrphansJob())
 
@@ -875,6 +876,14 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		err1 = common.Combine(err1, waitPanelTask(waitCtx, "API workers", s.api.WaitBackground))
 	}
 	err1 = common.Combine(err1, waitPanelTask(waitCtx, "initial jobs", s.startupTasks.Wait))
+	// A last reconcile tick may start sidecars. Join every producer, including
+	// retired panel workers, before stopping the process-wide managers.
+	if cronDone != nil {
+		err1 = common.Combine(err1, waitPanelTask(waitCtx, "scheduled jobs", func() { <-cronDone }))
+	}
+	if stopXray {
+		retiredPanelTasks.Wait()
+	}
 	if stopXray {
 		if coreType, _ := s.settingService.GetCoreType(); service.IsNativeCore(coreType) {
 			_ = service.SelectedNativeCore().Stop(s.ctx)
@@ -887,6 +896,7 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		externalvpn.GetManager().StopAll()
 		externalvpn.KeepOutbounds(nil)
 		mieru.GetManager().StopAll()
+		sudoku.GetManager().StopAll()
 		amneziawgnet.GetOutboundManager().StopAll()
 	}
 	if stopXray {
@@ -894,18 +904,11 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 			logger.Warning("vk-turn-proxy shutdown failed:", err)
 		}
 	}
-	if cronDone != nil {
-		err1 = common.Combine(err1, waitPanelTask(waitCtx, "scheduled jobs", func() { <-cronDone }))
-	}
 	if stopXray {
-		tuic.GetManager().StopAll()
 		if err := job.NewTuicJob().FlushStoppedTraffic(); err != nil {
 			logger.Warning("persist final TUIC traffic on shutdown failed:", err)
 			err2 = err
 		}
-		mtproto.GetManager().StopAll()
-		amneziawgnet.GetManager().StopAll()
-		amneziawgnet.GetOutboundManager().StopAll()
 	}
 	if stopXray {
 		if err := s.xrayService.StopXray(); err != nil {
@@ -914,9 +917,6 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	}
 	if s.bus != nil {
 		err1 = common.Combine(err1, waitPanelTask(waitCtx, "notification handlers", s.bus.Stop))
-	}
-	if stopXray {
-		retiredPanelTasks.Wait()
 	}
 	if err := service.PersistSystemMetrics(); err != nil {
 		logger.Warning("persist system metrics on shutdown failed:", err)

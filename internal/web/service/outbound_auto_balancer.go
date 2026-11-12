@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -147,23 +148,29 @@ func chooseSubscriptionOutbound(results []*outbound.TestOutboundResult, current,
 var (
 	autoBalanceMu       sync.Mutex
 	automaticBalanceNow = time.Now
-	autoBalanceProbe    = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
-		return (&outbound.OutboundService{}).TestAutomaticOutbounds(items, target, all, mode, core)
+	autoBalanceProbe    = func(ctx context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+		return (&outbound.OutboundService{}).TestAutomaticOutboundsContext(ctx, items, target, all, mode, core)
 	}
 )
 
 // runAutomaticProbe batches candidates and distinguishes an occupied probe
 // engine from failed nodes, so busy manual tests never cause a false failover.
-func runAutomaticProbe(members []any, target, all, mode, core string) ([]*outbound.TestOutboundResult, bool, error) {
+func runAutomaticProbe(ctx context.Context, members []any, target, all, mode, core string) ([]*outbound.TestOutboundResult, bool, error) {
 	var results []*outbound.TestOutboundResult
 	for start := 0; start < len(members); start += 50 {
+		if ctx.Err() != nil {
+			return nil, false, ctx.Err()
+		}
 		batch, err := json.Marshal(members[start:min(start+50, len(members))])
 		if err != nil {
 			return nil, false, err
 		}
-		r, err := autoBalanceProbe(string(batch), target, all, mode, core)
+		r, err := autoBalanceProbe(ctx, string(batch), target, all, mode, core)
 		if err != nil {
 			return nil, false, err
+		}
+		if ctx.Err() != nil {
+			return nil, false, ctx.Err()
 		}
 		for _, result := range r {
 			if result != nil && strings.Contains(result.Error, "Another outbound test is already running") {
@@ -177,16 +184,16 @@ func runAutomaticProbe(members []any, target, all, mode, core string) ([]*outbou
 
 // Long speed scans check the live node between small download batches. A
 // failure preempts ranking instead of waiting for all downloads to finish.
-func runAutomaticSpeedRanking(members, current []any, target, all, core string) ([]*outbound.TestOutboundResult, bool, bool, error) {
+func runAutomaticSpeedRanking(ctx context.Context, members, current []any, target, all, core string) ([]*outbound.TestOutboundResult, bool, bool, error) {
 	var results []*outbound.TestOutboundResult
 	for start := 0; start < len(members); start += 2 {
-		r, busy, err := runAutomaticProbe(members[start:min(start+2, len(members))], target, all, "speed", core)
+		r, busy, err := runAutomaticProbe(ctx, members[start:min(start+2, len(members))], target, all, "speed", core)
 		if err != nil || busy {
 			return nil, busy, false, err
 		}
 		results = append(results, r...)
 		if start+2 < len(members) {
-			health, busy, err := runAutomaticProbe(current, "", all, "real", core)
+			health, busy, err := runAutomaticProbe(ctx, current, "", all, "real", core)
 			if err != nil || busy {
 				return nil, busy, false, err
 			}
@@ -201,7 +208,7 @@ func runAutomaticSpeedRanking(members, current []any, target, all, core string) 
 // Emergency replacement checks small candidate groups and stops at the first
 // healthy group. A large subscription must not delay failover until every node
 // has timed out. Full ranking remains a separate scheduled operation.
-func runAutomaticFailoverProbe(members []any, current, target, all, core string) ([]*outbound.TestOutboundResult, bool, error) {
+func runAutomaticFailoverProbe(ctx context.Context, members []any, current, target, all, core string) ([]*outbound.TestOutboundResult, bool, error) {
 	var alternatives, previous []any
 	for _, raw := range members {
 		if ob, ok := raw.(map[string]any); ok && ob["tag"] == current {
@@ -212,7 +219,7 @@ func runAutomaticFailoverProbe(members []any, current, target, all, core string)
 	}
 	var results []*outbound.TestOutboundResult
 	for start := 0; start < len(alternatives); start += 8 {
-		r, busy, err := runAutomaticProbe(alternatives[start:min(start+8, len(alternatives))], target, all, "real", core)
+		r, busy, err := runAutomaticProbe(ctx, alternatives[start:min(start+8, len(alternatives))], target, all, "real", core)
 		if err != nil || busy {
 			return nil, busy, err
 		}
@@ -222,7 +229,7 @@ func runAutomaticFailoverProbe(members []any, current, target, all, core string)
 		}
 	}
 	// A transient failure may have recovered when no alternate is available.
-	r, busy, err := runAutomaticProbe(previous, target, all, "real", core)
+	r, busy, err := runAutomaticProbe(ctx, previous, target, all, "real", core)
 	return append(results, r...), busy, err
 }
 
@@ -256,6 +263,13 @@ func chooseRotatedOutbound(results []*outbound.TestOutboundResult, current, mode
 // ProbeAutomaticSubscriptions keeps health checks independent of ranking and
 // rotation timers. In-flight results are committed only to unchanged settings.
 func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (int, error) {
+	return s.ProbeAutomaticSubscriptionsContext(context.Background(), forceID)
+}
+
+func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptionsContext(ctx context.Context, forceID int) (int, error) {
+	if ctx.Err() != nil {
+		return 0, ctx.Err()
+	}
 	if !autoBalanceMu.TryLock() {
 		// The scheduler may skip an occupied probe; an explicit button press
 		// must not report success when no check was actually performed.
@@ -266,18 +280,18 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 	}
 	defer autoBalanceMu.Unlock()
 	var subs []*model.OutboundSubscription
-	if err := database.GetDB().Where("enabled = ? AND auto_balance = ?", true, true).Order("priority asc, id asc").Find(&subs).Error; err != nil {
+	if err := database.GetDB().WithContext(ctx).Where("enabled = ? AND auto_balance = ?", true, true).Order("priority asc, id asc").Find(&subs).Error; err != nil {
 		return 0, err
 	}
 	if len(subs) == 0 {
 		return 0, nil
 	}
 	settings := &SettingService{}
-	core, err := settings.GetCoreType()
+	core, err := settings.GetCoreTypeContext(ctx)
 	if err != nil {
 		return 0, err
 	}
-	template, err := settings.GetXrayConfigTemplate()
+	template, err := settings.getStringContext(ctx, "xrayTemplateConfig")
 	if err != nil {
 		return 0, err
 	}
@@ -287,7 +301,7 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 	}
 	all, _ := config["outbounds"].([]any)
 	// Include native manual hops in isolated health checks.
-	nativeTemplate, err := settings.GetSingBoxConfigTemplate()
+	nativeTemplate, err := settings.getStringContext(ctx, NativeCore(core).templateKey())
 	if err != nil {
 		return 0, err
 	}
@@ -309,7 +323,7 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 			}
 		}
 	}
-	active, err := s.AllActiveOutbounds()
+	active, err := s.allActiveOutboundsContext(ctx, core)
 	if err != nil {
 		return 0, err
 	}
@@ -319,6 +333,9 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 	}
 	changes := 0
 	for _, sub := range subs {
+		if ctx.Err() != nil {
+			return changes, ctx.Err()
+		}
 		if forceID > 0 && sub.Id != forceID {
 			continue
 		}
@@ -364,7 +381,7 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 			if sub.BalanceMode == "speed" {
 				healthURL = ""
 			}
-			results, busy, err := runAutomaticProbe(current, healthURL, string(allJSON), "real", core)
+			results, busy, err := runAutomaticProbe(ctx, current, healthURL, string(allJSON), "real", core)
 			if err != nil {
 				return changes, err
 			}
@@ -395,16 +412,16 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 			var err error
 			if mode == "speed" {
 				var failed bool
-				results, busy, failed, err = runAutomaticSpeedRanking(members, current, target, string(allJSON), core)
+				results, busy, failed, err = runAutomaticSpeedRanking(ctx, members, current, target, string(allJSON), core)
 				if err == nil && !busy && failed {
 					unavailable = true
 					mode, selectionMode, target = "real", "latency", ""
-					results, busy, err = runAutomaticFailoverProbe(members, sub.SelectedTag, target, string(allJSON), core)
+					results, busy, err = runAutomaticFailoverProbe(ctx, members, sub.SelectedTag, target, string(allJSON), core)
 				}
 			} else if unavailable && sub.SelectedTag != "" {
-				results, busy, err = runAutomaticFailoverProbe(members, sub.SelectedTag, target, string(allJSON), core)
+				results, busy, err = runAutomaticFailoverProbe(ctx, members, sub.SelectedTag, target, string(allJSON), core)
 			} else {
-				results, busy, err = runAutomaticProbe(members, target, string(allJSON), mode, core)
+				results, busy, err = runAutomaticProbe(ctx, members, target, string(allJSON), mode, core)
 			}
 			if err != nil {
 				return changes, err
@@ -415,7 +432,7 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 			// A broken download endpoint is not proof that every proxy is down.
 			// Recheck with the small health request and fall back to latency.
 			if mode == "speed" && chooseSubscriptionOutbound(results, "", "speed", 0) == "" {
-				results, busy, err = runAutomaticProbe(members, "", string(allJSON), "real", core)
+				results, busy, err = runAutomaticProbe(ctx, members, "", string(allJSON), "real", core)
 				if err != nil {
 					return changes, err
 				}
@@ -487,7 +504,10 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 			message = "No healthy outbound; automatic route is blocked"
 		}
 		updates["selected_tag"], updates["probe_error"], updates["switch_reason"] = chosen, message, reason
-		result := database.GetDB().Model(&model.OutboundSubscription{}).
+		if ctx.Err() != nil {
+			return changes, ctx.Err()
+		}
+		result := database.GetDB().WithContext(ctx).Model(&model.OutboundSubscription{}).
 			Where("id = ? AND updated_at = ? AND last_fetched_outbounds = ? AND enabled = ? AND auto_balance = ?", sub.Id, sub.UpdatedAt, sub.LastFetchedOutbounds, true, true).
 			Where("balance_mode = ? AND probe_url = ? AND switch_interval = ? AND health_interval = ? AND probe_interval = ? AND tolerance = ?", sub.BalanceMode, sub.ProbeURL, sub.SwitchInterval, sub.HealthInterval, sub.ProbeInterval, sub.Tolerance).Updates(updates)
 		if result.Error != nil {
@@ -499,4 +519,19 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 		}
 	}
 	return changes, nil
+}
+
+func (s *OutboundSubscriptionService) allActiveOutboundsContext(ctx context.Context, core string) ([]any, error) {
+	var subs []*model.OutboundSubscription
+	if err := database.GetDB().WithContext(ctx).Where("enabled = ?", true).Order("priority asc, id asc").Find(&subs).Error; err != nil {
+		return nil, err
+	}
+	prepend, appendList, err := splitActiveOutboundsForCore(subs, core)
+	return append(prepend, appendList...), err
+}
+
+func (s *OutboundSubscriptionService) activeAutomaticSubscriptionsContext(ctx context.Context) ([]*model.OutboundSubscription, error) {
+	var subs []*model.OutboundSubscription
+	err := database.GetDB().WithContext(ctx).Where("enabled = ? AND auto_balance = ?", true, true).Order("priority asc, id asc").Find(&subs).Error
+	return subs, err
 }

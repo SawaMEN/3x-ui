@@ -587,3 +587,23 @@ loads и прочие pending lifecycle подсистемы остаются о
 Финальный targeted -race после добавления всех regressions: job PASS 5.280s,
 sub PASS 3.170s, web PASS 4.355s. Delayed timer проверяется с synctest:
 worker сначала входит в ожидание таймера, затем отменяется; полный час не выжидается.
+
+
+## Продолжение: A77–A80, отмена автобалансировщика и завершение sidecars
+
+Нужно 4 исправления, реализовано 4; всего 80. Reviewed 243/2364, осталось 2121.
+
+| ID | Подтверждение до правки | Исправление |
+|---|---|---|
+| A77 | После cancel выбран b и запущены 2 probes; HTTP временного ядра не отменяется | Context через job, settings/DB, probe pools/HTTP/TCP/start; запрет поздних writes и очистка временного ядра |
+| A78 | Canceled apply перезаписывает acknowledgement остановленного ядра | Context-aware selector/apply/DB, сохранение AppliedTag/ApplyError после отмены |
+| A79 | Последний настоящий cron tick оставляет owned external child живым после Stop | Join всех producers до StopAll, сохранение TUIC tail flush |
+| A80 | Panel-only reload останавливает живой Sudoku | Удаление detached watcher; Server владеет полной остановкой, reload сохраняет процесс |
+
+Расширенные normal/race тесты, полный outbound пакет, build и vet прошли.
+Подробности прогонов, ограничения managed bootstrap и следующая очередь — RESUME.md.
+
+Итог A77–A80: golangci-lint 2.15.0 — 0 issues на неподвижном дереве.
+Финальный lifecycle/TUIC tail -race web PASS 5.203s; отмена очереди speed
+и временного ядра -race outbound PASS 1.125s. Полные build/vet прошли.
+Inventory и diff --check прошли: 243 reviewed, 2121 pending, stale 0.

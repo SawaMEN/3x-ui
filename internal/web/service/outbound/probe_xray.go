@@ -22,7 +22,12 @@ func newXrayBatchProcess(cfg *xray.Config, path string) batchProcess {
 	}, true), config: cfg, path: path}
 }
 
-func (p *xrayBatchProcess) Start() error {
+func (p *xrayBatchProcess) Start() error { return p.StartContext(context.Background()) }
+
+func (p *xrayBatchProcess) StartContext(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	data, err := json.Marshal(p.config)
 	if err != nil {
 		return err
@@ -30,7 +35,7 @@ func (p *xrayBatchProcess) Start() error {
 	if err := os.WriteFile(p.path, data, 0o600); err != nil {
 		return err
 	}
-	return p.process.Start(context.Background())
+	return p.process.Start(ctx)
 }
 func (p *xrayBatchProcess) Stop() error     { return p.process.Stop() }
 func (p *xrayBatchProcess) IsRunning() bool { return p.process.IsRunning() }

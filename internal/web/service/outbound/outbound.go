@@ -23,6 +23,14 @@ import (
 type OutboundService struct {
 	// CoreType retains compatibility with stored callers; probes use Sing-box.
 	CoreType string
+	probeCtx context.Context
+}
+
+func (s *OutboundService) probeContext() context.Context {
+	if s.probeCtx != nil {
+		return s.probeCtx
+	}
+	return context.Background()
 }
 
 func (s *OutboundService) AddTraffic(traffics []*coremodel.Traffic, clientTraffics []*coremodel.ClientTraffic) (error, bool) {
@@ -178,7 +186,7 @@ func (s *OutboundService) testOutboundTCP(outboundJSON string) (*TestOutboundRes
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			results[i] = probeTCPEndpoint(endpoints[i], 5*time.Second)
+			results[i] = probeTCPEndpoint(s.probeContext(), endpoints[i], 5*time.Second)
 		}(i)
 	}
 	wg.Wait()
@@ -208,10 +216,10 @@ func (s *OutboundService) testOutboundTCP(outboundJSON string) (*TestOutboundRes
 	return out, nil
 }
 
-func probeTCPEndpoint(endpoint string, timeout time.Duration) TestEndpointResult {
+func probeTCPEndpoint(ctx context.Context, endpoint string, timeout time.Duration) TestEndpointResult {
 	r := TestEndpointResult{Address: endpoint}
 	start := time.Now()
-	conn, err := (&net.Dialer{Timeout: timeout}).DialContext(context.Background(), "tcp", endpoint)
+	conn, err := (&net.Dialer{Timeout: timeout}).DialContext(ctx, "tcp", endpoint)
 	r.Delay = time.Since(start).Milliseconds()
 	if err != nil {
 		r.Error = err.Error()

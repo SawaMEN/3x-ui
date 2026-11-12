@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 76 подтверждённых исправлений панели; A74–A76 — текущая группа из 3 исправлений.
+Всего реализовано 80 подтверждённых исправлений панели; A77–A80 — текущая группа из 4 исправлений.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 231 файл, осталось 2133; общий проход не завершён.
+Проверено вручную 243 файла, осталось 2121; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -874,3 +874,94 @@ web PASS 0.309s. go build -p 3 ./... и go vet -p 3 ./...: PASS.
 Финальный targeted -race после добавления всех regressions: job PASS 5.280s,
 sub PASS 3.170s, web PASS 4.355s. Delayed timer проверяется с synctest:
 worker сначала входит в ожидание таймера, затем отменяется; полный час не выжидается.
+
+
+## Контрольная точка A77–A80: автобалансировщик и процессы протоколов
+
+A74–A76 опубликованы в a9bd1c81204cad4624cae9b2005db4265ffca393; с этой main
+продолжена работа. Нужно 4 исправления, реализовано 4, осталось 0 реализации.
+Всего 80; reviewed 243/2364, pending 2121, stale 0.
+
+- A77: отменённый probe продолжал HTTP/замеры и запуск следующих пакетов,
+  временное ядро оставалось живым до обычного timeout; поздний успешный результат
+  менял SelectedTag после cancel. До правки regression получил count=1, selected=b,
+  calls=2 после отмены. Теперь scheduler и ручная проверка передают context через
+  DB/settings snapshot, health/ranking/failover, временное ядро/ожидание портов,
+  очереди workers, HTTP/speed/TCP, warm GET и egress trace. Отмена возвращается
+  как context error; late results не публикуются в БД и не начинают следующий
+  пакет. Временное ядро всегда очищается, включая частично неудачный старт.
+  Старые API сохранены как Background wrappers. Existing probe hook тестов
+  получает context, но прежние offline egress stubs сохранены.
+- A78: отменённый apply tick стирал AppliedTag и заменял ApplyError сообщением
+  остановленного ядра. Regression до правки получил count=1 и потерю прежнего
+  acknowledgement. Context теперь проходит в subscriptions/settings queries,
+  selector HTTP calls, Xray apply deadline и DB writes; после отмены сохранённое
+  подтверждение не затирается. Проверяются отменённый tick, зависшее чтение БД,
+  прекращение job до apply и сохранность прежнего выбора. Реальный уже принятый
+  ядром выбор не откатывается отменой HTTP: следующий tick заново сверяет его.
+- A79: StopAll вызывался до cron join. Последний periodic reconcile мог вновь
+  поднять external sidecar, после чего полный Stop возвращал nil с живым child.
+  Регрессия воспроизвела это настоящим owned shell child и cron tick. Теперь
+  initial/current cron/retired workers завершаются до остановки managers.
+  Убраны повторные StopAll, которые больше не закрывают гонку; сохранён финальный
+  TUIC traffic flush после остановки. Полный stop и panel-only bounded wait
+  сохраняют свои прежние роли.
+- A80: NewSudokuJob создавал отдельный cancel watcher с безусловным StopAll.
+  StopPanelOnly обрывал рабочий Sudoku, а незавершённый watcher мог затронуть
+  процессы новой панели. Regression до правки получил not running после reload.
+  Watcher удалён; процессами владеет Server: reload их сохраняет, полный stop
+  синхронно вызывает Sudoku StopAll после join заданий. Проверено настоящим
+  временным child; job пропускает уже отменённый запуск.
+
+Первый объединённый normal: web PASS 2.521s, job PASS 1.268s, service PASS 10.470s,
+outbound PASS 0.120s. Расширенный -race: web PASS 8.383s, job PASS 4.336s,
+service PASS 87.276s, outbound PASS 1.220s. Дополнительно cancellation/speed queue
+-race outbound PASS 1.125s. Полный outbound пакет PASS 0.078s; затем полные
+build -p 3 ./... и vet -p 3 ./...: PASS. Итог lint/последних lifecycle tests — ниже.
+
+Один промежуточный lint загрузил тестовый файл одновременно с добавлением нового
+импорта sync/atomic и вернул typecheck error; это не успешный прогон. Последний
+запуск выполняется на неизменяемом коде. Реальные протоколы тестовыми children
+не проверяются: эти regressions проверяют lifecycle, локальные HTTP/SOCKS и БД.
+
+Следующая очередь:
+- EnsureProbeOutbound и managed sidecar bootstrap внутри externalvpn ещё имеют
+  собственные Background contexts/locks. A77 прекращает следующие setup шаги и
+  очищает выделенные ресурсы, но уже выполняющийся managed bootstrap остаётся
+  отдельным вопросом; не считать все FPTN/OpenFlux/Vetroff start paths мгновенно
+  отменяемыми. Проверить эти пути и cleanup на реальных timeout scenarios.
+- Финальные счётчики Mieru/externalvpn/MTProto/AWG: отдельная проверка tail traffic
+  и pending batches при полном Stop; A79 регрессия доказывает порядок завершения,
+  не гарантирует сохранность всех последних дельт каждого протокола.
+- Request-triggered remote routing background loads, TLS downgrade при невалидном
+  cert, SQL fixture и остальные pending подсистемы остаются открыты.
+- setting.go и xray_setting.go изменены только в прочитанных getter/auto-apply
+  участках и остаются pending до полного чтения. Новые setting_context helpers
+  прочитаны целиком. Рефакторинг getters сохраняет прежние defaults/legacy core
+  normalization, добавляя cancellable query без изменения write APIs.
+- Прежние R04/R05 и ограничение общего go test ./... сохраняются.
+
+Новые тесты не обращаются к public-IP API, не выпускают ACME certificates и не
+применяют host firewall: используются temporary SQLite, loopback HTTP/SOCKS,
+контролируемые probe results и принадлежащие тестам процессы exec sleep 60,
+которые обязательно останавливаются cleanup/Server.Stop.
+
+Итог A77–A80: golangci-lint 2.15.0 — 0 issues на неподвижном дереве.
+Финальный lifecycle/TUIC tail -race web PASS 5.203s; отмена очереди speed
+и временного ядра -race outbound PASS 1.125s. Полные build/vet прошли.
+Inventory и diff --check прошли: 243 reviewed, 2121 pending, stale 0.
+
+Перед публикацией выполнен fast-forward до 039f6f9 (независимый frontend DNS-01
+setup/issuance для remote inbounds). Backend этой входящей группой не менялся;
+прочитан новый общий setup component и diff точек встраивания. Входящие изменения
+сохранены как база checkpoint, исходный scope f3baf84 не расширен.
+Дополнительно прежние getter defaults/persistence/secret regressions PASS 0.742s.
+
+После включения frontend main: новый DNS-01 component regression PASS 4/4
+(12.07s), Vite production build PASS, повторные полные Go build/vet PASS.
+Стандартный vitest config не загрузился из-за uv_interface_addresses/EPERM
+в Storybook import. Для этих четырёх jsdom tests использован временный config
+с теми же React plugin, alias и component setup, без unrelated Storybook project;
+он удалён после запуска. Полный frontend test suite этим не засчитывается.
+
+TypeScript --noEmit на объединённом frontend: PASS.

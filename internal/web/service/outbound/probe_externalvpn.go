@@ -1,6 +1,7 @@
 package outbound
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-func bridgeManagedProbeOutbounds(cfg *xray.Config) (func(), error) {
+func bridgeManagedProbeOutbounds(ctx context.Context, cfg *xray.Config) (func(), error) {
 	var rows []map[string]any
 	if err := json.Unmarshal(cfg.OutboundConfigs, &rows); err != nil {
 		return nil, err
@@ -21,6 +22,10 @@ func bridgeManagedProbeOutbounds(cfg *xray.Config) (func(), error) {
 		}
 	}
 	for i, row := range rows {
+		if ctx.Err() != nil {
+			cleanup()
+			return nil, ctx.Err()
+		}
 		if !externalvpn.IsAdditionalOutbound(row) {
 			continue
 		}

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -100,7 +101,7 @@ func TestAutoBalancerProbePersistenceAndStaleEdit(t *testing.T) {
 	original := autoBalanceProbe
 	t.Cleanup(func() { autoBalanceProbe = original })
 	calls := 0
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		calls++
 		if mode != "real" || core != "sing-box" {
 			t.Fatalf("%s %s", mode, core)
@@ -123,7 +124,7 @@ func TestAutoBalancerProbePersistenceAndStaleEdit(t *testing.T) {
 	if n, err := svc.ProbeAutomaticSubscriptions(0); err != nil || n != 0 || calls != 1 {
 		t.Fatalf("%d %v calls=%d", n, err, calls)
 	}
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		if err := db.Model(sub).Update("auto_balance", false).Error; err != nil {
 			t.Fatal(err)
 		}

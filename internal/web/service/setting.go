@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -395,13 +396,7 @@ func (s *SettingService) ResetSettings() error {
 }
 
 func (s *SettingService) getSetting(key string) (*model.Setting, error) {
-	db := database.GetDB()
-	setting := &model.Setting{}
-	err := db.Model(model.Setting{}).Where("key = ?", key).First(setting).Error
-	if err != nil {
-		return nil, err
-	}
-	return setting, nil
+	return s.getSettingContext(context.Background(), key)
 }
 
 func (s *SettingService) saveSetting(key string, value string) error {
@@ -425,17 +420,7 @@ func saveSettingIn(db *gorm.DB, key, value string) error {
 }
 
 func (s *SettingService) getString(key string) (string, error) {
-	setting, err := s.getSetting(key)
-	if database.IsNotFound(err) {
-		value, ok := defaultValueMap[key]
-		if !ok {
-			return "", common.NewErrorf("key <%v> not in defaultValueMap", key)
-		}
-		return value, nil
-	} else if err != nil {
-		return "", err
-	}
-	return setting.Value, nil
+	return s.getStringContext(context.Background(), key)
 }
 
 func (s *SettingService) setString(key string, value string) error {
@@ -507,18 +492,7 @@ const (
 )
 
 func (s *SettingService) GetCoreType() (string, error) {
-	coreType, err := s.getString("coreType")
-	if err != nil {
-		return "", err
-	}
-	coreType = canonicalCoreType(coreType)
-	if coreType == CoreTypeXray {
-		return coreType, nil
-	} // Read-only legacy value for offline migration.
-	if !isSupportedCoreType(coreType) {
-		return CoreTypeSingBox, nil
-	}
-	return coreType, nil
+	return s.GetCoreTypeContext(context.Background())
 }
 
 func canonicalCoreType(value string) string {

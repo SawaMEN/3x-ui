@@ -615,7 +615,7 @@ func (a *XraySettingController) applyOutboundSubscriptionChanges(ctx context.Con
 	if core == service.CoreTypeXray {
 		return nil
 	}
-	if _, err := a.OutboundSubscriptionService.ApplyAutomaticSelections(); err != nil {
+	if _, err := a.OutboundSubscriptionService.ApplyAutomaticSelectionsContext(applyCtx); err != nil {
 		return fmt.Errorf("automatic selector acknowledgement: %w", err)
 	}
 	return nil
@@ -718,9 +718,9 @@ func (a *XraySettingController) probeOutboundSub(c *gin.Context) {
 		jsonMsg(c, "Automatic balancing is disabled", fmt.Errorf("enable automatic balancing first"))
 		return
 	}
-	_, err = a.OutboundSubscriptionService.ProbeAutomaticSubscriptions(id)
+	_, err = a.OutboundSubscriptionService.ProbeAutomaticSubscriptionsContext(c.Request.Context(), id)
 	if err == nil {
-		_, err = a.OutboundSubscriptionService.ApplyAutomaticSelections()
+		_, err = a.OutboundSubscriptionService.ApplyAutomaticSelectionsContext(c.Request.Context())
 	}
 	if err != nil {
 		jsonMsg(c, "Automatic check failed", err)

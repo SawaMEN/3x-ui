@@ -17544,9 +17544,9 @@
       "deletions": 6,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "7574c8eeb3794b5e12defeca9f10d6220e1a8584b3dd11853fe03e1cfd7ce668"
     },
     {
       "path": "internal/web/job/ip_limit_allowlist.go",
@@ -17632,9 +17632,9 @@
       "deletions": 7,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "a6126587441a1b9714219b29fc83ad96a9aa3c3a16001b69acb0e9c48307299e"
     },
     {
       "path": "internal/web/job/mtproto_job.go",
@@ -17710,8 +17710,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
-      "reviewed_sha256": "11872c2627f943d1f4a4e34f7ff65a100e9f708485f5d7609467c85abee24a63"
+      "evidence": "A77–A78: reviewed complete lifecycle wrapper; canceled ticks skip DB, probes/apply share panel context, cancellation prevents apply/broadcast; final formatter adds function spacing only. Normal and race lifecycle regressions pass.",
+      "reviewed_sha256": "71a059adc02c0f399e5bd00c2b9fa2d6099fd3f69dd3a2f7bb2fc49fcd511234"
     },
     {
       "path": "internal/web/job/outbound_subscription_job.go",
@@ -17797,9 +17797,9 @@
       "deletions": 12,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "4737c86f8e049e429f463336de2913514768344d67649781c77dac384479f3e1"
     },
     {
       "path": "internal/web/job/telemt_weekly_report_job.go",
@@ -21944,9 +21944,9 @@
       "deletions": 23,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "45d249e0a738ef0686f36014e9b50ac851bdb0a37b9085b7dbe7f905b2872dc7"
     },
     {
       "path": "internal/web/service/outbound/outbound_commit_postgres_test.go",
@@ -22010,9 +22010,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "5fd957843183719286a3b90ecc21fa4293d1b6789052ae8f8ff8a5fabff6c6ce"
     },
     {
       "path": "internal/web/service/outbound/probe_http.go",
@@ -22021,9 +22021,9 @@
       "deletions": 28,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "eff1434ab40cffb4de615df5c77de577051dd69ed5aeada68a05c589e72bae3b"
     },
     {
       "path": "internal/web/service/outbound/probe_http_test.go",
@@ -22054,9 +22054,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "a1b30d39f53588ea87a138237f40e8f2ff79fbacccf38002e7d1b72f94da2727"
     },
     {
       "path": "internal/web/service/outbound/probe_singbox_test.go",
@@ -22076,9 +22076,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "e4cbeafee5dd0cce289eee6be9312152ddcb4344ce9a7038ca4d0b86795a8e4b"
     },
     {
       "path": "internal/web/service/outbound_auto_apply.go",
@@ -22087,9 +22087,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "da1b098fa063cdf3982fe31c3f5e43e342b3d32f7fa3d9ee348cdc673e28d68b"
     },
     {
       "path": "internal/web/service/outbound_auto_apply_selector_test.go",
@@ -22109,9 +22109,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "2c1c7af166b28a5b9bb427d5a36f88fa598e14a80b62fcc633680bbea264e90a"
     },
     {
       "path": "internal/web/service/outbound_auto_balancer_test.go",
@@ -22120,9 +22120,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "7a80a76fa12fcc0010f17640a46c83258c4b9fd2d945e0fe9d64e4fde912a2b0"
     },
     {
       "path": "internal/web/service/outbound_auto_balancer_timers_test.go",
@@ -22131,9 +22131,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "7aded0e46447610e7316e9fd60ac28ea9fa11750e34762ddd0ab39413771521e"
     },
     {
       "path": "internal/web/service/outbound_auto_routes.go",
@@ -25058,8 +25058,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A74–A76: full source/test review of panel start/stop, initial cron ownership, cancellation propagation through routing refresh HTTP/cache persistence, and pre-existing retry/size/privacy/coalescing contracts. Before fixes reproduced uncancelable DB/HTTP/waiters and early StopPanelOnly return. Normal targeted tests pass; race/lint/full-sub results recorded in checkpoint.",
-      "reviewed_sha256": "ecffb29b973cd14ea0ddb6fc26830caf448b29d8eda595b9c7c60b5194eb3989"
+      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
+      "reviewed_sha256": "4fa4a332cbdd408288f6fca3a7e0e6631c88f951c2530a65f9937a931c09142a"
     },
     {
       "path": "internal/web/web_shutdown_test.go",

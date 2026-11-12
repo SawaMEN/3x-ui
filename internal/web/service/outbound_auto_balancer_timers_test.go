@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -33,7 +34,7 @@ func setupTimedBalancer(t *testing.T) (*model.OutboundSubscription, *int64) {
 func TestAutoBalancerTimerKeepsCurrentWhenItIsFastest(t *testing.T) {
 	sub, now := setupTimedBalancer(t)
 	calls := 0
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		calls++
 		if mode != "real" || target != "" {
 			t.Fatalf("scheduled switch ignored speed ranking interval: %s %s", mode, target)
@@ -77,7 +78,7 @@ func TestAutoBalancerPingLossDoesNotWaitForRankingOrRotation(t *testing.T) {
 	}
 	*now += 30
 	calls := 0
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		calls++
 		if mode != "real" || target != "" {
 			t.Fatalf("emergency check downloaded speed data: mode=%s URL=%s", mode, target)
@@ -103,7 +104,7 @@ func TestAutoBalancerPingLossDoesNotWaitForRankingOrRotation(t *testing.T) {
 func TestAutoBalancerFailedAlternativesKeepCurrentAndAdvanceTimer(t *testing.T) {
 	sub, now := setupTimedBalancer(t)
 	*now += 900
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		return []*outbound.TestOutboundResult{{Tag: "a", Success: true, HTTPStatus: 200, Delay: 10}, {Tag: "b", Error: "timeout"}}, nil
 	}
 	if n, err := (&OutboundSubscriptionService{}).ProbeAutomaticSubscriptions(0); err != nil || n != 0 {
@@ -118,7 +119,9 @@ func TestAutoBalancerFailedAlternativesKeepCurrentAndAdvanceTimer(t *testing.T) 
 func TestAutoBalancerPingLossAllDeadThenRecovers(t *testing.T) {
 	sub, now := setupTimedBalancer(t)
 	*now += 30
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) { return nil, nil }
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+		return nil, nil
+	}
 	if n, err := (&OutboundSubscriptionService{}).ProbeAutomaticSubscriptions(0); err != nil || n != 1 {
 		t.Fatalf("%d %v", n, err)
 	}
@@ -127,7 +130,7 @@ func TestAutoBalancerPingLossAllDeadThenRecovers(t *testing.T) {
 		t.Fatalf("%+v", saved)
 	}
 	*now += 30
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		return []*outbound.TestOutboundResult{{Tag: "b", Success: true, HTTPStatus: 204, Delay: 15}}, nil
 	}
 	if n, err := (&OutboundSubscriptionService{}).ProbeAutomaticSubscriptions(0); err != nil || n != 1 {
@@ -142,7 +145,7 @@ func TestAutoBalancerPingLossAllDeadThenRecovers(t *testing.T) {
 func TestAutoBalancerBusyProbeNeverMarksCurrentDead(t *testing.T) {
 	sub, now := setupTimedBalancer(t)
 	*now += 30
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		return []*outbound.TestOutboundResult{{Tag: "a", Error: "Another outbound test is already running, please wait"}}, nil
 	}
 	if n, err := (&OutboundSubscriptionService{}).ProbeAutomaticSubscriptions(0); err != nil || n != 0 {
@@ -186,7 +189,7 @@ func TestAutoBalancerFailoverDoesNotWaitForEntireSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 	count := 0
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		var batch []map[string]any
 		if err := json.Unmarshal([]byte(items), &batch); err != nil {
 			t.Fatal(err)
@@ -221,7 +224,7 @@ func TestAutoBalancerScheduledSpeedUsesCachedRanking(t *testing.T) {
 	if err := database.GetDB().Model(sub).Updates(map[string]any{"last_fetched_outbounds": string(encoded), "probe_results": `[{"tag":"a","success":true,"downloadMbps":15},{"tag":"b","success":true,"downloadMbps":10},{"tag":"c","success":true,"downloadMbps":40}]`}).Error; err != nil {
 		t.Fatal(err)
 	}
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		if mode != "real" || target != "" {
 			t.Fatalf("scheduled switch performed speed download: %s %s", mode, target)
 		}
@@ -240,7 +243,7 @@ func TestAutoBalancerRankingDownloadsOnlyWhenSpeedTimerDue(t *testing.T) {
 	sub, now := setupTimedBalancer(t)
 	*now += 3600
 	modes := []string{}
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		modes = append(modes, mode)
 		if mode == "real" {
 			return []*outbound.TestOutboundResult{{Tag: "a", Success: true, HTTPStatus: 204, Delay: 5}}, nil
@@ -274,7 +277,7 @@ func TestAutoBalancerPingLossInterruptsLongSpeedScan(t *testing.T) {
 		t.Fatal(err)
 	}
 	healthChecks, downloads := 0, 0
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		var batch []map[string]any
 		if err := json.Unmarshal([]byte(items), &batch); err != nil {
 			t.Fatal(err)
@@ -305,7 +308,7 @@ func TestAutoBalancerBrokenSpeedServerKeepsHealthyRoute(t *testing.T) {
 	sub, now := setupTimedBalancer(t)
 	*now += 3600
 	speedCalls := 0
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		if mode == "speed" {
 			speedCalls++
 			return []*outbound.TestOutboundResult{{Tag: "a", HTTPStatus: 403, Error: "download endpoint refused"}, {Tag: "b", Error: "tiny body"}}, nil
@@ -337,7 +340,7 @@ func TestManualBalancerCheckSelectsMeasuredBestWithinTolerance(t *testing.T) {
 	if err := database.GetDB().Model(sub).Updates(map[string]any{"balance_mode": "latency", "tolerance": 50}).Error; err != nil {
 		t.Fatal(err)
 	}
-	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+	autoBalanceProbe = func(_ context.Context, items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		return []*outbound.TestOutboundResult{{Tag: "a", Success: true, HTTPStatus: 204, Delay: 100}, {Tag: "b", Success: true, HTTPStatus: 204, Delay: 99}}, nil
 	}
 	if _, err := (&OutboundSubscriptionService{}).ProbeAutomaticSubscriptions(sub.Id); err != nil {

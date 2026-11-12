@@ -1,6 +1,7 @@
 package outbound
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -139,7 +140,7 @@ func withStubProcess(t *testing.T, factory func(cfg *xray.Config, configPath str
 func withEgressTraceProbe(t *testing.T, probe func(*url.URL) *TestEgressResult) {
 	t.Helper()
 	orig := egressTraceProbe
-	egressTraceProbe = probe
+	egressTraceProbe = func(_ context.Context, u *url.URL) *TestEgressResult { return probe(u) }
 	t.Cleanup(func() { egressTraceProbe = orig })
 }
 

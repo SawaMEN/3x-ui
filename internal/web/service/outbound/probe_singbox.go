@@ -102,7 +102,12 @@ var newSingBoxBatchProcess = func(cfg *singbox.Config, path string) batchProcess
 	return &singBoxBatchProcess{process: hiddify.NewProcess(path, true), config: cfg, path: path}
 }
 
-func (p *singBoxBatchProcess) Start() error {
+func (p *singBoxBatchProcess) Start() error { return p.StartContext(context.Background()) }
+
+func (p *singBoxBatchProcess) StartContext(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	data, err := p.config.Marshal()
 	if err != nil {
 		return err
@@ -110,7 +115,7 @@ func (p *singBoxBatchProcess) Start() error {
 	if err := os.WriteFile(p.path, data, 0o600); err != nil {
 		return fmt.Errorf("write sing-box test config: %w", err)
 	}
-	return p.process.Start(context.Background())
+	return p.process.Start(ctx)
 }
 func (p *singBoxBatchProcess) Stop() error     { return p.process.Stop() }
 func (p *singBoxBatchProcess) IsRunning() bool { return p.process.IsRunning() }
@@ -172,12 +177,23 @@ func automaticProbeContext(itemsJSON, allJSON string) (string, error) {
 }
 
 func (s *OutboundService) TestAutomaticOutbounds(items, target, all, mode, core string) ([]*TestOutboundResult, error) {
+	return s.TestAutomaticOutboundsContext(context.Background(), items, target, all, mode, core)
+}
+
+func (s *OutboundService) TestAutomaticOutboundsContext(ctx context.Context, items, target, all, mode, core string) ([]*TestOutboundResult, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	contextJSON, err := automaticProbeContext(items, all)
 	if err != nil {
 		return nil, err
 	}
-	probe := &OutboundService{CoreType: core}
-	return probe.TestOutbounds(items, target, contextJSON, mode)
+	probe := &OutboundService{CoreType: core, probeCtx: ctx}
+	results, err := probe.TestOutbounds(items, target, contextJSON, mode)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return results, err
 }
 
 func newUpstreamBatchProcess(cfg *singbox.Config, path string) batchProcess {

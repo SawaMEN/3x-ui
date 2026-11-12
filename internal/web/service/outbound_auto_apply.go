@@ -129,15 +129,22 @@ func runningAutomaticSelectors(data []byte) (map[string]bool, error) {
 // ApplyAutomaticSelections retries unconfirmed selections every scheduler
 // tick. Database choice and the running core's acknowledgement stay distinct.
 func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
+	return s.ApplyAutomaticSelectionsContext(context.Background())
+}
+
+func (s *OutboundSubscriptionService) ApplyAutomaticSelectionsContext(ctx context.Context) (int, error) {
+	if ctx.Err() != nil {
+		return 0, ctx.Err()
+	}
 	if !automaticApplyMu.TryLock() {
 		return 0, nil
 	}
 	defer automaticApplyMu.Unlock()
-	subs, err := s.activeAutomaticSubscriptions()
+	subs, err := s.activeAutomaticSubscriptionsContext(ctx)
 	if err != nil || len(subs) == 0 {
 		return 0, err
 	}
-	core, err := (&SettingService{}).GetCoreType()
+	core, err := (&SettingService{}).GetCoreTypeContext(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -156,6 +163,9 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 				if err == nil {
 					defer client.Close()
 					for _, sub := range subs {
+						if ctx.Err() != nil {
+							return 0, ctx.Err()
+						}
 						tag := autoOutboundTag(sub.Id)
 						if !selectors[tag] {
 							// A fresh subscription must wait for the scheduled core
@@ -163,7 +173,7 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 							failures[sub.Id] = fmt.Errorf("селектор %s ещё не загружен в ядро; требуется перезапуск sing-box", tag)
 							continue
 						}
-						actual, e := client.Select(context.Background(), tag, autoRouteTarget(sub))
+						actual, e := client.Select(ctx, tag, autoRouteTarget(sub))
 						applied[sub.Id] = actual
 						failures[sub.Id] = e
 					}
@@ -174,7 +184,7 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 		if !SelectedNativeCore().IsRunning() {
 			err = fmt.Errorf("core is stopped; selection will apply on startup")
 		} else {
-			applyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			applyCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			applied, err = applyXrayAutomaticChoices(applyCtx, subs)
 			cancel()
 		}
@@ -183,6 +193,9 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 	}
 	changes := 0
 	for _, sub := range subs {
+		if ctx.Err() != nil {
+			return changes, ctx.Err()
+		}
 		message := ""
 		failure := failures[sub.Id]
 		if err != nil {
@@ -195,7 +208,7 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 		if sub.AppliedTag == actual && sub.ApplyError == message {
 			continue
 		}
-		result := database.GetDB().Model(&model.OutboundSubscription{}).Where("id = ? AND selected_tag = ? AND updated_at = ? AND last_fetched_outbounds = ? AND enabled = ? AND auto_balance = ?", sub.Id, sub.SelectedTag, sub.UpdatedAt, sub.LastFetchedOutbounds, true, true).Updates(map[string]any{"applied_tag": actual, "apply_error": message})
+		result := database.GetDB().WithContext(ctx).Model(&model.OutboundSubscription{}).Where("id = ? AND selected_tag = ? AND updated_at = ? AND last_fetched_outbounds = ? AND enabled = ? AND auto_balance = ?", sub.Id, sub.SelectedTag, sub.UpdatedAt, sub.LastFetchedOutbounds, true, true).Updates(map[string]any{"applied_tag": actual, "apply_error": message})
 		if result.Error != nil {
 			return changes, result.Error
 		}
