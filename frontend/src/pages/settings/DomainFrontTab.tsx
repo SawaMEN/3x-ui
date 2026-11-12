@@ -151,6 +151,14 @@ export default function DomainFrontTab({
   const tls = Form.useWatch('tls', form);
   const label = (key: string, values?: Record<string, string | number>) =>
     t(`pages.settings.domains.${key}`, values);
+  const dnsHelp = (key: string, ru: string, en: string) => (
+    <Space size={5}>
+      {label('dns01.' + key)}
+      <Tooltip title={i18n.language.startsWith('ru') ? ru : en}>
+        <QuestionCircleOutlined aria-label={key + ' DNS-01 help'} style={{ cursor: 'help' }} />
+      </Tooltip>
+    </Space>
+  );
   const renewalLabel = (value: string) =>
     value === 'external' || value === 'manual' ? label(`renewal.${value}`) : value;
   const certificateError = (value: string) =>
@@ -996,7 +1004,13 @@ export default function DomainFrontTab({
           <Card size="small" title={label('dns01.title')} style={{ marginBottom: 12 }}>
             <Typography.Paragraph type="secondary">{label('dns01.hint')}</Typography.Paragraph>
             <Form layout="vertical">
-              <Form.Item label={label('dns01.provider')}>
+              <Form.Item
+                label={dnsHelp(
+                  'provider',
+                  'Выберите того, кто обслуживает DNS-записи домена: Cloudflare или DigitalOcean. Нода может находиться у другого хостинг-провайдера.',
+                  'Choose the provider hosting the domain DNS: Cloudflare or DigitalOcean. The node can be hosted elsewhere.',
+                )}
+              >
                 <Select
                   aria-label={label('dns01.provider')}
                   value={draft.dns01Provider || ''}
@@ -1018,7 +1032,13 @@ export default function DomainFrontTab({
               {(draft.dns01Provider === 'cloudflare' || draft.dns01Provider === 'digitalocean') && (
                 <>
                   <Space wrap style={{ width: '100%' }}>
-                    <Form.Item label={label('dns01.zone')}>
+                    <Form.Item
+                      label={dnsHelp(
+                        'zone',
+                        'Основная DNS-зона домена, например example.org для vpn.example.org. Она должна охватывать имена выдаваемых сертификатов.',
+                        'Authoritative DNS zone, e.g. example.org for vpn.example.org. It must contain the certificate hostnames.',
+                      )}
+                    >
                       <Input
                         aria-label={label('dns01.zone')}
                         value={draft.dns01Zone ?? ''}
@@ -1027,7 +1047,13 @@ export default function DomainFrontTab({
                       />
                     </Form.Item>
                     {draft.dns01Provider === 'cloudflare' && (
-                      <Form.Item label={label('dns01.zoneId')}>
+                      <Form.Item
+                        label={dnsHelp(
+                          'zoneId',
+                          'В Cloudflare откройте домен → Overview → Zone ID (32 символа). Это не идентификатор аккаунта.',
+                          'In Cloudflare open the domain → Overview → Zone ID (32 characters). This is not the account ID.',
+                        )}
+                      >
                         <Input
                           aria-label={label('dns01.zoneId')}
                           value={draft.dns01ZoneId ?? ''}
@@ -1036,7 +1062,13 @@ export default function DomainFrontTab({
                         />
                       </Form.Item>
                     )}
-                    <Form.Item label={label('dns01.propagation')}>
+                    <Form.Item
+                      label={dnsHelp(
+                        'propagation',
+                        'Пауза 0–180 секунд перед проверкой TXT-записи. Увеличьте при медленном распространении DNS; обычно оставьте 0.',
+                        'Wait 0–180 seconds before checking the TXT record. Increase only for slow DNS propagation; usually leave 0.',
+                      )}
+                    >
                       <InputNumber
                         aria-label={label('dns01.propagation')}
                         min={0}
@@ -1054,6 +1086,11 @@ export default function DomainFrontTab({
                       ' · ' + label('dns01.environment')}
                   </Typography.Paragraph>
                   <Space wrap>
+                    {dnsHelp(
+                      'token',
+                      'Токен API с минимальным доступом к управлению DNS-записями этой зоны. Сохраняется только на основном сервере, не передаётся удалённым нодам.',
+                      'API token scoped to edit DNS records in this zone. Stored only on the main server, not distributed to remote nodes.',
+                    )}
                     <Input.Password
                       aria-label={label('dns01.token')}
                       placeholder={label('dns01.token')}
