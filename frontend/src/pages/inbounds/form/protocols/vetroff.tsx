@@ -4,7 +4,10 @@ import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
-import { canUseManagedSniCertificate, mayReplaceCertificatePair } from '../security/local-certificate';
+import {
+  canUseManagedSniCertificate,
+  mayReplaceCertificatePair,
+} from '../security/local-certificate';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import {
@@ -125,10 +128,12 @@ export function VetroffFields() {
         description={
           options?.autoTLS
             ? t('pages.inbounds.form.vetroffManualTLSHint', {
-                defaultValue: 'To use certificate files, enter their paths below. This disables automatic TLS.',
+                defaultValue:
+                  'To use certificate files, enter their paths below. This disables automatic TLS.',
               })
             : t('pages.inbounds.form.vetroffManualTLSActive', {
-                defaultValue: 'TLS certificate and private key paths are editable. Leave both empty to use automatic TLS.',
+                defaultValue:
+                  'TLS certificate and private key paths are editable. Leave both empty to use automatic TLS.',
               })
         }
       />
