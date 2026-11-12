@@ -29,7 +29,7 @@ func LocalDomainCertificateSummaries() ([]runtime.RemoteCertificateSummary, erro
 			name = cert.Names[0]
 		}
 		items = append(items, runtime.RemoteCertificateSummary{
-			ID: cert.ID, Name: name, Names: cert.Names,
+			ID: cert.ID, Name: name, Names: cert.Names, CoverSite: cert.CoverSite, CanObtain: cert.CanObtain,
 			Manager: cert.Manager, Challenge: cert.Challenge, State: cert.State,
 			Issuer: cert.Issuer, ExpiresAt: cert.ExpiresAt, DaysLeft: cert.DaysLeft,
 			AutoRenew: cert.AutoRenew,
@@ -95,7 +95,7 @@ func nodeCertificateInventoryItem(nodeID int, nodeName string, cert runtime.Remo
 		issuer = issuer[:128]
 	}
 	return CertificateInventoryItem{
-		ID: "n" + hex.EncodeToString(id[:12]), Name: name, Names: names,
+		ID: "n" + hex.EncodeToString(id[:12]), Name: name, Names: names, CoverSite: cert.CoverSite, CanObtain: cert.CanObtain,
 		UsedBy: []string{"node"}, Manager: manager, Challenge: challenge,
 		Ports: []int{}, Source: "remote", State: state,
 		Issuer: issuer, ExpiresAt: cert.ExpiresAt, DaysLeft: cert.DaysLeft,

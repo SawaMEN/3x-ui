@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"reflect"
 	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 )
 
 func TestInboundCertificateEnrollmentPreservesOtherNodes(t *testing.T) {
@@ -83,5 +86,26 @@ func TestInboundCertificatePrepareValidatesBeforeSideEffects(t *testing.T) {
 	rows, _ := CoverCertificateFleets()
 	if len(rows) != 0 {
 		t.Fatal("invalid preparation enrolled nodes")
+	}
+}
+
+func TestDeliveredCoverConfigKeepsContentAndRejectsOtherPurposes(t *testing.T) {
+	cfg := domainfront.DefaultConfig()
+	cfg.Domains = []domainfront.DomainFrontDomain{{Name: "web.site.ru", Mode: "sni_only", Enabled: true, TLS: "certmagic", SiteCatalog: "custom", SiteTemplate: "html", SiteHTML: "<!doctype html><html><body>keep</body></html>"}, {Name: "other.site.ru", Mode: "direct", Enabled: true, TLS: "manual", CertFile: "/custom.pem"}}
+	out, changed, err := deliveredCoverCertificateConfig(cfg, "web.site.ru")
+	if err != nil || !changed || out.Domains[0].TLS != "existing" || out.Domains[0].SiteHTML != cfg.Domains[0].SiteHTML || !reflect.DeepEqual(out.Domains[1], cfg.Domains[1]) {
+		t.Fatalf("unsafe website update: %+v %v", out, err)
+	}
+	if cfg.Domains[0].TLS != "certmagic" {
+		t.Fatal("input configuration mutated")
+	}
+	for _, name := range []string{"other.site.ru", "absent.site.ru"} {
+		if _, _, err := deliveredCoverCertificateConfig(cfg, name); err == nil {
+			t.Fatalf("accepted non-cover target %s", name)
+		}
+	}
+	cfg.Domains[0].TLS = "manual"
+	if _, _, err := deliveredCoverCertificateConfig(cfg, "web.site.ru"); err == nil {
+		t.Fatal("replaced a manual certificate")
 	}
 }

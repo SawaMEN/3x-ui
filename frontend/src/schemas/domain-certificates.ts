@@ -4,6 +4,8 @@ export const CertificateInventorySchema = z.object({
   items: z.array(
     z.object({
       id: z.string(),
+      coverSite: z.boolean().optional(),
+      canObtain: z.boolean().optional(),
       name: z.string(),
       names: z.array(z.string()),
       usedBy: z.array(z.string()),

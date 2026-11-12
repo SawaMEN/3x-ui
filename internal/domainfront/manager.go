@@ -277,7 +277,7 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 		ca = certmagic.LetsEncryptStagingCA
 	}
 	issuerOptions := certmagic.ACMEIssuer{CA: ca, Email: cfg.Email, Agreed: cfg.AcceptTerms, AltHTTPPort: cfg.HTTPPort, AltTLSALPNPort: cfg.HTTPSPort, Logger: logger}
-	if cfg.DNS01Provider != "" {
+	if cfg.DNS01Provider != "" && cfg.UsesManagedCertificates(backend.Certificates) {
 		// DNS-only issuance works without public 80/443 challenge ports and
 		// supports wildcard certificates. These settings are shared by all
 		// providers, while each provider retains a separately scoped token.

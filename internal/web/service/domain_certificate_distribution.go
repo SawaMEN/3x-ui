@@ -19,6 +19,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
@@ -29,12 +30,13 @@ var certificateDistributionMu sync.Mutex
 // DistributedTLSCertificate is the public, path-only acknowledgement. Neither
 // the certificate PEM nor its private key is returned to the panel browser.
 type DistributedTLSCertificate struct {
-	Applied   bool   `json:"applied,omitempty"`
-	NodeID    int    `json:"nodeId,omitempty"`
-	Domain    string `json:"domain"`
-	CertFile  string `json:"certFile"`
-	KeyFile   string `json:"keyFile"`
-	ExpiresAt int64  `json:"expiresAt"`
+	CoverSiteApplied bool   `json:"coverSiteApplied,omitempty"`
+	Applied          bool   `json:"applied,omitempty"`
+	NodeID           int    `json:"nodeId,omitempty"`
+	Domain           string `json:"domain"`
+	CertFile         string `json:"certFile"`
+	KeyFile          string `json:"keyFile"`
+	ExpiresAt        int64  `json:"expiresAt"`
 }
 
 func distributionDomain(value string) (string, error) {
@@ -361,12 +363,22 @@ func distributedCertificateUsed(value any, cert DistributedTLSCertificate) bool 
 
 func InstallAndApplyDistributedTLSCertificate(ctx context.Context, payload runtime.TLSCertificateInstall) (DistributedTLSCertificate, error) {
 	result, err := InstallDistributedTLSCertificate(payload)
-	if err != nil || !payload.Apply {
+	if err != nil || (!payload.Apply && !payload.CoverSite) {
 		return result, err
 	}
 	if database.GetDB() == nil {
 		return result, errors.New("certificate installed; database unavailable for apply")
 	}
+	if payload.CoverSite {
+		if err := applyDeliveredCoverCertificate(ctx, result.Domain); err != nil {
+			return result, err
+		}
+		result.CoverSiteApplied = true
+	}
+	if !payload.Apply {
+		return result, nil
+	}
+
 	var inbounds []model.Inbound
 	if err := database.GetDB().Where("enable = ? AND (node_id IS NULL OR node_id = 0)", true).Find(&inbounds).Error; err != nil {
 		return result, err
@@ -385,4 +397,44 @@ func InstallAndApplyDistributedTLSCertificate(ctx context.Context, payload runti
 	}
 	result.Applied = true
 	return result, nil
+}
+
+// Only an explicitly selected managed cover site can adopt a delivered pair.
+// No HTML, DNS credentials, listener ports or unrelated domains are changed.
+func deliveredCoverCertificateConfig(cfg domainfront.DomainFrontConfig, name string) (domainfront.DomainFrontConfig, bool, error) {
+	cfg.Domains = append([]domainfront.DomainFrontDomain(nil), cfg.Domains...)
+	for i := range cfg.Domains {
+		d := &cfg.Domains[i]
+		if d.Name != name {
+			continue
+		}
+		if !d.Enabled || d.Mode != "sni_only" || d.TLS == "manual" {
+			return cfg, false, errors.New("certificate target is not an enabled automatically managed cover site")
+		}
+		changed := d.TLS != "existing"
+		d.TLS = "existing"
+		return cfg, changed, nil
+	}
+	return cfg, false, errors.New("cover site is no longer configured on this node")
+}
+
+func applyDeliveredCoverCertificate(ctx context.Context, name string) error {
+	managerCoverSiteMu.Lock()
+	defer managerCoverSiteMu.Unlock()
+	status, err := DomainFrontStatus()
+	if err != nil {
+		return err
+	}
+	cfg, changed, err := deliveredCoverCertificateConfig(status.Config, name)
+	if err != nil {
+		return err
+	}
+	if !changed && status.Running {
+		return nil
+	}
+	_, err = ApplyDomainFront(ctx, cfg)
+	if err != nil {
+		return errors.New("certificate installed; cover-site TLS apply failed and will be retried")
+	}
+	return nil
 }

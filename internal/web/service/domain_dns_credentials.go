@@ -146,7 +146,7 @@ func SaveDomainDNSCredentialFor(provider, token string, clear bool) error {
 }
 
 func configureDomainDNS01(cfg domainfront.DomainFrontConfig, backend *domainfront.Backend) error {
-	if cfg.DNS01Provider == "" {
+	if cfg.DNS01Provider == "" || !cfg.UsesManagedCertificates(backend.Certificates) {
 		return nil
 	}
 	if _, _, err := domainDNSCredentialTarget(cfg.DNS01Provider); err != nil {

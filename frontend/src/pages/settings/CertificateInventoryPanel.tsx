@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { FormProvider, useForm } from 'react-hook-form';
+import LocalCertificateAssistant from '@/pages/inbounds/form/security/LocalCertificateAssistant';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Button,
   Card,
   Empty,
+  Modal,
   Popconfirm,
   Space,
   Table,
@@ -22,6 +25,14 @@ export default function CertificateInventoryPanel() {
   const { t, i18n } = useTranslation();
   const label = (key: string) => t('pages.settings.domains.certificateInventory.' + key);
   const [renewing, setRenewing] = useState<string>();
+  const [selected, setSelected] = useState<{
+    domain: string;
+    nodeId: number;
+    coverSite: boolean;
+    nodeName?: string;
+  }>();
+  const ru = i18n.language.startsWith('ru');
+
   const [notice, contextHolder] = message.useMessage();
   const certificates = useQuery({
     queryKey: ['settings', 'domains', 'certificate-inventory'],
@@ -36,6 +47,12 @@ export default function CertificateInventoryPanel() {
     refetchInterval: 60000,
     refetchIntervalInBackground: false,
   });
+
+  const refetchInventory = certificates.refetch;
+  const onReady = useCallback(() => {
+    setSelected(undefined);
+    void refetchInventory();
+  }, [refetchInventory]);
 
   async function renew(id: string) {
     setRenewing(id);
@@ -186,13 +203,28 @@ export default function CertificateInventoryPanel() {
               title: label('actions'),
               key: 'actions',
               render: (_value, item) =>
-                !item.nodeId &&
-                (item.manager === 'acme.sh' ||
-                  item.manager === 'certbot' ||
-                  (item.manager === 'certmagic' &&
-                    item.autoRenew &&
-                    item.expiresAt > 0 &&
-                    item.daysLeft <= 30)) ? (
+                item.canObtain && !['valid', 'renewal_due', 'disabled'].includes(item.state) ? (
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() =>
+                      setSelected({
+                        domain: item.name,
+                        nodeId: item.nodeId || 0,
+                        coverSite: item.coverSite === true,
+                        nodeName: item.nodeName,
+                      })
+                    }
+                  >
+                    {ru ? 'Получить сертификат' : 'Obtain certificate'}
+                  </Button>
+                ) : !item.nodeId &&
+                  (item.manager === 'acme.sh' ||
+                    item.manager === 'certbot' ||
+                    (item.manager === 'certmagic' &&
+                      item.autoRenew &&
+                      item.expiresAt > 0 &&
+                      item.daysLeft <= 30)) ? (
                   <Popconfirm
                     title={label('renewConfirm')}
                     description={label('renewDescription')}
@@ -220,7 +252,47 @@ export default function CertificateInventoryPanel() {
           ]}
         />
       </Card>
+      {selected && (
+        <Modal
+          open
+          title={ru ? 'Получение сертификата' : 'Obtain certificate'}
+          footer={null}
+          onCancel={() => setSelected(undefined)}
+          destroyOnHidden
+        >
+          <Typography.Paragraph>
+            <strong>{selected.domain}</strong> ·{' '}
+            {selected.nodeName || (ru ? 'Основной сервер' : 'Main server')}
+          </Typography.Paragraph>
+          <InventoryCertificatePreparation
+            key={`${selected.nodeId}:${selected.domain}`}
+            {...selected}
+            onReady={onReady}
+          />
+        </Modal>
+      )}
       <CertificateAuditPanel />
     </>
+  );
+}
+
+function InventoryCertificatePreparation({
+  domain,
+  nodeId,
+  coverSite,
+  onReady,
+}: {
+  domain: string;
+  nodeId: number;
+  coverSite: boolean;
+  onReady: () => void;
+}) {
+  const form = useForm({
+    defaultValues: { protocol: 'trojan', nodeId, streamSettings: { security: 'tls' } },
+  });
+  return (
+    <FormProvider {...form}>
+      <LocalCertificateAssistant sni={domain} coverSite={coverSite} autoStart onReady={onReady} />
+    </FormProvider>
   );
 }

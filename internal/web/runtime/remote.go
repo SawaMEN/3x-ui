@@ -860,6 +860,8 @@ type RemoteManagedSNI struct {
 // RemoteCertificateSummary is the node's read-only certificate metadata.
 // It contains no private keys and deliberately omits certificate paths.
 type RemoteCertificateSummary struct {
+	CoverSite bool     `json:"coverSite,omitempty"`
+	CanObtain bool     `json:"canObtain,omitempty"`
 	ID        string   `json:"id"`
 	Name      string   `json:"name"`
 	Names     []string `json:"names"`

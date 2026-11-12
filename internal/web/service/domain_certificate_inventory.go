@@ -21,6 +21,8 @@ import (
 // CertificateInventoryItem describes a certificate owned by the local panel,
 // gateway, or a remote node. Private keys and ACME account secrets are never read.
 type CertificateInventoryItem struct {
+	CoverSite bool     `json:"coverSite,omitempty"`
+	CanObtain bool     `json:"canObtain,omitempty"`
 	ID        string   `json:"id"`
 	Name      string   `json:"name"`
 	Names     []string `json:"names"`
@@ -108,6 +110,9 @@ func certbotChallenge(certFile string) string {
 }
 
 func certificateManager(cert domainfront.DomainFrontCertificate, acme []domainACME) (string, string) {
+	if cert.Source == "distributed" {
+		return "external", "none"
+	}
 	if cert.Source == "remote" || cert.State == "external" {
 		return "remote", "none"
 	}
@@ -221,6 +226,12 @@ func makeCertificateInventory(status domainfront.DomainFrontStatus, states []dom
 			}
 			byKey[key] = item
 		}
+		for _, domain := range status.Config.Domains {
+			if domain.Name == item.Name && domain.Enabled && domain.Mode != "shared_sni" && domain.TLS != "manual" {
+				item.CanObtain = true
+				item.CoverSite = domain.Mode == "sni_only"
+			}
+		}
 		if cert.Source != "" && !containsCertificateLabel(item.UsedBy, cert.Source) {
 			item.UsedBy = append(item.UsedBy, cert.Source)
 		}
@@ -324,6 +335,16 @@ func localCertificateInventory() (CertificateInventory, error) {
 	}
 	items := makeCertificateInventory(status, domainACMEStates(domainACMEHomes()), state)
 	for _, imported := range LocalDistributedTLSCertificates() {
+		duplicate := false
+		for _, item := range items {
+			if item.CertFile == imported.CertFile && item.Name == imported.Domain {
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
+			continue
+		}
 		fingerprint := sha256.Sum256([]byte("distributed|" + imported.Domain))
 		items = append(items, CertificateInventoryItem{
 			ID:   hex.EncodeToString(fingerprint[:12]),

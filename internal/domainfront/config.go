@@ -323,3 +323,21 @@ type DomainFrontCheck struct {
 	Issuer    string   `json:"issuer"`
 	Error     string   `json:"error"`
 }
+
+// UsesManagedCertificates reports whether this host must issue certificates.
+// Nodes serving delivered pairs do not need the main panel's DNS API token.
+func (c DomainFrontConfig) UsesManagedCertificates(files map[string]CertificateFiles) bool {
+	if !c.Enabled {
+		return false
+	}
+	for _, d := range c.Domains {
+		if !d.Enabled || d.Mode == "shared_sni" {
+			continue
+		}
+		_, inherited := files[d.Name]
+		if d.TLS == "certmagic" || (d.TLS == "auto" && !inherited) {
+			return true
+		}
+	}
+	return false
+}

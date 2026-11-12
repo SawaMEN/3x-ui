@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
@@ -13,18 +14,20 @@ import (
 type InboundCertificateRequest struct {
 	NodeID      int    `json:"nodeId"`
 	Domain      string `json:"domain"`
+	CoverSite   bool   `json:"coverSite,omitempty"`
 	RSAOnly     bool   `json:"rsaOnly,omitempty"`
 	Email       string `json:"email,omitempty"`
 	AcceptTerms *bool  `json:"acceptTerms,omitempty"`
 }
 
 type InboundCertificatePreparation struct {
-	NodeID    int    `json:"nodeId"`
-	Domain    string `json:"domain"`
-	State     string `json:"state"`
-	CertFile  string `json:"certFile,omitempty"`
-	KeyFile   string `json:"keyFile,omitempty"`
-	ExpiresAt int64  `json:"expiresAt,omitempty"`
+	NodeID       int    `json:"nodeId"`
+	SourceNodeID int    `json:"sourceNodeId,omitempty"`
+	Domain       string `json:"domain"`
+	State        string `json:"state"`
+	CertFile     string `json:"certFile,omitempty"`
+	KeyFile      string `json:"keyFile,omitempty"`
+	ExpiresAt    int64  `json:"expiresAt,omitempty"`
 }
 
 func distributedPayloadSupportsRSA(payload runtime.TLSCertificateInstall) bool {
@@ -39,6 +42,8 @@ func distributedPayloadSupportsRSA(payload runtime.TLSCertificateInstall) bool {
 // This status lookup is read-only, including when the SNI is still being typed.
 // Only paths belonging to the selected node can appear in its response.
 func InboundCertificateStatus(ctx context.Context, req InboundCertificateRequest) (InboundCertificatePreparation, error) {
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
 	name, err := distributionDomain(req.Domain)
 	result := InboundCertificatePreparation{NodeID: req.NodeID, Domain: name, State: "not_requested"}
 	if err != nil || req.NodeID < 0 {
@@ -82,6 +87,13 @@ func InboundCertificateStatus(ctx context.Context, req InboundCertificateRequest
 	if _, _, err := localManagedCertificatePayload(ctx, name, req.RSAOnly); err == nil {
 		result.State = "available"
 	}
+	if result.State == "not_requested" {
+		if source, ok := readyCoverCertificateSource(ctx, name, req.NodeID, req.RSAOnly); ok {
+			result.State = "available"
+			result.SourceNodeID = source
+		}
+	}
+
 	if result.State == "not_requested" && !req.RSAOnly {
 		current, err := DomainFrontStatus()
 		if err != nil {
@@ -102,10 +114,45 @@ func InboundCertificateStatus(ctx context.Context, req InboundCertificateRequest
 	return result, nil
 }
 
+// Only a certificate belonging to an enabled owned website is offered as a
+// source. A panel certificate with the same hostname is not that site's TLS.
+func readyCoverCertificateSource(ctx context.Context, name string, target int, rsaOnly bool) (int, bool) {
+	sites, err := ManagedCoverSites(ctx)
+	if err != nil {
+		return 0, false
+	}
+	for _, site := range sites {
+		if site.Domain != name || site.NodeID == target || site.NodeID <= 0 {
+			continue
+		}
+		source, err := verifiedCertificateNode(site.NodeID)
+		if err != nil {
+			continue
+		}
+		certs, err := source.ListCertificateSummaries(ctx)
+		if err != nil {
+			continue
+		}
+		for _, cert := range certs {
+			if cert.Name != name || (!cert.CoverSite && cert.Manager != "certmagic") || cert.ExpiresAt <= time.Now().Unix() || (cert.State != "valid" && cert.State != "renewal_due") {
+				continue
+			}
+			if _, err := source.ResolveLocalTLSCertificate(ctx, name, rsaOnly); err == nil {
+				return site.NodeID, true
+			}
+		}
+	}
+	return 0, false
+}
+
 // Enroll additively: preparing Finland must not remove USA or other recipients.
 // The same persistent worker delivers both DNS-01 and owned-site certificates.
 func enrollMainCertificateTarget(domain string, nodeID int, rsaOnly bool) error {
-	if nodeID <= 0 {
+	return enrollCertificateTarget(domain, 0, nodeID, rsaOnly, false)
+}
+
+func enrollCertificateTarget(domain string, sourceID, nodeID int, rsaOnly, coverSite bool) error {
+	if nodeID == sourceID {
 		return nil
 	}
 	coverCertificateFleetMu.Lock()
@@ -119,7 +166,7 @@ func enrollMainCertificateTarget(domain string, nodeID int, rsaOnly bool) error 
 		if row.Domain != domain {
 			continue
 		}
-		if row.SourceNodeID == 0 {
+		if row.SourceNodeID == sourceID {
 			index = i
 			continue
 		}
@@ -133,15 +180,16 @@ func enrollMainCertificateTarget(domain string, nodeID int, rsaOnly bool) error 
 		if len(rows) >= 64 {
 			return errors.New("at most 64 shared domains are supported")
 		}
-		rows = append(rows, CoverCertificateFleet{SourceNodeID: 0, Domain: domain, MainCertificate: true, Targets: []CoverCertificateTarget{}})
+		rows = append(rows, CoverCertificateFleet{SourceNodeID: sourceID, Domain: domain, MainCertificate: sourceID == 0, Targets: []CoverCertificateTarget{}})
 		index = len(rows) - 1
 	}
-	rows[index].MainCertificate = true
+	rows[index].MainCertificate = sourceID == 0
 	found := false
 	for i := range rows[index].Targets {
 		dst := &rows[index].Targets[i]
 		if dst.NodeID == nodeID {
 			dst.RSAOnly = dst.RSAOnly || rsaOnly
+			dst.CoverSite = dst.CoverSite || coverSite
 			dst.State = "pending"
 			found = true
 			break
@@ -151,7 +199,7 @@ func enrollMainCertificateTarget(domain string, nodeID int, rsaOnly bool) error 
 		if len(rows[index].Targets) >= 32 {
 			return errors.New("at most 32 recipient nodes per domain")
 		}
-		rows[index].Targets = append(rows[index].Targets, CoverCertificateTarget{NodeID: nodeID, RSAOnly: rsaOnly, State: "pending"})
+		rows[index].Targets = append(rows[index].Targets, CoverCertificateTarget{NodeID: nodeID, RSAOnly: rsaOnly, CoverSite: coverSite, State: "pending"})
 	}
 	if err := saveFirewallJSON(coverCertificateFleetKey, rows); err != nil {
 		return err
@@ -182,8 +230,39 @@ func (s *ManagerService) PrepareInboundCertificate(ctx context.Context, owner in
 	if err != nil {
 		return empty, err
 	}
-	if status.State == "valid" || status.State == "pending" || status.State == "retrying" {
+	if (status.State == "valid" && !req.CoverSite) || status.State == "pending" || status.State == "retrying" {
 		return status, nil
+	}
+	if req.CoverSite {
+		var sites []ManagedCoverSiteSummary
+		if req.NodeID == 0 {
+			sites, err = LocalManagedCoverSites()
+		} else {
+			sites, err = ManagedCoverSites(ctx)
+		}
+		found := false
+		for _, site := range sites {
+			if site.NodeID == req.NodeID && site.Domain == name {
+				found = true
+			}
+		}
+		if err != nil || !found {
+			return empty, errors.New("select an existing enabled cover site on this node")
+		}
+	}
+	if status.State == "valid" && req.CoverSite {
+		if req.NodeID == 0 {
+			return status, nil
+		}
+		// A valid site needs no new issuance; a missing site that has only an
+		// installed copy must still enroll and apply it to the HTTPS frontend.
+		status.State = "not_requested"
+		if _, _, e := localManagedCertificatePayload(ctx, name, req.RSAOnly); e == nil {
+			status.State = "available"
+		} else if source, ok := readyCoverCertificateSource(ctx, name, req.NodeID, req.RSAOnly); ok {
+			status.State = "available"
+			status.SourceNodeID = source
+		}
 	}
 	if status.State != "available" {
 		// CertMagic currently issues ECDSA identities. Do not silently give FPTN
@@ -206,7 +285,7 @@ func (s *ManagerService) PrepareInboundCertificate(ctx context.Context, owner in
 			return empty, err
 		}
 	}
-	if err := enrollMainCertificateTarget(name, req.NodeID, req.RSAOnly); err != nil {
+	if err := enrollCertificateTarget(name, status.SourceNodeID, req.NodeID, req.RSAOnly, req.CoverSite); err != nil {
 		return empty, err
 	}
 	return InboundCertificateStatus(ctx, req)

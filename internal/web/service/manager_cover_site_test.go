@@ -70,14 +70,15 @@ func TestManagerCoverSiteConfigRefusesUnsafeOrConflictingDomain(t *testing.T) {
 	}
 }
 
-func TestManagerMainCertificateRejectsPublicSiteOverwrite(t *testing.T) {
+func TestManagerMainCertificatePreservesCoverSite(t *testing.T) {
 	cfg := domainfront.DefaultConfig()
 	cfg.DNS01Provider, cfg.DNS01Zone, cfg.DNS01ZoneID = "cloudflare", "example.org", "0123456789abcdef0123456789abcdef"
 	cfg.Domains = []domainfront.DomainFrontDomain{{
 		Name: "cover.example.org", Mode: "sni_only", TLS: "certmagic", Enabled: true,
 	}}
-	if _, err := managerMainCertificateConfig(cfg, "cover.example.org", "admin@example.org"); err == nil {
-		t.Fatal("certificate-only issuance overwrote an existing public website")
+	out, err := managerMainCertificateConfig(cfg, "cover.example.org", "admin@example.org")
+	if err != nil || out.Domains[0].Mode != "sni_only" || len(out.Domains) != 1 {
+		t.Fatalf("owned cover site was not preserved: %+v %v", out, err)
 	}
 }
 

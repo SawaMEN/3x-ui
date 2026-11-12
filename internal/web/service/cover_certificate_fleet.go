@@ -24,6 +24,7 @@ var (
 
 type CoverCertificateTarget struct {
 	NodeID        int    `json:"nodeId"`
+	CoverSite     bool   `json:"coverSite,omitempty"`
 	RSAOnly       bool   `json:"rsaOnly,omitempty"`
 	DeliveredHash string `json:"deliveredHash,omitempty"`
 	State         string `json:"state"`
@@ -284,13 +285,15 @@ func syncCoverCertificateFleet(ctx context.Context) {
 					}
 					if deliveryErr == nil {
 						if dst.NodeID == 0 {
-							payload.Apply = dst.DeliveredHash != hash
+							payload.CoverSite = dst.CoverSite
+							payload.Apply = dst.DeliveredHash != hash || (dst.CoverSite && dst.State != "ready")
 							_, deliveryErr = InstallAndApplyDistributedTLSCertificate(opCtx, payload)
 						} else {
 							var remote *runtime.Remote
 							remote, deliveryErr = verifiedCertificateNode(dst.NodeID)
 							if deliveryErr == nil {
-								payload.Apply = dst.DeliveredHash != hash
+								payload.CoverSite = dst.CoverSite
+								payload.Apply = dst.DeliveredHash != hash || (dst.CoverSite && dst.State != "ready")
 								var installed runtime.InstalledTLSCertificate
 								installed, deliveryErr = remote.InstallTLSCertificate(opCtx, payload)
 								if deliveryErr == nil && installed.ExpiresAt != expiry {

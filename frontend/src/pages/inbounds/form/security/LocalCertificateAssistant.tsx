@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useFormContext, useWatch } from 'react-hook-form';
@@ -25,9 +25,15 @@ type ResolvedCertificate = {
 export default function LocalCertificateAssistant({
   sni,
   disabled,
+  coverSite = false,
+  autoStart = false,
+  onReady,
 }: {
   sni: string;
   disabled?: boolean;
+  coverSite?: boolean;
+  autoStart?: boolean;
+  onReady?: () => void;
 }) {
   const { control, getValues, setValue } = useFormContext();
   const queryClient = useQueryClient();
@@ -223,8 +229,6 @@ export default function LocalCertificateAssistant({
     validSni,
   ]);
 
-  if (!fields || !validSni || disabled) return null;
-
   const state = remoteLookup.data?.state;
   const pending = state === 'pending' || state === 'retrying';
   const available = state === 'available' || !!mainCertificate;
@@ -253,6 +257,7 @@ export default function LocalCertificateAssistant({
           nodeId: nodeId ?? 0,
           domain: normalized,
           rsaOnly,
+          ...(coverSite ? { coverSite: true } : {}),
           ...(contact ? { email: contact.trim(), acceptTerms: accepted === true } : {}),
         },
         { headers: { 'Content-Type': 'application/json' }, silent: true },
@@ -287,6 +292,55 @@ export default function LocalCertificateAssistant({
       setOpen(true);
     }
   };
+  const startAutomatically = useEffectEvent(() => start());
+  const autoRequested = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !autoStart ||
+      !fields ||
+      !validSni ||
+      disabled ||
+      lookupSni !== normalized ||
+      remoteLookup.isPending ||
+      remoteLookup.isFetching
+    )
+      return;
+    if (pending) {
+      autoRequested.current = identity;
+      return;
+    }
+    if (manual || autoRequested.current === identity || (certificate && !coverSite)) return;
+    const timer = setTimeout(() => {
+      autoRequested.current = identity;
+      startAutomatically();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [
+    autoStart,
+    fields,
+    validSni,
+    disabled,
+    lookupSni,
+    normalized,
+    remoteLookup.isPending,
+    remoteLookup.isFetching,
+    pending,
+    manual,
+    identity,
+    certificate,
+    coverSite,
+  ]);
+  useEffect(() => {
+    if (
+      certificate &&
+      !pending &&
+      !issuing &&
+      !error &&
+      (!autoStart || autoRequested.current === identity)
+    )
+      onReady?.();
+  }, [certificate, pending, issuing, error, autoStart, identity, onReady]);
+  if (!fields || !validSni || disabled) return null;
   return (
     <div style={{ marginTop: 6 }}>
       <Space wrap>

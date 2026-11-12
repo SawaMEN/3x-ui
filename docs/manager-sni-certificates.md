@@ -338,3 +338,40 @@ CertMagic ECDSA issuance is not offered as a compatible FPTN identity.
   arbitrary ECDSA certificate for FPTN; the FPTN-specific advanced form
   accepts explicit RSA certificate/key files or PEM material.
 - REALITY and ShadowTLS camouflage require no local server certificate.
+
+## Certificate acquisition from the registry and an existing node website
+
+The Domains & TLS certificate registry now marks certificates belonging to
+managed sites and exposes **Obtain certificate** when their certificate is
+missing, pending, or invalid. The same preparation assistant used by the SNI
+editor handles the action, DNS-01 setup, waiting and completion. With saved
+contact/consent and DNS configuration the registry action starts with one click.
+Remote metadata contains only ownership/capability flags, never key paths or PEM.
+
+Before requesting another ACME certificate, SNI preparation searches enabled
+owned sites on directly managed verified-HTTPS nodes. It checks the site's
+certificate metadata and resolves that node's valid pair. A ready `web.site.ru`
+on USA can therefore become the renewal source for Finland and additional
+recipients without issuing another certificate on the main panel. Recipient
+registration remains additive; existing recipients are retained.
+
+Registry acquisition for a cover site explicitly enrolls **website application**
+as well as certificate delivery. The recipient verifies and stores the pair,
+then makes that existing `sni_only` domain use its node-local delivered files.
+HTML, templates, DNS settings, other domains and listener ports are preserved.
+Manual TLS sites cannot be silently replaced. The recipient acknowledges actual
+website application before the controller reports success. Existing-file TLS
+reloads renewed pairs on new handshakes. Periodic repair does not restart an
+unchanged core. Initial gateway application can briefly interrupt HTTPS service.
+
+Nodes that serve only delivered/existing pairs do not require DNS API tokens,
+even when DNS provider settings were previously saved. DNS credentials remain
+with the node performing issuance. The certificate registry then shows the
+active site's valid/renewal-due certificate instead of a missing CertMagic copy;
+duplicate entries for the same active delivered pair are suppressed.
+
+Regression coverage includes an actual local HTTPS handshake before and after
+certificate rotation, source discovery and one-click enrollment from an owned
+node website, registry action/automatic completion/error retry, and refusal to
+change manual or unrelated sites. Update participating nodes for the website
+application acknowledgement and registry ownership metadata.

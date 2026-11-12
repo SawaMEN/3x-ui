@@ -12,17 +12,19 @@ import (
 // contents to the browser.
 type TLSCertificateInstall struct {
 	Domain         string `json:"domain"`
+	CoverSite      bool   `json:"coverSite,omitempty"`
 	Apply          bool   `json:"apply,omitempty"`
 	CertificatePEM string `json:"certificatePem"`
 	PrivateKeyPEM  string `json:"privateKeyPem"`
 }
 
 type InstalledTLSCertificate struct {
-	Applied   bool   `json:"applied,omitempty"`
-	Domain    string `json:"domain"`
-	CertFile  string `json:"certFile"`
-	KeyFile   string `json:"keyFile"`
-	ExpiresAt int64  `json:"expiresAt"`
+	CoverSiteApplied bool   `json:"coverSiteApplied,omitempty"`
+	Applied          bool   `json:"applied,omitempty"`
+	Domain           string `json:"domain"`
+	CertFile         string `json:"certFile"`
+	KeyFile          string `json:"keyFile"`
+	ExpiresAt        int64  `json:"expiresAt"`
 }
 
 func (r *Remote) InstallTLSCertificate(ctx context.Context, payload TLSCertificateInstall) (InstalledTLSCertificate, error) {
@@ -37,7 +39,7 @@ func (r *Remote) InstallTLSCertificate(ctx context.Context, payload TLSCertifica
 	if err := json.Unmarshal(env.Obj, &installed); err != nil {
 		return InstalledTLSCertificate{}, errors.New("invalid node certificate installation response")
 	}
-	if installed.Domain != payload.Domain || installed.CertFile == "" || installed.KeyFile == "" || (payload.Apply && !installed.Applied) {
+	if installed.Domain != payload.Domain || installed.CertFile == "" || installed.KeyFile == "" || (payload.Apply && !installed.Applied) || (payload.CoverSite && !installed.CoverSiteApplied) {
 		return InstalledTLSCertificate{}, errors.New("node returned incomplete certificate paths")
 	}
 	return installed, nil

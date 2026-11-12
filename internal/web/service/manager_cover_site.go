@@ -121,6 +121,15 @@ func managerMainCertificateConfig(cfg domainfront.DomainFrontConfig, domain, ema
 		if d.Name != domain {
 			continue
 		}
+		if d.Mode == "sni_only" && (d.TLS == "auto" || d.TLS == "certmagic" || d.TLS == "existing") {
+			d.TLS = "certmagic"
+			d.Enabled = true
+			cfg.Enabled, cfg.AcceptTerms = true, true
+			if cfg.Email == "" {
+				cfg.Email = email
+			}
+			return cfg, nil
+		}
 		if d.Mode != "cert_only" && d.Mode != "shared_sni" {
 			return cfg, fmt.Errorf("%s already has another purpose on the main node", domain)
 		}

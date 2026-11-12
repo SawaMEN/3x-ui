@@ -147,6 +147,15 @@ func inheritedDomainCertificates(cfg domainfront.DomainFrontConfig, settings *en
 			break
 		}
 	}
+	// Delivered versions are node-local, trusted pairs. Existing mode avoids
+	// starting a second ACME issuer on the website node.
+	for _, cert := range LocalDistributedTLSCertificates() {
+		for _, d := range cfg.Domains {
+			if d.Enabled && d.Name == cert.Domain && (d.TLS == "auto" || d.TLS == "existing") {
+				result[d.Name] = domainfront.CertificateFiles{CertFile: cert.CertFile, KeyFile: cert.KeyFile, Source: "distributed", Renewal: "main-node", AutoRenew: false}
+			}
+		}
+	}
 	return result
 }
 

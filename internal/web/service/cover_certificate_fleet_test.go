@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"net"
@@ -136,13 +138,27 @@ func TestCoverCertificateFleetDeliveryAndRenewal(t *testing.T) {
 	payload := runtime.TLSCertificateInstall{Domain: host, CertificatePEM: string(cert1), PrivateKeyPEM: string(key1)}
 	var payloadMu sync.Mutex
 	source := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/panel/api/domains/certificates/export-cover" || r.Header.Get(wirecodec.MasterPushHeader) != "1" {
-			http.Error(w, "wrong source request", http.StatusBadRequest)
+		if r.Header.Get(wirecodec.MasterPushHeader) != "1" {
+			http.Error(w, "not a master push", http.StatusBadRequest)
 			return
 		}
 		payloadMu.Lock()
 		defer payloadMu.Unlock()
-		_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "obj": payload})
+		var obj any
+		switch r.URL.Path {
+		case "/panel/api/domains/cover-sites/local":
+			obj = []runtime.RemoteCoverSite{{Domain: host, SiteCatalog: "builtin", SiteTemplate: "notes"}}
+		case "/panel/api/domains/certificates":
+			obj = map[string]any{"items": []runtime.RemoteCertificateSummary{{ID: "website", Name: host, Manager: "certmagic", State: "valid", CoverSite: true, ExpiresAt: time.Now().Add(time.Hour).Unix()}}}
+		case "/panel/api/domains/certificates/resolve-local":
+			obj = runtime.InstalledTLSCertificate{Domain: host, CertFile: "/source/fullchain.pem", KeyFile: "/source/privkey.pem", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		case "/panel/api/domains/certificates/export-cover":
+			obj = payload
+		default:
+			http.Error(w, "wrong source request", http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "obj": obj})
 	}))
 	defer source.Close()
 	var installs atomic.Int32
@@ -185,9 +201,15 @@ func TestCoverCertificateFleetDeliveryAndRenewal(t *testing.T) {
 		return node.Id
 	}
 	sourceID, targetID := addNode(source), addNode(target)
-	if err := saveFirewallJSON(coverCertificateFleetKey, []CoverCertificateFleet{{SourceNodeID: sourceID, Domain: host, Targets: []CoverCertificateTarget{{NodeID: targetID, State: "pending"}}}}); err != nil {
-		t.Fatal(err)
+	offered, err := InboundCertificateStatus(context.Background(), InboundCertificateRequest{NodeID: targetID, Domain: host})
+	if err != nil || offered.State != "available" || offered.SourceNodeID != sourceID {
+		t.Fatalf("owned website source not detected: %+v %v", offered, err)
 	}
+	started, err := (&ManagerService{}).PrepareInboundCertificate(context.Background(), 1, InboundCertificateRequest{NodeID: targetID, Domain: host})
+	if err != nil || started.State != "pending" {
+		t.Fatalf("one-click website source: %+v %v", started, err)
+	}
+
 	syncCoverCertificateFleet(context.Background())
 	rows, err := CoverCertificateFleets()
 	if err != nil || len(rows) != 1 || rows[0].Targets[0].State != "ready" || installs.Load() != 1 {
@@ -250,4 +272,74 @@ func TestCoverCertificateFleetDeliveryAndRenewal(t *testing.T) {
 		t.Fatalf("main certificate was not delivered: %+v", rows)
 	}
 
+	// Exercise the actual HTTPS frontend: a received pair must be served by
+	// the existing cover site, and subsequent renewal must reload without
+	// replacing its HTML or listener configuration.
+	port := func() int {
+		ln, e := net.Listen("tcp", "127.0.0.1:0")
+		if e != nil {
+			t.Fatal(e)
+		}
+		n := ln.Addr().(*net.TCPAddr).Port
+		_ = ln.Close()
+		return n
+	}
+	cfg := domainfront.DefaultConfig()
+	cfg.Enabled = true
+	cfg.Listen = "127.0.0.1"
+	cfg.HTTPPort = port()
+	cfg.HTTPSPort = port()
+	cfg.Domains = []domainfront.DomainFrontDomain{{Name: host, Mode: "sni_only", Enabled: true, TLS: "certmagic", SiteCatalog: "builtin", SiteTemplate: "notes"}}
+	cfg.DNS01Provider, cfg.DNS01Zone, cfg.DNS01ZoneID = "cloudflare", "site.ru", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if err := saveFirewallJSON("domainFrontConfig", cfg); err != nil {
+		t.Fatal(err)
+	}
+	defer StopDomainFront()
+	assertSite := func(cert, key []byte) {
+		installed, e := InstallAndApplyDistributedTLSCertificate(context.Background(), runtime.TLSCertificateInstall{Domain: host, CertificatePEM: string(cert), PrivateKeyPEM: string(key), Apply: true, CoverSite: true})
+		if e != nil || !installed.CoverSiteApplied {
+			t.Fatalf("cover-site application: %+v %v", installed, e)
+		}
+		conn, e := tls.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.HTTPSPort)), &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12})
+		if e != nil {
+			t.Fatalf("website TLS handshake: %v", e)
+		}
+		defer conn.Close()
+		expected, e := tls.X509KeyPair(cert, key)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if !bytes.Equal(conn.ConnectionState().PeerCertificates[0].Raw, expected.Certificate[0]) {
+			t.Fatal("website served an old or unrelated certificate")
+		}
+	}
+	assertSite(cert1, key1)
+	assertSite(cert2, key2)
+	repaired, e := InstallAndApplyDistributedTLSCertificate(context.Background(), runtime.TLSCertificateInstall{Domain: host, CertificatePEM: string(cert2), PrivateKeyPEM: string(key2), CoverSite: true})
+	if e != nil || !repaired.CoverSiteApplied {
+		t.Fatalf("idempotent website repair: %+v %v", repaired, e)
+	}
+	status, e := DomainFrontStatus()
+	if e != nil {
+		t.Fatal(e)
+	}
+	if status.Config.Domains[0].Mode != "sni_only" || status.Config.Domains[0].SiteTemplate != "notes" || status.Config.HTTPSPort != cfg.HTTPSPort {
+		t.Fatal("website content or listeners changed")
+	}
+	registry, e := localCertificateInventory()
+	if e != nil {
+		t.Fatal(e)
+	}
+	found := false
+	for _, item := range registry.Items {
+		if item.CoverSite && item.Name == host {
+			found = true
+			if (item.State != "valid" && item.State != "renewal_due") || !item.CanObtain {
+				t.Fatalf("stale cover-site registry state: %+v", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("site certificate was not included in the registry")
+	}
 }
