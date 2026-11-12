@@ -91,7 +91,8 @@ func (a *DomainController) changeCoverSiteTemplate(c *gin.Context) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 300<<10)
+	// A 256-KiB HTML page can grow when escaped into JSON (e.g., < becomes \\u003c).
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
 	var req service.ManagedCoverSiteChange
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonObj(c, nil, err)
@@ -106,7 +107,8 @@ func (a *DomainController) nodeCoverSiteTemplate(c *gin.Context) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 300<<10)
+	// A 256-KiB HTML page can grow when escaped into JSON (e.g., < becomes \\u003c).
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
 	var req service.ManagedCoverSiteChange
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonObj(c, nil, err)
