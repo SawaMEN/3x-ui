@@ -11220,8 +11220,8 @@
       "subsystem": "database",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
-      "reviewed_sha256": "0247d6af58fdbc4107d183030aaebb2a1de2762d6bd4cd7dd3c2d24fc5be5902"
+      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
+      "reviewed_sha256": "704be406c2543bdf70e78dbb3a91ee42dcc6db646eac2ea4ba65a2b122c6fb50"
     },
     {
       "path": "internal/database/db_seed_test.go",
@@ -11341,8 +11341,8 @@
       "subsystem": "database",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Full source/test review through A21-A27; SQLite database normal and race; model/dbtest race; real isolated PostgreSQL 16 sequence, keepAlive, two-way migration, rollback, native dump/restore, and legacy migration checks. SQL fixture remains pending separately.",
-      "reviewed_sha256": "1625460c990dbc4785bd559b33046e74c1aa7c898b10a85bfe0ac2305fc2cccb"
+      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
+      "reviewed_sha256": "4b8750c2624f4303a6c18238be4e1ab48c9ae509e575d2bf01bfa9774325406c"
     },
     {
       "path": "internal/database/migration_models_test.go",
@@ -17545,8 +17545,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
-      "reviewed_sha256": "7574c8eeb3794b5e12defeca9f10d6220e1a8584b3dd11853fe03e1cfd7ce668"
+      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
+      "reviewed_sha256": "4648d923aa00a0b94366741aa070cc8c85fefdf1ef459972860d96c5bf4ec99c"
     },
     {
       "path": "internal/web/job/ip_limit_allowlist.go",
@@ -17633,8 +17633,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
-      "reviewed_sha256": "a6126587441a1b9714219b29fc83ad96a9aa3c3a16001b69acb0e9c48307299e"
+      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
+      "reviewed_sha256": "1dee94d36a9d8aedf4d04625c8258f365e9466d36156b630b853ca07f7f3b1d2"
     },
     {
       "path": "internal/web/job/mtproto_job.go",
@@ -17644,8 +17644,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
-      "reviewed_sha256": "c450646666d9c4b86438955a556a8047f4ac1bb177495354d721367dd59161e9"
+      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
+      "reviewed_sha256": "b7bfc83457c0ff040f551548614602c5f3a30515fd701a1f5fc3879e59891c65"
     },
     {
       "path": "internal/web/job/node_down_threshold_test.go",
@@ -17831,8 +17831,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
-      "reviewed_sha256": "cce2432a0cb483199f544b4cb3851d9f48dd89df6e81b37bd1fe9b716f4b913d"
+      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
+      "reviewed_sha256": "0c9c0f09185cb6d3ead45dbdac2c91f65d5d4d9e75e398a28a52ff4dff18a20a"
     },
     {
       "path": "internal/web/job/tuic_job.go",
@@ -17864,8 +17864,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
-      "reviewed_sha256": "2e2ffb515b788309bd9e20877c9953f4ca1a73c4edf87b8563881c23308d5be9"
+      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
+      "reviewed_sha256": "e243f9f1a848ee587d466c56346e60065a98d8f86be26f148bc99f73ee3f288f"
     },
     {
       "path": "internal/web/job/tuic_journal_test.go",

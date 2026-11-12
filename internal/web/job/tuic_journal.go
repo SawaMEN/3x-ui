@@ -37,15 +37,18 @@ func syncJournalDir(dir string) error {
 }
 
 func storeTuicBatch(batch tuicTrafficBatch) (string, error) {
-	dir := tuicJournalDir()
+	data, err := json.Marshal(batch)
+	if err != nil {
+		return "", err
+	}
+	return storeTrafficJournal(tuicJournalDir(), batch.ID, data)
+}
+
+func storeTrafficJournal(dir, id string, data []byte) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	if err := syncJournalDir(filepath.Dir(dir)); err != nil {
-		return "", err
-	}
-	data, err := json.Marshal(batch)
-	if err != nil {
 		return "", err
 	}
 	file, err := os.CreateTemp(dir, ".pending-")
@@ -65,7 +68,7 @@ func storeTuicBatch(batch tuicTrafficBatch) (string, error) {
 	if err := file.Close(); err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, batch.ID+".json")
+	path := filepath.Join(dir, id+".json")
 	if err := os.Rename(tmp, path); err != nil {
 		return "", err
 	}

@@ -1,9 +1,8 @@
 package job
 
 import (
-	"sync"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -11,8 +10,7 @@ import (
 
 type MieruJob struct {
 	inboundService service.InboundService
-	mu             sync.Mutex
-	pending        pendingTrafficBatch
+	journal        sidecarTrafficJournal
 }
 
 func NewMieruJob() *MieruJob {
@@ -23,8 +21,19 @@ func (j *MieruJob) Run() {
 	// CollectTraffic advances Mieru's cumulative-counter cursors. Serialize the
 	// whole poll so a slow database write cannot let another run consume a newer
 	// snapshot before the previous delta has been acknowledged.
-	j.mu.Lock()
-	defer j.mu.Unlock()
+	mieruTrafficMu.Lock()
+	defer mieruTrafficMu.Unlock()
+
+	_, _, retryErr := j.journal.replay("mieru", &j.inboundService)
+	if retryErr != nil {
+		logger.Warning("mieru job: replay traffic journal:", retryErr)
+		return
+	}
+	owners, ownerErr := service.CaptureSidecarTrafficOwners([]model.Protocol{model.Mieru})
+	if ownerErr != nil {
+		logger.Warning("mieru job: capture traffic owners:", ownerErr)
+		return
+	}
 
 	desired, err := j.inboundService.DesiredMieruInstances()
 	if err != nil {
@@ -39,22 +48,6 @@ func (j *MieruJob) Run() {
 
 	mgr := mieru.GetManager()
 	mgr.Reconcile(desired)
-
-	// A failed AddTraffic must be retried before asking the manager for another
-	// delta snapshot; otherwise its cursor moves forward and those bytes are lost.
-	if j.pending.hasData() {
-		needRestart, _, retryErr := j.pending.flush(j.inboundService.AddTraffic)
-		if retryErr != nil {
-			logger.Warning("mieru job: retry pending traffic failed:", retryErr)
-			return
-		}
-		if needRestart {
-			if refreshed, refreshErr := j.inboundService.DesiredMieruInstances(); refreshErr == nil {
-				desired = refreshed
-				mgr.Reconcile(desired)
-			}
-		}
-	}
 
 	deltas, onlineEmails := mgr.CollectTraffic(desired)
 	if len(deltas) > 0 || len(onlineEmails) > 0 {
@@ -101,11 +94,10 @@ func (j *MieruJob) Run() {
 			traffics = append(traffics, traffic)
 		}
 
-		needRestart, _, trafficErr := j.inboundService.AddTraffic(traffics, clientTraffic)
+		needRestart, _, trafficErr := j.journal.commit("mieru", owners, &j.inboundService, traffics, clientTraffic)
 		if trafficErr != nil {
 			// CollectTraffic has already advanced its cursor. Keep this exact batch
 			// and retry it before the next snapshot instead of silently losing it.
-			j.pending.remember(traffics, clientTraffic)
 			logger.Warning("mieru job: add traffic failed; batch queued for retry:", trafficErr)
 		} else if needRestart {
 			// Quota enforcement can disable Mieru users. Reconcile immediately

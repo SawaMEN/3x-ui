@@ -2,9 +2,9 @@ package job
 
 import (
 	"context"
-	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -17,8 +17,7 @@ import (
 type MtprotoJob struct {
 	ctx            context.Context
 	inboundService service.InboundService
-	mu             sync.Mutex
-	pending        pendingTrafficBatch
+	journal        sidecarTrafficJournal
 }
 
 // NewMtprotoJob creates a new MTProto reconcile/traffic job instance.
@@ -42,8 +41,19 @@ func (j *MtprotoJob) Run() {
 	}
 	// CollectTrafficConsistent advances Telemt's per-client snapshot baseline.
 	// Serialize the poll so two scheduler runs cannot consume overlapping snapshots.
-	j.mu.Lock()
-	defer j.mu.Unlock()
+	mtprotoTrafficMu.Lock()
+	defer mtprotoTrafficMu.Unlock()
+
+	_, _, retryErr := j.journal.replay("mtproto", &j.inboundService)
+	if retryErr != nil {
+		logger.Warning("mtproto job: replay traffic journal:", retryErr)
+		return
+	}
+	owners, ownerErr := service.CaptureSidecarTrafficOwners([]model.Protocol{model.MTProto})
+	if ownerErr != nil {
+		logger.Warning("mtproto job: capture traffic owners:", ownerErr)
+		return
+	}
 
 	desired, err := j.inboundService.DesiredMtprotoInstances()
 	if err != nil {
@@ -64,16 +74,6 @@ func (j *MtprotoJob) Run() {
 	mgr.Reconcile(desired)
 	if err := (service.TelemtService{}).RefreshMekoFix(); err != nil {
 		logger.Warning("mtproto job: reconcile MEKO V3 rules failed:", err)
-	}
-
-	// The manager advances its cumulative-counter baseline when traffic collection
-	// returns. Retry an uncommitted batch before sampling again so a transient DB
-	// failure cannot create a permanent hole in a client's traffic history.
-	if j.pending.hasData() {
-		if _, _, retryErr := j.pending.flush(j.inboundService.AddTraffic); retryErr != nil {
-			logger.Warning("mtproto job: retry pending traffic failed:", retryErr)
-			return
-		}
 	}
 
 	deltas, onlineEmails := mgr.CollectTrafficConsistent()
@@ -117,10 +117,9 @@ func (j *MtprotoJob) Run() {
 	}
 
 	if len(traffics) > 0 || len(clientTraffics) > 0 {
-		if _, _, err := j.inboundService.AddTraffic(traffics, clientTraffics); err != nil {
+		if _, _, err := j.journal.commit("mtproto", owners, &j.inboundService, traffics, clientTraffics); err != nil {
 			// The collector has already moved Telemt's baseline. Preserve the exact
 			// delta batch and retry it before collecting a newer snapshot.
-			j.pending.remember(traffics, clientTraffics)
 			logger.Warning("mtproto job: add traffic failed; batch queued for retry:", err)
 		}
 	}

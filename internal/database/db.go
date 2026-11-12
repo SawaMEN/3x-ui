@@ -92,6 +92,7 @@ func allModels() []any {
 		&model.OutboundSubscription{},
 		&model.SubBalancer{},
 		&model.TuicTrafficReceipt{},
+		&model.SidecarTrafficReceipt{},
 		&model.CoreTrafficCheckpoint{},
 		// AutoMigrate adds grace_minutes and retired; zero grace retains the safe runtime default.
 		&model.ManagerSubscription{}, &model.ManagerOperation{}, &model.ManagerRelay{}, &model.ManagerDomain{},

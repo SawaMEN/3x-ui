@@ -623,3 +623,17 @@ Inventory и diff --check прошли: 243 reviewed, 2121 pending, stale 0.
 Расширенные результаты и точная очередь оставшихся pending/tail traffic задач — RESUME.md.
 Unix-only test fixtures получили правильные build constraints; production APIs без
 context сохранены, реальный production tunnel не останавливается отменой probe.
+
+
+## Продолжение: A84, journal для Mieru/MTProto/external VPN
+
+Нужно 3 runtime paths, подключено 3; один общий дефект A84, всего 84 исправления.
+Reviewed 250/2364, осталось 2114: новых original-scope файлов не отмечалось.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A84 | Failed traffic batch живёт только в старом panel job, replay по переиспользованным names может начислить bytes новому owner | Durable journal до accounting, stable row IDs, atomic receipt/counters, process-wide recovery и serialization всех 3 jobs |
+
+SQLite проверки покрывают DB failure/replacement/replay once/rename/delete,
+filesystem failure и восстановление в настоящих Run entry points. Точные результаты
+и ограничения crash window, full-stop tails, receipt retention — в RESUME.md.

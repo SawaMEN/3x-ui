@@ -8,7 +8,7 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 83 подтверждённых исправления панели; A81–A83 — текущая группа из 3 исправлений.
+Всего реализовано 84 подтверждённых исправления панели; A84 — текущий общий journal/replay fix для 3 traffic jobs.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
@@ -1037,3 +1037,63 @@ query контролируется callback, реальные listener/service m
 - Request-triggered routing workers, TLS startup downgrade, SQL fixture и остальные
   pending подсистемы, прежние R04/R05 остаются открыты. Общий go test ./... не запускать
   до исправления ранее описанного public-IP discovery в тестах.
+
+
+## Контрольная точка A84: durable traffic retry для трёх sidecar jobs
+
+A81–A83 опубликованы в 7edf41ede245ecd42a5f80e555397c9dcecbd019.
+Нужно закрыть 3 пути (Mieru, MTProto, external VPN); реализация подключена к 3/3.
+Это один общий дефект lifecycle pending batch, A84; общий итог 84 исправления.
+Reviewed 250/2364, осталось 2114, scope не расширялся. На этом этапе обновлены
+доказательства ранее просмотренных файлов, новые исходные файлы не добавлялись.
+
+До исправления pendingTrafficBatch принадлежал экземпляру job и сохранял только
+срезы traffic с email/tag. Panel replacement создаёт новый job и теряет batch,
+который runtime collector уже вычел из своего cursor. Между повторами email/tag
+могли перейти к другому владельцу. В коде не было journal/receipt для этих jobs.
+
+A84:
+- Каждый batch перед счётчиками записывается через temporary file + fsync + rename
+  + directory fsync; используется общий с TUIC примитив без изменения его формата.
+- Stable traffic-row и inbound IDs захватываются до потребления runtime counters,
+  включая disabled owners, legacy inbound_id и normalized shared-client links.
+  Replay следует за переименованными владельцами и пропускает удалённые ID.
+  Названия не используются для поиска нового владельца при восстановлении.
+- SidecarTrafficReceipt записывается в той же DB-транзакции, что bytes. Повтор
+  после неоднозначного commit/unlink не начисляет batch второй раз. Модель включена
+  в обычную и cross-dialect migration. Post-commit maintenance использует прежний
+  quota/runtime path и не превращает committed bytes в failed accounting.
+- Все три job сначала восстанавливают journal, затем получают desired/runtime
+  configuration; повреждение или недоступность journal останавливает потребление
+  новых samples. Per-source process locks объединяют retired/replacement jobs.
+- Если WAL нельзя записать, batch остаётся у процесса, а не у старого panel job.
+  Новая panel task повторяет его запись до сбора следующего runtime sample.
+
+Проверки используют temporary SQLite DB и synthetic counters/filesystem faults.
+Для каждого из 3 sources проверены: accounting failure и rollback receipt,
+потеря всех first-job state, replay, rename client/inbound, передача старых names
+новым владельцам и ambiguous repeated WAL. Отдельно проверены delete/recreate,
+ошибка файловой записи с восстановлением новой job и реальные Run entry points
+всех трёх jobs до configuration queries. Query failure guard исключает запуск
+реальных sidecars/Docker/systemctl/firewall в entry-point tests.
+Первый normal targeted job run PASS 1.004s (до добавления entry-point tests).
+go build ./... и go vet ./... PASS. golangci-lint 2.15.0: 0 issues.
+Итоговый normal TestSidecar* (включая Run entry points): PASS 0.243s.
+Расширенный -race: job PASS 8.367s, service PASS 21.860s, database PASS 2.845s.
+Inventory check и git diff --check PASS: reviewed 250, pending 2114, stale 0.
+
+Ограничения и следующая очередь:
+- Это persistence уже снятых periodic batches, не финальная статистика перед
+  StopAll. Нужен отдельный drain-before-stop для Mieru/MTProto/external VPN,
+  включая routed totals/WEB. Не заменять drain вызовом Run: он может запустить
+  sidecars заново. Полный останов пока имеет специальный tail journal только TUIC.
+- При process crash между runtime sampling и успешным fsync, а также при отказе
+  диска с одновременной потерей процесса, нельзя гарантировать сохранность sample.
+  Нужен runtime cursor ACK или восстановимый источник для устранения этого окна.
+- Receipts сохраняются, как TUIC receipts; безопасную bounded retention/согласованное
+  восстановление DB backup вместе с filesystem WAL проверить отдельно. Восстановление
+  старой DB с повторным использованием ID не входит в доказанную identity гарантию.
+- PostgreSQL live replay в этом этапе не запускался; SQLite migration/receipt path
+  проверяется целевыми тестами. Предыдущие результаты PostgreSQL не выдавать за новый прогон.
+- Remaining production cancellation/Telemt operations, routing workers, TLS
+  downgrade, SQL fixture и R04/R05 остаются в общей очереди.
