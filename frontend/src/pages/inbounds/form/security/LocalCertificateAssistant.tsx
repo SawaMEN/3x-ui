@@ -358,7 +358,10 @@ export default function LocalCertificateAssistant({
           <Alert
             type="error"
             showIcon
-            title={t('Не удалось проверить DNS-токен. Повторите проверку выше.', 'Cannot verify the DNS token. Retry above.')}
+            title={t(
+              'Не удалось проверить DNS-токен. Повторите проверку выше.',
+              'Cannot verify the DNS token. Retry above.',
+            )}
           />
         )}
         <Typography.Text>{normalized}</Typography.Text>
