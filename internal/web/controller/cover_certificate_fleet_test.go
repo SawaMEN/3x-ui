@@ -17,8 +17,11 @@ func TestCoverCertificateExportRequiresAuthenticatedMaster(t *testing.T) {
 		scope  string
 		push   string
 	}{
-		{false, "", ""}, {false, "", "1"}, {true, model.ApiScopeAdmin, "1"},
-		{true, model.ApiScopeNodeSync, ""}, {true, model.ApiScopeNodeAdmin, ""},
+		{false, "", ""},
+		{false, "", "1"},
+		{true, model.ApiScopeAdmin, "1"},
+		{true, model.ApiScopeNodeSync, ""},
+		{true, model.ApiScopeNodeAdmin, ""},
 	} {
 		recorder := httptest.NewRecorder()
 		ctx, _ := gin.CreateTestContext(recorder)
@@ -33,6 +36,7 @@ func TestCoverCertificateExportRequiresAuthenticatedMaster(t *testing.T) {
 		}
 	}
 }
+
 func TestCoverCertificateFleetCannotBeEnrolledByBearerToken(t *testing.T) {
 	for _, scope := range []string{model.ApiScopeAdmin, model.ApiScopeNodeAdmin, model.ApiScopeNodeSync} {
 		recorder := httptest.NewRecorder()

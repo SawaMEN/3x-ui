@@ -476,6 +476,7 @@ func (a *DomainController) certificateFleet(c *gin.Context) {
 	rows, err := service.CoverCertificateFleets()
 	jsonObj(c, rows, err)
 }
+
 func (a *DomainController) saveCertificateFleet(c *gin.Context) {
 	if !requireDomainAdminSession(c) {
 		return
@@ -494,6 +495,7 @@ func (a *DomainController) saveCertificateFleet(c *gin.Context) {
 	result, err := service.SaveCoverCertificateFleet(c.Request.Context(), req.SourceNodeID, req.Domain, req.NodeIDs)
 	jsonObj(c, result, err)
 }
+
 func (a *DomainController) exportCoverCertificate(c *gin.Context) {
 	if !requireNodeCoverSitePush(c) {
 		return
@@ -527,6 +529,7 @@ func (a *DomainController) certificatePreparation(c *gin.Context) {
 	result, err := service.InboundCertificateStatus(c.Request.Context(), service.InboundCertificateRequest{NodeID: node, Domain: c.Query("domain"), RSAOnly: rsaOnly})
 	jsonObj(c, result, err)
 }
+
 func (a *DomainController) prepareInboundCertificate(c *gin.Context) {
 	if !requireDomainAdminSession(c) {
 		return

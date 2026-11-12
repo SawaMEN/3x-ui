@@ -137,7 +137,7 @@ func TestCoverCertificateFleetDeliveryAndRenewal(t *testing.T) {
 	var payloadMu sync.Mutex
 	source := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/panel/api/domains/certificates/export-cover" || r.Header.Get(wirecodec.MasterPushHeader) != "1" {
-			http.Error(w, "wrong source request", 400)
+			http.Error(w, "wrong source request", http.StatusBadRequest)
 			return
 		}
 		payloadMu.Lock()
@@ -149,13 +149,13 @@ func TestCoverCertificateFleetDeliveryAndRenewal(t *testing.T) {
 	var rejectApply atomic.Bool
 	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/panel/api/domains/certificates/install" || r.Header.Get(wirecodec.MasterPushHeader) != "1" {
-			http.Error(w, "wrong recipient request", 400)
+			http.Error(w, "wrong recipient request", http.StatusBadRequest)
 			return
 		}
 		var incoming runtime.TLSCertificateInstall
 		if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
 			t.Error(err)
-			http.Error(w, "bad input", 400)
+			http.Error(w, "bad input", http.StatusBadRequest)
 			return
 		}
 		if !incoming.Apply {
@@ -164,7 +164,7 @@ func TestCoverCertificateFleetDeliveryAndRenewal(t *testing.T) {
 		installed, err := InstallAndApplyDistributedTLSCertificate(r.Context(), incoming)
 		if err != nil {
 			t.Error(err)
-			http.Error(w, "install failed", 500)
+			http.Error(w, "install failed", http.StatusInternalServerError)
 			return
 		}
 		installs.Add(1)

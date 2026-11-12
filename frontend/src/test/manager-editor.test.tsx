@@ -5,6 +5,7 @@ import SubscriptionEditor from '@/pages/manager/SubscriptionEditor';
 import { newSubscription } from '@/pages/manager/schema';
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({ data: [{ id: 3, email: 'alice' }], isFetching: false }),
+  useQueryClient: () => ({ invalidateQueries: vi.fn(), setQueryData: vi.fn() }),
 }));
 vi.mock('@/api/queries/useInboundOptions', () => ({
   useInboundOptions: () => ({

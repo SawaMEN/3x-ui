@@ -17,8 +17,10 @@ import (
 
 const coverCertificateFleetKey = "coverCertificateFleet"
 
-var coverCertificateFleetMu sync.Mutex
-var coverCertificateFleetWake = make(chan struct{}, 1)
+var (
+	coverCertificateFleetMu   sync.Mutex
+	coverCertificateFleetWake = make(chan struct{}, 1)
+)
 
 type CoverCertificateTarget struct {
 	NodeID        int    `json:"nodeId"`
@@ -29,6 +31,7 @@ type CoverCertificateTarget struct {
 	CheckedAt     int64  `json:"checkedAt"`
 	Error         string `json:"error,omitempty"`
 }
+
 type CoverCertificateFleet struct {
 	SourceNodeID    int                      `json:"sourceNodeId"`
 	MainCertificate bool                     `json:"mainCertificate,omitempty"`
@@ -45,11 +48,13 @@ func loadCoverCertificateFleet() ([]CoverCertificateFleet, error) {
 	err = json.Unmarshal([]byte(raw), &rows)
 	return rows, err
 }
+
 func CoverCertificateFleets() ([]CoverCertificateFleet, error) {
 	// A single settings row is read atomically. Status polling must not wait
 	// for a slow node delivery; the mutex serializes writers only.
 	return loadCoverCertificateFleet()
 }
+
 func verifiedCertificateNode(id int) (*runtime.Remote, error) {
 	if id <= 0 || database.GetDB() == nil || runtime.GetManager() == nil {
 		return nil, errors.New("node manager is unavailable")
