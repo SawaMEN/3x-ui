@@ -306,6 +306,9 @@ func requirePingtunnelForwardVersion(path string) error {
 func (m *Manager) Ensure(inst Instance) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := sidecartraffic.ValidateDesired(inst.ID, inst.Protocol); err != nil {
+		return err
+	}
 	return m.ensureLocked(inst)
 }
 
@@ -513,6 +516,22 @@ func (m *Manager) StopAll() {
 func (m *Manager) Reconcile(instances []Instance) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	requests := make([]sidecartraffic.Desired, len(instances))
+	for i, inst := range instances {
+		requests[i] = sidecartraffic.Desired{ID: inst.ID, Protocol: inst.Protocol}
+	}
+	allowed, err := sidecartraffic.Current(requests)
+	if err != nil {
+		logger.Warningf("externalvpn: reconcile skipped: %v", err)
+		return
+	}
+	current := make([]Instance, 0, len(instances))
+	for i, inst := range instances {
+		if allowed[i] {
+			current = append(current, inst)
+		}
+	}
+	instances = current
 	sort.Slice(instances, func(i, j int) bool { return instances[i].ID < instances[j].ID })
 	desired := map[int]bool{}
 	for _, inst := range instances {

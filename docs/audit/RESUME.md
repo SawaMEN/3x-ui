@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 87 подтверждённых исправлений панели; A87 — handoff счётчиков при CRUD stop/reload/restart трёх sidecar managers.
+Всего реализовано 88 подтверждённых исправлений панели; A88 — запрет запуска отозванных sidecar inbounds из устаревших заданий.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 256 файлов, осталось 2108; общий проход не завершён.
+Проверено вручную 257 файлов, осталось 2107; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1354,3 +1354,70 @@ certificate metadata. Incoming feature commits не считаются fixes э�
 - Новые manager-to-DB bindings проверены на temporary SQLite/post-commit paths;
   live PostgreSQL handoff/DB lock stress и remaining request/background lifecycle,
   TLS downgrade, SQL fixture и прежние R04/R05 остаются в общей очереди.
+
+
+## Контрольная точка A88: проверка актуальности sidecar inbound перед запуском
+
+Нужно 3 managers; исправлены 3: Mieru, MTProto, external VPN.
+Один подтверждённый дефект A88; всего 88 исправлений.
+Охват исходного коммита: reviewed 257/2364, осталось 2107.
+Полностью дочитан internal/mtproto/settings_test.go; остальные новые helper/tests
+не входят в исходный inventory и не увеличивают исходный охват.
+
+Причина: старый desired snapshot или отложенный Ensure мог заново запустить
+подключение после delete/disable/move-to-node/protocol-change. Accounting Capture
+не является авторизацией, а cached/no-op Ensure вообще обходил повторное чтение БД.
+
+`sidecartraffic.Current` читает только id/enable/node_id/protocol пакетами по 900
+с общим timeout 5 секунд. Разрешены только существующие enabled local rows с точно
+совпадающим protocol, включая смену протокола внутри external VPN. Каждому desired
+элементу соответствует отдельное решение, включая повторяющиеся IDs с разными
+протоколами. DB=nil сохраняет standalone contract; закрытая/недоступная panel DB
+возвращает ошибку и не переводится в разрешение запуска.
+
+Все три Ensure проверяют актуальность под manager mutex до no-op/sweep/config
+writes. Reconcile проверяет весь desired до любых stop/start/sweep и фильтрует
+отозванные элементы в новую slice. DB read failure оставляет текущий runtime
+нетронутым. Explicit empty desired/Remove/StopAll не требуют DB availability.
+Блокировка связывает check/start с последующим CRUD Remove: если изменение БД
+произошло после проверки, Remove дождётся запущенного процесса и остановит его.
+
+Доказательства:
+- На прежней логике aff1af2 все 24 regression subtests упали, web FAIL 5.171s:
+  3 managers × 4 причины отзыва × Ensure/Reconcile. Только тесты/неподключённый
+  helper были добавлены; production manager paths оставались исходными.
+- После исправления общий selected run: sidecartraffic PASS 0.453s,
+  web PASS 13.178s, job PASS 1.649s, externalvpn PASS 0.423s.
+  Mieru/MTProto в этом фильтре не имели matching tests — не считать их отдельными
+  unit-test прогонами. Интеграционные web fixtures исполняли все 3 managers.
+- Финальные 24 сценария с дополнительным cached/no-op Ensure guard и DB-outage
+  runtime-preservation fixture: web PASS 4.362s.
+- Unit coverage: 1802 rows/3 DB batches, disabled/moved/exact-protocol/missing rows,
+  duplicate ID с другим протоколом, sanitized DB error и empty-desired без query.
+- Старые lifecycle/shutdown fixtures теперь создают enabled rows перед Ensure;
+  перед accounting-only replay явно выключают inbound. Их прежние assertions
+  о handoff/rename/routed/replay/concurrent-poll не ослаблены.
+
+Ограничения и следующая очередь:
+- Это guard существования/enable/local/protocol, не revision guard содержимого
+  settings/clients. Same-protocol credential edits и stale omission новых rows
+  остаются следующей очередью; предпочтителен единый generation contract для
+  формирования desired и применения runtime updates.
+- Прежние ограничения pre-stop samples/volatile metrics APIs A87 сохраняются.
+- Real upstream, host firewall/systemctl/ACME, Docker/NET_ADMIN, Unix IPC и live
+  PostgreSQL не запускались. Fixtures используют temporary SQLite, owned fake
+  children и loopback HTTP. Полный go test ./... не запускать: есть внешние probes.
+
+Дополнительная проверка A88:
+- Selected manager/service regressions PASS: Mieru 0.039s, MTProto 0.193s,
+  external VPN 0.658s, service 6.316s. Среди них service post-commit no-op edit,
+  credential replacement и reset depleted quota; standalone managers сохранили
+  прежнее поведение без panel DB.
+- Полностью прочитанный исходный settings_test.go: native settings/username
+  round-trip PASS 0.014s. Reviewed 257, pending 2107, stale 0.
+
+Итог A88: go build -p 1 ./... PASS, go vet -p 1 ./... PASS;
+golangci-lint 2.15.0 full ./... PASS, 0 issues. Inventory check и staged diff
+check PASS: reviewed 257, pending 2107, stale 0. Для A88 -race отдельно не
+запускался; перечисленные временные SQLite/process/loopback regressions — normal
+runs. Предыдущие race результаты A87 не считать новым прогоном A88.

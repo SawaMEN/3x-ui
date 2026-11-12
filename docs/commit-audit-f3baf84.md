@@ -681,3 +681,18 @@ Reviewed 256/2364, осталось 2108.
 Lifecycle/replay/rename/routed/disk-failure/concurrent-poll regressions после правки
 прошли; точные финальные результаты, incoming 710e8b3 и ограничения pre-stop
 snapshot/volatile source counters — RESUME.md.
+
+
+## Продолжение: A88, запрет stale sidecar startup после отзыва inbound
+
+Нужно 3 managers, исправлены 3; один defect A88, всего 88 исправлений.
+Reviewed 257/2364, осталось 2107.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A88 | Устаревшие Ensure/Reconcile заново запускают удалённый, выключенный, перенесённый на node или сменивший protocol inbound | Общая DB-проверка enabled/local/exact-protocol под manager mutex; пакетная проверка до runtime mutations; сохранение live runtime при DB read failure |
+
+Все 24 сценария воспроизведены до изменения manager paths. После исправления
+прошли те же сценарии, cached/no-op Ensure, batch/read-failure и существующие
+shutdown/lifecycle/accounting regressions. Точные результаты и очередь защиты
+same-protocol config/client revisions описаны в RESUME.md.

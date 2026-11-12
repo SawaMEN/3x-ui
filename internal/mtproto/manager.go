@@ -361,6 +361,9 @@ func usableAdTag(tag string) string {
 func (m *Manager) Ensure(inst Instance) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := sidecartraffic.ValidateDesired(inst.Id, model.MTProto); err != nil {
+		return err
+	}
 	m.sweepOrphansLocked()
 	return m.ensureLocked(inst)
 }
@@ -595,6 +598,22 @@ func removeStaleConfigs(want map[int]struct{}) int {
 func (m *Manager) Reconcile(desired []Instance) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	requests := make([]sidecartraffic.Desired, len(desired))
+	for i, inst := range desired {
+		requests[i] = sidecartraffic.Desired{ID: inst.Id, Protocol: model.MTProto}
+	}
+	allowed, err := sidecartraffic.Current(requests)
+	if err != nil {
+		logger.Warningf("mtproto: reconcile skipped: %v", err)
+		return
+	}
+	current := make([]Instance, 0, len(desired))
+	for i, inst := range desired {
+		if allowed[i] {
+			current = append(current, inst)
+		}
+	}
+	desired = current
 	m.sweepOrphansLocked()
 	want := make(map[int]struct{}, len(desired))
 	for _, i := range desired {

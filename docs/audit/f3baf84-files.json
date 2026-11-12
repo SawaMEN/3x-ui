@@ -12144,8 +12144,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A87 refreshed complete manager review after final external handoff ordering: sample precedes preflight writes of shared certificate/credential files, teardown does not duplicate that poll, restored old runtime keeps its original pinned owner on startup rollback. Lifecycle/rename/routed/disk-failure and rollback owner regressions pass; race/build/vet/lint and scope limits recorded in RESUME.",
-      "reviewed_sha256": "58940904f965e07bb20da354dc4b4873a66a17b7684d56221d3b0748b4a06fc0"
+      "evidence": "A88: reviewed authoritative enabled/local/exact-protocol guard under manager mutex before Ensure no-op and Reconcile mutations; 24 pre-fix failures reproduced, final cached/removed/disabled/node/protocol web regressions PASS; existing handoff/lifecycle/shutdown regression suite PASS.",
+      "reviewed_sha256": "229f246b0a31278bb736a9f267aec62aba7230b9e5939f511ea09a3e77145534"
     },
     {
       "path": "internal/externalvpn/manager_security_test.go",
@@ -13057,8 +13057,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A87: full Mieru process source read and refreshed complete manager/collector/journal reviews. Reproduced 4 Mieru lifecycle tail losses on isolated 449e639 baseline; owner IDs captured before runtime start, read-only sample handoff to shared WAL/process retry queue before CRUD stop/reload/restart, and epoch guard against old concurrent polls. Normal lifecycle/replay/routed/failure tests pass; final race/build/vet/lint and limits recorded in RESUME.",
-      "reviewed_sha256": "148247aeca5f17660f29f05e94655806c3e62817444852b5bc65b3ffc8c114ec"
+      "evidence": "A88: reviewed authoritative enabled/local/exact-protocol guard under manager mutex before Ensure no-op and Reconcile mutations; 24 pre-fix failures reproduced, final cached/removed/disabled/node/protocol web regressions PASS; existing handoff/lifecycle/shutdown regression suite PASS.",
+      "reviewed_sha256": "bac23d190e5d0ca7151b4835123ab46051ff880e93454555441379486c0ce3c1"
     },
     {
       "path": "internal/mieru/process.go",
@@ -13090,8 +13090,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A87: full Mieru process source read and refreshed complete manager/collector/journal reviews. Reproduced 4 Mieru lifecycle tail losses on isolated 449e639 baseline; owner IDs captured before runtime start, read-only sample handoff to shared WAL/process retry queue before CRUD stop/reload/restart, and epoch guard against old concurrent polls. Normal lifecycle/replay/routed/failure tests pass; final race/build/vet/lint and limits recorded in RESUME.",
-      "reviewed_sha256": "2aa0cc8e162cb30cc65e8bc6d4c546d0196128cd26acd6dc7435411bdcaa67cf"
+      "evidence": "A88: reviewed authoritative enabled/local/exact-protocol guard under manager mutex before Ensure no-op and Reconcile mutations; 24 pre-fix failures reproduced, final cached/removed/disabled/node/protocol web regressions PASS; existing handoff/lifecycle/shutdown regression suite PASS.",
+      "reviewed_sha256": "3001b79aa00e439552673ff0045654e37f2b72a7c64cba9ed2c4cd67fb78c7d7"
     },
     {
       "path": "internal/mtproto/manager_mutation_test.go",
@@ -13221,9 +13221,9 @@
       "deletions": 0,
       "subsystem": "protocols-utilities",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A88 continuation: read entire original 45-line native settings and username round-trip test file; valid/invalid mask, CIDR, ports, legacy/native fields and stable safe email aliases reviewed; targeted TestValidateNativeSettings/TestNativeUsernameRoundTrip PASS 0.014s.",
+      "reviewed_sha256": "e7940c041e1781a9a4937b393a3b7c4e2e731ff2247255b89699cabeae1955a4"
     },
     {
       "path": "internal/mtproto/stage8_kernel_test.go",

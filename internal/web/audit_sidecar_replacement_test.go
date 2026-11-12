@@ -38,7 +38,7 @@ func TestMieruLifecycleJournalsConsumedTail(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "mita"), []byte("#!/bin/sh\ncase \"$1\" in\nget) cat \"$XUI_AUDIT_REPLACEMENT_STATS\";;\nreload) exit 0;;\n*) exec sleep 60;;\nesac\n"), 0o700); err != nil {
 				t.Fatal(err)
 			}
-			ib := model.Inbound{Id: 990, Tag: "lifecycle", Protocol: model.Mieru, Settings: `{"clients":[]}`}
+			ib := model.Inbound{Enable: true, Id: 990, Tag: "lifecycle", Protocol: model.Mieru, Settings: `{"clients":[]}`}
 			if err := db.Create(&ib).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -108,6 +108,9 @@ func TestMieruLifecycleJournalsConsumedTail(t *testing.T) {
 			if err != nil || (operation != "disk_failure" && len(paths) != 1) {
 				t.Fatalf("old tail was not handed to durable journal: %v %v", paths, err)
 			}
+			if err := db.Model(&ib).Update("enable", false).Error; err != nil {
+				t.Fatal(err)
+			}
 			job.NewMieruJob().Run()
 			if err := db.First(&row, row.Id).Error; err != nil {
 				t.Fatal(err)
@@ -138,7 +141,7 @@ func TestMtprotoLifecycleJournalsConsumedTail(t *testing.T) {
 					t.Fatal(err)
 				}
 				t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-				ib := model.Inbound{Id: 991, Tag: "mtproto-lifecycle", Protocol: model.MTProto, Settings: `{"clients":[]}`}
+				ib := model.Inbound{Enable: true, Id: 991, Tag: "mtproto-lifecycle", Protocol: model.MTProto, Settings: `{"clients":[]}`}
 				if err := db.Create(&ib).Error; err != nil {
 					t.Fatal(err)
 				}
@@ -207,6 +210,9 @@ func TestMtprotoLifecycleJournalsConsumedTail(t *testing.T) {
 				if err != nil || len(paths) != 1 {
 					t.Fatalf("missing durable MTProto tail: %v %v", paths, err)
 				}
+				if err := db.Model(&ib).Update("enable", false).Error; err != nil {
+					t.Fatal(err)
+				}
 				job.NewMtprotoJob().Run()
 				job.NewMtprotoJob().Run()
 				if err := db.First(&row, row.Id).Error; err != nil {
@@ -245,7 +251,7 @@ func TestExternalLifecycleJournalsConsumedTail(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "trusttunnel_endpoint"), []byte(script), 0o700); err != nil {
 				t.Fatal(err)
 			}
-			ib := model.Inbound{Id: 992, Tag: "external-lifecycle", Protocol: model.TrustTunnel, Settings: `{"clients":[]}`}
+			ib := model.Inbound{Enable: true, Id: 992, Tag: "external-lifecycle", Protocol: model.TrustTunnel, Settings: `{"clients":[]}`}
 			if err := db.Create(&ib).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -323,6 +329,9 @@ func TestExternalLifecycleJournalsConsumedTail(t *testing.T) {
 			if err != nil || len(paths) != expectedFiles {
 				t.Fatalf("missing durable external tail: %v %v", paths, err)
 			}
+			if err := db.Model(&ib).Update("enable", false).Error; err != nil {
+				t.Fatal(err)
+			}
 			job.NewExternalVPNJob().Run()
 			job.NewExternalVPNJob().Run()
 			if err := db.First(&row, row.Id).Error; err != nil {
@@ -359,7 +368,7 @@ func TestMieruReloadHandoffRejectsOlderConcurrentPoll(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "mita"), script, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	ib := model.Inbound{Id: 993, Tag: "concurrent-reload", Protocol: model.Mieru, Settings: `{"clients":[]}`}
+	ib := model.Inbound{Enable: true, Id: 993, Tag: "concurrent-reload", Protocol: model.Mieru, Settings: `{"clients":[]}`}
 	if err := db.Create(&ib).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -431,6 +440,9 @@ func TestMieruReloadHandoffRejectsOlderConcurrentPoll(t *testing.T) {
 		t.Fatalf("handoff cursor overwritten by old poll: %+v %v", rows, err)
 	}
 	mgr.Remove(ib.Id)
+	if err := db.Model(&ib).Update("enable", false).Error; err != nil {
+		t.Fatal(err)
+	}
 	job.NewMieruJob().Run()
 	if err := db.First(&row, row.Id).Error; err != nil {
 		t.Fatal(err)
@@ -453,7 +465,7 @@ func TestMtprotoReloadHandoffRejectsOlderConcurrentPoll(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	ib := model.Inbound{Id: 994, Tag: "mtproto-concurrent", Protocol: model.MTProto, Settings: `{"clients":[]}`}
+	ib := model.Inbound{Enable: true, Id: 994, Tag: "mtproto-concurrent", Protocol: model.MTProto, Settings: `{"clients":[]}`}
 	if err := db.Create(&ib).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -538,6 +550,9 @@ func TestMtprotoReloadHandoffRejectsOlderConcurrentPoll(t *testing.T) {
 		t.Fatalf("Telemt handoff cursor overwritten: %+v %v", rows, err)
 	}
 	mgr.Remove(ib.Id)
+	if err := db.Model(&ib).Update("enable", false).Error; err != nil {
+		t.Fatal(err)
+	}
 	job.NewMtprotoJob().Run()
 	if err := db.First(&row, row.Id).Error; err != nil {
 		t.Fatal(err)

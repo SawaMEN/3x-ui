@@ -36,7 +36,7 @@ func TestShutdownPersistsMieruTrafficBeforeProcessRemoval(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "mita"), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	ib := model.Inbound{Id: 983, Tag: "audit-tail", Protocol: model.Mieru, Settings: `{"clients":[]}`}
+	ib := model.Inbound{Enable: true, Id: 983, Tag: "audit-tail", Protocol: model.Mieru, Settings: `{"clients":[]}`}
 	if err := database.GetDB().Create(&ib).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestShutdownPersistsExternalTrafficBeforeProcessRemoval(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "trusttunnel_endpoint"), []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	ib := model.Inbound{Id: 984, Tag: "external-tail", Protocol: model.TrustTunnel, Settings: `{"clients":[]}`}
+	ib := model.Inbound{Enable: true, Id: 984, Tag: "external-tail", Protocol: model.TrustTunnel, Settings: `{"clients":[]}`}
 	if err := database.GetDB().Create(&ib).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestShutdownPersistsMtprotoTrafficAndAvoidsRoutedDoubleCount(t *testing.T) 
 			if err := os.WriteFile(filepath.Join(dir, mtproto.GetBinaryName()), []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
 				t.Fatal(err)
 			}
-			ib := model.Inbound{Id: 985, Tag: "mtproto-tail", Protocol: model.MTProto, Settings: `{"clients":[]}`}
+			ib := model.Inbound{Enable: true, Id: 985, Tag: "mtproto-tail", Protocol: model.MTProto, Settings: `{"clients":[]}`}
 			if err := database.GetDB().Create(&ib).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -252,7 +252,7 @@ func TestShutdownReportsUnavailableSidecarMetrics(t *testing.T) {
 			t.Setenv("XUI_BIN_FOLDER", dir)
 			t.Setenv("XUI_DB_FOLDER", t.TempDir())
 			dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
-			ib := model.Inbound{Id: 986, Tag: "unavailable-metrics", Protocol: protocol, Settings: `{"clients":[]}`}
+			ib := model.Inbound{Enable: true, Id: 986, Tag: "unavailable-metrics", Protocol: protocol, Settings: `{"clients":[]}`}
 			if err := database.GetDB().Create(&ib).Error; err != nil {
 				t.Fatal(err)
 			}

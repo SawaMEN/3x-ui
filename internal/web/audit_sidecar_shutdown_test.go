@@ -15,6 +15,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
@@ -79,6 +80,9 @@ func TestShutdownStopsSidecarReconciledByLastCronTick(t *testing.T) {
 	mgr.StopAll()
 	defer mgr.StopAll()
 	inst := externalvpn.Instance{ID: 982, Tag: "audit-external", Protocol: model.OpenFlux, Listen: "127.0.0.1", Port: 34567, Settings: externalvpn.Settings{Context: "stable", Transports: []externalvpn.OpenFluxTransport{{Type: "direct", Priority: 100}}, Clients: []externalvpn.Client{{Email: "synthetic", Password: strings.Repeat("a", 64), Enable: true}}}}
+	if err := database.GetDB().Create(&model.Inbound{Id: inst.ID, Tag: inst.Tag, Enable: true, Protocol: inst.Protocol}).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := mgr.Ensure(inst); err != nil {
 		t.Fatal(err)
 	}

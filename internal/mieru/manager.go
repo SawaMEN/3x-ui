@@ -440,12 +440,31 @@ func (m *Manager) ensureLocked(inst Instance) error {
 func (m *Manager) Ensure(inst Instance) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := sidecartraffic.ValidateDesired(inst.Id, model.Mieru); err != nil {
+		return err
+	}
 	return m.ensureLocked(inst)
 }
 
 func (m *Manager) Reconcile(desired []Instance) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	requests := make([]sidecartraffic.Desired, len(desired))
+	for i, inst := range desired {
+		requests[i] = sidecartraffic.Desired{ID: inst.Id, Protocol: model.Mieru}
+	}
+	allowed, err := sidecartraffic.Current(requests)
+	if err != nil {
+		logger.Warningf("mieru: reconcile skipped: %v", err)
+		return
+	}
+	current := make([]Instance, 0, len(desired))
+	for i, inst := range desired {
+		if allowed[i] {
+			current = append(current, inst)
+		}
+	}
+	desired = current
 	want := map[int]Instance{}
 	for _, inst := range desired {
 		want[inst.Id] = inst
