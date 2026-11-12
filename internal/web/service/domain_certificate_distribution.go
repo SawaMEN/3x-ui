@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -28,6 +29,7 @@ var certificateDistributionMu sync.Mutex
 // DistributedTLSCertificate is the public, path-only acknowledgement. Neither
 // the certificate PEM nor its private key is returned to the panel browser.
 type DistributedTLSCertificate struct {
+	Applied   bool   `json:"applied,omitempty"`
 	NodeID    int    `json:"nodeId,omitempty"`
 	Domain    string `json:"domain"`
 	CertFile  string `json:"certFile"`
@@ -97,6 +99,42 @@ func readDistributedSource(path string) ([]byte, error) {
 	return contents, nil
 }
 
+func localManagedCertificatePayload(ctx context.Context, name string, rsaOnly bool) (runtime.TLSCertificateInstall, int64, error) {
+	var empty runtime.TLSCertificateInstall
+	sites, err := ManagedSNIDomains(ctx, false)
+	if err != nil {
+		return empty, 0, err
+	}
+	var source *ManagedSNIDomain
+	for i := range sites {
+		if sites[i].Name == name && sites[i].CertFile != "" && sites[i].KeyFile != "" &&
+			sites[i].Source != "remote" && sites[i].Source != "distributed" {
+			source = &sites[i]
+			break
+		}
+	}
+	if source == nil {
+		return empty, 0, errors.New("main node has no valid managed certificate for this SNI")
+	}
+	if rsaOnly && !managedCertificateSupportsRSA(source.CertFile, source.KeyFile) {
+		return empty, 0, errors.New("FPTN requires an RSA certificate and matching RSA private key")
+	}
+	cert, err := readDistributedSource(source.CertFile)
+	if err != nil {
+		return empty, 0, err
+	}
+	key, err := readDistributedSource(source.KeyFile)
+	if err != nil {
+		return empty, 0, err
+	}
+	expiry, err := validateDistributedPair(name, cert, key)
+	if err != nil {
+		return empty, 0, err
+	}
+
+	return runtime.TLSCertificateInstall{Domain: name, CertificatePEM: string(cert), PrivateKeyPEM: string(key)}, expiry, nil
+}
+
 // DistributeTLSCertificate sends only a locally registered certificate for an
 // owned hostname. A node with HTTP or skip-verification is refused because
 // forwarding a private key over such transport would expose the TLS identity.
@@ -118,33 +156,7 @@ func DistributeTLSCertificate(ctx context.Context, nodeID int, domain string, rs
 		return empty, errors.New("node must be enabled, direct, and use verified HTTPS (verify, pin or mTLS)")
 	}
 
-	sites, err := ManagedSNIDomains(ctx, false)
-	if err != nil {
-		return empty, err
-	}
-	var source *ManagedSNIDomain
-	for i := range sites {
-		if sites[i].Name == name && sites[i].CertFile != "" && sites[i].KeyFile != "" &&
-			sites[i].Source != "remote" && sites[i].Source != "distributed" {
-			source = &sites[i]
-			break
-		}
-	}
-	if source == nil {
-		return empty, errors.New("main node has no valid managed certificate for this SNI")
-	}
-	if rsaOnly && !managedCertificateSupportsRSA(source.CertFile, source.KeyFile) {
-		return empty, errors.New("FPTN requires an RSA certificate and matching RSA private key")
-	}
-	cert, err := readDistributedSource(source.CertFile)
-	if err != nil {
-		return empty, err
-	}
-	key, err := readDistributedSource(source.KeyFile)
-	if err != nil {
-		return empty, err
-	}
-	expiry, err := validateDistributedPair(name, cert, key)
+	payload, expiry, err := localManagedCertificatePayload(ctx, name, rsaOnly)
 	if err != nil {
 		return empty, err
 	}
@@ -158,7 +170,7 @@ func DistributeTLSCertificate(ctx context.Context, nodeID int, domain string, rs
 		return empty, err
 	}
 	installed, err := remote.InstallTLSCertificate(ctx, runtime.TLSCertificateInstall{
-		Domain: name, CertificatePEM: string(cert), PrivateKeyPEM: string(key),
+		Domain: name, CertificatePEM: payload.CertificatePEM, PrivateKeyPEM: payload.PrivateKeyPEM,
 	})
 	if err != nil {
 		return empty, fmt.Errorf("node certificate delivery failed: %w", err)
@@ -323,4 +335,54 @@ func LocalDistributedTLSCertificates() []DistributedTLSCertificate {
 		})
 	}
 	return out
+}
+
+// Installation without an active consumer must not start or restart a core.
+// Only local enabled inbounds referencing this identity need a reload.
+func distributedCertificateUsed(value any, cert DistributedTLSCertificate) bool {
+	switch v := value.(type) {
+	case string:
+		return v == cert.CertFile || v == cert.KeyFile || v == cert.Domain
+	case []any:
+		for _, item := range v {
+			if distributedCertificateUsed(item, cert) {
+				return true
+			}
+		}
+	case map[string]any:
+		for _, item := range v {
+			if distributedCertificateUsed(item, cert) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func InstallAndApplyDistributedTLSCertificate(ctx context.Context, payload runtime.TLSCertificateInstall) (DistributedTLSCertificate, error) {
+	result, err := InstallDistributedTLSCertificate(payload)
+	if err != nil || !payload.Apply {
+		return result, err
+	}
+	if database.GetDB() == nil {
+		return result, errors.New("certificate installed; database unavailable for apply")
+	}
+	var inbounds []model.Inbound
+	if err := database.GetDB().Where("enable = ? AND (node_id IS NULL OR node_id = 0)", true).Find(&inbounds).Error; err != nil {
+		return result, err
+	}
+	for _, inbound := range inbounds {
+		for _, raw := range []string{inbound.Settings, inbound.StreamSettings} {
+			var value any
+			if json.Unmarshal([]byte(raw), &value) == nil && distributedCertificateUsed(value, result) {
+				if err := SelectedNativeCore().Restart(ctx); err != nil {
+					return result, errors.New("certificate installed; runtime apply failed and will be retried")
+				}
+				result.Applied = true
+				return result, nil
+			}
+		}
+	}
+	result.Applied = true
+	return result, nil
 }

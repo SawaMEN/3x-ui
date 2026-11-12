@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useFormContext, useWatch } from 'react-hook-form';
-import { Alert, Button, Checkbox, Input, Modal, Space, Typography } from 'antd';
+import { Alert, Button, Checkbox, Input, Modal, Space, Tooltip, Typography } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import { HttpUtil } from '@/utils';
 import MainNodeDNS01Setup, { useMainNodeDNS01Readiness } from '@/components/MainNodeDNS01Setup';
@@ -12,8 +13,8 @@ import {
   nodeCertificateForSni,
 } from './local-certificate';
 
-type IssueResult = { domain: string; state: string; certFile?: string; keyFile?: string };
 type ResolvedCertificate = {
+  state?: string;
   domain: string;
   certFile: string;
   keyFile: string;
@@ -41,13 +42,18 @@ export default function LocalCertificateAssistant({
   const [email, setEmail] = useState('');
   const [consent, setConsent] = useState(false);
   const [issuing, setIssuing] = useState(false);
-  const [transferring, setTransferring] = useState(false);
-  const [transferred, setTransferred] = useState('');
-  const [error, setError] = useState('');
-  const [pending, setPending] = useState('');
+
+  const [failure, setFailure] = useState<{ identity: string; message: string } | null>(null);
+
   const fields = localCertificateFields(protocol, security);
   const certField = fields?.cert;
   const keyField = fields?.key;
+  const watchedCert = useWatch({ control, name: certField || '__unusedCertificate' });
+  const watchedKey = useWatch({ control, name: keyField || '__unusedKey' });
+  const watchedInline = useWatch({ control, name: 'streamSettings.tlsSettings.certificates.0' });
+  const inlineFptnCert = useWatch({ control, name: 'settings.certificatePEM' });
+  const inlineFptnKey = useWatch({ control, name: 'settings.privateKeyPEM' });
+
   const autoTLSField = fields?.autoTLS;
   const local = nodeId == null || nodeId === 0;
   const rsaOnly = protocol === 'fptn';
@@ -66,31 +72,58 @@ export default function LocalCertificateAssistant({
     !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) &&
     /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(normalized);
 
-  // Remote inventory deliberately hides filesystem paths. Resolve only the
-  // currently selected (node, SNI), through a scoped master-to-node API.
-  const remoteLookup = useQuery({
-    queryKey: ['tls-node-certificate', nodeId ?? 0, normalized, rsaOnly],
-    enabled: (!local || rsaOnly) && !!fields && validSni && !disabled,
-    staleTime: 60_000,
+  const identity = JSON.stringify([nodeId ?? 0, normalized, protocol, security]);
+  const identityRef = useRef(identity);
+  useEffect(() => {
+    identityRef.current = identity;
+  }, [identity]);
+  const error = failure?.identity === identity ? failure.message : '';
+  const setError = (message: string) => setFailure({ identity, message });
+  const [lookupSni, setLookupSni] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setLookupSni(normalized), 450);
+    return () => clearTimeout(timer);
+  }, [normalized]);
+  const lookupKey = ['inbound-certificate-preparation', nodeId ?? 0, normalized, rsaOnly];
+  const remoteLookup = useQuery<ResolvedCertificate | null>({
+    queryKey: lookupKey,
+    enabled: !!fields && validSni && lookupSni === normalized && !disabled,
+    staleTime: 15_000,
     retry: false,
-    queryFn: async (): Promise<ResolvedCertificate | null> => {
-      const response = await HttpUtil.post(
-        '/panel/api/domains/certificates/resolve',
+    refetchInterval: (query) =>
+      ['pending', 'retrying'].includes(query.state.data?.state || '') ? 2_000 : false,
+    queryFn: async ({ signal }): Promise<ResolvedCertificate | null> => {
+      const response = await HttpUtil.get(
+        '/panel/api/domains/certificates/preparation',
         { nodeId: nodeId ?? 0, domain: normalized, rsaOnly },
-        { headers: { 'Content-Type': 'application/json' }, silent: true },
+        { silent: true, signal },
       );
-      if (!response?.success) return null;
+      if (!response?.success) throw new Error(response?.msg || 'Cannot check certificate status');
       const found = response.obj as ResolvedCertificate;
+      if (found?.domain !== normalized || found.nodeId !== (nodeId ?? 0))
+        throw new Error('Unexpected certificate response');
       if (
-        found?.domain !== normalized ||
-        (found?.nodeId ?? 0) !== (nodeId ?? 0) ||
-        !found.certFile ||
-        !found.keyFile
+        found.state === 'valid' &&
+        (!found.certFile || !found.keyFile || found.expiresAt <= Date.now() / 1000)
       )
-        return null;
+        throw new Error('Invalid certificate response');
       return found;
     },
   });
+  // Clear only a pair previously filled by this assistant when changing the
+  // node/SNI/protocol. A late response must never attach another node's files.
+  useEffect(() => {
+    const previous = lastAutomatic.current;
+    if (!previous || !certField || !keyField) return;
+    if (
+      String(getValues(certField) || '') === previous.certFile &&
+      String(getValues(keyField) || '') === previous.keyFile
+    ) {
+      setValue(certField, '', { shouldDirty: true });
+      setValue(keyField, '', { shouldDirty: true });
+    }
+    lastAutomatic.current = null;
+  }, [identity, certField, keyField, getValues, setValue]);
   const certificate: ResolvedCertificate | null = useMemo(
     () =>
       local && !rsaOnly && localCertificate
@@ -101,7 +134,9 @@ export default function LocalCertificateAssistant({
             expiresAt: localCertificate.expiresAt || 0,
             nodeId: 0,
           }
-        : (remoteLookup.data ?? null),
+        : remoteLookup.data?.state === 'valid'
+          ? remoteLookup.data
+          : null,
     [local, localCertificate, remoteLookup.data, rsaOnly],
   );
   // Reuse only a verified certificate on the chosen machine. Never replace
@@ -125,8 +160,6 @@ export default function LocalCertificateAssistant({
 
     const opts = { shouldDirty: true, shouldValidate: true };
     if (certField.startsWith('streamSettings.')) {
-      // TlsForm handles locally discovered Xray pairs through its field array.
-      if (local) return;
       const rows = (getValues('streamSettings.tlsSettings.certificates') || []) as Array<{
         useFile?: boolean;
         certificate?: string[];
@@ -192,273 +225,177 @@ export default function LocalCertificateAssistant({
 
   if (!fields || !validSni || disabled) return null;
 
-  const transfer = async () => {
-    if (local || !nodeId || transferring || !mainCertificate || !certField || !keyField) return;
-    if (
-      rsaOnly &&
-      (String(getValues('settings.certificatePEM') || '') ||
-        String(getValues('settings.privateKeyPEM') || ''))
-    ) {
-      setError(
-        t(
-          'Сначала очистите встроенный PEM-сертификат FPTN.',
-          'Clear the embedded FPTN PEM certificate before transferring.',
-        ),
-      );
-      return;
-    }
-    setError('');
-    setTransferred('');
-    const currentCert = String(getValues(certField) || '');
-    const currentKey = String(getValues(keyField) || '');
-    if (!mayReplaceCertificatePair(currentCert, currentKey, sites, nodeId)) {
-      setError(
-        t(
-          'Уже заданы пользовательские файлы сертификата. Очистите их перед передачей.',
-          'Custom certificate paths are already set. Clear them before transferring.',
-        ),
-      );
-      return;
-    }
-    if (certField.startsWith('streamSettings.')) {
-      const rows = (getValues('streamSettings.tlsSettings.certificates') || []) as Array<{
-        certificate?: string[];
-        key?: string[];
-        [key: string]: unknown;
-      }>;
-      if (rows[0]?.certificate?.length || rows[0]?.key?.length) {
-        setError(
-          t(
-            'В форме есть встроенный PEM-сертификат. Удалите его перед передачей.',
-            'An embedded PEM certificate is configured. Remove it before transferring.',
-          ),
-        );
-        return;
-      }
-    }
-    setTransferring(true);
-    try {
-      const response = await HttpUtil.post(
-        '/panel/api/domains/certificates/distribute',
-        { nodeId, domain: normalized, rsaOnly },
-        { headers: { 'Content-Type': 'application/json' }, silent: true },
-      );
-      if (!response?.success) throw new Error(response?.msg || 'Certificate transfer failed');
-      const result = response.obj as {
-        domain: string;
-        certFile: string;
-        keyFile: string;
-        expiresAt: number;
-      };
-      if (result.domain !== normalized || !result.certFile || !result.keyFile) {
-        throw new Error('Incomplete certificate installation response');
-      }
-      const opts = { shouldDirty: true, shouldValidate: true, shouldTouch: true };
-      if (certField.startsWith('streamSettings.')) {
-        const rows = (getValues('streamSettings.tlsSettings.certificates') || []) as Array<
-          Record<string, unknown>
-        >;
-        const row = {
-          ...(rows[0] || {}),
-          useFile: true,
-          certificateFile: result.certFile,
-          keyFile: result.keyFile,
-          certificate: [],
-          key: [],
-          ocspStapling: 0,
-          oneTimeLoading: false,
-          usage: 'encipherment',
-          buildChain: false,
-        };
-        setValue('streamSettings.tlsSettings.certificates', [row, ...rows.slice(1)], opts);
-      } else {
-        setValue(certField, result.certFile, opts);
-        setValue(keyField, result.keyFile, opts);
-        if (autoTLSField) setValue(autoTLSField, false, opts);
-      }
-      lastAutomatic.current = { ...result, nodeId };
-      await queryClient.invalidateQueries({
-        queryKey: ['tls-node-certificate', nodeId, normalized, rsaOnly],
-      });
-      setTransferred(
-        t(
-          'Сертификат установлен на выбранной ноде. Сохраните подключение.',
-          'Certificate installed on the selected node. Save the inbound.',
-        ),
-      );
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setTransferring(false);
-    }
-  };
+  const state = remoteLookup.data?.state;
+  const pending = state === 'pending' || state === 'retrying';
+  const available = state === 'available' || !!mainCertificate;
+  const customPair =
+    !mayReplaceCertificatePair(
+      String(watchedCert || ''),
+      String(watchedKey || ''),
+      sites,
+      nodeId,
+    ) && !(certificate?.certFile === watchedCert && certificate?.keyFile === watchedKey);
+  const embedded = certField?.startsWith('streamSettings.')
+    ? !watchedInline?.useFile && (watchedInline?.certificate?.length || watchedInline?.key?.length)
+    : rsaOnly && (inlineFptnCert || inlineFptnKey);
+  const manual = customPair || !!embedded;
 
-  const issue = async () => {
-    if (issuing || !email.trim() || !consent) return;
+  const request = async (contact?: string, accepted?: boolean) => {
+    if (issuing || manual) return;
+    const startedFor = identity;
+    const key = [...lookupKey];
     setIssuing(true);
     setError('');
     try {
       const response = await HttpUtil.post(
-        '/panel/api/manager/domains/local-certificate',
+        '/panel/api/domains/certificates/prepare',
         {
+          nodeId: nodeId ?? 0,
           domain: normalized,
-          email: email.trim(),
-          acceptTerms: true,
+          rsaOnly,
+          ...(contact ? { email: contact.trim(), acceptTerms: accepted === true } : {}),
         },
         { headers: { 'Content-Type': 'application/json' }, silent: true },
       );
-      if (!response?.success) throw new Error(response?.msg || 'Certificate issuance failed');
-      const result = response.obj as IssueResult;
-      setPending(result.state === 'valid' ? '' : result.state || 'pending');
-      await refetch();
+      if (!response?.success) throw new Error(response?.msg || 'Certificate preparation failed');
+      const result = response.obj as ResolvedCertificate;
+      if (result.domain !== normalized || result.nodeId !== (nodeId ?? 0))
+        throw new Error('Unexpected certificate response');
+      if (
+        result.state === 'valid' &&
+        (!result.certFile || !result.keyFile || result.expiresAt <= Date.now() / 1000)
+      )
+        throw new Error('Invalid certificate response');
+      if (identityRef.current !== startedFor) return;
+      queryClient.setQueryData(key, result);
       setOpen(false);
+      await refetch();
+      await queryClient.invalidateQueries({ queryKey: key });
     } catch (e) {
-      setError(String(e));
+      if (identityRef.current === startedFor) setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIssuing(false);
     }
   };
-
-  const issuanceModal = (
-    <Modal
-      open={open}
-      title={t('TLS-сертификат на основной ноде', 'TLS certificate on the main node')}
-      onCancel={() => setOpen(false)}
-      onOk={() => void issue()}
-      okText={t('Выпустить через DNS-01', 'Issue via DNS-01')}
-      confirmLoading={issuing}
-      okButtonProps={{ disabled: !email.trim() || !consent || !dns01.ready || issuing }}
-    >
-      <Space orientation="vertical" style={{ width: '100%' }}>
+  const start = () => {
+    setError('');
+    if (available || (dns01.ready && dns01.config?.email && dns01.config.acceptTerms)) {
+      void request();
+    } else {
+      setEmail(dns01.config?.email || '');
+      setConsent(dns01.config?.acceptTerms === true);
+      setOpen(true);
+    }
+  };
+  return (
+    <div style={{ marginTop: 6 }}>
+      <Space wrap>
+        {manual ? (
+          <Typography.Text type="secondary">
+            {t(
+              'Используются заданные вручную файлы или PEM. Очистите их для автоматической настройки.',
+              'Custom certificate files or PEM are preserved. Clear them to use automatic setup.',
+            )}
+          </Typography.Text>
+        ) : certificate ? (
+          <Typography.Text type="success">
+            {t('Сертификат готов для выбранной ноды', 'Certificate ready on the selected node')}:{' '}
+            {normalized}
+          </Typography.Text>
+        ) : pending ? (
+          <Typography.Text type="secondary">
+            {state === 'retrying'
+              ? t(
+                  'Ожидаем сертификат или доступность ноды. Повторяем автоматически.',
+                  'Waiting for the certificate or node. Retrying automatically.',
+                )
+              : t(
+                  'Выпускаем и доставляем сертификат. Ожидайте — форма обновится автоматически.',
+                  'Preparing and delivering the certificate. This form updates automatically.',
+                )}
+          </Typography.Text>
+        ) : (
+          <Button
+            size="small"
+            type="primary"
+            loading={issuing}
+            disabled={issuing || remoteLookup.isFetching || lookupSni !== normalized}
+            onClick={start}
+          >
+            {available
+              ? t('Получить сертификат на эту ноду', 'Use certificate on this node')
+              : t('Получить сертификат (DNS-01)', 'Get certificate (DNS-01)')}
+          </Button>
+        )}
+        <Tooltip
+          title={t(
+            'Сначала ищем сертификат на выбранной ноде. Если его нет, используем сертификат основной панели или выпускаем его через DNS-01 и автоматически доставляем ноде. Готовый сайт может находиться на другом сервере: сайт, A/AAAA-записи и порты 80/443 менять не нужно. Продление и доставка обновлений автоматические. Пользовательские файлы не заменяются.',
+            'A matching certificate on this node is reused first. Otherwise the main panel reuses or issues one via DNS-01 and delivers it automatically, including renewals. Your existing website can stay on another server: no website, A/AAAA records or ports 80/443 need changing. Custom certificate files are preserved.',
+          )}
+        >
+          <QuestionCircleOutlined aria-label={t('Как получить сертификат', 'Certificate help')} />
+        </Tooltip>
+      </Space>
+      {rsaOnly && !certificate && !available && !pending && (
         <Alert
           type="info"
           showIcon
           description={t(
-            'Используется DNS-01 основной ноды. Сертификат и ключ будут храниться на ней. Если DNS-01 ещё не настроен, нажмите «Настроить DNS-01» ниже.',
-            'The certificate and key are issued and stored on the main node. If DNS-01 is not configured yet, use Configure DNS-01 below.',
+            'FPTN нужен RSA-сертификат. Используйте существующую RSA-пару; автоматический выпуск ECDSA для него не подходит.',
+            'FPTN requires an RSA certificate. Use an existing RSA pair; automatic ECDSA issuance is incompatible.',
           )}
         />
-        <MainNodeDNS01Setup
-          domain={normalized}
-          onConfigured={() => {
-            if (email.trim() && consent) void issue();
-          }}
-        />
-        {!dns01.ready && !dns01.checking && (
-          <Alert
-            type="warning"
-            showIcon
-            description={t(
-              'Сначала сохраните DNS-01 для выбранного домена. После настройки с заполненным email и согласием выпуск запустится автоматически.',
-              'Set up DNS-01 for this hostname first. Once configured, issuance starts automatically if email and consent are supplied.',
-            )}
-          />
-        )}
-        {dns01.credential.isError && (
-          <Alert
-            type="error"
-            showIcon
-            title={t(
-              'Не удалось проверить DNS-токен. Повторите проверку выше.',
-              'Cannot verify the DNS token. Retry above.',
-            )}
-          />
-        )}
-        <Typography.Text>{normalized}</Typography.Text>
-        <Input
-          type="email"
-          maxLength={254}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email для Let's Encrypt"
-        />
-        <Checkbox checked={consent} onChange={(e) => setConsent(e.target.checked)}>
-          {t(
-            'Я владею доменом и принимаю условия Let’s Encrypt.',
-            'I control this domain and accept the Let’s Encrypt terms.',
-          )}
-        </Checkbox>
-        {error && <Alert showIcon type="error" title={error} />}
-      </Space>
-    </Modal>
-  );
-
-  if (!local) {
-    return (
-      <div style={{ marginTop: 6 }}>
-        <Space wrap>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {t(
-              'Обычный TLS требует локальный сертификат и закрытый ключ на выбранной ноде.',
-              'Standard TLS requires a local certificate and private key on the selected node.',
-            )}
-          </Typography.Text>
-          <Button
-            size="small"
-            loading={transferring}
-            disabled={!mainCertificate || !nodeId}
-            onClick={() => void transfer()}
-          >
-            {t('Передать сертификат с основной ноды', 'Transfer certificate from main node')}
-          </Button>
-        </Space>
-        {!mainCertificate && (
-          <Alert
-            type="warning"
-            showIcon
-            description={
-              <Space orientation="vertical">
-                <Typography.Text>
-                  {t(
-                    'Сначала выпустите сертификат для управляемого домена на основной ноде через DNS-01.',
-                    'First issue a certificate for your controlled domain on the main node via DNS-01.',
-                  )}
-                </Typography.Text>
-                <Button size="small" onClick={() => setOpen(true)}>
-                  {t('Выпустить сертификат (DNS-01)', 'Issue certificate (DNS-01)')}
-                </Button>
-                {pending && (
-                  <Button size="small" onClick={() => void refetch()}>
-                    {t('Проверить выпуск', 'Check issuance')} ({pending})
-                  </Button>
-                )}
-              </Space>
-            }
-          />
-        )}
-        {issuanceModal}
-        {transferred && <Alert type="success" showIcon title={transferred} />}
-        {error && <Alert type="error" showIcon title={error} />}
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ marginTop: 6 }}>
-      {certificate ? (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          TLS: {certificate.certFile} · {certificate.keyFile}
-        </Typography.Text>
-      ) : (
-        <Space wrap>
-          <Typography.Text type="warning" style={{ fontSize: 12 }}>
-            {t(
-              'Нет действующего сертификата на основной ноде:',
-              'No valid certificate on the main node:',
-            )}{' '}
-            {normalized}
-          </Typography.Text>
-          <Button size="small" onClick={() => setOpen(true)}>
-            {t('Выпустить сертификат (DNS-01)', 'Issue certificate (DNS-01)')}
-          </Button>
-          {pending && (
-            <Button size="small" onClick={() => void refetch()}>
-              {t('Проверить выпуск', 'Check issuance')} ({pending})
-            </Button>
-          )}
-        </Space>
       )}
-      {issuanceModal}
+      {remoteLookup.error && (
+        <Typography.Text type="warning">{String(remoteLookup.error)} </Typography.Text>
+      )}
+      {error && <Alert type="error" showIcon title={error} />}
+      <Modal
+        open={open}
+        title={t('Сертификат для подключения', 'Certificate for this inbound')}
+        onCancel={() => setOpen(false)}
+        onOk={() => void request(email, consent)}
+        okText={t('Выпустить и подключить', 'Issue and connect')}
+        confirmLoading={issuing}
+        okButtonProps={{
+          disabled: !email.trim() || !consent || !dns01.ready || issuing || rsaOnly,
+        }}
+      >
+        <Space orientation="vertical" style={{ width: '100%' }}>
+          <Typography.Paragraph>
+            {t('Для', 'For')} <strong>{normalized}</strong>.{' '}
+            {t(
+              local
+                ? 'Сертификат будет выпущен через DNS-01 на основном сервере.'
+                : 'Выпуск через DNS-01 и доставка выбранной ноде выполнятся автоматически. Не нужно создавать новый сайт.',
+              local
+                ? 'The main server will issue the certificate using DNS-01.'
+                : 'DNS-01 issuance and delivery to this node are automatic. No new website is needed.',
+            )}
+          </Typography.Paragraph>
+          <MainNodeDNS01Setup
+            domain={normalized}
+            onConfigured={() => {
+              if (email.trim() && consent) void request(email, consent);
+            }}
+          />
+          <Input
+            type="email"
+            aria-label="ACME email"
+            maxLength={254}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email для Let's Encrypt"
+          />
+          <Checkbox checked={consent} onChange={(e) => setConsent(e.target.checked)}>
+            {t(
+              'Я владею доменом и принимаю условия Let’s Encrypt.',
+              'I control this domain and accept the Let’s Encrypt terms.',
+            )}
+          </Checkbox>
+          {error && <Alert showIcon type="error" title={error} />}
+        </Space>
+      </Modal>
     </div>
   );
 }

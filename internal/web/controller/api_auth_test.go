@@ -189,6 +189,7 @@ func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 	expected := map[string]map[string]struct{}{
 		"/domains/sni":                                {http.MethodGet: {}},
 		"/domains/certificates":                       {http.MethodGet: {}},
+		"/domains/certificates/export-cover":          {http.MethodPost: {}},
 		"/domains/certificates/install":               {http.MethodPost: {}},
 		"/domains/certificates/resolve-local":         {http.MethodPost: {}},
 		"/domains/cover-sites/local":                  {http.MethodGet: {}},

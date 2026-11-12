@@ -37,6 +37,7 @@ import SubscriptionEditor from './SubscriptionEditor';
 import SubscriptionWorkspace from './SubscriptionWorkspace';
 import BulkSharedModal from './BulkSharedModal';
 import CoverSiteModal from './CoverSiteModal';
+import CoverCertificateFleet from './CoverCertificateFleet';
 import RelayEditor from './RelayEditor';
 import { runSNIScan } from '@/pages/inbounds/form/security/sni-scanner';
 import { scannedServerName } from '@/pages/inbounds/form/security/RealityTargetScannerModal';
@@ -383,6 +384,7 @@ export default function ManagerPage() {
                     children: (
                       <Card size="small">
                         <Space orientation="vertical" style={{ width: '100%' }}>
+                          <CoverCertificateFleet nodes={nodes} />
                           <Alert type="info" showIcon title={m('domainsHint')} />
                           <Typography.Text>
                             {q.data?.domains.length ?? 0} {m('domains')}

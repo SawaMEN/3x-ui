@@ -185,7 +185,7 @@ func (s *ManagerService) ProvisionLocalCertificate(ctx context.Context, owner in
 		return result, err
 	}
 	for _, item := range known {
-		if item.Name == name && item.CertFile != "" && item.KeyFile != "" {
+		if item.Name == name && item.Source != "distributed" && item.Source != "remote" && item.CertFile != "" && item.KeyFile != "" {
 			result.State, result.CertFile, result.KeyFile, result.ExpiresAt = "valid", item.CertFile, item.KeyFile, item.ExpiresAt
 			return result, nil
 		}

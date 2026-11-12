@@ -204,6 +204,7 @@ func runDueDomainCertificateRenewals(ctx context.Context) {
 }
 
 func RunDomainCertificateRenewalScheduler(ctx context.Context) {
+	go runCoverCertificateFleetScheduler(ctx)
 	timer := time.NewTimer(5 * time.Minute)
 	defer timer.Stop()
 	for {

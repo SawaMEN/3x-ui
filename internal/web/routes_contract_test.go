@@ -53,8 +53,14 @@ func isInternalUIAPI(path string) bool {
 		// TLS key material distribution is an internal admin-to-node operation,
 		// not a supported public API contract.
 		path == "/panel/api/domains/certificates/distribute" ||
+		path == "/panel/api/domains/certificates/fleet" ||
+		path == "/panel/api/domains/certificates/preparation" ||
+		path == "/panel/api/domains/certificates/prepare" ||
+		path == "/panel/api/domains/certificates/export-cover" ||
 		path == "/panel/api/domains/cover-sites" ||
 		path == "/panel/api/domains/cover-sites/local" ||
+		path == "/panel/api/domains/cover-sites/content" ||
+		path == "/panel/api/domains/cover-sites/content/local" ||
 		path == "/panel/api/domains/cover-sites/change-template" ||
 		path == "/panel/api/domains/cover-sites/template" ||
 		path == "/panel/api/domains/certificates/resolve" ||

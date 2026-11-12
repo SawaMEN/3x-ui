@@ -18,6 +18,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/wirecodec"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 )
 
 type DomainController struct{}
@@ -53,6 +54,11 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.POST("/cover-sites/template", a.nodeCoverSiteTemplate)
 	g.GET("/certificates/events", a.certificateEvents)
 	g.POST("/certificates/distribute", a.distributeCertificate)
+	g.GET("/certificates/preparation", a.certificatePreparation)
+	g.POST("/certificates/prepare", a.prepareInboundCertificate)
+	g.GET("/certificates/fleet", a.certificateFleet)
+	g.POST("/certificates/fleet", a.saveCertificateFleet)
+	g.POST("/certificates/export-cover", a.exportCoverCertificate)
 	g.POST("/certificates/resolve", a.resolveCertificate)
 	g.POST("/certificates/resolve-local", a.resolveLocalCertificate)
 	g.POST("/certificates/install", a.installCertificate)
@@ -245,7 +251,7 @@ func (a *DomainController) installCertificate(c *gin.Context) {
 		jsonObj(c, nil, err)
 		return
 	}
-	result, err := service.InstallDistributedTLSCertificate(request)
+	result, err := service.InstallAndApplyDistributedTLSCertificate(c.Request.Context(), request)
 	jsonObj(c, result, err)
 }
 
@@ -459,5 +465,84 @@ func (a *DomainController) recommend(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 65*time.Second)
 	defer cancel()
 	result, err := service.ScanRedirectSites(ctx)
+	jsonObj(c, result, err)
+}
+
+func (a *DomainController) certificateFleet(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	rows, err := service.CoverCertificateFleets()
+	jsonObj(c, rows, err)
+}
+func (a *DomainController) saveCertificateFleet(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
+	var req struct {
+		SourceNodeID int    `json:"sourceNodeId"`
+		Domain       string `json:"domain" binding:"required"`
+		NodeIDs      []int  `json:"nodeIds"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.SaveCoverCertificateFleet(c.Request.Context(), req.SourceNodeID, req.Domain, req.NodeIDs)
+	jsonObj(c, result, err)
+}
+func (a *DomainController) exportCoverCertificate(c *gin.Context) {
+	if !requireNodeCoverSitePush(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	var req runtime.TLSCertificateLookup
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.ExportLocalCoverCertificate(c.Request.Context(), req.Domain)
+	jsonObj(c, result, err)
+}
+
+func (a *DomainController) certificatePreparation(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	node, err := strconv.Atoi(c.DefaultQuery("nodeId", "0"))
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	rsaOnly, err := strconv.ParseBool(c.DefaultQuery("rsaOnly", "false"))
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.InboundCertificateStatus(c.Request.Context(), service.InboundCertificateRequest{NodeID: node, Domain: c.Query("domain"), RSAOnly: rsaOnly})
+	jsonObj(c, result, err)
+}
+func (a *DomainController) prepareInboundCertificate(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	var req service.InboundCertificateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	user := session.GetLoginUser(c)
+	if user == nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	result, err := (&service.ManagerService{}).PrepareInboundCertificate(c.Request.Context(), user.Id, req)
 	jsonObj(c, result, err)
 }

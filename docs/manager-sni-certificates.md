@@ -215,12 +215,83 @@ and private key are controlled by the main node. It cannot extract a
 third-party website's private key or clone that site's TLS identity.
 A REALITY camouflage target does not need certificate distribution.
 
-**Renewals:** the main node continues renewing its own certificate via its
-existing ACME manager, but this initial distribution endpoint is manual.
-After a renewal, run distribution again for each target node and reload/reapply
-affected TLS listeners as required by the core. Automatic enrollment and
-renewal fan-out with bounded retries are not implemented in this change.
-Do not treat successful initial installation as automatic renewal.
+**Manual transfers:** this endpoint remains a one-time main-to-node transfer.
+For automatic delivery after renewal use the cover-site workflow below.
+
+## Share a cover site's certificate across nodes
+
+The Manager Domains tab contains **Share a site certificate with nodes**.
+Select the existing owned site (for example `web.site.ru` on the USA node),
+select Finland and any additional recipients, and click **Connect and update
+automatically**. Up to 32 recipients per site and 64 sites are supported.
+The main node can also be a recipient. The domain's DNS continues pointing
+to the website server. A second DNS-01 setup on the main node is unnecessary.
+
+- The website server remains responsible for issuance and renewal using its
+  existing Domain Front / CertMagic configuration. This workflow reuses the
+  resulting certificate and matching private key; it does not request another
+  certificate for every recipient or move the website.
+- Enrollment is an interactive administrator action. The saved source and
+  recipients survive panel restarts. Removing recipients stops future delivery;
+  it does not delete certificates or change existing inbounds.
+- The worker checks once per minute, starts after restart, and wakes after
+  enrollment. It compares certificate/key fingerprints, delivers changed pairs,
+  retries unavailable nodes, and periodically repairs installed copies. The UI
+  shows queued, retrying and ready states per recipient with expiration dates.
+- `POST /domains/certificates/export-cover` is a **private master-to-node API**,
+  restricted to node-sync/node-admin authentication plus the master-push header.
+  It exports only a certificate for an enabled owned `sni_only` site from the
+  running local gateway. Panel, subscription and distributed inventory entries
+  cannot be exported through this route. No caller-supplied file path is used.
+- Source and recipient channels must use verified HTTPS (system CA, pin or
+  mTLS). The main node verifies hostname, key match, validity and trust before
+  forwarding; the recipient repeats these checks. Browser requests/responses,
+  persisted enrollment and status records contain no PEM private keys.
+- Recipient installation uses the existing private immutable version store
+  and stable `current` paths. A changed certificate triggers core reapplication
+  only when an enabled local inbound references that identity. With no active
+  consumer, installation does not start a core. A failed apply stays retryable.
+  Reapplying a core can briefly interrupt connections.
+- Update the main panel, source and recipients to a version containing this
+  workflow. Older sources cannot export; older recipients that cannot acknowledge
+  automatic apply are not reported as ready. Errors remain retryable.
+- In the inbound editor select `web.site.ru` as SNI on the recipient node.
+  The existing node-local resolver supplies its installed paths. Delivery does
+  not rewrite ports, users, protocol or SNI in existing inbounds.
+- REALITY camouflage does not require distributing a certificate. This workflow
+  is for owned TLS identities used by ordinary TLS/HTTPS protocols.
+
+## One-click DNS-01 certificate preparation in the inbound editor
+
+Entering an SNI performs a debounced, cancellable **read-only** lookup on the
+selected node. It never starts ACME issuance while typing. A matching local
+certificate fills the form automatically, while custom file paths and embedded
+PEM remain untouched. REALITY and ShadowTLS do not use this workflow.
+
+If a certificate is missing, **Get certificate (DNS-01)** performs the whole
+operation: reuse an existing main-node certificate or use the already configured
+main-node DNS-01, wait for issuance, deliver to the selected node and populate
+that node's local paths. The editor polls automatically; there is no separate
+Check issuance / Transfer action. A changed SNI or node cancels stale lookups
+and ignores old preparation responses.
+
+Existing DNS provider configuration, contact email and accepted ACME terms are
+reused. If setup is missing, the inline DNS-01 dialog collects it once and resumes
+the same operation. Existing websites may live on any other server, including
+outside the managed node list: no extra cover site, A/AAAA change or public
+80/443 listener is needed on the main/recipient node. DNS-01 requires an API
+credential for the authoritative provider of the domain's DNS zone.
+
+`GET /domains/certificates/preparation` reports only this (node, SNI) status and
+validated local paths. Interactive-admin-only `POST /domains/certificates/prepare`
+starts issuance/reuse and **additively** enrolls a remote recipient in the same
+persistent renewal-delivery worker used by cover sites. Closing the form or
+restarting the panel does not discard that enrollment. An unacknowledged runtime
+apply stays pending/retrying, even if certificate files were installed already.
+No certificate/key PEM enters the browser API.
+
+FPTN remains restricted to existing RSA certificates. The ordinary automatic
+CertMagic ECDSA issuance is not offered as a compatible FPTN identity.
 
 ## Automatic SNI-to-certificate binding
 
