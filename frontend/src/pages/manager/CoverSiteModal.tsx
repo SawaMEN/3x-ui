@@ -231,7 +231,9 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       okButtonProps={{
         disabled:
           !mainCertificate &&
-          (!domain.trim() || (!selectedExisting && (!email.trim() || !acceptTerms || (nodeId > 0 && issueOnMain && !dns01.ready)))),
+          (!domain.trim() ||
+            (!selectedExisting &&
+              (!email.trim() || !acceptTerms || (nodeId > 0 && issueOnMain && !dns01.ready)))),
       }}
       destroyOnHidden
     >
