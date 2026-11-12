@@ -5,7 +5,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { Alert, Button, Checkbox, Input, Modal, Space, Typography } from 'antd';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import { HttpUtil } from '@/utils';
-import MainNodeDNS01Setup from '@/components/MainNodeDNS01Setup';
+import MainNodeDNS01Setup, { useMainNodeDNS01Readiness } from '@/components/MainNodeDNS01Setup';
 import {
   localCertificateFields,
   mayReplaceCertificatePair,
@@ -53,6 +53,7 @@ export default function LocalCertificateAssistant({
   const rsaOnly = protocol === 'fptn';
   const localCertificate = nodeCertificateForSni(sites, sni, nodeId);
   const normalized = sni.trim().toLowerCase().replace(/\.$/, '');
+  const dns01 = useMainNodeDNS01Readiness(normalized);
   const mainCertificate = sites.find(
     (site) =>
       site.name.trim().toLowerCase().replace(/\.$/, '') === normalized &&
@@ -326,7 +327,7 @@ export default function LocalCertificateAssistant({
       onOk={() => void issue()}
       okText={t('Выпустить через DNS-01', 'Issue via DNS-01')}
       confirmLoading={issuing}
-      okButtonProps={{ disabled: !email.trim() || !consent }}
+      okButtonProps={{ disabled: !email.trim() || !consent || !dns01.ready || issuing }}
     >
       <Space orientation="vertical" style={{ width: '100%' }}>
         <Alert
@@ -337,7 +338,29 @@ export default function LocalCertificateAssistant({
             'The certificate and key are issued and stored on the main node. If DNS-01 is not configured yet, use Configure DNS-01 below.',
           )}
         />
-        <MainNodeDNS01Setup />
+        <MainNodeDNS01Setup
+          domain={normalized}
+          onConfigured={() => {
+            if (email.trim() && consent) void issue();
+          }}
+        />
+        {!dns01.ready && !dns01.checking && (
+          <Alert
+            type="warning"
+            showIcon
+            description={t(
+              'Сначала сохраните DNS-01 для выбранного домена. После настройки с заполненным email и согласием выпуск запустится автоматически.',
+              'Set up DNS-01 for this hostname first. Once configured, issuance starts automatically if email and consent are supplied.',
+            )}
+          />
+        )}
+        {dns01.credential.isError && (
+          <Alert
+            type="error"
+            showIcon
+            title={t('Не удалось проверить DNS-токен. Повторите проверку выше.', 'Cannot verify the DNS token. Retry above.')}
+          />
+        )}
         <Typography.Text>{normalized}</Typography.Text>
         <Input
           type="email"
