@@ -392,8 +392,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
                 <div>
                   <Typography.Text>{t('Дизайн страницы', 'Page design')}</Typography.Text>
                   <Select
-                    showSearch
-                    optionFilterProp="label"
+                    showSearch={{ optionFilterProp: 'label' }}
                     value={siteTemplate}
                     onChange={setSiteTemplate}
                     style={{ width: '100%' }}
