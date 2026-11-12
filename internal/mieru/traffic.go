@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -89,6 +90,18 @@ func (m *Manager) CollectTraffic(desired []Instance) ([]TrafficDelta, []string) 
 		online = append(online, email)
 	}
 	return deltas, online
+}
+
+// CollectRunningTraffic samples the actual running users, including inbounds
+// disabled in the DB since the last periodic poll. It never reconciles processes.
+func (m *Manager) CollectRunningTraffic() ([]TrafficDelta, []string) {
+	m.mu.Lock()
+	instances := make([]Instance, 0, len(m.procs))
+	for id, cur := range m.procs {
+		instances = append(instances, Instance{Id: id, Tag: cur.tag, Users: slices.Clone(cur.users)})
+	}
+	m.mu.Unlock()
+	return m.CollectTraffic(instances)
 }
 
 // collectInstanceTraffic advances the cumulative per-user cursors for one

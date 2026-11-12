@@ -637,3 +637,18 @@ Reviewed 250/2364, осталось 2114: новых original-scope файлов
 SQLite проверки покрывают DB failure/replacement/replay once/rename/delete,
 filesystem failure и восстановление в настоящих Run entry points. Точные результаты
 и ограничения crash window, full-stop tails, receipt retention — в RESUME.md.
+
+
+## Продолжение: A85, последний sidecar snapshot при Stop
+
+Нужно 3 пути, подключены 3; один lifecycle/accounting дефект A85, всего 85.
+Reviewed 253/2364, осталось 2111.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A85 | Полный Stop удаляет Mieru/MTProto/external VPN runtime counters до последнего poll | Join producers, per-manager snapshot/WAL/accounting-only replay/StopAll под traffic lock, routed MTProto metadata без двойного inbound total |
+
+Mieru tail loss 0/0 вместо 100/200 воспроизведён до исправления. После правки
+owned child + metrics fixtures покрывают все 3 sources, direct/routed MTProto,
+DB failures и replay. Дополнительные результаты, incoming main d57cb69 и точное
+ограничение pre-stop snapshot (active connection drain ещё не гарантирован) — RESUME.md.

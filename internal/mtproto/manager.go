@@ -117,10 +117,12 @@ func (inst Instance) secretsFingerprint() string {
 }
 
 type Traffic struct {
-	Tag   string
-	Email string
-	Up    int64
-	Down  int64
+	// Routed marks totals already counted by the Xray bridge; client bytes still apply.
+	Routed bool
+	Tag    string
+	Email  string
+	Up     int64
+	Down   int64
 }
 
 type clientCounters struct {
@@ -148,6 +150,7 @@ type managed struct {
 	apiToken     string
 	last         map[string]clientCounters
 	userEmails   map[string]string
+	routed       bool
 }
 
 type Manager struct {
@@ -452,6 +455,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 				scheduleMekoSync()
 			}
 			cur.tag = inst.Tag
+			cur.routed = inst.RouteThroughXray
 			cur.userEmails = nativeUserEmails(inst.Secrets)
 			return nil
 		case ensureReload:
@@ -460,6 +464,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			}
 			if reloadTelemt(cur.apiPort, cur.apiToken) {
 				cur.tag = inst.Tag
+				cur.routed = inst.RouteThroughXray
 				cur.secretsFP = secFP
 				cur.mekoFP = mekoFP
 				scheduleMekoSync()
@@ -510,6 +515,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		apiToken:     apiToken,
 		last:         map[string]clientCounters{},
 		userEmails:   nativeUserEmails(inst.Secrets),
+		routed:       inst.RouteThroughXray,
 	}
 	scheduleMekoSync()
 	logger.Infof("mtproto: started Telemt for inbound %d on %s", inst.Id, inst.bindTo())

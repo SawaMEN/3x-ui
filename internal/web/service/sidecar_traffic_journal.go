@@ -76,7 +76,18 @@ func (o SidecarTrafficOwners) Batch(id string, inbounds []*coremodel.Traffic, cl
 
 // AddSidecarTrafficBatch commits the receipt with the bytes. Post-commit quota
 // maintenance follows the normal traffic path and must never cause replay.
-func (s *InboundService) AddSidecarTrafficBatch(batch SidecarTrafficBatch) (needRestart, disabled bool, err error) {
+func (s *InboundService) AddSidecarTrafficBatch(batch SidecarTrafficBatch) (bool, bool, error) {
+	return s.addSidecarTrafficBatch(batch, true)
+}
+
+// PersistSidecarTrafficBatch only commits accounting. Shutdown must not run
+// quota/runtime maintenance that can reload or start a process being stopped.
+func (s *InboundService) PersistSidecarTrafficBatch(batch SidecarTrafficBatch) error {
+	_, _, err := s.addSidecarTrafficBatch(batch, false)
+	return err
+}
+
+func (s *InboundService) addSidecarTrafficBatch(batch SidecarTrafficBatch, maintain bool) (needRestart, disabled bool, err error) {
 	if batch.ID == "" {
 		return false, false, errors.New("sidecar traffic batch has no ID")
 	}
@@ -112,12 +123,12 @@ func (s *InboundService) AddSidecarTrafficBatch(batch SidecarTrafficBatch) (need
 		}); err != nil {
 			return err
 		}
-		if applied {
+		if applied && maintain {
 			needRestart, disabled, nodes, plans, _ = s.maintainTrafficLocked()
 		}
 		return nil
 	})
-	if err == nil {
+	if err == nil && maintain {
 		needRestart = s.applyTrafficRemotePlans(plans) || needRestart
 		if len(nodes) > 0 {
 			s.restartRemoteNodesOnDisable(nodes)

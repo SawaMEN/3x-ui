@@ -13056,9 +13056,9 @@
       "deletions": 90,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A85: complete manager and consistent-collector source review, running-user ownership, routing metadata, reload/start/stop paths and panel shutdown ordering. Reproduced real owned Mieru child tail loss before fix; real owned child plus synthetic metrics tests cover all 3 sources, direct/routed MTProto, no restart, panel reload, durable DB-failure replay and accounting-only shutdown. Results and remaining scrape/termination gap in RESUME.",
+      "reviewed_sha256": "f49a934e899bb0daeceb4669337b1a509c893c0bc942e106335e61ad9e4e112a"
     },
     {
       "path": "internal/mieru/process.go",
@@ -13089,9 +13089,9 @@
       "deletions": 354,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A85: complete manager and consistent-collector source review, running-user ownership, routing metadata, reload/start/stop paths and panel shutdown ordering. Reproduced real owned Mieru child tail loss before fix; real owned child plus synthetic metrics tests cover all 3 sources, direct/routed MTProto, no restart, panel reload, durable DB-failure replay and accounting-only shutdown. Results and remaining scrape/termination gap in RESUME.",
+      "reviewed_sha256": "3e4491fd59b3fe81983ca934ac362b2f0ade68cc3b345e10260b09f7251ef02d"
     },
     {
       "path": "internal/mtproto/manager_mutation_test.go",
@@ -13254,9 +13254,9 @@
       "deletions": 23,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A85: complete manager and consistent-collector source review, running-user ownership, routing metadata, reload/start/stop paths and panel shutdown ordering. Reproduced real owned Mieru child tail loss before fix; real owned child plus synthetic metrics tests cover all 3 sources, direct/routed MTProto, no restart, panel reload, durable DB-failure replay and accounting-only shutdown. Results and remaining scrape/termination gap in RESUME.",
+      "reviewed_sha256": "467a9843a91f541a7f9b525ded95fc17c564d52a7efe15daf44849f7a0f298a2"
     },
     {
       "path": "internal/mtproto/usernames.go",
@@ -16775,8 +16775,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Repeated full read after incoming TLS/cover-site changes through 1292f40; reviewed node scopes, session guards, body limits, local-only mutation, certificate path lookup, SNI selection and dynamic sni_jobs allowlist additions. domains.go formatting normalized only.",
-      "reviewed_sha256": "119b211c78af2713a50e2b496e6688c92e09e130939b3ada44dbacdf3fa17044"
+      "evidence": "A85 refresh of earlier full review after incoming d57cb69: both cover-site mutation guards retained; request body cap raised to 2 MiB to fit JSON-escaped 256-KiB HTML. Changed functions and incoming diff reviewed, no additional original-scope coverage claimed.",
+      "reviewed_sha256": "80ededa0de3a38a8680d7dc257d9ff586d4f4e464a5e6304961590c3a7cb6fd2"
     },
     {
       "path": "internal/web/controller/domains_preflight_test.go",
@@ -19624,8 +19624,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Previously reviewed files rechecked against concurrent cb2ba67..d74ba23 TLS distribution changes, including complete new RPC and distribution service; preserved dedicated node-sync install scope, session-only distribution and local path-only inventory.",
-      "reviewed_sha256": "6c34d4aa679b445fdfcf378cc1859f43b7774b8b86282e9aad609e00fd22ad5b"
+      "evidence": "A85 merge refresh of earlier complete reviews: incoming cover-site endpoint authorization/body limits, authenticated local/remote HTML readers and backend rendering integration inspected in context after fast-forward to 3b976bd. Incoming custom-HTML validation/render tests included in targeted checks; no new original-scope coverage claimed for this refresh.",
+      "reviewed_sha256": "ac25b483d64db2470a44f411462c1ee9951fa7bc2df62b8cc3fba61b072b62c3"
     },
     {
       "path": "internal/web/service/domain_front_test.go",
@@ -25058,8 +25058,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
-      "reviewed_sha256": "18de97c2bc9d6250b3eda637394db34085cb92f90936d7c3d569e0a84b101cbe"
+      "evidence": "A85: complete manager and consistent-collector source review, running-user ownership, routing metadata, reload/start/stop paths and panel shutdown ordering. Reproduced real owned Mieru child tail loss before fix; real owned child plus synthetic metrics tests cover all 3 sources, direct/routed MTProto, no restart, panel reload, durable DB-failure replay and accounting-only shutdown. Results and remaining scrape/termination gap in RESUME.",
+      "reviewed_sha256": "511e44e3d924bdb3eec54f46ce7bf00437e59475f7240f56899f4651b5eda932"
     },
     {
       "path": "internal/web/web_shutdown_test.go",

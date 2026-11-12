@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 84 подтверждённых исправления панели; A84 — текущий общий journal/replay fix для 3 traffic jobs.
+Всего реализовано 85 подтверждённых исправлений панели; A85 — финальный traffic snapshot перед остановкой 3 sidecar managers.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 250 файлов, осталось 2114; общий проход не завершён.
+Проверено вручную 253 файла, осталось 2111; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1097,3 +1097,84 @@ Inventory check и git diff --check PASS: reviewed 250, pending 2114, stale 0.
   проверяется целевыми тестами. Предыдущие результаты PostgreSQL не выдавать за новый прогон.
 - Remaining production cancellation/Telemt operations, routing workers, TLS
   downgrade, SQL fixture и R04/R05 остаются в общей очереди.
+
+
+## Контрольная точка A85: финальный опрос sidecars перед полным остановом
+
+A84 опубликован в 8188e8fd36f99ecee6b2574e0a6c76bc7cf3ddb9.
+Нужно 3 пути остановки, подключены 3/3: Mieru, raw/WEB MTProto, external VPN.
+Это один дефект порядка shutdown/accounting, A85; всего 85 исправлений.
+Reviewed 253/2364, осталось 2111. Полностью прочитаны Mieru manager/traffic,
+MTProto manager/consistent collector; три новых original-scope файла отмечены.
+Mieru traffic.go и новые journal/shutdown helper files вне original scope,
+поэтому не увеличивают число просмотренных исходных файлов.
+
+Доказательство до правки: TestShutdownPersistsMieruTrafficBeforeProcessRemoval
+запускает принадлежащий тесту exec sleep, устанавливает cumulative baseline 10/20,
+потом увеличивает sample до 110/220. Panel-only reload сохраняет runtime; полный
+Stop до правки оставил client bytes 0/0 вместо 100/200 (FAIL 0.11s).
+Первоначальный OpenFlux Unix-socket fixture был недоступен в sandbox (operation
+not permitted) и не является product regression. Заменён loopback HTTP metrics
+fixture через TrustTunnel config; production Unix socket код не менялся.
+
+A85:
+- После join всех startup/cron/retired/API producers Server вызывает отдельный
+  StopSidecarsWithTraffic до остановки основного core/traffic writer.
+  Каждый source под process-wide traffic lock снимает статистику, пишет WAL и
+  немедленно вызывает свой StopAll (defer выполняется и при ошибке). Все 3 источника
+  обрабатываются независимо, ошибки объединяются и возвращаются из Server.Stop.
+- Mieru сохраняет копию фактически применённых users при start/noop/reload.
+  Shutdown CollectRunningTraffic не фильтрует недавно disabled rows через desired
+  DB-конфигурацию и не запускает/переконфигурирует процессы.
+- MTProto collector возвращает actual running RouteThroughXray metadata. На shutdown
+  client bytes всегда сохраняются, routed inbound total повторно не начисляется.
+  WEB использует независимый от уже canceled panel context ограниченный HTTP poll;
+  успешный raw sample сохраняется даже при WEB error. System-managed WEB backend
+  не получает новых команд stop/start в этом изменении.
+- PersistSidecarTrafficBatch сохраняет receipt/counters без post-commit quota/runtime
+  maintenance. Обычные periodic jobs продолжают прежнее применение квот.
+- При уже упавшем DB write старый WAL не мешает сохранить второй, финальный WAL.
+  Если старый batch не удалось записать даже в filesystem, он не перезаписывается
+  новым sample. Без доступных stable owner IDs курсоры не потребляются, StopAll
+  всё равно выполняется, а ошибка возвращается вызывающему коду.
+
+Проверки после исправления:
+- Настоящие owned child processes + synthetic metrics: Mieru, TrustTunnel,
+  raw/direct MTProto и routed MTProto. Проверяются client/inbound totals, отсутствие
+  двойного routed total, отсутствие запущенного процесса после Stop, panel-only
+  reload и сохранение TUIC final flush. Shell fixtures только exec sleep; HTTP
+  endpoints только loopback, config/files/SQLite только temporary directories.
+- Все 3 WAL sources: предыдущая periodic DB failure + новая shutdown DB failure,
+  два durable файла, восстановление один раз, direct/routed counters, отсутствие
+  maintenance даже при unrelated expired inbound. Owner query failure не запускает
+  sampling и не мешает StopAll. Частичный WEB failure не теряет raw sample.
+- Расширенный -race: web PASS 5.878s, job PASS 6.829s, mtproto PASS 1.121s,
+  service PASS 1.616s, domainfront PASS 1.029s. Mieru standalone selected regex не
+  содержит тестов; фактический manager/collector проверен web integration tests.
+- Нормальный combined targeted прогон: web PASS 0.493s, job PASS 0.321s,
+  mtproto PASS 0.044s. Полные go build ./... и go vet ./... PASS.
+- Итоговый golangci-lint 2.15.0: 0 issues. Финальные shutdown job tests
+  (включая partial WEB failure): -race PASS 3.157s. Inventory/diff check PASS, stale 0.
+
+Во время работы main продвинулся до d57cb69 (DNS-01 и custom cover sites,
+включая follow-up frontend controls и JSON escaping body cap).
+Изменения fast-forward включены без пересечения с локальным shutdown patch.
+Обновлены прежние review hashes domains.go/domain_front.go после просмотра diff,
+endpoint guards и новых helper/HTML rendering integration; custom HTML validation
+и rendering tests включены в race checks. Чужие feature commits не считаются
+новыми исправлениями этого аудита. Frontend в этом этапе не изменялся локально.
+
+Оставшиеся ограничения и следующий приоритет:
+- Это последний доступный pre-stop snapshot, а не транзакционная остановка сети.
+  Между ответом metrics API и завершением активных соединений могут прийти байты.
+  Для строгой гарантии нужен upstream quiesce/drain + финальные счётчики после
+  закрытия соединений либо durable runtime cursor ACK. Не заявлять нулевую потерю
+  при crash, недоступном API, отказе диска и DB owner-query failure.
+- Existing raw/Mieru/external scrapers часть ошибок возвращают как empty sample;
+  отдельный явный статус/ACK API и last-tick handling для CRUD removal/restart,
+  а также финальный Xray/native-core bridge accounting остаются в очереди.
+- WEB HTTP poll имеет ограничение, но внутренний systemctl и service operation
+  locks ещё не стали полностью context-aware; реальный host service/ACME здесь
+  не запускался. No host firewall/NET_ADMIN/Docker daemon modifications.
+- Остальные production cancellation, routing workers, TLS downgrade, SQL fixture,
+  receipt retention и предыдущие R04/R05 по-прежнему открыты.

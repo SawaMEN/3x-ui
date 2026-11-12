@@ -28,8 +28,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
-	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
@@ -888,17 +886,22 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		retiredPanelTasks.Wait()
 	}
 	if stopXray {
+		// Join producers above, then snapshot live sidecars before their metrics and
+		// counters disappear. Accounting-only replay cannot resurrect a runtime.
+		if err := job.StopSidecarsWithTraffic(); err != nil {
+			logger.Warning("persist final sidecar traffic before shutdown failed:", err)
+			err2 = common.Combine(err2, err)
+		}
+	}
+	if stopXray {
 		if coreType, _ := s.settingService.GetCoreType(); service.IsNativeCore(coreType) {
 			_ = service.SelectedNativeCore().Stop(s.ctx)
 		} else {
 			_ = s.xrayService.StopXray()
 		}
-		mtproto.GetManager().StopAll()
 		amneziawgnet.GetManager().StopAll()
 		tuic.GetManager().StopAll()
-		externalvpn.GetManager().StopAll()
 		externalvpn.KeepOutbounds(nil)
-		mieru.GetManager().StopAll()
 		sudoku.GetManager().StopAll()
 		amneziawgnet.GetOutboundManager().StopAll()
 	}
@@ -910,7 +913,7 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	if stopXray {
 		if err := job.NewTuicJob().FlushStoppedTraffic(); err != nil {
 			logger.Warning("persist final TUIC traffic on shutdown failed:", err)
-			err2 = err
+			err2 = common.Combine(err2, err)
 		}
 	}
 	if stopXray {

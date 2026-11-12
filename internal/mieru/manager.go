@@ -278,6 +278,7 @@ type (
 		tag       string
 		fp        string
 		restartFP string
+		users     []User
 	}
 	Manager struct {
 		mu      sync.Mutex
@@ -375,6 +376,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	if cur := m.procs[inst.Id]; cur != nil && cur.proc != nil && cur.proc.IsRunning() {
 		if cur.fp == fp {
 			cur.tag = inst.Tag
+			cur.users = slices.Clone(inst.Users)
 			return nil
 		}
 		// Upstream mita allows users and loggingLevel to be reloaded without
@@ -384,6 +386,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			if _, err := writeConfig(inst); err == nil {
 				if err := cur.proc.Reload(); err == nil {
 					cur.tag = inst.Tag
+					cur.users = slices.Clone(inst.Users)
 					cur.fp = fp
 					delete(m.lastErr, inst.Id)
 					logger.Debugf("mieru: reloaded mita for inbound %d (%s)", inst.Id, inst.Tag)
@@ -408,7 +411,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	if err := proc.Start(); err != nil {
 		return err
 	}
-	m.procs[inst.Id] = &managed{proc: proc, tag: inst.Tag, fp: fp, restartFP: restartFP}
+	m.procs[inst.Id] = &managed{proc: proc, tag: inst.Tag, fp: fp, restartFP: restartFP, users: slices.Clone(inst.Users)}
 	delete(m.lastErr, inst.Id)
 	logger.Infof("mieru: started mita for inbound %d (%s)", inst.Id, inst.Tag)
 	return nil

@@ -28,7 +28,13 @@ func sidecarJournalDir(source string) string {
 	return filepath.Join(config.GetDBFolderPath(), source+"-traffic-journal")
 }
 
-func (j *sidecarTrafficJournal) replay(source string, svc *service.InboundService) (restart, disabled bool, err error) {
+type sidecarTrafficCommit func(service.SidecarTrafficBatch) (bool, bool, error)
+
+func (j *sidecarTrafficJournal) replay(source string, svc *service.InboundService) (bool, bool, error) {
+	return j.replayWith(source, svc.AddSidecarTrafficBatch)
+}
+
+func (j *sidecarTrafficJournal) replayWith(source string, apply sidecarTrafficCommit) (restart, disabled bool, err error) {
 	key := sidecarJournalDir(source)
 	if pending, ok := unstoredSidecarTraffic.Load(key); ok {
 		batch := pending.(*service.SidecarTrafficBatch)
@@ -64,7 +70,7 @@ func (j *sidecarTrafficJournal) replay(source string, svc *service.InboundServic
 		if batch.ID+".json" != entry.Name() {
 			return restart, disabled, fmt.Errorf("%s journal batch ID mismatch", source)
 		}
-		r, d, applyErr := svc.AddSidecarTrafficBatch(batch)
+		r, d, applyErr := apply(batch)
 		restart, disabled = restart || r, disabled || d
 		if applyErr != nil {
 			return restart, disabled, applyErr
@@ -80,6 +86,10 @@ func (j *sidecarTrafficJournal) replay(source string, svc *service.InboundServic
 }
 
 func (j *sidecarTrafficJournal) commit(source string, owners service.SidecarTrafficOwners, svc *service.InboundService, inbounds []*coremodel.Traffic, clients []*coremodel.ClientTraffic) (bool, bool, error) {
+	return j.commitWith(source, owners, svc.AddSidecarTrafficBatch, inbounds, clients)
+}
+
+func (j *sidecarTrafficJournal) commitWith(source string, owners service.SidecarTrafficOwners, apply sidecarTrafficCommit, inbounds []*coremodel.Traffic, clients []*coremodel.ClientTraffic) (bool, bool, error) {
 	batch := owners.Batch(source+"-"+uuid.NewString(), inbounds, clients)
 	if len(batch.Inbounds) == 0 && len(batch.Clients) == 0 {
 		return false, false, nil
@@ -87,5 +97,5 @@ func (j *sidecarTrafficJournal) commit(source string, owners service.SidecarTraf
 	// Retain this copy if the filesystem cannot accept the WAL. Do not consume a
 	// newer sample until replay stores it; never write counters before the WAL.
 	unstoredSidecarTraffic.Store(sidecarJournalDir(source), &batch)
-	return j.replay(source, svc)
+	return j.replayWith(source, apply)
 }

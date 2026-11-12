@@ -97,6 +97,7 @@ func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
 		}
 		cur.last = next
 		tag := cur.tag
+		routed := cur.routed
 		m.mu.Unlock()
 
 		for _, name := range instanceOnline {
@@ -104,10 +105,11 @@ func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
 		}
 		for email, delta := range deltas {
 			out = append(out, Traffic{
-				Tag:   tag,
-				Email: panelUsername(email, s.userEmails),
-				Up:    delta.up,
-				Down:  delta.down,
+				Tag:    tag,
+				Routed: routed,
+				Email:  panelUsername(email, s.userEmails),
+				Up:     delta.up,
+				Down:   delta.down,
 			})
 		}
 	}
