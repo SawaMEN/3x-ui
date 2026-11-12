@@ -85,6 +85,11 @@ func ResolveTLSCertificate(ctx context.Context, nodeID int, domain string, rsaOn
         !filepath.IsAbs(resolved.CertFile) || !filepath.IsAbs(resolved.KeyFile) {
         return DistributedTLSCertificate{}, errors.New("node returned an invalid certificate reference")
     }
-    resolved.NodeID = nodeID
-    return resolved, nil
+    return DistributedTLSCertificate{
+        NodeID: nodeID,
+        Domain: resolved.Domain,
+        CertFile: resolved.CertFile,
+        KeyFile: resolved.KeyFile,
+        ExpiresAt: resolved.ExpiresAt,
+    }, nil
 }
