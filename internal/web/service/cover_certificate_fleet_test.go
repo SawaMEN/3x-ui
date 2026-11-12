@@ -128,7 +128,7 @@ func TestCoverCertificateFleetDeliveryAndRenewal(t *testing.T) {
 	cert1, key1 := testDistributionPair(t, host, time.Now().Add(24*time.Hour))
 	cert2, key2 := testDistributionPair(t, host, time.Now().Add(48*time.Hour))
 	roots := filepath.Join(t.TempDir(), "roots.pem")
-	if err := os.WriteFile(roots, append(append([]byte{}, cert1...), cert2...), 0600); err != nil {
+	if err := os.WriteFile(roots, append(append([]byte{}, cert1...), cert2...), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("SSL_CERT_FILE", roots)
@@ -224,10 +224,10 @@ func TestCoverCertificateFleetDeliveryAndRenewal(t *testing.T) {
 	}
 	mainDir := t.TempDir()
 	mainCert, mainKey := filepath.Join(mainDir, "fullchain.pem"), filepath.Join(mainDir, "privkey.pem")
-	if err := os.WriteFile(mainCert, cert2, 0600); err != nil {
+	if err := os.WriteFile(mainCert, cert2, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(mainKey, key2, 0600); err != nil {
+	if err := os.WriteFile(mainKey, key2, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	settings := &SettingService{}
