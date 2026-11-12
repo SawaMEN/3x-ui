@@ -56,10 +56,10 @@ describe('Vetroff automatic settings', () => {
       autoPin: true,
     });
   });
-  it('shows custom certificate paths only in manual TLS mode', () => {
+  it('keeps manual certificate paths visible when automatic TLS is selected', () => {
     renderWithProviders(<VetroffTestForm />);
     expect(screen.getByPlaceholderText('/etc/ssl/vetroff/fullchain.pem')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'HTTP/3' }));
-    expect(screen.queryByPlaceholderText('/etc/ssl/vetroff/fullchain.pem')).toBeNull();
+    expect(screen.getByPlaceholderText('/etc/ssl/vetroff/fullchain.pem')).toBeTruthy();
   });
 });

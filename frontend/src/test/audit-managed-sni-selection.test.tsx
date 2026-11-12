@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { expect, it, vi } from 'vitest';
 
 import SniSearchInput from '@/pages/inbounds/form/security/SniSearchInput';
+import { renderWithProviders } from './test-utils';
 
 const { sites } = vi.hoisted(() => ({
   sites: [
@@ -45,7 +46,7 @@ it('selects the chosen node when several certificates share one SNI', async () =
       </FormProvider>
     );
   }
-  render(<Harness />);
+  renderWithProviders(<Harness />);
   fireEvent.mouseDown(screen.getByRole('combobox'));
   fireEvent.click(await screen.findByText('vpn.example.org · Second node'));
   expect(onChange).toHaveBeenCalledWith('vpn.example.org');

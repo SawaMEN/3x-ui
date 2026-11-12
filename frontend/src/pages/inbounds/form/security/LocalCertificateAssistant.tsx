@@ -119,7 +119,7 @@ export default function LocalCertificateAssistant({
     const previous = lastAutomatic.current;
     const canReplace = (cert: string, key: string) =>
       mayReplaceCertificatePair(cert, key, sites, nodeId) ||
-      (previous?.nodeId === savedNode && previous.certFile === cert && previous.keyFile === key);
+      (previous?.certFile === cert && previous.keyFile === key);
 
     const opts = { shouldDirty: true, shouldValidate: true };
     if (certField.startsWith('streamSettings.')) {

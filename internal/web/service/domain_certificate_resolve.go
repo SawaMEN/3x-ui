@@ -66,8 +66,8 @@ func ResolveTLSCertificate(ctx context.Context, nodeID int, domain string, rsaOn
     if err := database.GetDB().First(&node, nodeID).Error; err != nil {
         return DistributedTLSCertificate{}, err
     }
-    if !node.Enable || node.Transitive {
-        return DistributedTLSCertificate{}, errors.New("node is unavailable or read-only")
+    if !node.Enable || node.Transitive || node.Scheme != "https" || node.TlsVerifyMode == "skip" {
+        return DistributedTLSCertificate{}, errors.New("certificate lookup requires an enabled direct node on verified HTTPS")
     }
     manager := runtime.GetManager()
     if manager == nil {
