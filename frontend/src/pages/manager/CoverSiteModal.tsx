@@ -137,7 +137,9 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
           { headers: { 'Content-Type': 'application/json' }, silent: true },
         );
         if (!response?.success) {
-          throw new Error(response?.msg || t('Не удалось сменить сайт', 'Could not change cover site'));
+          throw new Error(
+            response?.msg || t('Не удалось сменить сайт', 'Could not change cover site'),
+          );
         }
         void queryClient.invalidateQueries({ queryKey: ['manager', 'cover-sites'] });
         void queryClient.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
@@ -224,7 +226,9 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       onCancel={onClose}
       confirmLoading={saving}
       okButtonProps={{
-        disabled: !mainCertificate && (!domain.trim() || (!selectedExisting && (!email.trim() || !acceptTerms))),
+        disabled:
+          !mainCertificate &&
+          (!domain.trim() || (!selectedExisting && (!email.trim() || !acceptTerms))),
       }}
       destroyOnHidden
     >
@@ -330,7 +334,9 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
         </div>
         {!selectedExisting && (
           <div>
-            <Typography.Text>{t('Контактный email для ACME', 'ACME contact email')}</Typography.Text>
+            <Typography.Text>
+              {t('Контактный email для ACME', 'ACME contact email')}
+            </Typography.Text>
             <Input
               value={email}
               onChange={(ev) => setEmail(ev.target.value)}
@@ -362,12 +368,14 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             )}
           />
         )}
-        {!selectedExisting && <Checkbox checked={acceptTerms} onChange={(ev) => setAcceptTerms(ev.target.checked)}>
-          {t(
-            'Я контролирую этот домен и принимаю условия Let’s Encrypt.',
-            'I control this hostname and accept the Let’s Encrypt terms.',
-          )}
-        </Checkbox>}
+        {!selectedExisting && (
+          <Checkbox checked={acceptTerms} onChange={(ev) => setAcceptTerms(ev.target.checked)}>
+            {t(
+              'Я контролирую этот домен и принимаю условия Let’s Encrypt.',
+              'I control this hostname and accept the Let’s Encrypt terms.',
+            )}
+          </Checkbox>
+        )}
         {mainCertificate && (
           <Alert
             type="success"
