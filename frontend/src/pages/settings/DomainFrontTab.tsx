@@ -54,7 +54,10 @@ import { redirectSiteOptions } from './redirect-sites';
 import { onNumber } from '@/utils/onNumber';
 import { rootRedirectError } from './root-redirect';
 import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
-import CoverSiteHTMLEditor, { coverSiteHTMLValidation, starterCoverSiteHTML } from '@/components/CoverSiteHTMLEditor';
+import CoverSiteHTMLEditor, {
+  coverSiteHTMLValidation,
+  starterCoverSiteHTML,
+} from '@/components/CoverSiteHTMLEditor';
 
 type DomainSection = 'domains' | 'certificates' | 'sni' | 'settings';
 
@@ -483,7 +486,8 @@ export default function DomainFrontTab({
       origin: value.mode === 'relay' ? value.origin : '',
       siteCatalog: value.mode === 'sni_only' ? value.siteCatalog || '' : '',
       siteTemplate: value.mode === 'sni_only' ? value.siteTemplate || '' : '',
-      siteHtml: value.mode === 'sni_only' && value.siteCatalog === 'custom' ? value.siteHtml || '' : '',
+      siteHtml:
+        value.mode === 'sni_only' && value.siteCatalog === 'custom' ? value.siteHtml || '' : '',
       certFile:
         value.tls === 'manual' && value.mode !== 'shared_sni' && value.mode !== 'cert_only'
           ? value.certFile
@@ -1548,7 +1552,11 @@ export default function DomainFrontTab({
                           : form.getFieldValue('tls'),
                   });
                   if (value === 'sni_only') {
-                    form.setFieldsValue({ siteCatalog: 'builtin', siteTemplate: 'notes', siteHtml: '' });
+                    form.setFieldsValue({
+                      siteCatalog: 'builtin',
+                      siteTemplate: 'notes',
+                      siteHtml: '',
+                    });
                   } else {
                     form.setFieldsValue({ siteCatalog: '', siteTemplate: '', siteHtml: '' });
                   }
@@ -1596,10 +1604,16 @@ export default function DomainFrontTab({
                       value,
                       label: i18n.language.startsWith('ru') ? entry.ru : entry.en,
                     })),
-                    { value: 'custom', label: i18n.language.startsWith('ru') ? 'Свой HTML' : 'Custom HTML' },
+                    {
+                      value: 'custom',
+                      label: i18n.language.startsWith('ru') ? 'Свой HTML' : 'Custom HTML',
+                    },
                   ]}
                   onChange={(value: 'builtin' | 'mtproxyl' | 'custom') => {
-                    form.setFieldValue('siteTemplate', value === 'custom' ? 'html' : value === 'builtin' ? 'notes' : 'stub');
+                    form.setFieldValue(
+                      'siteTemplate',
+                      value === 'custom' ? 'html' : value === 'builtin' ? 'notes' : 'stub',
+                    );
                     if (value === 'custom' && !form.getFieldValue('siteHtml')) {
                       form.setFieldValue('siteHtml', starterCoverSiteHTML);
                     }
@@ -1612,7 +1626,17 @@ export default function DomainFrontTab({
                 rules={[{ required: true }]}
               >
                 {siteCatalog === 'custom' ? (
-                  <Select disabled options={[{ value: 'html', label: i18n.language.startsWith('ru') ? 'Моя HTML-страница' : 'My HTML page' }]} />
+                  <Select
+                    disabled
+                    options={[
+                      {
+                        value: 'html',
+                        label: i18n.language.startsWith('ru')
+                          ? 'Моя HTML-страница'
+                          : 'My HTML page',
+                      },
+                    ]}
+                  />
                 ) : (
                   <Select
                     options={TelemtWebCatalogs[
@@ -1630,11 +1654,20 @@ export default function DomainFrontTab({
               {siteCatalog === 'custom' && (
                 <Form.Item
                   name="siteHtml"
-                  rules={[{
-                    validator: (_, value: string) => coverSiteHTMLValidation(value || '')
-                      ? Promise.reject(new Error(i18n.language.startsWith('ru') ? 'Укажите полный HTML до 256 КБ' : 'Enter a full HTML document up to 256 KiB'))
-                      : Promise.resolve(),
-                  }]}
+                  rules={[
+                    {
+                      validator: (_, value: string) =>
+                        coverSiteHTMLValidation(value || '')
+                          ? Promise.reject(
+                              new Error(
+                                i18n.language.startsWith('ru')
+                                  ? 'Укажите полный HTML до 256 КБ'
+                                  : 'Enter a full HTML document up to 256 KiB',
+                              ),
+                            )
+                          : Promise.resolve(),
+                    },
+                  ]}
                 >
                   <CoverSiteHTMLEditor />
                 </Form.Item>

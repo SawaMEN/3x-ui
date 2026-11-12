@@ -52,7 +52,9 @@ export default function CoverSiteHTMLEditor({ value = '', onChange = () => {}, d
   const bytes = new TextEncoder().encode(value).length;
   return (
     <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-      <Typography.Text strong>{ru ? 'Код вашей страницы (HTML)' : 'Your page (HTML)'}</Typography.Text>
+      <Typography.Text strong>
+        {ru ? 'Код вашей страницы (HTML)' : 'Your page (HTML)'}
+      </Typography.Text>
       <Typography.Text type="secondary">
         {ru
           ? 'Вставьте готовый HTML целиком или измените пример. Для собственного дизайна используйте встроенный CSS. Файлы и адреса сайта настраиваются автоматически.'
@@ -69,19 +71,32 @@ export default function CoverSiteHTMLEditor({ value = '', onChange = () => {}, d
       />
       <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
         <Typography.Text type={error === 'size' ? 'danger' : 'secondary'}>
-          {new Intl.NumberFormat(ru ? 'ru-RU' : 'en-US').format(bytes)} / 262 144 {ru ? 'байт' : 'bytes'}
+          {new Intl.NumberFormat(ru ? 'ru-RU' : 'en-US').format(bytes)} / 262 144{' '}
+          {ru ? 'байт' : 'bytes'}
         </Typography.Text>
         <Button size="small" onClick={() => setPreview((current) => !current)}>
-          {preview ? (ru ? 'Скрыть предпросмотр' : 'Hide preview') : (ru ? 'Предпросмотр' : 'Preview')}
+          {preview
+            ? ru
+              ? 'Скрыть предпросмотр'
+              : 'Hide preview'
+            : ru
+              ? 'Предпросмотр'
+              : 'Preview'}
         </Button>
       </Space>
       {error && (
         <Alert
           type="warning"
           showIcon
-          title={error === 'size'
-            ? (ru ? 'Максимальный размер — 256 КБ' : 'Maximum size is 256 KiB')
-            : (ru ? 'Нужен полный HTML-документ с тегом <html>' : 'A full HTML document with an <html> tag is required')}
+          title={
+            error === 'size'
+              ? ru
+                ? 'Максимальный размер — 256 КБ'
+                : 'Maximum size is 256 KiB'
+              : ru
+                ? 'Нужен полный HTML-документ с тегом <html>'
+                : 'A full HTML document with an <html> tag is required'
+          }
         />
       )}
       {preview && (
@@ -91,7 +106,13 @@ export default function CoverSiteHTMLEditor({ value = '', onChange = () => {}, d
             sandbox=""
             referrerPolicy="no-referrer"
             srcDoc={value}
-            style={{ border: '1px solid var(--ant-color-border, #ddd)', borderRadius: 8, width: '100%', height: 310, background: '#fff' }}
+            style={{
+              border: '1px solid var(--ant-color-border, #ddd)',
+              borderRadius: 8,
+              width: '100%',
+              height: 310,
+              background: '#fff',
+            }}
           />
           <Typography.Text type="secondary">
             {ru ? 'В предпросмотре сценарии отключены.' : 'Scripts are disabled in this preview.'}

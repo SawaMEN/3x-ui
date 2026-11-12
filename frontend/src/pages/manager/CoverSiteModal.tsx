@@ -1,12 +1,26 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Card, Checkbox, Input, Modal, Segmented, Select, Space, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Input,
+  Modal,
+  Segmented,
+  Select,
+  Space,
+  Typography,
+} from 'antd';
 import type { NodeRecord } from '@/schemas/node';
 import { HttpUtil } from '@/utils';
 import MainNodeDNS01Setup, { useMainNodeDNS01Readiness } from '@/components/MainNodeDNS01Setup';
 import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
-import CoverSiteHTMLEditor, { coverSiteHTMLValidation, starterCoverSiteHTML } from '@/components/CoverSiteHTMLEditor';
+import CoverSiteHTMLEditor, {
+  coverSiteHTMLValidation,
+  starterCoverSiteHTML,
+} from '@/components/CoverSiteHTMLEditor';
 
 type EditableCoverSite = {
   nodeId: number;
@@ -108,7 +122,11 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   );
   const nodeSites = existingSites.filter((site) => site.nodeId === nodeId);
   const isCustom = siteCatalog === 'custom';
-  const { data: savedContent, isFetching: loadingContent, error: contentError } = useQuery({
+  const {
+    data: savedContent,
+    isFetching: loadingContent,
+    error: contentError,
+  } = useQuery({
     queryKey: ['manager', 'cover-site-content', nodeId, selectedExisting?.domain],
     enabled: open && selectedExisting?.siteCatalog === 'custom',
     staleTime: Infinity,
@@ -127,7 +145,11 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       return { nodeId: selected.nodeId, domain: selected.domain, html: response.obj.html };
     },
   });
-  const siteHTML = editedHTML ?? (selectedExisting?.siteCatalog === 'custom' ? savedContent?.html ?? '' : starterCoverSiteHTML);
+  const siteHTML =
+    editedHTML ??
+    (selectedExisting?.siteCatalog === 'custom'
+      ? (savedContent?.html ?? '')
+      : starterCoverSiteHTML);
   const htmlError = isCustom ? coverSiteHTMLValidation(siteHTML) : null;
   const setSiteHTML = setEditedHTML;
 
@@ -160,7 +182,8 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   );
   const submit = async (dnsJustConfigured = false) => {
     if (saving || mainCertificate || !domain.trim() || htmlError) return;
-    if (isCustom && selectedExisting?.siteCatalog === 'custom' && (loadingContent || contentError)) return;
+    if (isCustom && selectedExisting?.siteCatalog === 'custom' && (loadingContent || contentError))
+      return;
     if (nodeId > 0 && issueOnMain && !dns01.ready && !dnsJustConfigured) return;
     if (!selectedExisting && (!email.trim() || !acceptTerms)) return;
     setSaving(true);
@@ -169,7 +192,13 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       if (selectedExisting) {
         const response = await HttpUtil.post(
           '/panel/api/domains/cover-sites/change-template',
-          { nodeId, domain: selectedExisting.domain, siteCatalog, siteTemplate, siteHtml: isCustom ? siteHTML : '' },
+          {
+            nodeId,
+            domain: selectedExisting.domain,
+            siteCatalog,
+            siteTemplate,
+            siteHtml: isCustom ? siteHTML : '',
+          },
           { headers: { 'Content-Type': 'application/json' }, silent: true },
         );
         if (!response?.success) {
@@ -178,7 +207,9 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
           );
         }
         void queryClient.invalidateQueries({ queryKey: ['manager', 'cover-sites'] });
-        void queryClient.invalidateQueries({ queryKey: ['manager', 'cover-site-content', nodeId, selectedExisting.domain] });
+        void queryClient.invalidateQueries({
+          queryKey: ['manager', 'cover-site-content', nodeId, selectedExisting.domain],
+        });
         void queryClient.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
         onSuccess(selectedExisting.domain, 'valid');
         setDomain('');
@@ -268,8 +299,11 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       okButtonProps={{
         disabled:
           !mainCertificate &&
-          (!domain.trim() || Boolean(htmlError) ||
-            (isCustom && selectedExisting?.siteCatalog === 'custom' && (loadingContent || Boolean(contentError))) ||
+          (!domain.trim() ||
+            Boolean(htmlError) ||
+            (isCustom &&
+              selectedExisting?.siteCatalog === 'custom' &&
+              (loadingContent || Boolean(contentError))) ||
             (!selectedExisting &&
               (!email.trim() || !acceptTerms || (nodeId > 0 && issueOnMain && !dns01.ready)))),
       }}
@@ -365,7 +399,14 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
                   </Typography.Text>
                 )}
                 {selectedExisting?.siteCatalog === 'custom' && contentError && (
-                  <Alert type="error" showIcon title={t('Не удалось загрузить сохранённый HTML. Повторите открытие страницы.', 'Could not load saved HTML. Reopen the page and retry.')} />
+                  <Alert
+                    type="error"
+                    showIcon
+                    title={t(
+                      'Не удалось загрузить сохранённый HTML. Повторите открытие страницы.',
+                      'Could not load saved HTML. Reopen the page and retry.',
+                    )}
+                  />
                 )}
                 <CoverSiteHTMLEditor
                   value={siteHTML}
@@ -385,7 +426,8 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
                     }}
                     style={{ width: '100%' }}
                     options={Object.entries(TelemtWebCatalogs).map(([value, entry]) => ({
-                      value, label: ru ? entry.ru : entry.en,
+                      value,
+                      label: ru ? entry.ru : entry.en,
                     }))}
                   />
                 </div>
@@ -396,15 +438,18 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
                     value={siteTemplate}
                     onChange={setSiteTemplate}
                     style={{ width: '100%' }}
-                    options={TelemtWebCatalogs[siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'].templates.map((entry) => ({
-                      value: entry.id, label: ru ? entry.ru : entry.en,
+                    options={TelemtWebCatalogs[
+                      siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'
+                    ].templates.map((entry) => ({
+                      value: entry.id,
+                      label: ru ? entry.ru : entry.en,
                     }))}
                   />
                   <Typography.Text type="secondary" style={{ display: 'block', marginTop: 6 }}>
                     {(() => {
-                      const selected = TelemtWebCatalogs[siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'].templates.find(
-                        (entry) => entry.id === siteTemplate,
-                      );
+                      const selected = TelemtWebCatalogs[
+                        siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'
+                      ].templates.find((entry) => entry.id === siteTemplate);
                       return selected ? (ru ? selected.descriptionRu : selected.descriptionEn) : '';
                     })()}
                   </Typography.Text>
@@ -412,7 +457,10 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
               </>
             )}
             <Typography.Text type="secondary">
-              {t('После сохранения выбранная страница автоматически размещается на ноде. Смена оформления не меняет TLS и маршруты.', 'After saving, the selected page is published on the node automatically. TLS and routes remain unchanged.')}
+              {t(
+                'После сохранения выбранная страница автоматически размещается на ноде. Смена оформления не меняет TLS и маршруты.',
+                'After saving, the selected page is published on the node automatically. TLS and routes remain unchanged.',
+              )}
             </Typography.Text>
           </Space>
         </Card>
