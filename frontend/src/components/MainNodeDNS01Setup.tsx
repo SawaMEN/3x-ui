@@ -99,14 +99,17 @@ export default function MainNodeDNS01Setup({ domain = '', onConfigured }: Props)
         { silent: true },
       );
       if (!response?.success)
-        throw new Error(response?.msg || t('Не удалось проверить DNS-токен', 'Could not check DNS token'));
+        throw new Error(
+          response?.msg || t('Не удалось проверить DNS-токен', 'Could not check DNS token'),
+        );
       return response.obj as { configured: boolean; source?: string };
     },
   });
   const edit = () => {
     const target = normalizeName(domain);
     const currentZone = config?.dns01Zone || '';
-    const existingCovers = !!currentZone && (!target || target === currentZone || target.endsWith('.' + currentZone));
+    const existingCovers =
+      !!currentZone && (!target || target === currentZone || target.endsWith('.' + currentZone));
     setProvider(config?.dns01Provider || 'cloudflare');
     setZone(existingCovers ? currentZone : suggestZone(target) || currentZone);
     setZoneId(config?.dns01ZoneId || '');
@@ -122,7 +125,9 @@ export default function MainNodeDNS01Setup({ domain = '', onConfigured }: Props)
       // Refetch before applying so concurrent domain changes are preserved.
       const current = await status.refetch();
       if (current.isError || !current.data)
-        throw new Error(t('Не удалось загрузить настройки доменов', 'Could not load domain settings'));
+        throw new Error(
+          t('Не удалось загрузить настройки доменов', 'Could not load domain settings'),
+        );
       if (token) {
         const saved = await HttpUtil.post(
           '/panel/api/domains/dns/credential',
@@ -130,12 +135,19 @@ export default function MainNodeDNS01Setup({ domain = '', onConfigured }: Props)
           { silent: true },
         );
         if (!saved?.success)
-          throw new Error(saved?.msg || t('Не удалось сохранить DNS-токен', 'Could not save DNS token'));
+          throw new Error(
+            saved?.msg || t('Не удалось сохранить DNS-токен', 'Could not save DNS token'),
+          );
         setToken('');
       }
       const checked = await credential.refetch();
       if (checked.isError || !checked.data?.configured)
-        throw new Error(t('Укажите действующий API-токен DNS-провайдера', 'Provide a valid DNS provider API token'));
+        throw new Error(
+          t(
+            'Укажите действующий API-токен DNS-провайдера',
+            'Provide a valid DNS provider API token',
+          ),
+        );
       const response = await HttpUtil.post(
         '/panel/api/domains/apply',
         {
@@ -147,9 +159,13 @@ export default function MainNodeDNS01Setup({ domain = '', onConfigured }: Props)
         { silent: true },
       );
       if (!response?.success)
-        throw new Error(response?.msg || t('Не удалось настроить DNS-01', 'Could not configure DNS-01'));
+        throw new Error(
+          response?.msg || t('Не удалось настроить DNS-01', 'Could not configure DNS-01'),
+        );
       await queryClient.invalidateQueries({ queryKey: keys.settings.domains() });
-      await queryClient.invalidateQueries({ queryKey: ['settings', 'domains', 'dns-credential', provider] });
+      await queryClient.invalidateQueries({
+        queryKey: ['settings', 'domains', 'dns-credential', provider],
+      });
       setOpen(false);
       onConfigured?.();
     } catch (e) {
@@ -163,15 +179,27 @@ export default function MainNodeDNS01Setup({ domain = '', onConfigured }: Props)
       <Space wrap>
         <Typography.Text type={readiness.ready ? 'success' : 'secondary'}>
           {readiness.ready
-            ? t('DNS-01 готов:', 'DNS-01 ready:') + ' ' + config?.dns01Provider + ' · ' + config?.dns01Zone
+            ? t('DNS-01 готов:', 'DNS-01 ready:') +
+              ' ' +
+              config?.dns01Provider +
+              ' · ' +
+              config?.dns01Zone
             : config?.dns01Provider && domain && !readiness.coversDomain
-              ? t('DNS-зона не охватывает выбранный домен.', 'DNS zone does not cover this hostname.')
-              : t('Для выпуска настройте DNS-01 основной ноды.', 'Configure main-node DNS-01 before issuing.')}
+              ? t(
+                  'DNS-зона не охватывает выбранный домен.',
+                  'DNS zone does not cover this hostname.',
+                )
+              : t(
+                  'Для выпуска настройте DNS-01 основной ноды.',
+                  'Configure main-node DNS-01 before issuing.',
+                )}
         </Typography.Text>
-        <Tooltip title={t(
-          'DNS-01 подтверждает владение доменом через временную TXT-запись. Нужен API-токен провайдера DNS, а не удалённой ноды. Порты 80/443 на основной ноде не требуются.',
-          'DNS-01 verifies domain ownership using a temporary TXT record. You need a DNS provider API token, not credentials from the remote node. The main node does not need ports 80/443.',
-        )}>
+        <Tooltip
+          title={t(
+            'DNS-01 подтверждает владение доменом через временную TXT-запись. Нужен API-токен провайдера DNS, а не удалённой ноды. Порты 80/443 на основной ноде не требуются.',
+            'DNS-01 verifies domain ownership using a temporary TXT record. You need a DNS provider API token, not credentials from the remote node. The main node does not need ports 80/443.',
+          )}
+        >
           <QuestionCircleOutlined aria-label="DNS-01 help" style={{ cursor: 'help' }} />
         </Tooltip>
         <Button size="small" loading={status.isPending} disabled={!status.data} onClick={edit}>
@@ -219,10 +247,13 @@ export default function MainNodeDNS01Setup({ domain = '', onConfigured }: Props)
             )}
           />
           <div>
-            <HelpLabel label={t('DNS-провайдер', 'DNS provider')} help={t(
-              'Провайдер, на чьих DNS-серверах размещена зона домена. Выбор не связан с компанией, где арендована нода.',
-              'The provider hosting this domain’s authoritative DNS zone, not necessarily the company hosting the node.',
-            )} />
+            <HelpLabel
+              label={t('DNS-провайдер', 'DNS provider')}
+              help={t(
+                'Провайдер, на чьих DNS-серверах размещена зона домена. Выбор не связан с компанией, где арендована нода.',
+                'The provider hosting this domain’s authoritative DNS zone, not necessarily the company hosting the node.',
+              )}
+            />
             <Select
               aria-label={t('DNS-провайдер', 'DNS provider')}
               value={provider}
@@ -239,10 +270,13 @@ export default function MainNodeDNS01Setup({ domain = '', onConfigured }: Props)
             />
           </div>
           <div>
-            <HelpLabel label={t('DNS-зона', 'DNS zone')} help={t(
-              'Основной DNS-домен, содержащий выбранное имя. Для vpn.example.org обычно example.org. Автоподстановка ориентировочная: проверьте делегирование и исправьте при необходимости.',
-              'The authoritative DNS zone containing the hostname. For vpn.example.org it is usually example.org. The suggestion is approximate; verify DNS delegation and adjust it.',
-            )} />
+            <HelpLabel
+              label={t('DNS-зона', 'DNS zone')}
+              help={t(
+                'Основной DNS-домен, содержащий выбранное имя. Для vpn.example.org обычно example.org. Автоподстановка ориентировочная: проверьте делегирование и исправьте при необходимости.',
+                'The authoritative DNS zone containing the hostname. For vpn.example.org it is usually example.org. The suggestion is approximate; verify DNS delegation and adjust it.',
+              )}
+            />
             <Input
               aria-label={t('DNS-зона', 'DNS zone')}
               placeholder="example.org"
@@ -253,10 +287,13 @@ export default function MainNodeDNS01Setup({ domain = '', onConfigured }: Props)
           </div>
           {provider === 'cloudflare' && (
             <div>
-              <HelpLabel label="Cloudflare Zone ID" help={t(
-                '32-символьный идентификатор зоны в Cloudflare: выберите домен → Overview → Zone ID. Это не Account ID.',
-                'The 32-character zone identifier in Cloudflare: select your domain → Overview → Zone ID. This is not the Account ID.',
-              )} />
+              <HelpLabel
+                label="Cloudflare Zone ID"
+                help={t(
+                  '32-символьный идентификатор зоны в Cloudflare: выберите домен → Overview → Zone ID. Это не Account ID.',
+                  'The 32-character zone identifier in Cloudflare: select your domain → Overview → Zone ID. This is not the Account ID.',
+                )}
+              />
               <Input
                 aria-label="Cloudflare Zone ID"
                 placeholder="Cloudflare Zone ID"
@@ -267,15 +304,21 @@ export default function MainNodeDNS01Setup({ domain = '', onConfigured }: Props)
             </div>
           )}
           <div>
-            <HelpLabel label={t('API-токен DNS', 'DNS API token')} help={t(
-              'Создайте токен с минимальными правами на редактирование DNS-записей выбранной зоны. Токен сохраняется в закрытом файле основной ноды и не отправляется на удалённые серверы.',
-              'Create an API token scoped to DNS record editing for this zone. It is stored in a private file on the main node and never sent to remote nodes.',
-            )} />
+            <HelpLabel
+              label={t('API-токен DNS', 'DNS API token')}
+              help={t(
+                'Создайте токен с минимальными правами на редактирование DNS-записей выбранной зоны. Токен сохраняется в закрытом файле основной ноды и не отправляется на удалённые серверы.',
+                'Create an API token scoped to DNS record editing for this zone. It is stored in a private file on the main node and never sent to remote nodes.',
+              )}
+            />
             <Input.Password
               aria-label={t('API-токен DNS', 'DNS API token')}
               placeholder={
                 credential.data?.configured
-                  ? t('Токен сохранён; оставьте пустым для повторного использования', 'Token saved; leave empty to reuse')
+                  ? t(
+                      'Токен сохранён; оставьте пустым для повторного использования',
+                      'Token saved; leave empty to reuse',
+                    )
                   : t('API-токен DNS', 'DNS API token')
               }
               value={token}
