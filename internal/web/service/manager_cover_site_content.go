@@ -37,7 +37,7 @@ func LocalManagedCoverSiteContent(host string) (ManagedCoverSiteContent, error) 
 	return empty, errors.New("cover site not found")
 }
 
-func ManagedCoverSiteContent(ctx context.Context, nodeID int, host string) (ManagedCoverSiteContent, error) {
+func ReadManagedCoverSiteContent(ctx context.Context, nodeID int, host string) (ManagedCoverSiteContent, error) {
 	var empty ManagedCoverSiteContent
 	domain, err := managerDomain(host)
 	if err != nil {
