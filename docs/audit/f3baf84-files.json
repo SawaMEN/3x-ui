@@ -15191,8 +15191,8 @@
       "subsystem": "subscriptions",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
-      "reviewed_sha256": "deca770fcf399d503e24aa6744d6c8356d96f80f5caba7825cc293051eafa6ff"
+      "evidence": "A74–A76: full source/test review of panel start/stop, initial cron ownership, cancellation propagation through routing refresh HTTP/cache persistence, and pre-existing retry/size/privacy/coalescing contracts. Before fixes reproduced uncancelable DB/HTTP/waiters and early StopPanelOnly return. Normal targeted tests pass; race/lint/full-sub results recorded in checkpoint.",
+      "reviewed_sha256": "df3abaf8a55d94ca4f3e9b2880219c7c42f1e295bfb5ed9c1a3bf435f2af99f3"
     },
     {
       "path": "internal/sub/remote_routing_test.go",
@@ -15202,8 +15202,8 @@
       "subsystem": "subscriptions",
       "kind": "test-fixture",
       "status": "reviewed",
-      "evidence": "A50-A52: complete manual read of listed sources/tests; reproduced 10 traffic queries for 8 name-only host links, cache permanently loaded after transient SQL failure, persisted Clash size-cap bypass; targeted after-tests and whole internal/sub PASS 28.993s, golangci 0 issues. Name-only benchmark 17706ns/20090B/30alloc to 1931ns/1238B/28alloc on same CPU (100x); SQL retry and exact/over-limit boundary covered. Existing casing/TLS/quota/YAML/Sudoku/metadata tests passed in package.",
-      "reviewed_sha256": "865f11f52b83d5732e336725e226c0d58166fbdeef0125fd4f8ec9a1799851e7"
+      "evidence": "A74–A76: full source/test review of panel start/stop, initial cron ownership, cancellation propagation through routing refresh HTTP/cache persistence, and pre-existing retry/size/privacy/coalescing contracts. Before fixes reproduced uncancelable DB/HTTP/waiters and early StopPanelOnly return. Normal targeted tests pass; race/lint/full-sub results recorded in checkpoint.",
+      "reviewed_sha256": "676ce20bb74f7ed4f5289b4d20dfc9298198a2eab7a657718aa92ed476e32197"
     },
     {
       "path": "internal/sub/service.go",
@@ -17776,8 +17776,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
-      "reviewed_sha256": "cd6f0bb0c8b0e246a92aa262f4c16e5a43da2951d5ffd656e507a6d61390b6f3"
+      "evidence": "A74–A76: full source/test review of panel start/stop, initial cron ownership, cancellation propagation through routing refresh HTTP/cache persistence, and pre-existing retry/size/privacy/coalescing contracts. Before fixes reproduced uncancelable DB/HTTP/waiters and early StopPanelOnly return. Normal targeted tests pass; race/lint/full-sub results recorded in checkpoint.",
+      "reviewed_sha256": "2550c7cd77d01c884826d9f708e19e9c26cc9be02fe4755d6795e39f0156a04e"
     },
     {
       "path": "internal/web/job/stats_notify_job.go",
@@ -18127,9 +18127,9 @@
       "deletions": 0,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A74–A76: full source/test review of panel start/stop, initial cron ownership, cancellation propagation through routing refresh HTTP/cache persistence, and pre-existing retry/size/privacy/coalescing contracts. Before fixes reproduced uncancelable DB/HTTP/waiters and early StopPanelOnly return. Normal targeted tests pass; race/lint/full-sub results recorded in checkpoint.",
+      "reviewed_sha256": "99c242e3655227468326e9517416accde169c960b77e8f4df9ecfe7425a6e79b"
     },
     {
       "path": "internal/web/routes_contract_test.go",
@@ -25024,9 +25024,9 @@
       "deletions": 0,
       "subsystem": "protocols-utilities",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A74–A76: full source/test review of panel start/stop, initial cron ownership, cancellation propagation through routing refresh HTTP/cache persistence, and pre-existing retry/size/privacy/coalescing contracts. Before fixes reproduced uncancelable DB/HTTP/waiters and early StopPanelOnly return. Normal targeted tests pass; race/lint/full-sub results recorded in checkpoint.",
+      "reviewed_sha256": "a651387ef846f6a9aace9d39f98010cd8d3cf185bc1598986b248d3e125c4eb2"
     },
     {
       "path": "internal/web/translation/en-US.json",
@@ -25057,9 +25057,9 @@
       "deletions": 179,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A74–A76: full source/test review of panel start/stop, initial cron ownership, cancellation propagation through routing refresh HTTP/cache persistence, and pre-existing retry/size/privacy/coalescing contracts. Before fixes reproduced uncancelable DB/HTTP/waiters and early StopPanelOnly return. Normal targeted tests pass; race/lint/full-sub results recorded in checkpoint.",
+      "reviewed_sha256": "ecffb29b973cd14ea0ddb6fc26830caf448b29d8eda595b9c7c60b5194eb3989"
     },
     {
       "path": "internal/web/web_shutdown_test.go",
@@ -25068,9 +25068,9 @@
       "deletions": 0,
       "subsystem": "protocols-utilities",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A74–A76: full source/test review of panel start/stop, initial cron ownership, cancellation propagation through routing refresh HTTP/cache persistence, and pre-existing retry/size/privacy/coalescing contracts. Before fixes reproduced uncancelable DB/HTTP/waiters and early StopPanelOnly return. Normal targeted tests pass; race/lint/full-sub results recorded in checkpoint.",
+      "reviewed_sha256": "347727346d0a8b69b6372227a0eab33fcb4d37cd7b684ad41265b3123144360e"
     },
     {
       "path": "internal/web/web_sublink_test.go",

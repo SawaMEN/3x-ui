@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"io"
@@ -311,11 +312,13 @@ func TestRemoteRoutingResolverDoesNotBlockOnPersistedLoad(t *testing.T) {
 		return remoteRoutingResponse(http.StatusServiceUnavailable, "offline"), nil
 	}), true)
 
-	resolver.loadMu.Lock()
+	if err := resolver.loadMu.Acquire(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
 	loadLocked := true
 	t.Cleanup(func() {
 		if loadLocked {
-			resolver.loadMu.Unlock()
+			resolver.loadMu.Release(1)
 		}
 	})
 
@@ -328,7 +331,7 @@ func TestRemoteRoutingResolverDoesNotBlockOnPersistedLoad(t *testing.T) {
 		t.Fatalf("resolve blocked on persisted cache load for %v", elapsed)
 	}
 
-	resolver.loadMu.Unlock()
+	resolver.loadMu.Release(1)
 	loadLocked = false
 	close(release)
 	select {

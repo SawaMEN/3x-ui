@@ -559,3 +559,31 @@ POST под node-admin получил success=true и один вызов чуж
 Итоговый golangci-lint 2.15.0 на объединённом дереве: 0 issues.
 Сборка frontend, go build ./... и go vet ./... прошли; targeted race
 service/controller с A72/A73 и CertificateDistribution прошёл.
+
+
+## Продолжение: A74–A76, отмена и ожидание фоновых заданий
+
+Нужно 3, реализовано 3; всего 76 исправлений. Полностью просмотрено 231/2364
+файлов исходного diff; осталось 2133. Подробные сценарии и очередь — RESUME.md.
+
+| ID | Подтверждённый дефект | Исправление |
+|---|---|---|
+| A74 | RoutingCatalogJob продолжает DB/HTTP работу после остановки панели | Parent context, canceled-tick guard, отмена RefreshDue и запрет нового restart после stop |
+| A75 | Scheduled remote routing HTTP/shared wait/persisted load не отменяются | Context-aware fetch/cache DB/lock; сохранность last-good, немедленная повторная попытка после cancel |
+| A76 | StopPanelOnly возвращает до завершения initial cron workers | Учёт и join начальных workers, единый warm/cron guard, отменяемый delayed memory-release |
+
+До правки все три проблемы воспроизведены регрессионными тестами. Отмена waiter
+не отменяет общего HTTP leader; отменённый refresh не считается сбоем источника.
+Существующие API без context сохранены. Самостоятельные request-triggered фоновые
+loads и прочие pending lifecycle подсистемы остаются отдельной очередью аудита.
+
+Проверки A74–A76:
+- Полный internal/sub: PASS 72.466s.
+- Расширенный targeted -race: job PASS 3.084s; sub PASS 16.208s; web PASS 5.007s.
+- golangci-lint 2.15.0: 0 issues после нормализации импортов новых файлов.
+- Полные go build -p 3 ./... и go vet -p 3 ./...: PASS.
+- Inventory и diff --check: PASS, 231 reviewed, 2133 pending, 0 stale.
+
+Финальный targeted -race после добавления всех regressions: job PASS 5.280s,
+sub PASS 3.170s, web PASS 4.355s. Delayed timer проверяется с synctest:
+worker сначала входит в ожидание таймера, затем отменяется; полный час не выжидается.

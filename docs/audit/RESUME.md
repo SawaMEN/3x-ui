@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 73 подтверждённых исправления панели; A72–A73 — текущая группа из 2 исправлений.
+Всего реализовано 76 подтверждённых исправлений панели; A74–A76 — текущая группа из 3 исправлений.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 227 файлов, осталось 2137; общий проход не завершён.
+Проверено вручную 231 файл, осталось 2133; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -803,3 +803,74 @@ frontend сборки прошёл. Один запуск lint пересёкс�
 Итоговый golangci-lint 2.15.0 на объединённом дереве: 0 issues.
 Сборка frontend, go build ./... и go vet ./... прошли; targeted race
 service/controller с A72/A73 и CertificateDistribution прошёл.
+
+
+## Контрольная точка A74–A76: lifecycle фоновых заданий
+
+Предыдущая группа A72–A73 опубликована в 334ec7eda3519dbb2b2de11bfe0f780286c31ac1.
+Работа начата с этой main; отдельный исходный scope f3baf84 остаётся фиксированным.
+Нужно 3 исправления; реализовано 3, осталось 0 реализации. Всего 76.
+Ручной охват 231/2364, осталось 2133, stale 0.
+
+- A74: RoutingCatalogJob использовал context.Background вместо жизненного цикла
+  панели. GORM callback regression до правки подтвердил, что запрос продолжал
+  ждать после cancel. Теперь constructor принимает необязательный parent,
+  Server передаёт s.ctx; RefreshDue и его DB/HTTP операции получают этот context.
+  Уже отменённый tick не трогает БД; отмена не логируется как ошибка источника,
+  остановленное задание не запрашивает новый restart ядра.
+- A75: удалённые Happ/JSON/Clash routing refresh создавали HTTP request с
+  Background, а coalesced wait и persisted load mutex не принимали cancel.
+  До правки новые HTTP и waiter tests зависали до ручного освобождения.
+  Добавлен context-aware entry point при сохранении прежних обёрток; cron job
+  получает s.ctx. HTTP, DB Ping/query/persistence и ожидание загрузки передают
+  context. Отмена снимает inflight без негативного retry delay и без замены
+  last-good; отменённый waiter не останавливает чужую загрузку. После отмены
+  не начинается следующий настроенный источник. Проверяется реальный localhost
+  HTTPS с закрытием upstream request и отсутствие URL tokens в cancellation error.
+- A76: cron.Stop не учитывает вручную запускаемые initial WrappedJob.Run.
+  До правки StopPanelOnly возвращал nil до освобождения ресурсов такого задания.
+  Server теперь владеет initial worker wait group, join включён в существующий
+  bounded reload wait/retired-worker механизм; полный stop ждёт завершения.
+  Все initial sidecar jobs и remote routing warm зарегистрированы до запуска.
+  Warm и periodic remote routing используют один cron wrapper/overlap guard.
+  Отложенный первый memory-release вместо Sleep использует cancelable timer,
+  учитывается тем же join и не выполняется после отмены панели. Проверяются
+  panic/recovery, overlap, ожидание освобождения и отмена отложенного задания.
+
+Воспроизведение до правки:
+- TestRoutingCatalogJobCancelsDatabaseWork: FAIL 1.16s, ignored cancellation.
+- TestRemoteRoutingRefreshCancellationDoesNotDelayRetry: FAIL 1.00s.
+- TestRemoteRoutingCanceledWaiterDoesNotCancelSharedFetch: FAIL 1.00s.
+- TestPanelStopJoinsInitialScheduledJob: FAIL 0.17s, преждевременный nil от stop.
+
+После правки первый targeted normal: job PASS 0.187s, sub PASS 2.450s,
+web PASS 0.309s. go build -p 3 ./... и go vet -p 3 ./...: PASS.
+Последующие результаты расширенных проверок — ниже.
+
+Следующая очередь (не считать закрытой):
+- OutboundAutoBalancerJob, ProbeAutomaticSubscriptions/ApplyAutomaticSelections:
+  проверить context и bounded stop, HTTP/core probes и сохранение выбора после cancel.
+- resolveEntry/triggerPersistedLoad в subscription resolver всё ещё могут запускать
+  собственные background goroutines вне job. A75 закрывает scheduled/warm path,
+  а не lifetime всех request-triggered background loads; проследить владельца.
+- Проверить порядок остановки periodic sidecar jobs относительно StopAll: initial
+  workers теперь joined, но periodic workers и финальный сбор трафика требуют
+  отдельного прохода по всем managers, включая externalvpn/mieru/sudoku.
+- При недоступном TLS cert listener сейчас может деградировать в HTTP: отдельно
+  воспроизвести и определить безопасное поведение startup/reload.
+- SQL fixture, pending services/API/UI/install и прежние R04/R05 не закрыты.
+
+Тесты используют temporary SQLite, canceled contexts, controllable HTTP transport
+и локальный self-signed HTTPS server. Общий go test ./... не запускается из-за
+ранее описанного public-IP discovery; ACME и host firewall не вызываются.
+
+Проверки A74–A76:
+- Полный internal/sub: PASS 72.466s.
+- Расширенный targeted -race: job PASS 3.084s; sub PASS 16.208s; web PASS 5.007s.
+- golangci-lint 2.15.0: 0 issues после нормализации импортов новых файлов.
+- Полные go build -p 3 ./... и go vet -p 3 ./...: PASS.
+- Inventory и diff --check: PASS, 231 reviewed, 2133 pending, 0 stale.
+
+Финальный targeted -race после добавления всех regressions: job PASS 5.280s,
+sub PASS 3.170s, web PASS 4.355s. Delayed timer проверяется с synctest:
+worker сначала входит в ожидание таймера, затем отменяется; полный час не выжидается.

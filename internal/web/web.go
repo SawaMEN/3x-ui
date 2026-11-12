@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-contrib/gzip"
@@ -130,8 +131,9 @@ type Server struct {
 
 	wsHub *websocket.Hub
 
-	bus  *eventbus.Bus
-	cron *cron.Cron
+	bus          *eventbus.Bus
+	cron         *cron.Cron
+	startupTasks sync.WaitGroup
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -430,23 +432,23 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 
 	// Reconcile mtproto (mtg) sidecars and scrape their traffic
 	mtJob := job.NewMtprotoJob()
-	scheduleStartupJob(s.cron, cadenceMtproto, mtJob)
+	scheduleStartupJob(s.cron, cadenceMtproto, mtJob, s.runStartupTask)
 
 	// Reconcile embedded AmneziaWG interfaces; traffic rides Xray's own stats
 	awgJob := job.NewAmneziaWGJob()
-	scheduleStartupJob(s.cron, cadenceAmneziaWG, awgJob)
+	scheduleStartupJob(s.cron, cadenceAmneziaWG, awgJob, s.runStartupTask)
 
 	tuicJob := job.NewTuicJob()
-	scheduleStartupJob(s.cron, cadenceTuic, tuicJob)
+	scheduleStartupJob(s.cron, cadenceTuic, tuicJob, s.runStartupTask)
 
 	externalJob := job.NewExternalVPNJob()
-	scheduleStartupJob(s.cron, "@every 10s", externalJob)
+	scheduleStartupJob(s.cron, "@every 10s", externalJob, s.runStartupTask)
 
 	mieruJob := job.NewMieruJob()
-	scheduleStartupJob(s.cron, cadenceMieru, mieruJob)
+	scheduleStartupJob(s.cron, cadenceMieru, mieruJob, s.runStartupTask)
 
 	sudokuJob := job.NewSudokuJob(s.ctx)
-	scheduleStartupJob(s.cron, cadenceSudoku, sudokuJob)
+	scheduleStartupJob(s.cron, cadenceSudoku, sudokuJob, s.runStartupTask)
 
 	// check client ips from log file every 10 sec
 	_, _ = s.cron.AddJob(cadenceClientIPScan, job.NewCheckClientIpJob())
@@ -468,16 +470,15 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 
 	// Outbound subscription auto-refresh (respects per-sub updateInterval)
 	_, _ = s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob(s.ctx))
-	_, _ = s.cron.AddJob("@every 1m", job.NewRoutingCatalogJob())
+	_, _ = s.cron.AddJob("@every 1m", job.NewRoutingCatalogJob(s.ctx))
 	_, _ = s.cron.AddJob("@every 10s", job.NewOutboundAutoBalancerJob())
 
 	_, _ = s.cron.AddJob(cadenceReapOrphans, job.NewReapSyncOrphansJob())
 
 	// Warm permanent routing URLs immediately and refresh them outside the
 	// latency-sensitive subscription request path.
-	remoteRoutingJob := job.NewRemoteRoutingJob()
-	_, _ = s.cron.AddJob(cadenceRemoteRouting, remoteRoutingJob)
-	common.GoRecover("remote-routing-warm", remoteRoutingJob.Run)
+	remoteRoutingJob := job.NewRemoteRoutingJob(s.ctx)
+	scheduleStartupJob(s.cron, cadenceRemoteRouting, remoteRoutingJob, s.runStartupTask)
 
 	// check client ips from log file every day
 	_, _ = s.cron.AddJob("@daily", job.NewClearLogsJob())
@@ -528,10 +529,7 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 
 	if mins := sys.MemoryReleaseIntervalMinutes(); mins > 0 {
 		_, _ = s.cron.AddJob(fmt.Sprintf("@every %dm", mins), job.NewMemoryReleaseJob())
-		go func() {
-			time.Sleep(time.Minute)
-			job.NewMemoryReleaseJob().Run()
-		}()
+		s.runDelayedStartupTask(time.Minute, job.NewMemoryReleaseJob().Run)
 	}
 }
 
@@ -876,6 +874,7 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	if s.api != nil {
 		err1 = common.Combine(err1, waitPanelTask(waitCtx, "API workers", s.api.WaitBackground))
 	}
+	err1 = common.Combine(err1, waitPanelTask(waitCtx, "initial jobs", s.startupTasks.Wait))
 	if stopXray {
 		if coreType, _ := s.settingService.GetCoreType(); service.IsNativeCore(coreType) {
 			_ = service.SelectedNativeCore().Stop(s.ctx)
@@ -971,12 +970,17 @@ func scheduleSettingJob(c *cron.Cron, name, spec, fallback string, j cron.Job) c
 }
 
 // Initial and periodic runs share cron's panic recovery and overlap guard.
-func scheduleStartupJob(c *cron.Cron, spec string, j cron.Job) cron.EntryID {
+func scheduleStartupJob(c *cron.Cron, spec string, j cron.Job, runners ...func(func())) cron.EntryID {
 	id, err := c.AddJob(spec, j)
 	if err != nil {
 		logger.Errorf("schedule startup job %q: %v", spec, err)
 		return 0
 	}
-	go c.Entry(id).WrappedJob.Run()
+	run := c.Entry(id).WrappedJob.Run
+	if len(runners) > 0 && runners[0] != nil {
+		runners[0](run)
+	} else {
+		go run()
+	}
 	return id
 }
