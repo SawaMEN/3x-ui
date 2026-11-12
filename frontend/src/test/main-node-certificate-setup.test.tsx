@@ -121,9 +121,19 @@ describe('main-node certificate setup', () => {
       target: { value: 'admin@example.org' },
     });
     fireEvent.click(within(modal).getByRole('checkbox'));
-    expect(within(modal).getByRole('button', { name: 'Issue via DNS-01' })).toHaveProperty('disabled', true);
-    expect(within(modal).getByRole('button', { name: 'Configure DNS-01' })).toHaveProperty('disabled', false);
-    expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url === '/panel/api/manager/domains/local-certificate')).toBe(false);
+    expect(within(modal).getByRole('button', { name: 'Issue via DNS-01' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(within(modal).getByRole('button', { name: 'Configure DNS-01' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(
+      vi
+        .mocked(HttpUtil.post)
+        .mock.calls.some(([url]) => url === '/panel/api/manager/domains/local-certificate'),
+    ).toBe(false);
   });
   it('suggests the DNS zone and resumes issuance automatically after saving credentials', async () => {
     mocks.status.mockReturnValue({
@@ -131,7 +141,9 @@ describe('main-node certificate setup', () => {
       refetch: vi.fn().mockResolvedValue({ data: { config: defaultDomainConfig } }),
     });
     let tokenSaved = false;
-    vi.mocked(HttpUtil.get).mockImplementation(async () => new Msg(true, '', { configured: tokenSaved }));
+    vi.mocked(HttpUtil.get).mockImplementation(
+      async () => new Msg(true, '', { configured: tokenSaved }),
+    );
     vi.mocked(HttpUtil.post).mockImplementation(async (url) => {
       if (url === '/panel/api/domains/dns/credential') tokenSaved = true;
       if (url === '/panel/api/manager/domains/local-certificate')
@@ -147,7 +159,10 @@ describe('main-node certificate setup', () => {
     fireEvent.click(within(issuance).getByRole('checkbox'));
     fireEvent.click(within(issuance).getByRole('button', { name: 'Configure DNS-01' }));
     const setup = await screen.findByRole('dialog', { name: 'Configure DNS-01 on main server' });
-    expect(within(setup).getByRole('textbox', { name: 'DNS zone' })).toHaveProperty('value', 'example.org');
+    expect(within(setup).getByRole('textbox', { name: 'DNS zone' })).toHaveProperty(
+      'value',
+      'example.org',
+    );
     expect(within(setup).getByLabelText('DNS zone help')).toBeTruthy();
     fireEvent.change(within(setup).getByRole('textbox', { name: 'Cloudflare Zone ID' }), {
       target: { value: 'a'.repeat(32) },
@@ -158,11 +173,13 @@ describe('main-node certificate setup', () => {
     const save = within(setup).getByRole('button', { name: 'Save DNS-01' });
     await waitFor(() => expect(save).toHaveProperty('disabled', false));
     fireEvent.click(save);
-    await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(
-      '/panel/api/manager/domains/local-certificate',
-      { domain: 'vpn.example.org', email: 'admin@example.org', acceptTerms: true },
-      expect.anything(),
-    ));
+    await waitFor(() =>
+      expect(HttpUtil.post).toHaveBeenCalledWith(
+        '/panel/api/manager/domains/local-certificate',
+        { domain: 'vpn.example.org', email: 'admin@example.org', acceptTerms: true },
+        expect.anything(),
+      ),
+    );
   });
   it('preserves freshly loaded domains and stores the token separately from the configuration', async () => {
     const latest = {
