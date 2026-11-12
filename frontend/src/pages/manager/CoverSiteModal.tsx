@@ -125,10 +125,27 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
     (node) => node.id > 0 && node.enable && node.status === 'online' && !node.transitive,
   );
   const submit = async () => {
-    if (saving || mainCertificate || !domain.trim() || !email.trim() || !acceptTerms) return;
+    if (saving || mainCertificate || !domain.trim()) return;
+    if (!selectedExisting && (!email.trim() || !acceptTerms)) return;
     setSaving(true);
     setError('');
     try {
+      if (selectedExisting) {
+        const response = await HttpUtil.post(
+          '/panel/api/domains/cover-sites/change-template',
+          { nodeId, domain: selectedExisting.domain, siteCatalog, siteTemplate },
+          { headers: { 'Content-Type': 'application/json' }, silent: true },
+        );
+        if (!response?.success) {
+          throw new Error(response?.msg || t('Не удалось сменить сайт', 'Could not change cover site'));
+        }
+        void queryClient.invalidateQueries({ queryKey: ['manager', 'cover-sites'] });
+        void queryClient.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
+        onSuccess(selectedExisting.domain, 'valid');
+        setDomain('');
+        onClose();
+        return;
+      }
       const result = await HttpUtil.post(
         '/panel/api/manager/domains/cover-site',
         {
@@ -207,7 +224,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       onCancel={onClose}
       confirmLoading={saving}
       okButtonProps={{
-        disabled: !mainCertificate && (!domain.trim() || !email.trim() || !acceptTerms),
+        disabled: !mainCertificate && (!domain.trim() || (!selectedExisting && (!email.trim() || !acceptTerms))),
       }}
       destroyOnHidden
     >
@@ -311,17 +328,19 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             )}
           </Typography.Text>
         </div>
-        <div>
-          <Typography.Text>{t('Контактный email для ACME', 'ACME contact email')}</Typography.Text>
-          <Input
-            value={email}
-            onChange={(ev) => setEmail(ev.target.value)}
-            placeholder="admin@example.org"
-            type="email"
-            maxLength={254}
-          />
-        </div>
-        {nodeId > 0 && (
+        {!selectedExisting && (
+          <div>
+            <Typography.Text>{t('Контактный email для ACME', 'ACME contact email')}</Typography.Text>
+            <Input
+              value={email}
+              onChange={(ev) => setEmail(ev.target.value)}
+              placeholder="admin@example.org"
+              type="email"
+              maxLength={254}
+            />
+          </div>
+        )}
+        {nodeId > 0 && !selectedExisting && (
           <Checkbox checked={issueOnMain} onChange={(ev) => setIssueOnMain(ev.target.checked)}>
             {t(
               'Дополнительно выпустить сертификат на основной ноде (DNS-01)',
@@ -329,7 +348,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             )}
           </Checkbox>
         )}
-        {nodeId > 0 && issueOnMain && (
+        {nodeId > 0 && !selectedExisting && issueOnMain && (
           <Alert
             type="info"
             showIcon
@@ -343,12 +362,12 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             )}
           />
         )}
-        <Checkbox checked={acceptTerms} onChange={(ev) => setAcceptTerms(ev.target.checked)}>
+        {!selectedExisting && <Checkbox checked={acceptTerms} onChange={(ev) => setAcceptTerms(ev.target.checked)}>
           {t(
             'Я контролирую этот домен и принимаю условия Let’s Encrypt.',
             'I control this hostname and accept the Let’s Encrypt terms.',
           )}
-        </Checkbox>
+        </Checkbox>}
         {mainCertificate && (
           <Alert
             type="success"
