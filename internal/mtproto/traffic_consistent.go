@@ -63,6 +63,7 @@ func (m *Manager) CollectTrafficConsistentChecked() ([]Traffic, []string, error)
 		apiPort    int
 		apiToken   string
 		owner      *managed
+		epoch      uint64
 		last       map[string]clientCounters
 		userEmails map[string]string
 	}
@@ -81,6 +82,7 @@ func (m *Manager) CollectTrafficConsistentChecked() ([]Traffic, []string, error)
 			apiPort:    cur.apiPort,
 			apiToken:   cur.apiToken,
 			owner:      cur,
+			epoch:      cur.trafficEpoch,
 			last:       lastCopy,
 			userEmails: maps.Clone(cur.userEmails),
 		})
@@ -101,7 +103,7 @@ func (m *Manager) CollectTrafficConsistentChecked() ([]Traffic, []string, error)
 		// seed a newly started process with counters from the old process.
 		m.mu.Lock()
 		cur, stillSameProcess := m.procs[s.id]
-		if !stillSameProcess || cur != s.owner {
+		if !stillSameProcess || cur != s.owner || cur.trafficEpoch != s.epoch {
 			m.mu.Unlock()
 			collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: process changed during metrics poll", s.id))
 			continue

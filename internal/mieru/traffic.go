@@ -61,6 +61,7 @@ func (m *Manager) CollectTrafficChecked(desired []Instance) ([]TrafficDelta, []s
 		stats map[string]userTrafficStats
 		err   error
 		owner *managed
+		epoch uint64
 	}
 
 	results := make(chan scrapeResult, len(desired))
@@ -69,6 +70,10 @@ func (m *Manager) CollectTrafficChecked(desired []Instance) ([]TrafficDelta, []s
 	for _, inst := range desired {
 		m.mu.Lock()
 		owner := m.procs[inst.Id]
+		epoch := uint64(0)
+		if owner != nil {
+			epoch = owner.trafficEpoch
+		}
 		running := owner != nil && owner.proc != nil && owner.proc.IsRunning()
 		m.mu.Unlock()
 		if !running {
@@ -78,13 +83,13 @@ func (m *Manager) CollectTrafficChecked(desired []Instance) ([]TrafficDelta, []s
 			continue
 		}
 		wg.Add(1)
-		go func(inst Instance, owner *managed) {
+		go func(inst Instance, owner *managed, epoch uint64) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			stats, err := scrapeUsersChecked(socketPathForID(inst.Id), configPathForID(inst.Id))
-			results <- scrapeResult{inst: inst, stats: stats, err: err, owner: owner}
-		}(inst, owner)
+			results <- scrapeResult{inst: inst, stats: stats, err: err, owner: owner, epoch: epoch}
+		}(inst, owner, epoch)
 	}
 	wg.Wait()
 	close(results)
@@ -95,7 +100,7 @@ func (m *Manager) CollectTrafficChecked(desired []Instance) ([]TrafficDelta, []s
 			continue
 		}
 		m.mu.Lock()
-		if m.procs[result.inst.Id] != result.owner {
+		if m.procs[result.inst.Id] != result.owner || result.owner.trafficEpoch != result.epoch {
 			m.mu.Unlock()
 			collectErr = errors.Join(collectErr, fmt.Errorf("mieru inbound %d: process changed during metrics poll", result.inst.Id))
 			continue

@@ -15,6 +15,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 type PortBinding struct {
@@ -274,11 +275,13 @@ func (inst Instance) fingerprint() string {
 
 type (
 	managed struct {
-		proc      *Process
-		tag       string
-		fp        string
-		restartFP string
-		users     []User
+		proc         *Process
+		tag          string
+		fp           string
+		restartFP    string
+		users        []User
+		accounting   *sidecartraffic.Owner
+		trafficEpoch uint64
 	}
 	Manager struct {
 		mu        sync.Mutex
@@ -374,12 +377,27 @@ func writeConfig(inst Instance) (string, error) {
 func (m *Manager) ensureLocked(inst Instance) error {
 	fp := inst.fingerprint()
 	restartFP := inst.restartFingerprint()
-	if cur := m.procs[inst.Id]; cur != nil && cur.proc != nil && cur.proc.IsRunning() {
-		if cur.fp == fp {
-			cur.tag = inst.Tag
-			cur.users = slices.Clone(inst.Users)
-			return nil
+	cur := m.procs[inst.Id]
+	if cur != nil && cur.proc != nil && cur.proc.IsRunning() && cur.fp == fp {
+		if cur.accounting == nil {
+			owner, err := captureTrafficOwner(inst)
+			if err != nil {
+				return err
+			}
+			cur.accounting = owner
 		}
+		cur.tag = inst.Tag
+		cur.users = slices.Clone(inst.Users)
+		return nil
+	}
+	accounting, err := captureTrafficOwner(inst)
+	if err != nil {
+		return err
+	}
+	if cur != nil {
+		m.handoffTrafficLocked(inst.Id, cur)
+	}
+	if cur != nil && cur.proc != nil && cur.proc.IsRunning() {
 		// Upstream mita allows users and loggingLevel to be reloaded without
 		// disturbing active connections. Reuse that path when no restart-only
 		// server setting changed (ports/MTU/listen/advanced settings).
@@ -389,6 +407,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 					cur.tag = inst.Tag
 					cur.users = slices.Clone(inst.Users)
 					cur.fp = fp
+					cur.accounting = accounting
 					delete(m.lastErr, inst.Id)
 					logger.Debugf("mieru: reloaded mita for inbound %d (%s)", inst.Id, inst.Tag)
 					return nil
@@ -412,7 +431,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	if err := proc.Start(); err != nil {
 		return err
 	}
-	m.procs[inst.Id] = &managed{proc: proc, tag: inst.Tag, fp: fp, restartFP: restartFP, users: slices.Clone(inst.Users)}
+	m.procs[inst.Id] = &managed{proc: proc, tag: inst.Tag, fp: fp, restartFP: restartFP, users: slices.Clone(inst.Users), accounting: accounting}
 	delete(m.lastErr, inst.Id)
 	logger.Infof("mieru: started mita for inbound %d (%s)", inst.Id, inst.Tag)
 	return nil
@@ -433,6 +452,7 @@ func (m *Manager) Reconcile(desired []Instance) {
 	}
 	for id, cur := range m.procs {
 		if _, ok := want[id]; !ok {
+			m.handoffTrafficLocked(id, cur)
 			_ = cur.proc.Stop()
 			delete(m.procs, id)
 			delete(m.traffic, id)
@@ -452,6 +472,7 @@ func (m *Manager) Remove(id int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if cur := m.procs[id]; cur != nil {
+		m.handoffTrafficLocked(id, cur)
 		_ = cur.proc.Stop()
 		delete(m.procs, id)
 	}
@@ -464,6 +485,7 @@ func (m *Manager) StopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for id, cur := range m.procs {
+		m.handoffTrafficLocked(id, cur)
 		_ = cur.proc.Stop()
 		_ = os.Remove(configPathForID(id))
 		_ = os.Remove(socketPathForID(id))
@@ -487,6 +509,7 @@ func (m *Manager) Pause(id int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if cur := m.procs[id]; cur != nil && cur.proc != nil {
+		m.handoffTrafficLocked(id, cur)
 		if err := cur.proc.Stop(); err != nil {
 			return err
 		}

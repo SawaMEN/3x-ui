@@ -24,6 +24,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 type SecretEntry struct {
@@ -153,6 +154,8 @@ type managed struct {
 	last         map[string]clientCounters
 	userEmails   map[string]string
 	routed       bool
+	accounting   *sidecartraffic.Owner
+	trafficEpoch uint64
 }
 
 type Manager struct {
@@ -446,9 +449,24 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		return err
 	}
 	structFP, secFP, mekoFP := inst.structuralFingerprint(), inst.secretsFingerprint(), inst.mekoFingerprint()
-	if cur, ok := m.procs[inst.Id]; ok {
-		switch ensureActionFor(cur.proc.IsRunning(), cur.structuralFP, cur.secretsFP, structFP, secFP) {
+	cur := m.procs[inst.Id]
+	action := ensureRestart
+	var accounting *sidecartraffic.Owner
+	if cur != nil {
+		action = ensureActionFor(cur.proc.IsRunning(), cur.structuralFP, cur.secretsFP, structFP, secFP)
+		accounting = cur.accounting
+	}
+	if cur == nil || action != ensureNoop || accounting == nil {
+		var err error
+		accounting, err = captureTrafficOwner(inst)
+		if err != nil {
+			return err
+		}
+	}
+	if cur != nil {
+		switch action {
 		case ensureNoop:
+			cur.accounting = accounting
 			if cur.mekoFP != mekoFP {
 				if err := writeConfig(configPathForID(inst.Id), inst, cur.apiPort, cur.apiToken); err != nil {
 					return err
@@ -461,6 +479,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			cur.userEmails = nativeUserEmails(inst.Secrets)
 			return nil
 		case ensureReload:
+			m.handoffTrafficLocked(inst.Id, cur)
 			if err := writeConfig(configPathForID(inst.Id), inst, cur.apiPort, cur.apiToken); err != nil {
 				return err
 			}
@@ -468,6 +487,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 				cur.tag = inst.Tag
 				cur.routed = inst.RouteThroughXray
 				cur.secretsFP = secFP
+				cur.accounting = accounting
 				cur.mekoFP = mekoFP
 				scheduleMekoSync()
 				cur.userEmails = nativeUserEmails(inst.Secrets)
@@ -477,7 +497,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			logger.Warningf("mtproto: Telemt reload failed for inbound %d, restarting", inst.Id)
 			fallthrough
 		case ensureRestart:
-			if err := stopManaged(cur); err != nil {
+			if err := m.stopWithTrafficLocked(inst.Id, cur); err != nil {
 				return fmt.Errorf("mtproto: stop Telemt for inbound %d before restart: %w", inst.Id, err)
 			}
 			delete(m.procs, inst.Id)
@@ -518,6 +538,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		last:         map[string]clientCounters{},
 		userEmails:   nativeUserEmails(inst.Secrets),
 		routed:       inst.RouteThroughXray,
+		accounting:   accounting,
 	}
 	scheduleMekoSync()
 	logger.Infof("mtproto: started Telemt for inbound %d on %s", inst.Id, inst.bindTo())
@@ -528,7 +549,7 @@ func (m *Manager) Remove(id int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if cur, ok := m.procs[id]; ok {
-		if err := stopManaged(cur); err != nil {
+		if err := m.stopWithTrafficLocked(id, cur); err != nil {
 			logger.Errorf("mtproto: failed to stop Telemt for inbound %d: %v", id, err)
 			return
 		}
@@ -581,7 +602,7 @@ func (m *Manager) Reconcile(desired []Instance) {
 	}
 	for id, cur := range m.procs {
 		if _, ok := want[id]; !ok {
-			if err := stopManaged(cur); err != nil {
+			if err := m.stopWithTrafficLocked(id, cur); err != nil {
 				logger.Warningf("mtproto: failed to stop removed inbound %d: %v", id, err)
 				continue
 			}
@@ -604,7 +625,7 @@ func (m *Manager) StopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for id, cur := range m.procs {
-		if err := stopManaged(cur); err != nil {
+		if err := m.stopWithTrafficLocked(id, cur); err != nil {
 			logger.Warningf("mtproto: failed to stop Telemt for inbound %d during shutdown: %v", id, err)
 			continue
 		}

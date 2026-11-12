@@ -11891,8 +11891,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A67/A69/A70 complete source review including concurrent cert-only main changes: transactional commit rollback retains complete old backend; RefreshRoutes preserves certificate-event and DNS credential metadata; owned reverse-proxy pools close on replacement/stop/failure; upgraded request cancellation follows runtime lifetime without cancelling them on route refresh. Failing-before loopback tests prove callback loss, idle upstream sockets retained after refresh/stop, and upgraded tunnel retained after stop. Whole domainfront suite with race covers TLS, gRPC/H2C, trailers, WebSocket, cached certs, routing and new lifecycle cases. Source files read in full, fixed hashes current.",
-      "reviewed_sha256": "c1c89911c879506a4cb868ed1643cddb0a577282316a2cc084b451e9e1ad68b6"
+      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
+      "reviewed_sha256": "c4aa52d929efb81a34ca2070da749da97ca80cd56bf30b44458d24847fe50821"
     },
     {
       "path": "internal/domainfront/manager_test.go",
@@ -12144,8 +12144,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
-      "reviewed_sha256": "9e859e2f6d5dda45d5ae9490ef70bf9a1263f2fdc4b31bf16d66818293dcdbf5"
+      "evidence": "A87 refreshed complete manager review after final external handoff ordering: sample precedes preflight writes of shared certificate/credential files, teardown does not duplicate that poll, restored old runtime keeps its original pinned owner on startup rollback. Lifecycle/rename/routed/disk-failure and rollback owner regressions pass; race/build/vet/lint and scope limits recorded in RESUME.",
+      "reviewed_sha256": "58940904f965e07bb20da354dc4b4873a66a17b7684d56221d3b0748b4a06fc0"
     },
     {
       "path": "internal/externalvpn/manager_security_test.go",
@@ -13057,8 +13057,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
-      "reviewed_sha256": "a50748a5e88a3b97d260bdcb25f2c3452d7e61e399a359998b94c0ce6d02d842"
+      "evidence": "A87: full Mieru process source read and refreshed complete manager/collector/journal reviews. Reproduced 4 Mieru lifecycle tail losses on isolated 449e639 baseline; owner IDs captured before runtime start, read-only sample handoff to shared WAL/process retry queue before CRUD stop/reload/restart, and epoch guard against old concurrent polls. Normal lifecycle/replay/routed/failure tests pass; final race/build/vet/lint and limits recorded in RESUME.",
+      "reviewed_sha256": "148247aeca5f17660f29f05e94655806c3e62817444852b5bc65b3ffc8c114ec"
     },
     {
       "path": "internal/mieru/process.go",
@@ -13067,9 +13067,9 @@
       "deletions": 72,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A87: full Mieru process source read and refreshed complete manager/collector/journal reviews. Reproduced 4 Mieru lifecycle tail losses on isolated 449e639 baseline; owner IDs captured before runtime start, read-only sample handoff to shared WAL/process retry queue before CRUD stop/reload/restart, and epoch guard against old concurrent polls. Normal lifecycle/replay/routed/failure tests pass; final race/build/vet/lint and limits recorded in RESUME.",
+      "reviewed_sha256": "d69673bfee17236c3a23b6bfd4354c6bfe1e7b060ead96e8a76f41660749cb3c"
     },
     {
       "path": "internal/mieru/speed_integration_test.go",
@@ -13090,8 +13090,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
-      "reviewed_sha256": "9b87923adc403b383bdd44f446d81c8f088ff6ed648a42128a2dbce3287248ff"
+      "evidence": "A87: full Mieru process source read and refreshed complete manager/collector/journal reviews. Reproduced 4 Mieru lifecycle tail losses on isolated 449e639 baseline; owner IDs captured before runtime start, read-only sample handoff to shared WAL/process retry queue before CRUD stop/reload/restart, and epoch guard against old concurrent polls. Normal lifecycle/replay/routed/failure tests pass; final race/build/vet/lint and limits recorded in RESUME.",
+      "reviewed_sha256": "2aa0cc8e162cb30cc65e8bc6d4c546d0196128cd26acd6dc7435411bdcaa67cf"
     },
     {
       "path": "internal/mtproto/manager_mutation_test.go",
@@ -13255,8 +13255,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
-      "reviewed_sha256": "ee03cc773c27f932be4827acb11fe0c2521d3fc67a76901afd716ebe04be4024"
+      "evidence": "A87: full Mieru process source read and refreshed complete manager/collector/journal reviews. Reproduced 4 Mieru lifecycle tail losses on isolated 449e639 baseline; owner IDs captured before runtime start, read-only sample handoff to shared WAL/process retry queue before CRUD stop/reload/restart, and epoch guard against old concurrent polls. Normal lifecycle/replay/routed/failure tests pass; final race/build/vet/lint and limits recorded in RESUME.",
+      "reviewed_sha256": "10178bf2d668e2e83808a693359d7ec1f11650f89aebc06ec882136b4f701e37"
     },
     {
       "path": "internal/mtproto/usernames.go",
@@ -16632,8 +16632,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Repeated full review after 1292f40/8de49f7: authenticated token allowlists including init-added SNI jobs, scoped cover-site/resolve-local endpoints; gofmt normalization only in this checkpoint.",
-      "reviewed_sha256": "f308336fbc817bd48d77989ebebe775258f689dffbcf6cd348f1992fb94a8d9a"
+      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
+      "reviewed_sha256": "cb7900859dbe7cf4cd85883dc3cd867c050735f00f786ad4aa8d04568131d0a1"
     },
     {
       "path": "internal/web/controller/api_auth_test.go",
@@ -16643,8 +16643,8 @@
       "subsystem": "api-gateway",
       "kind": "test-fixture",
       "status": "reviewed",
-      "evidence": "Repeated full review after 1292f40/8de49f7: authenticated token allowlists including init-added SNI jobs, scoped cover-site/resolve-local endpoints; gofmt normalization only in this checkpoint.",
-      "reviewed_sha256": "0e742bb3d9cabea6e2befdc68e3b4f59e5a0c589e1b103c6ef8d09c62a79f165"
+      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
+      "reviewed_sha256": "d5352efa15b6bc5da94b31093056bc3feedace917cb5b137d14e3f0979ee175d"
     },
     {
       "path": "internal/web/controller/api_background_test.go",
@@ -16775,8 +16775,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A85 refresh of earlier full review after incoming d57cb69: both cover-site mutation guards retained; request body cap raised to 2 MiB to fit JSON-escaped 256-KiB HTML. Changed functions and incoming diff reviewed, no additional original-scope coverage claimed.",
-      "reviewed_sha256": "80ededa0de3a38a8680d7dc257d9ff586d4f4e464a5e6304961590c3a7cb6fd2"
+      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
+      "reviewed_sha256": "70dbfb8b393b505700f1783dc9abedb16eb6a4fbc3ec8fc48b061d65a50af793"
     },
     {
       "path": "internal/web/controller/domains_preflight_test.go",
@@ -17864,8 +17864,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
-      "reviewed_sha256": "e243f9f1a848ee587d466c56346e60065a98d8f86be26f148bc99f73ee3f288f"
+      "evidence": "A87: full Mieru process source read and refreshed complete manager/collector/journal reviews. Reproduced 4 Mieru lifecycle tail losses on isolated 449e639 baseline; owner IDs captured before runtime start, read-only sample handoff to shared WAL/process retry queue before CRUD stop/reload/restart, and epoch guard against old concurrent polls. Normal lifecycle/replay/routed/failure tests pass; final race/build/vet/lint and limits recorded in RESUME.",
+      "reviewed_sha256": "3d1b832ceee0caceb9f71336420c32decf42b40a4323facca99201109fcdd876"
     },
     {
       "path": "internal/web/job/tuic_journal_test.go",
@@ -18271,8 +18271,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A60–A63 review refreshed for A65 summary RPC and A62 follow-through: a full push of an adopted inbound can change its deployed tag even if its central tag is unchanged. New failing-before regression checks aliases disappear while canonical mapping and reconcile fingerprint skip remain; final runtime race run covers all changes.",
-      "reviewed_sha256": "0d4f91342e57d2926538ebfe1f0b5c3a20677b4e651aed9bbd64c974c1208fc9"
+      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
+      "reviewed_sha256": "4bd4d9189524544cfd73520eb24ce0574f1c7290140225d0d1ebc9c2b6881c2d"
     },
     {
       "path": "internal/web/runtime/remote_domainfront.go",
@@ -19525,8 +19525,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Rechecked concurrent distributed-certificate inventory integration and lint-only gofumpt formatting; node summaries still omit key material and paths.",
-      "reviewed_sha256": "4f6c5dff9386ceea8af02f58380b28b9c4c2d6fcf9b6fd276c023240435d33ee"
+      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
+      "reviewed_sha256": "87c0dfaebeea8cbb5384210e1860c0457f8f09e54af60fda311ab9e3cff50786"
     },
     {
       "path": "internal/web/service/domain_certificate_inventory_nodes.go",
@@ -19536,8 +19536,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A64–A66 full-file reads: pathless SNI merge/discovery, certificate metadata and preflight, domain API role/method matrix, node-only local redaction/no recursion, runtime RPC query contract, frontend hook and owning-node selection. Reproduced empty merged metadata, 403 for legitimate discovery and actual AntD selecting the wrong same-name node before fixes. Offline TLS-file and loopback RPC regressions, controller/service race, frontend component/ownership tests and typecheck. Related domain_front.go is left pending for unresolved rollback review despite full read; large frontend TLS forms and sni-search suite were not marked from partial reads.",
-      "reviewed_sha256": "815c55b910d2743ad78bb10f454309f95ed1fc455eca1c154e09fd593a5bfc87"
+      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
+      "reviewed_sha256": "3f8e6c81e6b2277cc8dd0467ff3e9dd32101752b5c3bc32193fc6fb9760d97aa"
     },
     {
       "path": "internal/web/service/domain_certificate_inventory_nodes_test.go",

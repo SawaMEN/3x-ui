@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 )
 
@@ -24,17 +24,7 @@ type tuicTrafficBatch struct {
 
 func tuicJournalDir() string { return filepath.Join(config.GetDBFolderPath(), "tuic-traffic-journal") }
 
-func syncJournalDir(dir string) error {
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	file, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	return file.Sync()
-}
+func syncJournalDir(dir string) error { return sidecartraffic.SyncDir(dir) }
 
 func storeTuicBatch(batch tuicTrafficBatch) (string, error) {
 	data, err := json.Marshal(batch)
@@ -45,34 +35,7 @@ func storeTuicBatch(batch tuicTrafficBatch) (string, error) {
 }
 
 func storeTrafficJournal(dir, id string, data []byte) (string, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	if err := syncJournalDir(filepath.Dir(dir)); err != nil {
-		return "", err
-	}
-	file, err := os.CreateTemp(dir, ".pending-")
-	if err != nil {
-		return "", err
-	}
-	tmp := file.Name()
-	defer os.Remove(tmp)
-	if _, err := file.Write(data); err != nil {
-		file.Close()
-		return "", err
-	}
-	if err := file.Sync(); err != nil {
-		file.Close()
-		return "", err
-	}
-	if err := file.Close(); err != nil {
-		return "", err
-	}
-	path := filepath.Join(dir, id+".json")
-	if err := os.Rename(tmp, path); err != nil {
-		return "", err
-	}
-	return path, syncJournalDir(dir)
+	return sidecartraffic.StoreFile(dir, id, data)
 }
 
 func (j *TuicJob) replayTuicJournal() error {

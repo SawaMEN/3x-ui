@@ -11,6 +11,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
@@ -36,6 +37,9 @@ func (j *sidecarTrafficJournal) replay(source string, svc *service.InboundServic
 
 func (j *sidecarTrafficJournal) replayWith(source string, apply sidecarTrafficCommit) (restart, disabled bool, err error) {
 	key := sidecarJournalDir(source)
+	if err := sidecartraffic.FlushPending(key); err != nil {
+		return false, false, err
+	}
 	if pending, ok := unstoredSidecarTraffic.Load(key); ok {
 		batch := pending.(*service.SidecarTrafficBatch)
 		data, marshalErr := json.Marshal(batch)

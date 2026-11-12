@@ -9,6 +9,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 // SidecarTrafficOwners is captured before consuming runtime counters. Names are
@@ -18,17 +19,10 @@ type SidecarTrafficOwners struct {
 	Clients  map[string]int
 }
 
-type SidecarTrafficDelta struct {
-	ID   int   `json:"id"`
-	Up   int64 `json:"up"`
-	Down int64 `json:"down"`
-}
-
-type SidecarTrafficBatch struct {
-	ID       string                `json:"id"`
-	Inbounds []SidecarTrafficDelta `json:"inbounds"`
-	Clients  []SidecarTrafficDelta `json:"clients"`
-}
+type (
+	SidecarTrafficDelta = sidecartraffic.Delta
+	SidecarTrafficBatch = sidecartraffic.Batch
+)
 
 func CaptureSidecarTrafficOwners(protocols []model.Protocol) (SidecarTrafficOwners, error) {
 	owners := SidecarTrafficOwners{Inbounds: map[string]int{}, Clients: map[string]int{}}

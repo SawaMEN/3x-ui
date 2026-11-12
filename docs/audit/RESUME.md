@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 86 подтверждённых исправлений панели; A86 — явные ошибки metrics poll и сохранение частичных samples всех 3 managers.
+Всего реализовано 87 подтверждённых исправлений панели; A87 — handoff счётчиков при CRUD stop/reload/restart трёх sidecar managers.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 255 файлов, осталось 2109; общий проход не завершён.
+Проверено вручную 256 файлов, осталось 2108; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1253,3 +1253,104 @@ A86:
   OpenFlux Unix IPC не запускались; no host firewall/ACME/Docker daemon mutations.
 - SQL fixture, production background lifecycle, receipt retention, TLS downgrade,
   остальные original-scope pending и R04/R05 остаются открыты.
+
+
+## Контрольная точка A87: передача счётчиков при замене отдельного процесса
+
+A86 опубликован в 449e6398f2cc56ad786f18e0c6a4d55e5bedcb81.
+Нужно 3 managers, подключены 3/3: Mieru, MTProto, external VPN.
+Один общий lifecycle/accounting дефект A87; всего 87 исправлений.
+Reviewed 256/2364, осталось 2108. Дополнительно полностью прочитан Mieru process.go;
+ранее полные manager/collector reviews обновлены. Новые helper/test/shared package
+не увеличивают original-scope inventory.
+
+Доказательство до правки: в отдельном checkout 449e639 с одним новым regression
+TestMieruLifecycleJournalsConsumedTail все 4 subtests (Remove, Pause, restart,
+Reconcile removal) FAIL: после cumulative 10/20 -> 110/220 журнал пуст. Нормальный
+baseline web FAIL 0.169s. Этот checkout изолирован от реализации; build error
+промежуточного меняющегося рабочего дерева не считается доказательством дефекта.
+
+A87:
+- Shared sidecartraffic.Owner закрепляет local inbound ID и traffic-row IDs
+  обслуживаемых имён при старте или перед применением нового user configuration.
+  Capture ограничен context 5s; unchanged running instances не делают новый lookup,
+  если owner уже привязан. Standalone managers без panel DB/unowned inbound остаются
+  совместимыми, но не получают panel-accounting identity задним числом.
+- До Stop/Remove/Pause/Reconcile removal/restart и перед hot reload менеджер снимает
+  текущие counters и передаёт delta в WAL. Файл/DB owner во время stop не ищется по
+  email или tag, поэтому переименование и повторное использование имён не меняют
+  получателя старого пакета. Inbound metadata pinned по ID; deleted rows при replay
+  по-прежнему пропускаются существующим receipt/accounting path.
+- Никакого AddTraffic/quota/runtime maintenance под manager locks: handoff пишет
+  только shared WAL. Periodic job сначала восстанавливает накопленные packets через
+  прежние atomic receipt/counters. Формат batch совместим с A84; типы сервиса — aliases.
+- Shared atomic-file helper используется и TUIC: write/fsync/rename/directory sync.
+  Имена journal ID валидируются. При ошибке filesystem batch принадлежит process-wide
+  immutable retry queue до повторной записи; manager может безопасно отключить
+  удалённого/disabled пользователя, не сохраняя ему сетевой доступ ради accounting.
+  Очередь переживает смену panel job, но не process crash до успешного fsync.
+- Mieru/MTProto handoff повышает traffic epoch. Запоздавший ответ periodic scrape
+  от прежнего состояния того же процесса после reload не перезаписывает новый cursor.
+  Это дополняет owner-pointer guard A86. External counters защищены statsMu.
+- Failed final scrape логируется, затем lifecycle action продолжается; crash/dead
+  process и недоступный API не выдаются за восстановленные байты. Full Stop сохраняет
+  A85 explicit diagnostic и теперь дополнительно пытается снять маленький tail в StopAll.
+
+Проверки:
+- Baseline 4 FAIL описаны выше. После подключения Mieru same regressions PASS 0.189s.
+- Все 3 managers, включая direct/routed MTProto: Remove/restart/reconcile removal,
+  Mieru Pause и hot reload, MTProto hot reload. Owned exec sleep children, fake CLI,
+  loopback metrics, temporary SQLite/config/WAL. Replay follows renamed original
+  traffic ID и не начисляет bytes новому owner старого email. Повторный replay once.
+- Mieru blocked journal directory: Remove всё равно останавливает runtime, затем
+  новая job восстанавливает process-owned packet после исправления filesystem.
+- Controlled overlapping old scrape + reload проверены для Mieru и MTProto:
+  handoff 200/400 (MTProto 200 aggregate), старый ответ отклонён, следующий sample
+  даёт только 10/20 (MTProto 10), WAL не начисляется дважды.
+- Normal combined regression: web PASS 5.093s, job PASS 0.309s, mieru PASS 0.030s,
+  mtproto PASS 0.020s, externalvpn PASS 0.015s. Финальные lifecycle + оба concurrent
+  handoff tests normal web PASS 2.616s.
+- Расширенный -race: web PASS 11.410s, job PASS 4.676s, mieru PASS 1.058s,
+  mtproto PASS 1.375s, externalvpn PASS 1.124s. Shared package не имеет отдельного
+  test binary и проверяется через эти integrations, не считать [no test files] тестом.
+- Финальные оба concurrent reload handoff + Mieru disk retry: web -race PASS 3.510s.
+  Incoming certificate scope/session guards: controller normal PASS 0.033s.
+- Финальный external preflight/rollback: web -race PASS 4.996s, externalvpn
+  regression -race PASS 3.067s. Новый отрицательный startup fixture подтверждает,
+  что rollback возвращает прежнего owner, а не владельца переиспользованного email.
+  Handoff external выполняется до записи replacement credential/certificate files;
+  teardown повторно не опрашивает уже перезаписанный источник trust material.
+- Итоговые go build ./..., go vet ./... PASS (-p 1 / GOMAXPROCS=1 / GOGC=50 /
+  GOMEMLIMIT=1GiB). golangci-lint 2.15.0 полный проход: 0 issues. Inventory/diff
+  checks PASS: reviewed 256, pending 2108, stale 0.
+
+Incoming main fast-forward 710e8b3 (certificate fleet/preparation/registry workflows)
+сохранён без пересечения с lifecycle patch. Changed contexts в ранее полностью
+проверенных файлах перечитаны: managed-vs-inherited issuer, master-only cover
+certificate export, session-bound prepare/fleet, allowlist и безопасные remote
+certificate metadata. Incoming feature commits не считаются fixes этого аудита;
+их новые крупные исходники не отмечаются автоматически как original reviewed.
+
+Ограничения/следующая очередь:
+- Это pre-mutation sample, не upstream quiesce/drain активных connections. Между
+  metrics response и завершением старого процесса ещё могут прийти bytes; нужны
+  upstream финальные counters/ACK для строгой гарантии. Reset/crash/API outage
+  и отсутствие исходной baseline не восстанавливаются локальным WAL.
+- Identity binding здесь относится к runtime-owned handoff. Periodic A84 batches
+  по-прежнему захватывают current DB owners отдельно: concurrent rename/reuse и
+  standalone-to-panel adoption требуют отдельного прохождения end-to-end.
+- Ошибки записи сохраняются в памяти и логируются, CRUD signature/availability
+  остаются прежними. При долгом disk outage retry queue может расти; при crash до
+  fsync память будет потеряна. Receipt retention/backup consistency остаются открыты.
+- WAL handoff не выполняет обслуживание квот синхронно; bytes становятся видны в
+  БД на следующем successful replay. Строгие immediate UI counters не обещаются.
+- Приоритет следующего прохода: stale desired/config apply после DB delete/disable.
+  Capture не является авторизационным generation guard: standalone/unowned runtime
+  сохраняет прежнюю совместимость, и менеджер может принять устаревший Ensure.
+  Проверить, что удалённая/disabled row не запускается последним stale reconcile;
+  это отдельный lifecycle дефект, не закрытый сохранением tail packets A87.
+- Scope протоколов ограничен их существующими metrics APIs. Full real upstream,
+  host WEB/systemctl/ACME, Docker/NET_ADMIN и OpenFlux Unix IPC не запускались.
+- Новые manager-to-DB bindings проверены на temporary SQLite/post-commit paths;
+  live PostgreSQL handoff/DB lock stress и remaining request/background lifecycle,
+  TLS downgrade, SQL fixture и прежние R04/R05 остаются в общей очереди.

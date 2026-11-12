@@ -7,7 +7,7 @@
 | frontend | 566 | 6 | 560 | 0 |
 | installation-ci | 83 | 7 | 76 | 0 |
 | limits | 10 | 10 | 0 | 0 |
-| protocols-utilities | 301 | 14 | 287 | 0 |
+| protocols-utilities | 301 | 15 | 286 | 0 |
 | services-nodes-jobs | 665 | 57 | 608 | 0 |
 | subscriptions | 111 | 44 | 67 | 0 |
-| TOTAL | 2364 | 255 | 2109 | 0 |
+| TOTAL | 2364 | 256 | 2108 | 0 |

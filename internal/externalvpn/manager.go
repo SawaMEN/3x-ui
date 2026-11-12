@@ -32,10 +32,12 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 type running struct {
 	statsMu     sync.Mutex
+	accounting  *sidecartraffic.Owner
 	stopping    atomic.Bool
 	protocol    model.Protocol
 	metricsAddr string
@@ -345,6 +347,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			return errors.Join(err, fmt.Errorf("restore previous external VPN: %w", restoreErr))
 		}
 		if restored := m.procs[inst.ID]; restored != nil {
+			restored.accounting = old.accounting
 			err = errors.Join(err, waitInboundStartup(restored))
 		}
 	}
@@ -375,6 +378,13 @@ func (m *Manager) startLocked(inst Instance) error {
 			delete(m.procs, inst.ID)
 		default:
 			if old.fingerprint == fp && !certificateRenewalNeeded(inst) {
+				if old.accounting == nil {
+					owner, err := captureTrafficOwner(inst)
+					if err != nil {
+						return err
+					}
+					old.accounting = owner
+				}
 				return nil
 			}
 		}
@@ -399,6 +409,10 @@ func (m *Manager) startLocked(inst Instance) error {
 			}
 		}
 	}
+	accounting, err := captureTrafficOwner(inst)
+	if err != nil {
+		return err
+	}
 	metricsAddr := ""
 	if inst.Protocol == model.TrustTunnel || inst.Protocol == model.FPTN {
 		listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
@@ -408,11 +422,16 @@ func (m *Manager) startLocked(inst Instance) error {
 		metricsAddr = listener.Addr().String()
 		_ = listener.Close()
 	}
+	// Preflight can overwrite shared credential/certificate files. Read the old
+	// process with its old trust material before writing any replacement files.
+	if old := m.procs[inst.ID]; old != nil {
+		m.handoffTrafficLocked(old)
+	}
 	cmd, cancel, err := m.prepareInboundCommand(inst, metricsAddr)
 	if err != nil {
 		return err
 	}
-	m.removeLocked(inst.ID)
+	m.stopLocked(inst.ID)
 	cleanupAdditional(inst.ID, inst.Protocol)
 
 	if err := cmd.Start(); err != nil {
@@ -423,7 +442,7 @@ func (m *Manager) startLocked(inst Instance) error {
 	snapshot := inst
 	data, _ := json.Marshal(inst)
 	_ = json.Unmarshal(data, &snapshot)
-	proc := &running{instance: snapshot, protocol: inst.Protocol, fingerprint: fp, cancel: cancel, cmd: cmd, done: make(chan struct{}), metricsAddr: metricsAddr, tag: inst.Tag, counters: map[string]trafficCounters{}}
+	proc := &running{accounting: accounting, instance: snapshot, protocol: inst.Protocol, fingerprint: fp, cancel: cancel, cmd: cmd, done: make(chan struct{}), metricsAddr: metricsAddr, tag: inst.Tag, counters: map[string]trafficCounters{}}
 	m.procs[inst.ID] = proc
 	go func() {
 		err := cmd.Wait()
@@ -462,6 +481,13 @@ func (m *Manager) prepareInboundCommand(inst Instance, metricsAddr string) (*exe
 }
 
 func (m *Manager) removeLocked(id int) {
+	if proc := m.procs[id]; proc != nil {
+		m.handoffTrafficLocked(proc)
+	}
+	m.stopLocked(id)
+}
+
+func (m *Manager) stopLocked(id int) {
 	if proc := m.procs[id]; proc != nil {
 		proc.stopping.Store(true)
 		cleanupAdditional(id, proc.protocol)

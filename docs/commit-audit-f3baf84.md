@@ -666,3 +666,18 @@ Reviewed 255/2364, осталось 2109.
 Три false-success shutdown regressions воспроизведены до правки. Recovery/partial
 samples, invalid responses и delayed process replacement проверены fixtures;
 точные результаты и unresolved CRUD tail queue/source ACK scope — RESUME.md.
+
+
+## Продолжение: A87, handoff при CRUD lifecycle sidecars
+
+Нужно 3 managers, подключены 3; один defect A87, всего 87 исправлений.
+Reviewed 256/2364, осталось 2108.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A87 | Remove/Pause/reload/restart/reconcile удаляют или меняют runtime counter state до сохранения последнего sample | Pinned owner IDs, read-only pre-mutation sample, shared WAL/process retry queue, epoch guard и receipt replay всех 3 managers |
+
+Четыре исходных Mieru failures подтверждены в изолированном checkout 449e639.
+Lifecycle/replay/rename/routed/disk-failure/concurrent-poll regressions после правки
+прошли; точные финальные результаты, incoming 710e8b3 и ограничения pre-stop
+snapshot/volatile source counters — RESUME.md.
