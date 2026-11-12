@@ -70,7 +70,7 @@ func (a *RoutingCatalogController) refresh(c *gin.Context) {
 func (a *RoutingCatalogController) delete(c *gin.Context) {
 	id, err := routingCatalogID(c)
 	if err == nil {
-		err = a.service.Delete(id)
+		err = a.service.DeleteContext(c.Request.Context(), id)
 	}
 	jsonObj(c, nil, err)
 }

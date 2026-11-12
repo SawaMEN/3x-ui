@@ -131,11 +131,11 @@ func DistributeTLSCertificate(ctx context.Context, nodeID int, domain string, rs
 		}
 	}
 	if source == nil {
-        return empty, errors.New("main node has no valid managed certificate for this SNI")
-    }
-    if rsaOnly && !managedCertificateSupportsRSA(source.CertFile, source.KeyFile) {
-        return empty, errors.New("FPTN requires an RSA certificate and matching RSA private key")
-    }
+		return empty, errors.New("main node has no valid managed certificate for this SNI")
+	}
+	if rsaOnly && !managedCertificateSupportsRSA(source.CertFile, source.KeyFile) {
+		return empty, errors.New("FPTN requires an RSA certificate and matching RSA private key")
+	}
 	cert, err := readDistributedSource(source.CertFile)
 	if err != nil {
 		return empty, err

@@ -539,3 +539,23 @@ credentials, port/path/query/fragment и network-path URL; обычный hostna
 Охват не изменился: **216/2364**, осталось **2148**, stale **0**.
 
 A71: оба TestCertificateDistribution* прошли с -race (1.132s).
+
+
+## Продолжение: A72–A73, отмена каталога и SNI node scope
+
+Требуется 2 исправления; реализовано 2. Общий итог 73; ручной охват 227/2364,
+осталось 2137. Подробное состояние и следующий участок — docs/audit/RESUME.md.
+
+| ID | Воспроизведённый дефект | Исправление |
+|---|---|---|
+| A72 | Отменённые catalog Save/Refresh ждут чужую загрузку; Refresh меняет schedule, RefreshDue скрывает отмену | Context-aware serialization и DB context, сохранность кэша/расписания, DeleteContext для HTTP |
+| A73 | Bearer node-admin пересылает SNI jobs на чужой runtime | Оба node scopes local-only для start/status/cancel/history; admin remote access сохранён |
+
+Перед исправлениями целевые тесты подтвердили обе ошибки. A72: два ожидания по
+секунде, перезапись LastAttempt/LastError и потеря context.Canceled. A73: authenticated
+POST под node-admin получил success=true и один вызов чужого runtime. Полнота аудита
+не заявляется; оставшиеся job lifecycle вопросы записаны в RESUME.
+
+Итоговый golangci-lint 2.15.0 на объединённом дереве: 0 issues.
+Сборка frontend, go build ./... и go vet ./... прошли; targeted race
+service/controller с A72/A73 и CertificateDistribution прошёл.

@@ -37,8 +37,8 @@ func normalizeSNINodeTarget(c *gin.Context, id *int) (*int, error) {
 	if *id < 0 {
 		return nil, errors.New("nodeId must be positive")
 	}
-	if scope, ok := c.Get("api_token_scope"); ok && scope == model.ApiScopeNodeSync {
-		return nil, errors.New("node-sync SNI requests may target only the local server")
+	if scope := c.GetString("api_token_scope"); scope == model.ApiScopeNodeSync || scope == model.ApiScopeNodeAdmin {
+		return nil, errors.New("node SNI requests may target only the local server")
 	}
 	return id, nil
 }

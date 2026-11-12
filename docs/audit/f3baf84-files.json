@@ -5566,8 +5566,8 @@
       "subsystem": "frontend",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A67–A68 on main after concurrent 0468d86: re-reviewed changed API allowlist, complete domain activity controller/test and shared node-target parser, SNI selector with new local-certificate helper dependencies, cert-only preflight diff. SQL commit rollback reproduced with live inherited TLS, including cancelled request; ApplyAndCommit retains full old backend and closes failed listeners. Real bearer/scoped controller regression rejects node-admin relay for domain activity and session disconnect while admin remains allowed. domain_front.go fully read and R06 fixed. Unmodified prior full-file reads underpin refreshed hashes; domainfront manager/shared lifecycle review remains pending for separate connection ownership work.",
-      "reviewed_sha256": "7d9ece72ddc0ae153e6f5573bfc7ff0eac538351bb9f60111305bface0d734f7"
+      "evidence": "Repeated full read after incoming TLS/cover-site changes through 1292f40; reviewed node scopes, session guards, body limits, local-only mutation, certificate path lookup, SNI selection and dynamic sni_jobs allowlist additions. domains.go formatting normalized only.",
+      "reviewed_sha256": "071a214991e5e8117e892649924403a33b8b0887a42a662c99057877a6cc283b"
     },
     {
       "path": "frontend/src/pages/inbounds/form/security/reality.tsx",
@@ -16632,8 +16632,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Previously reviewed files rechecked against concurrent cb2ba67..d74ba23 TLS distribution changes, including complete new RPC and distribution service; preserved dedicated node-sync install scope, session-only distribution and local path-only inventory.",
-      "reviewed_sha256": "23e63d1dd1598e52b1bd55eba5c0d2c662839abd4d2079d5aaeebe7782e26651"
+      "evidence": "Repeated full review after 1292f40/8de49f7: authenticated token allowlists including init-added SNI jobs, scoped cover-site/resolve-local endpoints; gofmt normalization only in this checkpoint.",
+      "reviewed_sha256": "f308336fbc817bd48d77989ebebe775258f689dffbcf6cd348f1992fb94a8d9a"
     },
     {
       "path": "internal/web/controller/api_auth_test.go",
@@ -16643,8 +16643,8 @@
       "subsystem": "api-gateway",
       "kind": "test-fixture",
       "status": "reviewed",
-      "evidence": "Previously reviewed files rechecked against concurrent cb2ba67..d74ba23 TLS distribution changes, including complete new RPC and distribution service; preserved dedicated node-sync install scope, session-only distribution and local path-only inventory.",
-      "reviewed_sha256": "2dc8b8d981e8e5405cf71565036708685c137b43c0ac6be5f7883e8340468a7c"
+      "evidence": "Repeated full review after 1292f40/8de49f7: authenticated token allowlists including init-added SNI jobs, scoped cover-site/resolve-local endpoints; gofmt normalization only in this checkpoint.",
+      "reviewed_sha256": "0e742bb3d9cabea6e2befdc68e3b4f59e5a0c589e1b103c6ef8d09c62a79f165"
     },
     {
       "path": "internal/web/controller/api_background_test.go",
@@ -16775,8 +16775,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Rechecked certificate install/distribute routes and session/node authentication after concurrent main additions and gofumpt formatting; no policy changes in formatting pass.",
-      "reviewed_sha256": "c5bcb921f8a9a7af4c5298a0d9ba1249664dc0c0bdf05c4f6638c4355e34f47b"
+      "evidence": "Repeated full read after incoming TLS/cover-site changes through 1292f40; reviewed node scopes, session guards, body limits, local-only mutation, certificate path lookup, SNI selection and dynamic sni_jobs allowlist additions. domains.go formatting normalized only.",
+      "reviewed_sha256": "119b211c78af2713a50e2b496e6688c92e09e130939b3ada44dbacdf3fa17044"
     },
     {
       "path": "internal/web/controller/domains_preflight_test.go",
@@ -17049,9 +17049,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "9ef8da9ff9cc36c29066e0dd7412b07055a1b6d74f8ebd41597fe060f10b2bbb"
     },
     {
       "path": "internal/web/controller/routing_diagnostics.go",
@@ -17203,9 +17203,9 @@
       "deletions": 0,
       "subsystem": "api-gateway",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "0c17534ced9c9da2feae641e3454a2b16edb55540cac42e9f5a4943f4edf4bec"
     },
     {
       "path": "internal/web/controller/sni_jobs_test.go",
@@ -17456,9 +17456,9 @@
       "deletions": 4,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "861b6d24479d40406f902c72817493eb8cd1aa8982bf9b9ccdf097fc1cd7e44a"
     },
     {
       "path": "internal/web/job/check_cpu_usage_test.go",
@@ -17478,9 +17478,9 @@
       "deletions": 1,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "8e18d739a8bc9a55e34dd0fc7e4f7b631c03f03af3204a863cccb2be14a0aa9b"
     },
     {
       "path": "internal/web/job/check_xray_running_job.go",
@@ -17511,9 +17511,9 @@
       "deletions": 15,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "bc987f1908c23a77b46bd98cf8125496327e656347763111aca164b4bdbd01a1"
     },
     {
       "path": "internal/web/job/clear_logs_job_test.go",
@@ -17709,9 +17709,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "11872c2627f943d1f4a4e34f7ff65a100e9f708485f5d7609467c85abee24a63"
     },
     {
       "path": "internal/web/job/outbound_subscription_job.go",
@@ -17720,9 +17720,9 @@
       "deletions": 13,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "c57995913801ac812b45e3c194096db8b1d5f5bb54a30b36f85d56f28adf58d7"
     },
     {
       "path": "internal/web/job/periodic_traffic_reset_client_test.go",
@@ -17775,9 +17775,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "cd6f0bb0c8b0e246a92aa262f4c16e5a43da2951d5ffd656e507a6d61390b6f3"
     },
     {
       "path": "internal/web/job/stats_notify_job.go",
@@ -17830,9 +17830,9 @@
       "deletions": 14,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "cce2432a0cb483199f544b4cb3851d9f48dd89df6e81b37bd1fe9b716f4b913d"
     },
     {
       "path": "internal/web/job/tuic_job.go",
@@ -17885,9 +17885,9 @@
       "deletions": 1,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "5111bc522d310e0a39d282b29a4d01051fa688f8506590921a6062587f54bd8b"
     },
     {
       "path": "internal/web/job/xray_traffic_job.go",
@@ -22681,9 +22681,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A72–A73: full source review of catalog policy transformations, context/serialization, controller authorization and job resource handling. Reproduced canceled catalog waiter/state corruption and authenticated node-admin SNI relay; fixes and regression tests in this checkpoint. Remaining background lifecycle questions recorded in RESUME.",
+      "reviewed_sha256": "66dabde242f1199590de3d53f71b87ea9d9d8dee518014deeef56bb6c4f32e89"
     },
     {
       "path": "internal/web/service/routing_catalog_test.go",

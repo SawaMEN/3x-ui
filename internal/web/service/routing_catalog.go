@@ -11,9 +11,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
+
+	"golang.org/x/sync/semaphore"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -25,7 +26,8 @@ import (
 
 const routingListMaxBytes = 4 << 20
 
-var routingListWriteMu sync.Mutex
+// Serialize policy writes while allowing abandoned requests to leave the queue.
+var routingListWriteMu = semaphore.NewWeighted(1)
 
 type RoutingCatalogCategory struct {
 	ID        string `json:"id"`
@@ -108,6 +110,9 @@ func downloadRoutingList(ctx context.Context, rawURL string) (routingcatalog.Ent
 	if err != nil {
 		// The URL can contain a private subscription token. Never persist it
 		// inside an error that later appears in the list view or logs.
+		if ctx.Err() != nil {
+			return routingcatalog.Entries{}, ctx.Err()
+		}
 		if errors.Is(err, netsafe.ErrPrivateAddressBlocked) {
 			return routingcatalog.Entries{}, netsafe.ErrPrivateAddressBlocked
 		}
@@ -138,9 +143,11 @@ func (*RoutingCatalogService) Save(ctx context.Context, in RoutingListInput) (*m
 	if err := validateRoutingListURL(in.URL); err != nil {
 		return nil, err
 	}
-	routingListWriteMu.Lock()
-	defer routingListWriteMu.Unlock()
-	db := database.GetDB()
+	if err := routingListWriteMu.Acquire(ctx, 1); err != nil {
+		return nil, err
+	}
+	defer routingListWriteMu.Release(1)
+	db := database.GetDB().WithContext(ctx)
 	var row model.RoutingList
 	if in.Id > 0 {
 		if err := db.First(&row, in.Id).Error; err != nil {
@@ -176,9 +183,11 @@ func (*RoutingCatalogService) Save(ctx context.Context, in RoutingListInput) (*m
 
 // Refresh only replaces a cached policy after the entire response validates.
 func (*RoutingCatalogService) Refresh(ctx context.Context, id int) (bool, error) {
-	routingListWriteMu.Lock()
-	defer routingListWriteMu.Unlock()
-	db := database.GetDB()
+	if err := routingListWriteMu.Acquire(ctx, 1); err != nil {
+		return false, err
+	}
+	defer routingListWriteMu.Release(1)
+	db := database.GetDB().WithContext(ctx)
 	var row model.RoutingList
 	if err := db.First(&row, id).Error; err != nil {
 		return false, err
@@ -186,6 +195,9 @@ func (*RoutingCatalogService) Refresh(ctx context.Context, id int) (bool, error)
 	now := time.Now().Unix()
 	entries, err := downloadRoutingList(ctx, row.URL)
 	if err != nil {
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
 		if updateErr := db.Model(&row).Updates(map[string]any{"last_attempt": now, "last_error": err.Error()}).Error; updateErr != nil {
 			return false, updateErr
 		}
@@ -203,7 +215,7 @@ func (*RoutingCatalogService) Refresh(ctx context.Context, id int) (bool, error)
 func (s *RoutingCatalogService) RefreshDue(ctx context.Context) (bool, error) {
 	var rows []model.RoutingList
 	now := time.Now().Unix()
-	if err := database.GetDB().Select("id").Where("update_interval > 0 AND last_attempt + update_interval <= ?", now).Order("id ASC").Find(&rows).Error; err != nil {
+	if err := database.GetDB().WithContext(ctx).Select("id").Where("update_interval > 0 AND last_attempt + update_interval <= ?", now).Order("id ASC").Find(&rows).Error; err != nil {
 		return false, err
 	}
 	changed := false
@@ -218,12 +230,18 @@ func (s *RoutingCatalogService) RefreshDue(ctx context.Context) (bool, error) {
 			failures = append(failures, fmt.Errorf("list %d: %w", row.Id, err))
 		}
 	}
-	return changed, errors.Join(failures...)
+	return changed, errors.Join(append(failures, ctx.Err())...)
 }
 
-func (*RoutingCatalogService) Delete(id int) error {
-	routingListWriteMu.Lock()
-	defer routingListWriteMu.Unlock()
+func (s *RoutingCatalogService) Delete(id int) error {
+	return s.DeleteContext(context.Background(), id)
+}
+
+func (*RoutingCatalogService) DeleteContext(ctx context.Context, id int) error {
+	if err := routingListWriteMu.Acquire(ctx, 1); err != nil {
+		return err
+	}
+	defer routingListWriteMu.Release(1)
 	template, err := (&SettingService{}).GetXrayConfigTemplate()
 	if err != nil {
 		return err
@@ -252,7 +270,7 @@ func (*RoutingCatalogService) Delete(id int) error {
 			}
 		}
 	}
-	res := database.GetDB().Delete(&model.RoutingList{}, id)
+	res := database.GetDB().WithContext(ctx).Delete(&model.RoutingList{}, id)
 	if res.Error != nil {
 		return res.Error
 	}

@@ -66,92 +66,114 @@ func NewDomainController(g *gin.RouterGroup) {
 }
 
 func requireNodeCoverSitePush(c *gin.Context) bool {
-    if nodeDomainDiscovery(c) && c.GetHeader(wirecodec.MasterPushHeader) == "1" {
-        return true
-    }
-    c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-        "success": false, "msg": "cover-site node API requires an authenticated master push",
-    })
-    return false
+	if nodeDomainDiscovery(c) && c.GetHeader(wirecodec.MasterPushHeader) == "1" {
+		return true
+	}
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+		"success": false, "msg": "cover-site node API requires an authenticated master push",
+	})
+	return false
 }
 
 func (a *DomainController) localCoverSites(c *gin.Context) {
-    if !requireNodeCoverSitePush(c) { return }
-    c.Header("Cache-Control", "no-store")
-    sites, err := service.LocalManagedCoverSites()
-    jsonObj(c, sites, err)
+	if !requireNodeCoverSitePush(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	sites, err := service.LocalManagedCoverSites()
+	jsonObj(c, sites, err)
 }
 
 func (a *DomainController) changeCoverSiteTemplate(c *gin.Context) {
-    if !requireDomainAdminSession(c) { return }
-    c.Header("Cache-Control", "no-store")
-    c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
-    var req service.ManagedCoverSiteChange
-    if err := c.ShouldBindJSON(&req); err != nil { jsonObj(c, nil, err); return }
-    result, err := service.ChangeManagedCoverSiteTemplate(c.Request.Context(), req)
-    jsonObj(c, result, err)
+	if !requireDomainAdminSession(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	var req service.ManagedCoverSiteChange
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.ChangeManagedCoverSiteTemplate(c.Request.Context(), req)
+	jsonObj(c, result, err)
 }
 
 func (a *DomainController) nodeCoverSiteTemplate(c *gin.Context) {
-    if !requireNodeCoverSitePush(c) { return }
-    c.Header("Cache-Control", "no-store")
-    c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
-    var req service.ManagedCoverSiteChange
-    if err := c.ShouldBindJSON(&req); err != nil { jsonObj(c, nil, err); return }
-    if req.NodeID != 0 {
-        jsonObj(c, nil, fmt.Errorf("node may update only its own SNI cover sites"))
-        return
-    }
-    result, err := service.ChangeLocalCoverSiteTemplate(c.Request.Context(), req)
-    jsonObj(c, result, err)
+	if !requireNodeCoverSitePush(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	var req service.ManagedCoverSiteChange
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	if req.NodeID != 0 {
+		jsonObj(c, nil, fmt.Errorf("node may update only its own SNI cover sites"))
+		return
+	}
+	result, err := service.ChangeLocalCoverSiteTemplate(c.Request.Context(), req)
+	jsonObj(c, result, err)
 }
 
 // coverSites exposes only names and built-in templates for editable owned
 // HTTPS cover sites. A remote node's private gateway config is never returned.
 func (a *DomainController) coverSites(c *gin.Context) {
-    if !requireDomainAdminSession(c) { return }
-    c.Header("Cache-Control", "no-store")
-    sites, err := service.ManagedCoverSites(c.Request.Context())
-    jsonObj(c, sites, err)
+	if !requireDomainAdminSession(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	sites, err := service.ManagedCoverSites(c.Request.Context())
+	jsonObj(c, sites, err)
 }
 
 // resolveCertificate is a read-only, administrator-specific lookup for the
 // active inbound node. The browser receives local file paths, never PEM keys.
 func (a *DomainController) resolveCertificate(c *gin.Context) {
-    if !requireDomainAdminSession(c) { return }
-    c.Header("Cache-Control", "no-store")
-    c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
-    var req struct {
-        NodeID int `json:"nodeId"`
-        Domain string `json:"domain" binding:"required"`
-        RSAOnly bool `json:"rsaOnly,omitempty"`
-    }
-    if err := c.ShouldBindJSON(&req); err != nil { jsonObj(c, nil, err); return }
-    result, err := service.ResolveTLSCertificate(c.Request.Context(), req.NodeID, req.Domain, req.RSAOnly)
-    jsonObj(c, result, err)
+	if !requireDomainAdminSession(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	var req struct {
+		NodeID  int    `json:"nodeId"`
+		Domain  string `json:"domain" binding:"required"`
+		RSAOnly bool   `json:"rsaOnly,omitempty"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.ResolveTLSCertificate(c.Request.Context(), req.NodeID, req.Domain, req.RSAOnly)
+	jsonObj(c, result, err)
 }
 
 // resolveLocalCertificate serves only a node's already validated paths to the
 // authenticated master, not an arbitrary path supplied in the request.
 func (a *DomainController) resolveLocalCertificate(c *gin.Context) {
-    scope := c.GetString("api_token_scope")
-    if !c.GetBool("api_authed") ||
-        (scope != model.ApiScopeNodeSync && scope != model.ApiScopeNodeAdmin) ||
-        c.GetHeader(wirecodec.MasterPushHeader) != "1" {
-        c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-            "success": false, "msg": "node certificate lookup requires an authenticated master push",
-        })
-        return
-    }
-    c.Header("Cache-Control", "no-store")
-    c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
-    var req struct {
-        Domain string `json:"domain" binding:"required"`
-        RSAOnly bool `json:"rsaOnly,omitempty"`
-    }
-    if err := c.ShouldBindJSON(&req); err != nil { jsonObj(c, nil, err); return }
-    result, err := service.ResolveLocalTLSCertificate(c.Request.Context(), req.Domain, req.RSAOnly)
-    jsonObj(c, result, err)
+	scope := c.GetString("api_token_scope")
+	if !c.GetBool("api_authed") ||
+		(scope != model.ApiScopeNodeSync && scope != model.ApiScopeNodeAdmin) ||
+		c.GetHeader(wirecodec.MasterPushHeader) != "1" {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"success": false, "msg": "node certificate lookup requires an authenticated master push",
+		})
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	var req struct {
+		Domain  string `json:"domain" binding:"required"`
+		RSAOnly bool   `json:"rsaOnly,omitempty"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.ResolveLocalTLSCertificate(c.Request.Context(), req.Domain, req.RSAOnly)
+	jsonObj(c, result, err)
 }
 
 // distributeCertificate requires an interactive administrator. Private keys
@@ -164,9 +186,9 @@ func (a *DomainController) distributeCertificate(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
 	var request struct {
-		NodeID int    `json:"nodeId" binding:"required"`
-		Domain string `json:"domain" binding:"required"`
-		RSAOnly bool `json:"rsaOnly,omitempty"`
+		NodeID  int    `json:"nodeId" binding:"required"`
+		Domain  string `json:"domain" binding:"required"`
+		RSAOnly bool   `json:"rsaOnly,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		jsonObj(c, nil, err)
