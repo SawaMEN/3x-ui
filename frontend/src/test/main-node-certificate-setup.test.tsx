@@ -14,12 +14,18 @@ vi.mock('@/api/queries/useManagedSniDomains', async (importOriginal) => ({
   useManagedSniDomains: mocks.sites,
 }));
 beforeEach(() => {
+  const configured = {
+    ...defaultDomainConfig,
+    dns01Provider: 'cloudflare',
+    dns01Zone: 'example.org',
+    dns01ZoneId: 'a'.repeat(32),
+  };
   mocks.status.mockReturnValue({
-    data: { config: defaultDomainConfig },
-    refetch: vi.fn().mockResolvedValue({ data: { config: defaultDomainConfig } }),
+    data: { config: configured },
+    refetch: vi.fn().mockResolvedValue({ data: { config: configured } }),
   });
   mocks.sites.mockReturnValue({ data: [], refetch: vi.fn() });
-  vi.mocked(HttpUtil.get).mockResolvedValue(new Msg(true, '', { configured: false }));
+  vi.mocked(HttpUtil.get).mockResolvedValue(new Msg(true, '', { configured: true }));
   vi.mocked(HttpUtil.post).mockClear();
 });
 function RemoteForm() {
@@ -37,7 +43,9 @@ async function requestIssuance() {
   const modal = await screen.findByRole('dialog');
   fireEvent.change(within(modal).getByRole('textbox'), { target: { value: 'admin@example.org' } });
   fireEvent.click(within(modal).getByRole('checkbox'));
-  fireEvent.click(within(modal).getByRole('button', { name: 'Issue via DNS-01' }));
+  const issue = within(modal).getByRole('button', { name: 'Issue via DNS-01' });
+  await waitFor(() => expect(issue).toHaveProperty('disabled', false));
+  fireEvent.click(issue);
   return modal;
 }
 describe('main-node certificate setup', () => {
@@ -100,17 +108,61 @@ describe('main-node certificate setup', () => {
       expect.anything(),
     );
   });
-  it('keeps issuance errors visible with a way to configure DNS-01', async () => {
-    vi.mocked(HttpUtil.post).mockResolvedValue(
-      new Msg(false, 'configure Cloudflare or DigitalOcean DNS-01 on the main node first', null),
-    );
+  it('blocks issuance before DNS-01 is configured instead of showing a backend error', async () => {
+    mocks.status.mockReturnValue({
+      data: { config: defaultDomainConfig },
+      refetch: vi.fn().mockResolvedValue({ data: { config: defaultDomainConfig } }),
+    });
+    vi.mocked(HttpUtil.get).mockResolvedValue(new Msg(true, '', { configured: false }));
     renderWithProviders(<RemoteForm />);
-    const modal = await requestIssuance();
-    expect(await within(modal).findByText(/configure Cloudflare or DigitalOcean/)).toBeTruthy();
-    expect(within(modal).getByRole('button', { name: 'Configure DNS-01' })).toHaveProperty(
-      'disabled',
-      false,
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Issue certificate (DNS-01)' }));
+    const modal = await screen.findByRole('dialog');
+    fireEvent.change(within(modal).getByRole('textbox'), {
+      target: { value: 'admin@example.org' },
+    });
+    fireEvent.click(within(modal).getByRole('checkbox'));
+    expect(within(modal).getByRole('button', { name: 'Issue via DNS-01' })).toHaveProperty('disabled', true);
+    expect(within(modal).getByRole('button', { name: 'Configure DNS-01' })).toHaveProperty('disabled', false);
+    expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url === '/panel/api/manager/domains/local-certificate')).toBe(false);
+  });
+  it('suggests the DNS zone and resumes issuance automatically after saving credentials', async () => {
+    mocks.status.mockReturnValue({
+      data: { config: defaultDomainConfig },
+      refetch: vi.fn().mockResolvedValue({ data: { config: defaultDomainConfig } }),
+    });
+    let tokenSaved = false;
+    vi.mocked(HttpUtil.get).mockImplementation(async () => new Msg(true, '', { configured: tokenSaved }));
+    vi.mocked(HttpUtil.post).mockImplementation(async (url) => {
+      if (url === '/panel/api/domains/dns/credential') tokenSaved = true;
+      if (url === '/panel/api/manager/domains/local-certificate')
+        return new Msg(true, '', { domain: 'vpn.example.org', state: 'pending' });
+      return new Msg(true, '', {});
+    });
+    renderWithProviders(<RemoteForm />);
+    fireEvent.click(screen.getByRole('button', { name: 'Issue certificate (DNS-01)' }));
+    const issuance = await screen.findByRole('dialog');
+    fireEvent.change(within(issuance).getByRole('textbox'), {
+      target: { value: 'admin@example.org' },
+    });
+    fireEvent.click(within(issuance).getByRole('checkbox'));
+    fireEvent.click(within(issuance).getByRole('button', { name: 'Configure DNS-01' }));
+    const setup = await screen.findByRole('dialog', { name: 'Configure DNS-01 on main server' });
+    expect(within(setup).getByRole('textbox', { name: 'DNS zone' })).toHaveProperty('value', 'example.org');
+    expect(within(setup).getByLabelText('DNS zone help')).toBeTruthy();
+    fireEvent.change(within(setup).getByRole('textbox', { name: 'Cloudflare Zone ID' }), {
+      target: { value: 'a'.repeat(32) },
+    });
+    fireEvent.change(within(setup).getByLabelText('DNS API token'), {
+      target: { value: 'secret-token-for-dns-only' },
+    });
+    const save = within(setup).getByRole('button', { name: 'Save DNS-01' });
+    await waitFor(() => expect(save).toHaveProperty('disabled', false));
+    fireEvent.click(save);
+    await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/manager/domains/local-certificate',
+      { domain: 'vpn.example.org', email: 'admin@example.org', acceptTerms: true },
+      expect.anything(),
+    ));
   });
   it('preserves freshly loaded domains and stores the token separately from the configuration', async () => {
     const latest = {
