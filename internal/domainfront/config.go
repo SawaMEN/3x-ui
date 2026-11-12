@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/mail"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -25,6 +26,7 @@ type DomainFrontDomain struct {
 	KeyFile      string `json:"keyFile"`
 	SiteCatalog  string `json:"siteCatalog,omitempty"`
 	SiteTemplate string `json:"siteTemplate,omitempty"`
+	SiteHTML     string `json:"siteHtml,omitempty"`
 }
 
 type DomainFrontConfig struct {
@@ -100,6 +102,8 @@ type Backend struct {
 func DefaultConfig() DomainFrontConfig {
 	return DomainFrontConfig{Listen: "0.0.0.0", HTTPPort: 80, HTTPSPort: 443, PublicPort: 443, Domains: []DomainFrontDomain{}}
 }
+
+var coverSiteHTMLDocument = regexp.MustCompile(`(?i)<html(?:\s|>)`)
 
 func (c *DomainFrontConfig) Validate() error { return c.ValidateWithCertificates(nil) }
 
@@ -203,7 +207,15 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 			if (d.SiteCatalog == "") != (d.SiteTemplate == "") {
 				return fmt.Errorf("%s: cover site catalog and template must be selected together", d.Name)
 			}
-		} else if d.SiteCatalog != "" || d.SiteTemplate != "" {
+			if d.SiteCatalog == "custom" {
+				if d.SiteTemplate != "html" || len(d.SiteHTML) == 0 || len(d.SiteHTML) > 256*1024 ||
+					strings.ContainsRune(d.SiteHTML, '\x00') || !coverSiteHTMLDocument.MatchString(d.SiteHTML) {
+					return fmt.Errorf("%s: custom site requires a complete HTML document (up to 256 KiB)", d.Name)
+				}
+			} else if d.SiteHTML != "" {
+				return fmt.Errorf("%s: HTML is only allowed with the custom site template", d.Name)
+			}
+		} else if d.SiteCatalog != "" || d.SiteTemplate != "" || d.SiteHTML != "" {
 			return fmt.Errorf("%s: only SNI-only domains can select a cover site template", d.Name)
 		}
 		switch d.TLS {

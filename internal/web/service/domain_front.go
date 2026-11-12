@@ -481,7 +481,11 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 			sitePath := filepath.Join(config.GetDBFolderPath(), "domain-tls", "sni-sites", fmt.Sprintf("%x", sha256.Sum256([]byte(d.Name))))
 			var site *TelemtWebSiteOptions
 			if d.SiteCatalog != "" || d.SiteTemplate != "" {
-				site = &TelemtWebSiteOptions{Mode: "catalog", Catalog: d.SiteCatalog, Template: d.SiteTemplate}
+				var siteErr error
+				site, siteErr = managedCoverSiteOptions(d.SiteCatalog, d.SiteTemplate, d.SiteHTML)
+				if siteErr != nil {
+					return backend, fmt.Errorf("SNI site %s: %w", d.Name, siteErr)
+				}
 			}
 			dir, siteErr := prepareTelemtWebSite(d.Name, filepath.Join(sitePath, "default"), filepath.Join(sitePath, "snapshots"), site)
 			if siteErr != nil {

@@ -18,6 +18,7 @@ type ManagedCoverSiteChange struct {
 	Domain       string `json:"domain"`
 	SiteCatalog  string `json:"siteCatalog"`
 	SiteTemplate string `json:"siteTemplate"`
+	SiteHTML     string `json:"siteHtml,omitempty"`
 }
 
 func ChangeLocalCoverSiteTemplate(ctx context.Context, change ManagedCoverSiteChange) (ManagedCoverSiteSummary, error) {
@@ -26,10 +27,12 @@ func ChangeLocalCoverSiteTemplate(ctx context.Context, change ManagedCoverSiteCh
 	if err != nil {
 		return empty, err
 	}
-	if err := validateTelemtWebSite(&TelemtWebSiteOptions{
-		Mode: "catalog", Catalog: change.SiteCatalog, Template: change.SiteTemplate,
-	}); err != nil {
+	site, err := managedCoverSiteOptions(change.SiteCatalog, change.SiteTemplate, change.SiteHTML)
+	if err != nil {
 		return empty, fmt.Errorf("invalid cover-site template: %w", err)
+	}
+	if site == nil {
+		return empty, errors.New("select a cover site template")
 	}
 
 	managerCoverSiteMu.Lock()
@@ -48,13 +51,14 @@ func ChangeLocalCoverSiteTemplate(ctx context.Context, change ManagedCoverSiteCh
 		if !entry.Enabled || entry.Mode != "sni_only" {
 			return empty, errors.New("only an existing enabled SNI-only website can change its template")
 		}
-		if entry.SiteCatalog == change.SiteCatalog && entry.SiteTemplate == change.SiteTemplate {
+		if entry.SiteCatalog == change.SiteCatalog && entry.SiteTemplate == change.SiteTemplate && entry.SiteHTML == change.SiteHTML {
 			return ManagedCoverSiteSummary{
 				Domain: domain, SiteCatalog: change.SiteCatalog, SiteTemplate: change.SiteTemplate,
 			}, nil
 		}
 		entry.SiteCatalog = change.SiteCatalog
 		entry.SiteTemplate = change.SiteTemplate
+		entry.SiteHTML = change.SiteHTML
 		found = true
 		break
 	}
@@ -101,6 +105,7 @@ func ChangeManagedCoverSiteTemplate(ctx context.Context, change ManagedCoverSite
 	}
 	if err := remote.ChangeLocalCoverSiteTemplate(ctx, runtime.RemoteCoverSite{
 		Domain: domain, SiteCatalog: change.SiteCatalog, SiteTemplate: change.SiteTemplate,
+		SiteHTML: change.SiteHTML,
 	}); err != nil {
 		return empty, fmt.Errorf("remote cover-site change failed: %w", err)
 	}

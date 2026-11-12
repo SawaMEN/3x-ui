@@ -26,6 +26,7 @@ type ManagerCoverSiteInput struct {
 	AcceptTerms  bool   `json:"acceptTerms"`
 	SiteCatalog  string `json:"siteCatalog"`
 	SiteTemplate string `json:"siteTemplate"`
+	SiteHTML     string `json:"siteHtml,omitempty"`
 	IssueOnMain  bool   `json:"issueOnMain"`
 }
 
@@ -49,13 +50,8 @@ var managerCoverSiteMu sync.Mutex
 // A conflicting existing domain mode must be edited via Domain Front, never
 // silently overwritten by the subscription manager.
 func managerCoverSiteConfig(cfg domainfront.DomainFrontConfig, req ManagerCoverSiteInput) (domainfront.DomainFrontConfig, error) {
-	if (req.SiteCatalog == "") != (req.SiteTemplate == "") {
-		return cfg, fmt.Errorf("select both a cover site catalog and template")
-	}
-	if req.SiteCatalog != "" {
-		if err := validateTelemtWebSite(&TelemtWebSiteOptions{Mode: "catalog", Catalog: req.SiteCatalog, Template: req.SiteTemplate}); err != nil {
-			return cfg, err
-		}
+	if _, err := managedCoverSiteOptions(req.SiteCatalog, req.SiteTemplate, req.SiteHTML); err != nil {
+		return cfg, err
 	}
 	if !req.AcceptTerms {
 		return cfg, fmt.Errorf("explicit agreement to Let's Encrypt terms is required")
@@ -92,7 +88,7 @@ func managerCoverSiteConfig(cfg domainfront.DomainFrontConfig, req ManagerCoverS
 			return cfg, fmt.Errorf("domain %s uses a manually managed certificate; edit it under Domains and TLS", domain)
 		}
 		d.Name, d.Enabled, d.TLS = domain, true, "certmagic"
-		d.SiteCatalog, d.SiteTemplate = req.SiteCatalog, req.SiteTemplate
+		d.SiteCatalog, d.SiteTemplate, d.SiteHTML = req.SiteCatalog, req.SiteTemplate, req.SiteHTML
 		found = true
 		break
 	}
@@ -102,7 +98,7 @@ func managerCoverSiteConfig(cfg domainfront.DomainFrontConfig, req ManagerCoverS
 		}
 		cfg.Domains = append(cfg.Domains, domainfront.DomainFrontDomain{
 			Name: domain, Mode: "sni_only", TLS: "certmagic", Enabled: true, InboundIDs: []int{},
-			SiteCatalog: req.SiteCatalog, SiteTemplate: req.SiteTemplate,
+			SiteCatalog: req.SiteCatalog, SiteTemplate: req.SiteTemplate, SiteHTML: req.SiteHTML,
 		})
 	}
 	cfg.Enabled, cfg.AcceptTerms, cfg.Email = true, true, email

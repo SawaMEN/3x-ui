@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 )
 
 type RemoteCoverSite struct {
 	Domain       string `json:"domain"`
 	SiteCatalog  string `json:"siteCatalog"`
 	SiteTemplate string `json:"siteTemplate"`
+	SiteHTML     string `json:"siteHtml,omitempty"`
 }
 
 func (r *Remote) ListLocalCoverSites(ctx context.Context) ([]RemoteCoverSite, error) {
@@ -34,4 +36,20 @@ func (r *Remote) ChangeLocalCoverSiteTemplate(ctx context.Context, site RemoteCo
 	}
 	_, err := r.do(ctx, http.MethodPost, "panel/api/domains/cover-sites/template", site)
 	return err
+}
+
+type RemoteCoverSiteContent struct {
+	HTML string `json:"html"`
+}
+
+func (r *Remote) ReadLocalCoverSiteContent(ctx context.Context, domain string) (RemoteCoverSiteContent, error) {
+	var content RemoteCoverSiteContent
+	response, err := r.do(ctx, http.MethodGet, "panel/api/domains/cover-sites/content/local?domain="+url.QueryEscape(domain), nil)
+	if err != nil {
+		return content, err
+	}
+	if err := json.Unmarshal(response.Obj, &content); err != nil {
+		return content, errors.New("node cover-site content is invalid")
+	}
+	return content, nil
 }

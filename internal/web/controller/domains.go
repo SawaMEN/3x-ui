@@ -47,6 +47,8 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.GET("/certificates", a.certificates)
 	g.GET("/cover-sites", a.coverSites)
 	g.GET("/cover-sites/local", a.localCoverSites)
+	g.GET("/cover-sites/content", a.coverSiteContent)
+	g.GET("/cover-sites/content/local", a.localCoverSiteContent)
 	g.POST("/cover-sites/change-template", a.changeCoverSiteTemplate)
 	g.POST("/cover-sites/template", a.nodeCoverSiteTemplate)
 	g.GET("/certificates/events", a.certificateEvents)
@@ -89,7 +91,7 @@ func (a *DomainController) changeCoverSiteTemplate(c *gin.Context) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 300<<10)
 	var req service.ManagedCoverSiteChange
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonObj(c, nil, err)
@@ -104,7 +106,7 @@ func (a *DomainController) nodeCoverSiteTemplate(c *gin.Context) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 300<<10)
 	var req service.ManagedCoverSiteChange
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonObj(c, nil, err)
@@ -116,6 +118,29 @@ func (a *DomainController) nodeCoverSiteTemplate(c *gin.Context) {
 	}
 	result, err := service.ChangeLocalCoverSiteTemplate(c.Request.Context(), req)
 	jsonObj(c, result, err)
+}
+
+func (a *DomainController) localCoverSiteContent(c *gin.Context) {
+	if !requireNodeCoverSitePush(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	content, err := service.LocalManagedCoverSiteContent(c.Query("domain"))
+	jsonObj(c, content, err)
+}
+
+func (a *DomainController) coverSiteContent(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	nodeID, err := strconv.Atoi(c.DefaultQuery("nodeId", "0"))
+	if err != nil || nodeID < 0 {
+		jsonObj(c, nil, fmt.Errorf("invalid node"))
+		return
+	}
+	content, err := service.ManagedCoverSiteContent(c.Request.Context(), nodeID, c.Query("domain"))
+	jsonObj(c, content, err)
 }
 
 // coverSites exposes only names and built-in templates for editable owned
