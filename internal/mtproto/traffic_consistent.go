@@ -1,6 +1,8 @@
 package mtproto
 
 import (
+	"errors"
+	"fmt"
 	"maps"
 	"sync"
 )
@@ -45,6 +47,12 @@ func mergeCounterSnapshots(previous map[string]clientCounters, users map[string]
 // stats responses and discards a scrape if the owning Telemt process was
 // replaced while the HTTP request was in flight.
 func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
+	deltas, online, _ := m.CollectTrafficConsistentChecked()
+	return deltas, online
+}
+
+func (m *Manager) CollectTrafficConsistentChecked() ([]Traffic, []string, error) {
+	var collectErr error
 	// The scheduler already serializes its own calls, but keeping this guard in
 	// the manager makes the baseline contract safe for any other caller too.
 	consistentTrafficCollectMu.Lock()
@@ -63,6 +71,7 @@ func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
 	snaps := make([]snap, 0, len(m.procs))
 	for id, cur := range m.procs {
 		if cur.proc == nil || !cur.proc.IsRunning() {
+			collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: process is not running", id))
 			continue
 		}
 		lastCopy := make(map[string]clientCounters, len(cur.last))
@@ -81,8 +90,9 @@ func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
 	var out []Traffic
 	var online []string
 	for _, s := range snaps {
-		users, ok := scrapeStats(s.apiPort, s.apiToken)
-		if !ok {
+		users, err := scrapeStatsChecked(s.apiPort, s.apiToken)
+		if err != nil {
+			collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: %w", s.id, err))
 			continue
 		}
 		next, deltas, instanceOnline := mergeCounterSnapshots(s.last, users)
@@ -93,6 +103,7 @@ func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
 		cur, stillSameProcess := m.procs[s.id]
 		if !stillSameProcess || cur != s.owner {
 			m.mu.Unlock()
+			collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: process changed during metrics poll", s.id))
 			continue
 		}
 		cur.last = next
@@ -113,5 +124,5 @@ func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
 			})
 		}
 	}
-	return out, online
+	return out, online, collectErr
 }

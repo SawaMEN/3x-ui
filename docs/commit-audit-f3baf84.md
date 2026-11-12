@@ -652,3 +652,17 @@ Mieru tail loss 0/0 вместо 100/200 воспроизведён до исп�
 owned child + metrics fixtures покрывают все 3 sources, direct/routed MTProto,
 DB failures и replay. Дополнительные результаты, incoming main d57cb69 и точное
 ограничение pre-stop snapshot (active connection drain ещё не гарантирован) — RESUME.md.
+
+
+## Продолжение: A86, явные ошибки traffic poll
+
+Нужно 3 пути, подключены 3; один общий defect A86, всего 86 исправлений.
+Reviewed 255/2364, осталось 2109.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A86 | Failed metrics polls Mieru/MTProto/external VPN выглядят как successful empty snapshot, в том числе при shutdown | Checked collectors/partial results, стабильные cursors при отказе, sanitized diagnostics, HTTP/envelope/text validation и Mieru owner guard |
+
+Три false-success shutdown regressions воспроизведены до правки. Recovery/partial
+samples, invalid responses и delayed process replacement проверены fixtures;
+точные результаты и unresolved CRUD tail queue/source ACK scope — RESUME.md.

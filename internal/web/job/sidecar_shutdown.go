@@ -36,15 +36,15 @@ type shutdownTrafficSource struct {
 func StopSidecarsWithTraffic() error {
 	sources := []shutdownTrafficSource{
 		{name: "mieru", stop: mieru.GetManager().StopAll, mu: &mieruTrafficMu, protocols: []model.Protocol{model.Mieru}, collect: func() ([]shutdownTrafficSample, error) {
-			deltas, _ := mieru.GetManager().CollectRunningTraffic()
+			deltas, _, err := mieru.GetManager().CollectRunningTrafficChecked()
 			samples := make([]shutdownTrafficSample, 0, len(deltas))
 			for _, d := range deltas {
 				samples = append(samples, shutdownTrafficSample{tag: d.Tag, email: d.Email, up: d.Up, down: d.Down})
 			}
-			return samples, nil
+			return samples, err
 		}},
 		{name: "mtproto", stop: mtproto.GetManager().StopAll, mu: &mtprotoTrafficMu, protocols: []model.Protocol{model.MTProto}, collect: func() ([]shutdownTrafficSample, error) {
-			deltas, _ := mtproto.GetManager().CollectTrafficConsistent()
+			deltas, _, rawErr := mtproto.GetManager().CollectTrafficConsistentChecked()
 			// The panel context is already canceled. Use an independent bounded poll
 			// for WEB's system-managed backend, without changing its service state.
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -55,15 +55,15 @@ func StopSidecarsWithTraffic() error {
 			for _, d := range deltas {
 				samples = append(samples, shutdownTrafficSample{tag: d.Tag, email: d.Email, up: d.Up, down: d.Down, routed: d.Routed})
 			}
-			return samples, err
+			return samples, errors.Join(rawErr, err)
 		}},
 		{name: "externalvpn", stop: externalvpn.GetManager().StopAll, mu: &externalTrafficMu, protocols: []model.Protocol{model.Pingtunnel, model.TrustTunnel, model.FPTN, model.VetroffProxy, model.OpenFlux}, collect: func() ([]shutdownTrafficSample, error) {
-			deltas := externalvpn.GetManager().CollectTraffic()
+			deltas, err := externalvpn.GetManager().CollectTrafficChecked()
 			samples := make([]shutdownTrafficSample, 0, len(deltas))
 			for _, d := range deltas {
 				samples = append(samples, shutdownTrafficSample{tag: d.Tag, email: d.Email, up: d.Up, down: d.Down})
 			}
-			return samples, nil
+			return samples, err
 		}},
 	}
 	var result error

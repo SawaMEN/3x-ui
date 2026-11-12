@@ -12044,9 +12044,9 @@
       "deletions": 0,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
+      "reviewed_sha256": "ddb98f6957e337c7df3f34a7735168adad66bc8d88c9c1c4aa7fa49adf435f42"
     },
     {
       "path": "internal/externalvpn/decode.go",
@@ -12143,9 +12143,9 @@
       "deletions": 66,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
+      "reviewed_sha256": "9e859e2f6d5dda45d5ae9490ef70bf9a1263f2fdc4b31bf16d66818293dcdbf5"
     },
     {
       "path": "internal/externalvpn/manager_security_test.go",
@@ -13057,8 +13057,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A85: complete manager and consistent-collector source review, running-user ownership, routing metadata, reload/start/stop paths and panel shutdown ordering. Reproduced real owned Mieru child tail loss before fix; real owned child plus synthetic metrics tests cover all 3 sources, direct/routed MTProto, no restart, panel reload, durable DB-failure replay and accounting-only shutdown. Results and remaining scrape/termination gap in RESUME.",
-      "reviewed_sha256": "f49a934e899bb0daeceb4669337b1a509c893c0bc942e106335e61ad9e4e112a"
+      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
+      "reviewed_sha256": "a50748a5e88a3b97d260bdcb25f2c3452d7e61e399a359998b94c0ce6d02d842"
     },
     {
       "path": "internal/mieru/process.go",
@@ -13090,8 +13090,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A85: complete manager and consistent-collector source review, running-user ownership, routing metadata, reload/start/stop paths and panel shutdown ordering. Reproduced real owned Mieru child tail loss before fix; real owned child plus synthetic metrics tests cover all 3 sources, direct/routed MTProto, no restart, panel reload, durable DB-failure replay and accounting-only shutdown. Results and remaining scrape/termination gap in RESUME.",
-      "reviewed_sha256": "3e4491fd59b3fe81983ca934ac362b2f0ade68cc3b345e10260b09f7251ef02d"
+      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
+      "reviewed_sha256": "9b87923adc403b383bdd44f446d81c8f088ff6ed648a42128a2dbce3287248ff"
     },
     {
       "path": "internal/mtproto/manager_mutation_test.go",
@@ -13255,8 +13255,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A85: complete manager and consistent-collector source review, running-user ownership, routing metadata, reload/start/stop paths and panel shutdown ordering. Reproduced real owned Mieru child tail loss before fix; real owned child plus synthetic metrics tests cover all 3 sources, direct/routed MTProto, no restart, panel reload, durable DB-failure replay and accounting-only shutdown. Results and remaining scrape/termination gap in RESUME.",
-      "reviewed_sha256": "467a9843a91f541a7f9b525ded95fc17c564d52a7efe15daf44849f7a0f298a2"
+      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
+      "reviewed_sha256": "ee03cc773c27f932be4827acb11fe0c2521d3fc67a76901afd716ebe04be4024"
     },
     {
       "path": "internal/mtproto/usernames.go",
@@ -17545,8 +17545,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
-      "reviewed_sha256": "4648d923aa00a0b94366741aa070cc8c85fefdf1ef459972860d96c5bf4ec99c"
+      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
+      "reviewed_sha256": "ef254f76f96f40f1daa248d80d20e3bc26f4fec61794b125da8636bd475f77cb"
     },
     {
       "path": "internal/web/job/ip_limit_allowlist.go",
@@ -17633,8 +17633,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
-      "reviewed_sha256": "1dee94d36a9d8aedf4d04625c8258f365e9466d36156b630b853ca07f7f3b1d2"
+      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
+      "reviewed_sha256": "26f1ab88556454ad9daac0c27f7d04786abc502041258c7b086a5a83bf479085"
     },
     {
       "path": "internal/web/job/mtproto_job.go",
@@ -17644,8 +17644,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A84: refreshed earlier full reviews after sidecar journal changes; database registration and migration-model changes inspected in context. Three complete traffic jobs and shared retry/journal files read, process-wide ownership and replay-before-setup checked. SQLite WAL/replacement/rename/delete/failure regressions, build/vet and lint results recorded in RESUME; no new original-scope files marked.",
-      "reviewed_sha256": "b7bfc83457c0ff040f551548614602c5f3a30515fd701a1f5fc3879e59891c65"
+      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
+      "reviewed_sha256": "5d875b4719cb03ca2a661859733e1c7adcc8160a992cf45199cb3457ce709073"
     },
     {
       "path": "internal/web/job/node_down_threshold_test.go",

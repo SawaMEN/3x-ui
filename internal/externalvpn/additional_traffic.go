@@ -2,12 +2,14 @@ package externalvpn
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha1" // Upstream FPTN's TLS session marker, not a credential hash.
 	"crypto/x509"
 	encodingbinary "encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -36,13 +38,18 @@ type fptnTrafficSample struct {
 }
 
 func (m *Manager) collectAdditionalTraffic(proc *running) []TrafficDelta {
+	rows, _ := m.collectAdditionalTrafficChecked(proc)
+	return rows
+}
+
+func (m *Manager) collectAdditionalTrafficChecked(proc *running) ([]TrafficDelta, error) {
 	if proc.protocol == model.OpenFlux {
-		return collectOpenFluxTraffic(proc)
+		return collectOpenFluxTrafficChecked(proc)
 	}
 	rows, err := collectFPTNTraffic(proc)
 	if err != nil {
-		return nil
-	} // Keep the previous baseline after a failed poll.
+		return nil, errors.New("FPTN metrics unavailable")
+	} // Do not expose the metrics URL/key or reset the previous baseline.
 	byEmail := map[string]TrafficDelta{}
 	// Baselines belong to upstream session labels. Summing counters before
 	// differencing loses traffic when sessions reset at different times.
@@ -69,7 +76,7 @@ func (m *Manager) collectAdditionalTraffic(proc *running) []TrafficDelta {
 		}
 	}
 
-	return deltas
+	return deltas, nil
 }
 
 func collectFPTNTraffic(proc *running) (map[string]fptnTrafficSample, error) {
@@ -149,7 +156,11 @@ func collectFPTNTraffic(proc *running) (map[string]fptnTrafficSample, error) {
 		emails[FPTNUsername(c.Email)] = c.Email
 	}
 	rows := map[string]fptnTrafficSample{}
-	sc := bufio.NewScanner(io.LimitReader(response.Body, 4<<20))
+	data, err = io.ReadAll(io.LimitReader(response.Body, (4<<20)+1))
+	if err != nil || len(data) > 4<<20 {
+		return nil, errors.New("invalid FPTN metrics response")
+	}
+	sc := bufio.NewScanner(bytes.NewReader(data))
 	sc.Buffer(make([]byte, 4096), 64<<10)
 	for sc.Scan() {
 		match := fptnMetricPattern.FindStringSubmatch(sc.Text())
@@ -183,11 +194,11 @@ func collectFPTNTraffic(proc *running) (map[string]fptnTrafficSample, error) {
 	return rows, sc.Err()
 }
 
-func collectOpenFluxTraffic(proc *running) []TrafficDelta {
+func collectOpenFluxTrafficChecked(proc *running) ([]TrafficDelta, error) {
 	socket := filepath.Join(directory(), strconv.Itoa(proc.instance.ID), "ipc.sock")
 	conn, err := (&net.Dialer{Timeout: time.Second}).DialContext(context.Background(), "unix", socket)
 	if err != nil {
-		return nil
+		return nil, errors.New("OpenFlux metrics unavailable")
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(2500 * time.Millisecond))
@@ -196,15 +207,15 @@ func collectOpenFluxTraffic(proc *running) []TrafficDelta {
 	for i := 0; i < 16; i++ {
 		var header [4]byte
 		if _, err := io.ReadFull(conn, header[:]); err != nil {
-			return nil
+			return nil, errors.New("OpenFlux metrics unavailable")
 		}
 		size := encodingbinary.BigEndian.Uint32(header[:])
 		if size < 1 || size > 1<<20 {
-			return nil
+			return nil, errors.New("OpenFlux metrics unavailable")
 		}
 		frame := make([]byte, size)
 		if _, err := io.ReadFull(conn, frame); err != nil {
-			return nil
+			return nil, errors.New("OpenFlux metrics unavailable")
 		}
 		if frame[0] != 3 {
 			continue
@@ -215,7 +226,7 @@ func collectOpenFluxTraffic(proc *running) []TrafficDelta {
 			Out       uint64 `json:"bytes_out"`
 		}
 		if err := json.Unmarshal(frame[1:], &status); err != nil {
-			return nil
+			return nil, errors.New("OpenFlux metrics unavailable")
 		}
 		for _, c := range proc.instance.Settings.Clients {
 			if !c.Enable {
@@ -224,10 +235,11 @@ func collectOpenFluxTraffic(proc *running) []TrafficDelta {
 			old := proc.counters[c.Email]
 			up, down := cumulativeTrafficDelta(status.In, old.up), cumulativeTrafficDelta(status.Out, old.down)
 			proc.counters[c.Email] = trafficCounters{up: status.In, down: status.Out}
-			return []TrafficDelta{{Tag: proc.tag, Email: c.Email, Up: up, Down: down, Active: status.Connected}}
+			return []TrafficDelta{{Tag: proc.tag, Email: c.Email, Up: up, Down: down, Active: status.Connected}}, nil
 		}
+		return nil, nil
 	}
-	return nil
+	return nil, errors.New("OpenFlux status frame missing")
 }
 
 func saturatedTrafficSum(a, b int64) int64 {

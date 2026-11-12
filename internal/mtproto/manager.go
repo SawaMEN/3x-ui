@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"net"
 	"net/http"
@@ -1038,18 +1040,23 @@ type statsUser struct {
 }
 
 func scrapeStats(port int, token string) (map[string]statsUser, bool) {
+	users, err := scrapeStatsChecked(port, token)
+	return users, err == nil
+}
+
+func scrapeStatsChecked(port int, token string) (map[string]statsUser, error) {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/v1/stats/users", port), nil)
 	if err != nil {
-		return nil, false
+		return nil, errors.New("Telemt user metrics unavailable")
 	}
 	authorize(req, token)
 	resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
 	if err != nil {
-		return nil, false
+		return nil, errors.New("Telemt user metrics unavailable")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, false
+		return nil, errors.New("Telemt user metrics unavailable")
 	}
 	var env struct {
 		OK   bool `json:"ok"`
@@ -1059,12 +1066,22 @@ func scrapeStats(port int, token string) (map[string]statsUser, bool) {
 			TotalOctets        int64  `json:"total_octets"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
-		return nil, false
+	data, err := io.ReadAll(io.LimitReader(resp.Body, (1<<20)+1))
+	if err != nil || len(data) > 1<<20 {
+		return nil, errors.New("invalid Telemt user metrics response")
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		return nil, errors.New("Telemt user metrics unavailable")
+	}
+	if !env.OK || env.Data == nil {
+		return nil, errors.New("Telemt user metrics response rejected")
 	}
 	out := make(map[string]statsUser, len(env.Data))
 	for _, u := range env.Data {
+		if u.TotalOctets < 0 {
+			return nil, errors.New("invalid Telemt user metrics counter")
+		}
 		out[u.Username] = statsUser{CurrentConnections: u.CurrentConnections, TotalOctets: u.TotalOctets}
 	}
-	return out, true
+	return out, nil
 }

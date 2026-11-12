@@ -112,8 +112,8 @@ func TestShutdownStopsSidecarReconciledByLastCronTick(t *testing.T) {
 	}
 	s.cron.Start()
 	<-entered
-	if err := s.Stop(); err != nil {
-		t.Fatal(err)
+	if err := s.Stop(); err == nil || !strings.Contains(err.Error(), "OpenFlux metrics unavailable") {
+		t.Fatalf("expected missing metrics diagnostic for dummy child, got: %v", err)
 	}
 	if err := <-tickErr; err != nil {
 		t.Fatal(err)

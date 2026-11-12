@@ -41,7 +41,10 @@ func (j *ExternalVPNJob) Run() {
 	mgr := externalvpn.GetManager()
 	mgr.Reconcile(desired)
 
-	rows := mgr.CollectTraffic()
+	rows, collectErr := mgr.CollectTrafficChecked()
+	if collectErr != nil {
+		logger.Warning("external VPN job: traffic poll incomplete:", collectErr)
+	}
 	inbound := map[string]*coremodel.Traffic{}
 	clients := make([]*coremodel.ClientTraffic, 0, len(rows))
 	activeEmails := []string{}

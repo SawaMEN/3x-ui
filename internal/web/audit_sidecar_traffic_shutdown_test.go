@@ -244,3 +244,81 @@ func serveShutdownMetrics(t *testing.T, address string, handler http.Handler) *h
 	srv.Start()
 	return srv
 }
+
+func TestShutdownReportsUnavailableSidecarMetrics(t *testing.T) {
+	for _, protocol := range []model.Protocol{model.Mieru, model.MTProto, model.TrustTunnel} {
+		t.Run(string(protocol), func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("XUI_BIN_FOLDER", dir)
+			t.Setenv("XUI_DB_FOLDER", t.TempDir())
+			dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
+			ib := model.Inbound{Id: 986, Tag: "unavailable-metrics", Protocol: protocol, Settings: `{"clients":[]}`}
+			if err := database.GetDB().Create(&ib).Error; err != nil {
+				t.Fatal(err)
+			}
+			row := coremodel.ClientTraffic{InboundId: ib.Id, Email: "unavailable@example.test", Enable: true}
+			if err := database.GetDB().Create(&row).Error; err != nil {
+				t.Fatal(err)
+			}
+			script := []byte("#!/bin/sh\nif [ \"$1\" = get ]; then exit 1; fi\nexec sleep 60\n")
+			binary := "mita"
+			if protocol == model.MTProto {
+				binary = mtproto.GetBinaryName()
+			}
+			if protocol == model.TrustTunnel {
+				binary = "trusttunnel_endpoint"
+			}
+			if err := os.WriteFile(filepath.Join(dir, binary), script, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			switch protocol {
+			case model.Mieru:
+				mgr := mieru.GetManager()
+				mgr.StopAll()
+				defer mgr.StopAll()
+				if err := mgr.Ensure(mieru.Instance{Id: ib.Id, Tag: ib.Tag, Users: []mieru.User{{Name: row.Email, Password: "synthetic"}}, PortBindings: []mieru.PortBinding{{Port: 34572, Protocol: "TCP"}}}); err != nil {
+					t.Fatal(err)
+				}
+			case model.MTProto:
+				mgr := mtproto.GetManager()
+				mgr.StopAll()
+				defer mgr.StopAll()
+				if err := mgr.Ensure(mtproto.Instance{Id: ib.Id, Tag: ib.Tag, Port: 34572, Listen: "127.0.0.1", Secrets: []mtproto.SecretEntry{{Name: row.Email, Secret: "0123456789abcdef0123456789abcdef"}}}); err != nil {
+					t.Fatal(err)
+				}
+				data, err := os.ReadFile(filepath.Join(dir, "mtproto", "telemt-986.toml"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var cfg struct {
+					Server struct{ API struct{ Listen string } }
+				}
+				if err := toml.Unmarshal(data, &cfg); err != nil {
+					t.Fatal(err)
+				}
+				srv := serveShutdownMetrics(t, cfg.Server.API.Listen, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
+				defer srv.Close()
+			case model.TrustTunnel:
+				mgr := externalvpn.GetManager()
+				mgr.StopAll()
+				defer mgr.StopAll()
+				if err := mgr.Ensure(externalvpn.Instance{ID: ib.Id, Tag: ib.Tag, Protocol: protocol, Listen: "127.0.0.1", Port: 34572, Settings: externalvpn.Settings{Hostname: "fixture.example.test", Clients: []externalvpn.Client{{Email: row.Email, Password: "synthetic", Enable: true}}}}); err != nil {
+					t.Fatal(err)
+				}
+				data, err := os.ReadFile(filepath.Join(dir, "externalvpn", "986", "vpn.toml"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var cfg struct{ Metrics struct{ Address string } }
+				if err := toml.Unmarshal(data, &cfg); err != nil {
+					t.Fatal(err)
+				}
+				srv := serveShutdownMetrics(t, cfg.Metrics.Address, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
+				defer srv.Close()
+			}
+			if err := NewServer(nil).Stop(); err == nil {
+				t.Fatal("shutdown silently treated unavailable metrics as an empty successful sample")
+			}
+		})
+	}
+}

@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 85 подтверждённых исправлений панели; A85 — финальный traffic snapshot перед остановкой 3 sidecar managers.
+Всего реализовано 86 подтверждённых исправлений панели; A86 — явные ошибки metrics poll и сохранение частичных samples всех 3 managers.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 253 файла, осталось 2111; общий проход не завершён.
+Проверено вручную 255 файлов, осталось 2109; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1178,3 +1178,78 @@ endpoint guards и новых helper/HTML rendering integration; custom HTML val
   не запускался. No host firewall/NET_ADMIN/Docker daemon modifications.
 - Остальные production cancellation, routing workers, TLS downgrade, SQL fixture,
   receipt retention и предыдущие R04/R05 по-прежнему открыты.
+
+
+## Контрольная точка A86: ошибка опроса больше не считается пустой статистикой
+
+A85 опубликован в 3a10904ea64723fd43f457a66acca3a362972d0c.
+Нужно 3 checked paths, подключены 3/3: Mieru, MTProto, external VPN.
+Один общий дефект failure reporting/partial accounting, A86; всего 86 исправлений.
+Reviewed 255/2364, осталось 2109; полностью дочитаны external manager и additional
+traffic collectors, остальные ранее полные reviews обновлены после изменений.
+Mieru traffic.go и новые helper/test files не расширяют original-scope inventory.
+
+До правки TestShutdownReportsUnavailableSidecarMetrics воспроизвёл три FAIL:
+Mieru get users exit 1, Telemt HTTP 503, TrustTunnel HTTP 503. Во всех случаях
+Server.Stop вернул nil, как будто последний опрос успешно не нашёл трафика.
+Normal pre-fix web suite FAIL 0.640s, все три subtests провалены.
+
+A86:
+- Публичные checked collectors возвращают successful deltas и отдельную error;
+  старые экспортированные сигнатуры сохранены для совместимости. Все три periodic
+  jobs используют checked path и логируют incomplete poll. Shutdown сохраняет
+  доступные samples, обязательно останавливает менеджеры и возвращает ошибки.
+- MTProto проверяет HTTP/JSON envelope OK и data, trailing/malformed/oversize
+  response и отрицательные total_octets. Неуспешный poll не двигает baseline.
+- TrustTunnel проверяет HTTP, JSON целиком и размер ответа. FPTN больше не считает
+  префикс ответа за полный snapshot на границе 4 MiB. OpenFlux возвращает явный
+  отказ IPC/frame/status; protocols без per-client API не дают ложную ошибку API.
+- В checked diagnostics нет URL/metrics key, response body, stdout/stderr или
+  auth token. Используется protocol/inbound ID и безопасная категория отказа.
+- Mieru проверяет exit status и фактический формат таблицы. Pinned upstream
+  pkg/cli/server.go serverGetUsersFunc и common.ByteCountIEC просмотрены локально:
+  User/LastActive/1DayDown/1DayUp header, compact IEC, '-' для отсутствующих counters.
+  Empty legitimate table отличается от диагностики на stdout. Проверяются timestamp,
+  unit и переполнение числового значения; старый permissive parsing не используется.
+- Mieru serialized collector проверяет owner после scrape: ответ старого процесса
+  не засеивает cursor нового. У уже умерших Mieru/MTProto owners нет ложного
+  successful empty result. Это не восстановление counter source после crash.
+
+Тесты:
+- Owned sleep children + temporary SQLite/files и loopback HTTP: shutdown всех
+  трёх managers явно сообщает отказ. Старый dummy OpenFlux lifecycle test теперь
+  ожидает диагностический metrics error, затем по-прежнему проверяет child exit.
+- Healthy external source не теряется рядом с HTTP 503; failed baseline 7 сохраняется,
+  recovery 35 даёт 28, healthy 10 -> 15 даёт 5. Проверены invalid/null/trailing/oversize
+  JSON, отказ FPTN/OpenFlux и отсутствие private response/URL/key в errors.
+- Mieru command failure/recovery, controlled process replacement во время scrape,
+  неизменность нового cursor, пустая корректная таблица/невалидный stdout/overflow.
+  Старый permissive parser первоначально принял произвольный stdout; обнаружено
+  тестом и исправлено до публикации. MTProto failed/missing-data/negative/oversize
+  envelope отклоняется, valid empty array принимается.
+- Расширенный race: web PASS 9.357s, job PASS 7.886s, mtproto PASS 1.256s,
+  externalvpn PASS 2.838s. Первоначальная Mieru проверка выявила parser failure;
+  после исправления финальный targeted -race: mieru PASS 1.065s, web PASS 3.329s.
+- Normal targeted после checked integration: web PASS 2.404s, mieru PASS 0.023s,
+  mtproto PASS 0.019s, externalvpn PASS 0.050s (до финального strict parser).
+- Финальные go build ./... и go vet ./... PASS при -p 1 / GOMAXPROCS=1 /
+  GOGC=20 / GOMEMLIMIT=512MiB. Полный golangci-lint 2.15.0 PASS: 0 issues
+  (concurrency 1 / GOGC=50 / GOMEMLIMIT=1GiB / timeout 10m). Предыдущий
+  memory-limited lint остановлен по timeout 5m и не считается PASS. Один lint запуск остановлен
+  с exit 137, второй поймал временный typecheck во время изменения файла. Затем
+  cache filesystem заполнился; проверки с no-space errors не считать успешными.
+  Воспроизводимый compiler cache перенесён частично в свободный tmpfs без удаления
+  исходников/пользовательских файлов; финальные проверки выполняются заново.
+
+Остаётся:
+- Предостановочный drain для индивидуального CRUD Remove/Pause/restart и reconcile
+  replacement: это изменение диагностирует неуспешный poll, но не добавляет durable
+  tail queue на каждой замене процесса. Не объявлять A85/A86 нулевой потерей всех bytes.
+- Crash/metrics API outage/source reset нельзя восстановить одной error-сигнатурой;
+  нужны upstream quiesce/drain и durable cursor ACK. Existing online presence на
+  failed poll требует отдельной проверки, как и лишние warnings при долгом outage.
+- Checked collectors сохраняют прежние bounded internal timeouts, а не обещают
+  caller-context cancellation во всех API. Полный active WEB host-service и реальный
+  OpenFlux Unix IPC не запускались; no host firewall/ACME/Docker daemon mutations.
+- SQL fixture, production background lifecycle, receipt retention, TLS downgrade,
+  остальные original-scope pending и R04/R05 остаются открыты.

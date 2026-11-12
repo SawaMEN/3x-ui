@@ -2,9 +2,13 @@ package mieru
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -38,6 +42,16 @@ type userTrafficStats struct {
 // only high-water deltas are returned. A process restart or counter/window
 // reset initializes a new cursor rather than creating a false traffic spike.
 func (m *Manager) CollectTraffic(desired []Instance) ([]TrafficDelta, []string) {
+	deltas, online, _ := m.CollectTrafficChecked(desired)
+	return deltas, online
+}
+
+// CollectTrafficChecked preserves successful samples and reports unavailable or
+// replaced sources separately from a successful empty poll.
+func (m *Manager) CollectTrafficChecked(desired []Instance) ([]TrafficDelta, []string, error) {
+	m.collectMu.Lock()
+	defer m.collectMu.Unlock()
+	var collectErr error
 	now := time.Now()
 	onlineSet := make(map[string]struct{})
 	deltas := make([]TrafficDelta, 0)
@@ -45,33 +59,47 @@ func (m *Manager) CollectTraffic(desired []Instance) ([]TrafficDelta, []string) 
 	type scrapeResult struct {
 		inst  Instance
 		stats map[string]userTrafficStats
-		ok    bool
+		err   error
+		owner *managed
 	}
 
 	results := make(chan scrapeResult, len(desired))
 	sem := make(chan struct{}, 4)
 	var wg sync.WaitGroup
 	for _, inst := range desired {
-		if !m.isRunning(inst.Id) {
+		m.mu.Lock()
+		owner := m.procs[inst.Id]
+		running := owner != nil && owner.proc != nil && owner.proc.IsRunning()
+		m.mu.Unlock()
+		if !running {
+			if owner != nil {
+				collectErr = errors.Join(collectErr, fmt.Errorf("mieru inbound %d: process is not running", inst.Id))
+			}
 			continue
 		}
 		wg.Add(1)
-		go func(inst Instance) {
+		go func(inst Instance, owner *managed) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			stats, ok := scrapeUsers(socketPathForID(inst.Id), configPathForID(inst.Id))
-			results <- scrapeResult{inst: inst, stats: stats, ok: ok}
-		}(inst)
+			stats, err := scrapeUsersChecked(socketPathForID(inst.Id), configPathForID(inst.Id))
+			results <- scrapeResult{inst: inst, stats: stats, err: err, owner: owner}
+		}(inst, owner)
 	}
 	wg.Wait()
 	close(results)
 
 	for result := range results {
-		if !result.ok {
+		if result.err != nil {
+			collectErr = errors.Join(collectErr, fmt.Errorf("mieru inbound %d: %w", result.inst.Id, result.err))
 			continue
 		}
 		m.mu.Lock()
+		if m.procs[result.inst.Id] != result.owner {
+			m.mu.Unlock()
+			collectErr = errors.Join(collectErr, fmt.Errorf("mieru inbound %d: process changed during metrics poll", result.inst.Id))
+			continue
+		}
 		cursors := m.traffic[result.inst.Id]
 		if cursors == nil {
 			cursors = make(map[string]trafficCursor)
@@ -89,19 +117,24 @@ func (m *Manager) CollectTraffic(desired []Instance) ([]TrafficDelta, []string) 
 	for email := range onlineSet {
 		online = append(online, email)
 	}
-	return deltas, online
+	return deltas, online, collectErr
 }
 
 // CollectRunningTraffic samples the actual running users, including inbounds
 // disabled in the DB since the last periodic poll. It never reconciles processes.
 func (m *Manager) CollectRunningTraffic() ([]TrafficDelta, []string) {
+	deltas, online, _ := m.CollectRunningTrafficChecked()
+	return deltas, online
+}
+
+func (m *Manager) CollectRunningTrafficChecked() ([]TrafficDelta, []string, error) {
 	m.mu.Lock()
 	instances := make([]Instance, 0, len(m.procs))
 	for id, cur := range m.procs {
 		instances = append(instances, Instance{Id: id, Tag: cur.tag, Users: slices.Clone(cur.users)})
 	}
 	m.mu.Unlock()
-	return m.CollectTraffic(instances)
+	return m.CollectTrafficChecked(instances)
 }
 
 // collectInstanceTraffic advances the cumulative per-user cursors for one
@@ -165,17 +198,10 @@ func collectInstanceTraffic(inst Instance, cursors map[string]trafficCursor, sta
 	return deltas, online
 }
 
-func (m *Manager) isRunning(id int) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	cur := m.procs[id]
-	return cur != nil && cur.proc != nil && cur.proc.IsRunning()
-}
-
-func scrapeUsers(socketPath, configPath string) (map[string]userTrafficStats, bool) {
+func scrapeUsersChecked(socketPath, configPath string) (map[string]userTrafficStats, error) {
 	bin := GetBinaryPath()
 	if _, err := os.Stat(bin); err != nil {
-		return nil, false
+		return nil, errors.New("user metrics unavailable")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -183,11 +209,11 @@ func scrapeUsers(socketPath, configPath string) (map[string]userTrafficStats, bo
 
 	absSocket, err := filepath.Abs(socketPath)
 	if err != nil {
-		return nil, false
+		return nil, errors.New("user metrics unavailable")
 	}
 	absConfig, err := filepath.Abs(configPath)
 	if err != nil {
-		return nil, false
+		return nil, errors.New("user metrics unavailable")
 	}
 
 	cmd := exec.CommandContext(ctx, bin, "get", "users")
@@ -198,45 +224,53 @@ func scrapeUsers(socketPath, configPath string) (map[string]userTrafficStats, bo
 	)
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, false
+		return nil, errors.New("user metrics unavailable")
 	}
-	return parseUsersTable(string(out)), true
+	return parseUsersTable(string(out))
 }
 
-func parseUsersTable(output string) map[string]userTrafficStats {
+const userBytePattern = `(?:-|[0-9]+(?:\.[0-9]+)?\s*(?:B|KiB|MiB|GiB|TiB|PiB))`
+
+var userStatsRow = regexp.MustCompile(`^(\S+)\s+(\S+)\s+(` + userBytePattern + `)\s+(` + userBytePattern + `)(?:\s|$)`)
+
+func parseUsersTable(output string) (map[string]userTrafficStats, error) {
 	result := make(map[string]userTrafficStats)
+	recognized := false
 	for _, line := range strings.Split(output, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 4 || strings.EqualFold(fields[0], "User") {
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
-
+		fields := strings.Fields(line)
+		// Pinned mita prints this header even for a legitimate empty snapshot.
+		if len(fields) >= 4 && fields[0] == "User" && fields[1] == "LastActive" {
+			recognized = true
+			continue
+		}
+		match := userStatsRow.FindStringSubmatch(line)
+		if match == nil {
+			return nil, errors.New("invalid user metrics response")
+		}
 		stats := userTrafficStats{}
-		if ts, err := time.Parse(time.RFC3339, fields[1]); err == nil {
+		if match[2] != "-" {
+			ts, err := time.Parse(time.RFC3339, match[2])
+			if err != nil {
+				return nil, errors.New("invalid user metrics timestamp")
+			}
 			stats.lastActive = ts
 		}
-
-		if compactByteToken(fields[2]) && compactByteToken(fields[3]) {
-			stats.down = parseByteToken(fields[2])
-			stats.up = parseByteToken(fields[3])
-		} else if len(fields) >= 6 {
-			stats.down = parseBytePair(fields[2], fields[3])
-			stats.up = parseBytePair(fields[4], fields[5])
-		} else {
-			continue
+		stats.down = parseByteToken(strings.Join(strings.Fields(match[3]), ""))
+		stats.up = parseByteToken(strings.Join(strings.Fields(match[4]), ""))
+		if stats.down < 0 || stats.up < 0 {
+			return nil, errors.New("invalid user metrics counter")
 		}
-		result[fields[0]] = stats
+		result[match[1]] = stats
+		recognized = true
 	}
-	return result
-}
-
-func compactByteToken(value string) bool {
-	for _, r := range value {
-		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
-			return true
-		}
+	if !recognized {
+		return nil, errors.New("invalid user metrics response")
 	}
-	return false
+	return result, nil
 }
 
 func parseByteToken(value string) int64 {
@@ -261,8 +295,8 @@ func parseByteToken(value string) int64 {
 
 func parseBytePair(number, unit string) int64 {
 	value, err := strconv.ParseFloat(strings.TrimSpace(number), 64)
-	if err != nil || value < 0 {
-		return 0
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+		return -1
 	}
 	var multiplier float64
 	switch strings.TrimSpace(unit) {
@@ -281,5 +315,9 @@ func parseBytePair(number, unit string) int64 {
 	default:
 		return 0
 	}
-	return int64(value * multiplier)
+	scaled := value * multiplier
+	if scaled >= float64(math.MaxInt64) {
+		return -1
+	}
+	return int64(scaled)
 }

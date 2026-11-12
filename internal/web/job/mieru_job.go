@@ -49,7 +49,10 @@ func (j *MieruJob) Run() {
 	mgr := mieru.GetManager()
 	mgr.Reconcile(desired)
 
-	deltas, onlineEmails := mgr.CollectTraffic(desired)
+	deltas, onlineEmails, collectErr := mgr.CollectTrafficChecked(desired)
+	if collectErr != nil {
+		logger.Warning("mieru job: traffic poll incomplete:", collectErr)
+	}
 	if len(deltas) > 0 || len(onlineEmails) > 0 {
 		inboundByTag := make(map[string]*coremodel.Traffic)
 		clientTraffic := make([]*coremodel.ClientTraffic, 0, len(deltas)+len(onlineEmails))

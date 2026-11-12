@@ -281,10 +281,11 @@ type (
 		users     []User
 	}
 	Manager struct {
-		mu      sync.Mutex
-		procs   map[int]*managed
-		lastErr map[int]string
-		traffic map[int]map[string]trafficCursor
+		mu        sync.Mutex
+		collectMu sync.Mutex
+		procs     map[int]*managed
+		lastErr   map[int]string
+		traffic   map[int]map[string]trafficCursor
 	}
 )
 

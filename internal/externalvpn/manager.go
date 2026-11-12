@@ -559,6 +559,12 @@ type (
 )
 
 func (m *Manager) CollectTraffic() []TrafficDelta {
+	deltas, _ := m.CollectTrafficChecked()
+	return deltas
+}
+
+func (m *Manager) CollectTrafficChecked() ([]TrafficDelta, error) {
+	var collectErr error
 	m.mu.Lock()
 	processes := make([]*running, 0, len(m.procs))
 	for _, proc := range m.procs {
@@ -582,33 +588,39 @@ func (m *Manager) CollectTraffic() []TrafficDelta {
 			if proc.stopping.Load() {
 				return
 			}
-			rows := m.collectProcessTraffic(proc)
+			rows, err := m.collectProcessTrafficChecked(proc)
 			resultMu.Lock()
+			if err != nil {
+				collectErr = errors.Join(collectErr, fmt.Errorf("%s inbound %d: %w", proc.protocol, proc.instance.ID, err))
+			}
 			deltas = append(deltas, rows...)
 			resultMu.Unlock()
 		}(proc)
 	}
 	wg.Wait()
-	return deltas
+	return deltas, collectErr
 }
 
 var metricsHTTPClient = &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil, MaxIdleConns: 32, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}}
 
-func (m *Manager) collectProcessTraffic(proc *running) []TrafficDelta {
+func (m *Manager) collectProcessTrafficChecked(proc *running) ([]TrafficDelta, error) {
 	var deltas []TrafficDelta
 	if proc.protocol == model.FPTN || proc.protocol == model.OpenFlux {
-		return m.collectAdditionalTraffic(proc)
+		return m.collectAdditionalTrafficChecked(proc)
 	}
 	if proc.metricsAddr == "" {
-		return nil
+		if proc.protocol == model.TrustTunnel {
+			return nil, errors.New("client metrics unavailable")
+		}
+		return nil, nil // This protocol does not expose per-client metrics.
 	}
 	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+proc.metricsAddr+"/clients", nil)
 	if err != nil {
-		return nil
+		return nil, errors.New("client metrics unavailable")
 	}
 	response, err := metricsHTTPClient.Do(request)
 	if err != nil {
-		return nil
+		return nil, errors.New("client metrics unavailable")
 	}
 	var clients []struct {
 		Username string `json:"username"`
@@ -616,11 +628,14 @@ func (m *Manager) collectProcessTraffic(proc *running) []TrafficDelta {
 		Inbound  uint64 `json:"inbound"`
 		Outbound uint64 `json:"outbound"`
 	}
-	if response.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&clients) != nil {
-		response.Body.Close()
-		return nil
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, errors.New("client metrics response rejected")
 	}
-	response.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
+	if err != nil || len(data) > 1<<20 || json.Unmarshal(data, &clients) != nil || clients == nil {
+		return nil, errors.New("invalid client metrics response")
+	}
 	for _, row := range clients {
 		if row.Username == "" {
 			continue
@@ -639,5 +654,5 @@ func (m *Manager) collectProcessTraffic(proc *running) []TrafficDelta {
 		}
 		proc.counters[row.Username] = trafficCounters{up: up, down: down}
 	}
-	return deltas
+	return deltas, nil
 }
