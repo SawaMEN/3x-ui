@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Button, Checkbox, Input, Modal, Select, Space, Typography } from 'antd';
 import type { NodeRecord } from '@/schemas/node';
 import { HttpUtil } from '@/utils';
-import MainNodeDNS01Setup from '@/components/MainNodeDNS01Setup';
+import MainNodeDNS01Setup, { useMainNodeDNS01Readiness } from '@/components/MainNodeDNS01Setup';
 import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
 
 type EditableCoverSite = {
@@ -45,6 +45,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   const [siteCatalog, setSiteCatalog] = useState<'builtin' | 'mtproxyl'>('builtin');
   const [siteTemplate, setSiteTemplate] = useState('notes');
   const [issueOnMain, setIssueOnMain] = useState(false);
+  const dns01 = useMainNodeDNS01Readiness(domain);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -125,8 +126,9 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   const online = nodes.filter(
     (node) => node.id > 0 && node.enable && node.status === 'online' && !node.transitive,
   );
-  const submit = async () => {
+  const submit = async (dnsJustConfigured = false) => {
     if (saving || mainCertificate || !domain.trim()) return;
+    if (nodeId > 0 && issueOnMain && !dns01.ready && !dnsJustConfigured) return;
     if (!selectedExisting && (!email.trim() || !acceptTerms)) return;
     setSaving(true);
     setError('');
@@ -229,7 +231,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       okButtonProps={{
         disabled:
           !mainCertificate &&
-          (!domain.trim() || (!selectedExisting && (!email.trim() || !acceptTerms))),
+          (!domain.trim() || (!selectedExisting && (!email.trim() || !acceptTerms || (nodeId > 0 && issueOnMain && !dns01.ready)))),
       }}
       destroyOnHidden
     >
@@ -360,8 +362,8 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             type="info"
             showIcon
             title={t(
-              'Для выпуска на основной ноде настройте DNS-01 (Cloudflare или DigitalOcean) кнопкой ниже.',
-              'Configure main-node DNS-01 (Cloudflare or DigitalOcean) using the button below.',
+              'Сертификат на основной ноде требует доступа к DNS выбранного домена. Настройка ниже проверяется до создания сайта.',
+              'The main-node certificate requires DNS access for this hostname. Setup is checked before provisioning.',
             )}
             description={t(
               'Сертификат и приватный ключ создаются на основном сервере без копирования с удалённого и без занятия портов 80/443. После выпуска локальные пути доступны в списке сертификатов и TLS/SNI.',
@@ -369,7 +371,14 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             )}
           />
         )}
-        {nodeId > 0 && !selectedExisting && issueOnMain && <MainNodeDNS01Setup />}
+        {nodeId > 0 && !selectedExisting && issueOnMain && (
+          <MainNodeDNS01Setup
+            domain={domain}
+            onConfigured={() => {
+              if (domain.trim() && email.trim() && acceptTerms) void submit(true);
+            }}
+          />
+        )}
         {!selectedExisting && (
           <Checkbox checked={acceptTerms} onChange={(ev) => setAcceptTerms(ev.target.checked)}>
             {t(
