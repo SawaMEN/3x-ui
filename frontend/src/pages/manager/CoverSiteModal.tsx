@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Checkbox, Input, Modal, Select, Space, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Input, Modal, Segmented, Select, Space, Typography } from 'antd';
 import type { NodeRecord } from '@/schemas/node';
 import { HttpUtil } from '@/utils';
 import MainNodeDNS01Setup, { useMainNodeDNS01Readiness } from '@/components/MainNodeDNS01Setup';
 import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
+import CoverSiteHTMLEditor, { coverSiteHTMLValidation, starterCoverSiteHTML } from '@/components/CoverSiteHTMLEditor';
 
 type EditableCoverSite = {
   nodeId: number;
@@ -42,8 +43,9 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   });
   const [domain, setDomain] = useState('');
   const [email, setEmail] = useState('');
-  const [siteCatalog, setSiteCatalog] = useState<'builtin' | 'mtproxyl'>('builtin');
+  const [siteCatalog, setSiteCatalog] = useState<'builtin' | 'mtproxyl' | 'custom'>('builtin');
   const [siteTemplate, setSiteTemplate] = useState('notes');
+  const [siteHTML, setSiteHTML] = useState(starterCoverSiteHTML);
   const [issueOnMain, setIssueOnMain] = useState(false);
   const dns01 = useMainNodeDNS01Readiness(domain);
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -105,29 +107,64 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
     (site) => site.nodeId === nodeId && site.domain === domain.trim().toLowerCase(),
   );
   const nodeSites = existingSites.filter((site) => site.nodeId === nodeId);
+  const isCustom = siteCatalog === 'custom';
+  const htmlError = isCustom ? coverSiteHTMLValidation(siteHTML) : null;
+  const { data: savedContent, isFetching: loadingContent, error: contentError } = useQuery({
+    queryKey: ['manager', 'cover-site-content', nodeId, selectedExisting?.domain],
+    enabled: open && selectedExisting?.siteCatalog === 'custom',
+    staleTime: Infinity,
+    retry: false,
+    queryFn: async (): Promise<{ domain: string; nodeId: number; html: string }> => {
+      const selected = selectedExisting;
+      if (!selected) throw new Error('Cover site not selected');
+      const response = await HttpUtil.get<{ html: string }>(
+        '/panel/api/domains/cover-sites/content',
+        { nodeId: selected.nodeId, domain: selected.domain },
+        { silent: true },
+      );
+      if (!response?.success || typeof response.obj?.html !== 'string') {
+        throw new Error(response?.msg || t('Не удалось загрузить HTML', 'Unable to load HTML'));
+      }
+      return { nodeId: selected.nodeId, domain: selected.domain, html: response.obj.html };
+    },
+  });
+  useEffect(() => {
+    if (savedContent && selectedExisting?.domain === savedContent.domain && nodeId === savedContent.nodeId) {
+      setSiteHTML(savedContent.html);
+    }
+  }, [savedContent, selectedExisting?.domain, nodeId]);
+
   const chooseExisting = (value?: string) => {
     const selected = nodeSites.find((site) => site.domain === value);
     if (!selected) {
       setDomain('');
       return;
     }
-    const catalog = selected.siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin';
-    const template = TelemtWebCatalogs[catalog].templates.some(
-      (item) => item.id === selected.siteTemplate,
-    )
-      ? selected.siteTemplate
-      : catalog === 'builtin'
-        ? 'notes'
-        : 'stub';
+    if (selected.siteCatalog === 'custom' && selected.siteTemplate === 'html') {
+      setSiteCatalog('custom');
+      setSiteTemplate('html');
+      setSiteHTML('');
+    } else {
+      const catalog = selected.siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin';
+      const template = TelemtWebCatalogs[catalog].templates.some(
+        (item) => item.id === selected.siteTemplate,
+      )
+        ? selected.siteTemplate
+        : catalog === 'builtin'
+          ? 'notes'
+          : 'stub';
+      setSiteCatalog(catalog);
+      setSiteTemplate(template);
+      setSiteHTML(starterCoverSiteHTML);
+    }
     setDomain(selected.domain);
-    setSiteCatalog(catalog);
-    setSiteTemplate(template);
   };
   const online = nodes.filter(
     (node) => node.id > 0 && node.enable && node.status === 'online' && !node.transitive,
   );
   const submit = async (dnsJustConfigured = false) => {
-    if (saving || mainCertificate || !domain.trim()) return;
+    if (saving || mainCertificate || !domain.trim() || htmlError) return;
+    if (isCustom && selectedExisting?.siteCatalog === 'custom' && (loadingContent || contentError)) return;
     if (nodeId > 0 && issueOnMain && !dns01.ready && !dnsJustConfigured) return;
     if (!selectedExisting && (!email.trim() || !acceptTerms)) return;
     setSaving(true);
@@ -136,7 +173,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       if (selectedExisting) {
         const response = await HttpUtil.post(
           '/panel/api/domains/cover-sites/change-template',
-          { nodeId, domain: selectedExisting.domain, siteCatalog, siteTemplate },
+          { nodeId, domain: selectedExisting.domain, siteCatalog, siteTemplate, siteHtml: isCustom ? siteHTML : '' },
           { headers: { 'Content-Type': 'application/json' }, silent: true },
         );
         if (!response?.success) {
@@ -160,6 +197,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
           acceptTerms,
           siteCatalog,
           siteTemplate,
+          siteHtml: isCustom ? siteHTML : '',
           issueOnMain: nodeId > 0 && issueOnMain,
         },
         { headers: { 'Content-Type': 'application/json' }, silent: true },
@@ -202,6 +240,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       setDomain('');
       setSiteCatalog('builtin');
       setSiteTemplate('notes');
+      setSiteHTML(starterCoverSiteHTML);
       setAcceptTerms(false);
       setIssueOnMain(false);
       onClose();
@@ -214,6 +253,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
   return (
     <Modal
       open={open}
+      width={760}
       title={t(
         'Собственный сайт-заглушка с автоматическим TLS',
         'Owned HTTPS cover site with automatic TLS',
@@ -231,7 +271,8 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
       okButtonProps={{
         disabled:
           !mainCertificate &&
-          (!domain.trim() ||
+          (!domain.trim() || Boolean(htmlError) ||
+            (isCustom && selectedExisting?.siteCatalog === 'custom' && (loadingContent || Boolean(contentError))) ||
             (!selectedExisting &&
               (!email.trim() || !acceptTerms || (nodeId > 0 && issueOnMain && !dns01.ready)))),
       }}
@@ -259,6 +300,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
               setDomain('');
               setSiteCatalog('builtin');
               setSiteTemplate('notes');
+              setSiteHTML(starterCoverSiteHTML);
               setIssueOnMain(false);
             }}
             style={{ width: '100%' }}
@@ -284,8 +326,8 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
           {selectedExisting && (
             <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
               {t(
-                'Выберите другой шаблон ниже. Домен и сертификат сохранятся.',
-                'Choose a new template below. The domain and its certificate stay unchanged.',
+                'Можно заменить шаблон или изменить собственный HTML. Домен и сертификат сохранятся.',
+                'You can change the template or edit your HTML. The domain and certificate stay unchanged.',
               )}
             </Typography.Text>
           )}
@@ -299,44 +341,85 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             maxLength={253}
           />
         </div>
-        <div>
-          <Typography.Text>{t('Каталог сайта-заглушки', 'Cover site catalog')}</Typography.Text>
-          <Select
-            value={siteCatalog}
-            onChange={(value) => {
-              setSiteCatalog(value);
-              setSiteTemplate(value === 'builtin' ? 'notes' : 'stub');
-            }}
-            style={{ width: '100%' }}
-            options={Object.entries(TelemtWebCatalogs).map(([value, entry]) => ({
-              value,
-              label: ru ? entry.ru : entry.en,
-            }))}
-          />
-        </div>
-        <div>
-          <Typography.Text>
-            {selectedExisting
-              ? t('На какой сайт заменить заглушку', 'Replacement website template')
-              : t('Какой сайт создать', 'Website template')}
-          </Typography.Text>
-          <Select
-            value={siteTemplate}
-            onChange={setSiteTemplate}
-            style={{ width: '100%' }}
-            options={TelemtWebCatalogs[siteCatalog].templates.map((entry) => ({
-              value: entry.id,
-              label: ru ? entry.ru : entry.en,
-              title: ru ? entry.descriptionRu : entry.descriptionEn,
-            }))}
-          />
-          <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
-            {t(
-              'Для изменения существующей заглушки укажите ту же ноду и домен и выберите другой сайт.',
-              'To edit an existing cover site, select the same node and domain with a different template.',
+        <Card size="small" title={t('Страница сайта-заглушки', 'Cover website page')}>
+          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+            <Segmented
+              block
+              value={isCustom ? 'custom' : 'templates'}
+              onChange={(value) => {
+                if (value === 'custom') {
+                  setSiteCatalog('custom');
+                  setSiteTemplate('html');
+                } else {
+                  setSiteCatalog('builtin');
+                  setSiteTemplate('notes');
+                }
+              }}
+              options={[
+                { value: 'templates', label: t('Готовая страница', 'Ready-made template') },
+                { value: 'custom', label: t('Свой HTML', 'Custom HTML') },
+              ]}
+            />
+            {isCustom ? (
+              <>
+                {selectedExisting?.siteCatalog === 'custom' && loadingContent && (
+                  <Typography.Text type="secondary">
+                    {t('Загружаем сохранённую страницу…', 'Loading saved website…')}
+                  </Typography.Text>
+                )}
+                {selectedExisting?.siteCatalog === 'custom' && contentError && (
+                  <Alert type="error" showIcon title={t('Не удалось загрузить сохранённый HTML. Повторите открытие страницы.', 'Could not load saved HTML. Reopen the page and retry.')} />
+                )}
+                <CoverSiteHTMLEditor
+                  value={siteHTML}
+                  onChange={setSiteHTML}
+                  disabled={selectedExisting?.siteCatalog === 'custom' && loadingContent}
+                />
+              </>
+            ) : (
+              <>
+                <div>
+                  <Typography.Text>{t('Коллекция', 'Collection')}</Typography.Text>
+                  <Select
+                    value={siteCatalog}
+                    onChange={(value: 'builtin' | 'mtproxyl') => {
+                      setSiteCatalog(value);
+                      setSiteTemplate(value === 'builtin' ? 'notes' : 'stub');
+                    }}
+                    style={{ width: '100%' }}
+                    options={Object.entries(TelemtWebCatalogs).map(([value, entry]) => ({
+                      value, label: ru ? entry.ru : entry.en,
+                    }))}
+                  />
+                </div>
+                <div>
+                  <Typography.Text>{t('Дизайн страницы', 'Page design')}</Typography.Text>
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    value={siteTemplate}
+                    onChange={setSiteTemplate}
+                    style={{ width: '100%' }}
+                    options={TelemtWebCatalogs[siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'].templates.map((entry) => ({
+                      value: entry.id, label: ru ? entry.ru : entry.en,
+                    }))}
+                  />
+                  <Typography.Text type="secondary" style={{ display: 'block', marginTop: 6 }}>
+                    {(() => {
+                      const selected = TelemtWebCatalogs[siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'].templates.find(
+                        (entry) => entry.id === siteTemplate,
+                      );
+                      return selected ? (ru ? selected.descriptionRu : selected.descriptionEn) : '';
+                    })()}
+                  </Typography.Text>
+                </div>
+              </>
             )}
-          </Typography.Text>
-        </div>
+            <Typography.Text type="secondary">
+              {t('После сохранения выбранная страница автоматически размещается на ноде. Смена оформления не меняет TLS и маршруты.', 'After saving, the selected page is published on the node automatically. TLS and routes remain unchanged.')}
+            </Typography.Text>
+          </Space>
+        </Card>
         {!selectedExisting && (
           <div>
             <Typography.Text>

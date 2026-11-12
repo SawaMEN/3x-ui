@@ -601,6 +601,7 @@ export interface DomainFrontDomain {
   panel: boolean;
   siteCatalog?: string;
   siteTemplate?: string;
+  siteHtml?: string;
   tls: string;
 }
 

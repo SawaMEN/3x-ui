@@ -2542,6 +2542,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "siteTemplate": {
         "type": "string"
       },
+      "siteHtml": {
+        "type": "string"
+      },
       "tls": {
         "example": "auto",
         "type": "string"
