@@ -29,7 +29,7 @@ export default function LocalCertificateAssistant({
 }) {
   const { control, getValues, setValue } = useFormContext();
   const queryClient = useQueryClient();
-  const lastAutomatic = useRef<ResolvedCertificate & { nodeId: number } | null>(null);
+  const lastAutomatic = useRef<(ResolvedCertificate & { nodeId: number }) | null>(null);
   const { i18n } = useTranslation();
   const t = (ru: string, en: string) => (i18n.language.startsWith('ru') ? ru : en);
   const protocol = String(useWatch({ control, name: 'protocol' }) || '');
@@ -84,7 +84,8 @@ export default function LocalCertificateAssistant({
         (found?.nodeId ?? 0) !== (nodeId ?? 0) ||
         !found.certFile ||
         !found.keyFile
-      ) return null;
+      )
+        return null;
       return found;
     },
   });
@@ -98,7 +99,7 @@ export default function LocalCertificateAssistant({
             expiresAt: localCertificate.expiresAt || 0,
             nodeId: 0,
           }
-        : remoteLookup.data ?? null,
+        : (remoteLookup.data ?? null),
     [local, localCertificate, remoteLookup.data, rsaOnly],
   );
   // Reuse only a verified certificate on the chosen machine. Never replace
@@ -110,7 +111,8 @@ export default function LocalCertificateAssistant({
       rsaOnly &&
       (String(getValues('settings.certificatePEM') || '') ||
         String(getValues('settings.privateKeyPEM') || ''))
-    ) return;
+    )
+      return;
     const pair = { certFile: certificate.certFile, keyFile: certificate.keyFile };
     if (!pair.certFile || !pair.keyFile) return;
     const savedNode = nodeId ?? 0;
@@ -132,8 +134,7 @@ export default function LocalCertificateAssistant({
         [key: string]: unknown;
       }>;
       const first = rows[0];
-      if (first && !first.useFile && (first.certificate?.length || first.key?.length))
-        return;
+      if (first && !first.useFile && (first.certificate?.length || first.key?.length)) return;
       if (!canReplace(first?.certificateFile || '', first?.keyFile || '')) return;
       if (first?.certificateFile !== pair.certFile || first?.keyFile !== pair.keyFile) {
         setValue(
@@ -162,8 +163,7 @@ export default function LocalCertificateAssistant({
       if (!canReplace(currentCert, currentKey)) return;
       if (currentCert !== pair.certFile) setValue(certField, pair.certFile, opts);
       if (currentKey !== pair.keyFile) setValue(keyField, pair.keyFile, opts);
-      if (autoTLSField && getValues(autoTLSField) !== false)
-        setValue(autoTLSField, false, opts);
+      if (autoTLSField && getValues(autoTLSField) !== false) setValue(autoTLSField, false, opts);
     }
     lastAutomatic.current = {
       ...pair,
@@ -172,8 +172,20 @@ export default function LocalCertificateAssistant({
       nodeId: savedNode,
     };
   }, [
-    autoTLSField, certField, certificate, disabled, fields, getValues, keyField,
-    local, nodeId, normalized, rsaOnly, setValue, sites, validSni,
+    autoTLSField,
+    certField,
+    certificate,
+    disabled,
+    fields,
+    getValues,
+    keyField,
+    local,
+    nodeId,
+    normalized,
+    rsaOnly,
+    setValue,
+    sites,
+    validSni,
   ]);
 
   if (!fields || !validSni || disabled) return null;
@@ -185,10 +197,12 @@ export default function LocalCertificateAssistant({
       (String(getValues('settings.certificatePEM') || '') ||
         String(getValues('settings.privateKeyPEM') || ''))
     ) {
-      setError(t(
-        'Сначала очистите встроенный PEM-сертификат FPTN.',
-        'Clear the embedded FPTN PEM certificate before transferring.',
-      ));
+      setError(
+        t(
+          'Сначала очистите встроенный PEM-сертификат FPTN.',
+          'Clear the embedded FPTN PEM certificate before transferring.',
+        ),
+      );
       return;
     }
     setError('');
