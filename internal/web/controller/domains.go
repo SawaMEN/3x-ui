@@ -139,7 +139,7 @@ func (a *DomainController) coverSiteContent(c *gin.Context) {
 		jsonObj(c, nil, fmt.Errorf("invalid node"))
 		return
 	}
-	content, err := service.ManagedCoverSiteContent(c.Request.Context(), nodeID, c.Query("domain"))
+	content, err := service.ReadManagedCoverSiteContent(c.Request.Context(), nodeID, c.Query("domain"))
 	jsonObj(c, content, err)
 }
 
