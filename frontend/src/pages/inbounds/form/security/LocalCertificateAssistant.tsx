@@ -5,6 +5,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { Alert, Button, Checkbox, Input, Modal, Space, Typography } from 'antd';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import { HttpUtil } from '@/utils';
+import MainNodeDNS01Setup from '@/components/MainNodeDNS01Setup';
 import {
   localCertificateFields,
   mayReplaceCertificatePair,
@@ -317,6 +318,45 @@ export default function LocalCertificateAssistant({
     }
   };
 
+  const issuanceModal = (
+    <Modal
+      open={open}
+      title={t('TLS-сертификат на основной ноде', 'TLS certificate on the main node')}
+      onCancel={() => setOpen(false)}
+      onOk={() => void issue()}
+      okText={t('Выпустить через DNS-01', 'Issue via DNS-01')}
+      confirmLoading={issuing}
+      okButtonProps={{ disabled: !email.trim() || !consent }}
+    >
+      <Space orientation="vertical" style={{ width: '100%' }}>
+        <Alert
+          type="info"
+          showIcon
+          description={t(
+            'Используется DNS-01 основной ноды. Сертификат и ключ будут храниться на ней. Если DNS-01 ещё не настроен, нажмите «Настроить DNS-01» ниже.',
+            'The certificate and key are issued and stored on the main node. If DNS-01 is not configured yet, use Configure DNS-01 below.',
+          )}
+        />
+        <MainNodeDNS01Setup />
+        <Typography.Text>{normalized}</Typography.Text>
+        <Input
+          type="email"
+          maxLength={254}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email для Let's Encrypt"
+        />
+        <Checkbox checked={consent} onChange={(e) => setConsent(e.target.checked)}>
+          {t(
+            'Я владею доменом и принимаю условия Let’s Encrypt.',
+            'I control this domain and accept the Let’s Encrypt terms.',
+          )}
+        </Checkbox>
+        {error && <Alert showIcon type="error" title={error} />}
+      </Space>
+    </Modal>
+  );
+
   if (!local) {
     return (
       <div style={{ marginTop: 6 }}>
@@ -340,12 +380,27 @@ export default function LocalCertificateAssistant({
           <Alert
             type="warning"
             showIcon
-            description={t(
-              'Сначала выпустите сертификат для управляемого домена на основной ноде через DNS-01.',
-              'First issue a certificate for your controlled domain on the main node via DNS-01.',
-            )}
+            description={
+              <Space orientation="vertical">
+                <Typography.Text>
+                  {t(
+                    'Сначала выпустите сертификат для управляемого домена на основной ноде через DNS-01.',
+                    'First issue a certificate for your controlled domain on the main node via DNS-01.',
+                  )}
+                </Typography.Text>
+                <Button size="small" onClick={() => setOpen(true)}>
+                  {t('Выпустить сертификат (DNS-01)', 'Issue certificate (DNS-01)')}
+                </Button>
+                {pending && (
+                  <Button size="small" onClick={() => void refetch()}>
+                    {t('Проверить выпуск', 'Check issuance')} ({pending})
+                  </Button>
+                )}
+              </Space>
+            }
           />
         )}
+        {issuanceModal}
         {transferred && <Alert type="success" showIcon title={transferred} />}
         {error && <Alert type="error" showIcon title={error} />}
       </div>
@@ -377,41 +432,7 @@ export default function LocalCertificateAssistant({
           )}
         </Space>
       )}
-      <Modal
-        open={open}
-        title={t('TLS-сертификат на основной ноде', 'TLS certificate on the main node')}
-        onCancel={() => setOpen(false)}
-        onOk={() => void issue()}
-        okText={t('Выпустить через DNS-01', 'Issue via DNS-01')}
-        confirmLoading={issuing}
-        okButtonProps={{ disabled: !email.trim() || !consent }}
-      >
-        <Space orientation="vertical" style={{ width: '100%' }}>
-          <Alert
-            type="info"
-            showIcon
-            description={t(
-              'Используется DNS-01 основной ноды. Сертификат и ключ будут храниться локально. Настройте DNS-01 в разделе «Домены и TLS».',
-              'The certificate and key are issued and stored on the main node. Configure DNS-01 under Domains & TLS.',
-            )}
-          />
-          <Typography.Text>{normalized}</Typography.Text>
-          <Input
-            type="email"
-            maxLength={254}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email для Let's Encrypt"
-          />
-          <Checkbox checked={consent} onChange={(e) => setConsent(e.target.checked)}>
-            {t(
-              'Я владею доменом и принимаю условия Let’s Encrypt.',
-              'I control this domain and accept the Let’s Encrypt terms.',
-            )}
-          </Checkbox>
-          {error && <Alert showIcon type="error" title={error} />}
-        </Space>
-      </Modal>
+      {issuanceModal}
     </div>
   );
 }

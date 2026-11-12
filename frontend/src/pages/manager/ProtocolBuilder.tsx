@@ -1,3 +1,4 @@
+import MainNodeDNS01Setup from '@/components/MainNodeDNS01Setup';
 import { useMemo, useState } from 'react';
 import {
   Alert,
@@ -726,6 +727,7 @@ export default function ProtocolBuilder({ nodes, domains, currentCount, russian,
               'Choose a TLS hostname per protocol or node. The main node issues its own certificate via DNS-01 without public ports 80/443; remote nodes use Domain Front. Private keys are never copied.',
             )}
           </Typography.Text>
+          {nodeIds.includes(0) && <MainNodeDNS01Setup />}
           <Input
             value={acmeEmail}
             onChange={(event) => setAcmeEmail(event.target.value)}

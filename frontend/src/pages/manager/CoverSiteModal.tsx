@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Button, Checkbox, Input, Modal, Select, Space, Typography } from 'antd';
 import type { NodeRecord } from '@/schemas/node';
 import { HttpUtil } from '@/utils';
+import MainNodeDNS01Setup from '@/components/MainNodeDNS01Setup';
 import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
 
 type EditableCoverSite = {
@@ -359,8 +360,8 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             type="info"
             showIcon
             title={t(
-              'Настройте DNS-01 (Cloudflare или DigitalOcean) на основной ноде в «Домены и TLS».',
-              'Configure DNS-01 (Cloudflare or DigitalOcean) on the main node under Domains & TLS.',
+              'Для выпуска на основной ноде настройте DNS-01 (Cloudflare или DigitalOcean) кнопкой ниже.',
+              'Configure main-node DNS-01 (Cloudflare or DigitalOcean) using the button below.',
             )}
             description={t(
               'Сертификат и приватный ключ создаются на основном сервере без копирования с удалённого и без занятия портов 80/443. После выпуска локальные пути доступны в списке сертификатов и TLS/SNI.',
@@ -368,6 +369,7 @@ export default function CoverSiteModal({ open, nodes, onClose, onSuccess }: Prop
             )}
           />
         )}
+        {nodeId > 0 && !selectedExisting && issueOnMain && <MainNodeDNS01Setup />}
         {!selectedExisting && (
           <Checkbox checked={acceptTerms} onChange={(ev) => setAcceptTerms(ev.target.checked)}>
             {t(
