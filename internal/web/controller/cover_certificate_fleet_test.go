@@ -6,9 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/wirecodec"
-	"github.com/gin-gonic/gin"
 )
 
 func TestCoverCertificateExportRequiresAuthenticatedMaster(t *testing.T) {

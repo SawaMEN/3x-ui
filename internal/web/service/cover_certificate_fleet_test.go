@@ -5,10 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/wirecodec"
-	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +17,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/wirecodec"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
 func TestCoverCertificateFleetValidationAndRemoval(t *testing.T) {
