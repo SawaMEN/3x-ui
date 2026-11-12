@@ -3,7 +3,6 @@ package job
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -16,19 +15,31 @@ import (
 // per-client traffic scraped from each Telemt API into the usual client and
 // inbound traffic accounting.
 type MtprotoJob struct {
+	ctx            context.Context
 	inboundService service.InboundService
 	mu             sync.Mutex
 	pending        pendingTrafficBatch
 }
 
 // NewMtprotoJob creates a new MTProto reconcile/traffic job instance.
-func NewMtprotoJob() *MtprotoJob {
-	return new(MtprotoJob)
+func NewMtprotoJob(parents ...context.Context) *MtprotoJob {
+	ctx := context.Background()
+	if len(parents) > 0 && parents[0] != nil {
+		ctx = parents[0]
+	}
+	return &MtprotoJob{ctx: ctx}
 }
 
 // Run reconciles desired MTProto inbounds with running Telemt processes and
 // records per-client traffic deltas and online status.
 func (j *MtprotoJob) Run() {
+	ctx := j.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctx.Err() != nil {
+		return
+	}
 	// CollectTrafficConsistent advances Telemt's per-client snapshot baseline.
 	// Serialize the poll so two scheduler runs cannot consume overlapping snapshots.
 	j.mu.Lock()
@@ -66,7 +77,7 @@ func (j *MtprotoJob) Run() {
 	}
 
 	deltas, onlineEmails := mgr.CollectTrafficConsistent()
-	webDeltas, webOnline, webTag, webErr := service.CollectMtprotoWebTraffic(context.Background())
+	webDeltas, webOnline, webTag, webErr := service.CollectMtprotoWebTraffic(ctx)
 	if webErr != nil {
 		logger.Warning("mtproto job: WEB traffic poll failed:", webErr)
 	} else {
@@ -115,14 +126,4 @@ func (j *MtprotoJob) Run() {
 	}
 
 	j.inboundService.RefreshLocalOnlineClients(onlineEmails, activeTags)
-	// WEB Proxy uses its own HTTPS frontend and Telemt backend, while ordinary
-	// MTProto inbounds above run as raw sidecars. Reconcile in a separate
-	// goroutine to avoid holding the traffic-poll lock during ACME requests.
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
-		defer cancel()
-		if err := service.ReconcileMtprotoWebProxy(ctx); err != nil {
-			logger.Warning("mtproto job: reconcile WEB Proxy failed:", err)
-		}
-	}()
 }

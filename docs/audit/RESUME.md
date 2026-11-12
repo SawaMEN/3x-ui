@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 80 подтверждённых исправлений панели; A77–A80 — текущая группа из 4 исправлений.
+Всего реализовано 83 подтверждённых исправления панели; A81–A83 — текущая группа из 3 исправлений.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 243 файла, осталось 2121; общий проход не завершён.
+Проверено вручную 250 файлов, осталось 2114; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -372,7 +372,8 @@ version и tags на обеих архитектурах. Локальный ARM
 - До исправлений все три новые regression проверки падали с описанными
   симптомами. После исправлений целевые tests/benchmark PASS (0,387 с).
 - Полный internal/sub PASS (28,993 с), целевые routing/template tests с -race
-  PASS (8,008 с), полный golangci-lint 2.15.0: 0 issues.
+  PASS (8,008 с), полный golangci-lint 2.15.0: 0 issues. Финальные TUIC aggregation/shutdown journal
+race tests PASS 3.748s.
 - Для race использован GOCACHE=/home/agent/.cache/3x-ui-audit-race, для normal
   GOCACHE=/tmp/3x-ui-go1274-cache: это отдельные временные кэши, чтобы не заполнить /tmp.
 - Полностью прочитано ещё 9 исходных файлов: remote routing и его tests,
@@ -965,3 +966,74 @@ setup/issuance для remote inbounds). Backend этой входящей гру
 он удалён после запуска. Полный frontend test suite этим не засчитывается.
 
 TypeScript --noEmit на объединённом frontend: PASS.
+
+
+## Контрольная точка A81–A83: подготовка probe-туннелей, WEB worker, TUIC
+
+A77–A80 опубликованы в 4e0c1b34f6c475bcfe2bda1aa8f9a590ee3db290.
+Нужно 3 исправления; реализовано 3, осталось 0 реализации. Всего 83.
+Reviewed 250/2364, осталось 2114; stale 0. Исходный scope f3baf84 не расширяется.
+
+- A81: EnsureProbeOutbound не принимал context. До правки canceled waiter ждал
+  чужой outbound lock; OpenFlux probe возвращал nil вместо cancellation; Docker
+  image inspect продолжал работать. Все три regression воспроизведены до правки.
+  Новый context-aware API используется bridgeManagedProbeOutbounds. Общий lock
+  сохраняет прежние production Lock/Unlock, но probe может покинуть очередь до
+  владения какими-либо ресурсами. Setup image inspect/pre-cleanup, grace period,
+  SOCKS readiness, FPTN exec readiness получают context; probe child привязан к
+  нему. Реальный production child не привязан к краткому caller context.
+  Cleanup остаётся независимым/ограниченным, чтобы cancel не оставлял контейнер.
+  Проверены удаление приватных файлов, завершение child, отмена после успешного
+  старта и сохранность production tunnel с тем же исходным tag. Readiness всех
+  четырёх протоколов проверена с synctest без минутного ожидания.
+- A82: MtprotoJob.Run запускал WEB Proxy reconciliation в detached goroutine
+  с Background/4m. Real GORM callback regression подтвердил, что Run уже вернулся,
+  а worker ещё использовал БД. Теперь это отдельный синхронный MtprotoWebJob,
+  зарегистрированный в cron и initial worker join сервера. Его длительная работа
+  не блокирует traffic job; parent cancellation доходит до worker, overlap guard
+  не запускает второй worker. Тест подтверждает, что Run ждёт освобождения
+  ресурсов даже после получения cancel. MTProto traffic poll тоже получает ctx
+  для WEB HTTP stats и пропускает уже отменённый tick.
+- A83: aggregateTuicClientTraffic складывал raw int64 без границ и принимал
+  отрицательные дельты. До правки все три identity regressions нарушали bounds.
+  Теперь используется saturating/nonnegative accumulateTrafficDelta, общий для
+  traffic jobs. Проверены traffic ID, legacy email, inbound+UUID и настоящий
+  SQLite journal replay: сумма двух больших значений ограничена TrafficMax,
+  отрицательная дельта не вычитает байты; replay той же записи не начисляет дважды.
+
+Normal targeted externalvpn PASS 2.069s, job PASS 0.488s. Расширенные TUIC bounds
+и SQLite shutdown/replay tests PASS 0.537s. Расширенные race tests: externalvpn PASS 3.387s, job PASS 4.779s,
+outbound PASS 1.222s, web PASS 8.514s. go build ./... и go vet ./... PASS;
+golangci-lint 2.15.0: 0 issues. Финальные TUIC aggregation/shutdown journal
+race tests PASS 3.748s. git diff --check и inventory check PASS.
+Воспроизведение A81: three failures 1.02s/0.50s/1.03s. A82: Run вернулся при
+активном WEB DB callback (0.37s); A83: все три identity cases FAIL до правки.
+
+Вспомогательная переносимость тестов: Unix-only sidecar regression из A79/A80
+и новые shell/kill fixtures ограничены build tag !windows, чтобы syscall.Kill
+не ломал Windows test compilation. Это не считается новым исправлением исходного
+коммита. Удалён больше не вызываемый private vetroffSocksReady Background wrapper.
+
+Тесты используют fake Docker executable в temporary PATH: host Docker daemon,
+NET_ADMIN и реальные tunnel containers не запускаются. OpenFlux fixture — owned
+exec sleep 60, который убивается и reap-ится. No real ACME or host firewall apply.
+WEB traffic regression использует пустую временную БД и stub systemctl; detached
+query контролируется callback, реальные listener/service mutations не требуются.
+
+Следующая очередь:
+- pendingTrafficBatch у Mieru/MTProto/externalvpn хранится внутри job и не имеет
+  durable replay. При создании новой панели pending batch может быть утрачен;
+  full stop пока flush-ит только TUIC journal. Нужен journal/receipt lifecycle
+  с устойчивой client/inbound identity, проверками DB failure, replay once,
+  rename/delete и исключением начисления новому пользователю с прежним email.
+  Не заменять это простым финальным Run, который может снова запустить sidecars.
+- У этих managers остаётся проверка последних runtime deltas до StopAll.
+  A83 закрывает TUIC aggregation bounds, а не финальную статистику всех протоколов.
+- A81 относится к isolated probes. Production apply/supervisor APIs и независимый
+  bounded teardown сохраняют прежние контексты; не объявлять весь manager отменяемым.
+- Telemt WEB service global operation locks/внутренние команды ещё требуют
+  проверки отмены и deadlines. A82 гарантирует владельца/join worker, а не мгновенную
+  отмену каждой внутренней операции ACME/systemctl.
+- Request-triggered routing workers, TLS startup downgrade, SQL fixture и остальные
+  pending подсистемы, прежние R04/R05 остаются открыты. Общий go test ./... не запускать
+  до исправления ранее описанного public-IP discovery в тестах.

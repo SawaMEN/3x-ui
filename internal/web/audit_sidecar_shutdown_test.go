@@ -1,3 +1,5 @@
+//go:build !windows
+
 package web
 
 import (
@@ -5,7 +7,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,9 +23,6 @@ import (
 )
 
 func TestSudokuSurvivesPanelReloadAndStopsOnShutdown(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Unix shell fixture")
-	}
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
 	t.Setenv("XUI_DB_FOLDER", t.TempDir())
@@ -67,9 +65,6 @@ func TestSudokuSurvivesPanelReloadAndStopsOnShutdown(t *testing.T) {
 }
 
 func TestShutdownStopsSidecarReconciledByLastCronTick(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Unix child fixture")
-	}
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
 	t.Setenv("XUI_DB_FOLDER", t.TempDir())

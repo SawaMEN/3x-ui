@@ -90,8 +90,8 @@ func aggregateTuicClientTraffic(clientDeltas []tuic.ClientTrafficDelta, onlineEm
 			traffic = &coremodel.ClientTraffic{Email: cd.Email, TuicTrafficID: cd.TrafficID, TuicUUID: cd.UUID, TuicInboundId: cd.InboundID}
 			clientTrafficMap[key] = traffic
 		}
-		traffic.Up += cd.Up
-		traffic.Down += cd.Down
+		traffic.Up = accumulateTrafficDelta(traffic.Up, cd.Up)
+		traffic.Down = accumulateTrafficDelta(traffic.Down, cd.Down)
 	}
 	for _, email := range onlineEmails {
 		if _, exists := clientTrafficMap[email]; !exists {

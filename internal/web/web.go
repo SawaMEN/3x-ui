@@ -432,8 +432,11 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	})
 
 	// Reconcile mtproto (mtg) sidecars and scrape their traffic
-	mtJob := job.NewMtprotoJob()
+	mtJob := job.NewMtprotoJob(s.ctx)
 	scheduleStartupJob(s.cron, cadenceMtproto, mtJob, s.runStartupTask)
+	// WEB reconciliation may issue certificates; it has its own tracked job
+	// so traffic polling stays independent and shutdown joins both workers.
+	scheduleStartupJob(s.cron, cadenceMtproto, job.NewMtprotoWebJob(s.ctx), s.runStartupTask)
 
 	// Reconcile embedded AmneziaWG interfaces; traffic rides Xray's own stats
 	awgJob := job.NewAmneziaWGJob()

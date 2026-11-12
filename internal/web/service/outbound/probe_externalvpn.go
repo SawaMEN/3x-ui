@@ -29,7 +29,7 @@ func bridgeManagedProbeOutbounds(ctx context.Context, cfg *xray.Config) (func(),
 		if !externalvpn.IsAdditionalOutbound(row) {
 			continue
 		}
-		bridge, release, err := externalvpn.EnsureProbeOutbound(row)
+		bridge, release, err := externalvpn.EnsureProbeOutboundContext(ctx, row)
 		if err != nil {
 			cleanup()
 			return nil, fmt.Errorf("managed outbound %q probe: %w", row["tag"], err)

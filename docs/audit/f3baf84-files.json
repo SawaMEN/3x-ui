@@ -12165,9 +12165,9 @@
       "deletions": 0,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
+      "reviewed_sha256": "7bc44372d0f1f88f65a18c2d05a71de18199a868685e0bd1985aa0426f06597d"
     },
     {
       "path": "internal/externalvpn/outbound_plan_test.go",
@@ -12209,9 +12209,9 @@
       "deletions": 0,
       "subsystem": "protocols-utilities",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
+      "reviewed_sha256": "46fdb331b78d1d06a1c75f06f5ca04177d6ddbaf189bd8b8815b859cb4139925"
     },
     {
       "path": "internal/externalvpn/stage8_openflux_native_test.go",
@@ -12330,9 +12330,9 @@
       "deletions": 0,
       "subsystem": "protocols-utilities",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
+      "reviewed_sha256": "e901e516ba6d9b67c4b971c6752340eccdf317befc305682f34a8b1aff06e9c5"
     },
     {
       "path": "internal/externalvpn/vetroff_process_linux_test.go",
@@ -17643,9 +17643,9 @@
       "deletions": 15,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
+      "reviewed_sha256": "c450646666d9c4b86438955a556a8047f4ac1bb177495354d721367dd59161e9"
     },
     {
       "path": "internal/web/job/node_down_threshold_test.go",
@@ -17841,9 +17841,9 @@
       "deletions": 107,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
+      "reviewed_sha256": "91492822d1ba6a9ea434f23d3af312dacb4080bd6497fbaaa05d3f6a3fda47c4"
     },
     {
       "path": "internal/web/job/tuic_job_test.go",
@@ -17863,9 +17863,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
+      "reviewed_sha256": "2e2ffb515b788309bd9e20877c9953f4ca1a73c4edf87b8563881c23308d5be9"
     },
     {
       "path": "internal/web/job/tuic_journal_test.go",
@@ -17874,9 +17874,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
+      "reviewed_sha256": "f1f0f29c686ceb188c558a84e468c9413fcd817242cb1bdbd2505a2c819c9fde"
     },
     {
       "path": "internal/web/job/warp_ip_job.go",
@@ -22011,8 +22011,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
-      "reviewed_sha256": "5fd957843183719286a3b90ecc21fa4293d1b6789052ae8f8ff8a5fabff6c6ce"
+      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
+      "reviewed_sha256": "51adaf782d439977669a94207d6dd600c185330d7c3a0ad7dfaae66ed09a56bc"
     },
     {
       "path": "internal/web/service/outbound/probe_http.go",
@@ -25058,8 +25058,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A77–A80: full read of auto-balance selection/timers and runtime apply, outbound probe HTTP/process/TCP paths, external/Mieru job ownership, Sudoku lifecycle and updated panel shutdown. Reproduced canceled choice writes, canceled acknowledgement writes, uncancelable HTTP/temp core, last-tick child resurrection and Sudoku drop on panel-only reload. Targeted normal tests pass; race/full outbound/build/vet/lint results and remaining managed bootstrap caveats recorded in RESUME.",
-      "reviewed_sha256": "4fa4a332cbdd408288f6fca3a7e0e6631c88f951c2530a65f9937a931c09142a"
+      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
+      "reviewed_sha256": "18de97c2bc9d6250b3eda637394db34085cb92f90936d7c3d569e0a84b101cbe"
     },
     {
       "path": "internal/web/web_shutdown_test.go",

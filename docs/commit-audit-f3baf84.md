@@ -607,3 +607,19 @@ worker сначала входит в ожидание таймера, зате�
 Финальный lifecycle/TUIC tail -race web PASS 5.203s; отмена очереди speed
 и временного ядра -race outbound PASS 1.125s. Полные build/vet прошли.
 Inventory и diff --check прошли: 243 reviewed, 2121 pending, stale 0.
+
+
+## Продолжение: A81–A83, probe bootstrap и счётчики shutdown
+
+Нужно 3, реализовано 3; общий итог 83. Reviewed 250/2364, осталось 2114.
+
+| ID | Подтверждённый дефект | Исправление |
+|---|---|---|
+| A81 | Probe lock/bootstrap/readiness игнорируют cancel и удерживают child/секретные файлы | Context-aware probe API/lock/setup/readiness, isolated child cancellation и cleanup |
+| A82 | MTProto traffic Run возвращает до окончания detached WEB worker | Отдельный synchronous cron job с initial join, parent context и overlap guard |
+| A83 | TUIC raw aggregation нарушает counter bounds и вычитает отрицательные дельты | Saturating/nonnegative accumulation для всех identities, проверенный SQLite journal replay once |
+
+Исходные ошибки воспроизведены до правки; normal targeted/regression проверки прошли.
+Расширенные результаты и точная очередь оставшихся pending/tail traffic задач — RESUME.md.
+Unix-only test fixtures получили правильные build constraints; production APIs без
+context сохранены, реальный production tunnel не останавливается отменой probe.

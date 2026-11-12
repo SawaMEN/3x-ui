@@ -54,7 +54,7 @@ type managedOutbound struct {
 }
 
 var (
-	outboundMu        sync.Mutex
+	outboundMu        = newOutboundMutex()
 	outboundProcesses = map[string]*managedOutbound{}
 	outboundPlans     = map[string]*managedOutbound{}
 )
@@ -277,19 +277,28 @@ func ApplyOutbounds(raws []map[string]any) (finish func(bool) error, err error) 
 }
 
 func waitOutboundStartup(tag string, proc *managedOutbound) error {
+	return waitOutboundStartupContext(context.Background(), tag, proc)
+}
+
+func waitOutboundStartupContext(ctx context.Context, tag string, proc *managedOutbound) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if proc == nil || proc.done == nil {
 		return fmt.Errorf("managed outbound %q disappeared during apply", tag)
 	}
 	protocol, _ := proc.raw["protocol"].(string)
 	if strings.EqualFold(protocol, "fptn") {
-		return waitFPTNReady(fmt.Sprintf("FPTN outbound %q", tag), proc.done, proc.cmd, func() bool {
-			return fptnExecReady(proc.container, `ip -4 -o addr show dev fptn0 | grep -q ' inet ' && [ -n "$(ss -H -lnt 'sport = :1080')" ]`)
+		return waitFPTNReadyContext(ctx, fmt.Sprintf("FPTN outbound %q", tag), proc.done, proc.cmd, func() bool {
+			return fptnExecReadyContext(ctx, proc.container, `ip -4 -o addr show dev fptn0 | grep -q ' inet ' && [ -n "$(ss -H -lnt 'sport = :1080')" ]`)
 		})
 	}
 	if !strings.EqualFold(protocol, "vetroff") && !strings.EqualFold(protocol, "sudoku") {
 		timer := time.NewTimer(500 * time.Millisecond)
 		defer timer.Stop()
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-proc.done:
 			return fmt.Errorf("managed outbound %q exited during startup: %s", tag, proc.cmd.ProcessState)
 		case <-timer.C:
@@ -310,12 +319,14 @@ func waitOutboundStartup(tag string, proc *managedOutbound) error {
 	defer poll.Stop()
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-proc.done:
 			return fmt.Errorf("%s outbound %q exited before SOCKS was ready: %s (inspect sidecar logs)", label, tag, proc.cmd.ProcessState)
 		case <-deadline.C:
 			return fmt.Errorf("%s outbound %q did not start its loopback SOCKS listener within %s (inspect sidecar logs for initialization errors)", label, tag, startupTimeout)
 		case <-poll.C:
-			if vetroffSocksReady(proc.port) {
+			if vetroffSocksReadyContext(ctx, proc.port) {
 				return nil
 			}
 		}
@@ -325,12 +336,21 @@ func waitOutboundStartup(tag string, proc *managedOutbound) error {
 // Docker's host proxy accepts TCP before the container listener is ready.
 // Check the actual private runtime and stop waiting when its owner exits.
 func waitFPTNReady(label string, done <-chan struct{}, cmd *exec.Cmd, ready func() bool) error {
+	return waitFPTNReadyContext(context.Background(), label, done, cmd, ready)
+}
+
+func waitFPTNReadyContext(ctx context.Context, label string, done <-chan struct{}, cmd *exec.Cmd, ready func() bool) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	deadline := time.NewTimer(90 * time.Second)
 	defer deadline.Stop()
 	poll := time.NewTicker(500 * time.Millisecond)
 	defer poll.Stop()
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-done:
 			return fmt.Errorf("%s exited before its private VPN runtime was ready: %s", label, cmd.ProcessState)
 		case <-deadline.C:
@@ -344,19 +364,25 @@ func waitFPTNReady(label string, done <-chan struct{}, cmd *exec.Cmd, ready func
 }
 
 func fptnExecReady(container, command string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	return fptnExecReadyContext(context.Background(), container, command)
+}
+
+func fptnExecReadyContext(parent context.Context, container, command string) bool {
+	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
 	return exec.CommandContext(ctx, "docker", "exec", container, "/bin/sh", "-c", command).Run() == nil
 }
 
 // A SOCKS5 no-auth greeting checks the local bridge, without attempting to
 // reach a third-party site or transmitting the outbound's connection secret.
-func vetroffSocksReady(port int) bool {
-	conn, err := (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext(context.Background(), "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+func vetroffSocksReadyContext(ctx context.Context, port int) bool {
+	conn, err := (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext(ctx, "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
 		return false
 	}
 	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 	if err := conn.SetDeadline(time.Now().Add(250 * time.Millisecond)); err != nil {
 		return false
 	}
@@ -382,6 +408,14 @@ func ensureOutbound(raw map[string]any, probe bool) (map[string]any, error) {
 	}
 	outboundMu.Lock()
 	defer outboundMu.Unlock()
+	return ensureOutboundLocked(context.Background(), raw, probe)
+}
+
+func ensureOutboundLocked(ctx context.Context, raw map[string]any, probe bool) (map[string]any, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	tag, _ := raw["tag"].(string)
 	data, _ := json.Marshal(raw)
 	sum := sha256.Sum256(data)
 	fingerprint := hex.EncodeToString(sum[:])
@@ -421,7 +455,7 @@ func ensureOutbound(raw map[string]any, probe bool) (map[string]any, error) {
 	if proc.password == "" {
 		proc.password = uuid.NewString()
 	}
-	if err := startOutbound(tag, proc); err != nil {
+	if err := startOutboundContext(ctx, tag, proc); err != nil {
 		delete(outboundProcesses, tag)
 		return nil, err
 	}
@@ -440,6 +474,13 @@ func outboundBridge(tag string, proc *managedOutbound) map[string]any {
 }
 
 func startOutbound(tag string, proc *managedOutbound) error {
+	return startOutboundContext(context.Background(), tag, proc)
+}
+
+func startOutboundContext(parent context.Context, tag string, proc *managedOutbound) error {
+	if parent.Err() != nil {
+		return parent.Err()
+	}
 	p, _ := proc.raw["protocol"].(string)
 	data, _ := json.Marshal(proc.raw["settings"])
 	var s OutboundSettings
@@ -450,7 +491,11 @@ func startOutbound(tag string, proc *managedOutbound) error {
 	if err := os.MkdirAll(folder, 0o700); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	runParent := context.Background()
+	if proc.probe {
+		runParent = parent
+	}
+	ctx, cancel := context.WithCancel(runParent)
 	proc.cancel = cancel
 	if strings.EqualFold(p, "sudoku") {
 		// Upstream Sudoku listens on every interface. Never launch it on the
@@ -476,7 +521,7 @@ func startOutbound(tag string, proc *managedOutbound) error {
 		}
 		// Debian supports both statically and dynamically linked official Go releases.
 		const image = "debian:bookworm-slim"
-		checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
+		checkCtx, checkCancel := context.WithTimeout(parent, 10*time.Second)
 		checkErr := exec.CommandContext(checkCtx, "docker", "image", "inspect", image).Run()
 		checkCancel()
 		if checkErr != nil {
@@ -484,7 +529,7 @@ func startOutbound(tag string, proc *managedOutbound) error {
 			return fmt.Errorf("Sudoku node routing needs a running Docker daemon and the local %s image (docker pull %s): %w", image, image, checkErr)
 		}
 		proc.container = containerName(0) + "-out-" + suffix
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(parent, 5*time.Second)
 		_ = exec.CommandContext(cleanupCtx, "docker", "rm", "-f", proc.container).Run()
 		cleanupCancel()
 		proc.cmd = exec.CommandContext(ctx, "docker", "run", "--rm",
@@ -548,7 +593,7 @@ func startOutbound(tag string, proc *managedOutbound) error {
 		}
 		proc.cmd = exec.CommandContext(ctx, binary(model.OpenFlux), "--config", path, "--negotiate")
 	} else {
-		checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
+		checkCtx, checkCancel := context.WithTimeout(parent, 10*time.Second)
 		checkErr := exec.CommandContext(checkCtx, "docker", "image", "inspect", "3x-ui-fptn-client:0.4.6").Run()
 		checkCancel()
 		if checkErr != nil {
@@ -591,13 +636,17 @@ func startOutbound(tag string, proc *managedOutbound) error {
 			return fmt.Errorf("FPTN outbound requires installed owner hiddify-core: %w", err)
 		}
 		proc.container = containerName(0) + "-out-" + suffix
-		cleanupCtx, done := context.WithTimeout(context.Background(), 5*time.Second)
+		cleanupCtx, done := context.WithTimeout(parent, 5*time.Second)
 		_ = exec.CommandContext(cleanupCtx, "docker", "rm", "-f", proc.container).Run()
 		done()
 		proc.cmd = exec.CommandContext(ctx, "docker", "run", "--rm", "--name", proc.container, "--cap-add", "NET_ADMIN", "--device", "/dev/net/tun:/dev/net/tun", "--publish", fmt.Sprintf("127.0.0.1:%d:1080/tcp", proc.port), "--mount", "type=bind,src="+folder+",dst=/run/panel,readonly", "--mount", "type=bind,src="+sb+",dst=/usr/bin/panel-core,readonly", "3x-ui-fptn-client:0.4.6", "/bin/sh", "/run/panel/run.sh", strconv.Itoa(s.MTU), s.SNI, s.Bypass)
 	}
 	prepareVetroffCommand(proc.cmd)
 	proc.cmd.Stdout, proc.cmd.Stderr = os.Stdout, os.Stderr
+	if parent.Err() != nil {
+		cancel()
+		return parent.Err()
+	}
 	if err := proc.cmd.Start(); err != nil {
 		cancel()
 		return err
@@ -705,12 +754,24 @@ func stopOutboundProtocol(protocol model.Protocol) {
 // Probe processes use separate identities so a temporary test cannot replace
 // the live tunnel or be restarted indefinitely by the regular supervisor.
 func EnsureProbeOutbound(raw map[string]any) (map[string]any, func(), error) {
+	return EnsureProbeOutboundContext(context.Background(), raw)
+}
+
+// EnsureProbeOutboundContext owns only an isolated temporary child. Canceling
+// its setup never touches an existing production tunnel with the same user tag.
+func EnsureProbeOutboundContext(ctx context.Context, raw map[string]any) (map[string]any, func(), error) {
+	if ctx.Err() != nil {
+		return nil, nil, ctx.Err()
+	}
 	data, err := json.Marshal(raw)
 	if err != nil {
 		return nil, nil, err
 	}
 	var isolated map[string]any
 	if err := json.Unmarshal(data, &isolated); err != nil {
+		return nil, nil, err
+	}
+	if err := ValidateAdditionalOutbound(isolated); err != nil {
 		return nil, nil, err
 	}
 	tag, _ := raw["tag"].(string)
@@ -729,20 +790,23 @@ func EnsureProbeOutbound(raw map[string]any) (map[string]any, func(), error) {
 			_ = os.RemoveAll(filepath.Join(directory(), "outbound-"+hex.EncodeToString(sum[:8])))
 		})
 	}
-	bridge, err := ensureOutbound(isolated, true)
+	if err := outboundMu.LockContext(ctx); err != nil {
+		return nil, nil, err
+	}
+	bridge, err := ensureOutboundLocked(ctx, isolated, true)
+	proc := outboundProcesses[probeTag]
+	outboundMu.Unlock()
+	if err == nil {
+		err = waitOutboundStartupContext(ctx, probeTag, proc)
+	}
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
-	outboundMu.Lock()
-	proc := outboundProcesses[probeTag]
-	outboundMu.Unlock()
-	if err := waitOutboundStartup(probeTag, proc); err != nil {
-		cleanup()
-		return nil, nil, err
-	}
 	bridge["tag"] = tag
-
 	return bridge, cleanup, nil
 }
 
