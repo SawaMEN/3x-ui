@@ -2,6 +2,7 @@ package externalvpn
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
@@ -17,6 +20,8 @@ func stage8OpenFlux(t *testing.T) (*Manager, Instance) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
+	t.Setenv("XUI_DB_FOLDER", dir)
+	dbtest.InitDB(t, filepath.Join(dir, "x-ui.db"))
 	// A real child exits on the rejected setting, otherwise remains available.
 	script := "#!/bin/sh\nif grep -q 'SessionContext = broken' \"$2\"; then exit 3; fi\nexec sleep 60\n"
 	if err := os.WriteFile(filepath.Join(dir, "openflux"), []byte(script), 0o700); err != nil {
@@ -25,6 +30,20 @@ func stage8OpenFlux(t *testing.T) (*Manager, Instance) {
 	m := &Manager{procs: map[int]*running{}, lastErrors: map[int]string{}}
 	t.Cleanup(m.StopAll)
 	inst := Instance{ID: 81, Tag: "external", Protocol: model.OpenFlux, Listen: "127.0.0.1", Port: 34567, Settings: Settings{Context: "stable", Transports: []OpenFluxTransport{{Type: "direct", Priority: 100}}, Clients: []Client{{Email: "alice", Password: strings.Repeat("a", 64), Enable: true}}}}
+	// Authorization reads the panel DB even after another test has closed its
+	// handle. Own a fresh fixture and derive the same revision as production.
+	settings, err := json.Marshal(inst.Settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inbound := model.Inbound{Id: inst.ID, Tag: inst.Tag, Protocol: inst.Protocol, Enable: true, Listen: inst.Listen, Port: inst.Port, Settings: string(settings)}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	inst, err = FromInbound(&inbound)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := m.Ensure(inst); err != nil {
 		t.Fatal(err)
 	}

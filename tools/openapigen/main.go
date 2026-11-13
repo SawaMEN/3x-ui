@@ -109,6 +109,9 @@ func run(root, outDir string) error {
 		},
 		{
 			Path: resolveRel(root, "internal/web/service"),
+			// Service implementation aliases (including accounting/WAL types)
+			// are not browser DTOs. Export only the public API aliases.
+			AliasAllow: setOf("ProcessState", "VKTurnProxyForwardType"),
 			StructAllow: setOf(
 				"InboundOption",
 				"ManagerSnapshot", "ManagerListOptions", "ManagerRelayInput", "ManagerPreflight", "ManagerPreflightEntry", "ManagerClientInfo",

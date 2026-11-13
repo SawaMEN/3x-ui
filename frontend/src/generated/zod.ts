@@ -12,27 +12,6 @@ export type Protocol = z.infer<typeof ProtocolSchema>;
 export const VKTurnProxyForwardTypeSchema = z.string();
 export type VKTurnProxyForwardType = z.infer<typeof VKTurnProxyForwardTypeSchema>;
 
-export const clientResetPolicySchema = z.number().int();
-export type clientResetPolicy = z.infer<typeof clientResetPolicySchema>;
-
-export const nearbySNIProbeSchema = z.unknown();
-export type nearbySNIProbe = z.infer<typeof nearbySNIProbeSchema>;
-
-export const sniProgressSchema = z.unknown();
-export type sniProgress = z.infer<typeof sniProgressSchema>;
-
-export const sniScanFuncSchema = z.unknown();
-export type sniScanFunc = z.infer<typeof sniScanFuncSchema>;
-
-export const staticEgressResolverSchema = z.string();
-export type staticEgressResolver = z.infer<typeof staticEgressResolverSchema>;
-
-export const trafficLocalApplyActionSchema = z.number().int();
-export type trafficLocalApplyAction = z.infer<typeof trafficLocalApplyActionSchema>;
-
-export const transportBitsSchema = z.number().int();
-export type transportBits = z.infer<typeof transportBitsSchema>;
-
 export const AWGClientOptionsSchema = z.object({
   i1: z.string().nullable().optional(),
   i2: z.string().nullable().optional(),

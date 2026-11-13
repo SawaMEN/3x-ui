@@ -3,13 +3,6 @@ export type GeoKind = string;
 export type ProcessState = string;
 export type Protocol = string;
 export type VKTurnProxyForwardType = string;
-export type clientResetPolicy = number;
-export type nearbySNIProbe = unknown;
-export type sniProgress = unknown;
-export type sniScanFunc = unknown;
-export type staticEgressResolver = string;
-export type trafficLocalApplyAction = number;
-export type transportBits = number;
 
 export interface AWGClientOptions {
   i1?: string | null;

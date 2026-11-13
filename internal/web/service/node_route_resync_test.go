@@ -41,9 +41,11 @@ func TestNodeRouteExplicitSyncRepairsUnchangedDestination(t *testing.T) {
 	host, portText, _ := net.SplitHostPort(srv.Listener.Addr().String())
 	port, _ := strconv.Atoi(portText)
 	node := &model.Node{Id: 123, Address: host, Port: port, Scheme: "http", BasePath: "/", ApiToken: "test-token", AllowPrivateAddress: true}
-	inbound := &model.Inbound{Tag: "n123-foreign", Protocol: model.VLESS, Enable: true, Port: 443,
+	inbound := &model.Inbound{
+		Tag: "n123-foreign", Protocol: model.VLESS, Enable: true, Port: 443,
 		Settings:       `{"clients":[{"email":"node-route@internal","id":"11111111-1111-4111-8111-111111111111","enable":true}],"decryption":"none"}`,
-		StreamSettings: `{"network":"tcp","security":"none"}`, NodeID: &node.Id}
+		StreamSettings: `{"network":"tcp","security":"none"}`, NodeID: &node.Id,
+	}
 	if err := database.GetDB().Create(inbound).Error; err != nil {
 		t.Fatal(err)
 	}

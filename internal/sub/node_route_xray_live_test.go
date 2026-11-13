@@ -25,11 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	sharelink "github.com/SawaMEN/3x-ui/v3/internal/util/link"
-	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	_ "github.com/xtls/xray-core/app/dispatcher"
 	_ "github.com/xtls/xray-core/app/log"
 	_ "github.com/xtls/xray-core/app/policy"
@@ -53,6 +48,12 @@ import (
 	_ "github.com/xtls/xray-core/transport/internet/tls"
 	_ "github.com/xtls/xray-core/transport/internet/websocket"
 	"golang.org/x/net/proxy"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	sharelink "github.com/SawaMEN/3x-ui/v3/internal/util/link"
+	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 // Each process owns a separate core: production nodes never share Xray's
@@ -234,9 +235,11 @@ func TestNodeRouteXrayLiveSubscriptionCascade(t *testing.T) {
 				block, _ := pem.Decode(certPEM)
 				hash := sha256.Sum256(block.Bytes)
 				stream["security"] = "tls"
-				stream["tlsSettings"] = map[string]any{"serverName": "cascade.test",
+				stream["tlsSettings"] = map[string]any{
+					"serverName":   "cascade.test",
 					"settings":     map[string]any{"pinnedPeerCertSha256": []string{fmt.Sprintf("%x", hash)}},
-					"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}}
+					"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}},
+				}
 			}
 			if tc.reality {
 				cover := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
@@ -265,8 +268,10 @@ func TestNodeRouteXrayLiveSubscriptionCascade(t *testing.T) {
 			}
 			streamRaw, _ := json.Marshal(stream)
 			settingsRaw, _ := json.Marshal(remoteSettings)
-			foreign := &model.Inbound{UserId: 1, Tag: "foreign", Enable: true, Listen: "127.0.0.1", Port: foreignPort,
-				Protocol: tc.protocol, NodeID: &node.Id, Settings: string(settingsRaw), StreamSettings: string(streamRaw)}
+			foreign := &model.Inbound{
+				UserId: 1, Tag: "foreign", Enable: true, Listen: "127.0.0.1", Port: foreignPort,
+				Protocol: tc.protocol, NodeID: &node.Id, Settings: string(settingsRaw), StreamSettings: string(streamRaw),
+			}
 			if err := db.Create(foreign).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -373,12 +378,16 @@ func TestNodeRouteXrayLiveSubscriptionCascade(t *testing.T) {
 			if !found {
 				t.Fatal("managed outbound not generated")
 			}
-			foreignConfig := map[string]any{"log": map[string]any{"loglevel": "none"},
+			foreignConfig := map[string]any{
+				"log":      map[string]any{"loglevel": "none"},
 				"inbounds": []any{map[string]any{"listen": "127.0.0.1", "port": foreignPort, "protocol": string(tc.protocol), "settings": remoteSettings, "streamSettings": stream}},
 				// The pinned Xray blocks private destinations by default. Permit
 				// only this test's loopback HTTP server on the fixture exit.
-				"outbounds": []any{map[string]any{"protocol": "freedom", "tag": "direct",
-					"settings": map[string]any{"finalRules": []any{map[string]any{"action": "allow", "ip": []string{"127.0.0.1/32"}}}}}}}
+				"outbounds": []any{map[string]any{
+					"protocol": "freedom", "tag": "direct",
+					"settings": map[string]any{"finalRules": []any{map[string]any{"action": "allow", "ip": []string{"127.0.0.1/32"}}}},
+				}},
+			}
 			stopForeign := startNodeRouteXray(t, foreignConfig)
 			startNodeRouteXray(t, main)
 			links := provider.LinksForClient("127.0.0.1", local, local.Tag+"@e")
@@ -389,9 +398,11 @@ func TestNodeRouteXrayLiveSubscriptionCascade(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			startNodeRouteXray(t, map[string]any{"log": map[string]any{"loglevel": "none"},
+			startNodeRouteXray(t, map[string]any{
+				"log":       map[string]any{"loglevel": "none"},
 				"inbounds":  []any{map[string]any{"listen": "127.0.0.1", "port": socksPort, "protocol": "socks", "settings": map[string]any{"auth": "noauth"}}},
-				"outbounds": []any{entry.Outbound}})
+				"outbounds": []any{entry.Outbound},
+			})
 			var hits atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				hits.Add(1)
