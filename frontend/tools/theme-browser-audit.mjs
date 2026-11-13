@@ -77,9 +77,12 @@ try {
     });
     await page.goto(base + '/__theme_audit__');
     await page.evaluate(async () => {
-      const React = await import('/node_modules/.vite/deps/react.js');
-      const { createRoot } = await import('/node_modules/.vite/deps/react-dom_client.js');
-      const antd = await import('/node_modules/.vite/deps/antd.js');
+      const reactModule = await import('/node_modules/.vite/deps/react.js');
+      const React = reactModule.default ?? reactModule;
+      const reactDomModule = await import('/node_modules/.vite/deps/react-dom_client.js');
+      const { createRoot } = reactDomModule.default ?? reactDomModule;
+      const antdModule = await import('/node_modules/.vite/deps/antd.js');
+      const antd = antdModule.default ?? antdModule;
       const { MemoryRouter } = await import('/node_modules/.vite/deps/react-router.js');
       const { QueryProvider } = await import('/src/api/QueryProvider.tsx');
       const { ThemeProvider, useTheme } = await import('/src/hooks/useTheme.tsx');
