@@ -54,6 +54,40 @@ try {
       let obj = [];
       if (/setting\/all/.test(path)) obj = {};
       if (/server\/status/.test(path)) obj = { xray: { state: 'running' } };
+      if (/telemt\/status/.test(path))
+        obj = {
+          installed: false,
+          active: false,
+          enabled: false,
+          configured: false,
+          version: '',
+          latestVersion: '',
+          updateAvailable: false,
+          mekoEnabled: false,
+          webProxy: {
+            enabled: false,
+            supported: false,
+            frontend: 'nginx',
+            frontendActive: false,
+            carrier: 'https',
+            carriers: [],
+            aliases: [],
+            links: [],
+            domain: '',
+            basePath: '',
+            defaultDomain: '',
+            link: '',
+            error: '',
+            carrierNegotiationSupported: false,
+            nginxInstalled: false,
+            nginxActive: false,
+            certificateReady: false,
+            certificateFile: '',
+            listenPort: 15080,
+            port443Available: true,
+            port443Owner: '',
+          },
+        };
       if (/singbox\/config/.test(path))
         obj = {
           config: { inbounds: [], outbounds: [], route: {} },
