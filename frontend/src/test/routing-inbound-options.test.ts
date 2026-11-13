@@ -37,4 +37,11 @@ describe('routing inbound selector', () => {
   it('rejects disabled, remote and blank database tags', () => {
     expect(selectableRoutingInboundTags('sing-box', [], options.slice(3))).toEqual([]);
   });
+
+  it.each(['xray', 'sing-box'] as const)('filters stale snapshot tags on %s', (engine) => {
+    expect(
+      selectableRoutingInboundTags(engine, ['remote', 'disabled', 'relay', 'local-vless'], options),
+    ).toEqual(expect.not.arrayContaining(['remote', 'disabled']));
+    expect(selectableRoutingInboundTags(engine, ['relay'], options)).toContain('relay');
+  });
 });

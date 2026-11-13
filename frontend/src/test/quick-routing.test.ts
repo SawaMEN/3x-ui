@@ -23,6 +23,71 @@ const draft = (changes: Partial<QuickRouteDraft> = {}): QuickRouteDraft => ({
 });
 
 describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engine) => {
+  it('diagnoses saved routes pointing at an absent local source', () => {
+    const entry = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
+    expect(diagnoseRouting([entry.rule], engine, OUTBOUNDS, ['in-a'])).toEqual([
+      expect.objectContaining({ code: 'missing-inbound', detail: expect.stringContaining('in-b') }),
+    ]);
+    expect(diagnoseRouting([{ ...entry.rule, enabled: false }], engine, OUTBOUNDS, [])).toEqual([]);
+  });
+  it('places new scoped exceptions before an overlapping managed inbound fallback', () => {
+    const fallback = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
+    const exception = compileQuickRoute(
+      draft({ match: 'domain', values: 'example.com', target: 'direct' }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
+    expect(putQuickRoute([fallback.rule], exception, engine).rules).toEqual([
+      exception.rule,
+      fallback.rule,
+    ]);
+    // Re-saving a legacy exception repairs its unreachable position as well.
+    expect(putQuickRoute([fallback.rule, exception.rule], exception, engine).rules).toEqual([
+      exception.rule,
+      fallback.rule,
+    ]);
+    const destination = engine === 'xray' ? 'outboundTag' : 'outbound';
+    expect(
+      setQuickRouteTarget(
+        [fallback.rule, exception.rule],
+        exception.id,
+        'blocked',
+        engine,
+        OUTBOUNDS,
+      ),
+    ).toEqual([{ ...exception.rule, [destination]: 'blocked' }, fallback.rule]);
+    expect(
+      setQuickRouteEnabled(
+        [fallback.rule, { ...exception.rule, enabled: false }],
+        exception.id,
+        true,
+        engine,
+      ),
+    ).toEqual([exception.rule, fallback.rule]);
+  });
+
+  it('does not move exceptions across unrelated inbound fallbacks or manual rules', () => {
+    const fallback = compileQuickRoute(
+      draft({ inboundTags: ['in-a'] }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
+    const exception = compileQuickRoute(
+      draft({ match: 'domain', inboundTags: ['in-b'], values: 'example.com' }),
+      engine,
+      OUTBOUNDS,
+      INBOUNDS,
+    );
+    const manual = { ...fallback.rule, ruleTag: 'manual', comment: 'manual' };
+    expect(putQuickRoute([manual, fallback.rule], exception, engine).rules).toEqual([
+      manual,
+      fallback.rule,
+      exception.rule,
+    ]);
+  });
+
   it('compiles a scoped inbound route with canonical order', () => {
     const rule = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
     const sorted = engine === 'xray' ? rule.rule.inboundTag : rule.rule.inbound;

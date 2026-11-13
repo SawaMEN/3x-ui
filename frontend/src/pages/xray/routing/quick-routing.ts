@@ -313,15 +313,15 @@ export function putQuickRoute(
     // after a terminal catch-all, where it could never be evaluated.
     const replacement = updated[existing];
     updated.splice(existing, 1);
-    const catchAll = updated.findIndex((rule) => isUnconditional(rule, engine));
+    const catchAll = quickRouteInsertionLimit(updated, next, engine);
     const position =
       catchAll >= 0 ? Math.min(existing, catchAll) : Math.min(existing, updated.length);
     updated.splice(position, 0, replacement);
     return { rules: updated, replaced: true, shadowed: false };
   }
-  // Never move API, DNS, existing overrides, user rules or auto-generated
-  // loopbacks. Insert immediately before a terminal catch-all, when present.
-  const catchAll = updated.findIndex((rule) => isUnconditional(rule, engine));
+  // Keep existing rules in order; place exceptions ahead of their managed
+  // inbound fallback or the terminal catch-all.
+  const catchAll = quickRouteInsertionLimit(updated, next, engine);
   const position = catchAll < 0 ? updated.length : catchAll;
   updated.splice(position, 0, next.rule);
   return {
@@ -333,6 +333,66 @@ export function putQuickRoute(
         .slice(0, position)
         .some((rule) => rule.enabled !== false && isUnconditional(rule, engine)),
   };
+}
+
+// Specific quick routes are exceptions to panel-owned per-listener fallbacks.
+// Otherwise adding a domain/IP/port rule after "all traffic from inbound A"
+// silently creates a rule the first-match router can never reach.
+function quickRouteInsertionLimit(
+  rules: RouteRecord[],
+  next: Pick<CompiledQuickRoute, 'id' | 'rule'>,
+  engine: RoutingEngine,
+): number {
+  const field = engine === 'xray' ? 'inboundTag' : 'inbound';
+  const selected = next.rule[field];
+  return rules.findIndex((rule) => {
+    if (isUnconditional(rule, engine)) return true;
+    if (next.id.startsWith(QUICK_PREFIX + 'inbound:') || rule.enabled === false) return false;
+    const marker = engine === 'xray' ? rule.ruleTag : rule.comment;
+    const managed =
+      (typeof marker === 'string' && marker.startsWith(QUICK_PREFIX + 'inbound:')) ||
+      (typeof rule.comment === 'string' && rule.comment.startsWith('panel-inbound:'));
+    if (
+      !managed ||
+      !Array.isArray(rule[field]) ||
+      rule[field].length === 0 ||
+      (engine === 'sing-box' && rule.action && !['route', 'reject'].includes(String(rule.action)))
+    )
+      return false;
+    // Do not mistake manually extended managed rules for broad fallbacks.
+    if (
+      ROUTE_MATCH_FIELDS.some((key) => {
+        if (key === field || key === 'action') return false;
+        const value = rule[key];
+        return Array.isArray(value)
+          ? value.length > 0
+          : value != null && value !== '' && value !== false;
+      })
+    )
+      return false;
+    return (
+      !Array.isArray(selected) ||
+      selected.length === 0 ||
+      selected.some((tag) => (rule[field] as unknown[]).includes(tag))
+    );
+  });
+}
+
+function repairQuickRoutePriority(
+  rules: RouteRecord[],
+  marker: string,
+  engine: RoutingEngine,
+): RouteRecord[] {
+  const index = rules.findIndex(
+    (rule) => (engine === 'xray' ? rule.ruleTag : rule.comment) === marker,
+  );
+  if (index < 0) return rules;
+  const next = [...rules];
+  const [rule] = next.splice(index, 1);
+  const limit = quickRouteInsertionLimit(next, { id: marker, rule }, engine);
+  if (limit < 0 || limit >= index) return rules;
+  next.splice(limit, 0, rule);
+  return next;
 }
 
 export function removeQuickRoute(
@@ -351,13 +411,14 @@ export function setQuickRouteEnabled(
   engine: RoutingEngine,
 ): RouteRecord[] {
   if (!marker.startsWith(QUICK_PREFIX)) return rules;
-  return rules.map((rule) =>
+  const updated = rules.map((rule) =>
     (engine === 'xray' ? rule.ruleTag : rule.comment) === marker ? { ...rule, enabled } : rule,
   );
+  return enabled ? repairQuickRoutePriority(updated, marker, engine) : updated;
 }
 
-// Change the destination of an existing managed rule without rebuilding its
-// conditions, moving its priority, or modifying unrelated configuration.
+// Change the destination without rebuilding conditions. Repair legacy entries
+// that were saved behind a broad fallback, keeping unrelated rules in order.
 export function setQuickRouteTarget(
   rules: RouteRecord[],
   marker: string,
@@ -372,7 +433,7 @@ export function setQuickRouteTarget(
     (engine === 'xray' && target === '@reject')
   )
     return rules;
-  return rules.map((rule) => {
+  const updated = rules.map((rule) => {
     const key = engine === 'xray' ? rule.ruleTag : rule.comment;
     if (key !== marker) return rule;
     if (engine === 'xray') return { ...rule, outboundTag: target };
@@ -386,10 +447,11 @@ export function setQuickRouteTarget(
     }
     return next;
   });
+  return repairQuickRoutePriority(updated, marker, engine);
 }
 
 export interface RoutingWarning {
-  code: 'missing-target' | 'catch-all' | 'duplicate' | 'unconditional';
+  code: 'missing-target' | 'missing-inbound' | 'catch-all' | 'duplicate' | 'unconditional';
   detail: string;
 }
 
@@ -397,6 +459,7 @@ export function diagnoseRouting(
   rules: RouteRecord[],
   engine: RoutingEngine,
   outbounds: string[],
+  inbounds?: string[],
 ): RoutingWarning[] {
   const issues: RoutingWarning[] = [];
   const seen = new Set<string>();
@@ -404,6 +467,17 @@ export function diagnoseRouting(
   for (let index = 0; index < rules.length; index++) {
     const rule = rules[index];
     if (rule.enabled === false) continue;
+    const sources = rule[engine === 'xray' ? 'inboundTag' : 'inbound'];
+    if (inbounds && isQuickRule(rule, engine) && Array.isArray(sources)) {
+      for (const source of sources) {
+        if (typeof source === 'string' && !inbounds.includes(source)) {
+          issues.push({
+            code: 'missing-inbound',
+            detail: `#${index + 1}: входящее «${source}» отсутствует среди включённых локальных подключений. Создайте маршрут на сервере, который принимает клиентское соединение.`,
+          });
+        }
+      }
+    }
     const target = engine === 'xray' ? rule.outboundTag : rule.outbound;
     if (
       typeof target === 'string' &&

@@ -124,11 +124,17 @@ export default function QuickRoutingPanel({
   const remarkByTag = useMemo(() => buildRemarkByTag(inboundOptions || []), [inboundOptions]);
   useEffect(() => {
     let active = true;
-    void HttpUtil.get<NodeRouteTarget[]>(
-      '/panel/api/xray/node-route/targets?core=' + encodeURIComponent(engine),
-      undefined,
-      { silent: true },
-    )
+    void Promise.resolve()
+      .then(() => {
+        if (!active) return;
+        setNodeTargetsLoading(true);
+        setNodeTargets([]);
+        return HttpUtil.get<NodeRouteTarget[]>(
+          '/panel/api/xray/node-route/targets?core=' + encodeURIComponent(engine),
+          undefined,
+          { silent: true },
+        );
+      })
       .then((result) => {
         if (active) setNodeTargets(result?.success && Array.isArray(result.obj) ? result.obj : []);
       })
@@ -155,7 +161,10 @@ export default function QuickRoutingPanel({
       rules.map((rule, index) => ({ rule, index })).filter(({ rule }) => isQuickRule(rule, engine)),
     [rules, engine],
   );
-  const warnings = useMemo(() => diagnoseRouting(rules, engine, tags), [rules, engine, tags]);
+  const warnings = useMemo(
+    () => diagnoseRouting(rules, engine, tags, inboundOptions ? inTags : undefined),
+    [rules, engine, tags, inboundOptions, inTags],
+  );
 
   const targetOptions = [
     {
@@ -298,6 +307,27 @@ export default function QuickRoutingPanel({
       if (nodeTargets.some((node) => node.tag === tag)) {
         void probeNodeTarget(tag);
       }
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function changeManagedEnabled(marker: string, enabled: boolean) {
+    if (creating) return;
+    if (!enabled) {
+      onChange(setQuickRouteEnabled(rules, marker, false, engine));
+      return;
+    }
+    setCreating(true);
+    try {
+      const rule = rules.find((item) => markerFor(item) === marker);
+      const target = rule?.[engine === 'xray' ? 'outboundTag' : 'outbound'];
+      // A disabled route may outlive its service client or a destination
+      // restore. Prepare it again before reactivating its traffic rule.
+      if (typeof target === 'string') await provisionNodeTarget(target);
+      onChange(setQuickRouteEnabled(rules, marker, true, engine));
     } catch (err) {
       messageApi.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -528,6 +558,9 @@ export default function QuickRoutingPanel({
               loading={creating}
               disabled={
                 creating ||
+                inboundOptionsLoading ||
+                inboundOptionsError ||
+                nodeTargetsLoading ||
                 (draft.match === 'inbound'
                   ? draft.inboundTags.length === 0 || !draft.target
                   : !draft.values.trim() || !draft.target)
@@ -603,9 +636,7 @@ export default function QuickRoutingPanel({
                             disabled={creating}
                             aria-label={'Включить маршрут #' + (index + 1)}
                             checked={rule.enabled !== false}
-                            onChange={(enabled) =>
-                              onChange(setQuickRouteEnabled(rules, marker, enabled, engine))
-                            }
+                            onChange={(enabled) => void changeManagedEnabled(marker, enabled)}
                           />
                           <Popconfirm
                             title="Удалить быстрый маршрут?"

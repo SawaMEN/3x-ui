@@ -256,6 +256,11 @@ func syncNodeRouteInbound(inbound *model.Inbound, node *model.Node) error {
 		return fmt.Errorf("read destination node inbounds: %w", err)
 	}
 	exists := nodeRouteRemoteInboundExists(payload.Tag, node.Id, options)
+	// This is an explicit prepare/repair action. The cached fingerprint only
+	// describes our last push, not the destination's current client list (which
+	// can change after a restore or a direct edit on that panel). Always re-send
+	// the credential before restarting, even when the inbound tag still exists.
+	remote.ForgetPushedInbound(payload.Tag)
 	_, err = remote.ReconcileInbound(ctx, payload, exists)
 	if err != nil {
 		return fmt.Errorf("apply cascade credential to destination node: %w", err)

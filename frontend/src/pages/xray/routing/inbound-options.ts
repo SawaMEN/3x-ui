@@ -33,7 +33,17 @@ export function selectableRoutingInboundTags(
   configTags: string[],
   available: InboundOption[],
 ): string[] {
-  const tags = new Set(configTags.map((tag) => tag.trim()).filter(Boolean));
+  // Xray's snapshot includes database tags from remote and disabled inbounds.
+  // They cannot match traffic in this core, even if present in configTags.
+  // Unknown tags may be generated relay listeners, so retain those.
+  const unavailable = new Set(
+    available
+      .filter((inbound) => inbound.enable === false || inbound.nodeId != null)
+      .map((inbound) => inbound.tag?.trim()),
+  );
+  const tags = new Set(
+    configTags.map((tag) => tag.trim()).filter((tag) => tag && !unavailable.has(tag)),
+  );
   for (const inbound of available) {
     const tag = inbound.tag?.trim();
     if (!tag || inbound.enable === false || inbound.nodeId != null) continue;

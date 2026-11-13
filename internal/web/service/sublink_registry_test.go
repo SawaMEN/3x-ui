@@ -38,6 +38,7 @@ func TestSubLinkProviderRegistrationIsRaceFree(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			_, _ = (&InboundService{}).GetSubLinks("panel.example", "subid")
+			_, _ = (&InboundService{}).GetScopedInboundLinks("panel.example", &model.Inbound{}, "route@internal")
 		}()
 	}
 	wg.Wait()
