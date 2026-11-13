@@ -12,7 +12,13 @@ type Fleet = {
   targets: { nodeId: number; state: string; expiresAt: number; error?: string }[];
 };
 
-export default function CoverCertificateFleet({ nodes }: { nodes: NodeRecord[] }) {
+export default function CoverCertificateFleet({
+  nodes,
+  defaultRecipientId,
+}: {
+  nodes: NodeRecord[];
+  defaultRecipientId?: number;
+}) {
   const { i18n } = useTranslation();
   const ru = i18n.language.startsWith('ru');
   const t = (r: string, e: string) => (ru ? r : e);
@@ -21,6 +27,7 @@ export default function CoverCertificateFleet({ nodes }: { nodes: NodeRecord[] }
   const [recipients, setRecipients] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
   const name = (id: number) =>
     id === 0
       ? t('Основной сервер', 'Main server')
@@ -62,16 +69,23 @@ export default function CoverCertificateFleet({ nodes }: { nodes: NodeRecord[] }
   const choose = (key: string) => {
     setSelected(key);
     const item = choices.get(key);
-    setRecipients(
-      fleet.data
-        ?.find((row) => row.sourceNodeId === item?.nodeId && row.domain === item?.domain)
-        ?.targets.map((target) => target.nodeId) || [],
+    const existing = fleet.data?.find(
+      (row) => row.sourceNodeId === item?.nodeId && row.domain === item?.domain,
     );
+    setRecipients(
+      existing
+        ? existing.targets.map((target) => target.nodeId)
+        : defaultRecipientId !== undefined && defaultRecipientId !== item?.nodeId
+          ? [defaultRecipientId]
+          : [],
+    );
+    setSaved(false);
     setError('');
   };
   const save = async () => {
     if (!site || saving) return;
     setSaving(true);
+    setSaved(false);
     setError('');
     try {
       const res = await HttpUtil.post(
@@ -82,6 +96,7 @@ export default function CoverCertificateFleet({ nodes }: { nodes: NodeRecord[] }
       if (!res?.success) throw new Error(res?.msg || t('Не удалось сохранить', 'Unable to save'));
       await client.invalidateQueries({ queryKey: ['manager', 'certificate-fleet'] });
       void client.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
+      setSaved(true);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -127,6 +142,11 @@ export default function CoverCertificateFleet({ nodes }: { nodes: NodeRecord[] }
           value={selected}
           onChange={choose}
           loading={sites.isLoading}
+          disabled={saving || fleet.isPending || fleet.isError}
+          showSearch={{
+            filterOption: (input, option) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+          }}
           options={[...choices].map(([value, item]) => ({
             value,
             label: `${item.domain} — ${name(item.nodeId)}`,
@@ -139,7 +159,10 @@ export default function CoverCertificateFleet({ nodes }: { nodes: NodeRecord[] }
           placeholder={t('На какие ноды доставлять сертификат', 'Nodes to receive the certificate')}
           style={{ width: '100%' }}
           value={recipients}
-          onChange={setRecipients}
+          onChange={(value) => {
+            setRecipients(value);
+            setSaved(false);
+          }}
           options={recipientOptions}
           disabled={!site || saving}
         />
@@ -147,7 +170,7 @@ export default function CoverCertificateFleet({ nodes }: { nodes: NodeRecord[] }
           type="primary"
           onClick={() => void save()}
           loading={saving}
-          disabled={!site || fleet.isLoading || fleet.isError}
+          disabled={!site || fleet.isPending || fleet.isError}
         >
           {recipients.length
             ? t('Подключить и обновлять автоматически', 'Connect and update automatically')
@@ -159,6 +182,23 @@ export default function CoverCertificateFleet({ nodes }: { nodes: NodeRecord[] }
             'The website server issues and renews the certificate. Delivery reapplies the node configuration and may briefly interrupt connections. Select this SNI in the inbound to fill certificate paths automatically.',
           )}
         </Typography.Text>
+        {saved && (
+          <Alert
+            type="success"
+            showIcon
+            title={
+              recipients.length
+                ? t(
+                    'Автоматическая доставка подключена. Дождитесь статуса «Готово» в таблице.',
+                    'Automatic delivery connected. Wait for Ready status in the table.',
+                  )
+                : t(
+                    'Автоматическая доставка отключена. Установленные сертификаты сохранены.',
+                    'Automatic delivery stopped. Installed certificates are retained.',
+                  )
+            }
+          />
+        )}
         {(error || sites.error || fleet.error) && (
           <Alert type="error" showIcon title={error || String(sites.error || fleet.error)} />
         )}

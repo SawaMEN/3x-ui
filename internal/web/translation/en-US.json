@@ -2668,7 +2668,9 @@
           "saveDomain": "Done",
           "issueCertificate": "Add DNS-01 certificate",
           "dnsRequired": "Configure a DNS provider and API token to issue DNS-01 certificates",
-          "configureDNS": "Configure DNS-01"
+          "configureDNS": "Configure DNS-01",
+          "takeNodeCertificate": "Use certificate from another node",
+          "loadingNodes": "Loading nodes…"
         },
         "preflight": {
           "action": "Check readiness",

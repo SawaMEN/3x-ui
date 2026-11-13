@@ -42,6 +42,7 @@ import {
 import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
 import DomainOverview from './DomainOverview';
 import CertificateInventoryPanel from './CertificateInventoryPanel';
+import NodeCertificateSharing from './NodeCertificateSharing';
 import { DomainPreflightReportSchema } from '@/schemas/domain-preflight';
 import type { DomainPreflightReport } from '@/schemas/domain-preflight';
 import type { DomainPreset } from './DomainOverview';
@@ -132,6 +133,7 @@ export default function DomainFrontTab({
   const [redirectScan, setRedirectScan] = useState<RedirectSiteScan>();
   const [separatePublicPort, setSeparatePublicPort] = useState(false);
   const [editing, setEditing] = useState<number>();
+  const [sharingCertificate, setSharingCertificate] = useState(false);
   const [primaryDomain, setPrimaryDomain] = useState(false);
   const [advancedEditorOpen, setAdvancedEditorOpen] = useState(false);
   const [dnsToken, setDnsToken] = useState('');
@@ -888,9 +890,14 @@ export default function DomainFrontTab({
         <div className="domain-manager-panel" data-testid="domain-panel-certificates">
           <div className="domain-manager-section-heading">
             <Typography.Text type="secondary">{label('automationDesc')}</Typography.Text>
-            <Button onClick={() => openPreset('certificate')} disabled={!initialized || busy}>
-              {label('workspace.issueCertificate')}
-            </Button>
+            <Space wrap>
+              <Button type="primary" onClick={() => setSharingCertificate(true)} disabled={busy}>
+                {label('workspace.takeNodeCertificate')}
+              </Button>
+              <Button onClick={() => openPreset('certificate')} disabled={!initialized || busy}>
+                {label('workspace.issueCertificate')}
+              </Button>
+            </Space>
           </div>
           <CertificateInventoryPanel />
           {!!status?.existingCertificates?.length && (
@@ -949,8 +956,13 @@ export default function DomainFrontTab({
               description={label('telemtReuseDesc')}
             />
           )}
+          <div className="domain-manager-section-heading">
+            <Typography.Text type="secondary">{label('sniCertHint')}</Typography.Text>
+            <Button type="primary" onClick={() => setSharingCertificate(true)} disabled={busy}>
+              {label('workspace.takeNodeCertificate')}
+            </Button>
+          </div>
           <Card size="small" title={label('sniCertificates')}>
-            <Typography.Paragraph type="secondary">{label('sniCertHint')}</Typography.Paragraph>
             <Space orientation="vertical" size={10} style={{ width: '100%' }}>
               {managedSniDomains.length === 0 &&
                 !draft.domains.some(
@@ -1545,6 +1557,9 @@ export default function DomainFrontTab({
           {label('apply')}
         </Button>
       </div>
+      {sharingCertificate && (
+        <NodeCertificateSharing onClose={() => setSharingCertificate(false)} />
+      )}
       <Modal
         open={editing !== undefined}
         title={label('editor')}

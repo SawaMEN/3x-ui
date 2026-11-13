@@ -2547,7 +2547,9 @@
           "saveDomain": "Готово",
           "issueCertificate": "Добавить сертификат DNS-01",
           "dnsRequired": "Для выпуска сертификата DNS-01 настройте DNS-провайдера и токен API",
-          "configureDNS": "Настроить DNS-01"
+          "configureDNS": "Настроить DNS-01",
+          "takeNodeCertificate": "Взять сертификат с другой ноды",
+          "loadingNodes": "Загружаем список нод…"
         },
         "preflight": {
           "action": "Проверить готовность",

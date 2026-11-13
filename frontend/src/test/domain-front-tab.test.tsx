@@ -259,6 +259,74 @@ describe('domain and TLS dashboard', () => {
     expect(f.applied).toBeUndefined();
   });
 
+  it.each(['Certificates', 'SNI and nodes'] as const)(
+    'receives a cover-site certificate from another node through %s without changing the domain draft',
+    async (section) => {
+      const f = fixture();
+      let nodeReads = 0;
+      let enrollment: unknown;
+      let fleet: unknown[] = [];
+      server.use(
+        http.get('*/panel/api/nodes/list', () => {
+          nodeReads++;
+          return HttpResponse.json({
+            success: true,
+            obj: [
+              {
+                id: 2,
+                name: 'Germany',
+                enable: true,
+                scheme: 'https',
+                tlsVerifyMode: 'verify',
+                status: 'online',
+              },
+            ],
+          });
+        }),
+        http.get('*/panel/api/domains/cover-sites', () =>
+          HttpResponse.json({
+            success: true,
+            obj: [{ nodeId: 2, domain: 'web.example.org' }],
+          }),
+        ),
+        http.get('*/panel/api/domains/certificates/fleet', () =>
+          HttpResponse.json({ success: true, obj: fleet }),
+        ),
+        http.post('*/panel/api/domains/certificates/fleet', async ({ request }) => {
+          enrollment = await request.json();
+          fleet = [
+            {
+              sourceNodeId: 2,
+              domain: 'web.example.org',
+              targets: [{ nodeId: 0, state: 'pending', expiresAt: 0 }],
+            },
+          ];
+          return HttpResponse.json({ success: true, obj: fleet });
+        }),
+      );
+      renderWithProviders(<DomainFrontTab />);
+      await openDomainSection(section);
+      expect(nodeReads).toBe(0);
+      fireEvent.click(screen.getByRole('button', { name: 'Use certificate from another node' }));
+      const source = await screen.findByRole('combobox', { name: 'Certificate source site' });
+      await waitFor(() => expect(source).toHaveProperty('disabled', false));
+      fireEvent.mouseDown(source);
+      fireEvent.click(await screen.findByText('web.example.org — Germany'));
+      expect(enrollment).toBeUndefined();
+      fireEvent.click(screen.getByRole('button', { name: 'Connect and update automatically' }));
+      await waitFor(() =>
+        expect(enrollment).toEqual({
+          sourceNodeId: 2,
+          domain: 'web.example.org',
+          nodeIds: [0],
+        }),
+      );
+      expect(await screen.findByText(/Automatic delivery connected/)).toBeTruthy();
+      expect(f.applied).toBeUndefined();
+      expect(nodeReads).toBe(1);
+    },
+  );
+
   it('shows certificate lifetime, preserves edited settings on refresh and applies the edited configuration', async () => {
     const f = fixture();
     renderWithProviders(<DomainFrontTab />);
