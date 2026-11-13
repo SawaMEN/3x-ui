@@ -75,10 +75,14 @@ func (j *MtprotoJob) Run() {
 		logger.Warning("mtproto job: reconcile MEKO V3 rules failed:", err)
 	}
 
-	deltas, onlineEmails, collectErr := mgr.CollectTrafficConsistentChecked()
+	_, onlineEmails, collectErr := mgr.CollectTrafficPersisted()
 	if collectErr != nil {
 		logger.Warning("mtproto job: traffic poll incomplete:", collectErr)
 	}
+	if _, _, err := j.journal.replay("mtproto", &j.inboundService); err != nil {
+		logger.Warning("mtproto job: replay owned traffic:", err)
+	}
+	var deltas []mtproto.Traffic // WEB retains its separate accounting path.
 	webDeltas, webOnline, webTag, webErr := service.CollectMtprotoWebTraffic(ctx)
 	if webErr != nil {
 		logger.Warning("mtproto job: WEB traffic poll failed:", webErr)

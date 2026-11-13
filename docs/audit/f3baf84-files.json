@@ -12144,8 +12144,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
-      "reviewed_sha256": "8c7507a2a33a030957e07a19e4f4bc67be11d425782f953a26353bf5cc76f576"
+      "evidence": "A91: reviewed pinned runtime owner acceptance before cursor/baseline advance, copied external owner snapshot and protected counter rollback, receipt replay without recharging returned bytes, native/routed MTProto vs separate WEB accounting. Three reused-email misattribution failures reproduced; new seven-case normal/disk-recovery/routed suite PASS and selected lifecycle/epoch/CRUD/job/service regressions PASS.",
+      "reviewed_sha256": "49056e19b211ecc5db6a37a8b3dbd541a57d766907658b2704a6c6cd6191c06d"
     },
     {
       "path": "internal/externalvpn/manager_security_test.go",
@@ -13100,9 +13100,9 @@
       "deletions": 14,
       "subsystem": "protocols-utilities",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A91: read full original 65-line mutation/stats fixture: endpoint, bearer authorization, users envelope/counters and unreachable endpoint diagnostics. Targeted TestScrapeStats and TestScrapeStatsUnreachable PASS 0.022s on owned loopback HTTP.",
+      "reviewed_sha256": "d6ce167f046818cb993dc9b43299d2d2fb1efbe5740bf1f845a2ad26e4805990"
     },
     {
       "path": "internal/mtproto/manager_reload_test.go",
@@ -13255,8 +13255,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A87: full Mieru process source read and refreshed complete manager/collector/journal reviews. Reproduced 4 Mieru lifecycle tail losses on isolated 449e639 baseline; owner IDs captured before runtime start, read-only sample handoff to shared WAL/process retry queue before CRUD stop/reload/restart, and epoch guard against old concurrent polls. Normal lifecycle/replay/routed/failure tests pass; final race/build/vet/lint and limits recorded in RESUME.",
-      "reviewed_sha256": "10178bf2d668e2e83808a693359d7ec1f11650f89aebc06ec882136b4f701e37"
+      "evidence": "A91: reviewed pinned runtime owner acceptance before cursor/baseline advance, copied external owner snapshot and protected counter rollback, receipt replay without recharging returned bytes, native/routed MTProto vs separate WEB accounting. Three reused-email misattribution failures reproduced; new seven-case normal/disk-recovery/routed suite PASS and selected lifecycle/epoch/CRUD/job/service regressions PASS.",
+      "reviewed_sha256": "e1f54f3b08c8a5ae59b403dfbd16815e5cf8c569eb8842ab8184f69d75f8e5db"
     },
     {
       "path": "internal/mtproto/usernames.go",
@@ -17545,8 +17545,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
-      "reviewed_sha256": "6c42dcbb23c5036d6e291972c96846be65d6ba4352ee110c8cd7ef8255c14135"
+      "evidence": "A91: reviewed pinned runtime owner acceptance before cursor/baseline advance, copied external owner snapshot and protected counter rollback, receipt replay without recharging returned bytes, native/routed MTProto vs separate WEB accounting. Three reused-email misattribution failures reproduced; new seven-case normal/disk-recovery/routed suite PASS and selected lifecycle/epoch/CRUD/job/service regressions PASS.",
+      "reviewed_sha256": "a2ca7147fe4fcc778ce5cabfbb0b154f2663f734a35b8da18de9d6ed747325df"
     },
     {
       "path": "internal/web/job/ip_limit_allowlist.go",
@@ -17633,8 +17633,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
-      "reviewed_sha256": "54d3a852bba0ff33f83aac7f3305e5fbb19311708366565b1ea0d0318d4665e3"
+      "evidence": "A91: reviewed pinned runtime owner acceptance before cursor/baseline advance, copied external owner snapshot and protected counter rollback, receipt replay without recharging returned bytes, native/routed MTProto vs separate WEB accounting. Three reused-email misattribution failures reproduced; new seven-case normal/disk-recovery/routed suite PASS and selected lifecycle/epoch/CRUD/job/service regressions PASS.",
+      "reviewed_sha256": "b7d76e535e4e6713dfd108634163ae3b6d56eb480f521ff165078e3d3ff6e0c8"
     },
     {
       "path": "internal/web/job/mtproto_job.go",
@@ -17644,8 +17644,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
-      "reviewed_sha256": "ca8e1d68065a8e5884f4adb7770b694467c685194e4378ffbfc77d2d85cd669d"
+      "evidence": "A91: reviewed pinned runtime owner acceptance before cursor/baseline advance, copied external owner snapshot and protected counter rollback, receipt replay without recharging returned bytes, native/routed MTProto vs separate WEB accounting. Three reused-email misattribution failures reproduced; new seven-case normal/disk-recovery/routed suite PASS and selected lifecycle/epoch/CRUD/job/service regressions PASS.",
+      "reviewed_sha256": "a69e6ef6e318e8c40634c5676fd36c8ea218bde344e6832ae4eb954aabb4e44f"
     },
     {
       "path": "internal/web/job/node_down_threshold_test.go",

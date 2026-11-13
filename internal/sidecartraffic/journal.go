@@ -34,6 +34,7 @@ type Batch struct {
 type Sample struct {
 	Email    string
 	Up, Down int64
+	Active   bool
 }
 
 // Owner pins database identities and the WAL directory before a runtime starts.
@@ -121,7 +122,7 @@ func (o *Owner) Store(samples []Sample) (accepted bool, err error) {
 	up, down := int64(0), int64(0)
 	for _, sample := range samples {
 		u, d := max(sample.Up, 0), max(sample.Down, 0)
-		if u == 0 && d == 0 {
+		if u == 0 && d == 0 && !sample.Active {
 			continue
 		}
 		if id := o.clients[sample.Email]; id > 0 {

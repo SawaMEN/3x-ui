@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math/big"
 	"net"
 	"net/http"
@@ -624,11 +625,22 @@ func (m *Manager) CollectTraffic() []TrafficDelta {
 }
 
 func (m *Manager) CollectTrafficChecked() ([]TrafficDelta, error) {
+	return m.collectTrafficChecked(false)
+}
+
+// CollectTrafficPersisted accepts bytes with the immutable runtime owner before returning.
+func (m *Manager) CollectTrafficPersisted() ([]TrafficDelta, error) {
+	return m.collectTrafficChecked(true)
+}
+
+func (m *Manager) collectTrafficChecked(persist bool) ([]TrafficDelta, error) {
 	var collectErr error
 	m.mu.Lock()
 	processes := make([]*running, 0, len(m.procs))
+	owners := make(map[*running]*sidecartraffic.Owner, len(m.procs))
 	for _, proc := range m.procs {
 		processes = append(processes, proc)
+		owners[proc] = proc.accounting
 	}
 	m.mu.Unlock()
 	// Poll independent processes concurrently without blocking inbound CRUD on
@@ -648,7 +660,29 @@ func (m *Manager) CollectTrafficChecked() ([]TrafficDelta, error) {
 			if proc.stopping.Load() {
 				return
 			}
+			if persist && owners[proc] == nil {
+				resultMu.Lock()
+				collectErr = errors.Join(collectErr, fmt.Errorf("%s inbound %d: runtime traffic owner unavailable", proc.protocol, proc.instance.ID))
+				resultMu.Unlock()
+				return
+			}
+			var previous map[string]trafficCounters
+			if persist {
+				previous = maps.Clone(proc.counters)
+			}
 			rows, err := m.collectProcessTrafficChecked(proc)
+			if persist {
+				samples := make([]sidecartraffic.Sample, 0, len(rows))
+				for _, d := range rows {
+					samples = append(samples, sidecartraffic.Sample{Email: d.Email, Up: d.Up, Down: d.Down, Active: d.Active})
+				}
+				accepted, storeErr := owners[proc].Store(samples)
+				err = errors.Join(err, storeErr)
+				if !accepted {
+					proc.counters = previous
+					rows = nil
+				}
+			}
 			resultMu.Lock()
 			if err != nil {
 				collectErr = errors.Join(collectErr, fmt.Errorf("%s inbound %d: %w", proc.protocol, proc.instance.ID, err))

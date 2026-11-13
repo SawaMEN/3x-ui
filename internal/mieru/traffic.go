@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"os/exec"
@@ -14,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 const defaultOnlineGrace = 120 * time.Second
@@ -49,6 +52,15 @@ func (m *Manager) CollectTraffic(desired []Instance) ([]TrafficDelta, []string) 
 // CollectTrafficChecked preserves successful samples and reports unavailable or
 // replaced sources separately from a successful empty poll.
 func (m *Manager) CollectTrafficChecked(desired []Instance) ([]TrafficDelta, []string, error) {
+	return m.collectTrafficChecked(desired, false)
+}
+
+// CollectTrafficPersisted accepts samples into the pinned-owner WAL before advancing cursors.
+func (m *Manager) CollectTrafficPersisted(desired []Instance) ([]TrafficDelta, []string, error) {
+	return m.collectTrafficChecked(desired, true)
+}
+
+func (m *Manager) collectTrafficChecked(desired []Instance, persist bool) ([]TrafficDelta, []string, error) {
 	m.collectMu.Lock()
 	defer m.collectMu.Unlock()
 	var collectErr error
@@ -105,12 +117,37 @@ func (m *Manager) CollectTrafficChecked(desired []Instance) ([]TrafficDelta, []s
 			collectErr = errors.Join(collectErr, fmt.Errorf("mieru inbound %d: process changed during metrics poll", result.inst.Id))
 			continue
 		}
+		if persist && result.owner.accounting == nil {
+			m.mu.Unlock()
+			collectErr = errors.Join(collectErr, fmt.Errorf("mieru inbound %d: runtime traffic owner unavailable", result.inst.Id))
+			continue
+		}
 		cursors := m.traffic[result.inst.Id]
+		if persist {
+			cursors = maps.Clone(cursors)
+		}
 		if cursors == nil {
 			cursors = make(map[string]trafficCursor)
-			m.traffic[result.inst.Id] = cursors
+			if !persist {
+				m.traffic[result.inst.Id] = cursors
+			}
 		}
 		instanceDeltas, instanceOnline := collectInstanceTraffic(result.inst, cursors, result.stats, now)
+		if persist {
+			samples := make([]sidecartraffic.Sample, 0, len(instanceDeltas))
+			for _, d := range instanceDeltas {
+				samples = append(samples, sidecartraffic.Sample{Email: d.Email, Up: d.Up, Down: d.Down})
+			}
+			accepted, err := result.owner.accounting.Store(sidecartraffic.WithActivity(samples, instanceOnline))
+			if err != nil {
+				collectErr = errors.Join(collectErr, fmt.Errorf("mieru inbound %d: traffic journal: %w", result.inst.Id, err))
+			}
+			if !accepted {
+				m.mu.Unlock()
+				continue
+			}
+			m.traffic[result.inst.Id] = cursors
+		}
 		deltas = append(deltas, instanceDeltas...)
 		for _, email := range instanceOnline {
 			onlineSet[email] = struct{}{}

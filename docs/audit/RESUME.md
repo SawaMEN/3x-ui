@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 90 подтверждённых исправлений панели; A90 — свежий reconcile set под manager mutex и guarded removal по committed state.
+Всего реализовано 91 подтверждённое исправление панели; A91 — периодический учёт по pinned runtime owner через WAL до advance counters.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 259 файлов, осталось 2105; общий проход не завершён.
+Проверено вручную 260 файлов, осталось 2104; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1587,3 +1587,78 @@ golangci-lint 2.15.0 full ./... PASS, 0 issues. Первая lint iteration на
 только в новом test condition; после упрощения focused 18-case removal suite снова
 PASS 4.380s и полные build/vet/lint повторно PASS. Inventory/diff check PASS:
 reviewed 259, pending 2105, stale 0. Изменения не затрагивают чужие incoming commits.
+
+
+## Контрольная точка A91: периодические bytes принадлежат runtime owner
+
+Нужно 3 managers; сделано 3: Mieru, MTProto, external VPN.
+Всего 91 подтверждённое исправление. Reviewed 260/2364, осталось 2104, stale 0.
+Полностью прочитан исходный manager_mutation_test.go: stats envelope, bearer,
+user counters и unreachable endpoint; targeted loopback run PASS 0.022s.
+
+Причина: periodic jobs заново разрешали tag/email в IDs через
+CaptureSidecarTrafficOwners. Если traffic row переименовали, а email присвоили
+новой строке при неизменившемся runtime, его delta начислялась новому клиенту.
+При появлении runtime/row после owner snapshot новая identity отсутствовала в
+карте. A87 pinned Owner уже защищал lifecycle handoff, но не обычный periodic poll.
+
+A91:
+- Отдельные CollectTrafficPersisted используют тот же parser и epoch/process
+  checks, но сохраняют samples через Owner работающего процесса. Байты принимаются
+  в shared immutable retry queue/WAL до commit нового cursor/baseline. Возвращённые
+  deltas уже приняты accounting и не должны повторно передаваться в commit(bytes).
+- Mieru клонирует tentative cursor map; MTProto использует existing next snapshot;
+  external клонирует counters и откатывает при отказе принять batch. Missing pinned
+  owner сообщает явную ошибку, не продвигая periodic owned counters. Legacy checked
+  collectors остаются самостоятельными read/consume API без этого side effect.
+- External копирует owner pointers под manager mutex, затем опрашивает процессы
+  под statsMu. Mutable manager accounting field не читается без manager lock.
+- Periodic Mieru/external jobs больше не создают name-based owner map и не
+  пересобирают returned deltas для повторного начисления. После owned poll идёт
+  receipt replay с quota maintenance. Source locks и prefix recovery сохраняются.
+- Native MTProto аналогично пишет pinned batches. Owner.routed исключает двойной
+  inbound total через Xray bridge. WEB backend сохраняет отдельный старый путь;
+  name-based owner map в MtprotoJob относится только к его WEB deltas.
+- Sample.Active + WithActivity сохраняют zero-byte connection activity по pinned
+  ClientTraffic ID, включая existing zero sample без дубликатов. Это позволяет
+  delayed-start maintenance работать без переназначения события по свежему email.
+- Fsync failure после process acceptance возвращает явную ошибку, но sample остаётся
+  в shared pending queue; следующий job сначала восстанавливает его, прежде чем
+  читать новые counters. Partial successful samples сохраняются, ошибки остальных
+  sources остаются видимыми.
+
+Доказательства:
+- До правки все 3 настоящих periodic job fixtures FAIL, web 0.590s: old owner 0/0,
+  replacement 100/200 для Mieru/TrustTunnel и replacement 0/100 для MTProto.
+  Initial owner был захвачен runtime до переименования row; job запускался после
+  повторного назначения email новой row. Production code на baseline не менялся.
+- После правки selected run PASS: web 17.818s, sidecartraffic 0.343s, job 0.376s,
+  service 1.654s, Mieru 0.008s, MTProto 0.008s, external VPN 0.416s. Включены A88–A90,
+  lifecycle/epoch/shutdown/replay/rollback и обычные service regressions.
+- Расширенный periodic run: 7 cases PASS, web 1.134s. Три normal owner reassignment,
+  три filesystem fault во время фактического scrape с recovery replacement job,
+  плюс routed MTProto. Проверены client и inbound totals, old vs replacement IDs;
+  при disk fault DB totals остаются нулевыми до recovery, затем ровно одна delta.
+- Full sidecartraffic tests PASS 0.389s, включая новый pinned zero-activity WAL test:
+  после row rename/replacement receipt с 0/0 всё ещё содержит original ID.
+- go build -p 1 ./... PASS; go vet -p 1 ./... PASS; golangci-lint 2.15.0 full ./...
+  PASS, 0 issues. Inventory/diff check PASS: reviewed 260, pending 2104, stale 0.
+
+Ограничения / следующая очередь:
+- WEB backend MTProto не переведён на native managed Owner contract; его отдельный
+  collector/owner snapshot требует собственного анализа. Name-based last-online
+  UI updates также не стали identity-based в A91; byte counters и zero-byte
+  accounting maintenance теперь используют pinned IDs.
+- Semantic no-op Ensure после удаления/создания ClientTraffic с теми же email и
+  credentials может сохранять прежний pinned Owner. Следующий приоритет — граница
+  смены identity без restart и сохранение delta до корректного owner rebind.
+- Capture должен видеть committed traffic rows при запуске; API не достраивает
+  отсутствующие на startup identities по свежему email во время poll.
+- Периодический WAL теперь создаётся на source instance с изменёнными samples/
+  activity, а не одним общим name-based batch на весь job. Это повышает fsync/receipt
+  нагрузку при большом количестве inbounds; отдельный performance benchmark открыт.
+  Fsync выполняется под соответствующим manager/stats lock, как lifecycle handoff.
+- Process retry queue не переживает crash до fsync. Прежние ограничения pre-stop
+  source metrics, ACK/drain и остальных managers остаются. Normal temporary SQLite,
+  owned fake children и loopback HTTP; отдельный -race A91, real upstream, host
+  firewall/systemctl/ACME, Docker/NET_ADMIN, Unix IPC и PostgreSQL не запускались.

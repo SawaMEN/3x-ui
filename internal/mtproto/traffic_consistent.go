@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"maps"
 	"sync"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 var consistentTrafficCollectMu sync.Mutex
@@ -52,6 +54,15 @@ func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
 }
 
 func (m *Manager) CollectTrafficConsistentChecked() ([]Traffic, []string, error) {
+	return m.collectTrafficChecked(false)
+}
+
+// CollectTrafficPersisted accepts the pinned-owner batch before committing baselines.
+func (m *Manager) CollectTrafficPersisted() ([]Traffic, []string, error) {
+	return m.collectTrafficChecked(true)
+}
+
+func (m *Manager) collectTrafficChecked(persist bool) ([]Traffic, []string, error) {
 	var collectErr error
 	// The scheduler already serializes its own calls, but keeping this guard in
 	// the manager makes the baseline contract safe for any other caller too.
@@ -107,6 +118,29 @@ func (m *Manager) CollectTrafficConsistentChecked() ([]Traffic, []string, error)
 			m.mu.Unlock()
 			collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: process changed during metrics poll", s.id))
 			continue
+		}
+		if persist {
+			if cur.accounting == nil {
+				m.mu.Unlock()
+				collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: runtime traffic owner unavailable", s.id))
+				continue
+			}
+			samples := make([]sidecartraffic.Sample, 0, len(deltas))
+			panelOnline := make([]string, 0, len(instanceOnline))
+			for name, d := range deltas {
+				samples = append(samples, sidecartraffic.Sample{Email: panelUsername(name, s.userEmails), Up: d.up, Down: d.down})
+			}
+			for _, name := range instanceOnline {
+				panelOnline = append(panelOnline, panelUsername(name, s.userEmails))
+			}
+			accepted, err := cur.accounting.Store(sidecartraffic.WithActivity(samples, panelOnline))
+			if err != nil {
+				collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: traffic journal: %w", s.id, err))
+			}
+			if !accepted {
+				m.mu.Unlock()
+				continue
+			}
 		}
 		cur.last = next
 		tag := cur.tag

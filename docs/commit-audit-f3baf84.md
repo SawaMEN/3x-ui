@@ -726,3 +726,18 @@ Reviewed 259/2364, осталось 2105.
 integration scenarios и unit ownership/read-error cases, а также прежние
 shutdown/lifecycle/accounting/service regressions. Точные результаты, low-level
 force API scope и очередь проверки periodic traffic owner snapshot — RESUME.md.
+
+
+## Продолжение: A91, pinned accounting обычных periodic polls
+
+Нужно 3 managers, сделано 3; всего 91 подтверждённое исправление.
+Reviewed 260/2364, осталось 2104.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A91 | Periodic delta старого runtime начисляется новой traffic row с повторно использованным email, либо отсутствующая в snapshot identity теряет байты | Owned collectors принимают pinned-ID samples в WAL до advance baseline; jobs выполняют receipt replay без повторного name-based начисления; zero activity и routed MTProto учитываются владельцем |
+
+Три неверных начисления воспроизведены до правки. После исправления прошли семь
+normal/disk-recovery/routed fixtures, pinned zero activity, прежние lifecycle,
+shutdown и service regressions, build/vet/lint. Точные результаты и оставшиеся
+owner rebind/WEB/performance вопросы — RESUME.md.
