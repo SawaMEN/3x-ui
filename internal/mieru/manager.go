@@ -452,6 +452,10 @@ func (m *Manager) Ensure(inst Instance) error {
 func (m *Manager) Reconcile(desired []Instance) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	_, _ = m.reconcileLocked(desired)
+}
+
+func (m *Manager) reconcileLocked(desired []Instance) ([]Instance, error) {
 	requests := make([]sidecartraffic.Desired, len(desired))
 	for i, inst := range desired {
 		requests[i] = inst.desiredState()
@@ -459,7 +463,7 @@ func (m *Manager) Reconcile(desired []Instance) {
 	allowed, err := sidecartraffic.Current(requests)
 	if err != nil {
 		logger.Warningf("mieru: reconcile skipped: %v", err)
-		return
+		return nil, err
 	}
 	current := make([]Instance, 0, len(desired))
 	for i, inst := range desired {
@@ -488,11 +492,16 @@ func (m *Manager) Reconcile(desired []Instance) {
 			logger.Warningf("mieru: failed to start inbound %d (%s): %v", inst.Id, inst.Tag, err)
 		}
 	}
+	return desired, nil
 }
 
 func (m *Manager) Remove(id int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.removeLocked(id)
+}
+
+func (m *Manager) removeLocked(id int) {
 	if cur := m.procs[id]; cur != nil {
 		m.handoffTrafficLocked(id, cur)
 		_ = cur.proc.Stop()

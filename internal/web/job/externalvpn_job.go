@@ -1,6 +1,8 @@
 package job
 
 import (
+	"context"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
@@ -32,14 +34,13 @@ func (j *ExternalVPNJob) Run() {
 		return
 	}
 
-	desired, err := j.inbounds.DesiredExternalVPNInstances()
+	externalvpn.RefreshOutbounds()
+	mgr := externalvpn.GetManager()
+	_, err := mgr.ReconcileCurrent(context.Background(), j.inbounds.DesiredExternalVPNInstancesContext)
 	if err != nil {
 		logger.Warning("external VPN reconcile:", err)
 		return
 	}
-	externalvpn.RefreshOutbounds()
-	mgr := externalvpn.GetManager()
-	mgr.Reconcile(desired)
 
 	rows, collectErr := mgr.CollectTrafficChecked()
 	if collectErr != nil {
@@ -71,8 +72,8 @@ func (j *ExternalVPNJob) Run() {
 			// batch and retry it before collecting a newer snapshot.
 			logger.Warning("external VPN traffic; batch queued for retry:", err)
 		} else if disabled {
-			if current, err := j.inbounds.DesiredExternalVPNInstances(); err == nil {
-				mgr.Reconcile(current)
+			if _, err := mgr.ReconcileCurrent(context.Background(), j.inbounds.DesiredExternalVPNInstancesContext); err != nil {
+				logger.Warning("external VPN job: refresh desired failed:", err)
 			}
 		}
 	}

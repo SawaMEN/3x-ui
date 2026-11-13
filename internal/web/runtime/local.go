@@ -74,7 +74,9 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 	}
 	if ib.Protocol == model.MTProto {
 		if mtproto.WebProxyInbound(ib) {
-			mtproto.GetManager().Remove(ib.Id)
+			if err := mtproto.GetManager().RemoveIfInactive(ib.Id); err != nil {
+				return err
+			}
 			return nil
 		}
 		inst, ok := mtproto.InstanceFromInbound(ib)
@@ -111,15 +113,21 @@ func (l *Local) DelInbound(ctx context.Context, ib *model.Inbound) error {
 		return nil
 	}
 	if ib.Protocol == model.Mieru {
-		mieru.GetManager().Remove(ib.Id)
+		if err := mieru.GetManager().RemoveIfInactive(ib.Id); err != nil {
+			return err
+		}
 		return nil
 	}
 	if externalvpn.IsManaged(ib.Protocol) {
-		externalvpn.GetManager().Remove(ib.Id)
+		if err := externalvpn.GetManager().RemoveIfInactive(ib.Id); err != nil {
+			return err
+		}
 		return nil
 	}
 	if ib.Protocol == model.MTProto {
-		mtproto.GetManager().Remove(ib.Id)
+		if err := mtproto.GetManager().RemoveIfInactive(ib.Id); err != nil {
+			return err
+		}
 		return nil
 	}
 	if ib.Protocol == model.AmneziaWG {
@@ -184,7 +192,9 @@ func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) 
 
 func (l *Local) updateMtprotoInbound(ctx context.Context, oldIb, newIb *model.Inbound) error {
 	if oldIb.Protocol == model.MTProto && newIb.Protocol != model.MTProto {
-		mtproto.GetManager().Remove(oldIb.Id)
+		if err := mtproto.GetManager().RemoveIfInactive(oldIb.Id); err != nil {
+			return err
+		}
 		if !newIb.Enable {
 			return nil
 		}
@@ -194,16 +204,22 @@ func (l *Local) updateMtprotoInbound(ctx context.Context, oldIb, newIb *model.In
 		_ = l.DelInbound(ctx, oldIb)
 	}
 	if !newIb.Enable {
-		mtproto.GetManager().Remove(newIb.Id)
+		if err := mtproto.GetManager().RemoveIfInactive(newIb.Id); err != nil {
+			return err
+		}
 		return nil
 	}
 	if mtproto.WebProxyInbound(newIb) {
-		mtproto.GetManager().Remove(newIb.Id)
+		if err := mtproto.GetManager().RemoveIfInactive(newIb.Id); err != nil {
+			return err
+		}
 		return nil
 	}
 	inst, ok := mtproto.InstanceFromInbound(newIb)
 	if !ok {
-		mtproto.GetManager().Remove(newIb.Id)
+		if err := mtproto.GetManager().RemoveIfInactive(newIb.Id); err != nil {
+			return err
+		}
 		return nil
 	}
 	return mtproto.GetManager().Ensure(inst)
@@ -277,7 +293,9 @@ func (l *Local) updateTuicInbound(ctx context.Context, oldIb, newIb *model.Inbou
 
 func (l *Local) updateMieruInbound(ctx context.Context, oldIb, newIb *model.Inbound) error {
 	if oldIb.Protocol == model.Mieru && newIb.Protocol != model.Mieru {
-		mieru.GetManager().Remove(oldIb.Id)
+		if err := mieru.GetManager().RemoveIfInactive(oldIb.Id); err != nil {
+			return err
+		}
 		if !newIb.Enable {
 			return nil
 		}
@@ -287,12 +305,16 @@ func (l *Local) updateMieruInbound(ctx context.Context, oldIb, newIb *model.Inbo
 		_ = l.DelInbound(ctx, oldIb)
 	}
 	if !newIb.Enable {
-		mieru.GetManager().Remove(newIb.Id)
+		if err := mieru.GetManager().RemoveIfInactive(newIb.Id); err != nil {
+			return err
+		}
 		return nil
 	}
 	inst, ok := mieru.InstanceFromInbound(newIb)
 	if !ok {
-		mieru.GetManager().Remove(newIb.Id)
+		if err := mieru.GetManager().RemoveIfInactive(newIb.Id); err != nil {
+			return err
+		}
 		return nil
 	}
 	return mieru.GetManager().Ensure(inst)

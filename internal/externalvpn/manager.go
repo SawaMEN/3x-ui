@@ -526,6 +526,10 @@ func (m *Manager) StopAll() {
 func (m *Manager) Reconcile(instances []Instance) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	_, _ = m.reconcileLocked(instances)
+}
+
+func (m *Manager) reconcileLocked(instances []Instance) ([]Instance, error) {
 	requests := make([]sidecartraffic.Desired, len(instances))
 	for i, inst := range instances {
 		requests[i] = inst.desiredState()
@@ -533,7 +537,7 @@ func (m *Manager) Reconcile(instances []Instance) {
 	allowed, err := sidecartraffic.Current(requests)
 	if err != nil {
 		logger.Warningf("externalvpn: reconcile skipped: %v", err)
-		return
+		return nil, err
 	}
 	current := make([]Instance, 0, len(instances))
 	for i, inst := range instances {
@@ -562,6 +566,7 @@ func (m *Manager) Reconcile(instances []Instance) {
 			delete(m.lastErrors, inst.ID)
 		}
 	}
+	return instances, nil
 }
 
 func ExportTrustTunnelLink(inst Instance, email, address string, port int) (string, error) {

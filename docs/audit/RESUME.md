@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 89 подтверждённых исправлений панели; A89 — проверка сохранённых settings/client eligibility перед stale apply и external rollback.
+Всего реализовано 90 подтверждённых исправлений панели; A90 — свежий reconcile set под manager mutex и guarded removal по committed state.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 258 файлов, осталось 2106; общий проход не завершён.
+Проверено вручную 259 файлов, осталось 2105; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1504,3 +1504,86 @@ golangci-lint 2.15.0 full ./... PASS, 0 issues. Inventory/diff checks PASS:
 reviewed 258, pending 2106, stale 0. Source стабилен на этих финальных checks;
 первый pre-rollback full-check run был остановлен до новых production edits и
 не считается финальным результатом. Все результаты A89 выше — normal test runs.
+
+
+## Контрольная точка A90: stale empty desired и запоздавшие удаления
+
+Нужно 3 managers; сделано 3: Mieru, MTProto, external VPN.
+Всего 90 подтверждённых исправлений. Reviewed 259/2364, осталось 2105, stale 0.
+Полностью прочитан исходный inbound_mieru.go, в том числе validation,
+quota/egress/speed-alias filters и post-commit immediate apply.
+
+После A89 оставались две destructive части того же desired-state lifecycle:
+старый пустой/неполный job snapshot мог остановить новый процесс, а delayed
+DelInbound/empty-client UpdateInbound удалял актуальный runtime, не проверяя БД.
+
+A90:
+- ReconcileCurrent принимает внутренний read-only resolver. Захватывает manager
+  mutex до построения полного desired set и удерживает до sweep/remove/start.
+  Context-based source read получает timeout 5s; отмена проверяется до и после
+  resolver. A88/A89 Current сохраняет свою последующую проверку и свой timeout.
+- Все 3 periodic jobs, повторные quota refresh Mieru/external и reset-all MTProto
+  используют новый API. Возвращённый filtered desired используется для tags и
+  Mieru poll; prefetched desired arrays больше не применяются production callers.
+- Desired*InstancesContext использует один context-bound DB handle для всех
+  запросов builder; Mieru ListForInbounds получает тот же handle, а не DB global.
+  Старые getter wrappers остаются совместимыми для прочих read callers.
+- RemoveIfInactive под тем же manager mutex читает актуальный saved inbound и
+  disabled clients через shared readState. Удалять можно missing/disabled/remote/
+  вне protocol ownership либо без активных effective clients. MTProto WEB mode
+  освобождает обычный native manager; Pingtunnel сохраняет свою key-only модель.
+- External проверяет весь managed protocol set, поэтому старое удаление TrustTunnel
+  не удалит уже действующий OpenFlux того же ID. Проверка callback использует
+  текущий protocol, не старый payload. DB read failure возвращает sanitized error
+  и сохраняет runtime; обычный local runtime переводит все соответствующие Remove
+  branches на guarded API, включая empty clients и protocol transitions.
+- Force Remove/StopAll и low-level Reconcile сохраняют прежний явный контракт:
+  аварийная остановка/компонентные операции не зависят от DB availability. Новые
+  production resolver paths не должны заменяться вызовами Reconcile(prefetched).
+
+Доказательства:
+- На прежней логике 42ea00b web FAIL 3.742s: 9 failures delayed deletion/empty
+  clients/read outage (3 managers × 3 destructive причины), плюс 3 failures empty
+  job snapshot vs newly enabled startup. 9 positive disabled/deleted/depleted
+  сценариев уже проходили. Production code на baseline не менялся.
+- Barrier ставится после фактического пустого Desired SELECT. Между snapshot и
+  продолжением job БД включает inbound, Ensure запускается параллельно. После
+  правки Ensure присоединяется к manager lock и запускается после старой сверки;
+  callback не подменяет desired и не вызывает host/network tooling.
+- Selected regressions: web PASS 20.098s, sidecartraffic 0.407s, job 0.439s,
+  service 1.849s, Mieru 0.008s, MTProto 0.014s, external VPN 0.421s. Runtime
+  package в этом фильтре имел no tests to run — не считать отдельным test coverage.
+- Final focused regressions: web PASS 5.840s (18 removal cases + 3 job races +
+  3 resolver error/cancellation cases), sidecartraffic PASS 0.135s.
+- Дополнительные post-commit/defer-to-commit/enable/core-bridge accounting tests:
+  service PASS 0.597s. Existing lifecycle/WAL/replay/shutdown/A88/A89 assertions
+  не ослаблены.
+- Unit CanRemove: manager protocol ownership, переход между двумя протоколами
+  одного manager, inactive callback, DB error sanitization/fail-preserve,
+  remote/missing row. Resolver failure/cancel tests подтверждают сохранение child
+  и наличие deadline; cancelled resolver не вызывается.
+
+Ограничения / следующая очередь:
+- Не введён persisted global generation counter. Вместо него production full-set
+  builder выполняется под тем же mutex, что runtime mutation; DB commit после
+  snapshot опирается на следующий post-commit Ensure/Remove, который присоединяется
+  к этому mutex. SQL resolver timeout и последующий Current timeout — разные фазы;
+  ожидание sync.Mutex не является context-cancellable до захвата.
+- Force manager API предназначен для lifecycle/component/shutdown и тестов;
+  он намеренно может остановить enabled DB row. Native speed handover Pause/
+  core apply и прочие managers не переводились на новый eligibility contract.
+- Readiness egress/limit aliases и startup retry остаются прежними. Большие IN
+  запросы в source builders отдельно не stress-tested; Current/readState batch900.
+- Следующий приоритет: согласованность periodic traffic owner snapshot с новыми
+  inbounds/client identities, созданными между CaptureSidecarTrafficOwners и poll;
+  проверить replay/сохранение accounting при semantic no-op и identity recreation.
+- Ограничения pre-stop metrics A87, WEB backend lifecycle и остальных managers
+  сохраняются. Normal temporary SQLite/fake owned children/loopback tests;
+  отдельный -race A90, real upstream, live PostgreSQL, host firewall/systemctl/
+  ACME, Docker/NET_ADMIN и real Unix IPC не запускались.
+
+Итог A90: go build -p 1 ./... PASS, go vet -p 1 ./... PASS;
+golangci-lint 2.15.0 full ./... PASS, 0 issues. Первая lint iteration нашла QF1001
+только в новом test condition; после упрощения focused 18-case removal suite снова
+PASS 4.380s и полные build/vet/lint повторно PASS. Inventory/diff check PASS:
+reviewed 259, pending 2105, stale 0. Изменения не затрагивают чужие incoming commits.

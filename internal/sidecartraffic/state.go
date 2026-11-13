@@ -51,31 +51,7 @@ func Current(desired []Desired) ([]bool, error) {
 	for i, inst := range desired {
 		ids[i] = inst.ID
 	}
-	current := make(map[int]model.Inbound, len(ids))
-	disabled := make(map[int]map[string]bool)
-	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for start := 0; start < len(ids); start += 900 {
-			batch := ids[start:min(start+900, len(ids))]
-			var rows []model.Inbound
-			if err := tx.Select("id", "enable", "node_id", "protocol", "tag", "listen", "port", "settings").Where("id IN ?", batch).Find(&rows).Error; err != nil {
-				return err
-			}
-			for _, row := range rows {
-				current[row.Id] = row
-			}
-			var stats []coremodel.ClientTraffic
-			if err := tx.Select("inbound_id", "email").Where("inbound_id IN ? AND enable = ?", batch, false).Find(&stats).Error; err != nil {
-				return err
-			}
-			for _, row := range stats {
-				if disabled[row.InboundId] == nil {
-					disabled[row.InboundId] = make(map[string]bool)
-				}
-				disabled[row.InboundId][row.Email] = true
-			}
-		}
-		return nil
-	})
+	current, disabled, err := readState(db.WithContext(ctx), ids)
 	if err != nil {
 		return nil, errors.New("read current sidecar inbound state failed")
 	}
@@ -106,4 +82,33 @@ func ValidateDesired(desired Desired) error {
 		return ErrRevoked
 	}
 	return nil
+}
+
+func readState(db *gorm.DB, ids []int) (map[int]model.Inbound, map[int]map[string]bool, error) {
+	current := make(map[int]model.Inbound, len(ids))
+	disabled := make(map[int]map[string]bool)
+	err := db.Transaction(func(tx *gorm.DB) error {
+		for start := 0; start < len(ids); start += 900 {
+			batch := ids[start:min(start+900, len(ids))]
+			var rows []model.Inbound
+			if err := tx.Select("id", "enable", "node_id", "protocol", "tag", "listen", "port", "settings").Where("id IN ?", batch).Find(&rows).Error; err != nil {
+				return err
+			}
+			for _, row := range rows {
+				current[row.Id] = row
+			}
+			var stats []coremodel.ClientTraffic
+			if err := tx.Select("inbound_id", "email").Where("inbound_id IN ? AND enable = ?", batch, false).Find(&stats).Error; err != nil {
+				return err
+			}
+			for _, row := range stats {
+				if disabled[row.InboundId] == nil {
+					disabled[row.InboundId] = make(map[string]bool)
+				}
+				disabled[row.InboundId][row.Email] = true
+			}
+		}
+		return nil
+	})
+	return current, disabled, err
 }

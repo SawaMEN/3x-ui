@@ -12144,8 +12144,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A89: reviewed local-only gorm/json/form-excluded source and eligibility provenance; constructor metadata, manager-locked validation before mutation and external rollback/no-op refresh reviewed; 18 pre-check stale Ensure/Reconcile failures and one pre-rollback-check failure reproduced; selected revision/lifecycle/shutdown/service regressions PASS.",
-      "reviewed_sha256": "bfbfd99091157dd19bb46bfd57d6768bb40f79ee22b85f176548ec50a2bbbf1c"
+      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
+      "reviewed_sha256": "8c7507a2a33a030957e07a19e4f4bc67be11d425782f953a26353bf5cc76f576"
     },
     {
       "path": "internal/externalvpn/manager_security_test.go",
@@ -13057,8 +13057,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A89: reviewed local-only gorm/json/form-excluded source and eligibility provenance; constructor metadata, manager-locked validation before mutation and external rollback/no-op refresh reviewed; 18 pre-check stale Ensure/Reconcile failures and one pre-rollback-check failure reproduced; selected revision/lifecycle/shutdown/service regressions PASS.",
-      "reviewed_sha256": "7dbe41d34574f7f14c899d0d8dc731f2111a5d8349a8c6b478cd6d3e808e3e84"
+      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
+      "reviewed_sha256": "9603f6c4a8f4ca0c87e69710535cfd20f4096cc724093d8bf44b489d3a9a8450"
     },
     {
       "path": "internal/mieru/process.go",
@@ -13090,8 +13090,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A89: reviewed local-only gorm/json/form-excluded source and eligibility provenance; constructor metadata, manager-locked validation before mutation and external rollback/no-op refresh reviewed; 18 pre-check stale Ensure/Reconcile failures and one pre-rollback-check failure reproduced; selected revision/lifecycle/shutdown/service regressions PASS.",
-      "reviewed_sha256": "0d65d8105a588a3452946283652bc1a6da5a36cf04adba24a676032455757d2e"
+      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
+      "reviewed_sha256": "6fc4d4acb3902487ba93837fadd23975b0f422f77fc0a88dc6199f316c9d0c33"
     },
     {
       "path": "internal/mtproto/manager_mutation_test.go",
@@ -17545,8 +17545,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
-      "reviewed_sha256": "ef254f76f96f40f1daa248d80d20e3bc26f4fec61794b125da8636bd475f77cb"
+      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
+      "reviewed_sha256": "6c42dcbb23c5036d6e291972c96846be65d6ba4352ee110c8cd7ef8255c14135"
     },
     {
       "path": "internal/web/job/ip_limit_allowlist.go",
@@ -17633,8 +17633,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
-      "reviewed_sha256": "26f1ab88556454ad9daac0c27f7d04786abc502041258c7b086a5a83bf479085"
+      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
+      "reviewed_sha256": "54d3a852bba0ff33f83aac7f3305e5fbb19311708366565b1ea0d0318d4665e3"
     },
     {
       "path": "internal/web/job/mtproto_job.go",
@@ -17644,8 +17644,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
-      "reviewed_sha256": "5d875b4719cb03ca2a661859733e1c7adcc8160a992cf45199cb3457ce709073"
+      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
+      "reviewed_sha256": "ca8e1d68065a8e5884f4adb7770b694467c685194e4378ffbfc77d2d85cd669d"
     },
     {
       "path": "internal/web/job/node_down_threshold_test.go",
@@ -20646,9 +20646,9 @@
       "deletions": 4,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A90: read full file: port/user validation, enabled/local selection, disabled-client filtering and provenance, egress/speed-alias gates, and post-commit local apply. Reviewed context propagation through disabled rows and ListForInbounds; real Mieru job empty-snapshot/startup regression and removal/quota fixtures PASS. Very-large IN query stress remains outside this run.",
+      "reviewed_sha256": "ed79694a402fdb0548a502c02d8842723e50e93b7d8f55c4f24d0dfe90ac325c"
     },
     {
       "path": "internal/web/service/inbound_mieru_update_test.go",

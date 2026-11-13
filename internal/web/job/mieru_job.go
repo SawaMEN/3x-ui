@@ -1,6 +1,8 @@
 package job
 
 import (
+	"context"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -35,7 +37,8 @@ func (j *MieruJob) Run() {
 		return
 	}
 
-	desired, err := j.inboundService.DesiredMieruInstances()
+	mgr := mieru.GetManager()
+	desired, err := mgr.ReconcileCurrent(context.Background(), j.inboundService.DesiredMieruInstancesContext)
 	if err != nil {
 		logger.Warning("mieru job: get desired instances failed:", err)
 		return
@@ -45,9 +48,6 @@ func (j *MieruJob) Run() {
 	for _, inst := range desired {
 		activeTags = append(activeTags, inst.Tag)
 	}
-
-	mgr := mieru.GetManager()
-	mgr.Reconcile(desired)
 
 	deltas, onlineEmails, collectErr := mgr.CollectTrafficChecked(desired)
 	if collectErr != nil {
@@ -105,8 +105,8 @@ func (j *MieruJob) Run() {
 		} else if needRestart {
 			// Quota enforcement can disable Mieru users. Reconcile immediately
 			// instead of waiting another poll for the sidecar to reload/remove them.
-			if desired, refreshErr := j.inboundService.DesiredMieruInstances(); refreshErr == nil {
-				mgr.Reconcile(desired)
+			if _, refreshErr := mgr.ReconcileCurrent(context.Background(), j.inboundService.DesiredMieruInstancesContext); refreshErr != nil {
+				logger.Warning("mieru job: refresh desired failed:", refreshErr)
 			}
 		}
 	}

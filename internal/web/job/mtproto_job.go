@@ -55,7 +55,8 @@ func (j *MtprotoJob) Run() {
 		return
 	}
 
-	desired, err := j.inboundService.DesiredMtprotoInstances()
+	mgr := mtproto.GetManager()
+	desired, err := mgr.ReconcileCurrent(ctx, j.inboundService.DesiredMtprotoInstancesContext)
 	if err != nil {
 		logger.Warning("mtproto job: get desired instances failed:", err)
 		return
@@ -70,8 +71,6 @@ func (j *MtprotoJob) Run() {
 		}
 	}
 
-	mgr := mtproto.GetManager()
-	mgr.Reconcile(desired)
 	if err := (service.TelemtService{}).RefreshMekoFix(); err != nil {
 		logger.Warning("mtproto job: reconcile MEKO V3 rules failed:", err)
 	}

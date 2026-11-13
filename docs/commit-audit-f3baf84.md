@@ -711,3 +711,18 @@ Reviewed 258/2364, осталось 2106.
 После правки прошли новые regressions, A88 revocation cases, lifecycle/accounting
 и service tests. Точные результаты и следующая очередь desired-set/delete generation
 сохранены в RESUME.md. Полный проход исходного коммита ещё не завершён.
+
+
+## Продолжение: A90, согласование списков и удаления sidecars
+
+Нужно 3 managers, сделано 3; всего 90 подтверждённых исправлений.
+Reviewed 259/2364, осталось 2105.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A90 | Запоздавший empty desired/DelInbound останавливает уже актуальный enabled runtime | Full-set resolver под manager mutex, context-bound builders, guarded committed-state removal и миграция periodic/quota/runtime callers |
+
+До правки воспроизведены 12 destructive failures; после правки проходят 24 focused
+integration scenarios и unit ownership/read-error cases, а также прежние
+shutdown/lifecycle/accounting/service regressions. Точные результаты, low-level
+force API scope и очередь проверки periodic traffic owner snapshot — RESUME.md.

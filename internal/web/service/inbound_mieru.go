@@ -37,7 +37,11 @@ func validateMieruInbound(inbound *model.Inbound, clients []model.Client) error 
 }
 
 func (s *InboundService) DesiredMieruInstances() ([]mieru.Instance, error) {
-	db := database.GetDB()
+	return s.DesiredMieruInstancesContext(context.Background())
+}
+
+func (s *InboundService) DesiredMieruInstancesContext(ctx context.Context) ([]mieru.Instance, error) {
+	db := database.GetDB().WithContext(ctx)
 	var inbounds []*model.Inbound
 	if err := db.Model(model.Inbound{}).
 		Where("protocol = ? AND enable = ? AND node_id IS NULL", model.Mieru, true).
@@ -58,7 +62,7 @@ func (s *InboundService) DesiredMieruInstances() ([]mieru.Instance, error) {
 		Select("inbound_id", "email").Find(&disabledRows).Error; err != nil {
 		return nil, err
 	}
-	clientRows, err := s.clientService.ListForInbounds(nil, ids)
+	clientRows, err := s.clientService.ListForInbounds(db, ids)
 	if err != nil {
 		return nil, err
 	}

@@ -554,6 +554,10 @@ func (m *Manager) ensureLocked(inst Instance) error {
 func (m *Manager) Remove(id int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.removeLocked(id)
+}
+
+func (m *Manager) removeLocked(id int) {
 	if cur, ok := m.procs[id]; ok {
 		if err := m.stopWithTrafficLocked(id, cur); err != nil {
 			logger.Errorf("mtproto: failed to stop Telemt for inbound %d: %v", id, err)
@@ -601,6 +605,10 @@ func removeStaleConfigs(want map[int]struct{}) int {
 func (m *Manager) Reconcile(desired []Instance) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	_, _ = m.reconcileLocked(desired)
+}
+
+func (m *Manager) reconcileLocked(desired []Instance) ([]Instance, error) {
 	requests := make([]sidecartraffic.Desired, len(desired))
 	for i, inst := range desired {
 		requests[i] = inst.desiredState()
@@ -608,7 +616,7 @@ func (m *Manager) Reconcile(desired []Instance) {
 	allowed, err := sidecartraffic.Current(requests)
 	if err != nil {
 		logger.Warningf("mtproto: reconcile skipped: %v", err)
-		return
+		return nil, err
 	}
 	current := make([]Instance, 0, len(desired))
 	for i, inst := range desired {
@@ -641,6 +649,7 @@ func (m *Manager) Reconcile(desired []Instance) {
 			logger.Warningf("mtproto: reconcile failed for inbound %d: %v", i.Id, err)
 		}
 	}
+	return desired, nil
 }
 
 func (m *Manager) StopAll() {

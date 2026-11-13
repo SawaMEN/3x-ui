@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -97,8 +98,13 @@ func prepareExternalVPN(ib *model.Inbound, previous string) error {
 }
 
 func (s *InboundService) DesiredExternalVPNInstances() ([]externalvpn.Instance, error) {
+	return s.DesiredExternalVPNInstancesContext(context.Background())
+}
+
+func (s *InboundService) DesiredExternalVPNInstancesContext(ctx context.Context) ([]externalvpn.Instance, error) {
+	db := database.GetDB().WithContext(ctx)
 	var rows []*model.Inbound
-	err := database.GetDB().Where("protocol IN ? AND enable = ? AND node_id IS NULL", []model.Protocol{model.Pingtunnel, model.TrustTunnel, model.FPTN, model.VetroffProxy, model.OpenFlux}, true).Find(&rows).Error
+	err := db.Where("protocol IN ? AND enable = ? AND node_id IS NULL", []model.Protocol{model.Pingtunnel, model.TrustTunnel, model.FPTN, model.VetroffProxy, model.OpenFlux}, true).Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +115,7 @@ func (s *InboundService) DesiredExternalVPNInstances() ([]externalvpn.Instance, 
 	disabled := map[int]map[string]bool{}
 	if len(ids) > 0 {
 		var stats []coremodel.ClientTraffic
-		if err := database.GetDB().Where("inbound_id IN ? AND enable = ?", ids, false).Find(&stats).Error; err != nil {
+		if err := db.Where("inbound_id IN ? AND enable = ?", ids, false).Find(&stats).Error; err != nil {
 			return nil, err
 		}
 		for _, stat := range stats {

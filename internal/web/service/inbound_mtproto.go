@@ -22,7 +22,11 @@ import (
 // would keep serving depleted clients until an unrelated restart. Inbounds whose
 // every secret is filtered away are omitted so Reconcile stops their sidecar.
 func (s *InboundService) DesiredMtprotoInstances() ([]mtproto.Instance, error) {
-	db := database.GetDB()
+	return s.DesiredMtprotoInstancesContext(context.Background())
+}
+
+func (s *InboundService) DesiredMtprotoInstancesContext(ctx context.Context) ([]mtproto.Instance, error) {
+	db := database.GetDB().WithContext(ctx)
 	var inbounds []*model.Inbound
 	err := db.Model(model.Inbound{}).
 		Where("protocol = ? AND enable = ? AND node_id IS NULL", model.MTProto, true).
@@ -140,11 +144,10 @@ func (s *InboundService) resetMtprotoClientQuota(email string) {
 
 func (s *InboundService) resetAllMtprotoQuotas() {
 	mgr := mtproto.GetManager()
-	desired, err := s.DesiredMtprotoInstances()
+	desired, err := mgr.ReconcileCurrent(context.Background(), s.DesiredMtprotoInstancesContext)
 	if err != nil {
 		return
 	}
-	mgr.Reconcile(desired)
 	for _, inst := range desired {
 		for _, sec := range inst.Secrets {
 			mgr.ResetQuota(sec.Name)
