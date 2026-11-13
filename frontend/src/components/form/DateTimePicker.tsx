@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CloseCircleFilled } from '@ant-design/icons';
-import { DatePicker } from 'antd';
+import { DatePicker, theme } from 'antd';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { PersianDateTimePicker } from 'persian-calendar-suite';
@@ -24,33 +24,6 @@ interface DateTimePickerProps {
   'aria-describedby'?: string;
 }
 
-const LIGHT_THEME = {
-  primaryColor: '#1677ff',
-  backgroundColor: '#ffffff',
-  borderColor: '#d9d9d9',
-  hoverColor: 'rgba(22, 119, 255, 0.10)',
-  selectedTextColor: '#ffffff',
-  textColor: 'rgba(0, 0, 0, 0.88)',
-};
-
-const DARK_THEME = {
-  primaryColor: '#1677ff',
-  backgroundColor: '#23252b',
-  borderColor: 'rgba(255, 255, 255, 0.12)',
-  hoverColor: 'rgba(22, 119, 255, 0.18)',
-  selectedTextColor: '#ffffff',
-  textColor: 'rgba(255, 255, 255, 0.88)',
-};
-
-const ULTRA_DARK_THEME = {
-  primaryColor: '#1677ff',
-  backgroundColor: '#101013',
-  borderColor: 'rgba(255, 255, 255, 0.08)',
-  hoverColor: 'rgba(22, 119, 255, 0.16)',
-  selectedTextColor: '#ffffff',
-  textColor: 'rgba(255, 255, 255, 0.88)',
-};
-
 export default function DateTimePicker({
   value,
   onChange,
@@ -66,7 +39,7 @@ export default function DateTimePicker({
 }: DateTimePickerProps) {
   const { t } = useTranslation();
   const { datepicker } = useDatepicker();
-  const { isDark, isUltra } = useTheme();
+  const { isDark, isUltra, antdThemeConfig } = useTheme();
   const jalaliRef = useRef<HTMLDivElement>(null);
   // Bumped on clear: persian-calendar-suite reads `value` only on mount, so
   // remounting via key is the only way to reflect an externally cleared value.
@@ -83,10 +56,16 @@ export default function DateTimePicker({
   }, [clearNonce]);
 
   const persianTheme = useMemo(() => {
-    if (isUltra) return ULTRA_DARK_THEME;
-    if (isDark) return DARK_THEME;
-    return LIGHT_THEME;
-  }, [isDark, isUltra]);
+    const token = theme.getDesignToken(antdThemeConfig);
+    return {
+      primaryColor: token.colorPrimary,
+      backgroundColor: token.colorBgElevated,
+      borderColor: token.colorBorder,
+      hoverColor: token.colorPrimaryBg,
+      selectedTextColor: 'var(--xui-on-primary)',
+      textColor: token.colorText,
+    };
+  }, [antdThemeConfig]);
 
   const commitChange = (next: Dayjs | null) => {
     if (next && maxDate && next.isAfter(maxDate)) {

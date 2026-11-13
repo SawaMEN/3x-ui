@@ -162,7 +162,7 @@ html[data-theme='ultra-dark'] .log-container {
   --log-divider: rgba(255, 255, 255, 0.12);
 }
 
-.logmodal-mobile .ant-modal-content {
+.logmodal-mobile .ant-modal-container {
   border-radius: 0;
   height: 100vh;
 }

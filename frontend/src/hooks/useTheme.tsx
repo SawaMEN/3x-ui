@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useSt
 import type { ReactNode } from 'react';
 import { theme as antdTheme } from 'antd';
 import type { ThemeConfig } from 'antd';
+import { configureStaticFeedbackTheme } from './staticFeedbackTheme';
 
 const STORAGE_DARK = 'dark-mode';
 const STORAGE_ULTRA = 'isUltraDarkThemeEnabled';
@@ -406,6 +407,10 @@ export function ThemeProvider({
   const toggleLowPower = useCallback(() => setLowPower((enabled) => !enabled), []);
 
   const antdThemeConfig = useMemo(() => buildAntdThemeConfig(activeMode), [activeMode]);
+
+  useLayoutEffect(() => {
+    configureStaticFeedbackTheme(antdThemeConfig);
+  }, [antdThemeConfig]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({

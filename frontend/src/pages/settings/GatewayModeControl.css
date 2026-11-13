@@ -121,7 +121,7 @@
   font-weight: 600;
 }
 
-.gateway-control .gateway-settings-groups .ant-collapse-content-box {
+.gateway-control .gateway-settings-groups .ant-collapse-body {
   padding: 16px;
 }
 
@@ -170,7 +170,7 @@
 
 @media (max-width: 640px) {
   .gateway-control .gateway-main-card .ant-card-body,
-  .gateway-control .gateway-settings-groups .ant-collapse-content-box {
+  .gateway-control .gateway-settings-groups .ant-collapse-body {
     padding: 14px;
   }
 

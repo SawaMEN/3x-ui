@@ -1,4 +1,4 @@
-.outbound-editor-modal .ant-modal-content {
+.outbound-editor-modal .ant-modal-container {
   padding: 28px;
   border-radius: 20px;
 }
@@ -76,7 +76,7 @@
   margin-top: 24px;
 }
 @media (max-width: 600px) {
-  .outbound-editor-modal .ant-modal-content {
+  .outbound-editor-modal .ant-modal-container {
     padding: 18px;
     border-radius: 14px;
   }
@@ -143,6 +143,6 @@
   font-weight: 600;
 }
 
-.outbound-editor-modal .outbound-editor-advanced .ant-collapse-content-box {
+.outbound-editor-modal .outbound-editor-advanced .ant-collapse-body {
   padding: 14px;
 }

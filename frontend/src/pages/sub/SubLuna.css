@@ -302,7 +302,7 @@
   }
 }
 /* The language popup is mounted outside the card, so frost it separately. */
-.sub-luna-popover .ant-popover-inner {
+.sub-luna-popover .ant-popover-container {
   background: rgba(16, 26, 45, 0.72);
   -webkit-backdrop-filter: blur(10px) saturate(125%);
   backdrop-filter: blur(10px) saturate(125%);

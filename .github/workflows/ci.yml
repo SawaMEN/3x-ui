@@ -602,6 +602,17 @@ jobs:
       - name: Test
         run: npm test
         working-directory: frontend
+      - name: Audit page and dialog themes in Chromium
+        working-directory: frontend
+        run: |
+          npm run dev -- --host 127.0.0.1 > "$RUNNER_TEMP/theme-vite.log" 2>&1 &
+          vite_pid=$!
+          trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5173/login.html > /dev/null; then break; fi
+            sleep 1
+          done
+          node tools/theme-browser-audit.mjs
       - name: Build
         if: github.event_name == 'pull_request'
         run: npm run build:ci

@@ -201,7 +201,7 @@
   padding: 48px 12px;
 }
 
-.manager-editor .ant-modal-content {
+.manager-editor .ant-modal-container {
   border-radius: var(--xui-radius-lg, 14px);
 }
 
@@ -279,7 +279,7 @@
     max-width: 100%;
   }
 
-  .manager-editor .ant-modal-content {
+  .manager-editor .ant-modal-container {
     padding: 16px;
   }
 }

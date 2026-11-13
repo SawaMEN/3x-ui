@@ -65,7 +65,7 @@
 
 .telemt-card .ant-input,
 .telemt-card .ant-input-number,
-.telemt-card .ant-select-selector {
+.telemt-card .ant-select:not(.ant-select-customize) {
   font-size: 14px;
 }
 
@@ -214,7 +214,7 @@
   border-top: 1px solid var(--ant-color-border-secondary);
 }
 
-.telemt-advanced .ant-collapse-content-box {
+.telemt-advanced .ant-collapse-body {
   padding: 20px;
 }
 
