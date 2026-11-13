@@ -19,6 +19,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/job"
 )
@@ -83,6 +84,7 @@ func TestShutdownStopsSidecarReconciledByLastCronTick(t *testing.T) {
 	if err := database.GetDB().Create(&model.Inbound{Id: inst.ID, Tag: inst.Tag, Enable: true, Protocol: inst.Protocol}).Error; err != nil {
 		t.Fatal(err)
 	}
+	inst.Revision = sidecartraffic.RevisionOf(&model.Inbound{Id: inst.ID, Tag: inst.Tag, Enable: true, Protocol: inst.Protocol})
 	if err := mgr.Ensure(inst); err != nil {
 		t.Fatal(err)
 	}

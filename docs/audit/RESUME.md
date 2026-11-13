@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 88 подтверждённых исправлений панели; A88 — запрет запуска отозванных sidecar inbounds из устаревших заданий.
+Всего реализовано 89 подтверждённых исправлений панели; A89 — проверка сохранённых settings/client eligibility перед stale apply и external rollback.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 257 файлов, осталось 2107; общий проход не завершён.
+Проверено вручную 258 файлов, осталось 2106; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1421,3 +1421,86 @@ golangci-lint 2.15.0 full ./... PASS, 0 issues. Inventory check и staged diff
 check PASS: reviewed 257, pending 2107, stale 0. Для A88 -race отдельно не
 запускался; перечисленные временные SQLite/process/loopback regressions — normal
 runs. Предыдущие race результаты A87 не считать новым прогоном A88.
+
+
+## Контрольная точка A89: версии настроек и доступа клиентов перед применением
+
+Нужно 3 managers; сделано 3: Mieru, MTProto, external VPN.
+Всего 89 подтверждённых исправлений. Reviewed 258/2364, осталось 2106, stale 0.
+Полностью прочитан исходный inbound_mtproto_desired_test.go, добавлена проверка
+равенства версий интерактивного и периодического filtered payload.
+
+A88 проверял только существование/enable/local/protocol. Задержанное задание всё
+ещё могло восстановить старые credentials, manual client enable или quota block
+state, оставаясь в том же inbound/protocol. External startup rollback также мог
+восстановить уже отозванные credentials после неудачного запуска replacement.
+
+A89:
+- Shared RevisionOf: SHA-256 saved id/protocol/tag/listen/port/settings. Counters и
+  panel-only remark не инвалидируют payload. Изменение формата settings JSON
+  считается новой saved representation, но не меняет runtime fingerprint.
+- DisabledRevision: детерминированный digest полного множества depletion-disabled
+  email для inbound; отслеживает как блокировку, так и последующий quota reset.
+- Все три constructors переносят provenance в Instance; periodic Desired builders
+  штампуют eligibility из того же disabled snapshot, которым фильтруют clients.
+  buildInboundForLocalRuntime сохраняет raw source revision до фильтрации и
+  eligibility revision из прочитанных ClientTraffic, включая settings без clients.
+- Два временных поля model.Inbound исключены из gorm/json/form. Миграции/передача
+  API provenance не нужны; unit fixture подтверждает отсутствие persistence/JSON.
+- Current читает saved fields и disabled rows в одной read-only по действию GORM
+  transaction, batch 900, общий timeout 5s. Все managers проверяют перед любым
+  mutation под mutex. Missing provenance либо mismatch возвращает ErrStaleDesired;
+  Reconcile полностью пропускает stale batch, сохраняя новый live runtime.
+- Дополнительная проверка active client names запрещает передавать в runtime
+  известные blocked emails. DB=nil сохраняет standalone contract. Explicit empty
+  desired возвращается без DB transaction и по-прежнему может остановить всё.
+- External rollback повторно проверяет provenance старого runtime. Если он уже
+  отозван или состояние БД недоступно, старый процесс удаляется без восстановления
+  старых credentials. Разрешённый rollback остаётся рабочим. No-op external apply
+  обновляет только provenance, чтобы benign saved-format change не делал живую
+  конфигурацию необоснованно устаревшей при последующем rollback.
+
+Доказательства A89:
+- До подключения проверки версий все 18 subtests упали: web FAIL 4.763s,
+  3 managers × credentials/manual-disable/quota-disable × Ensure/Reconcile.
+  Nine stale Ensure accepted; nine stale Reconcile overwrote newer config files.
+  Provenance fields на этом шаге уже добавлены, но A88 guard их ещё не проверял.
+- Отдельный external rollback regression до rollback guard FAIL 0.773s:
+  failed replacement восстановил old-password после commit new-password.
+- Первый selected run после защиты: sidecartraffic PASS 0.189s, web 11.622s,
+  job 0.356s, service 6.319s, Mieru 0.025s, MTProto 0.006s, external VPN 0.425s.
+- После проверки provenance parity и пути settings без clients: final selected
+  web PASS 8.157s, sidecartraffic 0.335s, desired parity service 0.296s.
+- Отдельный финальный service run desired/quota-reset/no-op update/fallback payload:
+  PASS 1.812s. Существующие assertion об effective clients не ослаблены.
+- После rollback guard: selected web PASS 10.936s, external VPN 0.433s,
+  sidecartraffic 0.197s. Включены оба stale desired набора A88/A89, новый rollback,
+  старые lifecycle/handoff/replay/разрешённый rollback tests и helper regressions.
+- Unit tests: old/missing revision, saved credentials, quota block и reset в обоих
+  направлениях, counters/remark stability, local filtering provenance,
+  deterministic disabled digest, JSON/DB exclusion и batch/read-failure A88.
+
+Ограничения / следующая очередь:
+- Это provenance контракта внутреннего builder, а не публичный authentication
+  token. Direct panel Instance обязан нести provenance; production paths получают
+  его через constructors и local builder. Synthetic accounting fixtures явно
+  связываются со своей saved fixture row. Standalone DB=nil не получает DB guard.
+- Полный desired-set generation ещё не реализован. Stale empty/omitted desired
+  либо отдельный delayed Remove/DelInbound может остановить новый runtime; в том
+  числе остаётся старый случай protocol-change внутри external manager. Следующий
+  приоритет — согласованная версия всего reconcile set и операций удаления.
+- Проверка не заменяет post-commit apply: если DB изменена после guard, её более
+  новый apply/Remove сериализуется тем же mutex. При отказе caller runtime позже
+  восстанавливает периодическая сверка, как и ранее.
+- Повторное создание тех же client identities с прежними credentials и сохранение
+  accounting ownership при semantic no-op требуют отдельного generation анализа.
+- Ограничения pre-stop metrics samples и A87 WAL/retry scope сохраняются.
+- Normal temporary SQLite/owned child/loopback tests; real upstream, PostgreSQL,
+  host firewall/systemctl/ACME, Docker/NET_ADMIN и Unix IPC не запускались.
+  Для A89 отдельный -race не запускался; старые race результаты не считать новыми.
+
+Итог A89: go build -p 1 ./... PASS, go vet -p 1 ./... PASS;
+golangci-lint 2.15.0 full ./... PASS, 0 issues. Inventory/diff checks PASS:
+reviewed 258, pending 2106, stale 0. Source стабилен на этих финальных checks;
+первый pre-rollback full-check run был остановлен до новых production edits и
+не считается финальным результатом. Все результаты A89 выше — normal test runs.

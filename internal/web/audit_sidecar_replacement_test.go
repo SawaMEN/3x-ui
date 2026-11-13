@@ -22,6 +22,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/job"
 )
 
@@ -46,7 +47,7 @@ func TestMieruLifecycleJournalsConsumedTail(t *testing.T) {
 			if err := db.Create(&row).Error; err != nil {
 				t.Fatal(err)
 			}
-			inst := mieru.Instance{Id: ib.Id, Tag: ib.Tag, Users: []mieru.User{{Name: row.Email, Password: "test"}}, PortBindings: []mieru.PortBinding{{Port: 34576, Protocol: "TCP"}}}
+			inst := mieru.Instance{Revision: sidecartraffic.RevisionOf(&ib), Id: ib.Id, Tag: ib.Tag, Users: []mieru.User{{Name: row.Email, Password: "test"}}, PortBindings: []mieru.PortBinding{{Port: 34576, Protocol: "TCP"}}}
 			mgr := mieru.GetManager()
 			mgr.StopAll()
 			defer mgr.StopAll()
@@ -149,7 +150,7 @@ func TestMtprotoLifecycleJournalsConsumedTail(t *testing.T) {
 				if err := db.Create(&row).Error; err != nil {
 					t.Fatal(err)
 				}
-				inst := mtproto.Instance{Id: ib.Id, Tag: ib.Tag, Listen: "127.0.0.1", Port: 34577, RouteThroughXray: routed, XrayRoutePort: 34578, Secrets: []mtproto.SecretEntry{{Name: row.Email, Secret: "0123456789abcdef0123456789abcdef"}}}
+				inst := mtproto.Instance{Revision: sidecartraffic.RevisionOf(&ib), Id: ib.Id, Tag: ib.Tag, Listen: "127.0.0.1", Port: 34577, RouteThroughXray: routed, XrayRoutePort: 34578, Secrets: []mtproto.SecretEntry{{Name: row.Email, Secret: "0123456789abcdef0123456789abcdef"}}}
 				mgr := mtproto.GetManager()
 				mgr.StopAll()
 				defer mgr.StopAll()
@@ -259,7 +260,7 @@ func TestExternalLifecycleJournalsConsumedTail(t *testing.T) {
 			if err := db.Create(&row).Error; err != nil {
 				t.Fatal(err)
 			}
-			inst := externalvpn.Instance{ID: ib.Id, Tag: ib.Tag, Protocol: ib.Protocol, Listen: "127.0.0.1", Port: 34579, Settings: externalvpn.Settings{Hostname: "fixture.example.test", Clients: []externalvpn.Client{{Email: row.Email, Password: "synthetic", Enable: true}}}}
+			inst := externalvpn.Instance{Revision: sidecartraffic.RevisionOf(&ib), ID: ib.Id, Tag: ib.Tag, Protocol: ib.Protocol, Listen: "127.0.0.1", Port: 34579, Settings: externalvpn.Settings{Hostname: "fixture.example.test", Clients: []externalvpn.Client{{Email: row.Email, Password: "synthetic", Enable: true}}}}
 			mgr := externalvpn.GetManager()
 			mgr.StopAll()
 			defer mgr.StopAll()
@@ -376,7 +377,7 @@ func TestMieruReloadHandoffRejectsOlderConcurrentPoll(t *testing.T) {
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	inst := mieru.Instance{Id: ib.Id, Tag: ib.Tag, Users: []mieru.User{{Name: row.Email, Password: "old"}}, PortBindings: []mieru.PortBinding{{Port: 34580, Protocol: "TCP"}}}
+	inst := mieru.Instance{Revision: sidecartraffic.RevisionOf(&ib), Id: ib.Id, Tag: ib.Tag, Users: []mieru.User{{Name: row.Email, Password: "old"}}, PortBindings: []mieru.PortBinding{{Port: 34580, Protocol: "TCP"}}}
 	mgr := mieru.GetManager()
 	mgr.StopAll()
 	defer mgr.StopAll()
@@ -473,7 +474,7 @@ func TestMtprotoReloadHandoffRejectsOlderConcurrentPoll(t *testing.T) {
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	inst := mtproto.Instance{Id: ib.Id, Tag: ib.Tag, Listen: "127.0.0.1", Port: 34581, Secrets: []mtproto.SecretEntry{{Name: row.Email, Secret: "0123456789abcdef0123456789abcdef"}}}
+	inst := mtproto.Instance{Revision: sidecartraffic.RevisionOf(&ib), Id: ib.Id, Tag: ib.Tag, Listen: "127.0.0.1", Port: 34581, Secrets: []mtproto.SecretEntry{{Name: row.Email, Secret: "0123456789abcdef0123456789abcdef"}}}
 	mgr := mtproto.GetManager()
 	mgr.StopAll()
 	defer mgr.StopAll()

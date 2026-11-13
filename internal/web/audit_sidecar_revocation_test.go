@@ -45,7 +45,7 @@ func TestSidecarRejectsRevokedDesired(t *testing.T) {
 						mgr := mieru.GetManager()
 						mgr.StopAll()
 						stop = mgr.StopAll
-						inst := mieru.Instance{Id: ib.Id, Tag: ib.Tag, Users: []mieru.User{{Name: "test", Password: "test"}}, PortBindings: []mieru.PortBinding{{Port: 34582, Protocol: "TCP"}}}
+						inst := mieru.Instance{Revision: sidecartraffic.RevisionOf(&ib), Id: ib.Id, Tag: ib.Tag, Users: []mieru.User{{Name: "test", Password: "test"}}, PortBindings: []mieru.PortBinding{{Port: 34582, Protocol: "TCP"}}}
 						ensure = func() error { return mgr.Ensure(inst) }
 						reconcile = func() { mgr.Reconcile([]mieru.Instance{inst}) }
 					case model.MTProto:
@@ -55,7 +55,7 @@ func TestSidecarRejectsRevokedDesired(t *testing.T) {
 						mgr := mtproto.GetManager()
 						mgr.StopAll()
 						stop = mgr.StopAll
-						inst := mtproto.Instance{Id: ib.Id, Tag: ib.Tag, Listen: "127.0.0.1", Port: 34582, Secrets: []mtproto.SecretEntry{{Name: "test", Secret: "0123456789abcdef0123456789abcdef"}}}
+						inst := mtproto.Instance{Revision: sidecartraffic.RevisionOf(&ib), Id: ib.Id, Tag: ib.Tag, Listen: "127.0.0.1", Port: 34582, Secrets: []mtproto.SecretEntry{{Name: "test", Secret: "0123456789abcdef0123456789abcdef"}}}
 						ensure = func() error { return mgr.Ensure(inst) }
 						reconcile = func() { mgr.Reconcile([]mtproto.Instance{inst}) }
 					default:
@@ -65,7 +65,7 @@ func TestSidecarRejectsRevokedDesired(t *testing.T) {
 						mgr := externalvpn.GetManager()
 						mgr.StopAll()
 						stop = mgr.StopAll
-						inst := externalvpn.Instance{ID: ib.Id, Tag: ib.Tag, Protocol: protocol, Listen: "127.0.0.1", Port: 34582, Settings: externalvpn.Settings{Context: "stable", Transports: []externalvpn.OpenFluxTransport{{Type: "direct", Priority: 100}}, Clients: []externalvpn.Client{{Email: "test", Password: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Enable: true}}}}
+						inst := externalvpn.Instance{Revision: sidecartraffic.RevisionOf(&ib), ID: ib.Id, Tag: ib.Tag, Protocol: protocol, Listen: "127.0.0.1", Port: 34582, Settings: externalvpn.Settings{Context: "stable", Transports: []externalvpn.OpenFluxTransport{{Type: "direct", Priority: 100}}, Clients: []externalvpn.Client{{Email: "test", Password: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Enable: true}}}}
 						ensure = func() error { return mgr.Ensure(inst) }
 						reconcile = func() { mgr.Reconcile([]externalvpn.Instance{inst}) }
 					}

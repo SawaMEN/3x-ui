@@ -30,6 +30,8 @@ type User struct {
 }
 
 type Instance struct {
+	Revision            string `json:"-"`
+	ClientRevision      string `json:"-"`
 	Id                  int
 	Tag                 string
 	Listen              string
@@ -234,6 +236,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	mandatory, _ := raw["userHintIsMandatory"].(bool)
 
 	return Instance{
+		Revision: sidecartraffic.RevisionOf(ib), ClientRevision: ib.RuntimeClientRevision,
 		Id:                  ib.Id,
 		Tag:                 ib.Tag,
 		Listen:              strings.TrimSpace(ib.Listen),
@@ -440,7 +443,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 func (m *Manager) Ensure(inst Instance) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if err := sidecartraffic.ValidateDesired(inst.Id, model.Mieru); err != nil {
+	if err := sidecartraffic.ValidateDesired(inst.desiredState()); err != nil {
 		return err
 	}
 	return m.ensureLocked(inst)
@@ -451,7 +454,7 @@ func (m *Manager) Reconcile(desired []Instance) {
 	defer m.mu.Unlock()
 	requests := make([]sidecartraffic.Desired, len(desired))
 	for i, inst := range desired {
-		requests[i] = sidecartraffic.Desired{ID: inst.Id, Protocol: model.Mieru}
+		requests[i] = inst.desiredState()
 	}
 	allowed, err := sidecartraffic.Current(requests)
 	if err != nil {

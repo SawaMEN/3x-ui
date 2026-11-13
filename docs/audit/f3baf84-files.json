@@ -11495,8 +11495,8 @@
       "subsystem": "database",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Full model review refreshed after A28 JSON listen quoting and A29 raw MTProto marker-like key regression; both reproduced before patch. Complete model race, database normal and targeted MTProto compatibility tests pass.",
-      "reviewed_sha256": "7b913590c21c6d758e57a37d525d1f4b33174078433cafe971efd42ddcfb807e"
+      "evidence": "A89: reviewed local-only gorm/json/form-excluded source and eligibility provenance; constructor metadata, manager-locked validation before mutation and external rollback/no-op refresh reviewed; 18 pre-check stale Ensure/Reconcile failures and one pre-rollback-check failure reproduced; selected revision/lifecycle/shutdown/service regressions PASS.",
+      "reviewed_sha256": "98902ba23e60af6d5b2f06c0032bb1da96812d7dbf118ace14745906eeb199ad"
     },
     {
       "path": "internal/database/model/model_mtproto_test.go",
@@ -12144,8 +12144,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A88: reviewed authoritative enabled/local/exact-protocol guard under manager mutex before Ensure no-op and Reconcile mutations; 24 pre-fix failures reproduced, final cached/removed/disabled/node/protocol web regressions PASS; existing handoff/lifecycle/shutdown regression suite PASS.",
-      "reviewed_sha256": "229f246b0a31278bb736a9f267aec62aba7230b9e5939f511ea09a3e77145534"
+      "evidence": "A89: reviewed local-only gorm/json/form-excluded source and eligibility provenance; constructor metadata, manager-locked validation before mutation and external rollback/no-op refresh reviewed; 18 pre-check stale Ensure/Reconcile failures and one pre-rollback-check failure reproduced; selected revision/lifecycle/shutdown/service regressions PASS.",
+      "reviewed_sha256": "bfbfd99091157dd19bb46bfd57d6768bb40f79ee22b85f176548ec50a2bbbf1c"
     },
     {
       "path": "internal/externalvpn/manager_security_test.go",
@@ -13057,8 +13057,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A88: reviewed authoritative enabled/local/exact-protocol guard under manager mutex before Ensure no-op and Reconcile mutations; 24 pre-fix failures reproduced, final cached/removed/disabled/node/protocol web regressions PASS; existing handoff/lifecycle/shutdown regression suite PASS.",
-      "reviewed_sha256": "bac23d190e5d0ca7151b4835123ab46051ff880e93454555441379486c0ce3c1"
+      "evidence": "A89: reviewed local-only gorm/json/form-excluded source and eligibility provenance; constructor metadata, manager-locked validation before mutation and external rollback/no-op refresh reviewed; 18 pre-check stale Ensure/Reconcile failures and one pre-rollback-check failure reproduced; selected revision/lifecycle/shutdown/service regressions PASS.",
+      "reviewed_sha256": "7dbe41d34574f7f14c899d0d8dc731f2111a5d8349a8c6b478cd6d3e808e3e84"
     },
     {
       "path": "internal/mieru/process.go",
@@ -13090,8 +13090,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A88: reviewed authoritative enabled/local/exact-protocol guard under manager mutex before Ensure no-op and Reconcile mutations; 24 pre-fix failures reproduced, final cached/removed/disabled/node/protocol web regressions PASS; existing handoff/lifecycle/shutdown regression suite PASS.",
-      "reviewed_sha256": "3001b79aa00e439552673ff0045654e37f2b72a7c64cba9ed2c4cd67fb78c7d7"
+      "evidence": "A89: reviewed local-only gorm/json/form-excluded source and eligibility provenance; constructor metadata, manager-locked validation before mutation and external rollback/no-op refresh reviewed; 18 pre-check stale Ensure/Reconcile failures and one pre-rollback-check failure reproduced; selected revision/lifecycle/shutdown/service regressions PASS.",
+      "reviewed_sha256": "0d65d8105a588a3452946283652bc1a6da5a36cf04adba24a676032455757d2e"
     },
     {
       "path": "internal/mtproto/manager_mutation_test.go",
@@ -20723,9 +20723,9 @@
       "deletions": 1,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A89: read full original desired-client filtering test and added parity assertions for source/eligibility revisions between interactive filtered payload and periodic desired; both payloads validated against current panel DB. Final targeted desired/reset/no-op/fallback service run PASS 1.812s.",
+      "reviewed_sha256": "febc08aa7a27851164ba89cc17dee3654d6289e0a04e4593ad50c1fe6fee875c"
     },
     {
       "path": "internal/web/service/inbound_node.go",

@@ -20,6 +20,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 
@@ -2350,14 +2351,13 @@ func (s *InboundService) buildInboundForLocalRuntime(tx *gorm.DB, inbound *model
 		return nil, err
 	}
 
+	built.RuntimeSourceRevision = sidecartraffic.RevisionOf(inbound)
+
 	settings := map[string]any{}
 	if err := json.Unmarshal([]byte(built.Settings), &settings); err != nil {
 		return nil, err
 	}
 	clients, ok := settings["clients"].([]any)
-	if !ok {
-		return built, nil
-	}
 
 	var clientStats []coremodel.ClientTraffic
 	if err := tx.Model(coremodel.ClientTraffic{}).
@@ -2367,8 +2367,17 @@ func (s *InboundService) buildInboundForLocalRuntime(tx *gorm.DB, inbound *model
 		return nil, err
 	}
 	enableMap := make(map[string]bool, len(clientStats))
+	disabled := make(map[string]struct{})
 	for _, clientTraffic := range clientStats {
 		enableMap[clientTraffic.Email] = clientTraffic.Enable
+		if !clientTraffic.Enable {
+			disabled[clientTraffic.Email] = struct{}{}
+		}
+	}
+
+	built.RuntimeClientRevision = sidecartraffic.DisabledRevision(disabled)
+	if !ok {
+		return built, nil
 	}
 
 	emails := make([]string, 0, len(clients))

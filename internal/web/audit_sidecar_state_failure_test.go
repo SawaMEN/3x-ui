@@ -14,6 +14,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 func TestMieruReconcileStateFailurePreservesRuntime(t *testing.T) {
@@ -31,7 +32,7 @@ func TestMieruReconcileStateFailurePreservesRuntime(t *testing.T) {
 	mgr := mieru.GetManager()
 	mgr.StopAll()
 	defer mgr.StopAll()
-	inst := mieru.Instance{Id: 996, Tag: "state-failure", Users: []mieru.User{{Name: "test", Password: "test"}}, PortBindings: []mieru.PortBinding{{Port: 34583, Protocol: "TCP"}}}
+	inst := mieru.Instance{Revision: sidecartraffic.RevisionOf(&model.Inbound{Id: 996, Enable: true, Tag: "state-failure", Protocol: model.Mieru}), Id: 996, Tag: "state-failure", Users: []mieru.User{{Name: "test", Password: "test"}}, PortBindings: []mieru.PortBinding{{Port: 34583, Protocol: "TCP"}}}
 	if err := mgr.Ensure(inst); err != nil {
 		t.Fatal(err)
 	}

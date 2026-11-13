@@ -7,6 +7,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 func TestDesiredMtprotoInstancesFiltersDepleted(t *testing.T) {
@@ -62,6 +63,14 @@ func TestDesiredMtprotoInstancesFiltersDepleted(t *testing.T) {
 		pushInst, ok := mtproto.InstanceFromInbound(built)
 		if !ok {
 			t.Fatal("push path must produce an instance")
+		}
+		if pushInst.Revision != instances[0].Revision || pushInst.ClientRevision != instances[0].ClientRevision {
+			t.Fatal("push and periodic eligibility/source revisions differ")
+		}
+		for _, inst := range []mtproto.Instance{pushInst, instances[0]} {
+			if err := sidecartraffic.ValidateDesired(sidecartraffic.Desired{ID: inst.Id, Protocol: model.MTProto, Revision: inst.Revision, ClientRevision: inst.ClientRevision, Clients: []string{"alice"}}); err != nil {
+				t.Fatalf("current filtered payload failed authoritative check: %v", err)
+			}
 		}
 		if !reflect.DeepEqual(pushInst.Secrets, instances[0].Secrets) {
 			t.Fatalf("push and job secret sets diverge: push %+v, job %+v", pushInst.Secrets, instances[0].Secrets)

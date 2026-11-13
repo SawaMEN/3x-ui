@@ -10,6 +10,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 	"github.com/SawaMEN/3x-ui/v3/internal/snell"
 )
 
@@ -127,6 +128,7 @@ func (s *InboundService) DesiredExternalVPNInstances() ([]externalvpn.Instance, 
 		if err != nil {
 			return nil, fmt.Errorf("inbound %d: %w", row.Id, err)
 		}
+		inst.ClientRevision = sidecartraffic.DisabledRevision(disabled[row.Id])
 		for i := range inst.Settings.Clients {
 			if disabled[row.Id][inst.Settings.Clients[i].Email] {
 				inst.Settings.Clients[i].Enable = false

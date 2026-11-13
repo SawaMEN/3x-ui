@@ -64,6 +64,10 @@ type User struct {
 
 // Inbound represents a panel inbound with traffic statistics and settings.
 type Inbound struct {
+	// RuntimeSourceRevision is local provenance for filtered sidecar payloads.
+	RuntimeSourceRevision string `json:"-" form:"-" gorm:"-"`
+	RuntimeClientRevision string `json:"-" form:"-" gorm:"-"`
+
 	Id                   int                       `json:"id" form:"id" gorm:"primaryKey;autoIncrement" example:"1"`                                                                                                     // Unique identifier
 	UserId               int                       `json:"-"`                                                                                                                                                            // Associated user ID
 	Up                   int64                     `json:"up" form:"up"`                                                                                                                                                 // Upload traffic in bytes

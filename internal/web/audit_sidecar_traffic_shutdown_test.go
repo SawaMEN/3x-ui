@@ -23,6 +23,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 func TestShutdownPersistsMieruTrafficBeforeProcessRemoval(t *testing.T) {
@@ -44,7 +45,7 @@ func TestShutdownPersistsMieruTrafficBeforeProcessRemoval(t *testing.T) {
 	if err := database.GetDB().Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	inst := mieru.Instance{Id: ib.Id, Tag: ib.Tag, PortBindings: []mieru.PortBinding{{Port: 34568, Protocol: "TCP"}}, Users: []mieru.User{{Name: row.Email, Password: "synthetic"}}}
+	inst := mieru.Instance{Revision: sidecartraffic.RevisionOf(&ib), Id: ib.Id, Tag: ib.Tag, PortBindings: []mieru.PortBinding{{Port: 34568, Protocol: "TCP"}}, Users: []mieru.User{{Name: row.Email, Password: "synthetic"}}}
 	mgr := mieru.GetManager()
 	mgr.StopAll()
 	defer mgr.StopAll()
@@ -105,7 +106,7 @@ func TestShutdownPersistsExternalTrafficBeforeProcessRemoval(t *testing.T) {
 	if err := database.GetDB().Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	inst := externalvpn.Instance{ID: ib.Id, Tag: ib.Tag, Protocol: ib.Protocol, Listen: "127.0.0.1", Port: 34569, Settings: externalvpn.Settings{Hostname: "fixture.example.test", Clients: []externalvpn.Client{{Email: row.Email, Password: "synthetic", Enable: true}}}}
+	inst := externalvpn.Instance{Revision: sidecartraffic.RevisionOf(&ib), ID: ib.Id, Tag: ib.Tag, Protocol: ib.Protocol, Listen: "127.0.0.1", Port: 34569, Settings: externalvpn.Settings{Hostname: "fixture.example.test", Clients: []externalvpn.Client{{Email: row.Email, Password: "synthetic", Enable: true}}}}
 	mgr := externalvpn.GetManager()
 	mgr.StopAll()
 	defer mgr.StopAll()
@@ -167,7 +168,7 @@ func TestShutdownPersistsMtprotoTrafficAndAvoidsRoutedDoubleCount(t *testing.T) 
 			if err := database.GetDB().Create(&row).Error; err != nil {
 				t.Fatal(err)
 			}
-			inst := mtproto.Instance{Id: ib.Id, Tag: ib.Tag, Listen: "127.0.0.1", Port: 34570, RouteThroughXray: routed, XrayRoutePort: 34571, Secrets: []mtproto.SecretEntry{{Name: row.Email, Secret: "0123456789abcdef0123456789abcdef"}}}
+			inst := mtproto.Instance{Revision: sidecartraffic.RevisionOf(&ib), Id: ib.Id, Tag: ib.Tag, Listen: "127.0.0.1", Port: 34570, RouteThroughXray: routed, XrayRoutePort: 34571, Secrets: []mtproto.SecretEntry{{Name: row.Email, Secret: "0123456789abcdef0123456789abcdef"}}}
 			mgr := mtproto.GetManager()
 			mgr.StopAll()
 			defer mgr.StopAll()
@@ -276,14 +277,14 @@ func TestShutdownReportsUnavailableSidecarMetrics(t *testing.T) {
 				mgr := mieru.GetManager()
 				mgr.StopAll()
 				defer mgr.StopAll()
-				if err := mgr.Ensure(mieru.Instance{Id: ib.Id, Tag: ib.Tag, Users: []mieru.User{{Name: row.Email, Password: "synthetic"}}, PortBindings: []mieru.PortBinding{{Port: 34572, Protocol: "TCP"}}}); err != nil {
+				if err := mgr.Ensure(mieru.Instance{Revision: sidecartraffic.RevisionOf(&ib), Id: ib.Id, Tag: ib.Tag, Users: []mieru.User{{Name: row.Email, Password: "synthetic"}}, PortBindings: []mieru.PortBinding{{Port: 34572, Protocol: "TCP"}}}); err != nil {
 					t.Fatal(err)
 				}
 			case model.MTProto:
 				mgr := mtproto.GetManager()
 				mgr.StopAll()
 				defer mgr.StopAll()
-				if err := mgr.Ensure(mtproto.Instance{Id: ib.Id, Tag: ib.Tag, Port: 34572, Listen: "127.0.0.1", Secrets: []mtproto.SecretEntry{{Name: row.Email, Secret: "0123456789abcdef0123456789abcdef"}}}); err != nil {
+				if err := mgr.Ensure(mtproto.Instance{Revision: sidecartraffic.RevisionOf(&ib), Id: ib.Id, Tag: ib.Tag, Port: 34572, Listen: "127.0.0.1", Secrets: []mtproto.SecretEntry{{Name: row.Email, Secret: "0123456789abcdef0123456789abcdef"}}}); err != nil {
 					t.Fatal(err)
 				}
 				data, err := os.ReadFile(filepath.Join(dir, "mtproto", "telemt-986.toml"))
@@ -302,7 +303,7 @@ func TestShutdownReportsUnavailableSidecarMetrics(t *testing.T) {
 				mgr := externalvpn.GetManager()
 				mgr.StopAll()
 				defer mgr.StopAll()
-				if err := mgr.Ensure(externalvpn.Instance{ID: ib.Id, Tag: ib.Tag, Protocol: protocol, Listen: "127.0.0.1", Port: 34572, Settings: externalvpn.Settings{Hostname: "fixture.example.test", Clients: []externalvpn.Client{{Email: row.Email, Password: "synthetic", Enable: true}}}}); err != nil {
+				if err := mgr.Ensure(externalvpn.Instance{Revision: sidecartraffic.RevisionOf(&ib), ID: ib.Id, Tag: ib.Tag, Protocol: protocol, Listen: "127.0.0.1", Port: 34572, Settings: externalvpn.Settings{Hostname: "fixture.example.test", Clients: []externalvpn.Client{{Email: row.Email, Password: "synthetic", Enable: true}}}}); err != nil {
 					t.Fatal(err)
 				}
 				data, err := os.ReadFile(filepath.Join(dir, "externalvpn", "986", "vpn.toml"))

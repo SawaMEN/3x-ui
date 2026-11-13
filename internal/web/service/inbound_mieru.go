@@ -12,6 +12,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 func validateMieruInbound(inbound *model.Inbound, clients []model.Client) error {
@@ -73,6 +74,8 @@ func (s *InboundService) DesiredMieruInstances() ([]mieru.Instance, error) {
 			continue
 		}
 		if inst, ok := mieru.InstanceFromInbound(ib); ok {
+			inst.ClientRevision = sidecartraffic.DisabledRevision(disabled[ib.Id])
+
 			if off := disabled[ib.Id]; len(off) > 0 {
 				users := inst.Users[:0]
 				for _, user := range inst.Users {

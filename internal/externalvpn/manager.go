@@ -306,7 +306,7 @@ func requirePingtunnelForwardVersion(path string) error {
 func (m *Manager) Ensure(inst Instance) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if err := sidecartraffic.ValidateDesired(inst.ID, inst.Protocol); err != nil {
+	if err := sidecartraffic.ValidateDesired(inst.desiredState()); err != nil {
 		return err
 	}
 	return m.ensureLocked(inst)
@@ -337,6 +337,12 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		m.removeLocked(inst.ID)
 	}
 	if old != nil {
+		// A successful rollback must not restore a password/client set that
+		// the panel has already revoked, even if the replacement failed.
+		if restoreErr := sidecartraffic.ValidateDesired(old.instance.desiredState()); restoreErr != nil {
+			m.removeLocked(inst.ID)
+			return errors.Join(err, fmt.Errorf("restore previous external VPN rejected: %w", restoreErr))
+		}
 		if m.procs[inst.ID] == old {
 			// Preflight may have written part of a shared config. Restore its files
 			// while preserving the still-running child.
@@ -388,6 +394,10 @@ func (m *Manager) startLocked(inst Instance) error {
 					}
 					old.accounting = owner
 				}
+				// Fingerprints exclude provenance: refresh it when only the
+				// saved representation changed, without restarting the child.
+				old.instance.Revision = inst.Revision
+				old.instance.ClientRevision = inst.ClientRevision
 				return nil
 			}
 		}
@@ -518,7 +528,7 @@ func (m *Manager) Reconcile(instances []Instance) {
 	defer m.mu.Unlock()
 	requests := make([]sidecartraffic.Desired, len(instances))
 	for i, inst := range instances {
-		requests[i] = sidecartraffic.Desired{ID: inst.ID, Protocol: inst.Protocol}
+		requests[i] = inst.desiredState()
 	}
 	allowed, err := sidecartraffic.Current(requests)
 	if err != nil {

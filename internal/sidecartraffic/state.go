@@ -5,6 +5,9 @@ import (
 	"errors"
 	"time"
 
+	"gorm.io/gorm"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
@@ -13,9 +16,16 @@ import (
 // local inbound. Accounting ownership alone is never startup authorization.
 var ErrRevoked = errors.New("sidecar inbound is no longer enabled and local with the requested protocol")
 
+// ErrStaleDesired rejects an obsolete or unversioned panel payload before any
+// runtime mutation. Reconcile must preserve the newer running configuration.
+var ErrStaleDesired = errors.New("sidecar desired configuration is stale; rebuild from current panel state")
+
 type Desired struct {
-	ID       int
-	Protocol model.Protocol
+	Revision       string
+	ClientRevision string
+	Clients        []string
+	ID             int
+	Protocol       model.Protocol
 }
 
 // Current returns one decision per desired instance. Callers hold their manager
@@ -24,6 +34,9 @@ type Desired struct {
 // existing runtime untouched; they are different from authoritative revocation.
 func Current(desired []Desired) ([]bool, error) {
 	allowed := make([]bool, len(desired))
+	if len(desired) == 0 {
+		return allowed, nil
+	}
 	db := database.GetDB()
 	if db == nil {
 		// Standalone managers have no panel database as their source of truth.
@@ -38,27 +51,54 @@ func Current(desired []Desired) ([]bool, error) {
 	for i, inst := range desired {
 		ids[i] = inst.ID
 	}
-	current := make(map[int]model.Protocol, len(ids))
-	for start := 0; start < len(ids); start += 900 {
-		var rows []model.Inbound
-		if err := db.WithContext(ctx).Select("id", "enable", "node_id", "protocol").Where("id IN ?", ids[start:min(start+900, len(ids))]).Find(&rows).Error; err != nil {
-			return nil, errors.New("read current sidecar inbound state failed")
-		}
-		for _, row := range rows {
-			if row.Enable && row.NodeID == nil {
-				current[row.Id] = row.Protocol
+	current := make(map[int]model.Inbound, len(ids))
+	disabled := make(map[int]map[string]bool)
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for start := 0; start < len(ids); start += 900 {
+			batch := ids[start:min(start+900, len(ids))]
+			var rows []model.Inbound
+			if err := tx.Select("id", "enable", "node_id", "protocol", "tag", "listen", "port", "settings").Where("id IN ?", batch).Find(&rows).Error; err != nil {
+				return err
+			}
+			for _, row := range rows {
+				current[row.Id] = row
+			}
+			var stats []coremodel.ClientTraffic
+			if err := tx.Select("inbound_id", "email").Where("inbound_id IN ? AND enable = ?", batch, false).Find(&stats).Error; err != nil {
+				return err
+			}
+			for _, row := range stats {
+				if disabled[row.InboundId] == nil {
+					disabled[row.InboundId] = make(map[string]bool)
+				}
+				disabled[row.InboundId][row.Email] = true
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, errors.New("read current sidecar inbound state failed")
 	}
 	for i, inst := range desired {
-		protocol, ok := current[inst.ID]
-		allowed[i] = ok && protocol == inst.Protocol
+		row, ok := current[inst.ID]
+		allowed[i] = ok && row.Enable && row.NodeID == nil && row.Protocol == inst.Protocol
+		if !allowed[i] {
+			continue
+		}
+		if inst.Revision == "" || inst.Revision != RevisionOf(&row) || inst.ClientRevision != DisabledRevision(disabled[inst.ID]) {
+			return nil, ErrStaleDesired
+		}
+		for _, email := range inst.Clients {
+			if disabled[inst.ID][email] {
+				return nil, ErrStaleDesired
+			}
+		}
 	}
 	return allowed, nil
 }
 
-func ValidateDesired(id int, protocol model.Protocol) error {
-	allowed, err := Current([]Desired{{ID: id, Protocol: protocol}})
+func ValidateDesired(desired Desired) error {
+	allowed, err := Current([]Desired{desired})
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 type Client struct {
@@ -57,12 +58,14 @@ type Settings struct {
 }
 
 type Instance struct {
-	ID       int
-	Tag      string
-	Protocol model.Protocol
-	Listen   string
-	Port     int
-	Settings Settings
+	Revision       string `json:"-"`
+	ClientRevision string `json:"-"`
+	ID             int
+	Tag            string
+	Protocol       model.Protocol
+	Listen         string
+	Port           int
+	Settings       Settings
 }
 
 func FromInbound(ib *model.Inbound) (Instance, error) {
@@ -78,7 +81,7 @@ func FromInbound(ib *model.Inbound) (Instance, error) {
 	if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil {
 		return Instance{}, fmt.Errorf("%s settings: %w", ib.Protocol, err)
 	}
-	inst := Instance{ID: ib.Id, Tag: ib.Tag, Protocol: ib.Protocol, Listen: ib.Listen, Port: ib.Port, Settings: settings}
+	inst := Instance{Revision: sidecartraffic.RevisionOf(ib), ClientRevision: ib.RuntimeClientRevision, ID: ib.Id, Tag: ib.Tag, Protocol: ib.Protocol, Listen: ib.Listen, Port: ib.Port, Settings: settings}
 	return inst, inst.Validate()
 }
 

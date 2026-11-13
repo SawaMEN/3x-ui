@@ -40,6 +40,8 @@ type SecretEntry struct {
 }
 
 type Instance struct {
+	Revision             string `json:"-"`
+	ClientRevision       string `json:"-"`
 	Id                   int
 	Tag                  string
 	Listen               string
@@ -321,6 +323,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		trusted = []string{"127.0.0.0/8", "::1/128"}
 	}
 	return Instance{
+		Revision: sidecartraffic.RevisionOf(ib), ClientRevision: ib.RuntimeClientRevision,
 		Id:                        ib.Id,
 		Tag:                       ib.Tag,
 		Listen:                    ib.Listen,
@@ -361,7 +364,7 @@ func usableAdTag(tag string) string {
 func (m *Manager) Ensure(inst Instance) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if err := sidecartraffic.ValidateDesired(inst.Id, model.MTProto); err != nil {
+	if err := sidecartraffic.ValidateDesired(inst.desiredState()); err != nil {
 		return err
 	}
 	m.sweepOrphansLocked()
@@ -600,7 +603,7 @@ func (m *Manager) Reconcile(desired []Instance) {
 	defer m.mu.Unlock()
 	requests := make([]sidecartraffic.Desired, len(desired))
 	for i, inst := range desired {
-		requests[i] = sidecartraffic.Desired{ID: inst.Id, Protocol: model.MTProto}
+		requests[i] = inst.desiredState()
 	}
 	allowed, err := sidecartraffic.Current(requests)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 // DesiredMtprotoInstances derives the Telemt sidecar configs this panel should
@@ -62,6 +63,7 @@ func (s *InboundService) DesiredMtprotoInstances() ([]mtproto.Instance, error) {
 		if !ok {
 			continue
 		}
+		inst.ClientRevision = sidecartraffic.DisabledRevision(disabled[ib.Id])
 		if off := disabled[ib.Id]; len(off) > 0 {
 			kept := make([]mtproto.SecretEntry, 0, len(inst.Secrets))
 			for _, sec := range inst.Secrets {

@@ -20,7 +20,7 @@ func TestCurrentBatchesAndMatchesExactProtocol(t *testing.T) {
 	desired := make([]Desired, len(rows))
 	for i := range rows {
 		rows[i] = model.Inbound{Id: i + 1, Enable: true, Tag: fmt.Sprintf("state-%d", i), Protocol: model.OpenFlux}
-		desired[i] = Desired{ID: i + 1, Protocol: model.OpenFlux}
+		desired[i] = Desired{ID: i + 1, Protocol: model.OpenFlux, Revision: RevisionOf(&rows[i])}
 	}
 	node := 1
 	rows[0].Enable = false
@@ -29,7 +29,7 @@ func TestCurrentBatchesAndMatchesExactProtocol(t *testing.T) {
 	if err := db.CreateInBatches(rows, 100).Error; err != nil {
 		t.Fatal(err)
 	}
-	desired = append(desired, Desired{ID: 9999, Protocol: model.OpenFlux}, Desired{ID: 1802, Protocol: model.TrustTunnel})
+	desired = append(desired, Desired{ID: 9999, Protocol: model.OpenFlux}, Desired{ID: 1802, Protocol: model.TrustTunnel, Revision: RevisionOf(&rows[1801])})
 	allowed, err := Current(desired)
 	if err != nil {
 		t.Fatal(err)
@@ -40,10 +40,10 @@ func TestCurrentBatchesAndMatchesExactProtocol(t *testing.T) {
 			t.Errorf("decision %d=%t, want %t", i, ok, want)
 		}
 	}
-	if err := ValidateDesired(1, model.OpenFlux); !errors.Is(err, ErrRevoked) {
+	if err := ValidateDesired(Desired{ID: 1, Protocol: model.OpenFlux, Revision: RevisionOf(&rows[0])}); !errors.Is(err, ErrRevoked) {
 		t.Fatalf("disabled inbound: %v", err)
 	}
-	if err := ValidateDesired(1802, model.OpenFlux); err != nil {
+	if err := ValidateDesired(Desired{ID: 1802, Protocol: model.OpenFlux, Revision: RevisionOf(&rows[1801])}); err != nil {
 		t.Fatalf("valid inbound: %v", err)
 	}
 }

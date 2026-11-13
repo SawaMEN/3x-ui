@@ -8,6 +8,6 @@
 | installation-ci | 83 | 7 | 76 | 0 |
 | limits | 10 | 10 | 0 | 0 |
 | protocols-utilities | 301 | 16 | 285 | 0 |
-| services-nodes-jobs | 665 | 57 | 608 | 0 |
+| services-nodes-jobs | 665 | 58 | 607 | 0 |
 | subscriptions | 111 | 44 | 67 | 0 |
-| TOTAL | 2364 | 257 | 2107 | 0 |
+| TOTAL | 2364 | 258 | 2106 | 0 |

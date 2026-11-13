@@ -696,3 +696,18 @@ Reviewed 257/2364, осталось 2107.
 прошли те же сценарии, cached/no-op Ensure, batch/read-failure и существующие
 shutdown/lifecycle/accounting regressions. Точные результаты и очередь защиты
 same-protocol config/client revisions описаны в RESUME.md.
+
+
+## Продолжение: A89, защита settings/client snapshots и rollback
+
+Нужно 3 managers, сделано 3; всего 89 подтверждённых исправлений.
+Reviewed 258/2364, осталось 2106.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A89 | Stale Ensure/Reconcile и external rollback возвращают старые credentials или доступ отключённого клиента в прежнем protocol | Source/eligibility provenance, единая DB-проверка до mutations, parity local/periodic payload, запрет восстановления уже отозванной rollback-конфигурации |
+
+18 stale scenarios и отдельный rollback воспроизведены до соответствующих guards.
+После правки прошли новые regressions, A88 revocation cases, lifecycle/accounting
+и service tests. Точные результаты и следующая очередь desired-set/delete generation
+сохранены в RESUME.md. Полный проход исходного коммита ещё не завершён.
