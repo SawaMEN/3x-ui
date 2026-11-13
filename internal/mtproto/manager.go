@@ -457,22 +457,19 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	structFP, secFP, mekoFP := inst.structuralFingerprint(), inst.secretsFingerprint(), inst.mekoFingerprint()
 	cur := m.procs[inst.Id]
 	action := ensureRestart
-	var accounting *sidecartraffic.Owner
 	if cur != nil {
 		action = ensureActionFor(cur.proc.IsRunning(), cur.structuralFP, cur.secretsFP, structFP, secFP)
-		accounting = cur.accounting
 	}
-	if cur == nil || action != ensureNoop || accounting == nil {
-		var err error
-		accounting, err = captureTrafficOwner(inst)
-		if err != nil {
-			return err
-		}
+	accounting, err := captureTrafficOwner(inst)
+	if err != nil {
+		return err
 	}
 	if cur != nil {
 		switch action {
 		case ensureNoop:
-			cur.accounting = accounting
+			if err := m.rebindTrafficOwnerLocked(inst.Id, cur, accounting); err != nil {
+				return err
+			}
 			if cur.mekoFP != mekoFP {
 				if err := writeConfig(configPathForID(inst.Id), inst, cur.apiPort, cur.apiToken); err != nil {
 					return err

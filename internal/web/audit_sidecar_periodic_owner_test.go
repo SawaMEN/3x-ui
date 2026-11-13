@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -26,7 +27,7 @@ import (
 
 func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 	for _, protocol := range []model.Protocol{model.Mieru, model.MTProto, model.TrustTunnel} {
-		for _, variant := range []string{"normal", "disk-retry", "routed"} {
+		for _, variant := range []string{"normal", "disk-retry", "routed", "rebind", "rebind-idle", "rebind-missing", "rebind-unavailable"} {
 			if variant == "routed" && protocol != model.MTProto {
 				continue
 			}
@@ -49,6 +50,9 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 				blockPath := filepath.Join(dir, source+"-traffic-journal")
 				t.Setenv("XUI_AUDIT_OWNER_BLOCK", "")
 				var block atomic.Bool
+				var missing, unavailable atomic.Bool
+				missingSample := missing.Store
+				t.Setenv("XUI_AUDIT_OWNER_UNAVAILABLE", "")
 				blockFS := func() {
 					if block.Swap(false) {
 						if err := os.WriteFile(blockPath, nil, 0o600); err != nil {
@@ -64,13 +68,30 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 					t.Fatal(err)
 				}
 				var run func()
+				var ensure func() error
+				pidFile := filepath.Join(dir, "owner.pid")
+				t.Setenv("XUI_AUDIT_OWNER_PID", pidFile)
+				readPID := func() string {
+					deadline := time.Now().Add(time.Second)
+					for {
+						data, err := os.ReadFile(pidFile)
+						if err == nil && strings.TrimSpace(string(data)) != "" {
+							return string(data)
+						}
+						if time.Now().After(deadline) {
+							t.Fatal(err)
+						}
+						time.Sleep(time.Millisecond)
+					}
+				}
 				var total atomic.Int64
 				total.Store(10)
+				advance := total.Store
 				switch protocol {
 				case model.Mieru:
 					stats := filepath.Join(dir, "stats")
 					t.Setenv("XUI_AUDIT_OWNER_STATS", stats)
-					script := "#!/bin/sh\ncase \"$1\" in\nget) if [ -n \"$XUI_AUDIT_OWNER_BLOCK\" ]; then : > \"$XUI_AUDIT_OWNER_BLOCK\"; fi; cat \"$XUI_AUDIT_OWNER_STATS\";;\nreload) exit 0;;\n*) exec sleep 60;;\nesac\n"
+					script := "#!/bin/sh\ncase \"$1\" in\nget) if [ -n \"$XUI_AUDIT_OWNER_UNAVAILABLE\" ]; then exit 1; fi; if [ -n \"$XUI_AUDIT_OWNER_BLOCK\" ]; then : > \"$XUI_AUDIT_OWNER_BLOCK\"; fi; cat \"$XUI_AUDIT_OWNER_STATS\";;\nreload) exit 0;;\n*) echo $$ > \"$XUI_AUDIT_OWNER_PID\"; exec sleep 60;;\nesac\n"
 					if err := os.WriteFile(filepath.Join(dir, "mita"), []byte(script), 0o700); err != nil {
 						t.Fatal(err)
 					}
@@ -81,7 +102,8 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 					if !ok {
 						t.Fatal("invalid Mieru fixture")
 					}
-					if err := mgr.Ensure(inst); err != nil {
+					ensure = func() error { return mgr.Ensure(inst) }
+					if err := ensure(); err != nil {
 						t.Fatal(err)
 					}
 					write := func(n int) {
@@ -89,12 +111,22 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 							t.Fatal(err)
 						}
 					}
+					advance = func(n int64) { write(int(n)) }
+					missingSample = func(on bool) {
+						if on {
+							if err := os.WriteFile(stats, nil, 0o600); err != nil {
+								t.Fatal(err)
+							}
+						} else {
+							write(110)
+						}
+					}
 					write(10)
 					mgr.CollectTraffic([]mieru.Instance{inst})
 					write(110)
 					run = func() { job.NewMieruJob().Run() }
 				case model.MTProto:
-					if err := os.WriteFile(filepath.Join(dir, mtproto.GetBinaryName()), []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
+					if err := os.WriteFile(filepath.Join(dir, mtproto.GetBinaryName()), []byte("#!/bin/sh\necho $$ > \"$XUI_AUDIT_OWNER_PID\"\nexec sleep 60\n"), 0o700); err != nil {
 						t.Fatal(err)
 					}
 					mgr := mtproto.GetManager()
@@ -104,7 +136,8 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 					if !ok {
 						t.Fatal("invalid Telemt fixture")
 					}
-					if err := mgr.Ensure(inst); err != nil {
+					ensure = func() error { return mgr.Ensure(inst) }
+					if err := ensure(); err != nil {
 						t.Fatal(err)
 					}
 					data, err := os.ReadFile(filepath.Join(dir, "mtproto", "telemt-1002.toml"))
@@ -127,6 +160,14 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 							w.WriteHeader(http.StatusUnauthorized)
 							return
 						}
+						if unavailable.Load() {
+							w.WriteHeader(http.StatusServiceUnavailable)
+							return
+						}
+						if missing.Load() {
+							_, _ = fmt.Fprint(w, `{"ok":true,"data":[]}`)
+							return
+						}
 						blockFS()
 						_, _ = fmt.Fprintf(w, `{"ok":true,"data":[{"username":"accounting","total_octets":%d}]}`, total.Load())
 					}))
@@ -135,7 +176,7 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 					total.Store(110)
 					run = func() { job.NewMtprotoJob().Run() }
 				default:
-					if err := os.WriteFile(filepath.Join(dir, "trusttunnel_endpoint"), []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
+					if err := os.WriteFile(filepath.Join(dir, "trusttunnel_endpoint"), []byte("#!/bin/sh\necho $$ > \"$XUI_AUDIT_OWNER_PID\"\nexec sleep 60\n"), 0o700); err != nil {
 						t.Fatal(err)
 					}
 					mgr := externalvpn.GetManager()
@@ -145,7 +186,8 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := mgr.Ensure(inst); err != nil {
+					ensure = func() error { return mgr.Ensure(inst) }
+					if err := ensure(); err != nil {
 						t.Fatal(err)
 					}
 					data, err := os.ReadFile(filepath.Join(dir, "externalvpn", "1002", "vpn.toml"))
@@ -157,6 +199,14 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 						t.Fatal(err)
 					}
 					srv := serveShutdownMetrics(t, cfg.Metrics.Address, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						if unavailable.Load() {
+							w.WriteHeader(http.StatusServiceUnavailable)
+							return
+						}
+						if missing.Load() {
+							_, _ = fmt.Fprint(w, `[]`)
+							return
+						}
 						blockFS()
 						n := total.Load()
 						_, _ = fmt.Fprintf(w, `[{"username":"accounting","inbound":%d,"outbound":%d}]`, n, n*2)
@@ -172,6 +222,47 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 				replacement := coremodel.ClientTraffic{InboundId: ib.Id, Email: "accounting", Enable: true}
 				if err := db.Create(&replacement).Error; err != nil {
 					t.Fatal(err)
+				}
+				if strings.HasPrefix(variant, "rebind") {
+					before := readPID()
+					if variant == "rebind-idle" {
+						advance(10)
+					}
+					if variant == "rebind-missing" {
+						missingSample(true)
+					}
+					if variant == "rebind-unavailable" {
+						unavailable.Store(true)
+						t.Setenv("XUI_AUDIT_OWNER_UNAVAILABLE", "1")
+					}
+					err := ensure()
+					incomplete := variant == "rebind-missing" || variant == "rebind-unavailable"
+					if incomplete {
+						if err == nil {
+							t.Fatal("incomplete boundary accepted identity replacement")
+						}
+					} else if err != nil {
+						t.Fatal(err)
+					}
+					if readPID() != before {
+						t.Fatal("accounting owner rebind restarted runtime")
+					}
+					if incomplete {
+						missingSample(false)
+						unavailable.Store(false)
+						t.Setenv("XUI_AUDIT_OWNER_UNAVAILABLE", "")
+						if err := ensure(); err != nil {
+							t.Fatal(err)
+						}
+						if readPID() != before {
+							t.Fatal("boundary recovery restarted runtime")
+						}
+					}
+					if variant == "rebind-idle" {
+						advance(20)
+					} else {
+						advance(120)
+					}
 				}
 				if variant == "disk-retry" {
 					block.Store(true)
@@ -205,10 +296,22 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 					wantUp = 0
 					wantDown = 100
 				}
+				if variant == "rebind-idle" {
+					wantUp = 0
+					wantDown = 0
+				}
 				if err := db.First(&ib, ib.Id).Error; err != nil {
 					t.Fatal(err)
 				}
 				inboundUp, inboundDown := wantUp, wantDown
+				if strings.HasPrefix(variant, "rebind") {
+					inboundUp += 10
+					inboundDown += 20
+					if protocol == model.MTProto {
+						inboundUp = 0
+						inboundDown = wantDown + 10
+					}
+				}
 				if variant == "routed" {
 					inboundUp = 0
 					inboundDown = 0
@@ -216,7 +319,16 @@ func TestPeriodicSidecarTrafficKeepsRuntimeOwner(t *testing.T) {
 				if ib.Up != inboundUp || ib.Down != inboundDown {
 					t.Fatalf("wrong inbound totals %d/%d, want %d/%d", ib.Up, ib.Down, inboundUp, inboundDown)
 				}
-				if original.Up != wantUp || original.Down != wantDown || replacement.Up != 0 || replacement.Down != 0 {
+				newUp, newDown := int64(0), int64(0)
+				if strings.HasPrefix(variant, "rebind") {
+					newUp = 10
+					newDown = 20
+					if protocol == model.MTProto {
+						newUp = 0
+						newDown = 10
+					}
+				}
+				if original.Up != wantUp || original.Down != wantDown || replacement.Up != newUp || replacement.Down != newDown {
 					t.Fatalf("runtime bytes charged by reused email: original=%d/%d replacement=%d/%d", original.Up, original.Down, replacement.Up, replacement.Down)
 				}
 			})

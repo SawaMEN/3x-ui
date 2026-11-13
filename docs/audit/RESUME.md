@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 91 подтверждённое исправление панели; A91 — периодический учёт по pinned runtime owner через WAL до advance counters.
+Всего реализовано 92 подтверждённых исправления панели; A92 — точная граница смены accounting identity при no-op Ensure без restart.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 260 файлов, осталось 2104; общий проход не завершён.
+Проверено вручную 261 файл, осталось 2103; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1662,3 +1662,88 @@ A91:
   source metrics, ACK/drain и остальных managers остаются. Normal temporary SQLite,
   owned fake children и loopback HTTP; отдельный -race A91, real upstream, host
   firewall/systemctl/ACME, Docker/NET_ADMIN, Unix IPC и PostgreSQL не запускались.
+
+
+## Контрольная точка A92: смена accounting owner без restart
+
+Нужно 3 managers; сделано 3: Mieru, MTProto, external VPN.
+Всего 92 подтверждённых исправления. Reviewed 261/2364, осталось 2103, stale 0.
+Полностью прочитан исходный process_race_test.go; targeted normal process lifecycle,
+exit/config cleanup/status tests PASS 0.140s. Название RaceSafe не означает, что
+этот прогон запускался с -race: новый race-detector run здесь не выполнялся.
+
+Причина: после A91 bytes всегда принадлежали pinned runtime owner, но unchanged
+Ensure вообще не перечитывал его IDs. Новая traffic row с прежними email/settings
+не получала будущие bytes, пока процесс не менял credentials или не перезапускался.
+
+A92:
+- SameIdentities сравнивает immutable source/dir/inbound/routed и email→row-ID map;
+  равные новые allocations не создают handoff. ChangedClients выдаёт только
+  действительно затронутые counters; смена accounting namespace требует всех IDs.
+- Все 3 unchanged Ensure заново capture owner. При изменении identities сначала
+  снимается strict boundary по старому owner, sample принимается в A87 WAL/process
+  retry queue, затем фиксируется baseline и назначается новый owner без restart.
+- В strict snapshot должны присутствовать затронутые users. Metrics failure или
+  отсутствие такого user возвращает ошибку, сохраняет прежний owner и baseline;
+  повторный Ensure после восстановления завершает handoff. Отсутствие постороннего
+  unchanged counter не блокирует boundary. Existing lifecycle stop/reload остаётся
+  best effort и по-прежнему может завершать user access при отказе metrics.
+- External boundary mode включает реально наблюдавшиеся idle users с нулевой delta,
+  сохраняя прежнюю фильтрацию regular polls. FPTN mode аналогично сохраняет idle
+  metric samples; OpenFlux уже возвращает zero sample. При incomplete/error rollback
+  external counter map восстанавливается, owner не назначается.
+- Mieru/MTProto checkpoint увеличивает existing traffic epoch, поэтому старый poll
+  не может переписать новый baseline. External получает identity epoch: owner/epoch
+  копируются под manager mutex, проверяются под statsMu перед consumption. Rebind
+  меняет baseline/owner/epoch под обоими locks. Отложенная ninth poll snapshot после
+  смены owner явно отвергается, а не начисляет новые bytes старой row.
+- Accepted filesystem failure остаётся в shared immutable retry queue. Это разрешает
+  закончить owner switch после process acceptance и восстановить обе стороны
+  границы позднее без двойного начисления. Неaccepted boundary не меняет owner.
+- Standalone nil→nil owner не требует checkpoint. При подключении ранее unowned
+  процесса новый owner получает только bytes после подтверждённой baseline;
+  прошлые unowned bytes не назначаются ему задним числом. Missing current owner
+  после существовавшего managed owner отклоняется. Unmetered external protocols
+  обновляют только metadata: у них нет native counter stream для разбиения.
+
+Доказательства A92:
+- До правки 3 cases FAIL, web 0.603s: после boundary 110 и нового sample 120 old
+  Mieru/Trust owner получил 110/220, new 0/0; old MTProto 0/110, new 0/0.
+  Требовалось old 100/200 + new 10/20 либо MTProto old 0/100 + new 0/10.
+- Первый selected regression run PASS: web 19.938s, sidecartraffic 0.185s,
+  job 0.363s, service 1.621s, Mieru 0.007s, MTProto 0.005s, external VPN 0.417s.
+  Проверены прежние lifecycle/reload/WAL/CRUD/rollback/A88–A91 assertions.
+- Expanded owner boundary suite: 19 cases × 3 repeats PASS, web 9.075s;
+  identity unit suite × 3 repeats PASS 0.006s. Cases: normal, disk recovery,
+  routed MTProto, explicit no-op rebind, observed idle boundary, omitted affected
+  user и unavailable metrics с успешным retry. Каждый rebind проверяет тот же PID.
+- Initial expanded run нашёл гонку только в test PID marker: readPID мог вернуть
+  пустой файл между create/truncate и echo. Helper ждёт non-empty marker; три
+  повторения после исправления прошли. Это не объявлено production defect.
+- Deterministic external delayed snapshot test × 3 PASS 0.187s: 8 loopback polls
+  блокируются, ninth ждёт semaphore после owner snapshot. Для ninth делается
+  boundary/rebind, затем новые bytes. Old queued snapshot возвращает epoch error;
+  следующая poll сохраняет old=100, new=10 по разным WAL row IDs. Реальных VPN
+  processes для этого concurrency fixture не запускается.
+- Process lifecycle/status/exit fixture использует только owned test-binary child
+  и временный config; host MEKO helper отсутствует. Normal targeted PASS 0.140s.
+
+Ограничения / следующая очередь:
+- Strict boundary опирается на доступный snapshot upstream API, а не на ACK/drain
+  всех соединений; rolling/reset/session semantics сохраняются прежними. Missing
+  changed user откладывает rebind до следующего полного для него sample.
+- Повторный Capture добавляет DB reads на no-op Ensure. Большие user/inbound sets,
+  fsync/receipt нагрузка A91 и PostgreSQL performance stress отдельно не измерялись.
+- Managed MTProto WEB backend всё ещё использует отдельный owner/counter contract;
+  следующий приоритет — identity/reload/periodic ownership этого backend. Name-based
+  last-online UI updates не стали ID-based. Другие managers остаются в общем аудите.
+- Пределы retry queue до fsync/crash и A87 source metrics сохраняются. Только normal
+  temporary SQLite, owned fake children и loopback HTTP; real upstream, live
+  PostgreSQL, host firewall/systemctl/ACME, Docker/NET_ADMIN, Unix IPC и отдельный
+  -race A92 не запускались.
+
+Итог A92: go build -p 1 ./... PASS; go vet -p 1 ./... PASS;
+golangci-lint 2.15.0 full ./... PASS, 0 issues. Inventory/diff checks PASS:
+reviewed 261, pending 2103, stale 0. Финальный full-check run выполнялся после
+исправления test PID readiness и добавления deterministic queued-owner fixture;
+предыдущий остановленный run не считается финальной проверкой.

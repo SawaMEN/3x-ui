@@ -12045,8 +12045,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A86: complete external manager and FPTN/OpenFlux collectors review; refreshed prior full manager/consistent-collector/job reviews after checked traffic-result integration. Reproduced silent Mieru command and MTProto/TrustTunnel HTTP 503 shutdown in all 3 sources. Checked APIs preserve partial samples and failed baselines, sanitize diagnostics, validate bounded HTTP/JSON and Mieru text format; Mieru serialization rejects replaced-process replies. Fixture/race/build/lint evidence and unresolved CRUD tail loss recorded in RESUME.",
-      "reviewed_sha256": "ddb98f6957e337c7df3f34a7735168adad66bc8d88c9c1c4aa7fa49adf435f42"
+      "evidence": "A92: reviewed no-op identity refresh, strict changed-client counter boundary and accepted WAL before owner/cursor switch, retained old owner on missing/unavailable metrics, observed idle rows for external boundary, epoch snapshot guard under manager/stats locks. Three stale-owner failures reproduced; full selected regression pass, boundary suite repeated three times and deterministic queued-owner regression repeated three times PASS.",
+      "reviewed_sha256": "886bc09d225db0dfe955a945fd550537b8ebe30df688a333d160e5a80ddf876d"
     },
     {
       "path": "internal/externalvpn/decode.go",
@@ -12144,8 +12144,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A91: reviewed pinned runtime owner acceptance before cursor/baseline advance, copied external owner snapshot and protected counter rollback, receipt replay without recharging returned bytes, native/routed MTProto vs separate WEB accounting. Three reused-email misattribution failures reproduced; new seven-case normal/disk-recovery/routed suite PASS and selected lifecycle/epoch/CRUD/job/service regressions PASS.",
-      "reviewed_sha256": "49056e19b211ecc5db6a37a8b3dbd541a57d766907658b2704a6c6cd6191c06d"
+      "evidence": "A92: reviewed no-op identity refresh, strict changed-client counter boundary and accepted WAL before owner/cursor switch, retained old owner on missing/unavailable metrics, observed idle rows for external boundary, epoch snapshot guard under manager/stats locks. Three stale-owner failures reproduced; full selected regression pass, boundary suite repeated three times and deterministic queued-owner regression repeated three times PASS.",
+      "reviewed_sha256": "6c29b4fe9583f58195091baf98f171a88e9dd73e9c9c20dd2477d4a24b402e53"
     },
     {
       "path": "internal/externalvpn/manager_security_test.go",
@@ -13057,8 +13057,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
-      "reviewed_sha256": "9603f6c4a8f4ca0c87e69710535cfd20f4096cc724093d8bf44b489d3a9a8450"
+      "evidence": "A92: reviewed no-op identity refresh, strict changed-client counter boundary and accepted WAL before owner/cursor switch, retained old owner on missing/unavailable metrics, observed idle rows for external boundary, epoch snapshot guard under manager/stats locks. Three stale-owner failures reproduced; full selected regression pass, boundary suite repeated three times and deterministic queued-owner regression repeated three times PASS.",
+      "reviewed_sha256": "acc6d63be461ab259d295c9b9196f8b98dc2bbe772ba57fc1c8d21f801c4c0c0"
     },
     {
       "path": "internal/mieru/process.go",
@@ -13090,8 +13090,8 @@
       "subsystem": "protocols-utilities",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A90: reviewed manager-locked current desired resolution before sweep/remove/start, guarded committed-state removal, unchanged force shutdown/accounting paths, context-bound source queries and migrated periodic/quota callers. Nine delayed removal/read-failure and three empty-job races reproduced before fix; selected A88-A90 lifecycle/job/service/process regressions PASS.",
-      "reviewed_sha256": "6fc4d4acb3902487ba93837fadd23975b0f422f77fc0a88dc6199f316c9d0c33"
+      "evidence": "A92: reviewed no-op identity refresh, strict changed-client counter boundary and accepted WAL before owner/cursor switch, retained old owner on missing/unavailable metrics, observed idle rows for external boundary, epoch snapshot guard under manager/stats locks. Three stale-owner failures reproduced; full selected regression pass, boundary suite repeated three times and deterministic queued-owner regression repeated three times PASS.",
+      "reviewed_sha256": "3ed7da8f82e048b431b02de3ea1f86722f4ecccd870b7ae359d7b68d20658fe8"
     },
     {
       "path": "internal/mtproto/manager_mutation_test.go",
@@ -13188,9 +13188,9 @@
       "deletions": 4,
       "subsystem": "protocols-utilities",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A92: read complete original process lifecycle concurrency/exit tests; reviewed mutex-protected cmd/done/result inspection, owned helper child exit/config cleanup and joins. Normal targeted ProcessLifecycleFieldsRaceSafe/UnexpectedSuccessfulExitRemovesConfig/ProcessStatusDuringExit tests PASS; not a new race-detector run.",
+      "reviewed_sha256": "310088746609c0dbb717543997e26c81cd5f460d84d5232144bdadf311a40ae6"
     },
     {
       "path": "internal/mtproto/publication.go",

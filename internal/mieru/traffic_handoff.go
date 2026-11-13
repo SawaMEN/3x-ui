@@ -17,19 +17,29 @@ func captureTrafficOwner(inst Instance) (*sidecartraffic.Owner, error) {
 	return sidecartraffic.Capture("mieru", inst.Id, emails, false)
 }
 
-// Called under m.mu, before changing users or deleting the old process/cursor.
+// Lifecycle stop/reload remains best effort; identity rebind requires success.
 func (m *Manager) handoffTrafficLocked(id int, cur *managed) {
 	if cur.accounting == nil {
 		return
 	}
+	_, err := m.checkpointTrafficLocked(id, cur, nil)
+	if err != nil {
+		logger.Warning(fmt.Sprintf("mieru inbound %d traffic handoff:", id), err)
+	}
+}
+
+func (m *Manager) checkpointTrafficLocked(id int, cur *managed, required []string) (bool, error) {
 	if cur.proc == nil || !cur.proc.IsRunning() {
-		logger.Warningf("mieru inbound %d: final counters unavailable after process exit", id)
-		return
+		return false, fmt.Errorf("mieru: final counters unavailable after process exit")
 	}
 	stats, err := scrapeUsersChecked(socketPathForID(id), configPathForID(id))
 	if err != nil {
-		logger.Warning(fmt.Sprintf("mieru inbound %d final traffic:", id), err)
-		return
+		return false, err
+	}
+	for _, email := range required {
+		if _, ok := stats[email]; !ok {
+			return false, fmt.Errorf("mieru: incomplete accounting identity boundary")
+		}
 	}
 	next := maps.Clone(m.traffic[id])
 	if next == nil {
@@ -45,7 +55,23 @@ func (m *Manager) handoffTrafficLocked(id int, cur *managed) {
 		m.traffic[id] = next
 		cur.trafficEpoch++
 	}
-	if err != nil {
-		logger.Warning(fmt.Sprintf("mieru inbound %d traffic handoff queued for retry:", id), err)
+	return accepted, err
+}
+
+func (m *Manager) rebindTrafficOwnerLocked(id int, cur *managed, next *sidecartraffic.Owner) error {
+	if cur.accounting.SameIdentities(next) {
+		return nil
 	}
+	if next == nil {
+		return fmt.Errorf("mieru: current accounting owner unavailable")
+	}
+	accepted, err := m.checkpointTrafficLocked(id, cur, cur.accounting.ChangedClients(next))
+	if !accepted {
+		return fmt.Errorf("mieru: accounting identity handoff failed: %w", err)
+	}
+	if err != nil {
+		logger.Warning(fmt.Sprintf("mieru inbound %d identity handoff queued for retry:", id), err)
+	}
+	cur.accounting = next
+	return nil
 }

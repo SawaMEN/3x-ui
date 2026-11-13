@@ -37,6 +37,8 @@ import (
 )
 
 type running struct {
+	trafficEpoch uint64 // Writes hold both manager.mu and statsMu.
+
 	statsMu     sync.Mutex
 	accounting  *sidecartraffic.Owner
 	stopping    atomic.Bool
@@ -388,12 +390,12 @@ func (m *Manager) startLocked(inst Instance) error {
 			delete(m.procs, inst.ID)
 		default:
 			if old.fingerprint == fp && !certificateRenewalNeeded(inst) {
-				if old.accounting == nil {
-					owner, err := captureTrafficOwner(inst)
-					if err != nil {
-						return err
-					}
-					old.accounting = owner
+				owner, err := captureTrafficOwner(inst)
+				if err != nil {
+					return err
+				}
+				if err := m.rebindTrafficOwnerLocked(old, owner); err != nil {
+					return err
 				}
 				// Fingerprints exclude provenance: refresh it when only the
 				// saved representation changed, without restarting the child.
@@ -638,9 +640,11 @@ func (m *Manager) collectTrafficChecked(persist bool) ([]TrafficDelta, error) {
 	m.mu.Lock()
 	processes := make([]*running, 0, len(m.procs))
 	owners := make(map[*running]*sidecartraffic.Owner, len(m.procs))
+	epochs := make(map[*running]uint64, len(m.procs))
 	for _, proc := range m.procs {
 		processes = append(processes, proc)
 		owners[proc] = proc.accounting
+		epochs[proc] = proc.trafficEpoch
 	}
 	m.mu.Unlock()
 	// Poll independent processes concurrently without blocking inbound CRUD on
@@ -658,6 +662,12 @@ func (m *Manager) collectTrafficChecked(persist bool) ([]TrafficDelta, error) {
 			proc.statsMu.Lock()
 			defer proc.statsMu.Unlock()
 			if proc.stopping.Load() {
+				return
+			}
+			if persist && proc.trafficEpoch != epochs[proc] {
+				resultMu.Lock()
+				collectErr = errors.Join(collectErr, fmt.Errorf("%s inbound %d: accounting owner changed during metrics poll", proc.protocol, proc.instance.ID))
+				resultMu.Unlock()
 				return
 			}
 			if persist && owners[proc] == nil {
@@ -698,9 +708,13 @@ func (m *Manager) collectTrafficChecked(persist bool) ([]TrafficDelta, error) {
 var metricsHTTPClient = &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil, MaxIdleConns: 32, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}}
 
 func (m *Manager) collectProcessTrafficChecked(proc *running) ([]TrafficDelta, error) {
+	return m.collectProcessTrafficMode(proc, false)
+}
+
+func (m *Manager) collectProcessTrafficMode(proc *running, includeIdle bool) ([]TrafficDelta, error) {
 	var deltas []TrafficDelta
 	if proc.protocol == model.FPTN || proc.protocol == model.OpenFlux {
-		return m.collectAdditionalTrafficChecked(proc)
+		return m.collectAdditionalTrafficMode(proc, includeIdle)
 	}
 	if proc.metricsAddr == "" {
 		if proc.protocol == model.TrustTunnel {
@@ -743,7 +757,7 @@ func (m *Manager) collectProcessTrafficChecked(proc *running) ([]TrafficDelta, e
 			Down:   cumulativeTrafficDelta(down, old.down),
 			Active: row.Sessions > 0,
 		}
-		if delta.Up > 0 || delta.Down > 0 || delta.Active {
+		if includeIdle || delta.Up > 0 || delta.Down > 0 || delta.Active {
 			deltas = append(deltas, delta)
 		}
 		proc.counters[row.Username] = trafficCounters{up: up, down: down}

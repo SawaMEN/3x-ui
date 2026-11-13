@@ -741,3 +741,18 @@ Reviewed 260/2364, осталось 2104.
 normal/disk-recovery/routed fixtures, pinned zero activity, прежние lifecycle,
 shutdown и service regressions, build/vet/lint. Точные результаты и оставшиеся
 owner rebind/WEB/performance вопросы — RESUME.md.
+
+
+## Продолжение: A92, identity handoff при неизменном процессе
+
+Нужно 3 managers, сделано 3; всего 92 подтверждённых исправления.
+Reviewed 261/2364, осталось 2103.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A92 | No-op Ensure сохраняет прежние traffic row IDs после пересоздания клиента с теми же settings/email | Сравнение immutable owners, strict old-owner boundary и WAL acceptance перед baseline/owner switch, retry при неполных metrics и epoch guard для отложенного poll |
+
+Три неверных границы начисления воспроизведены до правки. После неё 19-case owner
+suite и deterministic queued external poll прошли по три раза; также прошли
+прежние lifecycle/CRUD/shutdown/service tests. Детали проверки PID, ограничения
+upstream snapshots и очередь MTProto WEB accounting — RESUME.md.

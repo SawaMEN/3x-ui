@@ -382,12 +382,12 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	restartFP := inst.restartFingerprint()
 	cur := m.procs[inst.Id]
 	if cur != nil && cur.proc != nil && cur.proc.IsRunning() && cur.fp == fp {
-		if cur.accounting == nil {
-			owner, err := captureTrafficOwner(inst)
-			if err != nil {
-				return err
-			}
-			cur.accounting = owner
+		owner, err := captureTrafficOwner(inst)
+		if err != nil {
+			return err
+		}
+		if err := m.rebindTrafficOwnerLocked(inst.Id, cur, owner); err != nil {
+			return err
 		}
 		cur.tag = inst.Tag
 		cur.users = slices.Clone(inst.Users)

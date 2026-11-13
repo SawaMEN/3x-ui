@@ -43,6 +43,10 @@ func (m *Manager) collectAdditionalTraffic(proc *running) []TrafficDelta {
 }
 
 func (m *Manager) collectAdditionalTrafficChecked(proc *running) ([]TrafficDelta, error) {
+	return m.collectAdditionalTrafficMode(proc, false)
+}
+
+func (m *Manager) collectAdditionalTrafficMode(proc *running, includeIdle bool) ([]TrafficDelta, error) {
 	if proc.protocol == model.OpenFlux {
 		return collectOpenFluxTrafficChecked(proc)
 	}
@@ -71,7 +75,7 @@ func (m *Manager) collectAdditionalTrafficChecked(proc *running) ([]TrafficDelta
 	}
 	var deltas []TrafficDelta
 	for _, delta := range byEmail {
-		if delta.Active {
+		if includeIdle || delta.Active {
 			deltas = append(deltas, delta)
 		}
 	}
