@@ -184,6 +184,81 @@ describe('domain and TLS dashboard', () => {
     delete window.X_UI_BASE_PATH;
     setupHttp();
   });
+  it('opens the single TLS setup form from a contextual prompt for CertMagic domains', async () => {
+    const f = fixture();
+    f.config.email = '';
+    f.config.acceptTerms = false;
+    f.config.domains[0].tls = 'certmagic';
+    renderWithProviders(<DomainFrontTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure TLS' }));
+    expect(screen.getAllByRole('textbox', { name: 'ACME email' })).toHaveLength(1);
+    expect(screen.getAllByRole('checkbox', { name: /Let.s Encrypt/ })).toHaveLength(1);
+    expect(screen.queryByRole('combobox', { name: 'Domain validation method' })).toBeNull();
+    expect(f.applied).toBeUndefined();
+  });
+
+  it('adds a DNS-only certificate with the appropriate defaults and opens DNS setup', async () => {
+    const f = fixture();
+    renderWithProviders(<DomainFrontTab />);
+    await openDomainSection('Certificates');
+    fireEvent.click(screen.getByRole('button', { name: 'Add DNS-01 certificate' }));
+    fireEvent.change(screen.getByPlaceholderText('sub.example.com'), {
+      target: { value: '*.example.org' },
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole('checkbox', { name: 'Use in subscription links' })).toBeNull(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure DNS-01' }));
+    expect(await screen.findByRole('combobox', { name: 'Domain validation method' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() =>
+      expect(f.applied?.domains[1]).toMatchObject({
+        name: '*.example.org',
+        mode: 'cert_only',
+        tls: 'certmagic',
+        inboundIds: [],
+        panel: false,
+      }),
+    );
+    expect(f.applied?.subscriptionDomain).toBe('sub.example.com');
+  });
+
+  it('loads DNS credentials only when DNS settings are opened and preserves unsaved values', async () => {
+    const f = fixture();
+    f.config.dns01Provider = 'cloudflare';
+    f.config.dns01Zone = 'example.com';
+    let reads = 0;
+    server.use(
+      http.get('*/panel/api/domains/dns/credential', () => {
+        reads++;
+        return HttpResponse.json({ success: true, obj: { configured: true } });
+      }),
+    );
+    renderWithProviders(<DomainFrontTab />);
+    await openDomainSection('Settings');
+    expect(reads).toBe(0);
+    fireEvent.click(screen.getByText('Automatic DNS-01 validation'));
+    const zone = await screen.findByRole('textbox', { name: 'DNS zone' });
+    fireEvent.change(zone, { target: { value: 'edited.example.com' } });
+    await waitFor(() => expect(reads).toBe(1));
+    await openDomainSection('Domains');
+    await openDomainSection('Settings');
+    expect(await screen.findByDisplayValue('edited.example.com')).toBeTruthy();
+    expect(f.applied).toBeUndefined();
+  });
+
+  it('offers one edit action per cover site and keeps its draft in the editor', async () => {
+    const f = fixture();
+    f.config.domains[0].mode = 'sni_only';
+    f.config.subscriptionDomain = '';
+    renderWithProviders(<DomainFrontTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(screen.queryByRole('button', { name: 'Change cover site' })).toBeNull();
+    expect(await screen.findByRole('combobox', { name: 'Website template' })).toBeTruthy();
+    expect(f.applied).toBeUndefined();
+  });
+
   it('shows certificate lifetime, preserves edited settings on refresh and applies the edited configuration', async () => {
     const f = fixture();
     renderWithProviders(<DomainFrontTab />);
@@ -266,7 +341,7 @@ describe('domain and TLS dashboard', () => {
     await screen.findByRole('dialog');
     fireEvent.click(screen.getByText('Advanced: TLS and status'));
     chooseSelectOption('tls', title);
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     await waitFor(() =>
       expect(
         document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
@@ -295,7 +370,7 @@ describe('domain and TLS dashboard', () => {
         .checked,
     ).toBe(true);
     fireEvent.change(input, { target: { value: 'new.example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     await waitFor(() =>
       expect(
         document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
@@ -380,8 +455,11 @@ describe('domain and TLS dashboard', () => {
   it('preserves a domain draft when navigating between additional settings tabs', async () => {
     const f = fixture();
     server.use(
-      http.get('*/panel/api/setting/singbox/status', () =>
-        HttpResponse.json({ success: true, obj: { installed: true, running: true } }),
+      http.get('*/panel/api/setting/cores', () =>
+        HttpResponse.json({
+          success: true,
+          obj: { cores: [{ type: 'sing-box', installed: true, running: true, selected: true }] },
+        }),
       ),
       http.get('*/panel/api/server/status', () =>
         HttpResponse.json({ success: true, obj: { core: { running: 'sing-box' } } }),
@@ -449,6 +527,7 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     await openDomainSection('Settings');
+    fireEvent.click(screen.getByText('Domain website redirect'));
     fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
     expect(await screen.findByText(/Fastest website: https:\/\/ya.ru\//)).toBeTruthy();
     expect(update).not.toHaveBeenCalled();
@@ -495,6 +574,7 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     await openDomainSection('Settings');
+    fireEvent.click(screen.getByText('Domain website redirect'));
     fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
     expect(
       (await screen.findAllByText(/No suitable neighboring websites were found/)).length,
@@ -524,7 +604,8 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     await findDomainEmail();
-    const destination = screen.getByDisplayValue('https://example.com/');
+    fireEvent.click(screen.getByText('Domain website redirect'));
+    const destination = await screen.findByDisplayValue('https://example.com/');
     expect(destination.closest('.domain-redirect-settings')).toBeTruthy();
     fireEvent.change(destination, { target: { value: 'https://new.example.com/' } });
     expect(update).toHaveBeenCalledWith({ rootRedirectURL: 'https://new.example.com/' });
@@ -560,7 +641,7 @@ describe('domain and TLS dashboard', () => {
     await waitFor(() =>
       expect(screen.queryByRole('checkbox', { name: 'Allow admin panel access' })).toBeNull(),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     await waitFor(() =>
       expect(
         document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
@@ -590,7 +671,7 @@ describe('domain and TLS dashboard', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await screen.findByRole('dialog');
     expect(screen.queryByRole('checkbox', { name: 'Allow admin panel access' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     fireEvent.change(await findDomainEmail(), {
       target: { value: 'private@example.com' },
     });
