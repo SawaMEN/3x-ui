@@ -2613,14 +2613,16 @@
             "direct": "Direct / proxy",
             "cdn": "CDN",
             "sni": "Local SNI",
-            "shared": "Remote SNI"
+            "shared": "Remote SNI",
+            "certificate": "DNS-01 certificate only"
           },
           "hint": {
             "subscription": "Create a domain for subscription links",
             "direct": "Create a direct HTTPS entry and select compatible inbounds",
             "cdn": "Create an HTTPS domain behind your CDN",
             "sni": "Create a certificate for local SNI use",
-            "shared": "Reference an SNI domain managed on another node"
+            "shared": "Reference an SNI domain managed on another node",
+            "certificate": "Issue via your DNS provider without a website or open ports"
           },
           "audit": "Audit all DNS/TLS",
           "auditHint": "Check publicly reachable TLS certificates for all saved, active domains (up to three in parallel)",
@@ -2644,7 +2646,7 @@
             "healthy": "Valid",
             "pending": "Awaiting certificate"
           },
-          "subtitle": "Live gateway status, certificates and domains in one workspace",
+          "subtitle": "Domains, certificates and SNI in one place",
           "otherTypes": "Other options",
           "navigation": "Domain management sections",
           "moreActions": "More actions",
@@ -2657,7 +2659,18 @@
             "certificates": "Certificates",
             "sni": "SNI and nodes",
             "settings": "Settings"
-          }
+          },
+          "changes": "Configuration changes",
+          "saved": "All changes saved",
+          "configureTLS": "Configure TLS",
+          "gatewayAndTLS": "Gateway and automatic TLS",
+          "subscriptionDomain": "Subscription domain",
+          "saveDomain": "Done",
+          "issueCertificate": "Add DNS-01 certificate",
+          "dnsRequired": "Configure a DNS provider and API token to issue DNS-01 certificates",
+          "configureDNS": "Configure DNS-01",
+          "takeNodeCertificate": "Use certificate from another node",
+          "loadingNodes": "Loading nodes…"
         },
         "preflight": {
           "action": "Check readiness",

@@ -86,3 +86,18 @@ it('keeps an unavailable saved source selectable so renewal delivery can be stop
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Certificate source site' }));
   expect(await screen.findByText('web.site.ru — #77')).toBeTruthy();
 });
+
+it('keeps saved recipients instead of replacing them with the current server default', async () => {
+  renderWithProviders(<CoverCertificateFleet nodes={[]} defaultRecipientId={0} />);
+  await screen.findByText('Ready');
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Certificate source site' }));
+  fireEvent.click(await screen.findByText('web.site.ru — #2'));
+  fireEvent.click(screen.getByRole('button', { name: 'Connect and update automatically' }));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/domains/certificates/fleet',
+      { sourceNodeId: 2, domain: 'web.site.ru', nodeIds: [3] },
+      { silent: true },
+    ),
+  );
+});

@@ -28,7 +28,7 @@ import {
   Typography,
   message,
 } from 'antd';
-import { ReloadOutlined, QuestionCircleOutlined, MoreOutlined } from '@ant-design/icons';
+import { QuestionCircleOutlined, MoreOutlined } from '@ant-design/icons';
 import { HttpUtil } from '@/utils';
 import { antdRule } from '@/utils/antdRule';
 import { DomainFrontStatusSchema, DomainFrontCheckSchema } from '@/generated/zod';
@@ -42,6 +42,7 @@ import {
 import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
 import DomainOverview from './DomainOverview';
 import CertificateInventoryPanel from './CertificateInventoryPanel';
+import NodeCertificateSharing from './NodeCertificateSharing';
 import { DomainPreflightReportSchema } from '@/schemas/domain-preflight';
 import type { DomainPreflightReport } from '@/schemas/domain-preflight';
 import type { DomainPreset } from './DomainOverview';
@@ -60,6 +61,7 @@ import CoverSiteHTMLEditor, {
 } from '@/components/CoverSiteHTMLEditor';
 
 type DomainSection = 'domains' | 'certificates' | 'sni' | 'settings';
+type SettingsSection = 'dns' | 'redirect';
 
 type RedirectSiteCheck = {
   url: string;
@@ -121,6 +123,7 @@ export default function DomainFrontTab({
   const [domainSearch, setDomainSearch] = useState('');
   const [domainFilter, setDomainFilter] = useState('all');
   const [section, setSection] = useState<DomainSection>('domains');
+  const [settingsSections, setSettingsSections] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [preflighting, setPreflighting] = useState(false);
@@ -130,13 +133,14 @@ export default function DomainFrontTab({
   const [redirectScan, setRedirectScan] = useState<RedirectSiteScan>();
   const [separatePublicPort, setSeparatePublicPort] = useState(false);
   const [editing, setEditing] = useState<number>();
+  const [sharingCertificate, setSharingCertificate] = useState(false);
   const [primaryDomain, setPrimaryDomain] = useState(false);
   const [advancedEditorOpen, setAdvancedEditorOpen] = useState(false);
   const [dnsToken, setDnsToken] = useState('');
   const [savingDNSToken, setSavingDNSToken] = useState(false);
   const dnsCredential = useQuery({
     queryKey: ['settings', 'domains', 'dns-credential', draft.dns01Provider || 'cloudflare'],
-    enabled: section === 'settings',
+    enabled: section === 'settings' && settingsSections.includes('dns') && !!draft.dns01Provider,
     retry: false,
     queryFn: async () => {
       const response = await HttpUtil.get(
@@ -246,6 +250,7 @@ export default function DomainFrontTab({
   }
 
   async function apply() {
+    if (busy || preflighting || !initialized) return;
     if (redirectError) {
       messageApi.error(redirectError);
       return;
@@ -431,6 +436,10 @@ export default function DomainFrontTab({
     openEditor(-1, preset === 'sni', preset === 'shared');
     if (preset === 'direct') form.setFieldsValue({ mode: 'direct', tls: 'auto' });
     if (preset === 'cdn') form.setFieldsValue({ mode: 'cdn', tls: 'auto' });
+    if (preset === 'certificate') {
+      form.setFieldsValue({ mode: 'cert_only', tls: 'certmagic' });
+      setPrimaryDomain(false);
+    }
   }
 
   function openEditor(index: number, sniOnly = false, sharedOnly = false) {
@@ -475,6 +484,10 @@ export default function DomainFrontTab({
     const domain = DomainFormSchema.parse({
       ...defaultDomain,
       ...value,
+      // Hidden form fields are unregistered (preserve=false); certificate-only
+      // domains must retain CertMagic instead of falling back to gateway TLS.
+      tls:
+        value.mode === 'cert_only' ? 'certmagic' : value.mode === 'shared_sni' ? 'auto' : value.tls,
       panel: false,
       inboundIds:
         value.mode === 'sub_link_only' ||
@@ -548,31 +561,23 @@ export default function DomainFrontTab({
   return (
     <Space className="domain-manager" orientation="vertical" size={16} style={{ width: '100%' }}>
       {holder}
-      <Space wrap>
-        <Button
-          type="primary"
-          loading={busy || preflighting}
-          aria-label={label('apply')}
-          disabled={
-            (!dirty && !settingsDirty) || loading || !!redirectError || preflighting || busy
-          }
-          onClick={() => void apply()}
-        >
-          {label('apply')}
-        </Button>
-        <Button
-          onClick={() => void checkReadiness()}
-          disabled={!initialized || preflighting || busy}
-          loading={preflighting}
-          aria-label={label('preflight.action')}
-        >
-          {label('preflight.action')}
-        </Button>
-        <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-          {label('refresh')}
-        </Button>
-        {dirty && <Typography.Text type="secondary">{label('unsaved')}</Typography.Text>}
-      </Space>
+      <DomainOverview
+        draft={draft}
+        status={status}
+        checks={checks}
+        managedSniCount={managedSniDomains.length}
+        dirty={dirty}
+        loading={loading}
+        auditing={auditing}
+        auditDone={auditDone}
+        auditTotal={auditTotal}
+        onAudit={() => void auditDomains()}
+        onAdd={openPreset}
+        busy={busy || preflighting}
+        onRefresh={() => void load()}
+        refreshing={statusQuery.isFetching}
+        onPreflight={() => void checkReadiness()}
+      />
       {preflightReport && preflightDraft === JSON.stringify(draft) && (
         <Card size="small" title={label('preflight.title')}>
           <Space orientation="vertical" style={{ width: '100%' }}>
@@ -619,19 +624,6 @@ export default function DomainFrontTab({
           </Space>
         </Card>
       )}
-      <DomainOverview
-        draft={draft}
-        status={status}
-        checks={checks}
-        managedSniCount={managedSniDomains.length}
-        dirty={dirty}
-        loading={loading}
-        auditing={auditing}
-        auditDone={auditDone}
-        auditTotal={auditTotal}
-        onAudit={() => void auditDomains()}
-        onAdd={openPreset}
-      />
       {statusQuery.error && (
         <Alert
           type="error"
@@ -641,40 +633,44 @@ export default function DomainFrontTab({
         />
       )}
 
-      {section === 'domains' &&
+      {section !== 'settings' &&
         draft.enabled &&
         draft.domains.some(
-          (item) => item.enabled && item.mode !== 'shared_sni' && item.tls === 'auto',
+          (item) =>
+            item.enabled &&
+            item.mode !== 'shared_sni' &&
+            (item.tls === 'auto' || item.tls === 'certmagic' || item.mode === 'cert_only'),
         ) &&
         (!draft.email || !draft.acceptTerms) && (
-          <Card size="small" title={label('workspace.autoTLSSetup')}>
-            <Typography.Paragraph type="secondary">
-              {label('workspace.autoTLSHint')}
-            </Typography.Paragraph>
-            <Space wrap align="start" style={{ width: '100%' }}>
-              <Input
-                type="email"
-                aria-label={label('email')}
-                placeholder={label('email')}
-                value={draft.email}
-                onChange={(event) => update({ email: event.target.value })}
-                style={{ width: 280, maxWidth: '100%' }}
-              />
-              <Checkbox
-                checked={draft.acceptTerms}
-                onChange={(event) => update({ acceptTerms: event.target.checked })}
+          <Alert
+            type="warning"
+            showIcon
+            title={label('workspace.autoTLSSetup')}
+            description={label('workspace.autoTLSHint')}
+            action={
+              <Button onClick={() => setSection('settings')}>
+                {label('workspace.configureTLS')}
+              </Button>
+            }
+          />
+        )}
+      {!draft.dns01Provider &&
+        draft.domains.some((domain) => domain.enabled && domain.mode === 'cert_only') && (
+          <Alert
+            type="warning"
+            showIcon
+            title={label('workspace.dnsRequired')}
+            action={
+              <Button
+                onClick={() => {
+                  setSection('settings');
+                  setSettingsSections(['dns']);
+                }}
               >
-                {label('terms')}{' '}
-                <a
-                  href="https://letsencrypt.org/repository/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Let's Encrypt
-                </a>
-              </Checkbox>
-            </Space>
-          </Card>
+                {label('workspace.configureDNS')}
+              </Button>
+            }
+          />
         )}
       <div
         className="domain-manager-nav"
@@ -751,6 +747,9 @@ export default function DomainFrontTab({
                   render: (name: string, d: DomainForm) => (
                     <Space orientation="vertical" size={2}>
                       <Typography.Text strong>{name}</Typography.Text>
+                      {draft.subscriptionDomain === name && (
+                        <Tag color="blue">{label('workspace.subscriptionDomain')}</Tag>
+                      )}
                       {!d.enabled && <Tag>{label('disabled')}</Tag>}
                     </Space>
                   ),
@@ -814,19 +813,6 @@ export default function DomainFrontTab({
                       >
                         {label('edit')}
                       </Button>
-                      {d.mode === 'sni_only' && (
-                        <Button
-                          type="link"
-                          size="small"
-                          onClick={() =>
-                            openEditor(draft.domains.findIndex((item) => item.name === d.name))
-                          }
-                        >
-                          {i18n.language.startsWith('ru')
-                            ? 'Сменить сайт-заглушку'
-                            : 'Change cover site'}
-                        </Button>
-                      )}
                       <Dropdown
                         trigger={['click']}
                         menu={{
@@ -834,7 +820,7 @@ export default function DomainFrontTab({
                             {
                               key: 'check',
                               label: label('check'),
-                              disabled: dirty || !initialized || auditing,
+                              disabled: dirty || !initialized || auditing || busy || !!checking,
                             },
                             { type: 'divider' },
                             { key: 'remove', label: label('remove'), danger: true },
@@ -902,12 +888,17 @@ export default function DomainFrontTab({
       )}
       {section === 'certificates' && (
         <div className="domain-manager-panel" data-testid="domain-panel-certificates">
-          <Alert
-            type="info"
-            showIcon
-            title={label('automation')}
-            description={label('automationDesc')}
-          />
+          <div className="domain-manager-section-heading">
+            <Typography.Text type="secondary">{label('automationDesc')}</Typography.Text>
+            <Space wrap>
+              <Button type="primary" onClick={() => setSharingCertificate(true)} disabled={busy}>
+                {label('workspace.takeNodeCertificate')}
+              </Button>
+              <Button onClick={() => openPreset('certificate')} disabled={!initialized || busy}>
+                {label('workspace.issueCertificate')}
+              </Button>
+            </Space>
+          </div>
           <CertificateInventoryPanel />
           {!!status?.existingCertificates?.length && (
             <Collapse
@@ -965,8 +956,13 @@ export default function DomainFrontTab({
               description={label('telemtReuseDesc')}
             />
           )}
+          <div className="domain-manager-section-heading">
+            <Typography.Text type="secondary">{label('sniCertHint')}</Typography.Text>
+            <Button type="primary" onClick={() => setSharingCertificate(true)} disabled={busy}>
+              {label('workspace.takeNodeCertificate')}
+            </Button>
+          </div>
           <Card size="small" title={label('sniCertificates')}>
-            <Typography.Paragraph type="secondary">{label('sniCertHint')}</Typography.Paragraph>
             <Space orientation="vertical" size={10} style={{ width: '100%' }}>
               {managedSniDomains.length === 0 &&
                 !draft.domains.some(
@@ -1007,308 +1003,7 @@ export default function DomainFrontTab({
       )}
       {section === 'settings' && (
         <div className="domain-manager-panel" data-testid="domain-panel-settings">
-          <Card size="small" title={label('dns01.title')} style={{ marginBottom: 12 }}>
-            <Typography.Paragraph type="secondary">{label('dns01.hint')}</Typography.Paragraph>
-            <Form layout="vertical">
-              <Form.Item
-                label={dnsHelp(
-                  'provider',
-                  'Выберите того, кто обслуживает DNS-записи домена: Cloudflare или DigitalOcean. Нода может находиться у другого хостинг-провайдера.',
-                  'Choose the provider hosting the domain DNS: Cloudflare or DigitalOcean. The node can be hosted elsewhere.',
-                )}
-              >
-                <Select
-                  aria-label={label('dns01.provider')}
-                  value={draft.dns01Provider || ''}
-                  onChange={(value) => {
-                    setDnsToken('');
-                    update({
-                      dns01Provider: value,
-                      ...(value !== 'cloudflare' ? { dns01ZoneId: '' } : {}),
-                      ...(value === '' ? { dns01Zone: '', dns01Propagation: 0 } : {}),
-                    });
-                  }}
-                  options={[
-                    { value: '', label: label('dns01.disabled') },
-                    { value: 'cloudflare', label: 'Cloudflare' },
-                    { value: 'digitalocean', label: 'DigitalOcean' },
-                  ]}
-                />
-              </Form.Item>
-              {(draft.dns01Provider === 'cloudflare' || draft.dns01Provider === 'digitalocean') && (
-                <>
-                  <Space wrap style={{ width: '100%' }}>
-                    <Form.Item
-                      label={dnsHelp(
-                        'zone',
-                        'Основная DNS-зона домена, например example.org для vpn.example.org. Она должна охватывать имена выдаваемых сертификатов.',
-                        'Authoritative DNS zone, e.g. example.org for vpn.example.org. It must contain the certificate hostnames.',
-                      )}
-                    >
-                      <Input
-                        aria-label={label('dns01.zone')}
-                        value={draft.dns01Zone ?? ''}
-                        placeholder="example.com"
-                        onChange={(event) => update({ dns01Zone: event.target.value })}
-                      />
-                    </Form.Item>
-                    {draft.dns01Provider === 'cloudflare' && (
-                      <Form.Item
-                        label={dnsHelp(
-                          'zoneId',
-                          'В Cloudflare откройте домен → Overview → Zone ID (32 символа). Это не идентификатор аккаунта.',
-                          'In Cloudflare open the domain → Overview → Zone ID (32 characters). This is not the account ID.',
-                        )}
-                      >
-                        <Input
-                          aria-label={label('dns01.zoneId')}
-                          value={draft.dns01ZoneId ?? ''}
-                          placeholder="32-character Cloudflare ID"
-                          onChange={(event) => update({ dns01ZoneId: event.target.value })}
-                        />
-                      </Form.Item>
-                    )}
-                    <Form.Item
-                      label={dnsHelp(
-                        'propagation',
-                        'Пауза 0–180 секунд перед проверкой TXT-записи. Увеличьте при медленном распространении DNS; обычно оставьте 0.',
-                        'Wait 0–180 seconds before checking the TXT record. Increase only for slow DNS propagation; usually leave 0.',
-                      )}
-                    >
-                      <InputNumber
-                        aria-label={label('dns01.propagation')}
-                        min={0}
-                        max={180}
-                        value={draft.dns01Propagation ?? 0}
-                        onChange={onNumber((value) => update({ dns01Propagation: value }))}
-                      />
-                    </Form.Item>
-                  </Space>
-                  <Typography.Paragraph type="secondary">
-                    {dnsCredential.data?.configured
-                      ? label('dns01.credentialSaved')
-                      : label('dns01.credentialMissing')}
-                    {dnsCredential.data?.source === 'environment' &&
-                      ' · ' + label('dns01.environment')}
-                  </Typography.Paragraph>
-                  <Space wrap>
-                    {dnsHelp(
-                      'token',
-                      'Токен API с минимальным доступом к управлению DNS-записями этой зоны. Сохраняется только на основном сервере, не передаётся удалённым нодам.',
-                      'API token scoped to edit DNS records in this zone. Stored only on the main server, not distributed to remote nodes.',
-                    )}
-                    <Input.Password
-                      aria-label={label('dns01.token')}
-                      placeholder={label('dns01.token')}
-                      autoComplete="new-password"
-                      value={dnsToken}
-                      onChange={(event) => setDnsToken(event.target.value)}
-                      style={{ width: 300, maxWidth: '100%' }}
-                    />
-                    <Button
-                      loading={savingDNSToken}
-                      disabled={!dnsToken}
-                      onClick={() => void updateDNSToken()}
-                    >
-                      {label('dns01.saveToken')}
-                    </Button>
-                    <Button
-                      danger
-                      disabled={
-                        !dnsCredential.data?.configured ||
-                        dnsCredential.data?.source === 'environment'
-                      }
-                      loading={savingDNSToken}
-                      onClick={() => void updateDNSToken(true)}
-                    >
-                      {label('dns01.clearToken')}
-                    </Button>
-                  </Space>
-                </>
-              )}
-            </Form>
-          </Card>
-          {allSetting && updateSetting && (
-            <div className="domain-redirect-settings">
-              <SettingListItem
-                paddings="small"
-                title={t('pages.settings.rootRedirectEnable')}
-                description={t('pages.settings.rootRedirectDesc')}
-              >
-                <Switch
-                  checked={allSetting.rootRedirectEnable}
-                  onChange={(v) =>
-                    updateSetting({
-                      rootRedirectEnable: v,
-                      ...(!v && rootRedirectError(allSetting.rootRedirectURL, redirectDomains)
-                        ? { rootRedirectURL: '' }
-                        : {}),
-                    })
-                  }
-                />
-              </SettingListItem>
-              <Space orientation="vertical" style={{ width: '100%', padding: '8px 0 12px' }}>
-                <Space wrap>
-                  <Button
-                    loading={scanningRedirect}
-                    disabled={busy}
-                    onClick={() => void findRedirectSite()}
-                    aria-label={t('pages.settings.redirectScanAction')}
-                  >
-                    {t('pages.settings.redirectScanAction')}
-                  </Button>
-                  <Typography.Text type="secondary">
-                    {t('pages.settings.redirectScanHint')}
-                  </Typography.Text>
-                </Space>
-                {redirectScan && (
-                  <>
-                    <Alert
-                      type={redirectScan.recommended ? 'success' : 'warning'}
-                      showIcon
-                      title={
-                        redirectScan.recommended
-                          ? t('pages.settings.redirectScanFound', { url: redirectScan.recommended })
-                          : t('pages.settings.redirectScanEmpty')
-                      }
-                      description={t('pages.settings.redirectScanNote')}
-                    />
-                    <Table<RedirectSiteCheck>
-                      size="small"
-                      rowKey="url"
-                      pagination={{ pageSize: 6, hideOnSinglePage: true }}
-                      dataSource={redirectScan.sites}
-                      scroll={{ x: 650 }}
-                      columns={[
-                        {
-                          title: t('pages.settings.redirectScanWebsite'),
-                          dataIndex: 'url',
-                          key: 'url',
-                          render: (value: string, site) => (
-                            <Space>
-                              <Typography.Text ellipsis style={{ maxWidth: 240 }} title={value}>
-                                {value}
-                              </Typography.Text>
-                              {site.url === redirectScan.recommended && (
-                                <Tag color="green">{t('pages.settings.redirectScanBest')}</Tag>
-                              )}
-                            </Space>
-                          ),
-                        },
-                        {
-                          title: t('pages.settings.redirectScanResponse'),
-                          key: 'response',
-                          render: (_, site) => site.status || '—',
-                        },
-                        {
-                          title: t('pages.settings.redirectScanLatency'),
-                          key: 'latency',
-                          render: (_, site) => (site.available ? `${site.latencyMs} ms` : '—'),
-                        },
-                        {
-                          title: t('pages.settings.redirectScanSNI'),
-                          key: 'sni',
-                          render: (_, site) =>
-                            site.sniLatencyMs ? `${site.sniLatencyMs} ms` : '—',
-                        },
-                        {
-                          title: '',
-                          key: 'choose',
-                          render: (_, site) => (
-                            <Button
-                              size="small"
-                              disabled={
-                                !site.available || !!rootRedirectError(site.url, redirectDomains)
-                              }
-                              onClick={() => updateSetting({ rootRedirectURL: site.url })}
-                            >
-                              {t('pages.settings.redirectScanChoose')}
-                            </Button>
-                          ),
-                        },
-                      ]}
-                    />
-                  </>
-                )}
-              </Space>
-              <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
-                <AutoComplete
-                  status={redirectError ? 'error' : undefined}
-                  maxLength={2048}
-                  aria-label={t('pages.settings.rootRedirectURL')}
-                  style={{ width: '100%' }}
-                  value={allSetting.rootRedirectURL}
-                  options={redirectSiteOptions}
-                  showSearch={{
-                    filterOption: (input, option) =>
-                      (option?.value ?? '').toLowerCase().includes(input.toLowerCase()),
-                  }}
-                  defaultActiveFirstOption={false}
-                  allowClear
-                  onChange={(value) => updateSetting({ rootRedirectURL: value })}
-                  placeholder="https://example.com/"
-                />
-              </SettingListItem>
-              {allSetting.rootRedirectEnable && (
-                <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
-                  <Alert
-                    showIcon
-                    type={
-                      redirectError
-                        ? 'error'
-                        : settingsDirty
-                          ? 'warning'
-                          : status?.running
-                            ? 'success'
-                            : 'warning'
-                    }
-                    title={
-                      redirectError ||
-                      (settingsDirty
-                        ? 'Перенаправление ещё не применено'
-                        : status?.running
-                          ? 'Доменный шлюз работает'
-                          : 'Доменный шлюз не запущен')
-                    }
-                    description={t('pages.settings.redirectScanRedirectDescription')}
-                  />
-                  {!redirectDomains.length && (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      title="Сначала добавьте домен и настройте TLS. Для общего доступа нужны свободные порты 80 и 443."
-                    />
-                  )}
-                  {status?.error && <Alert type="error" showIcon title={status.error} />}
-                  {!redirectError &&
-                    redirectDomains.map((name) => (
-                      <Space key={name} wrap>
-                        <Typography.Text code>https://{name}/</Typography.Text>
-                        <span>→</span>
-                        <Typography.Text ellipsis style={{ maxWidth: 320 }}>
-                          {allSetting.rootRedirectURL}
-                        </Typography.Text>
-                      </Space>
-                    ))}
-                  <Typography.Text type="secondary">
-                    При ошибке привязки портов или TLS изменение перенаправления откатывается.
-                    Сохраните адрес панели перед включением.
-                  </Typography.Text>
-                </Space>
-              )}
-            </div>
-          )}
-          <Card
-            loading={loading}
-            title={
-              <Space>
-                {label('gateway')}
-                <Tag color={status?.running ? 'green' : 'default'}>
-                  {label(status?.running ? 'running' : 'stopped')}
-                </Tag>
-              </Space>
-            }
-          >
+          <Card loading={loading} size="small" title={label('workspace.gatewayAndTLS')}>
             <Form layout="vertical">
               <Form.Item label={label('enabled')} tooltip={label('enabledDesc')}>
                 <Switch
@@ -1433,6 +1128,358 @@ export default function DomainFrontTab({
               />
             </Form>
           </Card>
+          <Collapse
+            className="domain-manager-settings"
+            activeKey={settingsSections}
+            onChange={(keys) => setSettingsSections(Array.isArray(keys) ? keys : [keys])}
+            items={[
+              {
+                key: 'dns' satisfies SettingsSection,
+                label: label('dns01.title'),
+                extra: (
+                  <Typography.Text type="secondary">
+                    {draft.dns01Provider || label('dns01.disabled')}
+                  </Typography.Text>
+                ),
+                children: (
+                  <>
+                    <Typography.Paragraph type="secondary">
+                      {label('dns01.hint')}
+                    </Typography.Paragraph>
+                    <Form layout="vertical">
+                      <Form.Item
+                        label={dnsHelp(
+                          'provider',
+                          'Выберите того, кто обслуживает DNS-записи домена: Cloudflare или DigitalOcean. Нода может находиться у другого хостинг-провайдера.',
+                          'Choose the provider hosting the domain DNS: Cloudflare or DigitalOcean. The node can be hosted elsewhere.',
+                        )}
+                      >
+                        <Select
+                          aria-label={label('dns01.provider')}
+                          value={draft.dns01Provider || ''}
+                          onChange={(value) => {
+                            setDnsToken('');
+                            update({
+                              dns01Provider: value,
+                              ...(value !== 'cloudflare' ? { dns01ZoneId: '' } : {}),
+                              ...(value === '' ? { dns01Zone: '', dns01Propagation: 0 } : {}),
+                            });
+                          }}
+                          options={[
+                            { value: '', label: label('dns01.disabled') },
+                            { value: 'cloudflare', label: 'Cloudflare' },
+                            { value: 'digitalocean', label: 'DigitalOcean' },
+                          ]}
+                        />
+                      </Form.Item>
+                      {(draft.dns01Provider === 'cloudflare' ||
+                        draft.dns01Provider === 'digitalocean') && (
+                        <>
+                          <Space wrap style={{ width: '100%' }}>
+                            <Form.Item
+                              label={dnsHelp(
+                                'zone',
+                                'Основная DNS-зона домена, например example.org для vpn.example.org. Она должна охватывать имена выдаваемых сертификатов.',
+                                'Authoritative DNS zone, e.g. example.org for vpn.example.org. It must contain the certificate hostnames.',
+                              )}
+                            >
+                              <Input
+                                aria-label={label('dns01.zone')}
+                                value={draft.dns01Zone ?? ''}
+                                placeholder="example.com"
+                                onChange={(event) => update({ dns01Zone: event.target.value })}
+                              />
+                            </Form.Item>
+                            {draft.dns01Provider === 'cloudflare' && (
+                              <Form.Item
+                                label={dnsHelp(
+                                  'zoneId',
+                                  'В Cloudflare откройте домен → Overview → Zone ID (32 символа). Это не идентификатор аккаунта.',
+                                  'In Cloudflare open the domain → Overview → Zone ID (32 characters). This is not the account ID.',
+                                )}
+                              >
+                                <Input
+                                  aria-label={label('dns01.zoneId')}
+                                  value={draft.dns01ZoneId ?? ''}
+                                  placeholder="32-character Cloudflare ID"
+                                  onChange={(event) => update({ dns01ZoneId: event.target.value })}
+                                />
+                              </Form.Item>
+                            )}
+                            <Form.Item
+                              label={dnsHelp(
+                                'propagation',
+                                'Пауза 0–180 секунд перед проверкой TXT-записи. Увеличьте при медленном распространении DNS; обычно оставьте 0.',
+                                'Wait 0–180 seconds before checking the TXT record. Increase only for slow DNS propagation; usually leave 0.',
+                              )}
+                            >
+                              <InputNumber
+                                aria-label={label('dns01.propagation')}
+                                min={0}
+                                max={180}
+                                value={draft.dns01Propagation ?? 0}
+                                onChange={onNumber((value) => update({ dns01Propagation: value }))}
+                              />
+                            </Form.Item>
+                          </Space>
+                          <Typography.Paragraph type="secondary">
+                            {dnsCredential.data?.configured
+                              ? label('dns01.credentialSaved')
+                              : label('dns01.credentialMissing')}
+                            {dnsCredential.data?.source === 'environment' &&
+                              ' · ' + label('dns01.environment')}
+                          </Typography.Paragraph>
+                          <Space wrap>
+                            {dnsHelp(
+                              'token',
+                              'Токен API с минимальным доступом к управлению DNS-записями этой зоны. Сохраняется только на основном сервере, не передаётся удалённым нодам.',
+                              'API token scoped to edit DNS records in this zone. Stored only on the main server, not distributed to remote nodes.',
+                            )}
+                            <Input.Password
+                              aria-label={label('dns01.token')}
+                              placeholder={label('dns01.token')}
+                              autoComplete="new-password"
+                              value={dnsToken}
+                              onChange={(event) => setDnsToken(event.target.value)}
+                              style={{ width: 300, maxWidth: '100%' }}
+                            />
+                            <Button
+                              loading={savingDNSToken}
+                              disabled={!dnsToken}
+                              onClick={() => void updateDNSToken()}
+                            >
+                              {label('dns01.saveToken')}
+                            </Button>
+                            <Button
+                              danger
+                              disabled={
+                                !dnsCredential.data?.configured ||
+                                dnsCredential.data?.source === 'environment'
+                              }
+                              loading={savingDNSToken}
+                              onClick={() => void updateDNSToken(true)}
+                            >
+                              {label('dns01.clearToken')}
+                            </Button>
+                          </Space>
+                        </>
+                      )}
+                    </Form>
+                  </>
+                ),
+              },
+              ...(allSetting && updateSetting
+                ? [
+                    {
+                      key: 'redirect' satisfies SettingsSection,
+                      label: t('pages.settings.rootRedirectEnable'),
+                      children: (
+                        <>
+                          {allSetting && updateSetting && (
+                            <div className="domain-redirect-settings">
+                              <SettingListItem
+                                paddings="small"
+                                title={t('pages.settings.rootRedirectEnable')}
+                                description={t('pages.settings.rootRedirectDesc')}
+                              >
+                                <Switch
+                                  checked={allSetting.rootRedirectEnable}
+                                  onChange={(v) =>
+                                    updateSetting({
+                                      rootRedirectEnable: v,
+                                      ...(!v &&
+                                      rootRedirectError(allSetting.rootRedirectURL, redirectDomains)
+                                        ? { rootRedirectURL: '' }
+                                        : {}),
+                                    })
+                                  }
+                                />
+                              </SettingListItem>
+                              <Space
+                                orientation="vertical"
+                                style={{ width: '100%', padding: '8px 0 12px' }}
+                              >
+                                <Space wrap>
+                                  <Button
+                                    loading={scanningRedirect}
+                                    disabled={busy}
+                                    onClick={() => void findRedirectSite()}
+                                    aria-label={t('pages.settings.redirectScanAction')}
+                                  >
+                                    {t('pages.settings.redirectScanAction')}
+                                  </Button>
+                                  <Typography.Text type="secondary">
+                                    {t('pages.settings.redirectScanHint')}
+                                  </Typography.Text>
+                                </Space>
+                                {redirectScan && (
+                                  <>
+                                    <Alert
+                                      type={redirectScan.recommended ? 'success' : 'warning'}
+                                      showIcon
+                                      title={
+                                        redirectScan.recommended
+                                          ? t('pages.settings.redirectScanFound', {
+                                              url: redirectScan.recommended,
+                                            })
+                                          : t('pages.settings.redirectScanEmpty')
+                                      }
+                                      description={t('pages.settings.redirectScanNote')}
+                                    />
+                                    <Table<RedirectSiteCheck>
+                                      size="small"
+                                      rowKey="url"
+                                      pagination={{ pageSize: 6, hideOnSinglePage: true }}
+                                      dataSource={redirectScan.sites}
+                                      scroll={{ x: 650 }}
+                                      columns={[
+                                        {
+                                          title: t('pages.settings.redirectScanWebsite'),
+                                          dataIndex: 'url',
+                                          key: 'url',
+                                          render: (value: string, site) => (
+                                            <Space>
+                                              <Typography.Text
+                                                ellipsis
+                                                style={{ maxWidth: 240 }}
+                                                title={value}
+                                              >
+                                                {value}
+                                              </Typography.Text>
+                                              {site.url === redirectScan.recommended && (
+                                                <Tag color="green">
+                                                  {t('pages.settings.redirectScanBest')}
+                                                </Tag>
+                                              )}
+                                            </Space>
+                                          ),
+                                        },
+                                        {
+                                          title: t('pages.settings.redirectScanResponse'),
+                                          key: 'response',
+                                          render: (_, site) => site.status || '—',
+                                        },
+                                        {
+                                          title: t('pages.settings.redirectScanLatency'),
+                                          key: 'latency',
+                                          render: (_, site) =>
+                                            site.available ? `${site.latencyMs} ms` : '—',
+                                        },
+                                        {
+                                          title: t('pages.settings.redirectScanSNI'),
+                                          key: 'sni',
+                                          render: (_, site) =>
+                                            site.sniLatencyMs ? `${site.sniLatencyMs} ms` : '—',
+                                        },
+                                        {
+                                          title: '',
+                                          key: 'choose',
+                                          render: (_, site) => (
+                                            <Button
+                                              size="small"
+                                              disabled={
+                                                !site.available ||
+                                                !!rootRedirectError(site.url, redirectDomains)
+                                              }
+                                              onClick={() =>
+                                                updateSetting({ rootRedirectURL: site.url })
+                                              }
+                                            >
+                                              {t('pages.settings.redirectScanChoose')}
+                                            </Button>
+                                          ),
+                                        },
+                                      ]}
+                                    />
+                                  </>
+                                )}
+                              </Space>
+                              <SettingListItem
+                                paddings="small"
+                                title={t('pages.settings.rootRedirectURL')}
+                              >
+                                <AutoComplete
+                                  status={redirectError ? 'error' : undefined}
+                                  maxLength={2048}
+                                  aria-label={t('pages.settings.rootRedirectURL')}
+                                  style={{ width: '100%' }}
+                                  value={allSetting.rootRedirectURL}
+                                  options={redirectSiteOptions}
+                                  showSearch={{
+                                    filterOption: (input, option) =>
+                                      (option?.value ?? '')
+                                        .toLowerCase()
+                                        .includes(input.toLowerCase()),
+                                  }}
+                                  defaultActiveFirstOption={false}
+                                  allowClear
+                                  onChange={(value) => updateSetting({ rootRedirectURL: value })}
+                                  placeholder="https://example.com/"
+                                />
+                              </SettingListItem>
+                              {allSetting.rootRedirectEnable && (
+                                <Space
+                                  orientation="vertical"
+                                  style={{ width: '100%', marginTop: 12 }}
+                                >
+                                  <Alert
+                                    showIcon
+                                    type={
+                                      redirectError
+                                        ? 'error'
+                                        : settingsDirty
+                                          ? 'warning'
+                                          : status?.running
+                                            ? 'success'
+                                            : 'warning'
+                                    }
+                                    title={
+                                      redirectError ||
+                                      (settingsDirty
+                                        ? 'Перенаправление ещё не применено'
+                                        : status?.running
+                                          ? 'Доменный шлюз работает'
+                                          : 'Доменный шлюз не запущен')
+                                    }
+                                    description={t(
+                                      'pages.settings.redirectScanRedirectDescription',
+                                    )}
+                                  />
+                                  {!redirectDomains.length && (
+                                    <Alert
+                                      type="warning"
+                                      showIcon
+                                      title="Сначала добавьте домен и настройте TLS. Для общего доступа нужны свободные порты 80 и 443."
+                                    />
+                                  )}
+                                  {status?.error && (
+                                    <Alert type="error" showIcon title={status.error} />
+                                  )}
+                                  {!redirectError &&
+                                    redirectDomains.map((name) => (
+                                      <Space key={name} wrap>
+                                        <Typography.Text code>https://{name}/</Typography.Text>
+                                        <span>→</span>
+                                        <Typography.Text ellipsis style={{ maxWidth: 320 }}>
+                                          {allSetting.rootRedirectURL}
+                                        </Typography.Text>
+                                      </Space>
+                                    ))}
+                                  <Typography.Text type="secondary">
+                                    При ошибке привязки портов или TLS изменение перенаправления
+                                    откатывается. Сохраните адрес панели перед включением.
+                                  </Typography.Text>
+                                </Space>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+          />
           {allSetting && updateSetting && (
             <Collapse
               items={[
@@ -1494,6 +1541,25 @@ export default function DomainFrontTab({
       {status?.error && (
         <Alert type="error" showIcon title={label('gatewayError')} description={status.error} />
       )}
+      <div className="domain-manager-savebar" role="region" aria-label={label('workspace.changes')}>
+        <Typography.Text type={dirty || settingsDirty ? 'warning' : 'secondary'}>
+          {label(dirty || settingsDirty ? 'unsaved' : 'workspace.saved')}
+        </Typography.Text>
+        <Button
+          type="primary"
+          loading={busy || preflighting}
+          aria-label={label('apply')}
+          disabled={
+            (!dirty && !settingsDirty) || !initialized || !!redirectError || preflighting || busy
+          }
+          onClick={() => void apply()}
+        >
+          {label('apply')}
+        </Button>
+      </div>
+      {sharingCertificate && (
+        <NodeCertificateSharing onClose={() => setSharingCertificate(false)} />
+      )}
       <Modal
         open={editing !== undefined}
         title={label('editor')}
@@ -1504,7 +1570,8 @@ export default function DomainFrontTab({
           })
         }
         forceRender
-        width={580}
+        okText={label('workspace.saveDomain')}
+        width={620}
       >
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item
@@ -1680,7 +1747,6 @@ export default function DomainFrontTab({
               label={label('origin')}
               tooltip={label('originDesc')}
               rules={[{ required: true, message: label('originRequired') }]}
-              extra={label('originDesc')}
             >
               <Input placeholder="https://origin.example.com" />
             </Form.Item>
@@ -1694,7 +1760,6 @@ export default function DomainFrontTab({
                   name="inboundIds"
                   label={label('inbounds')}
                   tooltip={label('inboundsDesc')}
-                  extra={label('inboundsDesc')}
                 >
                   <Select
                     mode="multiple"
@@ -1707,10 +1772,7 @@ export default function DomainFrontTab({
               </>
             )}
           {mode !== 'sni_only' && mode !== 'shared_sni' && mode !== 'cert_only' && (
-            <Form.Item
-              label={label('useForSubscription')}
-              tooltip={label('useForSubscriptionHelp')}
-            >
+            <Form.Item tooltip={label('useForSubscriptionHelp')}>
               <Checkbox
                 checked={primaryDomain}
                 onChange={(event) => setPrimaryDomain(event.target.checked)}
