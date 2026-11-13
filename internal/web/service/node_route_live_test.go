@@ -110,16 +110,19 @@ func startNodeRouteLiveCore(t *testing.T, binary string, cfg *singbox.Config, tc
 }
 
 func nodeRouteLiveHTTP(socksPort int, target string) (string, error) {
-	dialer, err := proxy.SOCKS5("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(socksPort)), nil, proxy.Direct)
+	deadline := time.Now().Add(5 * time.Second)
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+	dialer, err := proxy.SOCKS5("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(socksPort)), nil, &net.Dialer{})
 	if err != nil {
 		return "", err
 	}
-	conn, err := dialer.Dial("tcp", target)
+	conn, err := dialer.(proxy.ContextDialer).DialContext(ctx, "tcp", target)
 	if err != nil {
 		return "", err
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetDeadline(deadline)
 	if _, err := io.WriteString(conn, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"); err != nil {
 		return "", err
 	}
