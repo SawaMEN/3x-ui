@@ -1,138 +1,640 @@
-.domain-manager > .ant-space-item,
-.domain-manager-panel,
-.domain-manager-panel .ant-card,
-.domain-manager-panel .ant-table-wrapper {
-  width: 100%;
+.domain-hub {
+  --hub-line: var(--ant-color-border-secondary, var(--xui-outline-variant, #e7e9ee));
+  --hub-soft: var(--ant-color-fill-quaternary, var(--xui-surface-container-low, #f7f8fa));
+  --hub-bg: var(--ant-color-bg-container, var(--xui-surface, #fff));
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 1600px;
+  margin: auto;
   min-width: 0;
 }
-
-.domain-workspace.ant-card {
-  background: linear-gradient(120deg, var(--ant-color-primary-bg), var(--ant-color-bg-container) 65%);
-}
-
-.domain-workspace .ant-card-body {
-  padding: 20px;
-}
-
-.domain-workspace-heading,
-.domain-workspace-actions,
-.domain-manager-section-heading,
-.domain-manager-savebar {
+.domain-hub-header,
+.domain-hub-brand,
+.domain-section-heading,
+.domain-inventory-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
 }
-
-.domain-workspace-icon {
-  color: var(--ant-color-primary);
-  margin-inline-end: 4px;
+.domain-hub-brand {
+  justify-content: flex-start;
 }
-
-.domain-workspace-summary {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 22px;
-  row-gap: 8px;
-  margin-top: 12px;
+.domain-hub-header h3 {
+  margin: 0 0 6px;
+  letter-spacing: -0.035em;
 }
-
-.domain-workspace-summary strong {
-  font-variant-numeric: tabular-nums;
+.domain-hub-logo {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  border-radius: 16px;
+  color: var(--ant-color-primary, var(--xui-primary, #1677ff));
+  background: var(--ant-color-primary-bg, var(--xui-primary-container, #e6f4ff));
+  font-size: 27px;
 }
-
-.domain-workspace-guidance {
+.domain-service-map {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.domain-service-tile {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 10px;
+  align-items: stretch;
+  justify-content: flex-start;
+  height: auto;
+  min-width: 0;
+  padding: 18px;
+  text-align: start;
+  white-space: normal;
+  border: 1px solid var(--hub-line);
+  font: inherit;
+  cursor: pointer;
+  color: var(--xui-on-surface, inherit);
+  background: var(--hub-bg);
+  border-radius: 14px;
+  box-shadow: none;
+  gap: 12px;
 }
-
-.domain-workspace-actions {
-  border-top: 1px solid var(--ant-color-border-secondary);
-  margin-top: 16px;
-  padding-top: 14px;
+.domain-service-tile-top,
+.domain-service-tile-bottom {
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
-
-.domain-workspace-audit {
-  min-width: 180px;
+.domain-service-tile-top {
+  color: var(--ant-color-text-secondary, var(--xui-on-surface-variant, #667085));
+  font-size: 13px;
 }
-
-.domain-workspace-audit .ant-progress {
-  margin-top: 7px;
+.domain-service-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--hub-soft);
+  color: var(--ant-color-primary, var(--xui-primary, #1677ff));
 }
-
-.domain-manager-nav .ant-segmented {
+.domain-tile-arrow {
+  margin-inline-start: auto;
+  opacity: 0.5;
+}
+.domain-service-tile > strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+.domain-service-tile-bottom {
+  justify-content: space-between;
+  font-size: 12px;
+}
+.domain-service-tile-bottom .ant-tag {
+  margin: 0;
+  font-size: 11px;
+  background: var(--hub-soft);
+  border: 0;
+}
+.domain-hub-body {
+  display: grid;
+  grid-template-columns: 174px minmax(0, 1fr);
+  gap: 26px;
+  min-height: 410px;
+}
+.domain-manager-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 3px;
+}
+.domain-manager-nav > button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   width: 100%;
-  padding: 4px;
+  padding: 12px 11px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ant-color-text-secondary, var(--xui-on-surface-variant, #667085));
+  cursor: pointer;
+  text-align: start;
+  font: inherit;
+  font-size: 13px;
+  transition: background 0.15s ease;
 }
-
+.domain-manager-nav > button:hover {
+  background: var(--hub-soft);
+}
+.domain-manager-nav > button:focus-visible {
+  outline: 2px solid var(--ant-color-primary, var(--xui-primary, #1677ff));
+  outline-offset: 2px;
+}
+.domain-manager-nav > button.is-active {
+  color: var(--ant-color-primary, var(--xui-primary, #1677ff));
+  background: var(--ant-color-primary-bg, var(--xui-primary-container, #e6f4ff));
+  font-weight: 600;
+}
+.domain-manager-nav > button small {
+  margin-inline-start: auto;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.domain-nav-note {
+  margin-top: auto;
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--hub-line);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.domain-hub-content {
+  min-width: 0;
+}
+.domain-section-heading {
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.domain-section-heading h4 {
+  margin: 0 0 5px;
+  font-size: 17px;
+}
+.domain-section-heading > div {
+  flex: 1 1 260px;
+}
+.domain-section-heading .ant-typography-secondary {
+  font-size: 12px;
+}
+.domain-host-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.domain-host-toolbar > .ant-input-search {
+  max-width: 330px;
+}
+.domain-host-toolbar > .ant-select {
+  min-width: 165px;
+}
+.domain-host-toolbar > .ant-typography {
+  margin-inline-start: auto;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.domain-host-columns,
+.domain-host-flow {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.6fr) minmax(130px, 1.2fr) minmax(150px, 1.2fr) minmax(
+      120px,
+      1fr
+    ) 100px;
+  gap: 14px;
+  align-items: center;
+}
+.domain-host-columns {
+  padding: 0 16px 9px;
+  font-size: 11px;
+  color: var(--ant-color-text-tertiary, var(--xui-on-surface-variant, #667085));
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.domain-config-list {
+  border: 1px solid var(--hub-line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--hub-bg);
+}
+.domain-config-list:empty {
+  border: 0;
+}
+.domain-host-row {
+  position: relative;
+  padding: 18px 16px;
+}
+.domain-host-row + .domain-host-row {
+  border-top: 1px solid var(--hub-line);
+}
+.domain-host-row:hover {
+  background: var(--hub-soft);
+}
+.domain-host-row.is-disabled .domain-host-identity {
+  opacity: 0.6;
+}
+.domain-host-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+}
+.domain-host-identity > .anticon {
+  margin-top: 4px;
+  color: var(--ant-color-primary, var(--xui-primary, #1677ff));
+}
+.domain-host-identity > div {
+  min-width: 0;
+}
+.domain-host-name {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.domain-host-target,
+.domain-host-certificate,
+.domain-host-server {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.domain-host-target > .ant-typography,
+.domain-host-certificate > .ant-typography,
+.domain-host-server > .ant-typography {
+  font-size: 11px;
+}
+.domain-host-certificate .ant-tag,
+.domain-host-identity .ant-tag {
+  font-size: 10px;
+  margin: 0;
+  line-height: 18px;
+  padding-inline: 5px;
+}
+.domain-host-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.domain-host-buttons .ant-btn {
+  font-size: 12px;
+}
+.domain-mobile-label {
+  display: none;
+}
+.domain-host-diagnostics {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--hub-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+}
+.domain-host-workspace > .ant-pagination {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
 .domain-manager-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+  min-width: 0;
 }
-
-.domain-manager-section-heading > .ant-typography {
-  flex: 1 1 260px;
+.domain-inventory.ant-card {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
 }
-
+.domain-inventory > .ant-card-body {
+  padding: 0;
+}
+.domain-inventory-toolbar {
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.domain-inventory-toolbar > .ant-typography {
+  flex: 1 1 220px;
+  font-size: 12px;
+}
+.domain-inventory .ant-table-wrapper {
+  border: 1px solid var(--hub-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.domain-inventory .ant-table-cell {
+  font-size: 12px;
+  vertical-align: top;
+}
+.domain-inventory-history .ant-card-head {
+  display: none;
+}
+.domain-inventory-history .ant-card {
+  border: 0;
+  background: transparent;
+}
+.domain-node-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.domain-node-card {
+  border: 1px solid var(--hub-line);
+  border-radius: 12px;
+  background: var(--hub-bg);
+  padding: 16px;
+  min-width: 0;
+}
+.domain-node-card > header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid var(--hub-line);
+  padding-bottom: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.domain-node-card > header > .anticon {
+  color: var(--ant-color-primary, var(--xui-primary, #1677ff));
+}
+.domain-node-card > header > .ant-tag {
+  margin-inline-start: auto;
+}
+.domain-node-identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  padding-block: 12px;
+  font-size: 12px;
+}
+.domain-node-identity > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.domain-node-identity .anticon {
+  color: var(--ant-color-text-tertiary, var(--xui-on-surface-variant, #667085));
+}
+.domain-node-identity small {
+  color: var(--ant-color-text-secondary, var(--xui-on-surface-variant, #667085));
+}
 .domain-manager-savebar {
   position: sticky;
   bottom: 12px;
   z-index: 5;
-  padding: 12px 16px;
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--ant-border-radius-lg, 12px);
-  background: var(--ant-color-bg-container);
-  box-shadow: var(--ant-box-shadow-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--ant-color-primary-border, var(--xui-outline, #91caff));
+  border-radius: 12px;
+  padding: 14px 18px;
+  background: var(--hub-bg, var(--ant-color-bg-container, var(--xui-surface, #fff)));
+  box-shadow: var(--ant-box-shadow-secondary, 0 4px 18px #00000012);
 }
-
-.domain-manager .domain-config-table .ant-table-cell {
-  vertical-align: middle;
+.domain-manager-savebar > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
-
-.domain-manager-settings .ant-collapse-header-text {
-  font-weight: 500;
+.domain-manager-savebar .ant-typography-secondary {
+  font-size: 11px;
 }
-
-@media (max-width: 620px) {
-  .domain-workspace .ant-card-body {
-    padding: 14px;
+.domain-drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.domain-editor-form .ant-tabs-tabpane {
+  padding-top: 12px;
+}
+.domain-editor-form .ant-form-item-extra {
+  font-size: 12px;
+}
+.domain-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.domain-create-option {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--xui-outline-variant, #ddd);
+  color: var(--xui-on-surface, inherit);
+  background: var(--xui-surface, #fff);
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 12px;
+  grid-template-rows: auto auto;
+  gap: 8px;
+  align-items: start;
+  height: auto;
+  min-height: 118px;
+  padding: 16px;
+  white-space: normal;
+  text-align: start;
+  border-radius: 12px;
+}
+.domain-create-icon {
+  grid-row: 1/3;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  font-size: 20px;
+  background: var(--ant-color-primary-bg, var(--xui-primary-container, #e6f4ff));
+  color: var(--ant-color-primary, var(--xui-primary, #1677ff));
+}
+.domain-create-option strong {
+  grid-column: 2;
+  font-size: 13px;
+}
+.domain-create-description {
+  grid-column: 2/4;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ant-color-text-secondary, var(--xui-on-surface-variant, #667085));
+}
+.domain-create-arrow {
+  grid-column: 3;
+  grid-row: 1;
+  font-size: 11px;
+  margin-top: 3px;
+}
+@media (max-width: 1250px) {
+  .domain-host-columns {
+    display: none;
   }
-
-  .domain-workspace-summary {
-    column-gap: 14px;
+  .domain-host-flow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-
-  .domain-workspace-actions {
-    align-items: stretch;
+  .domain-host-identity {
+    grid-column: 1/-1;
+    padding-inline-end: 110px;
   }
-
-  .domain-workspace-audit,
-  .domain-workspace-audit .ant-btn {
-    width: 100%;
-    min-width: 0;
+  .domain-host-buttons {
+    position: absolute;
+    inset-inline-end: 16px;
+    top: 18px;
   }
-
-  .domain-manager-nav .ant-segmented-group {
+  .domain-mobile-label {
+    display: block;
+    font-size: 10px;
+    color: var(--ant-color-text-tertiary, var(--xui-on-surface-variant, #667085));
+    margin-top: 4px;
+  }
+  .domain-node-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .domain-hub {
+    gap: 16px;
+  }
+  .domain-hub-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .domain-hub-header h3 {
+    font-size: 22px;
+  }
+  .domain-hub-logo {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    border-radius: 12px;
+    font-size: 23px;
+  }
+  .domain-hub-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .domain-manager-nav {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
   }
-
-  .domain-manager-nav .ant-segmented-item-label {
-    padding-inline: 6px;
-    white-space: normal;
+  .domain-manager-nav > button {
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px 4px;
+    font-size: 11px;
+    justify-content: center;
   }
-
+  .domain-manager-nav > button small,
+  .domain-nav-note {
+    display: none;
+  }
+  .domain-service-map {
+    gap: 7px;
+  }
+  .domain-service-tile {
+    padding: 11px;
+    gap: 9px;
+    border-radius: 11px;
+  }
+  .domain-service-tile-top {
+    font-size: 11px;
+    gap: 5px;
+  }
+  .domain-service-tile > strong {
+    font-size: 14px;
+  }
+  .domain-service-tile-bottom {
+    font-size: 10px;
+  }
+  .domain-service-tile-bottom .ant-tag,
+  .domain-tile-arrow {
+    display: none;
+  }
+  .domain-inventory-toolbar > .ant-space {
+    width: 100%;
+  }
   .domain-manager-savebar {
+    padding: 11px 12px;
     bottom: 8px;
-    padding: 10px 12px;
   }
+  .domain-manager-savebar .ant-typography-secondary {
+    display: none;
+  }
+}
+@media (max-width: 480px) {
+  .domain-service-icon {
+    display: none;
+  }
+  .domain-service-tile {
+    padding: 11px 8px;
+  }
+  .domain-host-toolbar {
+    flex-wrap: wrap;
+  }
+  .domain-host-toolbar > .ant-input-search {
+    max-width: none;
+  }
+  .domain-host-toolbar > .ant-select {
+    flex: 1;
+  }
+  .domain-host-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .domain-host-server {
+    grid-column: 1/-1;
+  }
+  .domain-host-row {
+    padding: 15px 12px;
+  }
+  .domain-host-buttons {
+    inset-inline-end: 12px;
+    top: 15px;
+  }
+  .domain-create-grid {
+    grid-template-columns: 1fr;
+  }
+  .domain-create-option {
+    min-height: 90px;
+  }
+}
 
-  .domain-manager-settings .ant-collapse-extra {
-    max-width: 40%;
-    overflow-wrap: anywhere;
-  }
+.domain-service-tile:hover,
+.domain-create-option:hover {
+  border-color: var(--xui-primary, #1677ff);
+  background: var(--xui-surface-container-low, #f7f8fa);
+}
+.domain-service-tile:focus-visible,
+.domain-create-option:focus-visible {
+  outline: 2px solid var(--xui-primary, #1677ff);
+  outline-offset: 3px;
+}
+
+.domain-sni-pending {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.domain-sni-pending > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.domain-sni-pending > div > button {
+  margin-inline-start: auto;
+}
+
+.domain-panel-identity.ant-card {
+  border: 0;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.domain-panel-identity > .ant-card-body {
+  padding: 0;
 }

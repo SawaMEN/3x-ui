@@ -20,7 +20,9 @@ export default function PanelDomainCertificate({
   allSetting,
   disabled,
   onSwitch,
+  compact = false,
 }: {
+  compact?: boolean;
   status?: DomainFrontStatus;
   allSetting: AllSetting;
   disabled: boolean;
@@ -77,7 +79,11 @@ export default function PanelDomainCertificate({
     }
   }
   return (
-    <Card size="small" title={label('title')}>
+    <Card
+      size="small"
+      title={compact ? undefined : label('title')}
+      className={compact ? 'domain-panel-identity' : undefined}
+    >
       {context}
       <Space orientation="vertical" style={{ width: '100%' }}>
         <Typography.Text>

@@ -442,7 +442,9 @@ export default function SettingsPage() {
 
                     <Col span={24}>
                       <Suspense fallback={<Spin size="large" />}>
-                        {activeSlug === 'gateway' ? (
+                        {activeSlug === 'gateway' ||
+                        (activeSlug === 'advanced' &&
+                          getAdditionalSettingsTab(location.hash) === 'domains') ? (
                           categoryBody
                         ) : (
                           <Card hoverable>{categoryBody}</Card>

@@ -6,6 +6,7 @@ import {
   Alert,
   Button,
   Card,
+  Collapse,
   Empty,
   Modal,
   Popconfirm,
@@ -21,7 +22,10 @@ import { HttpUtil } from '@/utils';
 import { CertificateInventorySchema } from '@/schemas/domain-certificates';
 import CertificateAuditPanel from './CertificateAuditPanel';
 
-export default function CertificateInventoryPanel() {
+export default function CertificateInventoryPanel({
+  compact = false,
+  onShare,
+}: { compact?: boolean; onShare?: () => void } = {}) {
   const { t, i18n } = useTranslation();
   const label = (key: string) => t('pages.settings.domains.certificateInventory.' + key);
   const [renewing, setRenewing] = useState<string>();
@@ -77,19 +81,38 @@ export default function CertificateInventoryPanel() {
       {contextHolder}
       <Card
         size="small"
-        title={label('title')}
+        className={compact ? 'domain-inventory' : undefined}
+        title={compact ? undefined : label('title')}
         extra={
-          <Button
-            icon={<ReloadOutlined />}
-            size="small"
-            loading={certificates.isFetching}
-            onClick={() => void certificates.refetch()}
-          >
-            {label('refresh')}
-          </Button>
+          !compact && (
+            <Button
+              icon={<ReloadOutlined />}
+              size="small"
+              loading={certificates.isFetching}
+              onClick={() => void certificates.refetch()}
+            >
+              {label('refresh')}
+            </Button>
+          )
         }
       >
-        <Typography.Paragraph type="secondary">{label('hint')}</Typography.Paragraph>
+        {compact && (
+          <div className="domain-inventory-toolbar">
+            <Typography.Text type="secondary">{label('hint')}</Typography.Text>
+            <Space wrap>
+              <Button onClick={onShare}>
+                {t('pages.settings.domains.workspace.takeNodeCertificate')}
+              </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                aria-label={label('refresh')}
+                loading={certificates.isFetching}
+                onClick={() => void certificates.refetch()}
+              />
+            </Space>
+          </div>
+        )}
+        {!compact && <Typography.Paragraph type="secondary">{label('hint')}</Typography.Paragraph>}
         {certificates.error && (
           <Alert
             type="error"
@@ -111,8 +134,26 @@ export default function CertificateInventoryPanel() {
           rowKey="id"
           size="small"
           loading={certificates.isPending}
-          scroll={{ x: 780 }}
-          pagination={{ pageSize: 8, showSizeChanger: false }}
+          scroll={{ x: 600 }}
+          pagination={{ pageSize: 8, showSizeChanger: false, hideOnSinglePage: true }}
+          expandable={{
+            expandedRowRender: (item) => (
+              <Space orientation="vertical" size={6}>
+                <Typography.Text strong>{label('certificatePath')}</Typography.Text>
+                <Typography.Text copyable={!!item.certFile} style={{ overflowWrap: 'anywhere' }}>
+                  {item.certFile || label('remotePath')}
+                </Typography.Text>
+                <Typography.Text type="secondary">{item.usedBy.join(', ')}</Typography.Text>
+                {item.ports.length > 0 && (
+                  <Space>
+                    <Typography.Text code>TCP {item.ports.join(', ')}</Typography.Text>
+                    <Typography.Text type="secondary">{label('temporaryPorts')}</Typography.Text>
+                  </Space>
+                )}
+                {item.warning && <Typography.Text type="warning">{item.warning}</Typography.Text>}
+              </Space>
+            ),
+          }}
           locale={{ emptyText: <Empty description={label('empty')} /> }}
           dataSource={certificates.data?.items ?? []}
           columns={[
@@ -122,7 +163,7 @@ export default function CertificateInventoryPanel() {
               render: (_value, item) => (
                 <Space orientation="vertical" size={2}>
                   <Typography.Text strong>{item.name}</Typography.Text>
-                  {item.names.length > 0 && (
+                  {item.names.some((name) => name !== item.name) && (
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                       SAN: {item.names.join(', ')}
                     </Typography.Text>
@@ -141,7 +182,6 @@ export default function CertificateInventoryPanel() {
               render: (_value, item) => (
                 <Space orientation="vertical" size={2}>
                   <Tag>{label('source.' + item.manager)}</Tag>
-                  <Typography.Text type="secondary">{item.usedBy.join(', ')}</Typography.Text>
                 </Space>
               ),
             },
@@ -159,7 +199,7 @@ export default function CertificateInventoryPanel() {
                           : 'warning'
                     }
                   >
-                    {item.state}
+                    {t('pages.settings.domains.state.' + item.state, { defaultValue: item.state })}
                   </Tag>
                   {item.expiresAt > 0 && (
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -180,14 +220,6 @@ export default function CertificateInventoryPanel() {
               render: (_value, item) => (
                 <Space orientation="vertical" size={2}>
                   <Tag>{label('challenge.' + item.challenge)}</Tag>
-                  {item.ports.length > 0 ? (
-                    <Space orientation="vertical" size={0}>
-                      <Typography.Text code>TCP {item.ports.join(', ')}</Typography.Text>
-                      <Typography.Text type="secondary">{label('temporaryPorts')}</Typography.Text>
-                    </Space>
-                  ) : (
-                    <Typography.Text type="secondary">{label('noPorts')}</Typography.Text>
-                  )}
                   <Typography.Text type="secondary">
                     {item.manager === 'certbot' || item.manager === 'acme.sh'
                       ? label('panelSchedule')
@@ -195,7 +227,6 @@ export default function CertificateInventoryPanel() {
                         ? label('automatic')
                         : label('externalControl')}
                   </Typography.Text>
-                  {item.warning && <Typography.Text type="warning">{item.warning}</Typography.Text>}
                 </Space>
               ),
             },
@@ -237,18 +268,6 @@ export default function CertificateInventoryPanel() {
                   </Popconfirm>
                 ) : null,
             },
-            {
-              title: label('certificatePath'),
-              key: 'path',
-              render: (_value, item) =>
-                item.certFile ? (
-                  <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>
-                    {item.certFile}
-                  </Typography.Text>
-                ) : (
-                  <Typography.Text type="secondary">{label('remotePath')}</Typography.Text>
-                ),
-            },
           ]}
         />
       </Card>
@@ -271,7 +290,16 @@ export default function CertificateInventoryPanel() {
           />
         </Modal>
       )}
-      <CertificateAuditPanel />
+      <Collapse
+        className="domain-inventory-history"
+        items={[
+          {
+            key: 'history',
+            label: t('pages.settings.domains.certificateInventory.audit.title'),
+            children: <CertificateAuditPanel />,
+          },
+        ]}
+      />
     </>
   );
 }

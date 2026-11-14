@@ -75,7 +75,7 @@ function fixture(existing = false) {
       HttpResponse.json({
         success: true,
         obj: {
-          items: status().certificates.map((cert) => ({
+          items: [...status().certificates, ...status().existingCertificates].map((cert) => ({
             id: cert.name,
             name: cert.name,
             names: [cert.name],
@@ -159,17 +159,30 @@ function fixture(existing = false) {
 }
 
 async function openDomainSection(name: 'Domains' | 'Certificates' | 'SNI and nodes' | 'Settings') {
-  await screen.findByText('Domain control center');
-  const navigation = document.querySelector('.domain-manager-nav');
-  const option = Array.from(navigation?.querySelectorAll('label') ?? []).find(
-    (element) => element.textContent?.trim() === name,
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Add domain' })).toHaveProperty('disabled', false),
   );
-  if (!option) throw new Error('Missing domain section: ' + name);
-  fireEvent.click(option);
+  const openDrawer = document.querySelector('.ant-drawer-open .ant-drawer-close');
+  if (openDrawer) {
+    if (name === 'Settings' && screen.queryByRole('tab', { name: 'Automatic TLS' })) return;
+    fireEvent.click(openDrawer);
+    await waitFor(() => expect(document.querySelector('.ant-drawer-open')).toBeNull());
+  }
+  const nav = document.querySelector('.domain-manager-nav')!;
+  const button = Array.from(nav.querySelectorAll('button')).find(
+    (b) => b.getAttribute('aria-label') === name,
+  );
+  if (!button) throw new Error('Missing domain section ' + name);
+  fireEvent.click(button);
+}
+async function tool(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Checks and refresh' }));
+  fireEvent.click(await screen.findByText(name));
 }
 
 async function findDomainEmail() {
   await openDomainSection('Settings');
+  fireEvent.click(await screen.findByRole('tab', { name: 'Automatic TLS' }));
   return screen.findByDisplayValue('old@example.com');
 }
 
@@ -238,7 +251,7 @@ describe('domain and TLS dashboard', () => {
     renderWithProviders(<DomainFrontTab />);
     await openDomainSection('Settings');
     expect(reads).toBe(0);
-    fireEvent.click(screen.getByText('Automatic DNS-01 validation'));
+    fireEvent.click(screen.getByRole('tab', { name: 'DNS-01' }));
     const zone = await screen.findByRole('textbox', { name: 'DNS zone' });
     fireEvent.change(zone, { target: { value: 'edited.example.com' } });
     await waitFor(() => expect(reads).toBe(1));
@@ -255,6 +268,7 @@ describe('domain and TLS dashboard', () => {
     renderWithProviders(<DomainFrontTab />);
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     expect(screen.queryByRole('button', { name: 'Change cover site' })).toBeNull();
+    fireEvent.click(await screen.findByRole('tab', { name: 'Cover site' }));
     expect(await screen.findByRole('combobox', { name: 'Website template' })).toBeTruthy();
     expect(f.applied).toBeUndefined();
   });
@@ -333,21 +347,19 @@ describe('domain and TLS dashboard', () => {
   it('shows certificate lifetime, preserves edited settings on refresh and applies the edited configuration', async () => {
     const f = fixture();
     renderWithProviders(<DomainFrontTab />);
-    expect(await screen.findByText('sub.example.com')).toBeTruthy();
+    expect((await screen.findAllByText('sub.example.com')).length).toBeGreaterThan(0);
     await openDomainSection('Certificates');
     expect(await screen.findByText(/45 days/)).toBeTruthy();
     const email = await findDomainEmail();
     fireEvent.change(email, { target: { value: 'edited@example.com' } });
     const initialReads = f.reads;
-    fireEvent.click(screen.getByRole('button', { name: /Refresh status/ }));
+    await tool('Refresh status');
     await waitFor(() => expect(f.reads).toBeGreaterThan(initialReads));
     expect(screen.getByDisplayValue('edited@example.com')).toBeTruthy();
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() => expect(f.applied?.email).toBe('edited@example.com'));
     await waitFor(() =>
-      expect(
-        (screen.getByText('Save and apply').closest('button') as HTMLButtonElement).disabled,
-      ).toBe(true),
+      expect(screen.queryByRole('button', { name: 'Save and apply' })).toBeNull(),
     );
   });
 
@@ -366,9 +378,10 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     await openDomainSection('Certificates');
-    fireEvent.click(await screen.findByText('Existing certificates'));
     expect(await screen.findByText(/Installer issuer/)).toBeTruthy();
-    expect(screen.getByText('/root/cert/existing/fullchain.pem')).toBeTruthy();
+    const issuer = await screen.findByText(/Installer issuer/);
+    fireEvent.click(issuer.closest('tr')!.querySelector('.ant-table-row-expand-icon')!);
+    expect(await screen.findByText('/root/cert/existing/fullchain.pem')).toBeTruthy();
     const address = (await screen.findByRole('textbox', {
       name: 'Public subscription address',
     })) as HTMLInputElement;
@@ -385,7 +398,7 @@ describe('domain and TLS dashboard', () => {
     const f = fixture();
     renderWithProviders(<DomainFrontTab />);
     await findDomainEmail();
-    fireEvent.click(screen.getByText('Advanced network and testing settings'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Network and ports' }));
     const gateway = await screen.findByRole('spinbutton', { name: 'HTTPS gateway port' });
     expect(
       screen.queryByRole('spinbutton', { name: 'External HTTPS port (NAT / proxy)' }),
@@ -410,13 +423,13 @@ describe('domain and TLS dashboard', () => {
     renderWithProviders(<DomainFrontTab />);
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await screen.findByRole('dialog');
-    fireEvent.click(screen.getByText('Advanced: TLS and status'));
+    fireEvent.click(screen.getByRole('tab', { name: 'TLS and state' }));
     chooseSelectOption('tls', title);
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     await waitFor(() =>
-      expect(
-        document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
-      ).toContain('sub.example.com'),
+      expect(document.querySelector('.domain-config-list')?.textContent).toContain(
+        'sub.example.com',
+      ),
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() => expect(f.applied?.domains[0].tls).toBe(tlsMode));
@@ -430,6 +443,7 @@ describe('domain and TLS dashboard', () => {
     await findDomainEmail();
     await openDomainSection('Domains');
     fireEvent.click(screen.getByRole('button', { name: /Add domain/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Subscription' }));
     const input = screen.getByPlaceholderText('sub.example.com');
     const help = document.querySelector('label[for="name"] .anticon-question-circle');
     expect(help).toBeTruthy();
@@ -443,9 +457,9 @@ describe('domain and TLS dashboard', () => {
     fireEvent.change(input, { target: { value: 'new.example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     await waitFor(() =>
-      expect(
-        document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
-      ).toContain('new.example.com'),
+      expect(document.querySelector('.domain-config-list')?.textContent).toContain(
+        'new.example.com',
+      ),
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() => expect(f.applied?.subscriptionDomain).toBe('new.example.com'));
@@ -464,14 +478,14 @@ describe('domain and TLS dashboard', () => {
     renderWithProviders(<DomainFrontTab />);
     await findDomainEmail();
     await openDomainSection('Domains');
-    fireEvent.click(screen.getByRole('button', { name: /Audit all DNS\/TLS/ }));
+    await tool('Audit all DNS/TLS');
     await waitFor(() =>
       expect(f.checked).toEqual(expect.arrayContaining(['sub.example.com', 'cdn.example.org'])),
     );
     const search = screen.getByRole('searchbox', { name: 'Search domains' });
     fireEvent.change(search, { target: { value: 'cdn.example.org' } });
     await waitFor(() => {
-      const table = document.querySelector('.domain-config-table .ant-table-tbody');
+      const table = document.querySelector('.domain-config-list');
       expect(table?.textContent).toContain('cdn.example.org');
       expect(table?.textContent).not.toContain('sub.example.com');
     });
@@ -482,7 +496,7 @@ describe('domain and TLS dashboard', () => {
     const f = fixture();
     renderWithProviders(<DomainFrontTab />);
     await findDomainEmail();
-    fireEvent.click(screen.getByRole('button', { name: 'Check readiness' }));
+    await tool('Check readiness');
     expect(await screen.findByText('Configuration is ready to apply')).toBeTruthy();
     expect(f.applied).toBeUndefined();
   });
@@ -598,7 +612,7 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     await openDomainSection('Settings');
-    fireEvent.click(screen.getByText('Domain website redirect'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Redirect' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
     expect(await screen.findByText(/Fastest website: https:\/\/ya.ru\//)).toBeTruthy();
     expect(update).not.toHaveBeenCalled();
@@ -645,7 +659,7 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     await openDomainSection('Settings');
-    fireEvent.click(screen.getByText('Domain website redirect'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Redirect' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Find neighboring websites' }));
     expect(
       (await screen.findAllByText(/No suitable neighboring websites were found/)).length,
@@ -675,7 +689,7 @@ describe('domain and TLS dashboard', () => {
       </MemoryRouter>,
     );
     await findDomainEmail();
-    fireEvent.click(screen.getByText('Domain website redirect'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Redirect' }));
     const destination = await screen.findByDisplayValue('https://example.com/');
     expect(destination.closest('.domain-redirect-settings')).toBeTruthy();
     fireEvent.change(destination, { target: { value: 'https://new.example.com/' } });
@@ -714,9 +728,9 @@ describe('domain and TLS dashboard', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     await waitFor(() =>
-      expect(
-        document.querySelector('.domain-config-table .ant-table-tbody')?.textContent,
-      ).toContain('Subscription only'),
+      expect(document.querySelector('.domain-config-list')?.textContent).toContain(
+        'Subscription only',
+      ),
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() =>
@@ -760,5 +774,71 @@ describe('domain and TLS dashboard', () => {
     expect(screen.getByText('DNS addresses: 203.0.113.8')).toBeTruthy();
     await openDomainSection('Certificates');
     expect(await screen.findByText('Test issuer')).toBeTruthy();
+  });
+  it('keeps one apply action and retains the draft when moving between sections and settings', async () => {
+    const f = fixture();
+    renderWithProviders(<DomainFrontTab />);
+    const email = await findDomainEmail();
+    fireEvent.change(email, { target: { value: 'retained@example.com' } });
+    expect(screen.getAllByRole('button', { name: 'Save and apply' })).toHaveLength(1);
+    await openDomainSection('Certificates');
+    expect(screen.getAllByRole('button', { name: 'Save and apply' })).toHaveLength(1);
+    await openDomainSection('Settings');
+    expect(await screen.findByDisplayValue('retained@example.com')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(f.applied?.email).toBe('retained@example.com'));
+    expect(screen.queryByRole('button', { name: 'Save and apply' })).toBeNull();
+  });
+
+  it('clears an incompatible filter when following the subscription map tile', async () => {
+    fixture();
+    renderWithProviders(<DomainFrontTab />);
+    await openDomainSection('Domains');
+    const filter = screen.getByRole('combobox', { name: 'Filter by domain mode or health' });
+    fireEvent.mouseDown(filter);
+    fireEvent.click(
+      await screen.findByText('Direct', { selector: '.ant-select-item-option-content' }),
+    );
+    expect(document.querySelector('.domain-config-list')?.textContent).not.toContain(
+      'sub.example.com',
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Subscription.*sub.example.com/ }));
+    expect(document.querySelector('.domain-config-list')?.textContent).toContain('sub.example.com');
+  });
+
+  it('opens the tab containing invalid fields instead of leaving errors hidden', async () => {
+    fixture();
+    renderWithProviders(<DomainFrontTab />);
+    await openDomainSection('Domains');
+    fireEvent.click(screen.getByRole('button', { name: 'Add domain' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Direct / proxy' }));
+    fireEvent.change(screen.getByPlaceholderText('sub.example.com'), {
+      target: { value: 'new.example.com' },
+    });
+    fireEvent.click(screen.getByRole('tab', { name: 'TLS and state' }));
+    chooseSelectOption('tls', 'Own certificate — manual');
+    await screen.findByPlaceholderText('/etc/ssl/fullchain.pem');
+    fireEvent.click(screen.getByRole('tab', { name: 'Domain and destination' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'TLS and state' }).getAttribute('aria-selected')).toBe(
+        'true',
+      ),
+    );
+    expect(screen.getByPlaceholderText('/etc/ssl/fullchain.pem')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Save and apply' })).toBeNull();
+  });
+  it('keeps configured SNI domains visible while their certificate is pending', async () => {
+    const f = fixture();
+    f.config.domains[0].mode = 'shared_sni';
+    renderWithProviders(<DomainFrontTab />);
+    await openDomainSection('SNI and nodes');
+    const panel = screen.getByTestId('domain-panel-sni');
+    expect(panel.textContent).toContain('sub.example.com');
+    expect(panel.textContent).toContain('Awaiting certificate');
+    fireEvent.click(
+      Array.from(panel.querySelectorAll('button')).find((button) => button.textContent === 'Edit')!,
+    );
+    expect(await screen.findByRole('dialog')).toBeTruthy();
   });
 });

@@ -1,4 +1,4 @@
-import { Alert, Modal, Space } from 'antd';
+import { Alert, Drawer, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNodesQuery } from '@/api/queries/useNodesQuery';
 import CoverCertificateFleet from '@/pages/manager/CoverCertificateFleet';
@@ -10,12 +10,12 @@ export default function NodeCertificateSharing({ onClose }: { onClose: () => voi
   const { nodes, loading, fetched, fetchError } = useNodesQuery();
   const label = (key: string) => t('pages.settings.domains.workspace.' + key);
   return (
-    <Modal open title={label('takeNodeCertificate')} onCancel={onClose} footer={null} width={860}>
+    <Drawer open title={label('takeNodeCertificate')} onClose={onClose} size={860} destroyOnHidden>
       <Space orientation="vertical" style={{ width: '100%' }}>
         {fetchError && <Alert type="error" showIcon title={fetchError} />}
         {loading && !fetched && <Alert type="info" showIcon title={label('loadingNodes')} />}
         {fetched && !fetchError && <CoverCertificateFleet nodes={nodes} defaultRecipientId={0} />}
       </Space>
-    </Modal>
+    </Drawer>
   );
 }
