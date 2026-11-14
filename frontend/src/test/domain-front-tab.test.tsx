@@ -286,7 +286,10 @@ describe('domain and TLS dashboard', () => {
         http.get('*/panel/api/domains/cover-sites', () =>
           HttpResponse.json({
             success: true,
-            obj: [{ nodeId: 2, domain: 'web.example.org' }],
+            obj: {
+              sites: [{ nodeId: 2, domain: 'web.example.org' }],
+              nodes: [{ nodeId: 2, nodeName: 'Germany', state: 'ready' }],
+            },
           }),
         ),
         http.get('*/panel/api/domains/certificates/fleet', () =>

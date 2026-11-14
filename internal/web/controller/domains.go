@@ -88,6 +88,11 @@ func (a *DomainController) localCoverSites(c *gin.Context) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
+	if c.Query("certificates") == "1" {
+		sites, err := service.LocalCoverCertificateSources()
+		jsonObj(c, sites, err)
+		return
+	}
 	sites, err := service.LocalManagedCoverSites()
 	jsonObj(c, sites, err)
 }
@@ -158,6 +163,11 @@ func (a *DomainController) coverSites(c *gin.Context) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
+	if c.Query("certificates") == "1" {
+		report, err := service.CoverCertificateSources(c.Request.Context())
+		jsonObj(c, report, err)
+		return
+	}
 	sites, err := service.ManagedCoverSites(c.Request.Context())
 	jsonObj(c, sites, err)
 }

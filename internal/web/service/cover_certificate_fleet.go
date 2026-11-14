@@ -79,7 +79,7 @@ func ExportLocalCoverCertificate(ctx context.Context, domain string) (runtime.TL
 	if err != nil {
 		return empty, err
 	}
-	sites, err := LocalManagedCoverSites()
+	sites, err := LocalCoverCertificateSources()
 	if err != nil {
 		return empty, err
 	}
@@ -98,7 +98,7 @@ func ExportLocalCoverCertificate(ctx context.Context, domain string) (runtime.TL
 		return empty, err
 	}
 	for _, cert := range inventory {
-		if cert.Name != name || cert.Source != "gateway" || cert.CertFile == "" || cert.KeyFile == "" {
+		if cert.Name != name || (cert.Source != "gateway" && cert.Source != "telemt") || cert.CertFile == "" || cert.KeyFile == "" {
 			continue
 		}
 		chain, err := readDistributedSource(cert.CertFile)
@@ -145,12 +145,12 @@ func SaveCoverCertificateFleet(ctx context.Context, source int, domain string, n
 		}
 	}
 	// Only discover public site metadata. Never obtain key material in this UI request.
-	sites, err := ManagedCoverSites(ctx)
+	report, err := CoverCertificateSources(ctx)
 	if err != nil {
 		return nil, err
 	}
 	found := false
-	for _, site := range sites {
+	for _, site := range report.Sites {
 		if site.NodeID == source && site.Domain == name {
 			found = true
 			break

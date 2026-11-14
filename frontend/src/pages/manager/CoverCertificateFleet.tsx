@@ -1,11 +1,21 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Card, Select, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Collapse, List, Select, Space, Table, Tag, Typography } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
+import { z } from 'zod';
 import type { NodeRecord } from '@/schemas/node';
 import { HttpUtil } from '@/utils';
 
-type Site = { nodeId: number; domain: string };
+const SourceSiteSchema = z.object({ nodeId: z.number().int().nonnegative(), domain: z.string() });
+const SourceReportSchema = z.object({
+  sites: z.array(SourceSiteSchema),
+  nodes: z.array(
+    z.object({ nodeId: z.number().int().positive(), nodeName: z.string(), state: z.string() }),
+  ),
+});
+type Site = z.infer<typeof SourceSiteSchema>;
+type SourceReport = z.infer<typeof SourceReportSchema> & { legacy?: boolean };
 type Fleet = {
   sourceNodeId: number;
   domain: string;
@@ -33,15 +43,20 @@ export default function CoverCertificateFleet({
       ? t('Основной сервер', 'Main server')
       : nodes.find((n) => n.id === id)?.name || `#${id}`;
   const sites = useQuery({
-    queryKey: ['manager', 'cover-sites'],
-    queryFn: async (): Promise<Site[]> => {
-      const res = await HttpUtil.get<Site[]>('/panel/api/domains/cover-sites', undefined, {
+    queryKey: ['manager', 'certificate-sources'],
+    queryFn: async (): Promise<SourceReport> => {
+      const res = await HttpUtil.get('/panel/api/domains/cover-sites?certificates=1', undefined, {
         silent: true,
       });
       if (!res?.success)
         throw new Error(res?.msg || t('Не удалось загрузить сайты', 'Unable to load sites'));
-      return res.obj || [];
+      // An older main panel ignores the query and returns the template list.
+      // Keep the UI usable, but explain that its node diagnostics are missing.
+      if (Array.isArray(res.obj))
+        return { sites: z.array(SourceSiteSchema).parse(res.obj), nodes: [], legacy: true };
+      return SourceReportSchema.parse(res.obj);
     },
+    retry: false,
     refetchInterval: 30_000,
   });
   const fleet = useQuery({
@@ -59,7 +74,7 @@ export default function CoverCertificateFleet({
     refetchInterval: 5_000,
   });
   const choices = new Map<string, Site>();
-  for (const site of sites.data || []) choices.set(`${site.nodeId}:${site.domain}`, site);
+  for (const site of sites.data?.sites || []) choices.set(`${site.nodeId}:${site.domain}`, site);
   for (const row of fleet.data || [])
     choices.set(`${row.sourceNodeId}:${row.domain}`, {
       nodeId: row.sourceNodeId,
@@ -123,10 +138,48 @@ export default function CoverCertificateFleet({
   for (const id of recipients)
     if (!recipientOptions.some((n) => n.value === id))
       recipientOptions.push({ value: id, label: name(id) });
+  const sourceStates: Record<string, string> = {
+    ready: t('Сайты найдены', 'Sites found'),
+    empty: t(
+      'Нет сайтов SNI / Telemt WEB. Если сайт на ноде есть — обновите её панель.',
+      'No SNI / Telemt WEB sites. Update the node panel if its website exists.',
+    ),
+    update_required: t(
+      'Обновите панель на этой ноде: API источников недоступен.',
+      'Update this node panel: the source API is unavailable.',
+    ),
+    access_denied: t(
+      'Нет доступа. Проверьте API-токен и его права на ноде.',
+      'Access denied. Check the node API token and its permissions.',
+    ),
+    https_required: t(
+      'Для получения ключа настройте HTTPS с проверкой сертификата в подключении ноды.',
+      'Configure verified HTTPS in the node connection before transferring its key.',
+    ),
+    direct_required: t(
+      'Нужно прямое подключение этой ноды к основной панели.',
+      'Connect this node directly to the main panel.',
+    ),
+    unavailable: t(
+      'Нода не ответила. Проверьте адрес, доступность и TLS подключения.',
+      'Node did not respond. Check its address, connectivity and TLS.',
+    ),
+  };
+  const sourceNodes = sites.data?.nodes ?? [];
+  const sourceProblems = sourceNodes.filter((node) => node.state !== 'ready');
   return (
     <Card
       size="small"
       title={t('Сертификат сайта для других нод', 'Share a site certificate with nodes')}
+      extra={
+        <Button
+          icon={<ReloadOutlined />}
+          loading={sites.isFetching}
+          disabled={saving}
+          onClick={() => void sites.refetch()}
+          aria-label={t('Обновить источники сертификатов', 'Refresh certificate sources')}
+        />
+      }
     >
       <Space orientation="vertical" style={{ width: '100%' }}>
         <Typography.Paragraph>
@@ -135,6 +188,55 @@ export default function CoverCertificateFleet({
             'Choose your cover site and recipient nodes. The panel securely delivers the certificate and key and updates copies after renewal. DNS keeps pointing to the website server; DNS-01 on the main server is unnecessary.',
           )}
         </Typography.Paragraph>
+        {sites.data?.legacy && (
+          <Alert
+            type="warning"
+            showIcon
+            title={t(
+              'Обновите основную панель: она вернула старый список сайтов без результатов опроса нод.',
+              'Update the main panel: it returned a legacy site list without node discovery results.',
+            )}
+          />
+        )}
+        {sites.data && !sites.data.legacy && sourceNodes.length === 0 && (
+          <Alert
+            type="info"
+            showIcon
+            title={t(
+              'Нет включённых подключённых нод. Добавьте или включите ноду в разделе «Ноды».',
+              'No enabled connected nodes. Add or enable one in Nodes.',
+            )}
+          />
+        )}
+        {sourceNodes.length > 0 && (
+          <Collapse
+            defaultActiveKey={sourceProblems.length ? ['discovery'] : []}
+            items={[
+              {
+                key: 'discovery',
+                label: t('Проверка нод-источников', 'Source node discovery'),
+                children: (
+                  <List
+                    size="small"
+                    dataSource={sourceNodes}
+                    renderItem={(node) => (
+                      <List.Item>
+                        <Space orientation="vertical" size={2}>
+                          <Typography.Text strong>
+                            {node.nodeName || name(node.nodeId)}
+                          </Typography.Text>
+                          <Typography.Text type={node.state === 'ready' ? 'success' : 'warning'}>
+                            {sourceStates[node.state] || sourceStates.unavailable}
+                          </Typography.Text>
+                        </Space>
+                      </List.Item>
+                    )}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
         <Select
           aria-label={t('Сайт-источник сертификата', 'Certificate source site')}
           placeholder={t('Выберите сайт и сервер', 'Choose site and server')}

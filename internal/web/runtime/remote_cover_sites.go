@@ -16,7 +16,15 @@ type RemoteCoverSite struct {
 }
 
 func (r *Remote) ListLocalCoverSites(ctx context.Context) ([]RemoteCoverSite, error) {
-	response, err := r.do(ctx, http.MethodGet, "panel/api/domains/cover-sites/local", nil)
+	return r.listLocalCoverSites(ctx, "panel/api/domains/cover-sites/local")
+}
+
+func (r *Remote) ListLocalCoverCertificateSources(ctx context.Context) ([]RemoteCoverSite, error) {
+	return r.listLocalCoverSites(ctx, "panel/api/domains/cover-sites/local?certificates=1")
+}
+
+func (r *Remote) listLocalCoverSites(ctx context.Context, path string) ([]RemoteCoverSite, error) {
+	response, err := r.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -239,6 +239,21 @@ func TestCoverCertificateFleetDeliveryAndRenewal(t *testing.T) {
 	if len(copies) != 1 || copies[0].Domain != host || copies[0].ExpiresAt != rows[0].Targets[0].ExpiresAt {
 		t.Fatalf("recipient inventory: %+v", copies)
 	}
+	// The main panel must also receive this remote site's key pair, without
+	// creating a second website or replacing the existing remote recipient.
+	rows, err = SaveCoverCertificateFleet(context.Background(), sourceID, host, []int{targetID, 0})
+	if err != nil {
+		t.Fatalf("enroll main as recipient: %v", err)
+	}
+	syncCoverCertificateFleet(context.Background())
+	rows, err = CoverCertificateFleets()
+	if err != nil || len(rows) != 1 || len(rows[0].Targets) != 2 || rows[0].Targets[1].NodeID != 0 || rows[0].Targets[1].State != "ready" {
+		t.Fatalf("node-to-main delivery failed: %+v %v", rows, err)
+	}
+	if installs.Load() != 3 {
+		t.Fatal("adding the main server redelivered an unchanged certificate to another node")
+	}
+
 	// The inbound workflow can use an already managed main-node certificate
 	// without a cover site, creating additive DNS-01 renewal enrollment.
 	if err := saveFirewallJSON(coverCertificateFleetKey, []CoverCertificateFleet{}); err != nil {

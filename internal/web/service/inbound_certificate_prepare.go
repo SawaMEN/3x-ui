@@ -117,11 +117,11 @@ func InboundCertificateStatus(ctx context.Context, req InboundCertificateRequest
 // Only a certificate belonging to an enabled owned website is offered as a
 // source. A panel certificate with the same hostname is not that site's TLS.
 func readyCoverCertificateSource(ctx context.Context, name string, target int, rsaOnly bool) (int, bool) {
-	sites, err := ManagedCoverSites(ctx)
+	report, err := CoverCertificateSources(ctx)
 	if err != nil {
 		return 0, false
 	}
-	for _, site := range sites {
+	for _, site := range report.Sites {
 		if site.Domain != name || site.NodeID == target || site.NodeID <= 0 {
 			continue
 		}
@@ -134,7 +134,7 @@ func readyCoverCertificateSource(ctx context.Context, name string, target int, r
 			continue
 		}
 		for _, cert := range certs {
-			if cert.Name != name || (!cert.CoverSite && cert.Manager != "certmagic") || cert.ExpiresAt <= time.Now().Unix() || (cert.State != "valid" && cert.State != "renewal_due") {
+			if cert.Name != name || (!cert.CoverSite && cert.Manager != "certmagic" && site.SiteCatalog != "telemt") || cert.ExpiresAt <= time.Now().Unix() || (cert.State != "valid" && cert.State != "renewal_due") {
 				continue
 			}
 			if _, err := source.ResolveLocalTLSCertificate(ctx, name, rsaOnly); err == nil {
