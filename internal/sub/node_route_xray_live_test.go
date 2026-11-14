@@ -94,7 +94,19 @@ func TestNodeRouteXrayCoreProcess(t *testing.T) {
 	<-stop
 }
 
-func startNodeRouteXray(t *testing.T, config any) func() {
+// Keep ports occupied through DB setup and provisioning HTTP calls so the OS
+// cannot reuse them for a fixture server or an outgoing ephemeral connection.
+func reserveNodeRouteXrayPort(t *testing.T) net.Listener {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	return listener
+}
+
+func startNodeRouteXray(t *testing.T, config any, reservation net.Listener) func() {
 	t.Helper()
 	raw, err := json.Marshal(config)
 	if err != nil {
@@ -113,6 +125,13 @@ func startNodeRouteXray(t *testing.T, config any) func() {
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestNodeRouteXrayCoreProcess$", "-test.timeout=2m")
 	cmd.Env = append(os.Environ(), "XUI_CASCADE_TEST_CONFIG="+configPath)
 	cmd.Stdout, cmd.Stderr = log, log
+	// Release only the port this child is about to bind, after preparing its
+	// config and process. Other core ports stay reserved until their own launch.
+	if err := reservation.Close(); err != nil {
+		cancel()
+		log.Close()
+		t.Fatal(err)
+	}
 	if err := cmd.Start(); err != nil {
 		cancel()
 		log.Close()
@@ -212,7 +231,12 @@ func TestNodeRouteXrayLiveSubscriptionCascade(t *testing.T) {
 			provider := NewLinkProvider()
 			service.RegisterSubLinkProvider(provider)
 			t.Cleanup(func() { service.RegisterSubLinkProvider(nil) })
-			localPort, foreignPort, socksPort := anyTLSFreePort(t), anyTLSFreePort(t), anyTLSFreePort(t)
+			localListener := reserveNodeRouteXrayPort(t)
+			foreignListener := reserveNodeRouteXrayPort(t)
+			socksListener := reserveNodeRouteXrayPort(t)
+			localPort := localListener.Addr().(*net.TCPAddr).Port
+			foreignPort := foreignListener.Addr().(*net.TCPAddr).Port
+			socksPort := socksListener.Addr().(*net.TCPAddr).Port
 			local := seedSubInbound(t, "cascade-entry", "entry", localPort, 0, `{"network":"tcp","security":"none"}`)
 			local.Listen = "127.0.0.1"
 			if err := db.Save(local).Error; err != nil {
@@ -388,8 +412,8 @@ func TestNodeRouteXrayLiveSubscriptionCascade(t *testing.T) {
 					"settings": map[string]any{"finalRules": []any{map[string]any{"action": "allow", "ip": []string{"127.0.0.1/32"}}}},
 				}},
 			}
-			stopForeign := startNodeRouteXray(t, foreignConfig)
-			startNodeRouteXray(t, main)
+			stopForeign := startNodeRouteXray(t, foreignConfig, foreignListener)
+			startNodeRouteXray(t, main, localListener)
 			links := provider.LinksForClient("127.0.0.1", local, local.Tag+"@e")
 			if len(links) != 1 {
 				t.Fatalf("local subscription has %d links", len(links))
@@ -402,7 +426,7 @@ func TestNodeRouteXrayLiveSubscriptionCascade(t *testing.T) {
 				"log":       map[string]any{"loglevel": "none"},
 				"inbounds":  []any{map[string]any{"listen": "127.0.0.1", "port": socksPort, "protocol": "socks", "settings": map[string]any{"auth": "noauth"}}},
 				"outbounds": []any{entry.Outbound},
-			})
+			}, socksListener)
 			var hits atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				hits.Add(1)

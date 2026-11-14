@@ -94,6 +94,17 @@ export default function DomainEditor({
                   >
                     <Select
                       onChange={(value) => {
+                        // TLS fields are unregistered for remote and certificate-only modes.
+                        // Restore a valid default before those controls mount again.
+                        form.setFieldValue(
+                          'tls',
+                          value === 'cert_only'
+                            ? 'certmagic'
+                            : value === 'shared_sni'
+                              ? 'auto'
+                              : form.getFieldValue('tls') ||
+                                (value === 'sni_only' ? 'certmagic' : 'auto'),
+                        );
                         if (
                           value === 'sub_link_only' ||
                           value === 'sni_only' ||

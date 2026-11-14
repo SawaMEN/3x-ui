@@ -384,7 +384,7 @@ export default function DomainFrontTab({
     // Only saved domains can be checked. Limit concurrency to avoid
     // overwhelming the panel and the DNS/TLS endpoints on larger installations.
     const names = status.config.domains
-      .filter((domain) => domain.enabled)
+      .filter((domain) => domain.enabled && domain.mode !== 'cert_only')
       .map((domain) => domain.name);
     if (names.length === 0) return;
     setAuditing(true);
@@ -440,6 +440,7 @@ export default function DomainFrontTab({
   }
 
   function openPreset(preset: DomainPreset) {
+    if (!initialized || busy || preflighting) return;
     openEditor(-1, preset === 'sni', preset === 'shared');
     if (preset === 'direct') form.setFieldsValue({ mode: 'direct', tls: 'auto' });
     if (preset === 'cdn') form.setFieldsValue({ mode: 'cdn', tls: 'auto' });
@@ -450,6 +451,7 @@ export default function DomainFrontTab({
   }
 
   function openEditor(index: number, sniOnly = false, sharedOnly = false) {
+    if (!initialized || busy || preflighting) return;
     form.resetFields();
     form.setFieldsValue(
       index < 0
@@ -648,7 +650,9 @@ export default function DomainFrontTab({
             setSettingsOpen(true);
           }
         }}
+        subscriptionDisabled={!initialized || busy || preflighting}
         onSubscription={() => {
+          if (!initialized || busy || preflighting) return;
           if (draft.subscriptionDomain) {
             setDomainSearch(draft.subscriptionDomain);
             setDomainFilter('all');

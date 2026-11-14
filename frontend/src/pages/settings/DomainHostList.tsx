@@ -48,6 +48,11 @@ export default function DomainHostList({
   const { t } = useTranslation();
   const l = (k: string) => t('pages.settings.domains.' + k);
   const [requestedPage, setPage] = useState(1);
+  const [query, setQuery] = useState({ search, filter });
+  if (query.search !== search || query.filter !== filter) {
+    setQuery({ search, filter });
+    setPage(1);
+  }
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(domains.length / 8)));
   const mode = (value: string) =>
     value === 'cert_only' ? l('redesign.certificateOnly') : l('mode.' + value);
@@ -59,12 +64,18 @@ export default function DomainHostList({
           placeholder={l('workspace.searchPlaceholder')}
           aria-label={l('workspace.searchPlaceholder')}
           value={search}
-          onChange={(e) => onSearch(e.target.value)}
+          onChange={(e) => {
+            setPage(1);
+            onSearch(e.target.value);
+          }}
         />
         <Select
           aria-label={l('workspace.filterLabel')}
           value={filter}
-          onChange={onFilter}
+          onChange={(value) => {
+            setPage(1);
+            onFilter(value);
+          }}
           options={[
             { value: 'all', label: l('workspace.filter.all') },
             { value: 'attention', label: l('workspace.filter.attention') },
@@ -97,8 +108,10 @@ export default function DomainHostList({
               (d) => d.name === domain.name && JSON.stringify(d) === JSON.stringify(domain),
             ) ?? false;
           const health = getDomainHealth(domain, status, checks[domain.name], saved);
-          const cert = status?.certificates.find((c) => c.name === domain.name);
           const remote = domain.mode === 'shared_sni';
+          const cert = remote
+            ? undefined
+            : status?.certificates.find((c) => c.name === domain.name);
           const node = sites.find((s) => s.name === domain.name && s.source === 'remote');
           const result = checks[domain.name];
           return (
@@ -181,7 +194,7 @@ export default function DomainHostList({
                       ? l('redesign.remoteIdentity')
                       : domain.mode === 'cert_only'
                         ? 'DNS-01'
-                        : `HTTPS · ${draft.httpsPort}`}
+                        : `HTTPS · ${draft.publicPort}`}
                   </Typography.Text>
                 </div>
                 <div className="domain-host-buttons">
@@ -192,7 +205,11 @@ export default function DomainHostList({
                     trigger={['click']}
                     menu={{
                       items: [
-                        { key: 'check', label: l('check'), disabled },
+                        {
+                          key: 'check',
+                          label: l('check'),
+                          disabled: disabled || domain.mode === 'cert_only',
+                        },
                         { type: 'divider' },
                         { key: 'remove', label: l('remove'), danger: true },
                       ],

@@ -129,8 +129,10 @@ func CoverCertificateSources(ctx context.Context) (CoverCertificateSourceReport,
 				if err != nil || domain != site.Domain {
 					continue
 				}
-				out.sites = append(out.sites, ManagedCoverSiteSummary{NodeID: node.Id, Domain: domain,
-					SiteCatalog: site.SiteCatalog, SiteTemplate: site.SiteTemplate})
+				out.sites = append(out.sites, ManagedCoverSiteSummary{
+					NodeID: node.Id, Domain: domain,
+					SiteCatalog: site.SiteCatalog, SiteTemplate: site.SiteTemplate,
+				})
 			}
 			out.node.State = "empty"
 			if len(out.sites) > 0 {

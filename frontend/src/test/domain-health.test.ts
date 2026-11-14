@@ -107,4 +107,23 @@ describe('domain workspace health', () => {
       certificateAlerts: 1,
     });
   });
+  it('uses local certificate health for DNS-only domains after a failed public probe', () => {
+    expect(
+      getDomainHealth(
+        { ...domain, mode: 'cert_only' },
+        status(),
+        {
+          name: domain.name,
+          addresses: [],
+          issuer: '',
+          daysLeft: 0,
+          expiresAt: 0,
+          checkedAt: 0,
+          error: 'connection refused',
+        },
+        true,
+        NOW,
+      ),
+    ).toBe('healthy');
+  });
 });

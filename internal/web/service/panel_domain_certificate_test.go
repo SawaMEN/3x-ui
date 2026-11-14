@@ -53,7 +53,7 @@ func TestPanelCertificateSharingKeepsGatewayIssuerAndPreventsSourceRemoval(t *te
 	t.Setenv("XUI_DB_FOLDER", root)
 	cert, key := writeTestCertificate(t)
 	cache := filepath.Join(root, "domain-tls", "certificates", "issuer", "golden-fixture.test")
-	if err := os.MkdirAll(cache, 0700); err != nil {
+	if err := os.MkdirAll(cache, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	copyFile := func(source, target string) {
@@ -62,7 +62,7 @@ func TestPanelCertificateSharingKeepsGatewayIssuerAndPreventsSourceRemoval(t *te
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(target, data, 0600); err != nil {
+		if err := os.WriteFile(target, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

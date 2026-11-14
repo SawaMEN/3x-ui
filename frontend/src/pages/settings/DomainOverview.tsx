@@ -73,7 +73,7 @@ export default function DomainOverview({
                   dirty ||
                   busy ||
                   auditing ||
-                  !status.config.domains.some((d) => d.enabled),
+                  !status.config.domains.some((d) => d.enabled && d.mode !== 'cert_only'),
               },
               { key: 'refresh', label: l('refresh'), disabled: busy },
             ],

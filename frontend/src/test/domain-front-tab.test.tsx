@@ -3,7 +3,7 @@ import { AllSetting } from '@/models/setting';
 import { HttpUtil, Msg } from '@/utils';
 import SubscriptionDomains from '@/pages/settings/SubscriptionDomains';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse, delay } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupHttp } from '@/api/http-init';
 import DomainFrontTab from '@/pages/settings/DomainFrontTab';
@@ -840,5 +840,113 @@ describe('domain and TLS dashboard', () => {
       Array.from(panel.querySelectorAll('button')).find((button) => button.textContent === 'Edit')!,
     );
     expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+  it.each(['shared_sni', 'cert_only'] as const)(
+    'restores automatic TLS when changing %s to a local domain',
+    async (mode) => {
+      const f = fixture();
+      f.config.domains[0].mode = mode;
+      f.config.domains[0].tls = mode === 'cert_only' ? 'certmagic' : 'auto';
+      renderWithProviders(<DomainFrontTab />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+      fireEvent.click(await screen.findByRole('tab', { name: 'Domain and destination' }));
+      chooseSelectOption('mode', 'Direct');
+      fireEvent.click(screen.getByRole('tab', { name: 'TLS and state' }));
+      await waitFor(() =>
+        expect(document.querySelector('#tls')?.closest('.ant-select')?.textContent).toContain(
+          'Automatic',
+        ),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Save and apply' }));
+      await waitFor(() =>
+        expect(f.applied?.domains[0]).toMatchObject({ mode: 'direct', tls: 'auto' }),
+      );
+    },
+  );
+
+  it('audits public hosts without probing DNS-only certificate domains', async () => {
+    const f = fixture();
+    f.config.domains.push({
+      ...defaultDomain,
+      name: 'cert.example.com',
+      mode: 'cert_only',
+      tls: 'certmagic',
+    });
+    renderWithProviders(<DomainFrontTab />);
+    await openDomainSection('Domains');
+    await tool('Audit all DNS/TLS');
+    await screen.findByText('DNS/TLS audit finished successfully');
+    expect(f.checked).toEqual(['sub.example.com']);
+  });
+
+  it('shows the public mapped HTTPS port in domain routes', async () => {
+    const f = fixture();
+    f.config.httpsPort = 8443;
+    f.config.publicPort = 443;
+    renderWithProviders(<DomainFrontTab />);
+    await openDomainSection('Domains');
+    expect(document.querySelector('.domain-host-server')?.textContent).toContain('HTTPS · 443');
+    expect(document.querySelector('.domain-host-server')?.textContent).not.toContain('8443');
+  });
+
+  it('does not present a main-node certificate as a remote certificate', async () => {
+    const f = fixture();
+    f.config.domains[0].mode = 'shared_sni';
+    renderWithProviders(<DomainFrontTab />);
+    await openDomainSection('Domains');
+    expect(document.querySelector('.domain-host-certificate')?.textContent).not.toContain('45 d');
+  });
+
+  it('starts at the first results page after searching a larger domain list', async () => {
+    const f = fixture();
+    f.config.domains = Array.from({ length: 20 }, (_, i) => ({
+      ...defaultDomain,
+      name: (i < 12 ? 'match' : 'other') + String(i).padStart(2, '0') + '.example.com',
+    }));
+    renderWithProviders(<DomainFrontTab />);
+    await openDomainSection('Domains');
+    fireEvent.click(document.querySelector('.ant-pagination-item-3')!);
+    expect(document.querySelector('.domain-config-list')?.textContent).toContain(
+      'other16.example.com',
+    );
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search domains' }), {
+      target: { value: 'match' },
+    });
+    expect(document.querySelector('.domain-config-list')?.textContent).toContain(
+      'match00.example.com',
+    );
+  });
+
+  it('does not create a subscription draft before server settings finish loading', async () => {
+    const f = fixture();
+    server.use(
+      http.get('*/panel/api/domains/status', async () => {
+        await delay(150);
+        return HttpResponse.json({
+          success: true,
+          obj: {
+            config: f.config,
+            running: true,
+            error: '',
+            certificates: [],
+            existingCertificates: [],
+          },
+        });
+      }),
+    );
+    renderWithProviders(<DomainFrontTab />);
+    const tile = screen.getByRole('button', { name: /Subscription.*Not assigned/ });
+    expect(tile).toHaveProperty('disabled', true);
+    fireEvent.click(tile);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add domain' })).toHaveProperty('disabled', false),
+    );
+    expect(screen.getByRole('button', { name: /Subscription.*sub.example.com/ })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(f.applied).toBeUndefined();
   });
 });

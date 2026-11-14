@@ -603,7 +603,7 @@
   }
 }
 
-.domain-service-tile:hover,
+.domain-service-tile:not(:disabled):hover,
 .domain-create-option:hover {
   border-color: var(--xui-primary, #1677ff);
   background: var(--xui-surface-container-low, #f7f8fa);
@@ -637,4 +637,9 @@
 }
 .domain-panel-identity > .ant-card-body {
   padding: 0;
+}
+
+.domain-service-tile:disabled {
+  cursor: default;
+  opacity: 0.55;
 }

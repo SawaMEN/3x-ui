@@ -241,8 +241,7 @@ func TestCoverCertificateFleetDeliveryAndRenewal(t *testing.T) {
 	}
 	// The main panel must also receive this remote site's key pair, without
 	// creating a second website or replacing the existing remote recipient.
-	rows, err = SaveCoverCertificateFleet(context.Background(), sourceID, host, []int{targetID, 0})
-	if err != nil {
+	if _, err = SaveCoverCertificateFleet(context.Background(), sourceID, host, []int{targetID, 0}); err != nil {
 		t.Fatalf("enroll main as recipient: %v", err)
 	}
 	syncCoverCertificateFleet(context.Background())

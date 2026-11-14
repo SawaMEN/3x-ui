@@ -21,6 +21,8 @@ export function getDomainHealth(
 ): DomainHealth {
   if (!domain.enabled) return 'disabled';
   if (!saved) return 'unsaved';
+  // DNS-01 certificates do not require a reachable HTTPS website.
+  if (domain.mode === 'cert_only') check = undefined;
   if (check?.error) return 'error';
   if (check?.expiresAt && check.expiresAt * 1000 <= now) return 'error';
   // Remote SNI certificates belong to their node; never treat local certificates as authoritative.

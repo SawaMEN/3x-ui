@@ -15,11 +15,13 @@ export default function DomainServiceMap({
   sites,
   onPanel,
   onSubscription,
+  subscriptionDisabled = false,
   onNodes,
 }: {
   settings?: AllSetting;
   draft: DomainConfigForm;
   sites: ManagedSniDomain[];
+  subscriptionDisabled?: boolean;
   onPanel: () => void;
   onSubscription: () => void;
   onNodes: () => void;
@@ -44,6 +46,7 @@ export default function DomainServiceMap({
       value: draft.subscriptionDomain || l('notAssigned'),
       detail: draft.subscriptionDomain ? `HTTPS · ${draft.publicPort}` : l('chooseDomain'),
       onClick: onSubscription,
+      disabled: subscriptionDisabled,
     },
     {
       key: 'nodes',
@@ -57,7 +60,13 @@ export default function DomainServiceMap({
   return (
     <section className="domain-service-map" aria-label={l('serviceMap')}>
       {tiles.map((tile) => (
-        <button type="button" key={tile.key} className="domain-service-tile" onClick={tile.onClick}>
+        <button
+          type="button"
+          key={tile.key}
+          className="domain-service-tile"
+          onClick={tile.onClick}
+          disabled={tile.disabled}
+        >
           <span className="domain-service-tile-top">
             <span className="domain-service-icon">{tile.icon}</span>
             <span>{tile.title}</span>
