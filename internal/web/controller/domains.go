@@ -60,6 +60,7 @@ func NewDomainController(g *gin.RouterGroup) {
 	g.POST("/certificates/fleet", a.saveCertificateFleet)
 	g.POST("/certificates/export-cover", a.exportCoverCertificate)
 	g.POST("/certificates/resolve", a.resolveCertificate)
+	g.POST("/certificates/panel-domain", a.panelDomainCertificate)
 	g.POST("/certificates/resolve-local", a.resolveLocalCertificate)
 	g.POST("/certificates/install", a.installCertificate)
 	g.GET("/dns/credential", a.dnsCredential)
@@ -557,5 +558,24 @@ func (a *DomainController) prepareInboundCertificate(c *gin.Context) {
 		return
 	}
 	result, err := (&service.ManagerService{}).PrepareInboundCertificate(c.Request.Context(), user.Id, req)
+	jsonObj(c, result, err)
+}
+
+// panelDomainCertificate validates a local direct-domain pair without changing
+// settings. Only an interactive administrator may prepare a panel identity.
+func (a *DomainController) panelDomainCertificate(c *gin.Context) {
+	if !requireDomainAdminSession(c) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2048)
+	var req struct {
+		Domain string `json:"domain" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := service.ResolvePanelDomainCertificate(c.Request.Context(), req.Domain)
 	jsonObj(c, result, err)
 }

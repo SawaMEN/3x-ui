@@ -29,6 +29,23 @@ export function panelUrlAfterRestart(
   return url.href;
 }
 
+// A selected direct domain terminates at this panel's own listener, even if
+// the old address was served through a reverse proxy on public TCP 443.
+export function panelUrlForDirectDomain(
+  current: string,
+  saved: PanelAddress,
+  portOverride = 0,
+): string {
+  const url = new URL(current);
+  url.protocol = 'https:';
+  url.hostname = saved.webDomain;
+  url.port = String(portOverride || saved.webPort);
+  url.pathname = `${normalizePath(saved.webBasePath)}panel/settings`;
+  url.search = '';
+  url.hash = '';
+  return url.href;
+}
+
 export async function waitForPanelRestart(
   target: string,
   current: string,

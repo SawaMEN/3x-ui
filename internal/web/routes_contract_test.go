@@ -64,6 +64,7 @@ func isInternalUIAPI(path string) bool {
 		path == "/panel/api/domains/cover-sites/change-template" ||
 		path == "/panel/api/domains/cover-sites/template" ||
 		path == "/panel/api/domains/certificates/resolve" ||
+		path == "/panel/api/domains/certificates/panel-domain" ||
 		path == "/panel/api/domains/certificates/resolve-local" ||
 		path == "/panel/api/domains/certificates/install" ||
 		path == "/panel/api/domains/certificates" ||

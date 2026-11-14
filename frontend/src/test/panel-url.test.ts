@@ -53,3 +53,33 @@ it('keeps an environment-overridden port and normalizes repeated slashes', () =>
     ),
   ).toBe('http://panel.test:8443/secret/child/panel/settings');
 });
+
+it('uses the actual panel TLS listener when switching from a proxied address to a direct domain', async () => {
+  const { panelUrlForDirectDomain } = await import('@/pages/settings/panel-url');
+  expect(
+    panelUrlForDirectDomain('https://old.test/secret/panel/settings#advanced/domains', {
+      ...initial,
+      webDomain: 'direct.test',
+      webPort: 2053,
+      webBasePath: '/secret/',
+      webCertFile: '/cert',
+      webKeyFile: '/key',
+    }),
+  ).toBe('https://direct.test:2053/secret/panel/settings');
+});
+it('keeps the environment port override when selecting a direct panel domain', async () => {
+  const { panelUrlForDirectDomain } = await import('@/pages/settings/panel-url');
+  expect(
+    panelUrlForDirectDomain(
+      'http://old.test:8443/panel/settings?old=1',
+      {
+        ...initial,
+        webDomain: 'direct.test',
+        webPort: 2053,
+        webCertFile: '/cert',
+        webKeyFile: '/key',
+      },
+      8443,
+    ),
+  ).toBe('https://direct.test:8443/panel/settings');
+});

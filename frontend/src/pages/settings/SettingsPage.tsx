@@ -33,7 +33,8 @@ import { AllSettingSchema } from '@/schemas/setting';
 import AppSidebar from '@/layouts/AppSidebar';
 import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
 import GeneralTab from './GeneralTab';
-import { panelUrlAfterRestart, waitForPanelRestart } from './panel-url';
+import { panelUrlAfterRestart, panelUrlForDirectDomain, waitForPanelRestart } from './panel-url';
+import type { PanelDomainPatch } from './PanelDomainCertificate';
 import './SettingsPage.css';
 import { getAdditionalSettingsTab } from './additional-settings';
 
@@ -195,25 +196,49 @@ export default function SettingsPage() {
     }
   }
 
-  function restartPanel() {
+  function restartPanel(panelPatch?: PanelDomainPatch) {
+    const saved = { ...allSetting, ...panelPatch };
+    const portOverride =
+      Number(
+        document.querySelector<HTMLMetaElement>('meta[name="panel-port-override"]')?.content,
+      ) || 0;
+    const target = panelPatch
+      ? panelUrlForDirectDomain(window.location.href, saved, portOverride)
+      : panelUrlAfterRestart(
+          window.location.href,
+          initialAddress.current ?? allSetting,
+          saved,
+          portOverride,
+        );
     modal.confirm({
       title: t('pages.settings.restartPanel'),
-      content: t('pages.settings.restartPanelDesc'),
+      content: panelPatch ? (
+        <Space orientation="vertical" style={{ width: '100%' }}>
+          <Alert type="info" showIcon title={t('pages.settings.domains.panelDomain.confirm')} />
+          <a href={target} target="_blank" rel="noreferrer" style={{ overflowWrap: 'anywhere' }}>
+            {target}
+          </a>
+          <span>{t('pages.settings.domains.panelDomain.confirmHint')}</span>
+        </Space>
+      ) : (
+        t('pages.settings.restartPanelDesc')
+      ),
       okText: t('pages.settings.restartPanel'),
       okButtonProps: { danger: true },
       cancelText: t('cancel'),
       onOk: async () => {
         setSpinning(true);
         try {
-          if (!saveDisabled && !(await onSave())) return;
-          const target = panelUrlAfterRestart(
-            window.location.href,
-            initialAddress.current ?? allSetting,
-            allSetting,
-            Number(
-              document.querySelector<HTMLMetaElement>('meta[name="panel-port-override"]')?.content,
-            ) || 0,
-          );
+          if (panelPatch) {
+            const parsed = AllSettingSchema.safeParse(saved);
+            if (!parsed.success) {
+              messageApi.error(t(parsed.error.issues[0].message));
+              throw new Error(t('pages.settings.domains.panelDomain.failed'));
+            }
+            const result = await savePayload(panelPatch);
+            if (!result?.success) throw new Error(t('pages.settings.domains.panelDomain.failed'));
+            window.dispatchEvent(new Event('xui-core-settings-saved'));
+          } else if (!saveDisabled && !(await onSave())) return;
           let instance =
             document.querySelector<HTMLMetaElement>('meta[name="panel-instance"]')?.content || '';
           try {
@@ -321,6 +346,7 @@ export default function SettingsPage() {
             updateSetting={updateSetting}
             saveSettings={onSave}
             settingsDirty={!saveDisabled}
+            onPanelDomainSwitch={(patch) => restartPanel(patch)}
           />
         );
       case 'gateway':
@@ -399,7 +425,7 @@ export default function SettingsPage() {
                                   type="primary"
                                   danger
                                   disabled={!saveDisabled}
-                                  onClick={restartPanel}
+                                  onClick={() => restartPanel()}
                                 >
                                   {t('pages.settings.restartPanel')}
                                 </Button>

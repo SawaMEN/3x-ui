@@ -351,6 +351,13 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	if err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
+	panel, err := s.GetAllSetting()
+	if err != nil {
+		return domainfront.DomainFrontStatus{}, err
+	}
+	if err := validatePanelCertificateSource(old, cfg, panel.WebDomain, panel.WebCertFile, panel.WebKeyFile); err != nil {
+		return domainfront.DomainFrontStatus{}, err
+	}
 	backend.Certificates = files
 	if err := configureDomainDNS01(cfg, &backend); err != nil {
 		return domainfront.DomainFrontStatus{}, err

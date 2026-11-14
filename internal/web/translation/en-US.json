@@ -2773,6 +2773,21 @@
               "recovered": "Recovered"
             }
           }
+        },
+        "panelDomain": {
+          "title": "Panel domain and certificate",
+          "current": "Configured domain",
+          "byIP": "Access by IP / current address",
+          "hint": "Choose a saved direct domain with ready TLS. The panel uses its certificate and key on its own port. Keep the issuing domain enabled for automatic renewal.",
+          "select": "Panel domain from direct domains",
+          "pending": "certificate not ready",
+          "switch": "Switch domain",
+          "saveFirst": "Save domain changes first and wait for the certificate to be ready.",
+          "empty": "Add a direct domain and wait for its certificate.",
+          "failed": "Unable to prepare the panel domain switch.",
+          "confirm": "Switch domain, save settings and restart the panel?",
+          "confirmHint": "Check that the domain points to this server and the panel port is reachable. Save the new address. Other settings changes will also be saved; the new address opens after restart.",
+          "sourceRequired": "Switch the panel domain or certificate before disabling its issuing domain, changing the certificate authority, or stopping automatic TLS renewal."
         }
       },
       "subAppearanceTheme": "Page theme",

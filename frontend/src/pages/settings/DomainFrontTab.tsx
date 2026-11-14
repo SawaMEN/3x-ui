@@ -43,6 +43,8 @@ import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
 import DomainOverview from './DomainOverview';
 import CertificateInventoryPanel from './CertificateInventoryPanel';
 import NodeCertificateSharing from './NodeCertificateSharing';
+import PanelDomainCertificate from './PanelDomainCertificate';
+import type { PanelDomainPatch } from './PanelDomainCertificate';
 import { DomainPreflightReportSchema } from '@/schemas/domain-preflight';
 import type { DomainPreflightReport } from '@/schemas/domain-preflight';
 import type { DomainPreset } from './DomainOverview';
@@ -84,7 +86,9 @@ export default function DomainFrontTab({
   updateSetting,
   saveSettings,
   settingsDirty = false,
+  onPanelDomainSwitch,
 }: {
+  onPanelDomainSwitch?: (patch: PanelDomainPatch) => void;
   saveSettings?: () => Promise<boolean | undefined>;
   settingsDirty?: boolean;
   allSetting?: AllSetting;
@@ -319,7 +323,8 @@ export default function DomainFrontTab({
       messageApi.success(t('pages.settings.domains.applied'));
       if (saved.enabled && saved.subscriptionDomain) void check(saved.subscriptionDomain);
     } catch (e) {
-      let detail = e instanceof Error ? e.message : t('somethingWentWrong');
+      let detail =
+        e instanceof Error ? t(e.message, { defaultValue: e.message }) : t('somethingWentWrong');
       if (domainFirst && committed && server) {
         const rollback = await HttpUtil.post('/panel/api/domains/apply', server, { silent: true });
         detail += rollback.success
@@ -687,6 +692,16 @@ export default function DomainFrontTab({
           }))}
         />
       </div>
+      {allSetting &&
+        onPanelDomainSwitch &&
+        (section === 'domains' || section === 'certificates') && (
+          <PanelDomainCertificate
+            status={status}
+            allSetting={allSetting}
+            disabled={dirty || loading || busy || preflighting}
+            onSwitch={onPanelDomainSwitch}
+          />
+        )}
       {section === 'domains' && (
         <div className="domain-manager-panel" data-testid="domain-panel-domains">
           <Card size="small" className="domain-manager-hosts" title={label('list')}>

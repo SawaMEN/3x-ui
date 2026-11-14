@@ -124,6 +124,9 @@ func inheritedDomainCertificates(cfg domainfront.DomainFrontConfig, settings *en
 			continue
 		}
 		for _, candidate := range candidates {
+			if d.TLS == "auto" && isDomainManagedCertificatePair(candidate.CertFile, candidate.KeyFile) {
+				continue
+			}
 			if candidate.CertFile == "" || candidate.KeyFile == "" {
 				continue
 			}

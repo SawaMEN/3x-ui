@@ -12,6 +12,7 @@ import { useLocation, useNavigate } from 'react-router';
 import type { AllSetting } from '@/models/setting';
 import { FirewallManager } from '@/pages/firewall/FirewallManager';
 import DomainFrontTab from './DomainFrontTab';
+import type { PanelDomainPatch } from './PanelDomainCertificate';
 import ProxyCoreTab from './ProxyCoreTab';
 import SwapSettingsTab from './SwapSettingsTab';
 import SystemUpdatePanel from './SystemUpdatePanel';
@@ -23,6 +24,7 @@ export default function AdditionalSettingsTab(props: {
   updateSetting: (patch: Partial<AllSetting>) => void;
   saveSettings: () => Promise<boolean | undefined>;
   settingsDirty: boolean;
+  onPanelDomainSwitch?: (patch: PanelDomainPatch) => void;
 }) {
   const { t } = useTranslation();
   const { hash } = useLocation();

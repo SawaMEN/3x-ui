@@ -66,6 +66,7 @@ func TestAuditNodeDomainDiscoveryScopesAndPrivacy(t *testing.T) {
 			{http.MethodGet, "/domains/status", false},
 			{http.MethodPost, "/domains/apply", false},
 			{http.MethodPost, "/domains/certificates/renew", false},
+			{http.MethodPost, "/domains/certificates/panel-domain", false},
 			{http.MethodPost, "/domains/dns/credential", false},
 		} {
 			// Admin API keeps its existing general read API. Test its mutation
