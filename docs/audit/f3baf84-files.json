@@ -21361,9 +21361,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A93/A94: complete current-file review; malformed WEB snapshot reproduction, SQLite history recovery and overflow regressions; managed WEB config/fingerprint/validation and monitor tests passed. WEB pinned runtime owner/WAL, first-observation and lifecycle boundaries remain explicitly open in RESUME.md.",
+      "reviewed_sha256": "f081fb363c7ec1bfe0fc2828f3305c990c676872798603a30ff51c7ef3cc137b"
     },
     {
       "path": "internal/web/service/mtproto_web_test.go",
@@ -21372,9 +21372,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "test-fixture",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A93/A94: complete current-file review; malformed WEB snapshot reproduction, SQLite history recovery and overflow regressions; managed WEB config/fingerprint/validation and monitor tests passed. WEB pinned runtime owner/WAL, first-observation and lifecycle boundaries remain explicitly open in RESUME.md.",
+      "reviewed_sha256": "5f03485ea36b060897e85846c5baffafeca176e6700cd2527ab4601fbf82c916"
     },
     {
       "path": "internal/web/service/native_config.go",
@@ -23671,9 +23671,9 @@
       "deletions": 18,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A93/A94: complete current-file review; malformed WEB snapshot reproduction, SQLite history recovery and overflow regressions; managed WEB config/fingerprint/validation and monitor tests passed. WEB pinned runtime owner/WAL, first-observation and lifecycle boundaries remain explicitly open in RESUME.md.",
+      "reviewed_sha256": "56e8380b232b84496493d01c13a64fe49ad5982f658a94f8bffe2fe583a2ce4a"
     },
     {
       "path": "internal/web/service/telemt_meko.go",

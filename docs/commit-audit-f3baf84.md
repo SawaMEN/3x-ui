@@ -756,3 +756,23 @@ Reviewed 261/2364, осталось 2103.
 suite и deterministic queued external poll прошли по три раза; также прошли
 прежние lifecycle/CRUD/shutdown/service tests. Детали проверки PID, ограничения
 upstream snapshots и очередь MTProto WEB accounting — RESUME.md.
+
+
+## Продолжение: A93–A94, WEB snapshots и история Telemt
+
+Нужно 3 части этапа; сделано 3, осталось 0. Исправления проверены целевыми
+service/job tests, Go build/vet и full golangci-lint (0 issues), с dist-stub
+по Makefile. Всего 94 подтверждённых исправления.
+Актуально reviewed 259/2364; pending 2100, stale 5. Три новых файла прочитаны,
+но после A92 пять других reviewed paths изменились во входящих коммитах и требуют
+повторного review. Они не были автоматически перезаписаны новыми hashes.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A93 | Missing/null/negative counter и malformed WEB snapshot принимаются как success, вызывая повторный учёт после ложного source reset | Полная проверка JSON envelope, required counter и уникальных normalized identities до выдачи любого sample |
+| A94 | История Telemt переполняет int64 при growth/reset или превышает общий cap | Existing saturating sumTrafficDelta для initial/growth/reset при точном сохранении raw source cursor и online metadata |
+
+10 parser failures, 3 неверных history totals и 4 overflow failures воспроизведены
+до соответствующих исправлений. После правки прошли новые regressions и прежние
+managed WEB/job tests. Финальные проверки и открытые WEB runtime ownership/
+first-sample/lifecycle/WAL задачи описаны в docs/audit/RESUME.md.

@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 92 подтверждённых исправления панели; A92 — точная граница смены accounting identity при no-op Ensure без restart.
+Всего реализовано 94 подтверждённых исправления панели; A93 — проверка полноты WEB API snapshots, A94 — защита накопленной истории Telemt от переполнения.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Проверено вручную 261 файл, осталось 2103; общий проход не завершён.
+Просмотрено вручную 264 файла; актуальны 259 отметок, 5 устарели после входящих изменений. Осталось 2100 новых файлов и 5 повторных проверок, всего 2105; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1747,3 +1747,76 @@ golangci-lint 2.15.0 full ./... PASS, 0 issues. Inventory/diff checks PASS:
 reviewed 261, pending 2103, stale 0. Финальный full-check run выполнялся после
 исправления test PID readiness и добавления deterministic queued-owner fixture;
 предыдущий остановленный run не считается финальной проверкой.
+
+
+## Контрольная точка A93–A94: валидация WEB статистики и история Telemt
+
+Нужно 3 части: анализ, воспроизведение, исправление/проверки. Сделано 3, осталось 0. Два fixes:
+A93 — malformed snapshots, A94 — overflow истории. Всего 94 исправления.
+Прочитаны полностью текущие mtproto_web.go, mtproto_web_test.go и
+telemt_connections.go; новые tests проверены отдельно. Inventory: 259 актуальных,
+2100 pending и 5 stale (264 ранее просмотренных файла из 2364).
+
+Входящий HEAD при начале этапа: 50f47b431f715b9fbe34466317073b3611949368.
+После A92 другие задачи изменили 5 reviewed paths. Их hashes намеренно НЕ
+обновлялись по одному diff: полная повторная проверка остаётся открытой:
+- internal/externalvpn/stage8_lifecycle_test.go
+- internal/web/controller/api.go
+- internal/web/controller/api_auth_test.go
+- internal/web/controller/domains.go
+- internal/web/service/domain_front.go
+Inventory check сообщает эти 5 stale; это не успешный check. При следующем
+продолжении сначала перепроверить данные пути, затем mark с новым evidence.
+
+A93:
+- fetchTelemtUserStats раньше принимал missing/null total_octets как 0, negative
+  как 0, пустые/повторяющиеся normalized usernames, missing/null users array и
+  trailing data после JSON. WEB collector считал ноль сбросом source counter;
+  history monitor также мог повторно прибавить уже начисленные bytes.
+- Required *int64 отличает настоящее 0 от missing/null. Весь JSON и все записи
+  валидируются до возврата snapshot. Отклоняется весь batch без partial data;
+  callers при error сохраняют baseline/history. Empty [] и неизвестные новые
+  поля по-прежнему разрешены; два JSON documents и trailing garbage запрещены.
+- Ошибки не включают usernames, response bodies или credentials.
+
+A94:
+- persistTelemtUserSnapshot использовал неограниченное int64 addition. При росте
+  и сбросе source история могла стать отрицательной; initial sample и saturated
+  history также выходили за общий database.TrafficMax.
+- Теперь используется существующий sumTrafficDelta. Ограничивается накопленный
+  TotalBytes, но raw SourceTotalBytes сохраняется точно, чтобы следующий poll не
+  считал уже учтённые bytes. Cursor и online metadata обновляются и при cap.
+  Negative legacy source при расчёте growth трактуется как 0.
+
+Воспроизведение до правок:
+- 10 malformed snapshot cases FAIL (service 0.049s): все приняты как success.
+- 3 recovery cases FAIL (service 0.569s): 100 -> malformed -> 120 дали TotalBytes
+  220 вместо 120. Duplicate-history case сам по себе прошёл; он не заявлен
+  отдельным доказанным history defect, duplicate rejection проверен parser suite.
+- 4 overflow cases FAIL (service 0.452s): first sample превышал TrafficMax,
+  growth/reset давали отрицательные totals, saturated total продолжал расти.
+
+После правок:
+- Targeted service и job regressions PASS (2.863s / 0.386s), включая parser,
+  recovery/history/cap/activity/cancellation, прежние managed WEB users,
+  fingerprint, validation, effective port и synchronous WEB job lifecycle.
+- go build -p 2 ./... PASS после предусмотренного Makefile dist-stub.
+  Первые build/vet без generated frontend dist завершились ошибкой go:embed;
+  они НЕ считаются успешными. Frontend build в этом backend-only этапе не запускался.
+- Итоговые go vet -p 2 ./... PASS; golangci-lint 2.15.0 full ./... PASS, 0 issues.
+  Первый lint до dist-stub завершился typecheck error go:embed и НЕ считается
+  успешным. Повторный полный lint после dist-stub завершился успешно.
+- git diff --check PASS. Inventory report сохранён, check корректно сообщает
+  только 5 входящих stale paths; новых stale от A93/A94 нет.
+
+Ограничения / следующая очередь:
+- Это НЕ перенос WEB на runtime-pinned Owner/WAL contract. CollectMtprotoWebTraffic
+  всё ещё строит mapping по текущей DB, первый sample прогревает baseline, а
+  process-global cursor не переживает panel restart. Исправлять first sample
+  простым начислением cumulative value нельзя: уже работавший backend может
+  содержать ранее учтённые bytes. Требуется lifecycle-aware cursor/identity contract.
+- Следующий приоритет после stale review: закрепление WEB owner при установке
+  backend config, boundary при hot reload/смене credentials/traffic rows и
+  WAL acceptance до cursor advance, включая shutdown и backend restart.
+- Только fake HTTP transport и temporary SQLite. Реальные WEB frontend/backend,
+  host systemctl/firewall/ACME, live PostgreSQL и отдельный race run не запускались.
