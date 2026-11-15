@@ -70,7 +70,7 @@ export default function RoutingCatalogTab({
   const [messageApi, messageContextHolder] = message.useMessage();
   const tr = useCallback(
     (key: string, options?: Record<string, unknown>) =>
-      t(`pages.xray.routingCatalog.${key}`, options),
+      t(`pages.xray.routingCatalog.${key}`, options ?? {}),
     [t],
   );
   const [search, setSearch] = useState('');

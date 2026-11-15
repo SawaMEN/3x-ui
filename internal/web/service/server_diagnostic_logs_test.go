@@ -40,7 +40,9 @@ func TestDiagnosticPanelIncludesAllLevelsAndFullRaw(t *testing.T) {
 			t.Fatalf("missing timestamp: %+v", e)
 		}
 	}
-	errors := (&ServerService{}).GetDashboardLogs("50", "error", "panel", "certificate")
+	// Dashboard logs merge the file with the process-wide buffer. Other tests
+	// legitimately leave certificate errors there; match this fixture uniquely.
+	errors := (&ServerService{}).GetDashboardLogs("50", "error", "panel", "diag-unique nested TLS failure: bad certificate")
 	if len(errors.Entries) != 1 || errors.Entries[0].Raw != lines[2] {
 		t.Fatalf("error filter silently dropped raw details: %+v", errors)
 	}

@@ -166,7 +166,7 @@ export default function DomainFrontTab({
   const [form] = Form.useForm<DomainForm>();
   const [messageApi, holder] = message.useMessage();
   const label = (key: string, values?: Record<string, string | number>) =>
-    t(`pages.settings.domains.${key}`, values);
+    t(`pages.settings.domains.${key}`, values ?? {});
   const dnsHelp = (key: string, ru: string, en: string) => (
     <Space size={5}>
       {label('dns01.' + key)}
