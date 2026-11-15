@@ -728,9 +728,7 @@ describe('domain and TLS dashboard', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     await waitFor(() =>
-      expect(document.querySelector('.domain-config-list')?.textContent).toContain(
-        'Subscription only',
-      ),
+      expect(document.querySelector('.domain-config-list')?.textContent).toContain('Subscription'),
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() =>
@@ -949,4 +947,58 @@ describe('domain and TLS dashboard', () => {
     );
     expect(f.applied).toBeUndefined();
   });
+  it.each(['sub.example.com', 'SUB.EXAMPLE.COM.'])(
+    'shows panel and primary subscription roles together for %s',
+    async (webDomain) => {
+      const f = fixture();
+      renderWithProviders(
+        <DomainFrontTab
+          allSetting={
+            new AllSetting({
+              webDomain,
+              webPort: 2053,
+              webCertFile: '/panel.crt',
+              webKeyFile: '/panel.key',
+            })
+          }
+        />,
+      );
+      await openDomainSection('Domains');
+      const row = document.querySelector('.domain-host-row')!;
+      expect(row.querySelector('.domain-host-identity')?.textContent).toContain('Admin panel');
+      expect(row.querySelector('.domain-host-identity')?.textContent).toContain(
+        'Primary subscription domain',
+      );
+      expect(row.querySelector('.domain-host-target')?.textContent).not.toContain(
+        'Subscription only',
+      );
+      expect(row.querySelector('.domain-host-server')?.textContent).toContain('HTTPS · 443');
+      expect(row.querySelector('.domain-host-server')?.textContent).toContain(
+        'Admin panel · HTTPS · 2053',
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+      await screen.findByRole('dialog');
+      expect(screen.getByRole('combobox', { name: 'Gateway role' })).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+      expect(f.config.domains[0].mode).toBe('sub_link_only');
+      expect(f.applied).toBeUndefined();
+    },
+  );
+
+  it.each(['panel.example.com', ''])(
+    'does not infer panel access just because a domain is the only subscription host (%s)',
+    async (webDomain) => {
+      fixture();
+      renderWithProviders(
+        <DomainFrontTab allSetting={new AllSetting({ webDomain, webPort: 2053 })} />,
+      );
+      await openDomainSection('Domains');
+      const row = document.querySelector('.domain-host-row')!;
+      expect(row.querySelector('.domain-host-identity')?.textContent).not.toContain('Admin panel');
+      expect(row.querySelector('.domain-host-identity')?.textContent).toContain(
+        'Primary subscription domain',
+      );
+      expect(row.querySelector('.domain-host-server')?.textContent).not.toContain('2053');
+    },
+  );
 });

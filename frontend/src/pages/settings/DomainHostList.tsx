@@ -12,10 +12,12 @@ import type { DomainForm, DomainConfigForm } from '@/schemas/domain-front';
 import type { DomainFrontStatus, DomainFrontCheck } from '@/generated/zod';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import { getDomainHealth } from './domain-health';
+import type { AllSetting } from '@/models/setting';
 export default function DomainHostList({
   domains,
   draft,
   status,
+  panelSettings,
   sites,
   checks,
   search,
@@ -32,6 +34,7 @@ export default function DomainHostList({
   domains: DomainForm[];
   draft: DomainConfigForm;
   status?: DomainFrontStatus;
+  panelSettings?: Pick<AllSetting, 'webDomain' | 'webPort' | 'webCertFile' | 'webKeyFile'>;
   sites: ManagedSniDomain[];
   checks: Record<string, DomainFrontCheck>;
   search: string;
@@ -108,6 +111,9 @@ export default function DomainHostList({
               (d) => d.name === domain.name && JSON.stringify(d) === JSON.stringify(domain),
             ) ?? false;
           const health = getDomainHealth(domain, status, checks[domain.name], saved);
+          const panelDomain = panelSettings?.webDomain.trim().toLowerCase().replace(/\.$/, '');
+          const servesPanel =
+            !!panelDomain && panelDomain === domain.name.toLowerCase().replace(/\.$/, '');
           const remote = domain.mode === 'shared_sni';
           const cert = remote
             ? undefined
@@ -128,6 +134,7 @@ export default function DomainHostList({
                       {domain.name}
                     </Typography.Text>
                     <Space size={3} wrap>
+                      {servesPanel && <Tag color="purple">{l('redesign.panel')}</Tag>}
                       {draft.subscriptionDomain === domain.name && (
                         <Tag color="blue">{l('workspace.subscriptionDomain')}</Tag>
                       )}
@@ -139,7 +146,10 @@ export default function DomainHostList({
                 <div className="domain-host-target">
                   <span className="domain-mobile-label">{l('redesign.destination')}</span>
                   <span>
-                    <ArrowRightOutlined /> {mode(domain.mode)}
+                    <ArrowRightOutlined />{' '}
+                    {domain.mode === 'sub_link_only'
+                      ? l('redesign.subscription')
+                      : mode(domain.mode)}
                   </span>
                   <Typography.Text type="secondary">
                     {domain.mode === 'relay'
@@ -196,6 +206,13 @@ export default function DomainHostList({
                         ? 'DNS-01'
                         : `HTTPS · ${draft.publicPort}`}
                   </Typography.Text>
+                  {servesPanel && panelSettings && (
+                    <Typography.Text type="secondary">
+                      {l('redesign.panel')} ·{' '}
+                      {panelSettings.webCertFile && panelSettings.webKeyFile ? 'HTTPS' : 'HTTP'} ·{' '}
+                      {panelSettings.webPort}
+                    </Typography.Text>
+                  )}
                 </div>
                 <div className="domain-host-buttons">
                   <Button size="small" onClick={() => onEdit(domain.name)}>

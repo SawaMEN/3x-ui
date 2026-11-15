@@ -754,6 +754,7 @@ export default function DomainFrontTab({
                 </div>
               </div>
               <DomainHostList
+                panelSettings={allSetting}
                 domains={filteredDomains}
                 draft={draft}
                 status={status}
