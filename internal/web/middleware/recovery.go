@@ -16,7 +16,8 @@ import (
 // credentials and subscription secrets. Gin's default request dump is disabled.
 func Recovery() gin.HandlerFunc {
 	return gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, recovered any) {
-		_, _ = fmt.Fprintf(logger.ErrorWriter{}, "HTTP handler panic (%s %s): %v\n%s", c.Request.Method, c.FullPath(), recovered, debug.Stack())
+		MarkRequestFailureLogged(c)
+		_, _ = fmt.Fprintf(logger.ErrorWriter{}, "HTTP handler panic (%s %s): %s\n%s", c.Request.Method, RequestRoute(c), logger.SanitizeDiagnostic(fmt.Sprint(recovered)), debug.Stack())
 		c.AbortWithStatus(http.StatusInternalServerError)
 	})
 }

@@ -170,7 +170,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	engine := gin.New()
-	engine.Use(middleware.Recovery())
+	engine.Use(middleware.RequestFailures(), middleware.Recovery())
 	if config.IsDebug() {
 		engine.Use(gin.Logger())
 	}

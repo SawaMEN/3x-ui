@@ -9,6 +9,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
@@ -20,6 +21,9 @@ func LocalCoverCertificateSources() ([]ManagedCoverSiteSummary, error) {
 		return nil, err
 	}
 	state, err := readTelemtWebState()
+	if err != nil {
+		logger.Errorf("Certificate source Telemt state read failed: %s", logger.ErrorSummary(err))
+	}
 	if err == nil && state.Enabled && telemtWebFrontendActive(state) {
 		sites = appendTelemtCertificateSources(sites, telemtWebHosts(state))
 	}
@@ -83,6 +87,7 @@ func CoverCertificateSources(ctx context.Context) (CoverCertificateSourceReport,
 	}
 	var nodes []model.Node
 	if err := db.Where("enable = ?", true).Limit(64).Find(&nodes).Error; err != nil {
+		logger.Errorf("Certificate source node inventory failed: %s", logger.ErrorSummary(err))
 		return report, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
@@ -102,13 +107,16 @@ func CoverCertificateSources(ctx context.Context) (CoverCertificateSourceReport,
 			defer func() { results <- out }()
 			if node.Transitive {
 				out.node.State = "direct_required"
+				logger.Warningf("Certificate source skipped node_id=%d reason=direct_required", node.Id)
 				return
 			}
 			if node.Scheme != "https" || node.TlsVerifyMode == "skip" {
 				out.node.State = "https_required"
+				logger.Warningf("Certificate source skipped node_id=%d reason=https_required", node.Id)
 				return
 			}
 			if manager == nil {
+				logger.Errorf("Certificate source discovery failed node_id=%d reason=node_manager_unavailable", node.Id)
 				return
 			}
 			select {
@@ -119,16 +127,19 @@ func CoverCertificateSources(ctx context.Context) (CoverCertificateSourceReport,
 			}
 			remote, err := manager.RemoteFor(&node)
 			if err != nil {
+				logger.Errorf("Certificate source connection failed node_id=%d error=%s", node.Id, logger.ErrorSummary(err))
 				return
 			}
 			remoteSites, err := remote.ListLocalCoverCertificateSources(ctx)
 			if err != nil {
 				out.node.State = coverSourceErrorState(err)
+				logger.Errorf("Certificate source discovery failed node_id=%d state=%s error=%s", node.Id, out.node.State, logger.ErrorSummary(err))
 				return
 			}
 			for _, site := range remoteSites {
 				domain, err := distributionDomain(site.Domain)
 				if err != nil || domain != site.Domain {
+					logger.Errorf("Certificate source response rejected node_id=%d reason=invalid_hostname", node.Id)
 					continue
 				}
 				out.sites = append(out.sites, ManagedCoverSiteSummary{

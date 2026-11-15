@@ -16,6 +16,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 // Shared by every synchronous and asynchronous scanner on this panel.
@@ -240,6 +241,7 @@ func (m *sniJobManager) worker() {
 		if errors.Is(err, context.Canceled) {
 			view.State = "canceled"
 		} else if err != nil {
+			logger.Errorf("SNI scan failed job_id=%s error=%s", view.ID, logger.ErrorSummary(err))
 			view.State = "failed"
 			view.Error = err.Error()
 		} else {
@@ -252,6 +254,7 @@ func (m *sniJobManager) worker() {
 		j.mu.Unlock()
 		if view.State == "done" && m.save != nil {
 			if err := m.save(view); err != nil {
+				logger.Errorf("SNI scan history persistence failed job_id=%s error=%s", view.ID, logger.ErrorSummary(err))
 				view.Error = "history save failed: " + err.Error()
 			}
 		}

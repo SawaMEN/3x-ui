@@ -23,8 +23,8 @@ import (
 
 	"github.com/caddyserver/certmagic"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
+	panellogger "github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
 )
 
@@ -269,7 +269,7 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 		}
 		r.listeners = append(r.listeners, secure)
 	}
-	logger := zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(os.Stderr), zap.WarnLevel))
+	logger := zap.New(panellogger.NewZapCore())
 	r.cache = certmagic.NewCache(certmagic.CacheOptions{Logger: logger, GetConfigForCert: func(certmagic.Certificate) (*certmagic.Config, error) { return r.magic, nil }})
 	r.magic = certmagic.New(r.cache, certmagic.Config{Storage: &certmagic.FileStorage{Path: m.cachePath}, Logger: logger, OnEvent: r.event})
 	ca := certmagic.LetsEncryptProductionCA

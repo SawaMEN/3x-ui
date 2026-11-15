@@ -222,7 +222,13 @@ func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelo
 
 // doWithTimeout allows launch operations with a bounded, longer handshake
 // without increasing the deadline of every ordinary node API call.
-func (r *Remote) doWithTimeout(ctx context.Context, method, path string, body any, timeout time.Duration) (*envelope, error) {
+func (r *Remote) doWithTimeout(ctx context.Context, method, path string, body any, timeout time.Duration) (result *envelope, failure error) {
+	started := time.Now()
+	defer func() {
+		if failure != nil {
+			logger.Errorf("Node RPC failed node_id=%d operation=%s method=%s duration_ms=%d error=%s", r.node.Id, remoteDiagnosticOperation(), method, time.Since(started).Milliseconds(), logger.ErrorSummary(failure))
+		}
+	}()
 	// mtls nodes authenticate via the client certificate, so a bearer token is
 	// optional for them; every other mode still requires one.
 	if r.node.ApiToken == "" && r.node.TlsVerifyMode != "mtls" {
@@ -1040,29 +1046,37 @@ func (r *Remote) FetchTrafficSnapshot(ctx context.Context) (*TrafficSnapshot, er
 	// node is an old build without the per-GUID endpoint (#4983).
 	envTree, err := r.do(ctx, http.MethodPost, "panel/api/clients/onlinesByGuid", nil)
 	if err == nil && len(envTree.Obj) > 0 {
-		_ = json.Unmarshal(envTree.Obj, &snap.OnlineTree)
+		if err := json.Unmarshal(envTree.Obj, &snap.OnlineTree); err != nil {
+			logger.Errorf("Node traffic decode failed node_id=%d field=online_tree error=%s", r.node.Id, logger.ErrorSummary(err))
+		}
 	}
 	if len(snap.OnlineTree) == 0 {
 		envOnlines, err := r.do(ctx, http.MethodPost, "panel/api/clients/onlines", nil)
 		if err != nil {
-			logger.Warning("remote", r.node.Name, "onlines fetch failed:", err)
+			logger.Errorf("Node traffic onlines fetch failed node_id=%d error=%s", r.node.Id, logger.ErrorSummary(err))
 		} else if len(envOnlines.Obj) > 0 {
-			_ = json.Unmarshal(envOnlines.Obj, &snap.OnlineEmails)
+			if err := json.Unmarshal(envOnlines.Obj, &snap.OnlineEmails); err != nil {
+				logger.Errorf("Node traffic decode failed node_id=%d field=online_emails error=%s", r.node.Id, logger.ErrorSummary(err))
+			}
 		}
 	}
 
 	envLastOnline, err := r.do(ctx, http.MethodPost, "panel/api/clients/lastOnline", nil)
 	if err != nil {
-		logger.Warning("remote", r.node.Name, "lastOnline fetch failed:", err)
+		logger.Errorf("Node traffic lastOnline fetch failed node_id=%d error=%s", r.node.Id, logger.ErrorSummary(err))
 	} else if len(envLastOnline.Obj) > 0 {
-		_ = json.Unmarshal(envLastOnline.Obj, &snap.LastOnlineMap)
+		if err := json.Unmarshal(envLastOnline.Obj, &snap.LastOnlineMap); err != nil {
+			logger.Errorf("Node traffic decode failed node_id=%d field=last_online error=%s", r.node.Id, logger.ErrorSummary(err))
+		}
 	}
 
 	envActiveInbounds, err := r.do(ctx, http.MethodPost, "panel/api/clients/activeInbounds", nil)
 	if err != nil {
-		logger.Debugf("remote %s active inbounds fetch failed: %v", r.node.Name, err)
+		logger.Errorf("Node traffic active inbounds fetch failed node_id=%d error=%s", r.node.Id, logger.ErrorSummary(err))
 	} else if len(envActiveInbounds.Obj) > 0 {
-		_ = json.Unmarshal(envActiveInbounds.Obj, &snap.ActiveInboundTree)
+		if err := json.Unmarshal(envActiveInbounds.Obj, &snap.ActiveInboundTree); err != nil {
+			logger.Errorf("Node traffic decode failed node_id=%d field=active_inbounds error=%s", r.node.Id, logger.ErrorSummary(err))
+		}
 	}
 
 	return snap, nil

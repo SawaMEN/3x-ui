@@ -225,6 +225,7 @@ func SaveCoverCertificateFleet(ctx context.Context, source int, domain string, n
 func syncCoverCertificateFleet(ctx context.Context) {
 	rows, err := CoverCertificateFleets()
 	if err != nil {
+		logger.Errorf("Certificate delivery inventory failed: %s", logger.ErrorSummary(err))
 		return
 	}
 	for _, row := range rows {
@@ -267,6 +268,7 @@ func syncCoverCertificateFleet(ctx context.Context) {
 			current, readErr := loadCoverCertificateFleet()
 			if readErr != nil {
 				coverCertificateFleetMu.Unlock()
+				logger.Errorf("Certificate delivery state read failed source_node_id=%d target_node_id=%d error=%s", row.SourceNodeID, target.NodeID, logger.ErrorSummary(readErr))
 				return
 			}
 			for i := range current {
@@ -305,10 +307,14 @@ func syncCoverCertificateFleet(ctx context.Context) {
 					stop()
 					dst.CheckedAt = time.Now().Unix()
 					if deliveryErr != nil {
+						logger.Errorf("Certificate delivery failed source_node_id=%d target_node_id=%d domain=%q error=%s", row.SourceNodeID, dst.NodeID, certificateAuditDomain(row.Domain), logger.ErrorSummary(deliveryErr))
 						dst.State = "retrying"
 						// Node errors can contain response bodies: never persist or expose them.
 						dst.Error = "Certificate is not ready, node is unavailable, or apply failed; retrying automatically"
 					} else {
+						if dst.State != "ready" {
+							logger.Noticef("Certificate delivery ready source_node_id=%d target_node_id=%d domain=%q", row.SourceNodeID, dst.NodeID, certificateAuditDomain(row.Domain))
+						}
 						dst.State = "ready"
 						dst.Error = ""
 						dst.ExpiresAt = expiry
@@ -317,7 +323,7 @@ func syncCoverCertificateFleet(ctx context.Context) {
 				}
 			}
 			if err := saveFirewallJSON(coverCertificateFleetKey, current); err != nil {
-				logger.Error("persist cover certificate delivery state failed")
+				logger.Errorf("Certificate delivery state persistence failed source_node_id=%d error=%s", row.SourceNodeID, logger.ErrorSummary(err))
 			}
 			coverCertificateFleetMu.Unlock()
 		}

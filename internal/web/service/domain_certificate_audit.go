@@ -117,11 +117,17 @@ func RecordCertificateAudit(manager, id, domain, action, outcome string) error {
 	}
 	certificateAuditMu.Lock()
 	defer certificateAuditMu.Unlock()
+	logCertificateAuditEvent(event)
 	entries, err := readCertificateAudit()
 	if err != nil {
+		logger.Errorf("Certificate audit read failed: %s", logger.ErrorSummary(err))
 		return err
 	}
-	return saveFirewallJSON(certificateAuditSettingKey, boundedCertificateAudit(entries, event))
+	err = saveFirewallJSON(certificateAuditSettingKey, boundedCertificateAudit(entries, event))
+	if err != nil {
+		logger.Errorf("Certificate audit persistence failed: %s", logger.ErrorSummary(err))
+	}
+	return err
 }
 
 // Node-specific audit entries are identified by the authenticated node's ID.
@@ -155,11 +161,17 @@ func RecordCertificateAuditWithNode(change CertificateAuditEntry) error {
 	change.Domain = certificateAuditDomain(change.Domain)
 	certificateAuditMu.Lock()
 	defer certificateAuditMu.Unlock()
+	logCertificateAuditEvent(change)
 	entries, err := readCertificateAudit()
 	if err != nil {
+		logger.Errorf("Certificate audit read failed: %s", logger.ErrorSummary(err))
 		return err
 	}
-	return saveFirewallJSON(certificateAuditSettingKey, boundedCertificateAudit(entries, change))
+	err = saveFirewallJSON(certificateAuditSettingKey, boundedCertificateAudit(entries, change))
+	if err != nil {
+		logger.Errorf("Certificate audit persistence failed: %s", logger.ErrorSummary(err))
+	}
+	return err
 }
 
 func CertificateAuditHistory() ([]CertificateAuditEntry, error) {
@@ -212,7 +224,7 @@ func DomainCertificateAuditedEventsForDNS(httpPort, httpsPort int, dnsOnly bool)
 			}
 			if action != "" {
 				if auditErr := RecordCertificateAudit("certmagic", "", name, action, outcome); auditErr != nil {
-					logger.Debug("certificate audit write failed:", auditErr)
+					logger.Errorf("Certificate audit event failed: %s", logger.ErrorSummary(auditErr))
 				}
 			}
 		}
@@ -331,9 +343,20 @@ func RunCertificateHealthMonitor(ctx context.Context) {
 			return
 		case <-timer.C:
 			if err := scanCertificateHealth(); err != nil {
-				logger.Debug("certificate health scan failed:", err)
+				logger.Errorf("Certificate health scan failed: %s", logger.ErrorSummary(err))
 			}
 			timer.Reset(time.Hour)
 		}
+	}
+}
+
+func logCertificateAuditEvent(event CertificateAuditEntry) {
+	switch event.Outcome {
+	case "failed", "expired":
+		logger.Errorf("Certificate event node_id=%d manager=%s domain=%q action=%s outcome=%s", event.NodeID, event.Manager, event.Domain, event.Action, event.Outcome)
+	case "expiring":
+		logger.Warningf("Certificate event node_id=%d manager=%s domain=%q action=%s outcome=%s", event.NodeID, event.Manager, event.Domain, event.Action, event.Outcome)
+	case "recovered":
+		logger.Noticef("Certificate recovered node_id=%d domain=%q", event.NodeID, event.Domain)
 	}
 }

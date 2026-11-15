@@ -28,7 +28,7 @@ func TestRecoveryRecordsPanicWithoutRequestSecrets(t *testing.T) {
 		t.Fatalf("panic status = %d", response.Code)
 	}
 	logs := strings.Join(logger.GetFileLogs(100, "error"), "\n")
-	for _, want := range []string{"recovery test marker", "GET /sub/:token", "recovery_test.go"} {
+	for _, want := range []string{"recovery test marker", "GET middleware.TestRecoveryRecordsPanicWithoutRequestSecrets", "recovery_test.go"} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("missing %q in %s", want, logs)
 		}

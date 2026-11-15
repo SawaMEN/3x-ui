@@ -140,7 +140,7 @@ func initFileBackend() logging.Backend {
 	}
 	fileRotateMu.Unlock()
 
-	backend := logging.NewLogBackend(rotate, "", 0)
+	backend := logging.NewLogBackend(diagnosticFileWriter{target: rotate, fallback: os.Stderr}, "", 0)
 	return logging.NewBackendFormatter(backend, newFormatter(true))
 }
 

@@ -423,7 +423,7 @@ func (a *SettingController) testSmtp(c *gin.Context) {
 	logger.Info("SMTP test: starting...")
 	result := emailService.TestConnection()
 	if !result.Success {
-		logger.Warning("SMTP test failed at", result.Stage+":", result.Message)
+		logger.Errorf("SMTP test failed stage=%s error=%s", logger.SanitizeDiagnostic(result.Stage), logger.SanitizeDiagnostic(result.Message))
 		c.JSON(200, gin.H{
 			"success": false,
 			"stage":   result.Stage,

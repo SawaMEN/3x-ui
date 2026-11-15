@@ -13,7 +13,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
 )
@@ -730,7 +729,7 @@ func (a *ClientController) generateHappLink(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, service.ErrHappSourceTooLong) {
 			// Keep the code exact so clients can localize it without exposing internal error details.
-			c.JSON(http.StatusOK, entity.Msg{Success: false, Msg: "happ_source_too_long", Obj: nil})
+			pureJsonMsg(c, http.StatusOK, false, "happ_source_too_long")
 			return
 		}
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), service.ErrHappLinkUnavailable)

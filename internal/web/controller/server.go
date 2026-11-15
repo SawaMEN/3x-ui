@@ -363,7 +363,7 @@ func (a *ServerController) getXrayObservatoryHistoryBucket(c *gin.Context) {
 func (a *ServerController) getPanelUpdateInfo(c *gin.Context) {
 	info, err := a.panelService.GetUpdateInfo()
 	if err != nil {
-		logger.Debug("panel update check failed:", err)
+		logger.Errorf("Panel update check failed: %s", logger.ErrorSummary(err))
 		c.JSON(http.StatusOK, entity.Msg{Success: false})
 		return
 	}

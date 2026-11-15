@@ -12,6 +12,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
@@ -115,6 +116,7 @@ func readRemoteCertificateInventories(ctx context.Context) []CertificateInventor
 	}
 	var nodes []model.Node
 	if err := db.Where("enable = ?", true).Limit(64).Find(&nodes).Error; err != nil {
+		logger.Errorf("Remote certificate inventory node query failed: %s", logger.ErrorSummary(err))
 		return nil
 	}
 	if len(nodes) == 0 {
@@ -140,10 +142,12 @@ func readRemoteCertificateInventories(ctx context.Context) []CertificateInventor
 			}
 			remote, err := manager.RemoteFor(&node)
 			if err != nil {
+				logger.Errorf("Remote certificate inventory connection failed node_id=%d error=%s", node.Id, logger.ErrorSummary(err))
 				return
 			}
 			certs, err := remote.ListCertificateSummaries(requestCtx)
 			if err != nil {
+				logger.Errorf("Remote certificate inventory failed node_id=%d error=%s", node.Id, logger.ErrorSummary(err))
 				return
 			}
 			items := make([]CertificateInventoryItem, 0, len(certs))

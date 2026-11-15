@@ -13,6 +13,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
@@ -137,7 +138,7 @@ func jsonObj(c *gin.Context, obj any, err error) {
 
 func requestErrorContext(c *gin.Context) string {
 	handler, loc := callerOutsideUtil()
-	return fmt.Sprintf("[%s %s handler=%s %s]", c.Request.Method, c.Request.URL.Path, handler, loc)
+	return fmt.Sprintf("[%s %s handler=%s %s]", c.Request.Method, middleware.RequestRoute(c), handler, loc)
 }
 
 func callerOutsideUtil() (string, string) {
@@ -173,18 +174,15 @@ func jsonMsgObj(c *gin.Context, msg string, obj any, err error) {
 		}
 	} else {
 		m.Success = false
-		ctx := requestErrorContext(c)
-		fail := I18nWeb(c, "fail")
+		middleware.MarkRequestFailureLogged(c)
+		logger.Errorf("%s operation failed: %s", requestErrorContext(c), logger.ErrorSummary(err))
 		errStr := err.Error()
 		if errStr != "" {
 			m.Msg = msg + " (" + errStr + ")"
-			logger.Warningf("%s %s %s: %v", ctx, msg, fail, err)
 		} else if msg != "" {
 			m.Msg = msg
-			logger.Warningf("%s %s %s", ctx, msg, fail)
 		} else {
 			m.Msg = I18nWeb(c, "somethingWentWrong")
-			logger.Warningf("%s %s %s", ctx, m.Msg, fail)
 		}
 	}
 	c.JSON(http.StatusOK, m)
@@ -202,6 +200,10 @@ func pendingNodeObj(pending bool) any {
 
 // pureJsonMsg sends a pure JSON message response with custom status code.
 func pureJsonMsg(c *gin.Context, statusCode int, success bool, msg string) {
+	if !success {
+		middleware.MarkRequestFailureLogged(c)
+		logger.Errorf("%s operation failed status=%d reason=%s", requestErrorContext(c), statusCode, logger.SanitizeDiagnostic(msg))
+	}
 	c.JSON(statusCode, entity.Msg{
 		Success: success,
 		Msg:     msg,

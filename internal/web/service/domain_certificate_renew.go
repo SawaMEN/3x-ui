@@ -163,7 +163,7 @@ const domainRenewalAttemptsKey = "domainExternalRenewalAttempts"
 func runDueDomainCertificateRenewals(ctx context.Context) {
 	status, err := DomainFrontStatus()
 	if err != nil {
-		logger.Debug("certificate renewal scan failed:", err)
+		logger.Errorf("Certificate renewal scan failed: %s", logger.ErrorSummary(err))
 		return
 	}
 	var telemt *TelemtWebProxyState
@@ -174,9 +174,11 @@ func runDueDomainCertificateRenewals(ctx context.Context) {
 	attempts := map[string]int64{}
 	raw, err := firewallSetting(domainRenewalAttemptsKey, "{}")
 	if err != nil {
+		logger.Errorf("Certificate renewal history read failed: %s", logger.ErrorSummary(err))
 		return
 	}
 	if err := json.Unmarshal([]byte(raw), &attempts); err != nil {
+		logger.Errorf("Certificate renewal history decode failed: %s", logger.ErrorSummary(err))
 		return
 	}
 	now := time.Now()
@@ -194,11 +196,11 @@ func runDueDomainCertificateRenewals(ctx context.Context) {
 		}
 		attempts[item.ID] = now.Unix()
 		if err := saveFirewallJSON(domainRenewalAttemptsKey, attempts); err != nil {
-			logger.Error("persist certificate renewal attempt:", err)
+			logger.Errorf("Certificate renewal attempt persistence failed: %s", logger.ErrorSummary(err))
 			return
 		}
 		if _, err := RenewDomainCertificate(ctx, item.ID); err != nil {
-			logger.Error("automatic external certificate renewal failed:", err)
+			logger.Errorf("Automatic certificate renewal failed domain=%q manager=%s error=%s", certificateAuditDomain(item.Name), item.Manager, logger.ErrorSummary(err))
 		}
 	}
 }
