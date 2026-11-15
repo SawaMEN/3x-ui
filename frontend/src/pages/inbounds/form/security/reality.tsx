@@ -64,7 +64,6 @@ export default function RealityForm({
   const { t } = useTranslation();
   const uid = useId();
   const { data: managedDomains = [] } = useManagedSniDomains();
-  const realityDomains = managedDomains.filter((domain) => managedRealityTarget(domain));
   const { getFieldState, getValues, setValue, trigger } = useFormContext();
   const [scannerOpen, setScannerOpen] = useState(false);
   const nodeId = useWatch({ name: 'nodeId' }) as number | null | undefined;
@@ -226,7 +225,11 @@ export default function RealityForm({
         extra={t('pages.inbounds.form.realityTargetHint')}
         onAfterChange={(value) => {
           const names = Array.isArray(value) ? value : [];
-          const picked = realityDomains.find((site) => names.includes(site.name));
+          // SNI references from older nodes may have no endpoint metadata.
+          // Keep suggesting them; only automatic target filling needs an endpoint.
+          const picked = managedDomains.find(
+            (site) => names.includes(site.name) && managedRealityTarget(site),
+          );
           if (picked && !getValues('streamSettings.realitySettings.target')) {
             setValue('streamSettings.realitySettings.target', managedRealityTarget(picked), {
               shouldDirty: true,
@@ -238,7 +241,7 @@ export default function RealityForm({
           mode="tags"
           tokenSeparators={[',']}
           style={{ width: '100%' }}
-          options={realityDomains.map((domain) => ({
+          options={managedDomains.map((domain) => ({
             value: domain.name,
             label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
           }))}
