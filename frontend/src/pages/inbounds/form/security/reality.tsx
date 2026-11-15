@@ -19,6 +19,7 @@ import dayjs from 'dayjs';
 
 import { FormField } from '@/components/form/rhf';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
+import { managedRealityTarget } from '@/lib/managed-sni-target';
 import { UTLS_FINGERPRINT } from '@/schemas/primitives';
 import {
   validateRealityClientVer,
@@ -63,6 +64,7 @@ export default function RealityForm({
   const { t } = useTranslation();
   const uid = useId();
   const { data: managedDomains = [] } = useManagedSniDomains();
+  const realityDomains = managedDomains.filter((domain) => managedRealityTarget(domain));
   const { getFieldState, getValues, setValue, trigger } = useFormContext();
   const [scannerOpen, setScannerOpen] = useState(false);
   const nodeId = useWatch({ name: 'nodeId' }) as number | null | undefined;
@@ -224,11 +226,9 @@ export default function RealityForm({
         extra={t('pages.inbounds.form.realityTargetHint')}
         onAfterChange={(value) => {
           const names = Array.isArray(value) ? value : [];
-          const picked = names.find(
-            (name) => typeof name === 'string' && managedDomains.some((site) => site.name === name),
-          );
+          const picked = realityDomains.find((site) => names.includes(site.name));
           if (picked && !getValues('streamSettings.realitySettings.target')) {
-            setValue('streamSettings.realitySettings.target', `${picked}:443`, {
+            setValue('streamSettings.realitySettings.target', managedRealityTarget(picked), {
               shouldDirty: true,
             });
           }
@@ -238,7 +238,7 @@ export default function RealityForm({
           mode="tags"
           tokenSeparators={[',']}
           style={{ width: '100%' }}
-          options={managedDomains.map((domain) => ({
+          options={realityDomains.map((domain) => ({
             value: domain.name,
             label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
           }))}

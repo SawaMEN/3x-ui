@@ -10,6 +10,7 @@ export interface ManagedSniDomain {
   nodeName?: string;
   expiresAt?: number;
   issuer?: string;
+  realityTarget?: string;
 }
 
 // Certificate paths belong to the hosting node and cannot be reused on

@@ -25,14 +25,15 @@ import (
 )
 
 type ManagedSNIDomain struct {
-	Name      string `json:"name"`
-	Source    string `json:"source"`
-	CertFile  string `json:"certFile"`
-	KeyFile   string `json:"keyFile"`
-	NodeID    int    `json:"nodeId,omitempty"`
-	NodeName  string `json:"nodeName,omitempty"`
-	ExpiresAt int64  `json:"expiresAt,omitempty"`
-	Issuer    string `json:"issuer,omitempty"`
+	Name          string `json:"name"`
+	Source        string `json:"source"`
+	CertFile      string `json:"certFile"`
+	KeyFile       string `json:"keyFile"`
+	NodeID        int    `json:"nodeId,omitempty"`
+	NodeName      string `json:"nodeName,omitempty"`
+	ExpiresAt     int64  `json:"expiresAt,omitempty"`
+	Issuer        string `json:"issuer,omitempty"`
+	RealityTarget string `json:"realityTarget,omitempty"`
 }
 
 // ManagedSNIDomains reads the *main panel's* live HTTPS endpoints. Remote node
@@ -45,7 +46,7 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 	}
 	out := make([]ManagedSNIDomain, 0, len(status.Certificates)+1)
 	seen := make(map[string]bool)
-	add := func(name, source, certFile, keyFile string) {
+	add := func(name, source, certFile, keyFile string, port int) {
 		name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
 		if name == "" || seen[name] || certFile == "" || keyFile == "" {
 			return
@@ -59,27 +60,31 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 			return
 		}
 		seen[name] = true
-		out = append(out, ManagedSNIDomain{Name: name, Source: source, CertFile: certFile, KeyFile: keyFile, ExpiresAt: leaf.NotAfter.Unix(), Issuer: leaf.Issuer.CommonName})
+		out = append(out, ManagedSNIDomain{Name: name, Source: source, CertFile: certFile, KeyFile: keyFile, ExpiresAt: leaf.NotAfter.Unix(), Issuer: leaf.Issuer.CommonName, RealityTarget: managedSNIRealityTarget(name, port)})
 	}
 	// Telemt WEB owns the cover site at public TCP 443. Prefer it when
 	// several managed certificates happen to cover the same hostname.
 	state, err := readTelemtWebState()
 	if err == nil && state.Enabled && telemtWebFrontendActive(state) {
-		add(state.Domain, "telemt", state.CertFile, state.KeyFile)
+		add(state.Domain, "telemt", state.CertFile, state.KeyFile, 443)
 		for _, alias := range state.Aliases {
-			add(alias, "telemt", state.CertFile, state.KeyFile)
+			add(alias, "telemt", state.CertFile, state.KeyFile, 443)
 		}
 	}
 	// Local sites always take precedence, because their certificate paths
 	// belong to the controlling host rather than a connected node.
 	if status.Config.Enabled && status.Running {
 		enabled := make(map[string]bool)
+		ports := make(map[string]int)
 		for _, domain := range status.Config.Domains {
 			enabled[domain.Name] = domain.Enabled
+			if domain.Mode != "cert_only" && domain.Mode != "shared_sni" {
+				ports[domain.Name] = status.Config.PublicPort
+			}
 		}
 		for _, cert := range status.Certificates {
 			if enabled[cert.Name] && (cert.State == "valid" || cert.State == "renewal_due") {
-				add(cert.Name, "gateway", cert.CertFile, cert.KeyFile)
+				add(cert.Name, "gateway", cert.CertFile, cert.KeyFile, ports[cert.Name])
 			}
 		}
 	}
@@ -87,13 +92,21 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 	// this host. Validate their SANs, dates and key pairs with the same add()
 	// check; never copy these paths to a connected node.
 	if settings, err := (&SettingService{}).GetAllSetting(); err == nil {
-		add(settings.SubDomain, "subscription", settings.SubCertFile, settings.SubKeyFile)
-		add(settings.WebDomain, "panel", settings.WebCertFile, settings.WebKeyFile)
+		subPort := 0
+		if settings.SubEnable {
+			subPort = settings.SubPort
+		}
+		add(settings.SubDomain, "subscription", settings.SubCertFile, settings.SubKeyFile, subPort)
+		panelPort := settings.WebPort
+		if override, configured, err := config.GetPortOverride(); configured && err == nil {
+			panelPort = override
+		}
+		add(settings.WebDomain, "panel", settings.WebCertFile, settings.WebKeyFile, panelPort)
 	}
 	// Installed copies are local files on THIS host, not paths borrowed
 	// from the controller. Their stable symlink follows certificate updates.
 	for _, imported := range LocalDistributedTLSCertificates() {
-		add(imported.Domain, "distributed", imported.CertFile, imported.KeyFile)
+		add(imported.Domain, "distributed", imported.CertFile, imported.KeyFile, 0)
 	}
 	if includeNodes {
 		out = mergeNodeManagedSNIDomains(out, discoverNodeSNI(ctx), seen)
@@ -148,6 +161,7 @@ func mergeNodeManagedSNIDomains(existing, incoming []ManagedSNIDomain, seenNames
 			continue
 		}
 		site.Name = name
+		site.RealityTarget = normalizeManagedSNIRealityTarget(name, site.RealityTarget)
 		// Discovery deliberately carries metadata only. Requiring node-local
 		// paths discards every summary; accepting old peers must not expose paths.
 		site.CertFile, site.KeyFile = "", ""
@@ -235,12 +249,13 @@ func discoverNodeSNI(ctx context.Context) []ManagedSNIDomain {
 			// paths are intentionally not returned to the parent or browser:
 			// the same path may refer to a different key on another machine.
 			out = append(out, ManagedSNIDomain{
-				Name:      site.Name,
-				Source:    "remote",
-				NodeID:    result.NodeID,
-				NodeName:  result.NodeName,
-				ExpiresAt: site.ExpiresAt,
-				Issuer:    site.Issuer,
+				Name:          site.Name,
+				Source:        "remote",
+				NodeID:        result.NodeID,
+				NodeName:      result.NodeName,
+				ExpiresAt:     site.ExpiresAt,
+				Issuer:        site.Issuer,
+				RealityTarget: site.RealityTarget,
 			})
 		}
 	}

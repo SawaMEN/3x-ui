@@ -345,7 +345,10 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	tlsCfg.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		d, ok := r.domain(hello.ServerName)
 		if !ok {
-			return nil, fmt.Errorf("unknown TLS domain")
+			if hello.ServerName == "" {
+				return nil, fmt.Errorf("unknown TLS domain: client did not send SNI")
+			}
+			return nil, fmt.Errorf("unknown TLS domain: SNI %q is not an enabled HTTPS site", hello.ServerName)
 		}
 		if cert := r.external[d.Name]; cert != nil {
 			return cert.GetCertificate(hello)

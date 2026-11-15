@@ -31,6 +31,18 @@ func TestInheritedCertificateRenewsWithoutSecondIssuer(t *testing.T) {
 	if manager.runtime.external["shared.example.com"] == nil {
 		t.Fatal("existing certificate was not reused")
 	}
+	for _, test := range []struct {
+		sni  string
+		want string
+	}{
+		{"", "client did not send SNI"},
+		{"unknown.example.com", `SNI "unknown.example.com" is not an enabled HTTPS site`},
+	} {
+		cert, err := manager.runtime.tlsConfig.GetCertificate(&tls.ClientHelloInfo{ServerName: test.sni})
+		if cert != nil || err == nil || !strings.Contains(err.Error(), test.want) {
+			t.Fatalf("unknown SNI %q: cert=%v err=%v", test.sni, cert, err)
+		}
+	}
 	before, _ := manager.runtime.tlsConfig.GetCertificate(&tls.ClientHelloInfo{ServerName: "shared.example.com"})
 	nextCert, nextKey, _ := testCertificate(t, "shared.example.com", 90)
 	raw, _ := os.ReadFile(nextCert)
