@@ -776,3 +776,19 @@ service/job tests, Go build/vet и full golangci-lint (0 issues), с dist-stub
 до соответствующих исправлений. После правки прошли новые regressions и прежние
 managed WEB/job tests. Финальные проверки и открытые WEB runtime ownership/
 first-sample/lifecycle/WAL задачи описаны в docs/audit/RESUME.md.
+
+
+## Продолжение: A95, самоблокировка WEB hot reload
+
+Всего 95 подтверждённых исправлений. Reviewed 265/2364, pending 2099, stale 0:
+пять входящих stale files прочитаны полностью и перепроверены регрессиями,
+добавлен review telemt_webproxy_hot_reload.go.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A95 | WEB reconcile держит operation mutex и повторно берёт его в SaveWebUsersHotReload: обновление users зависает и блокирует shutdown/writers | Отдельный locked reload entry, сохранение public serialization, передача parent context и проверки отмены перед мутациями |
+
+Зависание воспроизведено на исходном lock path в изолированном тестовом процессе.
+После исправления три повторения deadlock/serialization/cancellation tests и
+расширенные service/job/controller/externalvpn regressions прошли. Точные
+результаты, проверки и незавершённая WEB Owner/WAL задача — docs/audit/RESUME.md.

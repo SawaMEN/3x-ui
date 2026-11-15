@@ -12210,8 +12210,8 @@
       "subsystem": "protocols-utilities",
       "kind": "test-fixture",
       "status": "reviewed",
-      "evidence": "A81–A83: full source review of managed outbound bootstrap/readiness/teardown and child isolation, MTProto traffic job ownership, TUIC aggregation/journal and existing failure/replay regressions. Reproduced ignored probe cancellation, detached WEB DB work and invalid TUIC counter accumulation. New context, separate tracked WEB job and saturating aggregation verified by normal regressions; final race/build/vet/lint results and remaining pending traffic-journal scope in RESUME.",
-      "reviewed_sha256": "46fdb331b78d1d06a1c75f06f5ca04177d6ddbaf189bd8b8815b859cb4139925"
+      "evidence": "A95 incoming-change re-review: read all five current files completely; controller auth/allowlist/domain scope/privacy tests, DomainGateway/panel certificate sharing tests and Stage8 lifecycle regressions passed. No blind hash refresh.",
+      "reviewed_sha256": "1e678e59857d002bfb9e13d0d64987171b6f6c5b76d27e4409c7e10d8eab4f18"
     },
     {
       "path": "internal/externalvpn/stage8_openflux_native_test.go",
@@ -16632,8 +16632,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
-      "reviewed_sha256": "cb7900859dbe7cf4cd85883dc3cd867c050735f00f786ad4aa8d04568131d0a1"
+      "evidence": "A95 incoming-change re-review: read all five current files completely; controller auth/allowlist/domain scope/privacy tests, DomainGateway/panel certificate sharing tests and Stage8 lifecycle regressions passed. No blind hash refresh.",
+      "reviewed_sha256": "dd48d9697dba1c1da3f2b58a4edfc80145a85390e912f55f39b9cf9951a5c831"
     },
     {
       "path": "internal/web/controller/api_auth_test.go",
@@ -16643,8 +16643,8 @@
       "subsystem": "api-gateway",
       "kind": "test-fixture",
       "status": "reviewed",
-      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
-      "reviewed_sha256": "d5352efa15b6bc5da94b31093056bc3feedace917cb5b137d14e3f0979ee175d"
+      "evidence": "A95 incoming-change re-review: read all five current files completely; controller auth/allowlist/domain scope/privacy tests, DomainGateway/panel certificate sharing tests and Stage8 lifecycle regressions passed. No blind hash refresh.",
+      "reviewed_sha256": "279571678fc9a5d5129955f8f799e7dc2d1a1f3bbf9a25e52db4864584dd81ad"
     },
     {
       "path": "internal/web/controller/api_background_test.go",
@@ -16775,8 +16775,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
-      "reviewed_sha256": "70dbfb8b393b505700f1783dc9abedb16eb6a4fbc3ec8fc48b061d65a50af793"
+      "evidence": "A95 incoming-change re-review: read all five current files completely; controller auth/allowlist/domain scope/privacy tests, DomainGateway/panel certificate sharing tests and Stage8 lifecycle regressions passed. No blind hash refresh.",
+      "reviewed_sha256": "424ebe98a781fb114d316f979c0e987a734fc866db1bfe6726a4f71ad17ed702"
     },
     {
       "path": "internal/web/controller/domains_preflight_test.go",
@@ -19624,8 +19624,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A85 merge refresh of earlier complete reviews: incoming cover-site endpoint authorization/body limits, authenticated local/remote HTML readers and backend rendering integration inspected in context after fast-forward to 3b976bd. Incoming custom-HTML validation/render tests included in targeted checks; no new original-scope coverage claimed for this refresh.",
-      "reviewed_sha256": "ac25b483d64db2470a44f411462c1ee9951fa7bc2df62b8cc3fba61b072b62c3"
+      "evidence": "A95 incoming-change re-review: read all five current files completely; controller auth/allowlist/domain scope/privacy tests, DomainGateway/panel certificate sharing tests and Stage8 lifecycle regressions passed. No blind hash refresh.",
+      "reviewed_sha256": "dffc11c3fc45012d1c6b20d6eec6af2a8d4e6b670ef52562c521b9a4e885519a"
     },
     {
       "path": "internal/web/service/domain_front_test.go",
@@ -21362,8 +21362,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A93/A94: complete current-file review; malformed WEB snapshot reproduction, SQLite history recovery and overflow regressions; managed WEB config/fingerprint/validation and monitor tests passed. WEB pinned runtime owner/WAL, first-observation and lifecycle boundaries remain explicitly open in RESUME.md.",
-      "reviewed_sha256": "f081fb363c7ec1bfe0fc2828f3305c990c676872798603a30ff51c7ef3cc137b"
+      "evidence": "A95 complete current-file review: nested operation mutex deadlock reproduced in isolated child before fix; locked reload entry preserves public serialization and passes real reconcile/error/cancellation tests; focused regressions passed in service/job/controller/externalvpn. WEB runtime Owner/WAL transfer remains open.",
+      "reviewed_sha256": "51aef1b76c3069d996459b03095fad8dae8fd5b6ddaaff82027898c105219051"
     },
     {
       "path": "internal/web/service/mtproto_web_test.go",
@@ -23946,9 +23946,9 @@
       "deletions": 0,
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
-      "status": "pending",
-      "evidence": "",
-      "reviewed_sha256": null
+      "status": "reviewed",
+      "evidence": "A95 complete current-file review: nested operation mutex deadlock reproduced in isolated child before fix; locked reload entry preserves public serialization and passes real reconcile/error/cancellation tests; focused regressions passed in service/job/controller/externalvpn. WEB runtime Owner/WAL transfer remains open.",
+      "reviewed_sha256": "3d174ca46d6f951296de5f3eb00515c63ca7844dbb84cd748b289a40988cbcaf"
     },
     {
       "path": "internal/web/service/telemt_webproxy_native_test.go",

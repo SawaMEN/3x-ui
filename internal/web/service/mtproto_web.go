@@ -165,12 +165,22 @@ var (
 // Ordinary MTProto sidecars remain managed independently by internal/mtproto.
 // Legacy installations with an unowned WEB Proxy are never changed implicitly.
 func ReconcileMtprotoWebProxy(ctx context.Context) error {
+	return reconcileMtprotoWebProxy(ctx, readTelemtWebState, (TelemtService{}).GetConfig)
+}
+
+func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebProxyState, error), getConfig func() (TelemtConfig, error)) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !mtprotoWebSyncMu.TryLock() {
 		return nil
 	}
 	defer mtprotoWebSyncMu.Unlock()
 	telemtWebOperationMu.Lock()
 	defer telemtWebOperationMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	selected, err := mtprotoWebCandidates()
 	if err != nil {
 		return err
@@ -184,7 +194,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 			return err
 		}
 	}
-	state, err := readTelemtWebState()
+	state, err := readState()
 	if err != nil {
 		return err
 	}
@@ -246,11 +256,11 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 		return nil
 	}
 	if unchanged {
-		cfg, cfgErr := svc.GetConfig()
+		cfg, cfgErr := getConfig()
 		if cfgErr != nil {
 			return cfgErr
 		}
-		if saveErr := svc.SaveWebUsersHotReload(cfg); saveErr != nil {
+		if saveErr := svc.saveWebUsersHotReloadLocked(ctx, cfg); saveErr != nil {
 			return saveErr
 		}
 		state.UserFingerprint = fingerprint
@@ -285,7 +295,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 		_ = writeTelemtWebState(previousState)
 		return err
 	}
-	state, err = readTelemtWebState()
+	state, err = readState()
 	if err != nil {
 		return err
 	}
@@ -294,7 +304,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 	if err := writeTelemtWebState(state); err != nil {
 		return err
 	}
-	cfg, err := svc.GetConfig()
+	cfg, err := getConfig()
 	if err != nil {
 		return err
 	}

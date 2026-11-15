@@ -30,8 +30,20 @@ func (s TelemtService) SaveWebUsersHotReload(cfg TelemtConfig) error {
 	// management so no concurrent writer can overwrite a newer config.
 	telemtWebOperationMu.Lock()
 	defer telemtWebOperationMu.Unlock()
+	return s.saveWebUsersHotReloadLocked(context.Background(), cfg)
+}
+
+// The caller owns telemtWebOperationMu. Reconciliation must use this entry
+// point because it holds the operation lock across its entire state transition.
+func (s TelemtService) saveWebUsersHotReloadLocked(parent context.Context, cfg TelemtConfig) error {
+	if err := parent.Err(); err != nil {
+		return err
+	}
 	rendered, err := renderTelemtConfig(cfg)
 	if err != nil {
+		return err
+	}
+	if err := parent.Err(); err != nil {
 		return err
 	}
 	if err := ensureTelemtConfig(); err != nil {
@@ -59,7 +71,7 @@ func (s TelemtService) SaveWebUsersHotReload(cfg TelemtConfig) error {
 	if systemctl("is-active", "--quiet", telemtServiceName) != nil {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 	if err := telemtWebReloadRuntime(ctx); err == nil {
 		return nil

@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 94 подтверждённых исправления панели; A93 — проверка полноты WEB API snapshots, A94 — защита накопленной истории Telemt от переполнения.
+Всего реализовано 95 подтверждённых исправлений панели; A95 — устранение самоблокировки WEB reconcile при горячем обновлении пользователей.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Просмотрено вручную 264 файла; актуальны 259 отметок, 5 устарели после входящих изменений. Осталось 2100 новых файлов и 5 повторных проверок, всего 2105; общий проход не завершён.
+Просмотрено вручную 265 файлов; все отметки актуальны, stale 0. Осталось 2099 файлов; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1820,3 +1820,66 @@ A94:
   WAL acceptance до cursor advance, включая shutdown и backend restart.
 - Только fake HTTP transport и temporary SQLite. Реальные WEB frontend/backend,
   host systemctl/firewall/ACME, live PostgreSQL и отдельный race run не запускались.
+
+
+## Контрольная точка A95: WEB reconcile повторно блокирует operation mutex
+
+Нужно 3 части этапа: review текущего main, воспроизведение/исправление,
+финальные проверки/публикация. Сделано 3, осталось 0; результаты ниже.
+Всего 95 подтверждённых исправлений. Reviewed 265/2364, pending 2099, stale 0.
+
+Перед изменением WEB accounting найден блокирующий prerequisite: ReconcileMtprotoWebProxy
+держал telemtWebOperationMu и вызывал SaveWebUsersHotReload, который пытался
+повторно взять тот же sync.Mutex. Изменение users/fingerprint при неизменном
+frontend навсегда блокировало reconcile, остальные WEB writers и join фоновой
+работы при остановке панели. Это отдельный defect A95, не accounting Owner fix.
+
+Исправление:
+- Public SaveWebUsersHotReload сохраняет внешнюю сериализацию. Private
+  saveWebUsersHotReloadLocked требует уже удерживаемую operation lock; именно его
+  вызывает Reconcile. SaveConfig fallback не берёт эту lock повторно.
+- Parent context WEB job передаётся в bounded forward runtime reload вместо
+  безусловного Background. Уже отменённый reconcile возвращает context error до
+  захвата operation lock, после ожидания lock проверяется повторно. Locked reload
+  проверяет отмену до и после render, перед host config mutations.
+- Восстановление после уже начатой неудачной активации по-прежнему имеет отдельный
+  bounded Background context: отмена forward operation не должна оборвать rollback.
+- Private reconcile runner принимает readState/getConfig dependencies. Production
+  wrapper использует прежние реальные readers; детерминированный test проходит
+  настоящий unchanged/users branch и lock path с временной БД, затем получает
+  invalid-port error до host filesystem/systemctl/ACME/API operations.
+
+Доказательства:
+- До исправления isolated child test FAIL через 5.02s: real reconcile зависал при
+  повторном mutex Lock. Родитель завершает только свой тестовый процесс; тест
+  не пытается вручную разблокировать mutex чужой горутины.
+- После исправления deadlock/public-serialization/cancellation tests ×3 PASS,
+  service 0.481s. После возврата из error path обе lock снова доступны.
+- Expanded targeted suite PASS: service 1.837s, job 0.377s, controller 1.485s,
+  externalvpn 1.134s. Включены A93/A94 WEB stats/history, managed WEB profile/
+  fingerprint/validation, WEB job ownership, auth/allowlist/domain scope matrix,
+  domain gateway/panel certificate sharing и Stage8 process lifecycle.
+- go build -p 2 ./... PASS с существующим Makefile dist-stub. Frontend build не
+  запускался: frontend и generated assets этим исправлением не менялись.
+- go vet -p 2 ./... PASS; golangci-lint 2.15.0 full ./... PASS, 0 issues.
+- git diff --check и полный inventory check PASS, stale 0. Код, tests и audit
+  checkpoint публикуются одним коммитом поверх 577c8c9.
+
+Полная повторная проверка входящих изменений A93–A94 завершена: прочитаны все
+текущие строки stage8_lifecycle_test.go, controller/api.go, api_auth_test.go,
+controller/domains.go и service/domain_front.go, выполнены соответствующие
+регрессии. Все 5 stale отметок обновлены с evidence, не по одному diff.
+Полностью прочитан telemt_webproxy_hot_reload.go (новая reviewed отметка),
+mtproto_web.go перепроверен после A95. Inventory check PASS, stale 0.
+
+Ограничения / следующая очередь:
+- Исходная задача WEB runtime Owner/WAL не реализована этим prerequisite fix.
+  Collector по-прежнему строит mapping по текущей БД. Нужны pinned identities
+  при установке runtime config, old-owner snapshot до hot reload/stop/переноса,
+  WAL acceptance до cursor advance, epoch guard и no-op identity handoff.
+- Первый WEB sample и cursor после panel/backend restart требуют собственного
+  lifecycle contract: нельзя просто начислять cumulative first sample заново.
+- Operation lock остаётся sync.Mutex: отмена во время ожидания не прерывает само
+  ожидание, но после освобождения lock отменённое задание не начинает мутации.
+- Тесты не активировали реальные host services/ACME/firewall. Отдельный -race,
+  реальный Telemt WEB backend и PostgreSQL в этом этапе не запускались.
