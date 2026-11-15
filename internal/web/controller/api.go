@@ -62,12 +62,12 @@ func (a *APIController) checkAPIAuth(c *gin.Context) {
 			matchedScope = row.Scope
 		}
 	}
-	// Verified mTLS keeps its historical node-sync identity. Only an explicit
-	// node-admin bearer elevates it to software-update authority.
+	// Verified mTLS alone authenticates as node-sync. A valid explicit admin
+	// or node-admin bearer keeps its full authority instead of being downgraded.
 	if c.Request.TLS != nil && len(c.Request.TLS.VerifiedChains) > 0 {
 		scope := model.ApiScopeNodeSync
-		if matchedScope == model.ApiScopeNodeAdmin {
-			scope = model.ApiScopeNodeAdmin
+		if matchedScope == model.ApiScopeAdmin || matchedScope == model.ApiScopeNodeAdmin {
+			scope = matchedScope
 		}
 		if setAuthenticated(scope) {
 			c.Next()

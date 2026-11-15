@@ -190,13 +190,14 @@ The server, not the browser, reads the full certificate chain and matching
 private key from the main node's known certificate registry.
 
 - `POST /panel/api/domains/certificates/distribute` accepts only
-  `{"nodeId": 123, "domain": "vpn.example.com"}` under an interactive
-  administrator session. It refuses disabled/transitive nodes and connections
+  `{"nodeId": 123, "domain": "vpn.example.com"}` under an administrator
+  session or a valid full-access `admin` API token. It refuses disabled/transitive nodes and connections
   using HTTP or `skip` TLS verification.
 - The controller posts the pair over the existing authenticated node channel
-  (system CA validation, certificate pinning or mTLS). The node-sync-only
-  `POST /panel/api/domains/certificates/install` requires the master-push
-  header, a matching key and SAN, valid dates and a chain trusted by the
+  (system CA validation, certificate pinning or mTLS).
+  `POST /panel/api/domains/certificates/install` accepts full-access `admin`
+  tokens, or `node-sync`/`node-admin` authentication with the master-push header.
+  It requires a matching key and SAN, valid dates and a chain trusted by the
   node's system CA store. Its input has a strict size limit and supplies
   **no destination path**.
 - The recipient stores immutable pair versions under the panel's private
@@ -231,15 +232,18 @@ to the website server. A second DNS-01 setup on the main node is unnecessary.
   existing Domain Front / CertMagic configuration. This workflow reuses the
   resulting certificate and matching private key; it does not request another
   certificate for every recipient or move the website.
-- Enrollment is an interactive administrator action. The saved source and
+- Enrollment requires an administrator session or a full-access `admin` API
+  token. The saved source and
   recipients survive panel restarts. Removing recipients stops future delivery;
   it does not delete certificates or change existing inbounds.
 - The worker checks once per minute, starts after restart, and wakes after
   enrollment. It compares certificate/key fingerprints, delivers changed pairs,
   retries unavailable nodes, and periodically repairs installed copies. The UI
   shows queued, retrying and ready states per recipient with expiration dates.
-- `POST /domains/certificates/export-cover` is a **private master-to-node API**,
-  restricted to node-sync/node-admin authentication plus the master-push header.
+- `POST /domains/certificates/export-cover` accepts a full-access `admin` API
+  token, or node-sync/node-admin authentication plus the master-push header.
+  Admin tokens retain their complete permissions when used together with mTLS;
+  verified mTLS alone grants node-sync authority.
   It exports only a certificate for an enabled owned `sni_only` site from the
   running local gateway. Panel, subscription and distributed inventory entries
   cannot be exported through this route. No caller-supplied file path is used.

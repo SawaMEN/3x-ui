@@ -55,7 +55,7 @@ func TestAuditNodeDomainDiscoveryScopesAndPrivacy(t *testing.T) {
 	previous := runtime.GetManager()
 	runtime.SetManager(runtime.NewManager(runtime.LocalDeps{}))
 	t.Cleanup(func() { runtime.SetManager(previous) })
-	for _, scope := range []string{model.ApiScopeNodeSync, model.ApiScopeNodeAdmin, "mtls", model.ApiScopeMonitor, model.ApiScopeAdmin} {
+	for _, scope := range []string{model.ApiScopeNodeSync, model.ApiScopeNodeAdmin, "mtls", model.ApiScopeMonitor} {
 		for _, route := range []struct {
 			method, path string
 			discovery    bool
@@ -69,11 +69,6 @@ func TestAuditNodeDomainDiscoveryScopesAndPrivacy(t *testing.T) {
 			{http.MethodPost, "/domains/certificates/panel-domain", false},
 			{http.MethodPost, "/domains/dns/credential", false},
 		} {
-			// Admin API keeps its existing general read API. Test its mutation
-			// gate only; full local inventory includes deliberate firewall reads.
-			if scope == model.ApiScopeAdmin && (route.method == http.MethodGet || route.discovery) {
-				continue
-			}
 			t.Run(scope+route.method+route.path, func(t *testing.T) {
 				req := httptest.NewRequest(route.method, "/panel/api"+route.path, strings.NewReader(`{}`))
 				req.Header.Set("Content-Type", "application/json")

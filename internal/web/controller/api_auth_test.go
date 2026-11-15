@@ -142,7 +142,7 @@ func TestCheckAPIAuth_AcceptsVerifiedClientCert(t *testing.T) {
 		t.Fatalf("admin-only ping status = %d, want 403; body=%s", w.Code, w.Body.String())
 	}
 
-	for _, legacyScope := range []string{model.ApiScopeAdmin, model.ApiScopeMonitor, model.ApiScopeNodeSync} {
+	for _, legacyScope := range []string{model.ApiScopeMonitor, model.ApiScopeNodeSync} {
 		plaintext := "mtls-" + legacyScope + "-token"
 		if err := database.GetDB().Create(&model.ApiToken{
 			Name:    "mtls-" + legacyScope,
@@ -162,6 +162,21 @@ func TestCheckAPIAuth_AcceptsVerifiedClientCert(t *testing.T) {
 		if w.Code != http.StatusOK || w.Body.String() != `{"api_authed":true,"scope":"node-sync"}` {
 			t.Fatalf("mTLS %s response = %d %s, want preserved node-sync scope", legacyScope, w.Code, w.Body.String())
 		}
+	}
+
+	const adminToken = "mtls-full-admin-token"
+	if err := database.GetDB().Create(&model.ApiToken{
+		Name: "mtls-admin", Token: crypto.HashTokenSHA256(adminToken), Enabled: true, Scope: model.ApiScopeAdmin,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	adminRequest := httptest.NewRequest(http.MethodGet, "/panel/api/server/status", nil)
+	adminRequest.Header.Set("Authorization", "Bearer "+adminToken)
+	adminRequest.TLS = &tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{{{}}}}
+	adminResponse := httptest.NewRecorder()
+	engine.ServeHTTP(adminResponse, adminRequest)
+	if adminResponse.Code != http.StatusOK || adminResponse.Body.String() != `{"api_authed":true,"scope":"admin"}` {
+		t.Fatalf("mTLS downgraded admin token: status=%d body=%s", adminResponse.Code, adminResponse.Body.String())
 	}
 
 	const plaintext = "mtls-node-admin-token"

@@ -28,13 +28,20 @@ func nodeDomainDiscovery(c *gin.Context) bool {
 	return c.GetBool("api_authed") && (scope == model.ApiScopeNodeSync || scope == model.ApiScopeNodeAdmin)
 }
 
-// Node-to-node bearer authentication is sufficient for read-only discovery,
-// but not for changing a gateway's DNS tokens, certificates, or listener config.
-// Those high-impact actions require an interactive panel session.
-func requireDomainAdminSession(c *gin.Context) bool {
-	if c.GetBool("api_authed") {
+// Full-access API administrators have the same domain-management authority as
+// an authenticated panel administrator. Node scopes remain restricted to RPCs.
+func domainAdminToken(c *gin.Context) bool {
+	return c.GetBool("api_authed") && c.GetString("api_token_scope") == model.ApiScopeAdmin
+}
+
+func nodeDomainRequestAuthorized(c *gin.Context) bool {
+	return domainAdminToken(c) || (nodeDomainDiscovery(c) && c.GetHeader(wirecodec.MasterPushHeader) == "1")
+}
+
+func requireDomainAdmin(c *gin.Context) bool {
+	if c.GetBool("api_authed") && !domainAdminToken(c) {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"success": false, "msg": "Domain mutations require an interactive administrator session",
+			"success": false, "msg": "Domain management requires administrator privileges",
 		})
 		return false
 	}
@@ -75,11 +82,11 @@ func NewDomainController(g *gin.RouterGroup) {
 }
 
 func requireNodeCoverSitePush(c *gin.Context) bool {
-	if nodeDomainDiscovery(c) && c.GetHeader(wirecodec.MasterPushHeader) == "1" {
+	if nodeDomainRequestAuthorized(c) {
 		return true
 	}
 	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-		"success": false, "msg": "cover-site node API requires an authenticated master push",
+		"success": false, "msg": "cover-site node API requires an administrator token or authenticated master push",
 	})
 	return false
 }
@@ -99,7 +106,7 @@ func (a *DomainController) localCoverSites(c *gin.Context) {
 }
 
 func (a *DomainController) changeCoverSiteTemplate(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
@@ -144,7 +151,7 @@ func (a *DomainController) localCoverSiteContent(c *gin.Context) {
 }
 
 func (a *DomainController) coverSiteContent(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
@@ -160,7 +167,7 @@ func (a *DomainController) coverSiteContent(c *gin.Context) {
 // coverSites exposes only names and built-in templates for editable owned
 // HTTPS cover sites. A remote node's private gateway config is never returned.
 func (a *DomainController) coverSites(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
@@ -176,7 +183,7 @@ func (a *DomainController) coverSites(c *gin.Context) {
 // resolveCertificate is a read-only, administrator-specific lookup for the
 // active inbound node. The browser receives local file paths, never PEM keys.
 func (a *DomainController) resolveCertificate(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
@@ -195,14 +202,11 @@ func (a *DomainController) resolveCertificate(c *gin.Context) {
 }
 
 // resolveLocalCertificate serves only a node's already validated paths to the
-// authenticated master, not an arbitrary path supplied in the request.
+// authenticated administrator or master, not an arbitrary path supplied in the request.
 func (a *DomainController) resolveLocalCertificate(c *gin.Context) {
-	scope := c.GetString("api_token_scope")
-	if !c.GetBool("api_authed") ||
-		(scope != model.ApiScopeNodeSync && scope != model.ApiScopeNodeAdmin) ||
-		c.GetHeader(wirecodec.MasterPushHeader) != "1" {
+	if !nodeDomainRequestAuthorized(c) {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"success": false, "msg": "node certificate lookup requires an authenticated master push",
+			"success": false, "msg": "node certificate lookup requires an administrator token or authenticated master push",
 		})
 		return
 	}
@@ -220,11 +224,11 @@ func (a *DomainController) resolveLocalCertificate(c *gin.Context) {
 	jsonObj(c, result, err)
 }
 
-// distributeCertificate requires an interactive administrator. Private keys
+// distributeCertificate requires administrator authority. Private keys
 // never appear in its input or output: the server reads only local managed
 // certificates and sends them to the explicitly selected node.
 func (a *DomainController) distributeCertificate(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
@@ -246,12 +250,9 @@ func (a *DomainController) distributeCertificate(c *gin.Context) {
 // uploads, it accepts no destination path and validates the TLS identity
 // before writing to the panel's private certificate store.
 func (a *DomainController) installCertificate(c *gin.Context) {
-	scope := c.GetString("api_token_scope")
-	if !c.GetBool("api_authed") ||
-		(scope != model.ApiScopeNodeSync && scope != model.ApiScopeNodeAdmin) ||
-		c.GetHeader(wirecodec.MasterPushHeader) != "1" {
+	if !nodeDomainRequestAuthorized(c) {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"success": false, "msg": "certificate installation requires an authenticated node push",
+			"success": false, "msg": "certificate installation requires an administrator token or authenticated node push",
 		})
 		return
 	}
@@ -275,7 +276,7 @@ func (a *DomainController) dnsCredential(c *gin.Context) {
 }
 
 func (a *DomainController) saveDNSCredential(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
@@ -311,7 +312,7 @@ func (a *DomainController) status(c *gin.Context) {
 
 // Renew exactly one already registered local certificate, never a caller-supplied path.
 func (a *DomainController) renewCertificate(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	var request struct {
@@ -363,7 +364,7 @@ func (a *DomainController) sni(c *gin.Context) {
 }
 
 func (a *DomainController) apply(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	cfg := domainfront.DefaultConfig()
@@ -480,7 +481,7 @@ func (a *DomainController) recommend(c *gin.Context) {
 }
 
 func (a *DomainController) certificateFleet(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
@@ -489,7 +490,7 @@ func (a *DomainController) certificateFleet(c *gin.Context) {
 }
 
 func (a *DomainController) saveCertificateFleet(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
@@ -523,7 +524,7 @@ func (a *DomainController) exportCoverCertificate(c *gin.Context) {
 }
 
 func (a *DomainController) certificatePreparation(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
@@ -542,7 +543,7 @@ func (a *DomainController) certificatePreparation(c *gin.Context) {
 }
 
 func (a *DomainController) prepareInboundCertificate(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")
@@ -562,9 +563,9 @@ func (a *DomainController) prepareInboundCertificate(c *gin.Context) {
 }
 
 // panelDomainCertificate validates a local direct-domain pair without changing
-// settings. Only an interactive administrator may prepare a panel identity.
+// settings. Only an administrator may prepare a panel identity.
 func (a *DomainController) panelDomainCertificate(c *gin.Context) {
-	if !requireDomainAdminSession(c) {
+	if !requireDomainAdmin(c) {
 		return
 	}
 	c.Header("Cache-Control", "no-store")

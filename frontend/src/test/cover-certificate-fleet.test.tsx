@@ -171,9 +171,15 @@ it('explains why only local sites are visible and can rediscover a recovered rem
   expect(await screen.findByText(/Update this node panel/)).toBeTruthy();
   expect(screen.getByText(/HTTP 403: certificate access is forbidden/)).toBeTruthy();
   expect(screen.getByText(/HTTP 401: the node or proxy rejected authentication/)).toBeTruthy();
-  expect(screen.getByText(/ordinary admin token is not accepted/)).toBeTruthy();
+  expect(screen.getByText(/Admin, node-sync and node-admin tokens are supported/)).toBeTruthy();
   expect(
-    screen.getByText(/reverse proxy forwards Authorization and X-3x-Master-Push/),
+    screen.getByText(/Admin tokens have full access and do not need to be replaced/),
+  ).toBeTruthy();
+  expect(screen.queryByText(/ordinary admin token is not accepted/)).toBeNull();
+  expect(
+    screen.getByText(
+      /reverse proxy forwards Authorization; node-sync\/node-admin requests also require X-3x-Master-Push/,
+    ),
   ).toBeTruthy();
   expect(screen.getByText(/Configure verified HTTPS/)).toBeTruthy();
   refreshed = true;

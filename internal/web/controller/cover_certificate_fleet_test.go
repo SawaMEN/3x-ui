@@ -20,7 +20,9 @@ func TestCoverCertificateExportRequiresAuthenticatedMaster(t *testing.T) {
 	}{
 		{false, "", ""},
 		{false, "", "1"},
-		{true, model.ApiScopeAdmin, "1"},
+		{false, model.ApiScopeAdmin, "1"},
+		{true, model.ApiScopeMonitor, "1"},
+		{true, "unknown", "1"},
 		{true, model.ApiScopeNodeSync, ""},
 		{true, model.ApiScopeNodeAdmin, ""},
 	} {
@@ -38,8 +40,8 @@ func TestCoverCertificateExportRequiresAuthenticatedMaster(t *testing.T) {
 	}
 }
 
-func TestCoverCertificateFleetCannotBeEnrolledByBearerToken(t *testing.T) {
-	for _, scope := range []string{model.ApiScopeAdmin, model.ApiScopeNodeAdmin, model.ApiScopeNodeSync} {
+func TestCoverCertificateFleetRejectsRestrictedBearerTokens(t *testing.T) {
+	for _, scope := range []string{model.ApiScopeMonitor, model.ApiScopeNodeAdmin, model.ApiScopeNodeSync} {
 		recorder := httptest.NewRecorder()
 		ctx, _ := gin.CreateTestContext(recorder)
 		ctx.Set("api_authed", true)
@@ -51,8 +53,8 @@ func TestCoverCertificateFleetCannotBeEnrolledByBearerToken(t *testing.T) {
 	}
 }
 
-func TestInboundCertificatePreparationRejectsBearerMutations(t *testing.T) {
-	for _, scope := range []string{model.ApiScopeAdmin, model.ApiScopeNodeAdmin, model.ApiScopeNodeSync} {
+func TestInboundCertificatePreparationRejectsRestrictedBearerMutations(t *testing.T) {
+	for _, scope := range []string{model.ApiScopeMonitor, model.ApiScopeNodeAdmin, model.ApiScopeNodeSync} {
 		for _, handler := range []func(*gin.Context){(&DomainController{}).prepareInboundCertificate, (&DomainController{}).certificatePreparation} {
 			recorder := httptest.NewRecorder()
 			ctx, _ := gin.CreateTestContext(recorder)
