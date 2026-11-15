@@ -59,6 +59,7 @@ func TestCoverCertificateSourcesDiscoverNodesAndExplainFailures(t *testing.T) {
 	good := addServer("Remote website", 200, `{"success":true,"obj":[{"domain":"web.example.org","siteCatalog":"telemt","certFile":"PRIVATE_PATH","siteHtml":"PRIVATE_HTML"}]}`)
 	missing := addServer("Old node", 404, `PRIVATE_ERROR_BODY`)
 	denied := addServer("No access", 403, `PRIVATE_TOKEN_ERROR`)
+	unauthorized := addServer("Invalid token", 401, `PRIVATE_CREDENTIAL_ERROR`)
 	empty := addServer("No website", 200, `{"success":true,"obj":[]}`)
 	insecure := model.Node{Name: "HTTP node", Scheme: "http", Enable: true}
 	if err := database.GetDB().Create(&insecure).Error; err != nil {
@@ -75,7 +76,7 @@ func TestCoverCertificateSourcesDiscoverNodesAndExplainFailures(t *testing.T) {
 	for _, node := range report.Nodes {
 		states[node.NodeID] = node.State
 	}
-	for id, want := range map[int]string{good: "ready", missing: "update_required", denied: "access_denied", empty: "empty", insecure.Id: "https_required"} {
+	for id, want := range map[int]string{good: "ready", missing: "update_required", denied: "access_denied", unauthorized: "unauthorized", empty: "empty", insecure.Id: "https_required"} {
 		if states[id] != want {
 			t.Errorf("node %d state=%q, want %q", id, states[id], want)
 		}

@@ -60,7 +60,9 @@ func coverSourceErrorState(err error) string {
 	switch {
 	case runtime.IsRemoteHTTPStatus(err, http.StatusNotFound), runtime.IsRemoteHTTPStatus(err, http.StatusMethodNotAllowed):
 		return "update_required"
-	case runtime.IsRemoteHTTPStatus(err, http.StatusUnauthorized), runtime.IsRemoteHTTPStatus(err, http.StatusForbidden):
+	case runtime.IsRemoteHTTPStatus(err, http.StatusUnauthorized):
+		return "unauthorized"
+	case runtime.IsRemoteHTTPStatus(err, http.StatusForbidden):
 		return "access_denied"
 	default:
 		// Remote errors may contain response bodies or credentials. Expose a code,

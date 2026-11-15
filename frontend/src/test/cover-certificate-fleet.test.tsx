@@ -159,6 +159,7 @@ it('explains why only local sites are visible and can rediscover a recovered rem
                 },
                 { nodeId: 9, nodeName: 'Locked node', state: 'access_denied' },
                 { nodeId: 10, nodeName: 'HTTP node', state: 'https_required' },
+                { nodeId: 11, nodeName: 'Expired token', state: 'unauthorized' },
               ],
             }
           : [],
@@ -168,7 +169,12 @@ it('explains why only local sites are visible and can rediscover a recovered rem
     <CoverCertificateFleet nodes={[{ id: 8, name: 'Remote node' }]} defaultRecipientId={0} />,
   );
   expect(await screen.findByText(/Update this node panel/)).toBeTruthy();
-  expect(screen.getByText(/Check the node API token/)).toBeTruthy();
+  expect(screen.getByText(/HTTP 403: certificate access is forbidden/)).toBeTruthy();
+  expect(screen.getByText(/HTTP 401: the node or proxy rejected authentication/)).toBeTruthy();
+  expect(screen.getByText(/ordinary admin token is not accepted/)).toBeTruthy();
+  expect(
+    screen.getByText(/reverse proxy forwards Authorization and X-3x-Master-Push/),
+  ).toBeTruthy();
   expect(screen.getByText(/Configure verified HTTPS/)).toBeTruthy();
   refreshed = true;
   fireEvent.click(screen.getByRole('button', { name: 'Refresh certificate sources' }));

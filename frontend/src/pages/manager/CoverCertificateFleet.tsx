@@ -148,9 +148,13 @@ export default function CoverCertificateFleet({
       'Обновите панель на этой ноде: API источников недоступен.',
       'Update this node panel: the source API is unavailable.',
     ),
+    unauthorized: t(
+      'HTTP 401: нода или прокси не приняли авторизацию. Проверьте значение API-токена, срок действия и что он включён.',
+      'HTTP 401: the node or proxy rejected authentication. Check the API token value, expiry and enabled state.',
+    ),
     access_denied: t(
-      'Нет доступа. Проверьте API-токен и его права на ноде.',
-      'Access denied. Check the node API token and its permissions.',
+      'HTTP 403: получение сертификатов запрещено. Нужен токен node-sync («Синхронизация узла») или node-admin. Обычный admin для этой операции не подходит.',
+      'HTTP 403: certificate access is forbidden. Use a node-sync or node-admin token; an ordinary admin token is not accepted for this operation.',
     ),
     https_required: t(
       'Для получения ключа настройте HTTPS с проверкой сертификата в подключении ноды.',
@@ -235,6 +239,17 @@ export default function CoverCertificateFleet({
                 ),
               },
             ]}
+          />
+        )}
+        {sourceNodes.some((node) => ['unauthorized', 'access_denied'].includes(node.state)) && (
+          <Alert
+            type="info"
+            showIcon
+            title={t('Как настроить доступ к источнику', 'Configure access to the source')}
+            description={t(
+              'На ноде-источнике откройте «Настройки панели → Безопасность → API-токены». Если в подключении используется обычный admin или monitor, создайте отдельный токен «Синхронизация узла» (node-sync). На основном сервере укажите его в карточке этой ноды и нажмите «Обновить источники сертификатов». Если уже используется действующий node-sync/node-admin, проверьте, что обратный прокси передаёт Authorization и X-3x-Master-Push. Токен сюда отправлять не нужно.',
+              'On the source node, open Panel settings → Security → API tokens. If the connection uses an ordinary admin or monitor token, create a separate node-sync token. Set it in this node’s connection on the main server and refresh certificate sources. If a valid node-sync/node-admin token is already in use, check that the reverse proxy forwards Authorization and X-3x-Master-Push. Do not send the token here.',
+            )}
           />
         )}
         <Select
