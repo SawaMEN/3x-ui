@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import type { DomainForm, DomainConfigForm } from '@/schemas/domain-front';
 import type { DomainFrontStatus, DomainFrontCheck } from '@/generated/zod';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
+import { panelListenerAddress } from './panel-url';
 import { getDomainHealth } from './domain-health';
 import type { AllSetting } from '@/models/setting';
 export default function DomainHostList({
@@ -50,6 +51,7 @@ export default function DomainHostList({
 }) {
   const { t } = useTranslation();
   const l = (k: string) => t('pages.settings.domains.' + k);
+  const panelAddress = panelListenerAddress(panelSettings, window.location.hostname);
   const [requestedPage, setPage] = useState(1);
   const [query, setQuery] = useState({ search, filter });
   if (query.search !== search || query.filter !== filter) {
@@ -111,7 +113,7 @@ export default function DomainHostList({
               (d) => d.name === domain.name && JSON.stringify(d) === JSON.stringify(domain),
             ) ?? false;
           const health = getDomainHealth(domain, status, checks[domain.name], saved);
-          const panelDomain = panelSettings?.webDomain.trim().toLowerCase().replace(/\.$/, '');
+          const panelDomain = panelAddress?.hostname;
           const servesPanel =
             !!panelDomain && panelDomain === domain.name.toLowerCase().replace(/\.$/, '');
           const remote = domain.mode === 'shared_sni';
@@ -199,20 +201,18 @@ export default function DomainHostList({
                     <CloudServerOutlined />{' '}
                     {remote ? node?.nodeName || l('remoteSNITag') : l('redesign.mainServer')}
                   </span>
-                  <Typography.Text type="secondary">
+                  {servesPanel && panelAddress && (
+                    <Typography.Text type="secondary" className="domain-panel-endpoint">
+                      {l('redesign.panel')} · {panelAddress.protocol} · {panelAddress.port}
+                    </Typography.Text>
+                  )}
+                  <Typography.Text type="secondary" className="domain-gateway-endpoint">
                     {remote
                       ? l('redesign.remoteIdentity')
                       : domain.mode === 'cert_only'
                         ? 'DNS-01'
-                        : `HTTPS · ${draft.publicPort}`}
+                        : `${l('redesign.gateway')} · HTTPS · ${draft.publicPort}`}
                   </Typography.Text>
-                  {servesPanel && panelSettings && (
-                    <Typography.Text type="secondary">
-                      {l('redesign.panel')} ·{' '}
-                      {panelSettings.webCertFile && panelSettings.webKeyFile ? 'HTTPS' : 'HTTP'} ·{' '}
-                      {panelSettings.webPort}
-                    </Typography.Text>
-                  )}
                 </div>
                 <div className="domain-host-buttons">
                   <Button size="small" onClick={() => onEdit(domain.name)}>

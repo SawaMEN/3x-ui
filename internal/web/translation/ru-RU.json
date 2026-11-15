@@ -2709,7 +2709,8 @@
           "gatewayEnabled": "Шлюз включён",
           "gatewayDisabled": "Шлюз выключен",
           "autoRenewShort": "Автопродление",
-          "inboundCount": "Подключения: {count}"
+          "inboundCount": "Подключения: {count}",
+          "gateway": "Шлюз"
         }
       },
       "subAppearanceTheme": "Тема страницы",

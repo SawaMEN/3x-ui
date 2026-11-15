@@ -2830,7 +2830,8 @@
           "gatewayEnabled": "Gateway enabled",
           "gatewayDisabled": "Gateway disabled",
           "autoRenewShort": "Auto-renewal",
-          "inboundCount": "Inbounds: {count}"
+          "inboundCount": "Inbounds: {count}",
+          "gateway": "Gateway"
         }
       },
       "subAppearanceTheme": "Page theme",

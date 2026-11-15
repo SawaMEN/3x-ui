@@ -8,6 +8,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { AllSetting } from '@/models/setting';
 import type { DomainConfigForm } from '@/schemas/domain-front';
+import { panelListenerAddress } from './panel-url';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 export default function DomainServiceMap({
   settings,
@@ -28,15 +29,14 @@ export default function DomainServiceMap({
 }) {
   const { t } = useTranslation();
   const l = (k: string) => t('pages.settings.domains.redesign.' + k);
+  const panelAddress = panelListenerAddress(settings, window.location.hostname);
   const tiles = [
     {
       key: 'panel',
       icon: <DesktopOutlined />,
       title: l('panel'),
-      value: settings?.webDomain || l('byAddress'),
-      detail: settings
-        ? `${settings.webCertFile && settings.webKeyFile ? 'HTTPS' : 'HTTP'} · ${settings.webPort}`
-        : l('unavailable'),
+      value: panelAddress?.hostname || l('byAddress'),
+      detail: panelAddress ? `${panelAddress.protocol} · ${panelAddress.port}` : l('unavailable'),
       onClick: onPanel,
     },
     {
@@ -44,7 +44,9 @@ export default function DomainServiceMap({
       icon: <LinkOutlined />,
       title: l('subscription'),
       value: draft.subscriptionDomain || l('notAssigned'),
-      detail: draft.subscriptionDomain ? `HTTPS · ${draft.publicPort}` : l('chooseDomain'),
+      detail: draft.subscriptionDomain
+        ? `${l('gateway')} · HTTPS · ${draft.publicPort}`
+        : l('chooseDomain'),
       onClick: onSubscription,
       disabled: subscriptionDisabled,
     },

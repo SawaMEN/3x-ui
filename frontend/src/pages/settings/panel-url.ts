@@ -7,6 +7,20 @@ type PanelAddress = {
   webKeyFile: string;
 };
 
+// Listener metadata comes from panel settings, never the domain gateway port.
+// With no configured hostname the panel is reached at the current page host.
+export function panelListenerAddress(
+  settings: Pick<PanelAddress, 'webDomain' | 'webPort' | 'webCertFile' | 'webKeyFile'> | undefined,
+  currentHostname: string,
+) {
+  if (!settings) return undefined;
+  return {
+    hostname: (settings.webDomain.trim() || currentHostname).toLowerCase().replace(/\.$/, ''),
+    port: settings.webPort,
+    protocol: settings.webCertFile && settings.webKeyFile ? 'HTTPS' : 'HTTP',
+  };
+}
+
 export function panelUrlAfterRestart(
   current: string,
   initial: PanelAddress,

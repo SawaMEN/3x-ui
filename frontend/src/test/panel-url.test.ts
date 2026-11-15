@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { panelUrlAfterRestart } from '@/pages/settings/panel-url';
+import { panelUrlAfterRestart, panelListenerAddress } from '@/pages/settings/panel-url';
 
 const initial = { webDomain: '', webPort: 80, webBasePath: '/', webCertFile: '', webKeyFile: '' };
 describe('panel address after restart', () => {
@@ -82,4 +82,37 @@ it('keeps the environment port override when selecting a direct panel domain', a
       8443,
     ),
   ).toBe('https://direct.test:8443/panel/settings');
+});
+
+describe('panel listener labels', () => {
+  it('uses the configured panel port and hostname', () => {
+    expect(
+      panelListenerAddress(
+        {
+          ...initial,
+          webDomain: 'PANEL.EXAMPLE.COM.',
+          webPort: 5443,
+          webCertFile: '/cert',
+          webKeyFile: '/key',
+        },
+        'other.example.com',
+      ),
+    ).toEqual({ hostname: 'panel.example.com', port: 5443, protocol: 'HTTPS' });
+  });
+  it('recognizes the current host when webDomain is empty without substituting port 443', () => {
+    expect(
+      panelListenerAddress(
+        { ...initial, webPort: 2053, webCertFile: '/cert', webKeyFile: '/key' },
+        'shared.example.com',
+      ),
+    ).toEqual({ hostname: 'shared.example.com', port: 2053, protocol: 'HTTPS' });
+  });
+  it('does not label a plain panel listener as HTTPS or invent unavailable settings', () => {
+    expect(panelListenerAddress({ ...initial, webPort: 8080 }, 'panel.example.com')).toEqual({
+      hostname: 'panel.example.com',
+      port: 8080,
+      protocol: 'HTTP',
+    });
+    expect(panelListenerAddress(undefined, 'panel.example.com')).toBeUndefined();
+  });
 });

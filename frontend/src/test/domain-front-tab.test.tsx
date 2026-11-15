@@ -884,7 +884,9 @@ describe('domain and TLS dashboard', () => {
     f.config.publicPort = 443;
     renderWithProviders(<DomainFrontTab />);
     await openDomainSection('Domains');
-    expect(document.querySelector('.domain-host-server')?.textContent).toContain('HTTPS · 443');
+    expect(document.querySelector('.domain-host-server')?.textContent).toContain(
+      'Gateway · HTTPS · 443',
+    );
     expect(document.querySelector('.domain-host-server')?.textContent).not.toContain('8443');
   });
 
@@ -972,7 +974,15 @@ describe('domain and TLS dashboard', () => {
       expect(row.querySelector('.domain-host-target')?.textContent).not.toContain(
         'Subscription only',
       );
-      expect(row.querySelector('.domain-host-server')?.textContent).toContain('HTTPS · 443');
+      const panelEndpoint = row.querySelector('.domain-panel-endpoint')!;
+      const gatewayEndpoint = row.querySelector('.domain-gateway-endpoint')!;
+      expect(panelEndpoint.textContent).toBe('Admin panel · HTTPS · 2053');
+      expect(gatewayEndpoint.textContent).toBe('Gateway · HTTPS · 443');
+      expect(
+        Array.from(row.querySelector('.domain-host-server')!.children).indexOf(panelEndpoint),
+      ).toBeLessThan(
+        Array.from(row.querySelector('.domain-host-server')!.children).indexOf(gatewayEndpoint),
+      );
       expect(row.querySelector('.domain-host-server')?.textContent).toContain(
         'Admin panel · HTTPS · 2053',
       );
