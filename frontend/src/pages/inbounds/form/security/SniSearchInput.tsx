@@ -12,7 +12,7 @@ import type { RealityScanResult } from '@/generated/types';
 import RealityTargetScannerModal, { scannedServerName } from './RealityTargetScannerModal';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
 import LocalCertificateAssistant from './LocalCertificateAssistant';
-import { nodeCertificateForSni } from './local-certificate';
+import { managedSniForNode } from '@/lib/managed-sni-target';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 import type { SniScanPurpose } from './RealityTargetScannerModal';
 
@@ -50,6 +50,7 @@ export default function SniSearchInput({
   const [messageApi, contextHolder] = message.useMessage();
   const { control } = useFormContext();
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
+  const availableDomains = managedSniForNode(managedDomains, nodeId, purpose);
   const scan: SNIScanCallback = async (targets, mode, signal, progress, recheck) => {
     try {
       return await runSNIScan(nodeId, purpose, targets, mode, signal, progress, recheck);
@@ -76,31 +77,24 @@ export default function SniSearchInput({
           style={{ flex: 1, minWidth: 0 }}
           onChange={(event) => onChange?.(event.target.value)}
         />
-        {managedDomains.length > 0 && (
+        {availableDomains.length > 0 && (
           <Select
+            key={nodeId ?? 0}
             aria-label={t('pages.settings.domains.managedSni')}
             style={{ width: 170, minWidth: 110 }}
             value={undefined}
             placeholder={t('pages.settings.domains.managedSni')}
             disabled={disabled}
             showSearch={{ optionFilterProp: 'label' }}
-            options={managedDomains.map((domain) => ({
+            options={availableDomains.map((domain) => ({
               label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? domain.nodeName || t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
               value: managedDomainKey(domain),
             }))}
             onChange={(key) => {
-              const domain = managedDomains.find((item) => managedDomainKey(item) === key);
+              const domain = availableDomains.find((item) => managedDomainKey(item) === key);
               if (!domain) return;
               onChange?.(domain.name);
               onPickManagedDomain?.(domain);
-              if (
-                domain.source === 'remote' &&
-                domain.nodeId !== nodeId &&
-                purpose === 'tls' &&
-                !nodeCertificateForSni(managedDomains, domain.name, nodeId)
-              ) {
-                messageApi.info(t('pages.settings.domains.remoteSNITLSWarning'));
-              }
             }}
           />
         )}

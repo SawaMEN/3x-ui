@@ -19,7 +19,7 @@ import dayjs from 'dayjs';
 
 import { FormField } from '@/components/form/rhf';
 import { useManagedSniDomains } from '@/api/queries/useManagedSniDomains';
-import { managedRealityTarget } from '@/lib/managed-sni-target';
+import { managedRealityTarget, managedSniForNode } from '@/lib/managed-sni-target';
 import { UTLS_FINGERPRINT } from '@/schemas/primitives';
 import {
   validateRealityClientVer,
@@ -67,6 +67,7 @@ export default function RealityForm({
   const { getFieldState, getValues, setValue, trigger } = useFormContext();
   const [scannerOpen, setScannerOpen] = useState(false);
   const nodeId = useWatch({ name: 'nodeId' }) as number | null | undefined;
+  const availableDomains = managedSniForNode(managedDomains, nodeId, 'reality');
   const mldsa65Seed = useWatch({
     name: 'streamSettings.realitySettings.mldsa65Seed',
   });
@@ -225,9 +226,7 @@ export default function RealityForm({
         extra={t('pages.inbounds.form.realityTargetHint')}
         onAfterChange={(value) => {
           const names = Array.isArray(value) ? value : [];
-          // SNI references from older nodes may have no endpoint metadata.
-          // Keep suggesting them; only automatic target filling needs an endpoint.
-          const picked = managedDomains.find(
+          const picked = availableDomains.find(
             (site) => names.includes(site.name) && managedRealityTarget(site),
           );
           if (picked && !getValues('streamSettings.realitySettings.target')) {
@@ -241,7 +240,7 @@ export default function RealityForm({
           mode="tags"
           tokenSeparators={[',']}
           style={{ width: '100%' }}
-          options={managedDomains.map((domain) => ({
+          options={availableDomains.map((domain) => ({
             value: domain.name,
             label: `${domain.name} · ${domain.source === 'telemt' ? 'Telemt WEB' : domain.source === 'remote' ? t('pages.settings.domains.remoteSNITag') : 'TLS'}`,
           }))}

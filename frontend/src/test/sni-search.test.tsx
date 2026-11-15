@@ -179,7 +179,7 @@ describe('SNI search in protocol forms', () => {
     ['local AnyTLS', <AnyTlsFields key="local-anytls" />, undefined, true],
     ['remote AnyTLS', <AnyTlsFields key="remote-anytls" />, 7, false],
   ] as const)(
-    'picks Telemt WEB SNI from the master for %s',
+    'offers the master certificate only when locally usable: %s',
     async (title, fields, nodeId, local) => {
       vi.spyOn(HttpUtil, 'get').mockImplementation(
         async (url) =>
@@ -199,6 +199,15 @@ describe('SNI search in protocol forms', () => {
           ),
       );
       renderWithProviders(<Harness nodeId={nodeId}>{fields}</Harness>);
+      if (!local) {
+        await waitFor(() =>
+          expect(HttpUtil.get).toHaveBeenCalledWith('/panel/api/domains/sni', undefined, {
+            silent: true,
+          }),
+        );
+        expect(screen.queryByRole('combobox', { name: 'My SNI' })).toBeNull();
+        return;
+      }
       const select = await screen.findByRole('combobox', { name: 'My SNI' });
       fireEvent.mouseDown(select);
       fireEvent.click(await screen.findByText('edge.example.com · Telemt WEB'));
