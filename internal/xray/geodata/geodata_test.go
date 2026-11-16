@@ -14,6 +14,7 @@ import (
 
 	xraygeodata "github.com/xtls/xray-core/common/geodata"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 func writeSiteDB(t *testing.T, dir, name string, sites ...*xraygeodata.GeoSite) string {
@@ -403,6 +404,66 @@ func TestBrokenFileIsListedWithReason(t *testing.T) {
 	}
 	if files[0].Kind != "" {
 		t.Errorf("kind = %q, want empty", files[0].Kind)
+	}
+}
+
+// RuNetFreedom geosite databases contain records larger than 32 MiB. A large
+// unrelated category must not prevent expanding a small routing category.
+func TestLargeGeositeRecordStreamsWithoutRejectingRoute(t *testing.T) {
+	dir := t.TempDir()
+	file, err := os.Create(filepath.Join(dir, "geosite_RU.dat"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	raw, err := proto.Marshal(domain(xraygeodata.Domain_Domain, strings.Repeat("a", 8192)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	domainField := protowire.AppendBytes(protowire.AppendTag(nil, fieldEntryPayload, protowire.BytesType), raw)
+	codeField := protowire.AppendString(protowire.AppendTag(nil, fieldEntryCode, protowire.BytesType), "ru-blocked-all")
+	const recordCount = 4100
+	recordSize := len(codeField) + recordCount*len(domainField)
+	if recordSize <= 32<<20 {
+		t.Fatalf("test record too small: %d bytes", recordSize)
+	}
+	write := func(data []byte) {
+		t.Helper()
+		if _, err := file.Write(data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(protowire.AppendVarint(protowire.AppendTag(nil, fieldListEntry, protowire.BytesType), uint64(recordSize)))
+	write(codeField)
+	for range recordCount {
+		write(domainField)
+	}
+	small, err := proto.Marshal(site("ru-available-only-inside", domain(xraygeodata.Domain_Domain, "example.ru")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(protowire.AppendBytes(protowire.AppendTag(nil, fieldListEntry, protowire.BytesType), small))
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewStore(dir)
+	category, err := store.Lookup("geosite_RU.dat", "ru-available-only-inside")
+	if err != nil || category.Entries != 1 {
+		t.Fatalf("routing category = %+v, error = %v", category, err)
+	}
+	pages, err := store.Entries("geosite_RU.dat", "ru-blocked-all", "", 0, 1)
+	if err != nil || pages.Total != recordCount || len(pages.Items) != 1 {
+		t.Fatalf("large category page = %+v, error = %v", pages, err)
+	}
+	entries, err := store.AllEntries("geosite_RU.dat", "ru-available-only-inside", 10)
+	if err != nil || len(entries) != 1 || entries[0].Value != "example.ru" {
+		t.Fatalf("routing entries = %+v, error = %v", entries, err)
+	}
+	files, err := store.ListFiles()
+	if err != nil || len(files) != 1 || files[0].Kind != KindSite || files[0].Error != "" {
+		t.Fatalf("large geosite file = %+v, error = %v", files, err)
 	}
 }
 
