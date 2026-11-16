@@ -14,15 +14,32 @@ vi.mock('@/pages/singbox/native-import', async (importOriginal) => ({
   importNativeConnections: vi.fn(),
 }));
 describe('native outbound modal', () => {
-  it.each([false, true])('offers OpenFlux only after component installation: %s', async (installed) => {
-    vi.mocked(HttpUtil.get).mockResolvedValue(new Msg(true, '', { installed }));
-    render(<SingBoxOutboundModal open value={null} existingTags={[]} onCancel={() => {}} onSave={() => {}} />);
-    await waitFor(() => expect(HttpUtil.get).toHaveBeenCalled());
-    const input = screen.getByLabelText('Протокол');
-    fireEvent.mouseDown(input.closest('.ant-select')?.querySelector('.ant-select-selector') ?? input);
-    fireEvent.change(input, { target: { value: 'openflux' } });
-    await waitFor(() => expect(document.querySelectorAll('.ant-select-item-option[title="openflux"]').length > 0).toBe(installed));
-  });
+  it.each([false, true])(
+    'offers OpenFlux only after component installation: %s',
+    async (installed) => {
+      vi.mocked(HttpUtil.get).mockResolvedValue(new Msg(true, '', { installed }));
+      render(
+        <SingBoxOutboundModal
+          open
+          value={null}
+          existingTags={[]}
+          onCancel={() => {}}
+          onSave={() => {}}
+        />,
+      );
+      await waitFor(() => expect(HttpUtil.get).toHaveBeenCalled());
+      const input = screen.getByLabelText('Протокол');
+      fireEvent.mouseDown(
+        input.closest('.ant-select')?.querySelector('.ant-select-selector') ?? input,
+      );
+      fireEvent.change(input, { target: { value: 'openflux' } });
+      await waitFor(() =>
+        expect(
+          document.querySelectorAll('.ant-select-item-option[title="openflux"]').length > 0,
+        ).toBe(installed),
+      );
+    },
+  );
   it('creates Cloudflare WARP through the protocol picker with a unique tag', async () => {
     const onSave = vi.fn();
     render(

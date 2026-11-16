@@ -33,15 +33,20 @@ function toggleSockoptsSwitch() {
 }
 
 describe('OutboundFormModal', () => {
-  it.each([false, true])('offers OpenFlux only after component installation: %s', async (installed) => {
-    vi.mocked(HttpUtil.get).mockResolvedValue(new Msg(true, '', { installed }));
-    renderModal();
-    await act(async () => {});
-    listSelectOptions('protocol');
-    fireEvent.change(document.querySelector('#protocol')!, { target: { value: 'openflux' } });
-    await act(async () => {});
-    expect(listSelectOptions('protocol').some((label) => label.startsWith('openflux'))).toBe(installed);
-  });
+  it.each([false, true])(
+    'offers OpenFlux only after component installation: %s',
+    async (installed) => {
+      vi.mocked(HttpUtil.get).mockResolvedValue(new Msg(true, '', { installed }));
+      renderModal();
+      await act(async () => {});
+      listSelectOptions('protocol');
+      fireEvent.change(document.querySelector('#protocol')!, { target: { value: 'openflux' } });
+      await act(async () => {});
+      expect(listSelectOptions('protocol').some((label) => label.startsWith('openflux'))).toBe(
+        installed,
+      );
+    },
+  );
 
   it('renders add mode without crashing', () => {
     renderModal(null);
