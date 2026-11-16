@@ -37,7 +37,14 @@ export const FptnInboundSettingsSchema = z.object({
 });
 export const OpenFluxInboundSettingsSchema = z
   .object({
-    maxPacketSize: z.number().int().refine((v) => v === 0 || (v >= 1280 && v <= 65000), 'pages.inbounds.form.openfluxPacketInvalid').default(0),
+    maxPacketSize: z
+      .number()
+      .int()
+      .refine(
+        (v) => v === 0 || (v >= 1280 && v <= 65000),
+        'pages.inbounds.form.openfluxPacketInvalid',
+      )
+      .default(0),
     refusePeerLogin: z.boolean().default(false),
     debug: z.number().int().min(0).max(2).default(0),
     context: z

@@ -347,10 +347,15 @@ export default function SingBoxOutboundModal({
           <Select
             showSearch={{ optionFilterProp: 'label' }}
             value={type || undefined}
-            options={[...outboundProtocols, ...nativeEndpointTypes].filter((protocol) => protocol !== 'openflux' || openFluxInstalled || value?.type === 'openflux').map((protocol) => ({
-              value: protocol,
-              label: outboundProtocolLabel(protocol),
-            }))}
+            options={[...outboundProtocols, ...nativeEndpointTypes]
+              .filter(
+                (protocol) =>
+                  protocol !== 'openflux' || openFluxInstalled || value?.type === 'openflux',
+              )
+              .map((protocol) => ({
+                value: protocol,
+                label: outboundProtocolLabel(protocol),
+              }))}
             onChange={(next) => {
               setInvalidOptions([]);
               savedProtocols.current[type] = structuredClone(draft);

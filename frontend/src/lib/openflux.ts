@@ -1,4 +1,13 @@
-export const OPENFLUX_TRANSPORTS = ['direct', 'yandex', 'vyandex', 'boards', 'mailru', 'cupsonline', 'avito', 'telemost'] as const;
+export const OPENFLUX_TRANSPORTS = [
+  'direct',
+  'yandex',
+  'vyandex',
+  'boards',
+  'mailru',
+  'cupsonline',
+  'avito',
+  'telemost',
+] as const;
 export type OpenFluxTransportType = (typeof OPENFLUX_TRANSPORTS)[number];
 export type OpenFluxTransport = {
   type: OpenFluxTransportType;
@@ -25,7 +34,8 @@ export function suggestOpenFluxTransport(value: string): OpenFluxTransportType |
     if (url.hostname === 'docs.mail.ru') return 'mailru';
     if (url.hostname === 'cups.online') return 'cupsonline';
     if (url.hostname === 'code.avito.ru') return 'avito';
-    if (url.hostname === 'telemost.yandex.ru' || url.hostname === 'telemost.yandex.com') return 'telemost';
+    if (url.hostname === 'telemost.yandex.ru' || url.hostname === 'telemost.yandex.com')
+      return 'telemost';
   } catch {
     // Incomplete URLs stay editable.
   }
@@ -34,9 +44,13 @@ export function suggestOpenFluxTransport(value: string): OpenFluxTransportType |
 
 export function openFluxTransportLabel(type: OpenFluxTransportType): string {
   return {
-    direct: 'Direct (TCP)', yandex: 'Yandex Docs (WebSocket)',
-    vyandex: 'Yandex Docs (Volga)', boards: 'Yandex Boards',
-    mailru: 'Mail.ru Docs', cupsonline: 'Cups.online',
-    avito: 'Avito Code', telemost: 'Yandex Telemost',
+    direct: 'Direct (TCP)',
+    yandex: 'Yandex Docs (WebSocket)',
+    vyandex: 'Yandex Docs (Volga)',
+    boards: 'Yandex Boards',
+    mailru: 'Mail.ru Docs',
+    cupsonline: 'Cups.online',
+    avito: 'Avito Code',
+    telemost: 'Yandex Telemost',
   }[type];
 }

@@ -323,9 +323,11 @@ export default function InboundFormModal({
 
   const protocolOptions = useMemo(
     () =>
-      PROTOCOL_OPTIONS.filter((option) =>
-        option.value !== Protocols.OPENFLUX || openFluxInstalled ||
-        (mode === 'edit' && dbInbound?.protocol === Protocols.OPENFLUX),
+      PROTOCOL_OPTIONS.filter(
+        (option) =>
+          option.value !== Protocols.OPENFLUX ||
+          openFluxInstalled ||
+          (mode === 'edit' && dbInbound?.protocol === Protocols.OPENFLUX),
       ).filter(
         (option) =>
           ![

@@ -540,7 +540,15 @@ export default function OutboundFormModal({
                         name="protocol"
                         rules={{ validate: rhfZodValidate(OutboundFormBaseSchema.shape.tag) }}
                       >
-                        <Select id="protocol" options={PROTOCOL_OPTIONS.filter((option) => option.value !== 'openflux' || openFluxInstalled || outboundProp?.protocol === 'openflux')} />
+                        <Select
+                          id="protocol"
+                          options={PROTOCOL_OPTIONS.filter(
+                            (option) =>
+                              option.value !== 'openflux' ||
+                              openFluxInstalled ||
+                              outboundProp?.protocol === 'openflux',
+                          )}
+                        />
                       </FormField>
 
                       <Controller
