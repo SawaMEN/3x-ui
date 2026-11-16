@@ -1557,8 +1557,10 @@ func MergeClientRecord(existing *ClientRecord, incoming *ClientRecord) []ClientM
 			existing.ForwardedPorts = incoming.ForwardedPorts
 		}
 	}
-	if existing.Comment != incoming.Comment && incoming.Comment != "" {
-		if incomingNewer || existing.Comment == "" {
+	// A newer empty comment is an explicit deletion, not missing data. Once
+	// a record has a known version, an old snapshot must not fill it back in.
+	if existing.Comment != incoming.Comment {
+		if incomingNewer || (existing.UpdatedAt == 0 && existing.Comment == "" && incoming.Comment != "") {
 			keep("comment", existing.Comment, incoming.Comment, incoming.Comment)
 			existing.Comment = incoming.Comment
 		}

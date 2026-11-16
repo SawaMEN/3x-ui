@@ -356,7 +356,7 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 	if !ok {
 		return false, common.NewError("clients must be an array")
 	}
-	nowTs := time.Now().Unix() * 1000
+	nowTs := time.Now().UnixMilli()
 	for i := range interfaceClients {
 		if cm, ok := interfaceClients[i].(map[string]any); ok {
 			if _, ok2 := cm["created_at"]; !ok2 {
@@ -909,7 +909,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	if len(interfaceClients) > 0 {
 		if newMap, ok := interfaceClients[0].(map[string]any); ok {
 			if preservedCreated == nil {
-				preservedCreated = time.Now().Unix() * 1000
+				preservedCreated = time.Now().UnixMilli()
 			}
 			newMap["created_at"] = preservedCreated
 			newSub, _ := newMap["subId"].(string)
@@ -947,7 +947,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 					delete(newMap, "updated_at")
 				}
 			} else {
-				newMap["updated_at"] = time.Now().Unix() * 1000
+				newMap["updated_at"] = time.Now().UnixMilli()
 			}
 			interfaceClients[0] = newMap
 		}
@@ -1420,7 +1420,7 @@ func (s *ClientService) SetClientTelegramUserID(inboundSvc *InboundService, traf
 		}
 		if c["email"] == clientEmail {
 			c["tgId"] = tgId
-			c["updated_at"] = time.Now().Unix() * 1000
+			c["updated_at"] = time.Now().UnixMilli()
 			newClients = append(newClients, any(c))
 		}
 	}
@@ -1558,7 +1558,7 @@ func (s *ClientService) applyClientFieldByEmail(inboundSvc *InboundService, clie
 			}
 			if c["email"] == clientEmail {
 				mutate(c)
-				c["updated_at"] = time.Now().Unix() * 1000
+				c["updated_at"] = time.Now().UnixMilli()
 				newClients = append(newClients, any(c))
 			}
 		}

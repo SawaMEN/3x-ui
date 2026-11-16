@@ -64,7 +64,10 @@ func applyClientRecordMerge(row *model.ClientRecord, incoming *model.ClientRecor
 		row.AWGClientOptions = incoming.AWGClientOptions
 	}
 	row.SubID = incoming.SubID
-	if incoming.ConnectionNameMode != nil {
+	// An unchanged sibling inbound may still carry a pre-edit client snapshot.
+	// Unknown legacy timestamps retain their previous update behavior.
+	namingCurrent := incoming.UpdatedAt == 0 || row.UpdatedAt == 0 || incoming.UpdatedAt >= row.UpdatedAt
+	if namingCurrent && incoming.ConnectionNameMode != nil {
 		name := *incoming.ConnectionNameMode
 		row.ConnectionNameMode = &name
 	}
@@ -79,7 +82,9 @@ func applyClientRecordMerge(row *model.ClientRecord, incoming *model.ClientRecor
 	if incoming.Group != "" {
 		row.Group = incoming.Group
 	}
-	row.Comment = incoming.Comment
+	if namingCurrent {
+		row.Comment = incoming.Comment
+	}
 	row.Reset = incoming.Reset
 	row.ResetDay = incoming.ResetDay
 	row.ResetMax = incoming.ResetMax

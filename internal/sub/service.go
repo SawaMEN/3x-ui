@@ -316,7 +316,36 @@ func (s *SubService) clientsForLinkExport(inbound *model.Inbound) ([]model.Clien
 		// These protocols keep the client password in the inbound settings JSON.
 		// Prefer that source so subscriptions also work for existing rows whose
 		// normalized clients record predates password persistence.
-		return s.inboundService.GetClients(inbound)
+		clients, err := s.inboundService.GetClients(inbound)
+		if err != nil || database.GetDB() == nil || inbound.Id <= 0 || len(clients) == 0 {
+			return clients, err
+		}
+		// Credentials remain per-inbound, but naming belongs to the shared client
+		// record. In particular, an empty current comment must replace stale JSON.
+		var naming []struct {
+			Email              string
+			Comment            string
+			ConnectionNameMode *string
+		}
+		err = database.GetDB().Table("clients").
+			Select("clients.email, clients.comment, clients.connection_name_mode").
+			Joins("JOIN client_inbounds ON client_inbounds.client_id = clients.id").
+			Where("client_inbounds.inbound_id = ?", inbound.Id).Find(&naming).Error
+		if err != nil {
+			logger.Warning("SubService - unable to load current client naming for inbound ", inbound.Id, ": ", err)
+			return clients, nil
+		}
+		byEmail := make(map[string]int, len(naming))
+		for i, name := range naming {
+			byEmail[name.Email] = i
+		}
+		for i := range clients {
+			if index, ok := byEmail[clients[i].Email]; ok {
+				clients[i].Comment = naming[index].Comment
+				clients[i].ConnectionNameMode = naming[index].ConnectionNameMode
+			}
+		}
+		return clients, nil
 	}
 	if database.GetDB() != nil {
 		clients, err := s.inboundService.ListClientsForInbound(inbound.Id)
