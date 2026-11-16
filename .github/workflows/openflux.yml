@@ -79,3 +79,20 @@ jobs:
                       print("OPENFLUX_FORMAT_CHUNK=" + json.dumps({"path": path, "offset": start, "content": result[start:start+4000]}, ensure_ascii=True))
           PY
 
+
+      - name: Report canonical frontend formatting
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          files = ["frontend/src/lib/openflux.ts","frontend/src/schemas/protocols/inbound/additional-vpn.ts","frontend/src/api/openflux-install.ts","frontend/src/pages/inbounds/form/InboundFormModal.tsx","frontend/src/pages/inbounds/form/protocols/additional-vpn.tsx","frontend/src/pages/xray/outbounds/OpenFluxOutboundEditor.tsx","frontend/src/pages/xray/outbounds/AdditionalOutboundEditor.tsx","frontend/src/pages/settings/SystemUpdatePanel.tsx","frontend/src/test/openflux-settings.test.ts","frontend/src/test/openflux-install.test.ts","frontend/src/test/openflux-fields.test.tsx"]
+          formatter = pathlib.Path("frontend/node_modules/.bin/oxfmt")
+          if formatter.exists():
+              original = {path: pathlib.Path(path).read_text() for path in files}
+              subprocess.run([str(formatter), *files], check=True)
+              for path in files:
+                  result = pathlib.Path(path).read_text()
+                  if result != original[path]:
+                      for start in range(0, len(result), 4000):
+                          print("OPENFLUX_TS_CHUNK=" + json.dumps({"path": path, "offset": start, "content": result[start:start+4000]}, ensure_ascii=True))
+          PY

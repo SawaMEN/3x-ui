@@ -44,7 +44,7 @@ describe('OpenFlux channel setup', () => {
       return <><OpenFluxOutboundEditor settings={settings} update={(patch) => setSettings((current) => ({ ...current, ...patch }))} /><output data-testid="client">{JSON.stringify(settings)}</output></>;
     }
     renderWithProviders(<Client />);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Import OpenFlux connection' }), { target: { value: 'openflux://v1/example' } });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Import OpenFlux connection' }), { target: { value: 'openflux://v1/example' } });
     fireEvent.click(screen.getByRole('button', { name: 'Import connection' }));
     await waitFor(() => expect(screen.getByTestId('client').textContent).toContain('vpn.example.org:443'));
     expect(screen.getByTestId('client').textContent).toContain('imported-context');
