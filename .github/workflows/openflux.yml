@@ -1,0 +1,75 @@
+name: OpenFlux integration
+
+on:
+  pull_request:
+    paths:
+      - "internal/externalvpn/**"
+      - "internal/web/controller/server_openflux*"
+      - "internal/web/runtime/openflux*"
+      - "frontend/src/**openflux*"
+      - "frontend/src/**/OpenFlux*"
+      - "frontend/src/pages/inbounds/form/protocols/additional-vpn.tsx"
+      - "frontend/src/schemas/protocols/inbound/additional-vpn.ts"
+      - ".github/workflows/openflux.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openflux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Download pinned official OpenFlux
+        run: |
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/openflux" https://github.com/p1neappleXpress/OpenFlux/releases/download/v0.3.0/openflux-linux-amd64
+          echo "fdc30ccd12f65bc88db080da600a5fb2e5bbb22fe886648b67583ed77282c622  $RUNNER_TEMP/openflux" | sha256sum --check
+          chmod 755 "$RUNNER_TEMP/openflux"
+      - name: Check Go behavior and real encrypted TCP payload
+        env:
+          STAGE8_OPENFLUX_BINARY: ${{ runner.temp }}/openflux
+        run: |
+          go test ./internal/externalvpn -run 'TestOpenFlux|TestManagedVPNOpenFluxContract|TestStage8OpenFluxNativePayload' -count=1 -v -timeout=5m
+          go test ./internal/web/controller ./internal/web/runtime ./internal/util/link -run 'TestOpenFlux|TestNodeSyncScopeAllow' -count=1 -timeout=5m
+      - name: Install frontend dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: frontend
+      - name: Check frontend types and OpenFlux behavior
+        working-directory: frontend
+        run: |
+          npm run typecheck
+          npx vitest run --project unit src/test/openflux-settings.test.ts src/test/openflux-install.test.ts
+          npx vitest run --project components src/test/openflux-fields.test.tsx src/test/system-update-components.test.tsx
+      - name: Report canonical formatting
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          files = [
+            "internal/externalvpn/additional.go", "internal/externalvpn/additional_process.go",
+            "internal/externalvpn/decode.go", "internal/externalvpn/openflux_install.go",
+            "internal/externalvpn/openflux_automation_test.go", "internal/externalvpn/update.go",
+            "internal/externalvpn/outbound.go", "internal/web/controller/api.go",
+            "internal/web/controller/api_auth_test.go", "internal/web/controller/server_externalvpn.go",
+            "internal/web/controller/server_openflux.go", "internal/web/controller/server_openflux_test.go",
+            "internal/web/runtime/openflux_install.go", "internal/web/service/component_remove.go",
+          ]
+          for path in files:
+              result = subprocess.run(["gofmt", path], check=True, text=True, capture_output=True).stdout
+              if result != pathlib.Path(path).read_text():
+                  print("OPENFLUX_FORMAT=" + json.dumps({"path": path, "content": result}, ensure_ascii=True))
+          PY

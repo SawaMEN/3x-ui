@@ -112,6 +112,7 @@ var monitorScopeAllow = map[string]struct{}{
 
 // nodeSyncScopeAllow is the node-sync route/method allowlist relative to /panel/api; Gin patterns prevent concrete parameters broadening authority.
 var nodeSyncScopeAllow = map[string]map[string]struct{}{
+	"/server/openflux/status": {http.MethodGet: {}},
 	"/domains/sni":                                {http.MethodGet: {}},
 	"/domains/certificates":                       {http.MethodGet: {}},
 	"/domains/certificates/export-cover":          {http.MethodPost: {}},
@@ -305,6 +306,7 @@ func (a *APIController) StartBackground(ctx context.Context) {
 func (a *APIController) WaitBackground() { a.backgroundWG.Wait() }
 
 var nodeAdminScopeAllow = map[string]map[string]struct{}{
+	"/server/openflux/install": {http.MethodGet: {}, http.MethodPost: {}},
 	"/server/updatePanel":     {http.MethodPost: {}},
 	"/server/getUpdateStatus": {http.MethodGet: {}},
 }
