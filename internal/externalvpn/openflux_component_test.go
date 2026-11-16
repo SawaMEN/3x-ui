@@ -19,10 +19,10 @@ import (
 
 type openFluxTestRelease struct {
 	version string
-	body string
-	digest string
-	url string
-	name string
+	body    string
+	digest  string
+	url     string
+	name    string
 }
 
 func componentTestRelease(version, body string) openFluxTestRelease {
@@ -59,7 +59,7 @@ func TestOpenFluxOptionalOfficialComponentLifecycle(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(githubRelease{
 			TagName: "v" + release.version,
-			Assets: []releaseAsset{{Name: release.name, URL: release.url, Digest: release.digest}},
+			Assets:  []releaseAsset{{Name: release.name, URL: release.url, Digest: release.digest}},
 		})
 	}))
 	defer server.Close()

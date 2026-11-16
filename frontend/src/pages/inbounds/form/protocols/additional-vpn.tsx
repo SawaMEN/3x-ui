@@ -33,7 +33,8 @@ export function InstallVPNButton({ protocol }: { protocol: 'fptn' | 'vetroff' })
         setBusy(true);
         try {
           const result = await HttpUtil.post(
-            `/panel/api/server/externalvpn/update/${protocol}`, undefined,
+            `/panel/api/server/externalvpn/update/${protocol}`,
+            undefined,
             { timeout: 600000 },
           );
           if (result?.success) message.success(t('pages.inbounds.form.vpnInstalled'));

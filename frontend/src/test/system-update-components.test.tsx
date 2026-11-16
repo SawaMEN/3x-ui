@@ -38,7 +38,13 @@ beforeEach(() => {
           }
         : String(path).includes('externalvpn')
           ? {
-              openflux: { installed: installedOpenFlux, version: installedOpenFlux ? openFluxInstalledVersion : '', latestVersion: '0.17.1', updateAvailable: installedOpenFlux && openFluxInstalledVersion !== '0.17.1', supported: true },
+              openflux: {
+                installed: installedOpenFlux,
+                version: installedOpenFlux ? openFluxInstalledVersion : '',
+                latestVersion: '0.17.1',
+                updateAvailable: installedOpenFlux && openFluxInstalledVersion !== '0.17.1',
+                supported: true,
+              },
               vetroff: { installed: installedVetroff, latestVersion: '0.1.0' },
               pingtunnel: { installed: false, latestVersion: '2.10' },
               trusttunnel: { installed: false, latestVersion: '1.1.0' },
@@ -288,11 +294,19 @@ it('installs VetroffProxy from its component card and refreshes installed status
 it('keeps OpenFlux uninstalled until its component install button is clicked', async () => {
   await openComponents();
   expect(card('OpenFlux').getByRole('button', { name: /Установить/ })).toBeTruthy();
-  expect(vi.mocked(HttpUtil.post).mock.calls.some(([path]) => String(path).includes('/openflux/install'))).toBe(false);
+  expect(
+    vi
+      .mocked(HttpUtil.post)
+      .mock.calls.some(([path]) => String(path).includes('/openflux/install')),
+  ).toBe(false);
   fireEvent.click(card('OpenFlux').getByRole('button', { name: /Установить/ }));
-  await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(
-    '/panel/api/server/openflux/install', undefined, expect.anything(),
-  ));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/server/openflux/install',
+      undefined,
+      expect.anything(),
+    ),
+  );
   await waitFor(() => expect(card('OpenFlux').getAllByText('0.17.1')).toHaveLength(2));
 });
 
@@ -301,8 +315,14 @@ it('updates OpenFlux to the available release from the component card', async ()
   openFluxInstalledVersion = '0.3.0';
   await openComponents();
   fireEvent.click(card('OpenFlux').getByRole('button', { name: 'Update' }));
-  await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(
-    '/panel/api/server/openflux/install', undefined, expect.anything(),
-  ));
-  await waitFor(() => expect(card('OpenFlux').queryByRole('button', { name: 'Update' })).toBeNull());
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/server/openflux/install',
+      undefined,
+      expect.anything(),
+    ),
+  );
+  await waitFor(() =>
+    expect(card('OpenFlux').queryByRole('button', { name: 'Update' })).toBeNull(),
+  );
 });
