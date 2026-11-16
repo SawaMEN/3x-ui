@@ -64,7 +64,14 @@ func (m *Manager) additionalCommand(inst Instance, metricsAddr string) (*exec.Cm
 		if err := writePrivate(path, []byte(conf.String())); err != nil {
 			return fail(err)
 		}
-		return exec.CommandContext(ctx, binary(inst.Protocol), "--config", path, "--session-context", inst.Settings.Context, "--negotiate"), cancel, nil
+		args := []string{"--config", path, "--session-context", inst.Settings.Context, "--negotiate", "--debug", strconv.Itoa(inst.Settings.Debug)}
+		if inst.Settings.MaxPacketSize > 0 {
+			args = append(args, "--max-packet-size", strconv.Itoa(inst.Settings.MaxPacketSize))
+		}
+		if inst.Settings.RefusePeerLogin {
+			args = append(args, "--refuse-peer-login")
+		}
+		return exec.CommandContext(ctx, binary(inst.Protocol), args...), cancel, nil
 	}
 	if _, err := exec.LookPath("docker"); err != nil {
 		return fail(fmt.Errorf("FPTN requires Docker for isolated networking: %w", err))

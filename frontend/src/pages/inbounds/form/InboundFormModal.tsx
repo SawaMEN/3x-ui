@@ -1,3 +1,4 @@
+import { useOpenFluxInstalled } from '@/api/useOpenFluxInstalled';
 import { checkOpenFluxInstalled } from '@/api/openflux-install';
 import { VetroffFields } from './protocols/vetroff';
 import { FptnFields, OpenFluxFields } from './protocols/additional-vpn';
@@ -277,6 +278,8 @@ export default function InboundFormModal({
   const selectableNodes = (availableNodes || []).filter(
     (n) => n.enable && nodeSupportsProtocol(n, protocol),
   );
+  const wNodeId = useWatch({ control, name: 'nodeId' }) ?? null;
+  const openFluxInstalled = useOpenFluxInstalled(open, wNodeId ?? 0);
   const [installedProtocols, setInstalledProtocols] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -320,7 +323,10 @@ export default function InboundFormModal({
 
   const protocolOptions = useMemo(
     () =>
-      PROTOCOL_OPTIONS.filter(
+      PROTOCOL_OPTIONS.filter((option) =>
+        option.value !== Protocols.OPENFLUX || openFluxInstalled ||
+        (mode === 'edit' && dbInbound?.protocol === Protocols.OPENFLUX),
+      ).filter(
         (option) =>
           ![
             Protocols.MTPROTO,
@@ -332,7 +338,7 @@ export default function InboundFormModal({
           installedProtocols[option.value] === true ||
           (mode === 'edit' && protocol === option.value),
       ),
-    [mode, protocol, installedProtocols],
+    [mode, protocol, installedProtocols, openFluxInstalled, dbInbound?.protocol],
   );
   const isNodeEligible = !!NODE_ELIGIBLE_PROTOCOLS[protocol];
   /*
@@ -426,7 +432,6 @@ export default function InboundFormModal({
     }
   }, [dbInbounds, mode, protocol, shadowTlsEnabled, setV, wListen]);
 
-  const wNodeId = useWatch({ control, name: 'nodeId' }) ?? null;
   const shareAddrStrategy = useWatch({ control, name: 'shareAddrStrategy' }) ?? 'node';
   const wTag = (useWatch({ control, name: 'tag' }) ?? '') as string;
   const wSsNetwork = useWatch({ control, name: 'settings.network' });

@@ -200,8 +200,14 @@ func (inst Instance) validateAdditional() error {
 		if len(s.Clients) > 1 {
 			return fmt.Errorf("OpenFlux supports one client per inbound; create a separate inbound for each user")
 		}
-		if len(s.Transports) < 1 || len(s.Transports) > 5 {
-			return fmt.Errorf("OpenFlux requires 1..5 distinct transports")
+		if len(s.Transports) < 1 || len(s.Transports) > 8 {
+			return fmt.Errorf("OpenFlux requires 1..8 distinct transports")
+		}
+		if s.MaxPacketSize != 0 && (s.MaxPacketSize < 1280 || s.MaxPacketSize > 65000) {
+			return fmt.Errorf("OpenFlux packet size must be automatic (0) or 1280..65000")
+		}
+		if s.Debug < 0 || s.Debug > 2 {
+			return fmt.Errorf("OpenFlux debug level must be 0..2")
 		}
 		seen := map[string]bool{}
 		for _, t := range s.Transports {
@@ -214,7 +220,7 @@ func (inst Instance) validateAdditional() error {
 			}
 			switch t.Type {
 			case "direct":
-			case "yandex", "vyandex", "boards", "mailru":
+			case "yandex", "vyandex", "boards", "mailru", "cupsonline", "avito", "telemost":
 				u, err := url.Parse(t.URL)
 				if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
 					return fmt.Errorf("transport requires a HTTPS channel URL")

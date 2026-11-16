@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import {
   OPENFLUX_TRANSPORTS,
+  openFluxTransportLabel,
   validOpenFluxChannelURL,
   type OpenFluxTransport,
 } from '@/lib/openflux';
@@ -50,6 +51,8 @@ export default function OpenFluxOutboundEditor({
       });
       setLink('');
       messageApi.success(t('pages.inbounds.form.openfluxImported'));
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : t('pages.inbounds.form.openfluxImportFailed'));
     } finally {
       setBusy(false);
     }
@@ -57,7 +60,7 @@ export default function OpenFluxOutboundEditor({
   return (
     <>
       {contextHolder}
-      <Form.Item label={t('pages.inbounds.form.openfluxImport')}>
+      <Form.Item label={t('pages.inbounds.form.openfluxImport')} tooltip={t('pages.inbounds.form.openfluxImportHint')}>
         <Input.Search
           aria-label={t('pages.inbounds.form.openfluxImport')}
           value={link}
@@ -71,7 +74,7 @@ export default function OpenFluxOutboundEditor({
           }}
         />
       </Form.Item>
-      <Form.Item label={t('pages.inbounds.form.openfluxSecret')}>
+      <Form.Item label={t('pages.inbounds.form.openfluxSecret')} tooltip={t('pages.inbounds.form.openfluxSecretHint')}>
         <Input.Password
           value={String(settings.secret ?? '')}
           onChange={(event) => update({ secret: event.target.value })}
@@ -80,7 +83,7 @@ export default function OpenFluxOutboundEditor({
       </Form.Item>
       <Form.Item
         label={t('pages.inbounds.form.openfluxContext')}
-        extra={t('pages.inbounds.form.openfluxContextHint')}
+        tooltip={t('pages.inbounds.form.openfluxContextHint')}
       >
         <Input
           value={String(settings.context ?? '')}
@@ -91,19 +94,19 @@ export default function OpenFluxOutboundEditor({
       <Alert type="info" showIcon description={t('pages.inbounds.form.openfluxOutboundHint')} />
       {transports.map((transport, index) => (
         <Space key={index} wrap align="start">
-          <Form.Item label={t('pages.inbounds.form.openfluxTransport')}>
+          <Form.Item label={t('pages.inbounds.form.openfluxTransport')} tooltip={t('pages.inbounds.form.openfluxTransportHint')}>
             <Select
               style={{ width: 150 }}
               value={transport.type}
               options={OPENFLUX_TRANSPORTS.map((type) => ({
                 value: type,
-                label: type,
+                label: openFluxTransportLabel(type),
                 disabled: used.has(type) && transport.type !== type,
               }))}
               onChange={(type) => changeTransport(index, { type })}
             />
           </Form.Item>
-          <Form.Item label={t('pages.inbounds.form.openfluxPriority')}>
+          <Form.Item label={t('pages.inbounds.form.openfluxPriority')} tooltip={t('pages.inbounds.form.openfluxPriorityHint')}>
             <InputNumber
               value={transport.priority ?? 50}
               min={0}
@@ -112,7 +115,7 @@ export default function OpenFluxOutboundEditor({
             />
           </Form.Item>
           {transport.type === 'direct' ? (
-            <Form.Item label={t('pages.inbounds.form.openfluxEndpoint')}>
+            <Form.Item label={t('pages.inbounds.form.openfluxEndpoint')} tooltip={t('pages.inbounds.form.openfluxEndpointHint')}>
               <Input
                 value={transport.dial ?? ''}
                 placeholder="vpn.example.org:443"
@@ -122,6 +125,7 @@ export default function OpenFluxOutboundEditor({
           ) : (
             <Form.Item
               label="URL"
+              tooltip={t('pages.inbounds.form.openfluxChannelHint')}
               validateStatus={validOpenFluxChannelURL(transport.url ?? '') ? undefined : 'error'}
               help={
                 validOpenFluxChannelURL(transport.url ?? '')

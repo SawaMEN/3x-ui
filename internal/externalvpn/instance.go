@@ -41,6 +41,9 @@ type Settings struct {
 	TorrentFilter  bool                `json:"torrentFilter"`
 	SpamFilter     bool                `json:"spamFilter"`
 	MetricsKey     string              `json:"metricsKey"`
+	MaxPacketSize int `json:"maxPacketSize,omitempty"`
+	RefusePeerLogin bool `json:"refusePeerLogin,omitempty"`
+	Debug int `json:"debug,omitempty"`
 	Context        string              `json:"context"`
 	Transports     []OpenFluxTransport `json:"transports"`
 
