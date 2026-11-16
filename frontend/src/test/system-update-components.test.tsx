@@ -3,6 +3,8 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import SystemUpdatePanel from '@/pages/settings/SystemUpdatePanel';
 import { HttpUtil } from '@/utils';
 
+let installedOpenFlux = false;
+let openFluxInstalledVersion = '0.17.1';
 let installedVetroff = false;
 let installedHysteria = false;
 let installedOxiDNS = false;
@@ -11,6 +13,8 @@ let installedNaive = false;
 let hysteriaFallback = '';
 
 beforeEach(() => {
+  installedOpenFlux = false;
+  openFluxInstalledVersion = '0.17.1';
   installedVetroff = false;
   installedHysteria = false;
   installedOxiDNS = false;
@@ -34,6 +38,7 @@ beforeEach(() => {
           }
         : String(path).includes('externalvpn')
           ? {
+              openflux: { installed: installedOpenFlux, version: installedOpenFlux ? openFluxInstalledVersion : '', latestVersion: '0.17.1', updateAvailable: installedOpenFlux && openFluxInstalledVersion !== '0.17.1', supported: true },
               vetroff: { installed: installedVetroff, latestVersion: '0.1.0' },
               pingtunnel: { installed: false, latestVersion: '2.10' },
               trusttunnel: { installed: false, latestVersion: '1.1.0' },
@@ -58,6 +63,11 @@ beforeEach(() => {
             : { installed: false, latestVersion: '1.0.0' },
   }));
   vi.mocked(HttpUtil.post).mockImplementation(async (path) => {
+    if (String(path).endsWith('/openflux/install')) {
+      installedOpenFlux = true;
+      openFluxInstalledVersion = '0.17.1';
+      return { success: true, msg: '', obj: { runId: 'manual-openflux', state: 'success' } };
+    }
     if (String(path).endsWith('/externalvpn/update/vetroff')) installedVetroff = true;
     if (String(path).endsWith('/externalvpn/update/hysteria2')) installedHysteria = true;
     if (String(path).endsWith('/naiveproxy/update')) installedNaive = true;
@@ -273,4 +283,26 @@ it('installs VetroffProxy from its component card and refreshes installed status
   await waitFor(() =>
     expect(card('VetroffProxy').queryByRole('button', { name: /Установить/ })).toBeNull(),
   );
+});
+
+it('keeps OpenFlux uninstalled until its component install button is clicked', async () => {
+  await openComponents();
+  expect(card('OpenFlux').getByRole('button', { name: /Установить/ })).toBeTruthy();
+  expect(vi.mocked(HttpUtil.post).mock.calls.some(([path]) => String(path).includes('/openflux/install'))).toBe(false);
+  fireEvent.click(card('OpenFlux').getByRole('button', { name: /Установить/ }));
+  await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(
+    '/panel/api/server/openflux/install', undefined, expect.anything(),
+  ));
+  await waitFor(() => expect(card('OpenFlux').getAllByText('0.17.1')).toHaveLength(2));
+});
+
+it('updates OpenFlux to the available release from the component card', async () => {
+  installedOpenFlux = true;
+  openFluxInstalledVersion = '0.3.0';
+  await openComponents();
+  fireEvent.click(card('OpenFlux').getByRole('button', { name: 'Update' }));
+  await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(
+    '/panel/api/server/openflux/install', undefined, expect.anything(),
+  ));
+  await waitFor(() => expect(card('OpenFlux').queryByRole('button', { name: 'Update' })).toBeNull());
 });

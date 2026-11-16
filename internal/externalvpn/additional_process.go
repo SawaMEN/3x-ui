@@ -132,7 +132,7 @@ func cleanupAdditional(id int, p model.Protocol) {
 	_ = exec.CommandContext(ctx, "docker", "rm", "-f", containerName(id)).Run()
 }
 
-// InstallOpenFlux installs a pinned, digest-verified executable from upstream.
+// InstallOpenFlux installs the latest stable, digest-verified upstream executable.
 // It deliberately refuses mutable assets without a GitHub SHA-256 digest.
 func InstallOpenFlux(ctx context.Context) error {
 	externalVPNUpdateMu.Lock()
@@ -145,16 +145,9 @@ func InstallOpenFlux(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	name := "openflux-linux-" + runtimeArch()
-	var asset releaseAsset
-	for _, a := range rel.Assets {
-		if a.Name == name {
-			asset = a
-			break
-		}
-	}
-	if asset.URL == "" || !strings.HasPrefix(asset.Digest, "sha256:") {
-		return fmt.Errorf("OpenFlux release has no digest-verified %s asset", name)
+	asset, err := openFluxReleaseAsset(rel, runtimeArch())
+	if err != nil {
+		return err
 	}
 	dir := config.GetBinFolderPath()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -184,10 +177,7 @@ func InstallOpenFlux(ctx context.Context) error {
 	if err != nil || !strings.Contains(string(output), "--role") || !strings.Contains(string(output), "--config") {
 		return fmt.Errorf("downloaded OpenFlux does not support managed configuration")
 	}
-	if err := writeOpenFluxReceipt(asset.Digest); err != nil {
-		return err
-	}
-	if err := os.Rename(path, filepath.Join(dir, "openflux")); err != nil {
+	if err := commitOpenFluxBinary(path, normalizeReleaseVersion(rel.TagName), asset.Digest); err != nil {
 		return err
 	}
 	GetManager().StopProtocol(model.OpenFlux)

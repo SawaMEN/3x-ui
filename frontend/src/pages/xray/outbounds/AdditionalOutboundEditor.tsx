@@ -108,7 +108,7 @@ export default function AdditionalOutboundEditor({
         </>
       ) : protocol === 'openflux' ? (
         <>
-          <InstallVPNButton protocol="openflux" />
+          <Alert type="info" showIcon description={t('pages.inbounds.form.openfluxComponentHint')} />
           <OpenFluxOutboundEditor settings={settings} update={update} />
         </>
       ) : (

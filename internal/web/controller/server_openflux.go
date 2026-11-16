@@ -46,7 +46,7 @@ func (a *ServerController) openFluxInstall(c *gin.Context) {
 		return
 	}
 	if c.GetBool("openflux_status_only") {
-		jsonObj(c, externalvpn.OpenFluxBinaryStatus(), nil)
+		jsonObj(c, externalvpn.OpenFluxBinaryStatus(c.Request.Context(), true), nil)
 	} else if c.Request.Method == http.MethodPost {
 		jsonObj(c, externalvpn.StartOpenFluxInstallation(), nil)
 	} else {

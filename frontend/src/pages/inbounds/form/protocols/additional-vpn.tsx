@@ -16,7 +16,6 @@ import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import { HttpUtil } from '@/utils';
 import SniSearchInput from '../security/SniSearchInput';
-import { installOpenFlux } from '@/api/openflux-install';
 import {
   OPENFLUX_TRANSPORTS,
   suggestOpenFluxTransport,
@@ -24,13 +23,7 @@ import {
   type OpenFluxTransportType,
 } from '@/lib/openflux';
 
-export function InstallVPNButton({
-  protocol,
-  nodeId = 0,
-}: {
-  protocol: 'fptn' | 'openflux' | 'vetroff';
-  nodeId?: number;
-}) {
+export function InstallVPNButton({ protocol }: { protocol: 'fptn' | 'vetroff' }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   return (
@@ -39,12 +32,10 @@ export function InstallVPNButton({
       onClick={async () => {
         setBusy(true);
         try {
-          const result =
-            protocol === 'openflux'
-              ? await installOpenFlux(nodeId)
-              : await HttpUtil.post(`/panel/api/server/externalvpn/update/${protocol}`, undefined, {
-                  timeout: 600000,
-                });
+          const result = await HttpUtil.post(
+            `/panel/api/server/externalvpn/update/${protocol}`, undefined,
+            { timeout: 600000 },
+          );
           if (result?.success) message.success(t('pages.inbounds.form.vpnInstalled'));
           else message.error(result?.msg || t('pages.inbounds.form.vpnInstallFailed'));
         } catch (error) {
@@ -57,12 +48,7 @@ export function InstallVPNButton({
       }}
     >
       {t('pages.inbounds.form.vpnInstall', {
-        protocol:
-          protocol === 'fptn'
-            ? 'FPTN client'
-            : protocol === 'vetroff'
-              ? 'VetroffProxy'
-              : 'OpenFlux',
+        protocol: protocol === 'fptn' ? 'FPTN client' : 'VetroffProxy',
       })}
     </Button>
   );
@@ -183,7 +169,6 @@ export function OpenFluxFields() {
     url?: string;
     priority?: number;
   }[];
-  const nodeId = useWatch({ control, name: 'nodeId' }) as number | undefined;
   const [adding, setAdding] = useState(false);
   const [addDirect, setAddDirect] = useState(false);
   const [channelType, setChannelType] = useState<OpenFluxTransportType>('vyandex');
@@ -221,9 +206,8 @@ export function OpenFluxFields() {
         >
           {t('pages.inbounds.form.openfluxFailover')}
         </Button>
-        <InstallVPNButton key={nodeId ?? 0} protocol="openflux" nodeId={nodeId ?? 0} />
       </Space>
-      <Alert type="info" showIcon description={t('pages.inbounds.form.openfluxAutoInstall')} />
+      <Alert type="info" showIcon description={t('pages.inbounds.form.openfluxComponentHint')} />
       {transports.fields.map((field, i) => (
         <Space key={field.id} wrap align="start">
           <FormField

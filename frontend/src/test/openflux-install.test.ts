@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { installOpenFlux, ensureOpenFlux } from '@/api/openflux-install';
+import { installOpenFlux, checkOpenFluxInstalled } from '@/api/openflux-install';
 import { HttpUtil, Msg } from '@/utils';
 
 afterEach(() => vi.restoreAllMocks());
@@ -22,13 +22,23 @@ describe('OpenFlux installation', () => {
       new Msg(true, '', { installed: true, supported: true }),
     );
     const post = vi.spyOn(HttpUtil, 'post');
-    expect((await ensureOpenFlux(4)).success).toBe(true);
+    expect((await checkOpenFluxInstalled(4)).success).toBe(true);
+    expect(post).not.toHaveBeenCalled();
+  });
+  it('does not install a missing component when checking an inbound', async () => {
+    vi.spyOn(HttpUtil, 'get').mockResolvedValue(
+      new Msg(true, '', { installed: false, supported: true }),
+    );
+    const post = vi.spyOn(HttpUtil, 'post');
+    const result = await checkOpenFluxInstalled(4);
+    expect(result.success).toBe(false);
+    expect(result.msg).toBe('pages.inbounds.form.openfluxInstallRequired');
     expect(post).not.toHaveBeenCalled();
   });
   it('does not fall back to the master when a remote panel lacks the API', async () => {
     vi.spyOn(HttpUtil, 'get').mockResolvedValue(new Msg(false, 'HTTP 404', null));
     const post = vi.spyOn(HttpUtil, 'post');
-    expect((await ensureOpenFlux(4)).success).toBe(false);
+    expect((await checkOpenFluxInstalled(4)).success).toBe(false);
     expect(post).not.toHaveBeenCalled();
   });
   it('rejects a lost/replaced job rather than claiming success', async () => {
