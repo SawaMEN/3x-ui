@@ -260,16 +260,16 @@ describe('InboundFormModal', () => {
     const strategyItem = (title: string) =>
       document.querySelector(`.ant-select-content[title="${title}"]`);
     const modal = (nodes: never[], fetched: boolean) => (
-        <InboundFormModal
-          open
-          mode="edit"
-          dbInbound={buildInbound()}
-          dbInbounds={[]}
-          availableNodes={nodes}
-          availableNodesFetched={fetched}
-          onClose={() => {}}
-          onSaved={() => {}}
-        />
+      <InboundFormModal
+        open
+        mode="edit"
+        dbInbound={buildInbound()}
+        dbInbounds={[]}
+        availableNodes={nodes}
+        availableNodesFetched={fetched}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />
     );
 
     // Baseline: nodes already loaded, so the node option is offered and selected.
