@@ -717,7 +717,9 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			cfg.Log["timestamp"] = true
 		}
 		cfg.Log["disabled"] = false
-		cfg.Log["disable_color"] = true
+		// The pinned HiddifyCli (and upstream sing-box) accepts --disable-color
+		// as a CLI flag, not as a log JSON option. Remove legacy template values.
+		delete(cfg.Log, "disable_color")
 		if s.coreType() == CoreTypeSingBoxUpstream {
 			// Official release binaries omit with_v2ray_api. Do not generate
 			// an experimental service which prevents those binaries starting.
