@@ -54,6 +54,7 @@ interface NodeRouteTarget {
   port: number;
   portLabel?: string;
   available: boolean;
+  provisioned?: boolean;
   reason?: string;
 }
 
@@ -295,6 +296,35 @@ export default function QuickRoutingPanel({
     });
     if (!response?.success || response.obj?.tag !== tag) {
       throw new Error(response?.msg || 'Не удалось подготовить подключение ноды.');
+    }
+    setNodeTargets((current) =>
+      current.map((item) => (item.tag === tag ? { ...item, provisioned: true } : item)),
+    );
+  }
+
+  async function deleteNodeConnection(target: NodeRouteTarget): Promise<void> {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const response = await HttpUtil.post<{ pending: boolean }>('/panel/api/xray/node-route/delete', {
+        inboundId: target.inboundId,
+      });
+      if (!response?.success) {
+        throw new Error(response?.msg || 'Не удалось удалить подключение ноды.');
+      }
+      setNodeTargets((current) =>
+        current.map((item) => (item.tag === target.tag ? { ...item, provisioned: false } : item)),
+      );
+      setProbeResult((current) => (current?.tag === target.tag ? null : current));
+      messageApi.success(
+        response.obj?.pending
+          ? 'Подключение удалено. Нода применит изменение при синхронизации.'
+          : 'Подключение ноды удалено.',
+      );
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -586,6 +616,38 @@ export default function QuickRoutingPanel({
         </Card>
 
         <div className="quick-routing-aside">
+          <Card title="Подключения нод" size="small">
+            <Typography.Paragraph type="secondary">
+              Эти подключения управляются здесь и не отображаются в клиентах. Для удаления
+              сначала удалите использующие подключение правила и сохраните настройки.
+            </Typography.Paragraph>
+            {nodeTargets.filter((target) => target.provisioned).length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Нет подготовленных подключений нод" />
+            ) : (
+              <Space orientation="vertical" style={{ width: '100%' }}>
+                {nodeTargets.filter((target) => target.provisioned).map((target) => (
+                  <div key={target.tag} className="quick-routing-managed-title">
+                    <Typography.Text>{target.nodeName} · {target.remark || target.protocol}</Typography.Text>
+                    <Popconfirm
+                      title="Удалить подключение ноды?"
+                      description="Нода и её входящее подключение останутся на месте."
+                      okText="Удалить"
+                      cancelText="Отмена"
+                      onConfirm={() => void deleteNodeConnection(target)}
+                    >
+                      <Button
+                        size="small"
+                        danger
+                        disabled={creating}
+                        aria-label={'Удалить подключение ноды ' + target.tag}
+                        icon={<DeleteOutlined aria-hidden />}
+                      />
+                    </Popconfirm>
+                  </div>
+                ))}
+              </Space>
+            )}
+          </Card>
           <Card title="Быстрые маршруты" size="small" className="quick-routing-managed">
             {managed.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Пока нет быстрых маршрутов">

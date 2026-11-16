@@ -28,6 +28,9 @@ func (s *ClientService) ResetTrafficByEmail(inboundSvc *InboundService, email st
 }
 
 func (s *ClientService) BulkResetTraffic(inboundSvc *InboundService, emails []string) (int, error) {
+	if err := rejectManagedNodeRouteEmails(emails); err != nil {
+		return 0, err
+	}
 	cleanEmails := trimmedUniqueEmails(emails)
 	if len(cleanEmails) == 0 {
 		return 0, nil
@@ -96,7 +99,13 @@ func (s *ClientService) resetClientTrafficSet(inboundSvc *InboundService, select
 		if err != nil {
 			return err
 		}
-		emails = trimmedUniqueEmails(emails)
+		publicEmails := make([]string, 0, len(emails))
+		for _, email := range emails {
+			if !IsManagedNodeRouteClientEmail(email) {
+				publicEmails = append(publicEmails, email)
+			}
+		}
+		emails = trimmedUniqueEmails(publicEmails)
 		if len(emails) == 0 {
 			return nil
 		}

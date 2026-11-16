@@ -54,6 +54,9 @@ func (s *ClientService) ListGroups() ([]GroupSummary, error) {
 	}
 	out := make([]GroupSummary, 0, len(merged))
 	for name, agg := range merged {
+		if name == "_system" && agg.count == 0 {
+			continue
+		}
 		up := groupUsageSince(agg.up, baseUp[name])
 		down := groupUsageSince(agg.down, baseDown[name])
 		out = append(out, GroupSummary{Name: name, ClientCount: agg.count, TrafficUsed: common.TrafficUsage(up, down), Up: up, Down: down})
@@ -117,7 +120,7 @@ func (s *ClientService) EmailsByGroup(name string) ([]string, error) {
 	}
 	db := database.GetDB()
 	var emails []string
-	if err := db.Model(&model.ClientRecord{}).
+	if err := publicClientRecords(db.Model(&model.ClientRecord{}), "email").
 		Where("group_name = ?", name).
 		Order("email ASC").
 		Pluck("email", &emails).Error; err != nil {
@@ -370,7 +373,7 @@ func (s *ClientService) replaceGroupValue(oldName, newName string) (int, error) 
 			}
 		}
 		var records []model.ClientRecord
-		if err := tx.Where("group_name = ?", oldName).Find(&records).Error; err != nil {
+		if err := publicClientRecords(tx, "email").Where("group_name = ?", oldName).Find(&records).Error; err != nil {
 			return err
 		}
 		if err := applyClientGroupTx(tx, records, newName); err != nil {
@@ -414,7 +417,7 @@ func groupUsageSince(counter, baseline int64) int64 {
 // only the display aggregate. SQLite SUM may overflow even with valid rows,
 // so its exceptional path streams exact integers, retaining O(groups) memory.
 func groupTrafficTotals(tx *gorm.DB, condition string, args ...any) ([]GroupSummary, error) {
-	query := tx.Table("clients AS c").Joins("LEFT JOIN client_traffics ct ON ct.email = c.email").Where(condition, args...)
+	query := publicClientRecords(tx.Table("clients AS c"), "c.email").Joins("LEFT JOIN client_traffics ct ON ct.email = c.email").Where(condition, args...)
 	up, down := "COALESCE(SUM(ct.up), 0)", "COALESCE(SUM(ct.down), 0)"
 	if tx.Name() == "postgres" {
 		up = fmt.Sprintf("LEAST(%s, %d)", up, int64(math.MaxInt64))

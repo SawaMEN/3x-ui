@@ -171,7 +171,7 @@ func (s *ClientService) TunnelAllowedIPsByInbound(inboundSvc *InboundService, em
 func (s *ClientService) List() ([]ClientWithAttachments, error) {
 	db := database.GetDB()
 	var rows []model.ClientRecord
-	if err := db.Order("id ASC").Find(&rows).Error; err != nil {
+	if err := publicClientRecords(db, "email").Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	if len(rows) == 0 {

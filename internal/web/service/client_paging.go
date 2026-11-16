@@ -199,7 +199,7 @@ func newClientQuery(db *gorm.DB, nowMs, expireDiffMs, trafficDiffBytes int64) cl
 }
 
 func (q clientQuery) from() *gorm.DB {
-	tx := q.db.Table("clients AS c")
+	tx := publicClientRecords(q.db.Table("clients AS c"), "c.email")
 	for _, j := range q.joins {
 		tx = tx.Joins(j.sql, j.args...)
 	}
@@ -394,7 +394,7 @@ func (s *ClientService) ListPaged(inboundSvc *InboundService, settingSvc *Settin
 	q := newClientQuery(db, time.Now().UnixMilli(), expireDiffMs, trafficDiffBytes)
 
 	var total int64
-	if err := db.Model(&model.ClientRecord{}).Count(&total).Error; err != nil {
+	if err := publicClientRecords(db.Model(&model.ClientRecord{}), "email").Count(&total).Error; err != nil {
 		return nil, err
 	}
 
@@ -573,7 +573,7 @@ func (q clientQuery) onlineEmails(onlines []string) ([]string, int, error) {
 	count := 0
 	for _, batch := range chunkStrings(onlines, sqlInChunk) {
 		var page []string
-		if err := q.db.Model(&model.ClientRecord{}).
+		if err := publicClientRecords(q.db.Model(&model.ClientRecord{}), "email").
 			Where("COALESCE(enable, FALSE) = TRUE AND email IN ?", batch).
 			Order("id ASC").
 			Pluck("email", &page).Error; err != nil {
@@ -594,11 +594,11 @@ func (q clientQuery) onlineEmails(onlines []string) ([]string, int, error) {
 func (s *ClientService) listGroupNames() ([]string, error) {
 	db := database.GetDB()
 	var stored []string
-	if err := db.Model(&model.ClientGroup{}).Pluck("name", &stored).Error; err != nil {
+	if err := db.Model(&model.ClientGroup{}).Where("name <> ?", "_system").Pluck("name", &stored).Error; err != nil {
 		return nil, err
 	}
 	var used []string
-	if err := db.Model(&model.ClientRecord{}).
+	if err := publicClientRecords(db.Model(&model.ClientRecord{}), "email").
 		Where("group_name <> ''").
 		Distinct().
 		Pluck("group_name", &used).Error; err != nil {
