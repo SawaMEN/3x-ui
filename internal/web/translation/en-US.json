@@ -1667,6 +1667,7 @@
       "testConnection": "Test Connection",
       "connectionOk": "Connection OK ({ms} ms)",
       "connectionFailed": "Connection failed",
+      "connectionRequiresSave": "Save the node to apply its connection route and check connectivity.",
       "never": "never",
       "justNow": "just now",
       "subNode": "Sub-node",

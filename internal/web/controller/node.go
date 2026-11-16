@@ -165,28 +165,40 @@ func (a *NodeController) add(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
 		return
 	}
+	// Once inserted, every subsequent failure must remove this new node.
+	// Otherwise retrying the form creates hidden duplicate entries/bridges.
+	fail := func(cause error) {
+		if cleanupErr := a.nodeService.Delete(view.Id); cleanupErr != nil {
+			cause = errors.Join(cause, fmt.Errorf("remove incomplete node: %w", cleanupErr))
+		}
+		if n.OutboundTag != "" {
+			markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
+		}
+		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), cause)
+	}
 	if n.OutboundTag != "" {
 		if err := restartSelectedCoreNow(c.Request.Context(), &a.settingService, &a.xrayService, &a.singBoxService); err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
+			fail(err)
 			return
 		}
 		initialPatch, err = a.ensureReachable(c, n, view.Id)
 		if err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
+			fail(err)
 			return
 		}
 		havePatch = true
 	}
 	if havePatch {
 		if err := a.nodeService.UpdateHeartbeat(view.Id, initialPatch); err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
+			fail(err)
 			return
 		}
-		view, err = a.nodeService.GetViewById(view.Id)
+		updatedView, err := a.nodeService.GetViewById(view.Id)
 		if err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
+			fail(err)
 			return
 		}
+		view = updatedView
 	}
 	jsonMsgObj(c, I18nWeb(c, "pages.nodes.toasts.add"), view, nil)
 }
@@ -225,6 +237,8 @@ func (a *NodeController) update(c *gin.Context) {
 			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
 			return
 		}
+	}
+	if !havePatch && (!n.ClearApiToken || n.Enable) {
 		probePatch, err = a.ensureReachable(c, n, id)
 		if err != nil {
 			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
