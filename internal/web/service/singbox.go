@@ -134,6 +134,7 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any, lookups ...func(string
 		"type": "tuic", "tag": ib.Tag, "listen": listen, "listen_port": inst.Port,
 		"users": users, "congestion_control": inst.CongestionControl,
 		"auth_timeout":       fmt.Sprintf("%ds", inst.AuthenticationTimeout),
+		"idle_timeout":       fmt.Sprintf("%ds", inst.MaxIdleTime),
 		"zero_rtt_handshake": inst.ZeroRTTHandshake,
 		"tls":                tls,
 	}, nil

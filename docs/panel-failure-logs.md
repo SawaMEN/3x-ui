@@ -37,3 +37,29 @@ PEM and private-URI formats. Individual diagnostic strings are bounded to
 avoid injecting multiline records or unbounded messages into the log. This
 is not a guarantee that every third-party component emits a diagnostic, nor
 a replacement for a server-side log collector if long-term retention is needed.
+
+## Dashboard and native-core crashes
+
+The top dashboard log window includes `core/<engine>/console` under
+**Core / crashes / stderr** and **All sources**. Child stdout/stderr is saved
+in `<core-config-path>.console.log`, separately from the structured core log.
+This retains Go panic stacks and diagnostics from libraries which bypass the
+core logger. It remains visible after switching cores. Files rotate at 10 MiB
+with two backups and seven-day retention; the viewer reads the active segment.
+
+Multiline frames are grouped before search/severity filters and display limits.
+Native timezone prefixes, coloured levels, and JSON severity/timestamps are
+recognized. Generated native logging is enabled, uses timestamps by default,
+and disables ANSI colours. Existing severity thresholds remain in effect.
+
+Unexpected child exits generate a panel ERROR with PID, exit reason and console
+path. Crash-loop backoff is retained across successful starts until the core
+stays healthy for 30 seconds. Repeated traffic-triggered crashes therefore keep
+increasing retry delays up to two minutes, rather than repeatedly treating
+500 ms of successful startup as recovery.
+
+After updating from a version without console capture, restart the core once
+from the panel: an already-running external process cannot have stdout/stderr
+reattached retroactively. SIGKILL/OOM cannot produce a Go stack; the exit signal
+is recorded, while identifying an OOM kill requires kernel/systemd records.
+No particular protocol is assumed to be responsible without crash evidence.

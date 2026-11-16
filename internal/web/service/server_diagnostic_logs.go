@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -45,16 +46,32 @@ type sortableDashboardLog struct {
 const dashboardLogLimit = 2000
 
 var (
-	diagnosticSeverity  = regexp.MustCompile(`(?i)\b(FATAL|CRITICAL|ERROR|ERR|WARNING|WARN|NOTICE|INFO|DEBUG|TRACE)\b`)
+	diagnosticANSI      = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
+	diagnosticCoreTime  = regexp.MustCompile(`^[+-]\d{4} \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?`)
+	diagnosticSeverity  = regexp.MustCompile(`(?i)\b(FATAL|PANIC|CRITICAL|ERROR|ERR|WARNING|WARN|NOTICE|INFO|DEBUG|TRACE)\b`)
 	diagnosticTimestamp = regexp.MustCompile(`\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?`)
 	diagnosticISOTime   = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})`)
 )
 
 func diagnosticLevel(line string) string {
+	line = diagnosticANSI.ReplaceAllString(line, "")
+	var structured struct {
+		Level string `json:"level"`
+	}
+	if strings.HasPrefix(strings.TrimSpace(line), "{") && json.Unmarshal([]byte(line), &structured) == nil && structured.Level != "" {
+		return diagnosticLevel(strings.ToUpper(structured.Level) + " - structured event")
+	}
+	if stamp := diagnosticCoreTime.FindString(line); stamp != "" {
+		line = strings.TrimSpace(strings.TrimPrefix(line, stamp))
+	}
+
 	// Raw runtime panics sometimes contain terms such as DEBUG or INFO in
 	// their payload. Their leading panic marker must take precedence over
 	// incidental severity words, otherwise ERROR-only filters hide crashes.
 	rawPrefix := strings.ToLower(strings.TrimSpace(line))
+	if strings.HasPrefix(rawPrefix, "fatal error:") || strings.HasPrefix(rawPrefix, "sigsegv:") || strings.HasPrefix(rawPrefix, "sigabrt:") {
+		return "FATAL"
+	}
 	if strings.HasPrefix(rawPrefix, "panic:") || strings.HasPrefix(rawPrefix, "runtime: panic:") {
 		return "ERROR"
 	}
@@ -105,7 +122,7 @@ func diagnosticLevel(line string) string {
 		return "UNKNOWN"
 	}
 	switch strings.ToUpper(candidate[indices[2]:indices[3]]) {
-	case "FATAL", "CRITICAL":
+	case "FATAL", "PANIC", "CRITICAL":
 		return "FATAL"
 	case "ERR", "ERROR":
 		return "ERROR"
@@ -121,6 +138,27 @@ func diagnosticLevel(line string) string {
 }
 
 func diagnosticTime(line string) time.Time {
+	line = diagnosticANSI.ReplaceAllString(line, "")
+	if strings.HasPrefix(strings.TrimSpace(line), "{") {
+		var structured struct {
+			TS   float64 `json:"ts"`
+			Time string  `json:"time"`
+		}
+		if json.Unmarshal([]byte(line), &structured) == nil {
+			if structured.TS > 0 && structured.TS < 9e9 {
+				return time.Unix(int64(structured.TS), int64((structured.TS-float64(int64(structured.TS)))*1e9))
+			}
+			if t, err := time.Parse(time.RFC3339Nano, structured.Time); err == nil {
+				return t
+			}
+		}
+	}
+	if stamp := diagnosticCoreTime.FindString(line); stamp != "" {
+		if t, err := time.Parse("-0700 2006-01-02 15:04:05.999999999", stamp); err == nil {
+			return t
+		}
+	}
+
 	// Prefer the earliest timestamp in the record. An ordinary panel log
 	// may mention an RFC3339 date in its message; that later date must not
 	// replace the actual "YYYY/MM/DD HH:MM:SS" log prefix.
@@ -222,7 +260,7 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
 	entries := make([]sortableDashboardLog, 0, limit)
 	warnings := make([]string, 0, 3)
 	appendLines := func(kind string, lines []string) {
-		for _, raw := range lines {
+		for _, raw := range diagnosticRecords(lines) {
 			raw = strings.TrimRight(raw, "\r\n")
 			if strings.TrimSpace(raw) == "" {
 				continue
@@ -344,6 +382,16 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
 			}
 		}
 	}
+	if source == "all" || source == "core" {
+		// Retain crash evidence after switching away from the failed core.
+		for _, kind := range []string{CoreTypeSingBox, CoreTypeSingBoxUpstream, CoreTypeXray} {
+			console := NativeCore(kind).ProcessConfigPath() + ".console.log"
+			if _, err := os.Stat(console); err == nil || !errors.Is(err, os.ErrNotExist) {
+				readFile("core/"+kind+"/console", console)
+			}
+		}
+	}
+
 	if source == "all" || source == "update" {
 		readFile("update", "/var/log/x-ui/update.log")
 	}
@@ -440,6 +488,11 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
 	// entries first while retaining relative order for equal/unknown stamps.
 	sort.SliceStable(entries, func(i, j int) bool {
 		a, b := entries[i].stamp, entries[j].stamp
+		urgentA := a.IsZero() && diagnosticRank(entries[i].entry.Level) <= 1
+		urgentB := b.IsZero() && diagnosticRank(entries[j].entry.Level) <= 1
+		if urgentA != urgentB {
+			return urgentA
+		}
 		if a.IsZero() {
 			return false
 		}
@@ -456,4 +509,36 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
 		result[i] = entries[i].entry
 	}
 	return DashboardLogs{Entries: result, Warnings: warnings}
+}
+
+// Reassemble oldest-first stack frames before filtering and display limits.
+// Tail readers supply newest-first physical lines.
+func diagnosticRecords(lines []string) []string {
+	records := make([]string, 0, len(lines))
+	var current strings.Builder
+	flush := func() {
+		if current.Len() > 0 {
+			records = append(records, current.String())
+			current.Reset()
+		}
+	}
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimRight(lines[i], "\r\n")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		continuation := strings.HasPrefix(line, "\t") || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "goroutine ") || strings.HasPrefix(line, "created by ") || strings.HasPrefix(line, "runtime stack:") || (strings.Contains(line, "(") && strings.HasSuffix(line, ")") && !strings.Contains(line, " - "))
+		if !continuation || diagnosticLevel(line) != "UNKNOWN" || !diagnosticTime(line).IsZero() {
+			flush()
+		}
+		if current.Len() > 0 {
+			current.WriteByte('\n')
+		}
+		current.WriteString(line)
+	}
+	flush()
+	for i, j := 0, len(records)-1; i < j; i, j = i+1, j-1 {
+		records[i], records[j] = records[j], records[i]
+	}
+	return records
 }

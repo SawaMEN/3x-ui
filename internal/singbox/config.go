@@ -634,8 +634,11 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 			}
 			out["network"] = network
 		}
-		if network := rawString(settings, "network"); network == "udp" {
+		if network := rawString(settings, "network"); network != "tcp" {
 			if cc := rawString(settings, "quicCongestionControl"); cc != "" {
+				if cc != "bbr" && cc != "cubic" && cc != "reno" {
+					return nil, fmt.Errorf("inbound %q has invalid NaiveProxy QUIC congestion control", rawString(raw, "tag"))
+				}
 				out["quic_congestion_control"] = cc
 			}
 		}

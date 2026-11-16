@@ -64,3 +64,31 @@ func TestCoreRecoveryBackoffResetOnHealthyCore(t *testing.T) {
 		t.Fatal("new crash should be retried without waiting for an old cooldown")
 	}
 }
+
+func TestCoreRecoveryBackoffSurvivesTrafficCrashAfterSuccessfulStart(t *testing.T) {
+	var b coreRecoveryBackoff
+	now := time.Unix(1000, 0)
+	b.recovered(now)
+	b.healthy(now.Add(time.Second))
+	if b.shouldRecover(now.Add(2 * time.Second)) {
+		t.Fatal("healthy tick cleared cooldown")
+	}
+	if b.shouldRecover(now.Add(10 * time.Second)) {
+		t.Fatal("first failed observation restarted")
+	}
+	if !b.shouldRecover(now.Add(13 * time.Second)) {
+		t.Fatal("second failed observation did not retry")
+	}
+	b.recovered(now.Add(13 * time.Second))
+	if b.delay != 20*time.Second {
+		t.Fatalf("runtime crash did not back off: %s", b.delay)
+	}
+	b.healthy(now.Add(14 * time.Second))
+	if b.delay == 0 {
+		t.Fatal("one healthy tick reset backoff")
+	}
+	b.healthy(now.Add(44 * time.Second))
+	if b.delay != 0 {
+		t.Fatal("stable runtime did not reset backoff")
+	}
+}

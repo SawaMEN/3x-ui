@@ -17,18 +17,21 @@ var EventBus *eventbus.Bus
 const (
 	coreRecoveryInitialDelay = 10 * time.Second
 	coreRecoveryMaxDelay     = 2 * time.Minute
+	coreRecoveryStablePeriod = 30 * time.Second
 )
 
 // coreRecoveryBackoff prevents a broken persisted configuration from starting
 // a new expensive "check" process every two watchdog ticks. A successful
-// recovery or an observed healthy/manually stopped core clears the backoff.
+// recovery retains its cooldown until stable; manual Stop clears the backoff.
 type coreRecoveryBackoff struct {
-	consecutive int
-	retryAfter  time.Time
-	delay       time.Duration
+	consecutive  int
+	retryAfter   time.Time
+	delay        time.Duration
+	healthySince time.Time
 }
 
 func (b *coreRecoveryBackoff) shouldRecover(now time.Time) bool {
+	b.healthySince = time.Time{}
 	if now.Before(b.retryAfter) {
 		return false
 	}
@@ -37,6 +40,7 @@ func (b *coreRecoveryBackoff) shouldRecover(now time.Time) bool {
 }
 
 func (b *coreRecoveryBackoff) failed(now time.Time) time.Duration {
+	b.healthySince = time.Time{}
 	b.consecutive = 0
 	if b.delay == 0 {
 		b.delay = coreRecoveryInitialDelay
@@ -45,6 +49,19 @@ func (b *coreRecoveryBackoff) failed(now time.Time) time.Duration {
 	}
 	b.retryAfter = now.Add(b.delay)
 	return b.delay
+}
+
+// Retain cooldown when a successful startup is followed by a traffic crash.
+func (b *coreRecoveryBackoff) recovered(now time.Time) { b.failed(now); b.healthySince = now }
+
+func (b *coreRecoveryBackoff) healthy(now time.Time) {
+	b.consecutive = 0
+	if b.healthySince.IsZero() {
+		b.healthySince = now
+	}
+	if now.Sub(b.healthySince) >= coreRecoveryStablePeriod {
+		b.reset()
+	}
 }
 
 func (b *coreRecoveryBackoff) reset() {
@@ -73,7 +90,11 @@ func (j *CheckXrayRunningJob) Run() {
 		logger.Warning("Gateway reconcile: ", err)
 	}
 	if !native.DidCrash() {
-		j.recovery.reset()
+		if native.IsRunning() {
+			j.recovery.healthy(time.Now())
+		} else {
+			j.recovery.reset()
+		}
 		return
 	}
 	if !j.recovery.shouldRecover(time.Now()) {
@@ -85,5 +106,8 @@ func (j *CheckXrayRunningJob) Run() {
 		logger.Errorf("Restart sing-box failed; next automatic retry in %s: %v", delay, err)
 		return
 	}
-	j.recovery.reset()
+	if native.IsRunning() {
+		j.recovery.recovered(time.Now())
+		logger.Notice("Proxy core recovered after unexpected exit")
+	}
 }

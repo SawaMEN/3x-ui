@@ -713,6 +713,11 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			cfg.Log = map[string]any{"level": "info"}
 		}
 		cfg.Log["output"] = s.logPath()
+		if _, exists := cfg.Log["timestamp"]; !exists {
+			cfg.Log["timestamp"] = true
+		}
+		cfg.Log["disabled"] = false
+		cfg.Log["disable_color"] = true
 		if s.coreType() == CoreTypeSingBoxUpstream {
 			// Official release binaries omit with_v2ray_api. Do not generate
 			// an experimental service which prevents those binaries starting.

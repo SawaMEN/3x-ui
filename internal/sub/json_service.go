@@ -713,6 +713,9 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		if inbound.Protocol == model.MASQUE {
 			// Parse the listener once even when a subscription shares many users.
 			masqueSettings, masqueSettingsErr = masque.Parse(inbound.Settings)
+			if masqueSettingsErr == nil {
+				masqueSettings = resolveMASQUESubscriptionTLS(inbound, masqueSettings)
+			}
 		}
 		for _, client := range clients {
 			seenEmails[client.Email] = struct{}{}
@@ -898,6 +901,11 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				generated := 0
 				for _, endpoint := range subReq.shareEndpointsForInbound(inbound) {
 					native := genNativeMASQUE(masqueSettings, client, endpoint)
+					if native != nil && inbound.NodeID == nil {
+						if cert := service.NativeTLSClientCertificate(masqueSettings.TLS.CertificatePath); cert != "" {
+							native["tls"].(map[string]any)["certificate"] = []string{cert}
+						}
+					}
 					if native == nil {
 						continue
 					}
@@ -1922,6 +1930,24 @@ func (s *SubJsonService) wrapNativeShadowTLS(inbound *model.Inbound, inner map[s
 		"server_port": port, "version": 3, "password": password, "tls": tls,
 	}
 	return true
+}
+
+// Use runtime TLS identity rules locally; remote paths belong to the node.
+func resolveMASQUESubscriptionTLS(inbound *model.Inbound, settings masque.Settings) masque.Settings {
+	if inbound.NodeID != nil {
+		return settings
+	}
+	var lookup func(string) (string, error)
+	if database.GetDB() != nil {
+		lookup = service.NativeTLSSetting
+	}
+	resolved, err := service.ResolveNativeTLSSettings(map[string]any{"certificatePath": settings.TLS.CertificatePath, "keyPath": settings.TLS.KeyPath, "serverName": settings.TLS.ServerName}, lookup)
+	if err == nil {
+		settings.TLS.CertificatePath, _ = resolved["certificatePath"].(string)
+		settings.TLS.KeyPath, _ = resolved["keyPath"].(string)
+		settings.TLS.ServerName, _ = resolved["serverName"].(string)
+	}
+	return settings
 }
 
 // genNativeMASQUE keeps the advertised client options consistent with the server

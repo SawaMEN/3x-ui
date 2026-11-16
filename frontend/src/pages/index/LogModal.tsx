@@ -81,7 +81,7 @@ export default function LogModal({ open, onClose }: LogModalProps) {
   const sources = [
     { value: 'all', label: ru ? 'Все источники' : 'All sources' },
     { value: 'panel', label: ru ? 'Панель' : 'Panel' },
-    { value: 'core', label: ru ? 'Ядро / ошибки' : 'Core / errors' },
+    { value: 'core', label: ru ? 'Ядро / сбои / stderr' : 'Core / crashes / stderr' },
     { value: 'access', label: ru ? 'Подключения Xray' : 'Xray access' },
     { value: 'journal', label: ru ? 'Службы systemd' : 'System services' },
     { value: 'protocol', label: ru ? 'Протокольные серверы' : 'Protocol servers' },

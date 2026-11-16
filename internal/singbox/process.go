@@ -19,6 +19,7 @@ import (
 	gprocess "github.com/shirou/gopsutil/v4/process"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 const (
@@ -93,6 +94,8 @@ type Process struct {
 	externalPID   int
 	isolated      bool
 	appliedConfig []byte
+	stopRequested bool
+	consoleOutput *runtimeOutput // lifecycle lock; rotation worker is reused across restarts
 }
 
 func NewProcessWithOptions(configPath string, options ProcessOptions, isolated bool) *Process {
@@ -440,10 +443,11 @@ func (p *Process) startLocked(ctx context.Context) error {
 	cmd.WaitDelay = defaultForceStopTimeout
 	cmd.Dir = filepath.Dir(binary)
 	cmd.Env = clientlimit.Default.Environment(os.Environ())
-	output := &processOutput{}
+	output := p.runtimeConsole()
 	cmd.Stdout = output
 	cmd.Stderr = output
 	if err := cmd.Start(); err != nil {
+		_ = output.Close()
 		err = fmt.Errorf("start %s: %w", p.coreName(), err)
 		p.setErr(err)
 		return err
@@ -452,21 +456,30 @@ func (p *Process) startLocked(ctx context.Context) error {
 	p.cmd = cmd
 	p.done = make(chan struct{})
 	p.exitErr = nil
+	p.stopRequested = false
 	p.externalPID = 0
 	p.startTime = time.Now()
 	done = p.done
 	p.mu.Unlock()
 	go func() {
 		err := cmd.Wait()
+		_ = output.Close()
 		if err != nil {
 			if details := output.String(); details != "" {
 				err = fmt.Errorf("%w: %s", err, details)
 			}
 		}
 		p.mu.Lock()
+		unexpected := !p.stopRequested
+		if unexpected && err == nil {
+			err = fmt.Errorf("%s exited with status 0 without a stop request", p.coreName())
+		}
 		p.exitErr = err
 		close(done)
 		p.mu.Unlock()
+		if unexpected {
+			logger.Errorf("%s exited unexpectedly pid=%d error=%s console_log=%s", p.coreName(), cmd.Process.Pid, logger.ErrorSummary(err), p.ConsoleLogPath())
+		}
 	}()
 	// Startup errors (including bind collisions) happen after cmd.Start. Do not
 	// report success while the child is still in that immediate failure window.
@@ -504,9 +517,10 @@ func (p *Process) Stop() error {
 }
 
 func (p *Process) stopLocked() error {
-	p.mu.RLock()
+	p.mu.Lock()
+	p.stopRequested = true
 	cmd, done, externalPID := p.cmd, p.done, p.externalPID
-	p.mu.RUnlock()
+	p.mu.Unlock()
 	if done != nil {
 		select {
 		case <-done:

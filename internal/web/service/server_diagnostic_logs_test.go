@@ -438,3 +438,48 @@ func TestDiagnosticSidecarWarnsForDirectoryInsteadOfJournal(t *testing.T) {
 		t.Fatalf("broken sidecar log path silently ignored: %+v", got.Warnings)
 	}
 }
+
+func TestDiagnosticKeepsPanicStackWithErrorFilterAndSearch(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_LOG_FOLDER", dir)
+	raw := "panic: crash marker\ngoroutine 7 [running]:\nmain.worker()\n\tcore.go:42\ncreated by main.run in goroutine 1\n\tcore.go:10"
+	if err := os.WriteFile(filepath.Join(dir, logger.LogFileName), []byte(raw+"\n2026/11/01 01:20:00 INFO - healthy\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result := (&ServerService{}).GetDashboardLogsFiltered("1", "debug", "panel", "core.go:42", "ERROR")
+	if len(result.Entries) != 1 || result.Entries[0].Raw != raw {
+		t.Fatalf("lost frames: %+v", result)
+	}
+}
+
+func TestDiagnosticParsesNativeCoreHeaders(t *testing.T) {
+	for _, line := range []string{"+0300 2026-11-15 12:10:00 ERROR inbound/tuic: failed", "\x1b[31mERROR\x1b[0m[0010] inbound/hysteria2: failed", `{"level":"error","msg":"TLS error"}`} {
+		if got := diagnosticLevel(line); got != "ERROR" {
+			t.Fatalf("hidden error: %q => %s", line, got)
+		}
+	}
+	if got := diagnosticTime("+0300 2026-11-15 12:10:00 ERROR failed").Format(time.RFC3339); got != "2026-11-15T12:10:00+03:00" {
+		t.Fatalf("wrong timezone: %s", got)
+	}
+	got := diagnosticTime(`{"level":"error","ts":1794744600.5,"msg":"failed"}`)
+	if got.Unix() != 1794744600 || got.Nanosecond() != 500000000 {
+		t.Fatalf("lost JSON time: %v", got)
+	}
+}
+
+func TestDiagnosticCoreIncludesConsoleAfterCoreSwitch(t *testing.T) {
+	setupSettingTestDB(t)
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	if err := (&SettingService{}).SetCoreType(CoreTypeSingBoxUpstream); err != nil {
+		t.Fatal(err)
+	}
+	path := NativeCore(CoreTypeSingBox).ProcessConfigPath() + ".console.log"
+	raw := "panic: owner-console-crash-marker\ngoroutine 7 [running]:\nmain.worker()\n\tcore.go:42"
+	if err := os.WriteFile(path, []byte(raw+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result := (&ServerService{}).GetDashboardLogsFiltered("10", "debug", "core", "owner-console-crash-marker", "ERROR")
+	if len(result.Entries) != 1 || result.Entries[0].Raw != raw {
+		t.Fatalf("lost switched-core crash: %+v", result)
+	}
+}

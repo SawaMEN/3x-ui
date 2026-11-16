@@ -56,7 +56,7 @@ func TestSingBoxExcludesLocalSidecarInbounds(t *testing.T) {
 func TestSingBoxTUICInboundPreservesUsersAndTLS(t *testing.T) {
 	ib := &model.Inbound{
 		Tag: "tuic-443", Protocol: model.TUIC, Port: 443,
-		Settings: `{"server":{"certificate":"/tls/cert.pem","private_key":"/tls/key.pem","congestion_control":"bbr","alpn":["h3"],"authentication_timeout":5}}`,
+		Settings: `{"server":{"certificate":"/tls/cert.pem","private_key":"/tls/key.pem","congestion_control":"bbr","alpn":["h3"],"authentication_timeout":5,"max_idle_time":45}}`,
 	}
 	clients := []any{map[string]any{"email": "alice", "uuid": "768e8bdd-bee3-4442-9006-b26464148aaa", "password": "secret"}}
 	got, err := singBoxTUICInbound(ib, clients)
@@ -65,6 +65,9 @@ func TestSingBoxTUICInboundPreservesUsersAndTLS(t *testing.T) {
 	}
 	if got["type"] != "tuic" || got["listen"] != "0.0.0.0" || got["listen_port"] != 443 || got["auth_timeout"] != "5s" {
 		t.Fatalf("unexpected TUIC listener: %v", got)
+	}
+	if got["idle_timeout"] != "45s" {
+		t.Fatalf("idle timeout ignored: %v", got["idle_timeout"])
 	}
 	users := got["users"].([]map[string]any)
 	if len(users) != 1 || users[0]["name"] != "alice" || users[0]["uuid"] != clients[0].(map[string]any)["uuid"] {
