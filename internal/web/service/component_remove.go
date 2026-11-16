@@ -32,6 +32,8 @@ func RemoveProtocolComponent(ctx context.Context, component string) error {
 	case "vetroff":
 		protocol = model.VetroffProxy
 		path = filepath.Join(config.GetBinFolderPath(), "vetroff-bundle")
+	case "openflux":
+		protocol = model.OpenFlux
 	case "trusttunnel":
 		protocol = model.TrustTunnel
 		path = filepath.Join(config.GetBinFolderPath(), "trusttunnel_endpoint")
@@ -70,6 +72,9 @@ func RemoveProtocolComponent(ctx context.Context, component string) error {
 	}
 	if protocol == model.VetroffProxy {
 		return externalvpn.RemoveVetroff(ctx)
+	}
+	if protocol == model.OpenFlux {
+		return externalvpn.RemoveOpenFlux(ctx)
 	}
 	if err := removeComponentFile(path); err != nil {
 		return err

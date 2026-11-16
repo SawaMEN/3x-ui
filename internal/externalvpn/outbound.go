@@ -577,7 +577,7 @@ func startOutboundContext(parent context.Context, tag string, proc *managedOutbo
 			return err
 		}
 		var conf strings.Builder
-		fmt.Fprintf(&conf, "[Interface]\nRole = client\nInbound = socks5\nSocks5 = 127.0.0.1:%d\nCodec = batched\nEncryptionKeyFile = %s\nSessionContext = %s\nCookieStore = %s\n", proc.port, secret, s.Context, filepath.Join(folder, "cookies.json"))
+		fmt.Fprintf(&conf, "[Interface]\nRole = client\nInbound = socks5\nSocks5 = 127.0.0.1:%d\nCodec = batched\nEncryptionKeyFile = %s\nSessionContext = %s\nCookieStore = %s\n", proc.port, secret, openFluxINIContext(s.Context), filepath.Join(folder, "cookies.json"))
 		for _, t := range s.Transports {
 			fmt.Fprintf(&conf, "\n[Transport \"%s\"]\nType = %s\nPriority = %d\n", t.Type, t.Type, t.Priority)
 			if t.Type == "direct" {
@@ -591,7 +591,7 @@ func startOutboundContext(parent context.Context, tag string, proc *managedOutbo
 			cancel()
 			return err
 		}
-		proc.cmd = exec.CommandContext(ctx, binary(model.OpenFlux), "--config", path, "--negotiate")
+		proc.cmd = exec.CommandContext(ctx, binary(model.OpenFlux), "--config", path, "--session-context", s.Context, "--negotiate")
 	} else {
 		checkCtx, checkCancel := context.WithTimeout(parent, 10*time.Second)
 		checkErr := exec.CommandContext(checkCtx, "docker", "image", "inspect", "3x-ui-fptn-client:0.4.6").Run()

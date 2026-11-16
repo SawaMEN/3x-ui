@@ -65,6 +65,7 @@ type BinaryStatus struct {
 }
 
 type UpdateStatus struct {
+	OpenFlux    BinaryStatus `json:"openflux"`
 	Vetroff     BinaryStatus `json:"vetroff"`
 	Hysteria2   BinaryStatus `json:"hysteria2"`
 	Pingtunnel  BinaryStatus `json:"pingtunnel"`
@@ -103,6 +104,7 @@ func releaseSpecFor(protocol model.Protocol) (releaseSpec, error) {
 
 func GetUpdateStatus(ctx context.Context, localOnly ...bool) UpdateStatus {
 	var status UpdateStatus
+	status.OpenFlux = OpenFluxBinaryStatus()
 	var wg sync.WaitGroup
 	wg.Add(4)
 	go func() { defer wg.Done(); status.Vetroff = binaryStatus(ctx, model.VetroffProxy, localOnly...) }()

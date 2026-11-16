@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
@@ -98,8 +99,31 @@ func PrepareAdditional(ib *model.Inbound, previous string) error {
 			raw["certificatePEM"], raw["privateKeyPEM"] = cert, key
 		}
 	} else {
-		if ib.Protocol == model.OpenFlux && raw["transports"] == nil {
-			raw["transports"] = []OpenFluxTransport{{Type: "direct", Priority: 100}}
+		if ib.Protocol == model.OpenFlux {
+			if raw["transports"] == nil {
+				raw["transports"] = []OpenFluxTransport{{Type: "direct", Priority: 100}}
+			}
+			if raw["context"] == nil || raw["context"] == "" {
+				context := old.Context
+				if context == "" && previous != "" {
+					// Freeze the old effective KDF context before editing carriers.
+					context = "http://#"
+					best := -1
+					for i, transport := range old.Transports {
+						if transport.Type != "direct" && transport.URL != "" && (best < 0 || transport.Priority > old.Transports[best].Priority) {
+							best, context = i, transport.URL
+						}
+					}
+				}
+				if context == "" {
+					var err error
+					context, err = GenerateSecret()
+					if err != nil {
+						return err
+					}
+				}
+				raw["context"] = context
+			}
 		}
 	}
 	keys := map[string]string{}
@@ -176,8 +200,8 @@ func (inst Instance) validateAdditional() error {
 		if len(s.Clients) > 1 {
 			return fmt.Errorf("OpenFlux supports one client per inbound; create a separate inbound for each user")
 		}
-		if len(s.Transports) < 1 || len(s.Transports) > 6 {
-			return fmt.Errorf("OpenFlux requires 1..6 transports")
+		if len(s.Transports) < 1 || len(s.Transports) > 5 {
+			return fmt.Errorf("OpenFlux requires 1..5 distinct transports")
 		}
 		seen := map[string]bool{}
 		for _, t := range s.Transports {
@@ -198,11 +222,11 @@ func (inst Instance) validateAdditional() error {
 			default:
 				return fmt.Errorf("unsupported shareable OpenFlux transport %q", t.Type)
 			}
-			if strings.ContainsAny(t.URL, "\r\n\x00#;") {
+			if strings.TrimSpace(t.URL) != t.URL || strings.ContainsAny(t.URL, "\r\n\x00#;") {
 				return fmt.Errorf("URL cannot contain INI comments or control characters")
 			}
 		}
-		if strings.ContainsAny(s.Context, "\r\n\x00#;") {
+		if len(s.Context) > 4096 || strings.TrimSpace(s.Context) != s.Context || strings.ContainsAny(s.Context, "\r\n\x00") {
 			return fmt.Errorf("invalid OpenFlux encryption context")
 		}
 	}
@@ -215,8 +239,15 @@ func (inst Instance) validateAdditional() error {
 		if inst.Protocol == model.OpenFlux && c.Enable && strings.TrimSpace(c.Password) != c.Password {
 			return fmt.Errorf("OpenFlux secret cannot begin or end with whitespace")
 		}
-		if c.Enable && (len(c.Password) < 32 || strings.ContainsAny(c.Password, "\r\n\x00")) {
-			return fmt.Errorf("VPN client secret must have at least 32 characters")
+		if c.Enable {
+			length, minimum := len(c.Password), 32
+			if inst.Protocol == model.OpenFlux {
+				// Match official CLI, Android and desktop UTF-16 length checks.
+				length, minimum = len(utf16.Encode([]rune(c.Password))), 16
+			}
+			if length < minimum || strings.ContainsAny(c.Password, "\r\n\x00") {
+				return fmt.Errorf("VPN client secret must have at least %d characters", minimum)
+			}
 		}
 	}
 	return nil

@@ -1,3 +1,4 @@
+import { ensureOpenFlux } from '@/api/openflux-install';
 import { VetroffFields } from './protocols/vetroff';
 import { FptnFields, OpenFluxFields } from './protocols/additional-vpn';
 import { useId, useEffect, useMemo, useRef, useState } from 'react';
@@ -736,6 +737,13 @@ export default function InboundFormModal({
         onDraft(payload);
         onClose();
         return;
+      }
+      if (parsed.data.protocol === 'openflux' && parsed.data.enable) {
+        const component = await ensureOpenFlux(parsed.data.nodeId ?? 0);
+        if (!component.success) {
+          messageApi.error(component.msg || t('pages.inbounds.form.vpnInstallFailed'));
+          return;
+        }
       }
       const url =
         mode === 'edit' && dbInbound

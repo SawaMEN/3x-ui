@@ -1,3 +1,4 @@
+import { installOpenFlux } from '@/api/openflux-install';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -43,6 +44,7 @@ type DependencyKey =
   | 'sudoku'
   | 'pingtunnel'
   | 'vetroff'
+  | 'openflux'
   | 'trusttunnel'
   | 'oxidns'
   | 'dnstt'
@@ -81,6 +83,7 @@ type ExternalVPNBinaryStatus = {
 };
 
 type ExternalVPNStatus = {
+  openflux?: ExternalVPNBinaryStatus;
   hysteria2?: ExternalVPNBinaryStatus;
   pingtunnel?: ExternalVPNBinaryStatus;
   trusttunnel?: ExternalVPNBinaryStatus;
@@ -137,6 +140,7 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.key === 'dnstt' ||
   dependency.key === 'pingtunnel' ||
   dependency.key === 'vetroff' ||
+  dependency.key === 'openflux' ||
   dependency.key === 'trusttunnel' ||
   dependency.key === 'olcrtc' ||
   dependency.key === 'telemt';
@@ -291,7 +295,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
       updateAvailable: false,
     }));
     const rows: DependencyStatus[] = [...bundled];
-    for (const key of ['sudoku', 'pingtunnel', 'trusttunnel', 'vetroff'] as const) {
+    for (const key of ['sudoku', 'pingtunnel', 'trusttunnel', 'vetroff', 'openflux'] as const) {
       const data =
         key === 'sudoku'
           ? sudoku.success
@@ -303,13 +307,15 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
       rows.push({
         key,
         label:
-          key === 'vetroff'
-            ? 'VetroffProxy'
-            : key === 'sudoku'
-              ? 'Sudoku'
-              : key === 'pingtunnel'
-                ? 'Pingtunnel'
-                : 'TrustTunnel',
+          key === 'openflux'
+            ? 'OpenFlux'
+            : key === 'vetroff'
+              ? 'VetroffProxy'
+              : key === 'sudoku'
+                ? 'Sudoku'
+                : key === 'pingtunnel'
+                  ? 'Pingtunnel'
+                  : 'TrustTunnel',
         installed: data?.installed === true,
         installedVersion: data?.version || '',
         availableVersion: data?.latestVersion || '',
@@ -424,6 +430,8 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
 
   const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
     switch (dependency.key) {
+      case 'openflux':
+        return await installOpenFlux();
       case 'telemt':
         return (await HttpUtil.post(
           dependency.installed ? '/panel/api/telemt/action' : '/panel/api/telemt/install',

@@ -51,7 +51,7 @@ func (m *Manager) additionalCommand(inst Instance, metricsAddr string) (*exec.Cm
 			}
 		}
 		var conf strings.Builder
-		fmt.Fprintf(&conf, "[Interface]\nRole = exit\nMode = l4\nCodec = batched\nEncryptionKeyFile = %s\nSessionContext = %s\nIPCSocket = %s\nCookieStore = %s\n", secret, inst.Settings.Context, socket, filepath.Join(folder, "cookies.json"))
+		fmt.Fprintf(&conf, "[Interface]\nRole = exit\nMode = l4\nCodec = batched\nEncryptionKeyFile = %s\nSessionContext = %s\nIPCSocket = %s\nCookieStore = %s\n", secret, openFluxINIContext(inst.Settings.Context), socket, filepath.Join(folder, "cookies.json"))
 		for _, t := range inst.Settings.Transports {
 			fmt.Fprintf(&conf, "\n[Transport \"%s\"]\nType = %s\nPriority = %d\n", t.Type, t.Type, t.Priority)
 			if t.Type == "direct" {
@@ -64,7 +64,7 @@ func (m *Manager) additionalCommand(inst Instance, metricsAddr string) (*exec.Cm
 		if err := writePrivate(path, []byte(conf.String())); err != nil {
 			return fail(err)
 		}
-		return exec.CommandContext(ctx, binary(inst.Protocol), "--config", path, "--negotiate"), cancel, nil
+		return exec.CommandContext(ctx, binary(inst.Protocol), "--config", path, "--session-context", inst.Settings.Context, "--negotiate"), cancel, nil
 	}
 	if _, err := exec.LookPath("docker"); err != nil {
 		return fail(fmt.Errorf("FPTN requires Docker for isolated networking: %w", err))
@@ -137,7 +137,10 @@ func cleanupAdditional(id int, p model.Protocol) {
 func InstallOpenFlux(ctx context.Context) error {
 	externalVPNUpdateMu.Lock()
 	defer externalVPNUpdateMu.Unlock()
-	spec := releaseSpec{protocol: model.OpenFlux, api: "https://api.github.com/repos/p1neappleXpress/OpenFlux/releases/tags/v0.3.0", binaryName: "openflux"}
+	if runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
+		return fmt.Errorf("OpenFlux installation supports Linux amd64/arm64")
+	}
+	spec := releaseSpec{protocol: model.OpenFlux, api: openFluxReleaseAPI, binaryName: "openflux"}
 	rel, err := fetchLatestRelease(ctx, spec)
 	if err != nil {
 		return err
@@ -180,6 +183,9 @@ func InstallOpenFlux(ctx context.Context) error {
 	output, err := exec.CommandContext(checkCtx, path, "--help").CombinedOutput()
 	if err != nil || !strings.Contains(string(output), "--role") || !strings.Contains(string(output), "--config") {
 		return fmt.Errorf("downloaded OpenFlux does not support managed configuration")
+	}
+	if err := writeOpenFluxReceipt(asset.Digest); err != nil {
+		return err
 	}
 	if err := os.Rename(path, filepath.Join(dir, "openflux")); err != nil {
 		return err

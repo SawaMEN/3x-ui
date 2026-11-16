@@ -1,5 +1,6 @@
 import { Alert, Button, Form, Input, InputNumber, Select, Space, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
+import OpenFluxOutboundEditor from './OpenFluxOutboundEditor';
 import { InstallVPNButton } from '@/pages/inbounds/form/protocols/additional-vpn';
 
 export default function AdditionalOutboundEditor({
@@ -108,13 +109,7 @@ export default function AdditionalOutboundEditor({
       ) : protocol === 'openflux' ? (
         <>
           <InstallVPNButton protocol="openflux" />
-          <Form.Item label={t('pages.inbounds.form.openfluxSecret')}>
-            <Input.Password
-              value={String(settings.secret ?? '')}
-              onChange={(e) => update({ secret: e.target.value })}
-            />
-          </Form.Item>
-          <Alert type="info" description={t('pages.inbounds.form.openfluxOutboundHint')} />
+          <OpenFluxOutboundEditor settings={settings} update={update} />
         </>
       ) : (
         <>

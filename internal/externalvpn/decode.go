@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"unicode"
 )
 
 type FPTNServer struct {
@@ -68,10 +69,25 @@ type OpenFluxLink struct {
 
 func DecodeOpenFluxLink(link string) (OpenFluxLink, error) {
 	var result OpenFluxLink
+	link = strings.TrimSpace(link)
 	if !strings.HasPrefix(link, "openflux://v1/") || len(link) > 64<<10 {
 		return result, fmt.Errorf("unsupported OpenFlux link")
 	}
-	packed, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(strings.TrimPrefix(link, "openflux://v1/"), "="))
+	body := strings.Map(func(r rune) rune {
+		switch r {
+		case '+':
+			return '-'
+		case '/':
+			return '_'
+		case '\u200b':
+			return -1
+		}
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, strings.TrimPrefix(link, "openflux://v1/"))
+	packed, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(body, "="))
 	if err != nil {
 		return result, err
 	}

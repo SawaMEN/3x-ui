@@ -1,11 +1,22 @@
 import { z } from 'zod';
 import { NaiveClientSchema } from './naive';
+import { OPENFLUX_TRANSPORTS, validOpenFluxChannelURL } from '@/lib/openflux';
 
-export const OpenFluxTransportSchema = z.object({
-  type: z.enum(['direct', 'yandex', 'vyandex', 'boards', 'mailru']),
-  url: z.string().default(''),
-  priority: z.number().int().min(0).max(1000).default(50),
-});
+export const OpenFluxTransportSchema = z
+  .object({
+    type: z.enum(OPENFLUX_TRANSPORTS),
+    url: z.string().default(''),
+    priority: z.number().int().min(0).max(1000).default(50),
+  })
+  .superRefine((value, ctx) => {
+    if (value.type !== 'direct' && !validOpenFluxChannelURL(value.url)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['url'],
+        message: 'pages.inbounds.form.openfluxURLRequired',
+      });
+    }
+  });
 export const FptnInboundSettingsSchema = z.object({
   image: z.string().default('fptnvpn/fptn-vpn-server:0.4.4'),
   hostname: z.string().default('fptn.local'),
@@ -24,12 +35,51 @@ export const FptnInboundSettingsSchema = z.object({
   spamFilter: z.boolean().default(true),
   clients: z.array(NaiveClientSchema).default([]),
 });
-export const OpenFluxInboundSettingsSchema = z.object({
-  context: z.string().default(''),
-  transports: z
-    .array(OpenFluxTransportSchema)
-    .min(1)
-    .max(6)
-    .default([{ type: 'direct', url: '', priority: 100 }]),
-  clients: z.array(NaiveClientSchema).max(1).default([]),
-});
+export const OpenFluxInboundSettingsSchema = z
+  .object({
+    context: z
+      .string()
+      .max(4096)
+      .refine(
+        (value) => value.trim() === value && !/[\r\n\0]/.test(value),
+        'pages.inbounds.form.openfluxContextInvalid',
+      )
+      .default(''),
+    transports: z
+      .array(OpenFluxTransportSchema)
+      .min(1)
+      .max(5)
+      .default([{ type: 'direct', url: '', priority: 100 }]),
+    clients: z
+      .array(
+        NaiveClientSchema.superRefine((client, ctx) => {
+          if (
+            client.enable &&
+            client.password &&
+            (client.password.length < 16 ||
+              client.password.trim() !== client.password ||
+              /[\r\n\0]/.test(client.password))
+          ) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['password'],
+              message: 'pages.inbounds.form.openfluxSecretInvalid',
+            });
+          }
+        }),
+      )
+      .max(1)
+      .default([]),
+  })
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.transports.forEach((transport, index) => {
+      if (seen.has(transport.type))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['transports', index, 'type'],
+          message: 'pages.inbounds.form.openfluxDuplicate',
+        });
+      seen.add(transport.type);
+    });
+  });
