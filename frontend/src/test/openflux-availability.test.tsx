@@ -29,7 +29,11 @@ describe('OpenFlux component availability', () => {
     });
     const client = makeTestQueryClient();
     const view = renderWithProviders(<Status nodeId={7} />, { queryClient: client });
-    view.rerender(<QueryClientProvider client={client}><Status nodeId={8} /></QueryClientProvider>);
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <Status nodeId={8} />
+      </QueryClientProvider>,
+    );
     await act(async () => {
       completeOld(new Msg(true, '', { installed: true }));
     });

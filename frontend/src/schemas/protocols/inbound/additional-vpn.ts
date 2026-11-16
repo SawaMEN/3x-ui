@@ -51,7 +51,7 @@ export const OpenFluxInboundSettingsSchema = z
       .string()
       .max(4096)
       .refine(
-        (value) => value.trim() === value && !/[\r\n\0]/.test(value),
+        (value) => value.trim() === value && !/[\r\n\0]/.test(value) && new TextEncoder().encode(value).length <= 4096,
         'pages.inbounds.form.openfluxContextInvalid',
       )
       .default(''),

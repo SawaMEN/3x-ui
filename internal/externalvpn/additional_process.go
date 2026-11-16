@@ -64,7 +64,10 @@ func (m *Manager) additionalCommand(inst Instance, metricsAddr string) (*exec.Cm
 		if err := writePrivate(path, []byte(conf.String())); err != nil {
 			return fail(err)
 		}
-		args := []string{"--config", path, "--session-context", inst.Settings.Context, "--negotiate", "--debug", strconv.Itoa(inst.Settings.Debug)}
+		args := []string{"--config", path, "--session-context", inst.Settings.Context, "--negotiate"}
+		if inst.Settings.Debug > 0 {
+			args = append(args, "--debug", strconv.Itoa(inst.Settings.Debug))
+		}
 		if inst.Settings.MaxPacketSize > 0 {
 			args = append(args, "--max-packet-size", strconv.Itoa(inst.Settings.MaxPacketSize))
 		}

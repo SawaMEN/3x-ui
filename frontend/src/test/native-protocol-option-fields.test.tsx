@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
+import { renderWithProviders as render } from './test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import SingBoxOutboundModal from '@/pages/singbox/SingBoxOutboundModal';
 import fields from '@/pages/singbox/native-outbound-fields.json';

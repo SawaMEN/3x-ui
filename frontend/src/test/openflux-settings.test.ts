@@ -37,7 +37,9 @@ describe('OpenFlux settings', () => {
   it('accepts every shareable carrier from the latest stable release', () => {
     const transports = [
       { type: 'direct' },
-      ...['yandex', 'vyandex', 'boards', 'mailru', 'cupsonline', 'avito', 'telemost'].map((type) => ({ type, url: 'https://example.org/room' })),
+      ...['yandex', 'vyandex', 'boards', 'mailru', 'cupsonline', 'avito', 'telemost'].map(
+        (type) => ({ type, url: 'https://example.org/room' }),
+      ),
     ];
     expect(OpenFluxInboundSettingsSchema.safeParse({ transports }).success).toBe(true);
     expect(suggestOpenFluxTransport('https://cups.online/room/a')).toBe('cupsonline');
@@ -45,8 +47,10 @@ describe('OpenFlux settings', () => {
     expect(suggestOpenFluxTransport('https://telemost.yandex.ru/j/a')).toBe('telemost');
   });
   it('validates negotiated packet limits and safe logging levels', () => {
-    for (const maxPacketSize of [0, 1280, 65000]) expect(OpenFluxInboundSettingsSchema.safeParse({ maxPacketSize }).success).toBe(true);
-    for (const maxPacketSize of [1, 1279, 65001]) expect(OpenFluxInboundSettingsSchema.safeParse({ maxPacketSize }).success).toBe(false);
+    for (const maxPacketSize of [0, 1280, 65000])
+      expect(OpenFluxInboundSettingsSchema.safeParse({ maxPacketSize }).success).toBe(true);
+    for (const maxPacketSize of [1, 1279, 65001])
+      expect(OpenFluxInboundSettingsSchema.safeParse({ maxPacketSize }).success).toBe(false);
     expect(OpenFluxInboundSettingsSchema.safeParse({ debug: 3 }).success).toBe(false);
   });
   it('uses official UTF-16 secret lengths', () => {
