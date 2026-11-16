@@ -482,7 +482,8 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/server/openflux/install',
-        summary: 'Start installing or updating the official OpenFlux executable on the selected node.',
+        summary:
+          'Start installing or updating the official OpenFlux executable on the selected node.',
         params: [
           {
             name: 'nodeId',
