@@ -601,4 +601,3 @@ func mergeAttributes(existing []string, attributes map[string]struct{}) []string
 	sort.Strings(out)
 	return out
 }
-
