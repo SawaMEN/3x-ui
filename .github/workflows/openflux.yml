@@ -31,8 +31,8 @@ jobs:
           go-version-file: go.mod
       - name: Download pinned official OpenFlux
         run: |
-          curl --fail --location --retry 3 --output "$RUNNER_TEMP/openflux" https://github.com/p1neappleXpress/OpenFlux/releases/download/v0.3.0/openflux-linux-amd64
-          echo "fdc30ccd12f65bc88db080da600a5fb2e5bbb22fe886648b67583ed77282c622  $RUNNER_TEMP/openflux" | sha256sum --check
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/openflux" https://github.com/p1neappleXpress/OpenFlux/releases/download/v0.17.1/openflux-linux-amd64
+          echo "c0d00461e8cc59e48429b239fd8044b1c1aaa3769968a7c9160c488f4bd63f3b  $RUNNER_TEMP/openflux" | sha256sum --check
           chmod 755 "$RUNNER_TEMP/openflux"
       - name: Check Go behavior and real encrypted TCP payload
         env:
@@ -50,7 +50,7 @@ jobs:
           files = [
             "internal/externalvpn/additional.go", "internal/externalvpn/additional_process.go",
             "internal/externalvpn/decode.go", "internal/externalvpn/openflux_install.go",
-            "internal/externalvpn/openflux_automation_test.go", "internal/externalvpn/update.go",
+            "internal/externalvpn/openflux_automation_test.go", "internal/externalvpn/openflux_component_test.go", "internal/externalvpn/update.go",
             "internal/externalvpn/outbound.go", "internal/web/controller/api.go",
             "internal/web/controller/api_auth_test.go", "internal/web/controller/server_externalvpn.go",
             "internal/web/controller/server_openflux.go", "internal/web/controller/server_openflux_test.go",
@@ -84,7 +84,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, pathlib, subprocess
-          files = ["frontend/src/lib/openflux.ts","frontend/src/schemas/protocols/inbound/additional-vpn.ts","frontend/src/api/openflux-install.ts","frontend/src/pages/inbounds/form/InboundFormModal.tsx","frontend/src/pages/inbounds/form/protocols/additional-vpn.tsx","frontend/src/pages/xray/outbounds/OpenFluxOutboundEditor.tsx","frontend/src/pages/xray/outbounds/AdditionalOutboundEditor.tsx","frontend/src/pages/settings/SystemUpdatePanel.tsx","frontend/src/test/openflux-settings.test.ts","frontend/src/test/openflux-install.test.ts","frontend/src/test/openflux-fields.test.tsx"]
+          files = ["frontend/src/lib/openflux.ts","frontend/src/schemas/protocols/inbound/additional-vpn.ts","frontend/src/api/openflux-install.ts","frontend/src/pages/inbounds/form/InboundFormModal.tsx","frontend/src/pages/inbounds/form/protocols/additional-vpn.tsx","frontend/src/pages/xray/outbounds/OpenFluxOutboundEditor.tsx","frontend/src/pages/xray/outbounds/AdditionalOutboundEditor.tsx","frontend/src/pages/settings/SystemUpdatePanel.tsx","frontend/src/test/openflux-settings.test.ts","frontend/src/test/openflux-install.test.ts","frontend/src/test/openflux-fields.test.tsx", "frontend/src/pages/xray/outbounds/AdditionalOutboundEditor.tsx", "frontend/src/test/system-update-components.test.tsx"]
           formatter = pathlib.Path("frontend/node_modules/.bin/oxfmt")
           if formatter.exists():
               original = {path: pathlib.Path(path).read_text() for path in files}

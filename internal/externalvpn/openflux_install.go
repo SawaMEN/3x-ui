@@ -3,6 +3,7 @@ package externalvpn
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,8 +16,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
-const openFluxVersion = "0.3.0"
-const openFluxReleaseAPI = "https://api.github.com/repos/p1neappleXpress/OpenFlux/releases/tags/v" + openFluxVersion
+const openFluxReleaseAPI = "https://api.github.com/repos/p1neappleXpress/OpenFlux/releases/latest"
 
 type OpenFluxInstallStatus struct {
 	RunID string `json:"runId"`
@@ -80,8 +80,8 @@ type openFluxInstallReceipt struct {
 	Digest  string `json:"digest"`
 }
 
-func writeOpenFluxReceipt(digest string) error {
-	data, err := json.Marshal(openFluxInstallReceipt{Version: openFluxVersion, Digest: digest})
+func writeOpenFluxReceipt(version, digest string) error {
+	data, err := json.Marshal(openFluxInstallReceipt{Version: version, Digest: digest})
 	if err != nil {
 		return err
 	}
@@ -90,10 +90,9 @@ func writeOpenFluxReceipt(digest string) error {
 
 // Upstream has no version flag. Only claim a version when the installed bytes
 // still match the digest recorded by our verified installer.
-func OpenFluxBinaryStatus() BinaryStatus {
+func OpenFluxBinaryStatus(ctx context.Context, localOnly ...bool) BinaryStatus {
 	status := BinaryStatus{
-		Supported:     runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"),
-		LatestVersion: openFluxVersion,
+		Supported: runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"),
 	}
 	if !status.Supported {
 		status.UnsupportedReason = "OpenFlux installation supports Linux amd64/arm64"
@@ -102,17 +101,52 @@ func OpenFluxBinaryStatus() BinaryStatus {
 	path := binary(model.OpenFlux)
 	info, err := os.Stat(path)
 	status.Installed = err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
-	if !status.Installed {
+	if status.Installed {
+		var receipt openFluxInstallReceipt
+		data, err := os.ReadFile(filepath.Join(config.GetBinFolderPath(), ".openflux-install.json"))
+		if err == nil && json.Unmarshal(data, &receipt) == nil && receipt.Version != "" &&
+			len(receipt.Digest) == len("sha256:")+64 && verifyReleaseDigest(path, receipt.Digest) == nil {
+			status.Version = receipt.Version
+		}
+	}
+	// Saving a configuration only reads local state. Checking components for
+	// updates uses the official latest stable release, even before installation.
+	if len(localOnly) > 0 && localOnly[0] {
 		return status
 	}
-	var receipt openFluxInstallReceipt
-	data, err := os.ReadFile(filepath.Join(config.GetBinFolderPath(), ".openflux-install.json"))
-	if err == nil && json.Unmarshal(data, &receipt) == nil && receipt.Version != "" &&
-		len(receipt.Digest) == len("sha256:")+64 && verifyReleaseDigest(path, receipt.Digest) == nil {
-		status.Version = receipt.Version
+	spec := releaseSpec{protocol: model.OpenFlux, api: openFluxReleaseAPI, binaryName: "openflux"}
+	release, err := fetchLatestRelease(ctx, spec)
+	if err != nil {
+		status.Error = err.Error()
+		return status
 	}
-	status.UpdateAvailable = status.Version != openFluxVersion
+	if _, err := openFluxReleaseAsset(release, runtime.GOARCH); err != nil {
+		status.Supported = false
+		status.UnsupportedReason = err.Error()
+		return status
+	}
+	status.LatestVersion = normalizeReleaseVersion(release.TagName)
+	status.UpdateAvailable = status.Installed && status.Version != status.LatestVersion
 	return status
+}
+
+func openFluxReleaseAsset(release githubRelease, arch string) (releaseAsset, error) {
+	if arch != "amd64" && arch != "arm64" {
+		return releaseAsset{}, fmt.Errorf("OpenFlux installation supports Linux amd64/arm64")
+	}
+	name := "openflux-linux-" + arch
+	for _, asset := range release.Assets {
+		if asset.Name != name {
+			continue
+		}
+		if !strings.HasPrefix(asset.URL, "https://github.com/p1neappleXpress/OpenFlux/releases/download/") ||
+			!strings.HasSuffix(asset.URL, "/"+name) ||
+			!strings.HasPrefix(asset.Digest, "sha256:") || len(asset.Digest) != len("sha256:")+64 {
+			return releaseAsset{}, fmt.Errorf("OpenFlux release has no digest-verified official %s asset", name)
+		}
+		return asset, nil
+	}
+	return releaseAsset{}, fmt.Errorf("OpenFlux release has no %s asset", name)
 }
 
 // Context is also passed as an exact CLI argument. Do not let INI comment
@@ -147,6 +181,55 @@ func RemoveOpenFlux(ctx context.Context) error {
 		if err := os.Remove(filepath.Join(config.GetBinFolderPath(), name)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
+	}
+	return nil
+}
+
+// Keep the previous executable and its receipt intact if committing either
+// part fails. Only a verified, launch-compatible staged binary reaches here.
+func commitOpenFluxBinary(staged, version, digest string) error {
+	dir := config.GetBinFolderPath()
+	target := filepath.Join(dir, "openflux")
+	backup, err := os.CreateTemp(dir, ".openflux-previous-*")
+	if err != nil {
+		return err
+	}
+	backupPath := backup.Name()
+	if err := backup.Close(); err != nil {
+		_ = os.Remove(backupPath)
+		return err
+	}
+	defer func() {
+		if backupPath != "" {
+			_ = os.Remove(backupPath)
+		}
+	}()
+	previous := true
+	if err := os.Rename(target, backupPath); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		previous = false
+	}
+	restore := func() error {
+		if previous {
+			if err := os.Rename(backupPath, target); err != nil {
+				retained := backupPath
+				backupPath = ""
+				return fmt.Errorf("restore previous OpenFlux from %s: %w", retained, err)
+			}
+			return nil
+		}
+		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	if err := os.Rename(staged, target); err != nil {
+		return errors.Join(err, restore())
+	}
+	if err := writeOpenFluxReceipt(version, digest); err != nil {
+		return errors.Join(err, restore())
 	}
 	return nil
 }

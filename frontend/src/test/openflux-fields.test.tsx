@@ -48,19 +48,12 @@ describe('OpenFlux channel setup', () => {
     );
     expect(screen.getByTestId('values').textContent).toContain('keep-this-context');
   });
-  it('installs on the chosen node rather than the master', async () => {
-    vi.mocked(HttpUtil.post).mockResolvedValueOnce(
-      new Msg(true, '', { runId: 'remote', state: 'success' }),
-    );
+  it('offers component guidance without installation controls in the inbound form', () => {
+    vi.mocked(HttpUtil.post).mockClear();
     renderWithProviders(<Inbound />);
-    fireEvent.click(screen.getByRole('button', { name: 'Install OpenFlux' }));
-    await waitFor(() =>
-      expect(HttpUtil.post).toHaveBeenCalledWith(
-        '/panel/api/server/openflux/install?nodeId=7',
-        undefined,
-        expect.anything(),
-      ),
-    );
+    expect(screen.queryByRole('button', { name: 'Install OpenFlux' })).toBeNull();
+    expect(screen.getByText(/Installation and component updates/)).toBeTruthy();
+    expect(HttpUtil.post).not.toHaveBeenCalled();
   });
   it('imports all client connection settings without editing JSON', async () => {
     vi.mocked(HttpUtil.post).mockResolvedValueOnce(

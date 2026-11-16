@@ -40,7 +40,7 @@ export async function installOpenFlux(nodeId = 0, signal?: AbortSignal): Promise
     : new Msg(false, result.obj?.error || result.msg || 'OpenFlux installation failed', null);
 }
 
-export async function ensureOpenFlux(nodeId = 0): Promise<Msg<unknown>> {
+export async function checkOpenFluxInstalled(nodeId = 0): Promise<Msg<unknown>> {
   try {
     const url = '/panel/api/server/openflux/status' + (nodeId > 0 ? '?nodeId=' + nodeId : '');
     const result = await HttpUtil.get<{
@@ -61,11 +61,11 @@ export async function ensureOpenFlux(nodeId = 0): Promise<Msg<unknown>> {
         result.obj.unsupportedReason || 'OpenFlux is unsupported on this platform',
         null,
       );
-    return await installOpenFlux(nodeId);
+    return new Msg(false, 'pages.inbounds.form.openfluxInstallRequired', null);
   } catch (error) {
     return new Msg(
       false,
-      error instanceof Error ? error.message : 'OpenFlux installation failed',
+      error instanceof Error ? error.message : 'Unable to check OpenFlux installation',
       null,
     );
   }

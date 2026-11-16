@@ -104,9 +104,9 @@ func releaseSpecFor(protocol model.Protocol) (releaseSpec, error) {
 
 func GetUpdateStatus(ctx context.Context, localOnly ...bool) UpdateStatus {
 	var status UpdateStatus
-	status.OpenFlux = OpenFluxBinaryStatus()
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(5)
+	go func() { defer wg.Done(); status.OpenFlux = OpenFluxBinaryStatus(ctx, localOnly...) }()
 	go func() { defer wg.Done(); status.Vetroff = binaryStatus(ctx, model.VetroffProxy, localOnly...) }()
 	go func() {
 		defer wg.Done()

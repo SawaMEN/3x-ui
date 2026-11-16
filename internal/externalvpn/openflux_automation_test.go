@@ -130,21 +130,21 @@ func TestOpenFluxStatusNeedsVerifiedReceipt(t *testing.T) {
 	if err := os.WriteFile(path, []byte("3x-ui"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeOpenFluxReceipt("sha256:1343462835cbb1f7631c393c1090169aee14f90129e0922c7ec1d58fd40b0647"); err != nil {
+	if err := writeOpenFluxReceipt("0.3.0", "sha256:1343462835cbb1f7631c393c1090169aee14f90129e0922c7ec1d58fd40b0647"); err != nil {
 		t.Fatal(err)
 	}
-	status := OpenFluxBinaryStatus()
+	status := OpenFluxBinaryStatus(context.Background(), true)
 	if !status.Supported {
 		t.Skip("installer platform")
 	}
-	if !status.Installed || status.Version != openFluxVersion || status.UpdateAvailable {
+	if !status.Installed || status.Version != "0.3.0" || status.UpdateAvailable {
 		t.Fatalf("verified install not recognized: %+v", status)
 	}
 	if err := os.WriteFile(filepath.Join(filepath.Dir(path), "openflux"), []byte("replaced"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	status = OpenFluxBinaryStatus()
-	if !status.Installed || status.Version != "" || !status.UpdateAvailable {
+	status = OpenFluxBinaryStatus(context.Background(), true)
+	if !status.Installed || status.Version != "" || status.UpdateAvailable {
 		t.Fatalf("stale receipt trusted: %+v", status)
 	}
 }
