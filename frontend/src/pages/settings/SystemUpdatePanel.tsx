@@ -310,12 +310,12 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
           key === 'openflux'
             ? 'OpenFlux'
             : key === 'vetroff'
-            ? 'VetroffProxy'
-            : key === 'sudoku'
-              ? 'Sudoku'
-              : key === 'pingtunnel'
-                ? 'Pingtunnel'
-                : 'TrustTunnel',
+              ? 'VetroffProxy'
+              : key === 'sudoku'
+                ? 'Sudoku'
+                : key === 'pingtunnel'
+                  ? 'Pingtunnel'
+                  : 'TrustTunnel',
         installed: data?.installed === true,
         installedVersion: data?.version || '',
         availableVersion: data?.latestVersion || '',

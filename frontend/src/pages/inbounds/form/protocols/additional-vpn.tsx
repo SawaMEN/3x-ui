@@ -1,14 +1,36 @@
 import { useState } from 'react';
-import { Alert, Button, Collapse, Input, InputNumber, Modal, Select, Space, Switch, message } from 'antd';
+import {
+  Alert,
+  Button,
+  Collapse,
+  Input,
+  InputNumber,
+  Modal,
+  Select,
+  Space,
+  Switch,
+  message,
+} from 'antd';
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import { HttpUtil } from '@/utils';
 import SniSearchInput from '../security/SniSearchInput';
 import { installOpenFlux } from '@/api/openflux-install';
-import { OPENFLUX_TRANSPORTS, suggestOpenFluxTransport, validOpenFluxChannelURL, type OpenFluxTransportType } from '@/lib/openflux';
+import {
+  OPENFLUX_TRANSPORTS,
+  suggestOpenFluxTransport,
+  validOpenFluxChannelURL,
+  type OpenFluxTransportType,
+} from '@/lib/openflux';
 
-export function InstallVPNButton({ protocol, nodeId = 0 }: { protocol: 'fptn' | 'openflux' | 'vetroff'; nodeId?: number }) {
+export function InstallVPNButton({
+  protocol,
+  nodeId = 0,
+}: {
+  protocol: 'fptn' | 'openflux' | 'vetroff';
+  nodeId?: number;
+}) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   return (
@@ -17,11 +39,12 @@ export function InstallVPNButton({ protocol, nodeId = 0 }: { protocol: 'fptn' | 
       onClick={async () => {
         setBusy(true);
         try {
-          const result = protocol === 'openflux' ? await installOpenFlux(nodeId) : await HttpUtil.post(
-            `/panel/api/server/externalvpn/update/${protocol}`,
-            undefined,
-            { timeout: 600000 },
-          );
+          const result =
+            protocol === 'openflux'
+              ? await installOpenFlux(nodeId)
+              : await HttpUtil.post(`/panel/api/server/externalvpn/update/${protocol}`, undefined, {
+                  timeout: 600000,
+                });
           if (result?.success) message.success(t('pages.inbounds.form.vpnInstalled'));
           else message.error(result?.msg || t('pages.inbounds.form.vpnInstallFailed'));
         } catch (error) {
@@ -155,7 +178,11 @@ export function OpenFluxFields() {
   const { t } = useTranslation();
   const { control, getValues } = useFormContext();
   const transports = useFieldArray({ control, name: 'settings.transports' });
-  const values = (useWatch({ control, name: 'settings.transports' }) ?? []) as { type: OpenFluxTransportType; url?: string; priority?: number }[];
+  const values = (useWatch({ control, name: 'settings.transports' }) ?? []) as {
+    type: OpenFluxTransportType;
+    url?: string;
+    priority?: number;
+  }[];
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | undefined;
   const [adding, setAdding] = useState(false);
   const [addDirect, setAddDirect] = useState(false);
@@ -164,7 +191,10 @@ export function OpenFluxFields() {
   const used = new Set(values.map((entry) => entry.type));
   const available = OPENFLUX_TRANSPORTS.filter((type) => !used.has(type));
   const openAdd = (withDirect: boolean) => {
-    const next = ['vyandex', ...available].find((type) => available.includes(type as OpenFluxTransportType) && (!withDirect || type !== 'direct'));
+    const next = ['vyandex', ...available].find(
+      (type) =>
+        available.includes(type as OpenFluxTransportType) && (!withDirect || type !== 'direct'),
+    );
     if (!next) return;
     setChannelType(next as OpenFluxTransportType);
     setChannelURL('');
@@ -185,7 +215,10 @@ export function OpenFluxFields() {
         >
           {t('pages.inbounds.form.openfluxDirect')}
         </Button>
-        <Button disabled={!available.some((type) => type !== 'direct')} onClick={() => openAdd(true)}>
+        <Button
+          disabled={!available.some((type) => type !== 'direct')}
+          onClick={() => openAdd(true)}
+        >
           {t('pages.inbounds.form.openfluxFailover')}
         </Button>
         <InstallVPNButton key={nodeId ?? 0} protocol="openflux" nodeId={nodeId ?? 0} />
@@ -196,11 +229,20 @@ export function OpenFluxFields() {
           <FormField
             name={['settings', 'transports', i, 'type']}
             label={t('pages.inbounds.form.openfluxTransport')}
-            rules={{ validate: (value) => values.every((entry, index) => index === i || entry.type !== value) || t('pages.inbounds.form.openfluxDuplicate') }}
+            rules={{
+              validate: (value) =>
+                values.every((entry, index) => index === i || entry.type !== value) ||
+                t('pages.inbounds.form.openfluxDuplicate'),
+            }}
           >
-            <Select style={{ width: 150 }} options={OPENFLUX_TRANSPORTS.map((value) => ({
-              value, label: value, disabled: used.has(value) && values[i]?.type !== value,
-            }))} />
+            <Select
+              style={{ width: 150 }}
+              options={OPENFLUX_TRANSPORTS.map((value) => ({
+                value,
+                label: value,
+                disabled: used.has(value) && values[i]?.type !== value,
+              }))}
+            />
           </FormField>
           <FormField
             name={['settings', 'transports', i, 'priority']}
@@ -213,7 +255,11 @@ export function OpenFluxFields() {
             <FormField
               name={['settings', 'transports', i, 'url']}
               label="URL"
-              rules={{ validate: (value) => validOpenFluxChannelURL(String(value ?? '')) || t('pages.inbounds.form.openfluxURLRequired') }}
+              rules={{
+                validate: (value) =>
+                  validOpenFluxChannelURL(String(value ?? '')) ||
+                  t('pages.inbounds.form.openfluxURLRequired'),
+              }}
             >
               <Input style={{ width: 250 }} placeholder="https://…" />
             </FormField>
@@ -226,26 +272,42 @@ export function OpenFluxFields() {
       <Button disabled={available.length === 0} onClick={() => openAdd(false)}>
         {t('pages.inbounds.form.openfluxAdd')}
       </Button>
-      <Collapse ghost items={[{
-        key: 'context',
-        label: t('pages.inbounds.advancedTitle'),
-        children: (
-          <FormField name={['settings', 'context']} label={t('pages.inbounds.form.openfluxContext')} extra={t('pages.inbounds.form.openfluxContextHint')}>
-            <Input maxLength={4096} />
-          </FormField>
-        ),
-      }]} />
+      <Collapse
+        ghost
+        items={[
+          {
+            key: 'context',
+            label: t('pages.inbounds.advancedTitle'),
+            children: (
+              <FormField
+                name={['settings', 'context']}
+                label={t('pages.inbounds.form.openfluxContext')}
+                extra={t('pages.inbounds.form.openfluxContextHint')}
+              >
+                <Input maxLength={4096} />
+              </FormField>
+            ),
+          },
+        ]}
+      />
       <Modal
         title={t('pages.inbounds.form.openfluxAdd')}
         open={adding}
         onCancel={() => setAdding(false)}
-        okButtonProps={{ disabled: channelType !== 'direct' && !validOpenFluxChannelURL(channelURL.trim()) }}
+        okButtonProps={{
+          disabled: channelType !== 'direct' && !validOpenFluxChannelURL(channelURL.trim()),
+        }}
         onOk={() => {
           const current = (getValues('settings.transports') ?? []) as typeof values;
           if (current.some((entry) => entry.type === channelType)) return;
           const additions = [];
-          if (addDirect && !current.some((entry) => entry.type === 'direct')) additions.push({ type: 'direct', url: '', priority: 100 });
-          additions.push({ type: channelType, url: channelType === 'direct' ? '' : channelURL.trim(), priority: channelType === 'direct' ? 100 : 50 });
+          if (addDirect && !current.some((entry) => entry.type === 'direct'))
+            additions.push({ type: 'direct', url: '', priority: 100 });
+          additions.push({
+            type: channelType,
+            url: channelType === 'direct' ? '' : channelURL.trim(),
+            priority: channelType === 'direct' ? 100 : 50,
+          });
           transports.append(additions);
           setAdding(false);
         }}
@@ -255,7 +317,9 @@ export function OpenFluxFields() {
             aria-label={t('pages.inbounds.form.openfluxTransport')}
             style={{ width: '100%' }}
             value={channelType}
-            options={available.filter((type) => !addDirect || type !== 'direct').map((type) => ({ value: type, label: type }))}
+            options={available
+              .filter((type) => !addDirect || type !== 'direct')
+              .map((type) => ({ value: type, label: type }))}
             onChange={setChannelType}
           />
           {channelType !== 'direct' && (
