@@ -17,8 +17,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: openflux-${{ github.ref }}
-  cancel-in-progress: true
+  group: openflux-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   contract:
@@ -29,11 +29,6 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
       - name: Download pinned official OpenFlux
         run: |
           curl --fail --location --retry 3 --output "$RUNNER_TEMP/openflux" https://github.com/p1neappleXpress/OpenFlux/releases/download/v0.3.0/openflux-linux-amd64
@@ -47,17 +42,6 @@ jobs:
           mkdir -p internal/web/dist
           touch internal/web/dist/index.html
           go test ./internal/web/controller ./internal/web/runtime ./internal/util/link -run 'TestOpenFlux|TestNodeSyncScopeAllow' -count=1 -timeout=5m
-      - name: Install frontend dependencies
-        if: always()
-        run: npm ci --ignore-scripts --no-audit --no-fund
-        working-directory: frontend
-      - name: Check frontend types and OpenFlux behavior
-        if: always()
-        working-directory: frontend
-        run: |
-          npm run typecheck
-          npx vitest run --project unit src/test/openflux-settings.test.ts src/test/openflux-install.test.ts
-          npx vitest run --project components src/test/openflux-fields.test.tsx src/test/system-update-components.test.tsx
       - name: Report canonical formatting
         if: always()
         run: |
@@ -80,6 +64,21 @@ jobs:
           PY
 
 
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Report canonical frontend formatting
         if: always()
         run: |
@@ -96,3 +95,11 @@ jobs:
                       for start in range(0, len(result), 4000):
                           print("OPENFLUX_TS_CHUNK=" + json.dumps({"path": path, "offset": start, "content": result[start:start+4000]}, ensure_ascii=True))
           PY
+
+      - name: Check frontend types, lint and OpenFlux behavior
+        working-directory: frontend
+        run: |
+          npm run lint
+          npm run typecheck
+          npx vitest run --project unit src/test/openflux-settings.test.ts src/test/openflux-install.test.ts
+          npx vitest run --project components src/test/openflux-fields.test.tsx src/test/system-update-components.test.tsx
