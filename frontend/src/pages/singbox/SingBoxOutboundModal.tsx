@@ -1,3 +1,4 @@
+import { useOpenFluxInstalled } from '@/api/useOpenFluxInstalled';
 import {
   useEffect,
   useRef,
@@ -110,6 +111,7 @@ export default function SingBoxOutboundModal({
   onSubscriptionURL?: (url: string) => void;
   onSave: (value: ConfigObject, additional?: ConfigObject[]) => void;
 }) {
+  const openFluxInstalled = useOpenFluxInstalled(open);
   const [optionsRevision, setOptionsRevision] = useState(0);
   const [draft, setDraft] = useState<ConfigObject>({});
   const [additional, setAdditional] = useState<ConfigObject[]>([]);
@@ -345,10 +347,15 @@ export default function SingBoxOutboundModal({
           <Select
             showSearch={{ optionFilterProp: 'label' }}
             value={type || undefined}
-            options={[...outboundProtocols, ...nativeEndpointTypes].map((protocol) => ({
-              value: protocol,
-              label: outboundProtocolLabel(protocol),
-            }))}
+            options={[...outboundProtocols, ...nativeEndpointTypes]
+              .filter(
+                (protocol) =>
+                  protocol !== 'openflux' || openFluxInstalled || value?.type === 'openflux',
+              )
+              .map((protocol) => ({
+                value: protocol,
+                label: outboundProtocolLabel(protocol),
+              }))}
             onChange={(next) => {
               setInvalidOptions([]);
               savedProtocols.current[type] = structuredClone(draft);

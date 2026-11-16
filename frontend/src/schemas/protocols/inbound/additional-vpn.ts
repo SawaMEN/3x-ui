@@ -37,18 +37,31 @@ export const FptnInboundSettingsSchema = z.object({
 });
 export const OpenFluxInboundSettingsSchema = z
   .object({
+    maxPacketSize: z
+      .number()
+      .int()
+      .refine(
+        (v) => v === 0 || (v >= 1280 && v <= 65000),
+        'pages.inbounds.form.openfluxPacketInvalid',
+      )
+      .default(0),
+    refusePeerLogin: z.boolean().default(false),
+    debug: z.number().int().min(0).max(2).default(0),
     context: z
       .string()
       .max(4096)
       .refine(
-        (value) => value.trim() === value && !/[\r\n\0]/.test(value),
+        (value) =>
+          value.trim() === value &&
+          !/[\r\n\0]/.test(value) &&
+          new TextEncoder().encode(value).length <= 4096,
         'pages.inbounds.form.openfluxContextInvalid',
       )
       .default(''),
     transports: z
       .array(OpenFluxTransportSchema)
       .min(1)
-      .max(5)
+      .max(OPENFLUX_TRANSPORTS.length)
       .default([{ type: 'direct', url: '', priority: 100 }]),
     clients: z
       .array(

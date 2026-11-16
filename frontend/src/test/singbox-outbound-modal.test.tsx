@@ -1,4 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithProviders as render } from './test-utils';
+import { HttpUtil, Msg } from '@/utils';
 import { describe, expect, it, vi } from 'vitest';
 import SingBoxOutboundModal from '@/pages/singbox/SingBoxOutboundModal';
 import { importNativeConnections } from '@/pages/singbox/native-import';
@@ -12,6 +14,32 @@ vi.mock('@/pages/singbox/native-import', async (importOriginal) => ({
   importNativeConnections: vi.fn(),
 }));
 describe('native outbound modal', () => {
+  it.each([false, true])(
+    'offers OpenFlux only after component installation: %s',
+    async (installed) => {
+      vi.mocked(HttpUtil.get).mockResolvedValue(new Msg(true, '', { installed }));
+      render(
+        <SingBoxOutboundModal
+          open
+          value={null}
+          existingTags={[]}
+          onCancel={() => {}}
+          onSave={() => {}}
+        />,
+      );
+      await waitFor(() => expect(HttpUtil.get).toHaveBeenCalled());
+      const input = screen.getByLabelText('Протокол');
+      fireEvent.mouseDown(
+        input.closest('.ant-select')?.querySelector('.ant-select-selector') ?? input,
+      );
+      fireEvent.change(input, { target: { value: 'openflux' } });
+      await waitFor(() =>
+        expect(
+          document.querySelectorAll('.ant-select-item-option[title="openflux"]').length > 0,
+        ).toBe(installed),
+      );
+    },
+  );
   it('creates Cloudflare WARP through the protocol picker with a unique tag', async () => {
     const onSave = vi.fn();
     render(

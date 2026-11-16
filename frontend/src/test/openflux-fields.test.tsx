@@ -38,7 +38,7 @@ describe('OpenFlux channel setup', () => {
     const modal = await screen.findByRole('dialog');
     const ok = within(modal).getByRole('button', { name: /^OK$/ });
     expect(ok).toHaveProperty('disabled', true);
-    fireEvent.change(within(modal).getByRole('textbox', { name: 'Document or board URL' }), {
+    fireEvent.change(within(modal).getByRole('textbox', { name: 'Channel URL' }), {
       target: { value: 'https://docs.yandex.ru/edit/d/channel' },
     });
     await waitFor(() => expect(ok).toHaveProperty('disabled', false));
@@ -47,6 +47,12 @@ describe('OpenFlux channel setup', () => {
       expect(screen.getByTestId('values').textContent).toContain('"type":"vyandex"'),
     );
     expect(screen.getByTestId('values').textContent).toContain('keep-this-context');
+  });
+  it('shows question-mark help for channel selection and advanced settings', async () => {
+    renderWithProviders(<Inbound />);
+    expect(document.querySelectorAll('.ant-form-item-tooltip').length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(screen.getByText('Advanced Settings'));
+    expect(await screen.findByText('Maximum session packet (bytes)')).toBeTruthy();
   });
   it('offers component guidance without installation controls in the inbound form', () => {
     vi.mocked(HttpUtil.post).mockClear();

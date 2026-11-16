@@ -129,7 +129,7 @@ describe('InboundFormModal', () => {
       }));
       renderModal();
       await act(async () => {});
-      for (const protocol of ['pingtunnel', 'trusttunnel', 'sudoku', 'vetroff']) {
+      for (const protocol of ['pingtunnel', 'trusttunnel', 'sudoku', 'vetroff', 'openflux']) {
         listSelectOptions('protocol');
         fireEvent.change(document.querySelector('#protocol')!, { target: { value: protocol } });
         await act(async () => {});
