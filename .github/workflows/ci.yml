@@ -157,6 +157,7 @@ jobs:
           python3 -m unittest discover -s tools -p test_fetch_latest_kernel.py
           python3 tools/test-core-migration-shell.py
           python3 tools/test-management-shell.py
+          python3 tools/test-update-cleanup-shell.py
           python3 -m unittest discover -s tools/ci -p 'test_*.py'
       - name: Check pinned native core source, security and runtime contract
         run: python3 tools/verify-hiddify-build.py

@@ -69,6 +69,34 @@ if [[ "${1:-}" == --check ]]; then
   exit 0
 fi
 
+# Only orphaned download/staging payloads are disposable. Backups may be the
+# sole recovery copy after power loss, so keep every .core-backup directory.
+cleanup_core_update_artifacts() {
+  local old asset suffix size removed=0 reclaimed=0
+  while IFS= read -r -d '' old; do
+    [[ -d "$old" && ! -L "$old" ]] || continue
+    size=$(du -sk -- "$old" | awk '{print $1}') || size=0
+    if rm -rf -- "$old"; then
+      removed=$((removed + 1)); reclaimed=$((reclaimed + ${size:-0}))
+      echo "Removed abandoned core staging: $old"
+    fi
+  done < <(find "$root" -mindepth 1 -maxdepth 1 -type d -name '.core-stage.????????' -print0)
+  for asset in "${assets[@]}"; do
+    while IFS= read -r -d '' old; do
+      [[ -f "$old" && ! -L "$old" ]] || continue
+      suffix="${old##*.}"
+      [[ "$suffix" =~ ^[0-9]+$ ]] || continue
+      size=$(du -sk -- "$old" | awk '{print $1}') || size=0
+      if rm -f -- "$old"; then
+        removed=$((removed + 1)); reclaimed=$((reclaimed + ${size:-0}))
+        echo "Removed abandoned core update payload: $old"
+      fi
+    done < <(find "$bin" -mindepth 1 -maxdepth 1 -type f -name ".core-update-$asset.*" -print0)
+  done
+  echo "Core update cleanup: removed $removed artifacts, reclaimed $reclaimed KiB."
+}
+cleanup_core_update_artifacts
+
 stage=$(mktemp -d "$root/.core-stage.XXXXXXXX")
 backup=$(mktemp -d "$root/.core-backup.XXXXXXXX")
 swapping=0

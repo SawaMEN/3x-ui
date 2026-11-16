@@ -203,7 +203,7 @@ fi
 
     def test_remote_update_download_lock_reclaims_only_abandoned_artifacts(self):
         source = (ROOT / "update.sh").read_text()
-        start = source.index("acquire_update_download_lock() {")
+        start = source.index("cleanup_update_artifacts() {")
         end = source.index("# Cheap pre-download guard.", start)
         lock_functions = source[start:end]
         with tempfile.TemporaryDirectory() as raw:
@@ -232,12 +232,12 @@ fi
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertFalse(old_download.exists())
             self.assertFalse(old_stage.exists())
-            self.assertTrue(new_download.exists())
+            self.assertFalse(new_download.exists())
             self.assertTrue((recovery / "installation" / "x-ui").exists())
 
     def test_remote_update_download_lock_blocks_parallel_downloads(self):
         source = (ROOT / "update.sh").read_text()
-        start = source.index("acquire_update_download_lock() {")
+        start = source.index("cleanup_update_artifacts() {")
         end = source.index("# Cheap pre-download guard.", start)
         lock_functions = source[start:end]
         with tempfile.TemporaryDirectory() as raw:
@@ -268,7 +268,7 @@ fi
 
     def test_remote_update_download_lock_serializes_launches(self):
         source = (ROOT / "update.sh").read_text()
-        start = source.index("acquire_update_download_lock() {")
+        start = source.index("cleanup_update_artifacts() {")
         end = source.index("# Cheap pre-download guard.", start)
         lock_functions = source[start:end]
         with tempfile.TemporaryDirectory() as raw:

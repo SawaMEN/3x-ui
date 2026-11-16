@@ -1177,14 +1177,50 @@ download_release_asset() {
     download_http_status=$("${curl_bin:-curl}" -4 -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url")
 }
 
-# Hold the same upgrade lock through the entire download/preflight phase.
-# Without this, two panel-triggered updates could each download a large
-# archive before one finally failed the installation lock.
-# Serialize download + migration for panel updates. A separate download lock
-# avoids dropping the lock during the handoff to a release's migration helper,
-# which independently owns .x-ui-upgrade.lock (including older releases).
+# Called only while both updater locks are held, before creating this run's files.
+# Restrict deletion to known updater artifacts and explicitly verified snapshots.
+cleanup_update_artifacts() {
+    local parent="$1" root="$2" old marker size removed=0 reclaimed=0 before after
+    [[ "$parent" == /* && "$parent" != / && -d "$parent" && ! -L "$parent" ]] || return 1
+    [[ "$root" == "$parent/x-ui" && ! -L "$root" ]] || return 1
+    before=$(df -Pk -- "$parent" | awk 'END {print $4}') || return 1
+    echo "Checking old and incomplete update files before download..."
+    while IFS= read -r -d '' old; do
+        [[ ! -L "$old" && ( -f "$old" || -d "$old" ) ]] || continue
+        [[ "$old" != "${xui_download_archive:-}" && "$old" != "${cm_stage:-}" ]] || continue
+        if [[ "$old" == "$parent"/x-ui-upgrade.* ]]; then
+            marker="$old/.x-ui-upgrade-verified"
+            [[ -f "$marker" && ! -L "$marker" ]] || continue
+            [[ "$(cat -- "$marker")" == 'x-ui verified upgrade v1' ]] || continue
+        fi
+        size=$(du -sk -- "$old" 2>/dev/null | awk '{print $1}') || size=0
+        [[ "$size" =~ ^[0-9]+$ ]] || size=0
+        if rm -rf -- "$old"; then
+            removed=$((removed + 1))
+            reclaimed=$((reclaimed + size))
+            echo "Removed update artifact: $old (${size} KiB)"
+        else
+            echo "Cannot remove update artifact: $old" >&2
+        fi
+    done < <(
+        find "$parent" -mindepth 1 -maxdepth 1 \( \
+            -type f \( -name '.x-ui-download.??????.tar.gz' -o -name '.x-ui-download.??????.tar.gz.sha256' \
+                -o -name '.x-ui-download.??????.tar.gz.part' -o -name '.x-ui-download.??????.tar.gz.sha256.part' \
+                -o -name '.core-migration.??????' -o -name 'x-ui-linux-amd64.tar.gz' -o -name 'x-ui-linux-arm64.tar.gz' \
+                -o -name 'x-ui-linux-amd64.tar.gz.part' -o -name 'x-ui-linux-arm64.tar.gz.part' -o -name 'x-ui-linux-amd64.tar.gz.sha256' -o -name 'x-ui-linux-arm64.tar.gz.sha256' \) \
+            -o -type d \( -name '.x-ui-release.??????' -o -name 'x-ui-upgrade.*' \) \) -print0 2>/dev/null
+        if [[ -d "$root" && ! -L "$root" ]]; then
+            find "$root" -mindepth 1 -maxdepth 1 -type d -name '.core-stage.????????' -print0 2>/dev/null
+        fi
+    )
+    after=$(df -Pk -- "$parent" | awk 'END {print $4}') || return 1
+    echo "Update cleanup: removed ${removed} artifacts, reclaimed ${reclaimed} KiB; free space ${before} -> ${after} KiB."
+}
+
+# Hold the download lock for the entire run. Briefly hold the migration lock
+# during cleanup; the release's migration helper acquires that lock later.
 acquire_update_download_lock() {
-    local parent="$1" old install_lock_fd
+    local parent="$1" install_lock_fd status=0
     command -v flock >/dev/null 2>&1 || return 1
     exec {xui_download_lock_fd}>"$parent/.x-ui-download.lock" || return 1
     if ! flock -n "$xui_download_lock_fd"; then
@@ -1192,28 +1228,15 @@ acquire_update_download_lock() {
         unset xui_download_lock_fd
         return 1
     fi
-    # Do not clean staging while another process (e.g. install.sh) is doing
-    # an actual migration. The installer lock is only probed, not retained:
-    # the release migration helper must be able to acquire it later.
     exec {install_lock_fd}>"$parent/.x-ui-upgrade.lock" || return 1
     if ! flock -n "$install_lock_fd"; then
         exec {install_lock_fd}>&-
         return 1
     fi
-    # A hard kill cannot run EXIT traps. Reclaim only known temporary artifacts
-    # from runs abandoned over six hours ago. Do not touch recovery snapshots.
-    while IFS= read -r -d '' old; do
-        [[ -f "$old" && ! -L "$old" ]] || continue
-        echo "Removing abandoned panel download: $old"
-        rm -f -- "$old" || true
-    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type f \( -name '.x-ui-download.??????.tar.gz' -o -name '.x-ui-download.??????.tar.gz.sha256' -o -name '.core-migration.??????' \) -mmin +360 -print0 2>/dev/null)
-    while IFS= read -r -d '' old; do
-        [[ -d "$old" && ! -L "$old" ]] || continue
-        echo "Removing abandoned release staging: $old"
-        rm -rf -- "$old" || true
-    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type d -name '.x-ui-release.??????' -mmin +360 -print0 2>/dev/null)
-    flock -u "$install_lock_fd" || return 1
+    cleanup_update_artifacts "$parent" "${xui_folder:-$parent/x-ui}" || status=1
+    flock -u "$install_lock_fd" || status=1
     exec {install_lock_fd}>&-
+    return "$status"
 }
 
 # Cheap pre-download guard. The exact unpacked size is verified later by

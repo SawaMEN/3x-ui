@@ -1736,7 +1736,7 @@ prepare_release_migration() {
         source "$cm_helper"
         rm -f "$cm_helper"
         xui_download_archive="$cm_archive"
-        trap 'code=$?; core_migration_exit "$code" || code=1; rm -f -- "$xui_download_archive" "${xui_download_archive}.sha256" "${xui_script_temp:-}"; exit "$code"' EXIT
+        trap 'code=$?; core_migration_exit "$code" || code=1; rm -f -- "$xui_download_archive" "${xui_download_archive}.sha256" "${xui_script_temp:-}"; if [[ -n "${xui_download_lock_fd:-}" ]]; then flock -u "$xui_download_lock_fd" 2>/dev/null || true; exec {xui_download_lock_fd}>&-; fi; exit "$code"' EXIT
         trap 'exit 143' TERM
         trap 'exit 130' INT
         core_migration_prepare_archive "$cm_archive" || return 1
@@ -1792,14 +1792,78 @@ _stop_existing_xui_for_install() {
     return 0
 }
 
+# Called only while both updater locks are held, before creating this run's files.
+# Restrict deletion to known updater artifacts and explicitly verified snapshots.
+cleanup_update_artifacts() {
+    local parent="$1" root="$2" old marker size removed=0 reclaimed=0 before after
+    [[ "$parent" == /* && "$parent" != / && -d "$parent" && ! -L "$parent" ]] || return 1
+    [[ "$root" == "$parent/x-ui" && ! -L "$root" ]] || return 1
+    before=$(df -Pk -- "$parent" | awk 'END {print $4}') || return 1
+    echo "Checking old and incomplete update files before download..."
+    while IFS= read -r -d '' old; do
+        [[ ! -L "$old" && ( -f "$old" || -d "$old" ) ]] || continue
+        [[ "$old" != "${xui_download_archive:-}" && "$old" != "${cm_stage:-}" ]] || continue
+        if [[ "$old" == "$parent"/x-ui-upgrade.* ]]; then
+            marker="$old/.x-ui-upgrade-verified"
+            [[ -f "$marker" && ! -L "$marker" ]] || continue
+            [[ "$(cat -- "$marker")" == 'x-ui verified upgrade v1' ]] || continue
+        fi
+        size=$(du -sk -- "$old" 2>/dev/null | awk '{print $1}') || size=0
+        [[ "$size" =~ ^[0-9]+$ ]] || size=0
+        if rm -rf -- "$old"; then
+            removed=$((removed + 1))
+            reclaimed=$((reclaimed + size))
+            echo "Removed update artifact: $old (${size} KiB)"
+        else
+            echo "Cannot remove update artifact: $old" >&2
+        fi
+    done < <(
+        find "$parent" -mindepth 1 -maxdepth 1 \( \
+            -type f \( -name '.x-ui-download.??????.tar.gz' -o -name '.x-ui-download.??????.tar.gz.sha256' \
+                -o -name '.x-ui-download.??????.tar.gz.part' -o -name '.x-ui-download.??????.tar.gz.sha256.part' \
+                -o -name '.core-migration.??????' -o -name 'x-ui-linux-amd64.tar.gz' -o -name 'x-ui-linux-arm64.tar.gz' \
+                -o -name 'x-ui-linux-amd64.tar.gz.part' -o -name 'x-ui-linux-arm64.tar.gz.part' -o -name 'x-ui-linux-amd64.tar.gz.sha256' -o -name 'x-ui-linux-arm64.tar.gz.sha256' \) \
+            -o -type d \( -name '.x-ui-release.??????' -o -name 'x-ui-upgrade.*' \) \) -print0 2>/dev/null
+        if [[ -d "$root" && ! -L "$root" ]]; then
+            find "$root" -mindepth 1 -maxdepth 1 -type d -name '.core-stage.????????' -print0 2>/dev/null
+        fi
+    )
+    after=$(df -Pk -- "$parent" | awk 'END {print $4}') || return 1
+    echo "Update cleanup: removed ${removed} artifacts, reclaimed ${reclaimed} KiB; free space ${before} -> ${after} KiB."
+}
+
+# Hold the download lock for the entire run. Briefly hold the migration lock
+# during cleanup; the release's migration helper acquires that lock later.
+acquire_update_download_lock() {
+    local parent="$1" install_lock_fd status=0
+    command -v flock >/dev/null 2>&1 || return 1
+    exec {xui_download_lock_fd}>"$parent/.x-ui-download.lock" || return 1
+    if ! flock -n "$xui_download_lock_fd"; then
+        exec {xui_download_lock_fd}>&-
+        unset xui_download_lock_fd
+        return 1
+    fi
+    exec {install_lock_fd}>"$parent/.x-ui-upgrade.lock" || return 1
+    if ! flock -n "$install_lock_fd"; then
+        exec {install_lock_fd}>&-
+        return 1
+    fi
+    cleanup_update_artifacts "$parent" "${xui_folder:-$parent/x-ui}" || status=1
+    flock -u "$install_lock_fd" || status=1
+    exec {install_lock_fd}>&-
+    return "$status"
+}
+
 install_x-ui() {
     cd "${xui_folder%/x-ui}"/ || { echo "Cannot enter installation directory" >&2; return 1; }
+
+    acquire_update_download_lock "${xui_folder%/*}" || { echo "Another updater is active or cleanup failed; installation unchanged." >&2; return 1; }
 
     # Separate downloads from concurrent install/update attempts.
     local archive
     archive=$(mktemp "${xui_folder%/*}/.x-ui-download.XXXXXX.tar.gz") || return 1
     xui_download_archive="$archive"
-    trap 'code=$?; rm -f -- "$xui_download_archive" "$xui_download_archive.sha256" "${xui_script_temp:-}"; exit "$code"' EXIT
+    trap 'code=$?; rm -f -- "$xui_download_archive" "$xui_download_archive.sha256" "${xui_script_temp:-}"; if [[ -n "${xui_download_lock_fd:-}" ]]; then flock -u "$xui_download_lock_fd" 2>/dev/null || true; exec {xui_download_lock_fd}>&-; fi; exit "$code"' EXIT
 
     # Download resources
     if [ $# == 0 ]; then
