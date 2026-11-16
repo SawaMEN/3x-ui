@@ -1,3 +1,4 @@
+import { onNumber } from '@/utils/onNumber';
 import { useState } from 'react';
 import { Alert, Button, Form, Input, InputNumber, Select, Space, message } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -71,7 +72,7 @@ export default function OpenFluxOutboundEditor({
             />
           </Form.Item>
           <Form.Item label={t('pages.inbounds.form.openfluxPriority')}>
-            <InputNumber value={transport.priority ?? 50} min={0} max={1000} onChange={(priority) => changeTransport(index, { priority: priority ?? 50 })} />
+            <InputNumber value={transport.priority ?? 50} min={0} max={1000} onChange={onNumber((priority) => changeTransport(index, { priority }))} />
           </Form.Item>
           {transport.type === 'direct' ? (
             <Form.Item label={t('pages.inbounds.form.openfluxEndpoint')}>

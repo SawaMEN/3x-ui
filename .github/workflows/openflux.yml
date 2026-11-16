@@ -44,11 +44,15 @@ jobs:
           STAGE8_OPENFLUX_BINARY: ${{ runner.temp }}/openflux
         run: |
           go test ./internal/externalvpn -run 'TestOpenFlux|TestManagedVPNOpenFluxContract|TestStage8OpenFluxNativePayload' -count=1 -v -timeout=5m
+          mkdir -p internal/web/dist
+          touch internal/web/dist/index.html
           go test ./internal/web/controller ./internal/web/runtime ./internal/util/link -run 'TestOpenFlux|TestNodeSyncScopeAllow' -count=1 -timeout=5m
       - name: Install frontend dependencies
+        if: always()
         run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: frontend
       - name: Check frontend types and OpenFlux behavior
+        if: always()
         working-directory: frontend
         run: |
           npm run typecheck
@@ -71,5 +75,7 @@ jobs:
           for path in files:
               result = subprocess.run(["gofmt", path], check=True, text=True, capture_output=True).stdout
               if result != pathlib.Path(path).read_text():
-                  print("OPENFLUX_FORMAT=" + json.dumps({"path": path, "content": result}, ensure_ascii=True))
+                  for start in range(0, len(result), 4000):
+                      print("OPENFLUX_FORMAT_CHUNK=" + json.dumps({"path": path, "offset": start, "content": result[start:start+4000]}, ensure_ascii=True))
           PY
+

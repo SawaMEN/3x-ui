@@ -38,6 +38,7 @@ func TestOpenFluxAutomaticContextAndSecret(t *testing.T) {
 }
 
 func TestOpenFluxLegacyContextSurvivesTransportEdit(t *testing.T) {
+	folder := t.TempDir()
 	for _, context := range []string{"http://#", "https://docs.yandex.ru/edit/d/channel"} {
 		t.Run(context, func(t *testing.T) {
 			previous := Settings{Clients: []Client{{Email: "alice", Password: strings.Repeat("a", 64), Enable: true}}, Transports: []OpenFluxTransport{{Type: "direct", Priority: 100}}}
@@ -53,7 +54,7 @@ func TestOpenFluxLegacyContextSurvivesTransportEdit(t *testing.T) {
 			if err != nil || inst.Settings.Context != context {
 				t.Fatalf("legacy context changed: %q, %v", inst.Settings.Context, err)
 			}
-			t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+			t.Setenv("XUI_BIN_FOLDER", folder)
 			cmd, cancel, err := GetManager().additionalCommand(inst, "")
 			if err != nil {
 				t.Fatal(err)

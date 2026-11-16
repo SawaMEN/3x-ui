@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
@@ -25,8 +25,8 @@ type OpenFluxInstallStatus struct {
 }
 
 type openFluxInstaller struct {
-	mu sync.Mutex
-	status OpenFluxInstallStatus
+	mu      sync.Mutex
+	status  OpenFluxInstallStatus
 	install func(context.Context) error
 }
 
@@ -35,7 +35,7 @@ var openFluxInstallJob = &openFluxInstaller{install: InstallOpenFlux}
 // Installation is detached from a short HTTP request and bounded independently.
 // Repeated clicks attach to the same job instead of queuing more downloads.
 func StartOpenFluxInstallation() OpenFluxInstallStatus { return openFluxInstallJob.start() }
-func GetOpenFluxInstallation() OpenFluxInstallStatus { return openFluxInstallJob.read() }
+func GetOpenFluxInstallation() OpenFluxInstallStatus   { return openFluxInstallJob.read() }
 
 func (j *openFluxInstaller) read() OpenFluxInstallStatus {
 	j.mu.Lock()
@@ -77,7 +77,7 @@ func (j *openFluxInstaller) start() OpenFluxInstallStatus {
 
 type openFluxInstallReceipt struct {
 	Version string `json:"version"`
-	Digest string `json:"digest"`
+	Digest  string `json:"digest"`
 }
 
 func writeOpenFluxReceipt(digest string) error {
@@ -92,7 +92,7 @@ func writeOpenFluxReceipt(digest string) error {
 // still match the digest recorded by our verified installer.
 func OpenFluxBinaryStatus() BinaryStatus {
 	status := BinaryStatus{
-		Supported: runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"),
+		Supported:     runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"),
 		LatestVersion: openFluxVersion,
 	}
 	if !status.Supported {

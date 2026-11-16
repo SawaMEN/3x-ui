@@ -202,7 +202,7 @@ func TestCheckAPIAuth_AcceptsVerifiedClientCert(t *testing.T) {
 
 func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 	expected := map[string]map[string]struct{}{
-		"/server/openflux/status": {http.MethodGet: {}},
+		"/server/openflux/status":                     {http.MethodGet: {}},
 		"/domains/sni":                                {http.MethodGet: {}},
 		"/domains/certificates":                       {http.MethodGet: {}},
 		"/domains/certificates/export-cover":          {http.MethodPost: {}},
