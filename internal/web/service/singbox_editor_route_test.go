@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
@@ -93,5 +94,67 @@ func TestSingBoxEditorDoesNotImportStaleDiskRoute(t *testing.T) {
 		if raw.(map[string]any)["outbound"] == "stale" {
 			t.Fatal("stale disk policy became editable")
 		}
+	}
+}
+
+// A client can send an IP while the TLS SNI/HTTP Host still names a domain.
+// The activity switch must make that metadata available even on listeners
+// whose UI does not expose a sniffing tab (for example TUIC and Naive).
+func TestDomainActivityAddsRuntimeSniffingOnlyWhileEnabled(t *testing.T) {
+	for _, protocol := range []model.Protocol{model.VLESS, model.TUIC, model.NaiveProxy} {
+		t.Run(string(protocol), func(t *testing.T) {
+			setupBulkDB(t)
+			t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+			cert, key := writeTestCertificate(t)
+			if err := singBoxSettingService.setString("webCertFile", cert); err != nil {
+				t.Fatal(err)
+			}
+			if err := singBoxSettingService.setString("webKeyFile", key); err != nil {
+				t.Fatal(err)
+			}
+			stream, _ := json.Marshal(map[string]any{
+				"network": "tcp", "security": "tls",
+				"tlsSettings": map[string]any{"certificates": []any{map[string]any{
+					"certificateFile": cert, "keyFile": key,
+				}}},
+			})
+			ib := seedHiddifyConfigInbound(t, protocol, `{}`, string(stream))
+			if err := database.GetDB().Model(ib).Update("sniffing", `{"enabled":false}`).Error; err != nil {
+				t.Fatal(err)
+			}
+			svc := &SingBoxService{}
+			for _, enabled := range []bool{false, true, false} {
+				if err := singBoxSettingService.SetDomainActivityEnabled(enabled); err != nil {
+					t.Fatal(err)
+				}
+				cfg, err := svc.GetConfig()
+				if err != nil {
+					t.Fatal(err)
+				}
+				count := 0
+				for _, raw := range singBoxRouteRules(cfg.Route) {
+					if rule, ok := raw.(map[string]any); ok && rule["action"] == "sniff" {
+						count++
+						if _, exists := rule["override_destination"]; exists {
+							t.Fatal("activity sniffing must not rewrite the destination")
+						}
+					}
+				}
+				if (count == 1) != enabled || count > 1 {
+					t.Fatalf("activity=%v: sniff rules=%d", enabled, count)
+				}
+				editor, err := svc.GetEditorConfig(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if route, ok := editor.Config["route"].(map[string]any); ok {
+					for _, raw := range singBoxRouteRules(route) {
+						if rule, ok := raw.(map[string]any); ok && rule["action"] == "sniff" {
+							t.Fatal("activity runtime rule leaked into the routing editor")
+						}
+					}
+				}
+			}
+		})
 	}
 }

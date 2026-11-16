@@ -308,6 +308,12 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		return nil, err
 	}
 
+	activityEnabled, err := nativeConfigSetting(snapshot, "domainActivityEnabled", func() (string, error) {
+		return singBoxSettingService.getString("domainActivityEnabled")
+	})
+	if err != nil {
+		return nil, err
+	}
 	var unsupported []string
 	var sniffRules []any
 	for _, inbound := range inbounds {
@@ -466,6 +472,15 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		if sniffErr != nil {
 			unsupported = append(unsupported, sniffErr.Error())
 			continue
+		}
+		// Activity needs the TLS/HTTP/QUIC hostname even when a client sends
+		// an IP destination. Preserve explicit inbound sniffing policies;
+		// otherwise add metadata-only sniffing while activity is opted in.
+		if sniffRule == nil && activityEnabled == "true" {
+			sniffRule = map[string]any{
+				"inbound": []string{inbound.Tag}, "action": "sniff",
+				"sniffer": []string{"http", "tls", "quic"},
+			}
 		}
 		if sniffRule != nil {
 			sniffRules = append(sniffRules, sniffRule)

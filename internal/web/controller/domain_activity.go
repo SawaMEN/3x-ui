@@ -156,5 +156,10 @@ func (a *ServerController) setDomainActivity(c *gin.Context) {
 		return
 	}
 	state, err := a.domainActivityState()
+	if err == nil && state.Mode == "active" {
+		// Reconcile the runtime sniff rules through the normal apply worker.
+		// A stopped core remains stopped, and repeated saves are harmless.
+		service.SelectedNativeCore().SetToNeedRestart()
+	}
 	jsonObj(c, state, err)
 }
