@@ -150,32 +150,48 @@ func TestOpenFluxStatusNeedsVerifiedReceipt(t *testing.T) {
 }
 
 func TestOpenFluxLatestShareableCarriers(t *testing.T) {
- t.Setenv("XUI_BIN_FOLDER", t.TempDir())
- for _, typ := range []string{"direct", "yandex", "vyandex", "boards", "mailru", "cupsonline", "avito", "telemost"} {
-  t.Run(typ, func(t *testing.T) {
-   inst := Instance{ID: 95, Protocol: model.OpenFlux, Port: 443, Settings: Settings{
-    Context: "stable-context", MaxPacketSize: 1400, RefusePeerLogin: true, Debug: 2,
-    Clients: []Client{{Email: "alice", Password: strings.Repeat("a", 32), Enable: true}},
-    Transports: []OpenFluxTransport{{Type: typ, URL: "https://example.org/room", Priority: 50}},
-   }}
-   if err := inst.Validate(); err != nil { t.Fatal(err) }
-   link, err := ExportAdditionalLink(inst, "alice", "example.org", 443, typ)
-   if err != nil { t.Fatal(err) }
-   decoded, err := DecodeOpenFluxLink(link)
-   if err != nil || len(decoded.Transports) != 1 || decoded.Transports[0].Type != typ { t.Fatalf("link mismatch: %+v, %v", decoded, err) }
-   cmd, cancel, err := GetManager().additionalCommand(inst, "")
-   if err != nil { t.Fatal(err) }
-   defer cancel()
-   args := strings.Join(cmd.Args, " ")
-   for _, want := range []string{"--negotiate", "--max-packet-size 1400", "--refuse-peer-login", "--debug 2"} {
-    if !strings.Contains(args, want) { t.Fatalf("missing %q in %s", want, args) }
-   }
-   data, err := os.ReadFile(filepath.Join(directory(), "95", "openflux.conf"))
-   if err != nil || !strings.Contains(string(data), "Type = "+typ) { t.Fatalf("missing carrier config: %v", err) }
-   inst.Settings.MaxPacketSize = 1279
-   if err := inst.Validate(); err == nil { t.Fatal("bad packet limit accepted") }
-   inst.Settings.MaxPacketSize, inst.Settings.Debug = 0, 3
-   if err := inst.Validate(); err == nil { t.Fatal("sensitive debug level accepted") }
-  })
- }
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	for _, typ := range []string{"direct", "yandex", "vyandex", "boards", "mailru", "cupsonline", "avito", "telemost"} {
+		t.Run(typ, func(t *testing.T) {
+			inst := Instance{ID: 95, Protocol: model.OpenFlux, Port: 443, Settings: Settings{
+				Context: "stable-context", MaxPacketSize: 1400, RefusePeerLogin: true, Debug: 2,
+				Clients:    []Client{{Email: "alice", Password: strings.Repeat("a", 32), Enable: true}},
+				Transports: []OpenFluxTransport{{Type: typ, URL: "https://example.org/room", Priority: 50}},
+			}}
+			if err := inst.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			link, err := ExportAdditionalLink(inst, "alice", "example.org", 443, typ)
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := DecodeOpenFluxLink(link)
+			if err != nil || len(decoded.Transports) != 1 || decoded.Transports[0].Type != typ {
+				t.Fatalf("link mismatch: %+v, %v", decoded, err)
+			}
+			cmd, cancel, err := GetManager().additionalCommand(inst, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cancel()
+			args := strings.Join(cmd.Args, " ")
+			for _, want := range []string{"--negotiate", "--max-packet-size 1400", "--refuse-peer-login", "--debug 2"} {
+				if !strings.Contains(args, want) {
+					t.Fatalf("missing %q in %s", want, args)
+				}
+			}
+			data, err := os.ReadFile(filepath.Join(directory(), "95", "openflux.conf"))
+			if err != nil || !strings.Contains(string(data), "Type = "+typ) {
+				t.Fatalf("missing carrier config: %v", err)
+			}
+			inst.Settings.MaxPacketSize = 1279
+			if err := inst.Validate(); err == nil {
+				t.Fatal("bad packet limit accepted")
+			}
+			inst.Settings.MaxPacketSize, inst.Settings.Debug = 0, 3
+			if err := inst.Validate(); err == nil {
+				t.Fatal("sensitive debug level accepted")
+			}
+		})
+	}
 }
