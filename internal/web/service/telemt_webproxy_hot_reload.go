@@ -54,46 +54,50 @@ func (s TelemtService) saveWebUsersHotReloadLocked(parent context.Context, cfg T
 		return err
 	}
 	if bytes.Equal(previous, []byte(rendered)) {
-		return nil
+		return withMtprotoWebTrafficConfig(parent, rendered, false, func() (bool, error) { return false, nil })
 	}
 	if webProfileCapacity(previous) != webProfileCapacity([]byte(rendered)) {
 		return s.SaveConfig(cfg)
 	}
 
-	temp := telemtConfigPath + ".users.tmp"
-	if err := os.WriteFile(temp, []byte(rendered), 0o600); err != nil {
-		return err
-	}
-	if err := os.Rename(temp, telemtConfigPath); err != nil {
-		_ = os.Remove(temp)
-		return err
-	}
-	if systemctl("is-active", "--quiet", telemtServiceName) != nil {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
-	defer cancel()
-	if err := telemtWebReloadRuntime(ctx); err == nil {
-		return nil
-	} else {
-		// Restore the exact on-disk snapshot if a new user/profile list fails.
-		rollbackTmp := filepath.Join(filepath.Dir(telemtConfigPath), ".telemt-web-rollback.tmp")
-		if writeErr := os.WriteFile(rollbackTmp, previous, 0o600); writeErr != nil {
-			return fmt.Errorf("Telemt hot reload rejected; failed to restore old config: %w", writeErr)
+	return withMtprotoWebTrafficConfig(parent, rendered, true, func() (bool, error) {
+		temp := telemtConfigPath + ".users.tmp"
+		if err := os.WriteFile(temp, []byte(rendered), 0o600); err != nil {
+			return false, err
 		}
-		if renameErr := os.Rename(rollbackTmp, telemtConfigPath); renameErr != nil {
-			return fmt.Errorf("Telemt hot reload rejected; failed to restore old config: %w", renameErr)
+		if err := os.Rename(temp, telemtConfigPath); err != nil {
+			_ = os.Remove(temp)
+			return false, err
 		}
-		recoveryCtx, recoveryCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer recoveryCancel()
-		if recoveryErr := telemtWebReloadRuntime(recoveryCtx); recoveryErr != nil {
-			// Last resort: keep the old service available.
-			if restartErr := systemctl("restart", telemtServiceName); restartErr != nil {
-				return fmt.Errorf("Telemt hot reload failed (%w); rollback reload failed (%w); restart failed: %w", err, recoveryErr, restartErr)
+		if systemctl("is-active", "--quiet", telemtServiceName) != nil {
+			return true, nil
+		}
+		ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+		defer cancel()
+		if err := telemtWebReloadRuntime(ctx); err == nil {
+			return false, nil
+		} else {
+			// Restore the exact on-disk snapshot if a new user/profile list fails.
+			rollbackTmp := filepath.Join(filepath.Dir(telemtConfigPath), ".telemt-web-rollback.tmp")
+			if writeErr := os.WriteFile(rollbackTmp, previous, 0o600); writeErr != nil {
+				return false, fmt.Errorf("Telemt hot reload rejected; failed to restore old config: %w", writeErr)
 			}
+			if renameErr := os.Rename(rollbackTmp, telemtConfigPath); renameErr != nil {
+				return false, fmt.Errorf("Telemt hot reload rejected; failed to restore old config: %w", renameErr)
+			}
+			recoveryCtx, recoveryCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer recoveryCancel()
+			reset := false
+			if recoveryErr := telemtWebReloadRuntime(recoveryCtx); recoveryErr != nil {
+				// Last resort: keep the old service available.
+				if restartErr := systemctl("restart", telemtServiceName); restartErr != nil {
+					return false, fmt.Errorf("Telemt hot reload failed (%w); rollback reload failed (%w); restart failed: %w", err, recoveryErr, restartErr)
+				}
+				reset = true
+			}
+			return reset, fmt.Errorf("Telemt user/profile reload failed; previous configuration restored: %w", err)
 		}
-		return fmt.Errorf("Telemt user/profile reload failed; previous configuration restored: %w", err)
-	}
+	})
 }
 
 func webProfileCapacity(config []byte) string {

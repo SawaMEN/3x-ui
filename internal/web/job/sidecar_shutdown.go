@@ -49,8 +49,7 @@ func StopSidecarsWithTraffic() error {
 			// for WEB's system-managed backend, without changing its service state.
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			web, _, _, err := service.CollectMtprotoWebTraffic(ctx)
-			deltas = append(deltas, web...)
+			_, _, err := service.CollectMtprotoWebTrafficPersisted(ctx)
 			samples := make([]shutdownTrafficSample, 0, len(deltas))
 			for _, d := range deltas {
 				samples = append(samples, shutdownTrafficSample{tag: d.Tag, email: d.Email, up: d.Up, down: d.Down, routed: d.Routed})
@@ -109,5 +108,7 @@ func flushShutdownTrafficSource(source shutdownTrafficSource) error {
 		}
 	}
 	_, _, commitErr := journal.commitWith(source.name, owners, apply, inbounds, clients)
-	return errors.Join(priorErr, collectErr, commitErr)
+	// Owned collectors can write a WAL without returning legacy samples.
+	_, _, ownedErr := journal.replayWith(source.name, apply)
+	return errors.Join(priorErr, collectErr, commitErr, ownedErr)
 }

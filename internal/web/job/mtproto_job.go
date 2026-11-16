@@ -3,8 +3,6 @@ package job
 import (
 	"context"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -49,11 +47,6 @@ func (j *MtprotoJob) Run() {
 		logger.Warning("mtproto job: replay traffic journal:", retryErr)
 		return
 	}
-	owners, ownerErr := service.CaptureSidecarTrafficOwners([]model.Protocol{model.MTProto})
-	if ownerErr != nil {
-		logger.Warning("mtproto job: capture traffic owners:", ownerErr)
-		return
-	}
 
 	mgr := mtproto.GetManager()
 	desired, err := mgr.ReconcileCurrent(ctx, j.inboundService.DesiredMtprotoInstancesContext)
@@ -62,13 +55,9 @@ func (j *MtprotoJob) Run() {
 		return
 	}
 
-	routedTags := make(map[string]bool)
 	activeTags := make([]string, 0, len(desired))
 	for _, inst := range desired {
 		activeTags = append(activeTags, inst.Tag)
-		if inst.RouteThroughXray {
-			routedTags[inst.Tag] = true
-		}
 	}
 
 	if err := (service.TelemtService{}).RefreshMekoFix(); err != nil {
@@ -79,55 +68,16 @@ func (j *MtprotoJob) Run() {
 	if collectErr != nil {
 		logger.Warning("mtproto job: traffic poll incomplete:", collectErr)
 	}
-	if _, _, err := j.journal.replay("mtproto", &j.inboundService); err != nil {
-		logger.Warning("mtproto job: replay owned traffic:", err)
-	}
-	var deltas []mtproto.Traffic // WEB retains its separate accounting path.
-	webDeltas, webOnline, webTag, webErr := service.CollectMtprotoWebTraffic(ctx)
+	webOnline, webTag, webErr := service.CollectMtprotoWebTrafficPersisted(ctx)
 	if webErr != nil {
 		logger.Warning("mtproto job: WEB traffic poll failed:", webErr)
-	} else {
-		deltas = append(deltas, webDeltas...)
-		onlineEmails = append(onlineEmails, webOnline...)
-		if webTag != "" {
-			activeTags = append(activeTags, webTag)
-		}
 	}
-
-	// A routed inbound's total is already metered through the Xray bridge by
-	// xray_traffic_job, so only non-routed inbounds are rolled up here; per-client
-	// deltas are always kept, since the bridge cannot tell MTProto users apart.
-	clientTraffics := make([]*coremodel.ClientTraffic, 0, len(deltas))
-	inboundUp := make(map[string]int64)
-	inboundDown := make(map[string]int64)
-	for _, d := range deltas {
-		clientTraffics = append(clientTraffics, &coremodel.ClientTraffic{
-			Email: d.Email,
-			Up:    d.Up,
-			Down:  d.Down,
-		})
-		if !routedTags[d.Tag] {
-			inboundUp[d.Tag] = accumulateTrafficDelta(inboundUp[d.Tag], d.Up)
-			inboundDown[d.Tag] = accumulateTrafficDelta(inboundDown[d.Tag], d.Down)
-		}
+	onlineEmails = append(onlineEmails, webOnline...)
+	if webTag != "" {
+		activeTags = append(activeTags, webTag)
 	}
-
-	traffics := make([]*coremodel.Traffic, 0, len(inboundUp))
-	for tag, up := range inboundUp {
-		traffics = append(traffics, &coremodel.Traffic{
-			IsInbound: true,
-			Tag:       tag,
-			Up:        up,
-			Down:      inboundDown[tag],
-		})
-	}
-
-	if len(traffics) > 0 || len(clientTraffics) > 0 {
-		if _, _, err := j.journal.commit("mtproto", owners, &j.inboundService, traffics, clientTraffics); err != nil {
-			// The collector has already moved Telemt's baseline. Preserve the exact
-			// delta batch and retry it before collecting a newer snapshot.
-			logger.Warning("mtproto job: add traffic failed; batch queued for retry:", err)
-		}
+	if _, _, err := j.journal.replay("mtproto", &j.inboundService); err != nil {
+		logger.Warning("mtproto job: replay owned traffic:", err)
 	}
 
 	j.inboundService.RefreshLocalOnlineClients(onlineEmails, activeTags)

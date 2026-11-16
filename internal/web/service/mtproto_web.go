@@ -246,6 +246,9 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		telemtWebRetryJitterEqual(state.RetryJitter, normalized.RetryJitter)
 	svc := TelemtService{}
 	if unchanged && state.UserFingerprint == fingerprint && svc.WebProxyTelemtActive() {
+		if err := refreshMtprotoWebTrafficBinding(ctx); err != nil {
+			return err
+		}
 		// Recover the HTTPS entry point even when only its process was stopped.
 		if !telemtWebFrontendActive(state) {
 			if err := telemtWebEnsureFrontendRunning(state); err != nil {
@@ -356,11 +359,7 @@ func mtprotoWebUsername(inboundID int, email string) string {
 	return fmt.Sprintf("mtweb_%d_%x", inboundID, digest[:8])
 }
 
-var mtprotoWebTraffic struct {
-	sync.Mutex
-	inboundID int
-	last      map[string]int64
-}
+var mtprotoWebTraffic mtprotoWebTrafficTracker
 
 func resetMtprotoWebClientQuota(inboundID int, email string) error {
 	telemtWebOperationMu.Lock()
@@ -389,77 +388,6 @@ func resetMtprotoWebClientQuota(inboundID int, email string) error {
 		return fmt.Errorf("telemt WEB quota reset rejected: HTTP %d", response.StatusCode)
 	}
 	return nil
-}
-
-// CollectMtprotoWebTraffic maps cumulative WEB backend counters back onto the
-// usual MTProto clients. Telemt currently reports aggregate octets, not reliable
-// direction-specific counters, so they are recorded as Down, just like raw
-// MTProto sidecars. A failed poll never advances the previous snapshot.
-func CollectMtprotoWebTraffic(ctx context.Context) ([]mtproto.Traffic, []string, string, error) {
-	mtprotoWebTraffic.Lock()
-	defer mtprotoWebTraffic.Unlock()
-
-	state, err := readTelemtWebState()
-	if err != nil {
-		return nil, nil, "", err
-	}
-	if !state.Enabled || state.ManagedInboundID == 0 {
-		mtprotoWebTraffic.inboundID = 0
-		mtprotoWebTraffic.last = nil
-		return nil, nil, "", nil
-	}
-
-	var inbound model.Inbound
-	if err := database.GetDB().First(&inbound, state.ManagedInboundID).Error; err != nil {
-		return nil, nil, "", err
-	}
-	inst, ok := mtproto.InstanceFromInbound(&inbound)
-	if !ok {
-		return nil, nil, "", nil
-	}
-
-	usersByName := make(map[string]string, len(inst.Secrets))
-	for _, sec := range inst.Secrets {
-		usersByName[mtprotoWebUsername(inbound.Id, sec.Name)] = sec.Name
-	}
-	if mtprotoWebTraffic.inboundID != inbound.Id {
-		mtprotoWebTraffic.inboundID = inbound.Id
-		mtprotoWebTraffic.last = make(map[string]int64)
-	}
-	if systemctl("is-active", "--quiet", telemtServiceName) != nil {
-		return nil, nil, "", nil
-	}
-
-	client := &http.Client{Timeout: 4 * time.Second, Transport: telemtMonitorTransport{ctx}}
-	snapshot, err := fetchTelemtUserStats(client)
-	if err != nil {
-		return nil, nil, "", err
-	}
-
-	var deltas []mtproto.Traffic
-	var online []string
-	for _, user := range snapshot {
-		email, wanted := usersByName[user.Username]
-		if !wanted {
-			continue
-		}
-		if user.CurrentConnections > 0 {
-			online = append(online, email)
-		}
-		current := max(user.TotalOctets, 0)
-		last, had := mtprotoWebTraffic.last[user.Username]
-		if had {
-			delta := current - last
-			if delta < 0 {
-				delta = current
-			} // Telemt restarted/reset its counter.
-			if delta > 0 {
-				deltas = append(deltas, mtproto.Traffic{Tag: inbound.Tag, Email: email, Down: delta})
-			}
-		}
-		mtprotoWebTraffic.last[user.Username] = current
-	}
-	return deltas, online, inbound.Tag, nil
 }
 
 func mtprotoWebFingerprint(ib *model.Inbound) string {

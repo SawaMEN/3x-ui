@@ -792,3 +792,28 @@ first-sample/lifecycle/WAL задачи описаны в docs/audit/RESUME.md.
 После исправления три повторения deadlock/serialization/cancellation tests и
 расширенные service/job/controller/externalvpn regressions прошли. Точные
 результаты, проверки и незавершённая WEB Owner/WAL задача — docs/audit/RESUME.md.
+
+
+## Продолжение: A96, WEB owner и общий WAL
+
+Сделано 3 из 3 частей этапа, осталось 0. Всего 96 подтверждённых исправлений.
+Актуально reviewed 258/2364; pending 2099 и 7 incoming stale, всего осталось 2106.
+Входящие SNI/logging/native-runtime изменения сохранены; stale paths не считаются
+повторно проверенными по одному diff.
+
+| ID | Дефект | Исправление |
+|---|---|---|
+| A96 | WEB consumed delta после повторного использования email назначается другой row; cursor отделён от runtime owner/lifecycle/WAL | Pinned installed mapping/Owner, WAL acceptance до cursor advance, pre-activation/no-op identity boundary, restart/rollback baselines и periodic/shutdown owned replay |
+
+Исходное воспроизведение: old=0/new=20 вместо 20/0. Восстановленные 16 WEB
+scenarios прошли трижды, включая disk/metrics failure, rollback/restart, queued
+poll и receipt replay. Отзыв доступа не блокируется отсутствием metrics;
+неизвестный интервал не назначается replacement row. После последнего обновления
+main повторно прошли combined targeted tests, full Go build/vet и lint затронутых
+4 packages. Полный configured lint всех 87 packages прошёл пакетами, 0 issues.
+Подробные результаты, incoming stale и незакрытый durable cursor/exec contract
+сохранены в docs/audit/RESUME.md. Общий проход исходного коммита не завершён.
+
+Перед публикацией сохранён независимый 23f6675 (fresh client naming).
+Объединённые naming/WEB tests, full Go build и vet прошли; повторный
+lint model/sub/service и итог публикации — RESUME.md.

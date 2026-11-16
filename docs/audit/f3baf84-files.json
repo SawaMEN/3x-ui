@@ -4081,8 +4081,8 @@
       "subsystem": "frontend",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Complete query/type module reread after concurrent 9741214 adds distributed certificate source union; request contract and normalized defaults unchanged.",
-      "reviewed_sha256": "58cd1b206d20fc5b33aa29dbe2807929434209dfae1058aae9650e1bbcc68bba"
+      "evidence": "A96 incoming re-review: current files read completely; full Go build passes with current manifest. Query change adds optional realityTarget interface metadata; existing query and certificate locality logic retained. No frontend build claimed.",
+      "reviewed_sha256": "e859254712555659a90c14bed326751450556f48bae91edfa02ad1745b5c45ad"
     },
     {
       "path": "frontend/src/api/queries/useNodeMutations.ts",
@@ -10164,8 +10164,8 @@
       "subsystem": "installation-ci",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "Full module manifest reviewed. CI identified reachable GO-2026-6859 in Go 1.27.3 net/http; official Go release 1.27.4 verified and minimum directive raised. Build/vet pass on 1.27.4; govulncheck 1.9.0 reports 0 called-code and 0 imported-package vulnerabilities, with only an unimported openpgp module advisory retained explicitly.",
-      "reviewed_sha256": "a7f351fe4102943a393aa4336d85efc3d69790d7831589a4ac24b96198743fcd"
+      "evidence": "A96 incoming re-review: current files read completely; full Go build passes with current manifest. Query change adds optional realityTarget interface metadata; existing query and certificate locality logic retained. No frontend build claimed.",
+      "reviewed_sha256": "5027142e41b986fa697c0a148c9cedfd644851728d1b669742a972107aaef6ea"
     },
     {
       "path": "go.sum",
@@ -17644,8 +17644,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A91: reviewed pinned runtime owner acceptance before cursor/baseline advance, copied external owner snapshot and protected counter rollback, receipt replay without recharging returned bytes, native/routed MTProto vs separate WEB accounting. Three reused-email misattribution failures reproduced; new seven-case normal/disk-recovery/routed suite PASS and selected lifecycle/epoch/CRUD/job/service regressions PASS.",
-      "reviewed_sha256": "a69e6ef6e318e8c40634c5676fd36c8ea218bde344e6832ae4eb954aabb4e44f"
+      "evidence": "A96 restored and re-reviewed WEB owner/WAL paths on afc73e6: native pinned Owner, pre-activation boundary, no-op identity handoff, rollback/restart baselines and persisted periodic/shutdown integration; service/job/sidecartraffic tests repeated three times passed. New tracker and fixtures reviewed separately.",
+      "reviewed_sha256": "064542c65ee8bce0daa8d257e742b6368e3e477194a92dab95b0c792f98b9b31"
     },
     {
       "path": "internal/web/job/node_down_threshold_test.go",
@@ -17985,8 +17985,8 @@
       "subsystem": "api-gateway",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
-      "reviewed_sha256": "c28dd0aaa9d3250b5f9b2f6ca3b396f1a712690b7db99ca56161ebcb5d86a22a"
+      "evidence": "A96 incoming logging re-review: all current lines read; panic recovery privacy/healthy continuation and remote certificate metadata sanitization/identity tests passed again on restored afc73e6 tree, middleware 0.022s/service 0.034s.",
+      "reviewed_sha256": "ea574e7bd2765a6b192b803f344cc2b2c00d75f49fc81e61d62dc1d773ad5ea1"
     },
     {
       "path": "internal/web/middleware/recovery_test.go",
@@ -17996,8 +17996,8 @@
       "subsystem": "api-gateway",
       "kind": "test-fixture",
       "status": "reviewed",
-      "evidence": "A58–A59 and A57 follow-through: complete file reads; WebSocket origin/handshake/pumps, hub queue and shutdown ownership, full hub and concurrency tests; reproduced queued/post-stop client leak and tested real loopback upgraded socket shutdown. Read SPA fallback/dist rewriting and related SPA tests outside original diff; reproduced HTML/JS corruption with a URI prefix accepted by Normalize, validated resulting DOM and decoded JSON after escaping. Reviewed redirect/recovery and write-deadline middleware with existing tests.",
-      "reviewed_sha256": "16460dd42b7a22d71e4ecaab2084fc687abd7539248255eb3b8790d53940e6b0"
+      "evidence": "A96 incoming logging re-review: all current lines read; panic recovery privacy/healthy continuation and remote certificate metadata sanitization/identity tests passed again on restored afc73e6 tree, middleware 0.022s/service 0.034s.",
+      "reviewed_sha256": "b211e78b7af71fc54a521b427f16a1f599032d5b2be5c25fe6998e00ca24de2a"
     },
     {
       "path": "internal/web/middleware/root_redirect.go",
@@ -19536,8 +19536,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A87 incoming-main refresh of earlier complete reviews through 710e8b3: changed contexts read for inherited certificate issuer choice, certificate export/fleet/preparation endpoint guards and allowlist, session-user binding, constrained cover-site export helper and remote inventory metadata. These incoming feature commits are not counted as audit fixes or new original-scope reviews. Guard regression checks and remaining scope recorded in RESUME.",
-      "reviewed_sha256": "3f8e6c81e6b2277cc8dd0467ff3e9dd32101752b5c3bc32193fc6fb9760d97aa"
+      "evidence": "A96 incoming logging re-review: all current lines read; panic recovery privacy/healthy continuation and remote certificate metadata sanitization/identity tests passed again on restored afc73e6 tree, middleware 0.022s/service 0.034s.",
+      "reviewed_sha256": "e3a78314a8284ae144d83f6a6a4c94cdb04a5b65d7d3033857db8dc02594b64d"
     },
     {
       "path": "internal/web/service/domain_certificate_inventory_nodes_test.go",
@@ -21362,8 +21362,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A95 complete current-file review: nested operation mutex deadlock reproduced in isolated child before fix; locked reload entry preserves public serialization and passes real reconcile/error/cancellation tests; focused regressions passed in service/job/controller/externalvpn. WEB runtime Owner/WAL transfer remains open.",
-      "reviewed_sha256": "51aef1b76c3069d996459b03095fad8dae8fd5b6ddaaff82027898c105219051"
+      "evidence": "A96 restored and re-reviewed WEB owner/WAL paths on afc73e6: native pinned Owner, pre-activation boundary, no-op identity handoff, rollback/restart baselines and persisted periodic/shutdown integration; service/job/sidecartraffic tests repeated three times passed. New tracker and fixtures reviewed separately.",
+      "reviewed_sha256": "65ce202988e7adf6c5a48742753c25714bca5a279b780a0efcf143b18c8cc633"
     },
     {
       "path": "internal/web/service/mtproto_web_test.go",
@@ -23947,8 +23947,8 @@
       "subsystem": "services-nodes-jobs",
       "kind": "source-config",
       "status": "reviewed",
-      "evidence": "A95 complete current-file review: nested operation mutex deadlock reproduced in isolated child before fix; locked reload entry preserves public serialization and passes real reconcile/error/cancellation tests; focused regressions passed in service/job/controller/externalvpn. WEB runtime Owner/WAL transfer remains open.",
-      "reviewed_sha256": "3d174ca46d6f951296de5f3eb00515c63ca7844dbb84cd748b289a40988cbcaf"
+      "evidence": "A96 restored and re-reviewed WEB owner/WAL paths on afc73e6: native pinned Owner, pre-activation boundary, no-op identity handoff, rollback/restart baselines and persisted periodic/shutdown integration; service/job/sidecartraffic tests repeated three times passed. New tracker and fixtures reviewed separately.",
+      "reviewed_sha256": "af80470d857f7fd91dc1500773e05c5bbe6b3de42f2ccef8ccac9ccc3820d597"
     },
     {
       "path": "internal/web/service/telemt_webproxy_native_test.go",

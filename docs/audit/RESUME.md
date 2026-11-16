@@ -8,11 +8,11 @@
 Группа A28–A29 также исправлена и проверена; A21–A27 опубликована в `f96b27f`.
 Группа A30–A38 подготовлена как очередная контрольная точка: подписки, Hosts, HWID, кэш и CI.
 Группа A30–A38 опубликована в `4ecc2e7`; A39 поднимает сборочный Go панели до 1.27.4.
-Всего реализовано 95 подтверждённых исправлений панели; A95 — устранение самоблокировки WEB reconcile при горячем обновлении пользователей.
+Всего реализовано 96 подтверждённых исправлений панели; A96 — WEB runtime owner, границы смены ID и общий WAL до cursor advance.
 
 Полностью завершён 1 из 4 общих этапов; осталось 3.
 Реестр учитывает **все 2364 файла**, включая удаления и переименования.
-Просмотрено вручную 265 файлов; все отметки актуальны, stale 0. Осталось 2099 файлов; общий проход не завершён.
+Просмотрено вручную 265 файлов; актуальны 258 отметок, 7 требуют повторной проверки после входящих SNI/logging/runtime/client-коммитов. Осталось 2099 новых файлов и 7 повторных проверок, всего 2106; общий проход не завершён.
 Число ошибок, которые ещё предстоит найти, неизвестно и не заменяется числом файлов.
 
 ## Бюджет одного большого этапа: 300 минут
@@ -1883,3 +1883,101 @@ mtproto_web.go перепроверен после A95. Inventory check PASS, st
   ожидание, но после освобождения lock отменённое задание не начинает мутации.
 - Тесты не активировали реальные host services/ACME/firewall. Отдельный -race,
   реальный Telemt WEB backend и PostgreSQL в этом этапе не запускались.
+
+
+## Контрольная точка A96: WEB runtime owner и общий WAL
+
+Нужно 3 части: анализ/воспроизведение, внедрение, итоговая проверка/публикация.
+Сделано 3, осталось 0. Всего 96 подтверждённых исправлений.
+Текущий реестр: reviewed 258/2364, pending 2099, incoming stale 7.
+Основная проверенная база: 48fb790346e4c4a59e071649c4d0d4fb767b979d.
+Перед публикацией сохранён независимый incoming naming fix
+23f6675bf48d568dede2a9b402b7789a4053a265. На объединённом дереве повторно
+прошли tests model/sub/service (0.008s / 1.428s / 2.667s), full Go build/vet.
+Повторный полный configured lint model/sub/service PASS, каждый 0 issues.
+Финальная интеграция 23f6675+A96 прошла tests, full Go build/vet и lint всех
+пакетов, изменившихся после основной 87-package проверки.
+
+Причина A96 и поведение:
+- Старый WEB collector перечитывал текущие DB settings/email, а job назначал
+  consumed delta через новый DB snapshot. При повторном использовании email
+  новый ClientTraffic получал bytes уже работающего backend. Исходное
+  воспроизведение дало old=0/new=20 вместо old=20/new=0.
+- Новый tracker хранит installed username->email map и immutable Owner, причём
+  capture включает только пользователей из отрендеренного access.users.
+  Обычный poll установленного binding не перечитывает row IDs/current emails.
+- Owner.Store принимает samples в общий MTProto WAL/process retry queue ДО
+  cursor advance. Accepted filesystem failure сохраняет batch с первоначальными
+  IDs; повторная job/receipt replay не начисляет его дважды.
+- SaveConfig и hot reload снимают доступный old-owner sample перед активацией.
+  Next owner назначается только после её успеха. Failed activation сохраняет
+  old owner; successful rollback restart сбрасывает его source baseline на 0.
+- No-op reconcile замечает смену IDs даже при прежнем user fingerprint/config.
+  Чистый identity handoff требует полного snapshot затронутых retained users;
+  отсутствие metrics/user откладывает switch без изменения owner/cursor.
+- Реальные config/credential changes и отзыв доступа не ждут metrics, включая
+  cold binding. Неизвестный old/new интервал не назначается replacement row:
+  affected cursor прогревается следующим sample, ошибка логируется. При этом
+  возможен недоучёт неизвестного интервала; revocation имеет приоритет.
+- Poll и activation держат общий tracker mutex до API/acceptance/смены state,
+  поэтому queued old response не пересекает границу owner. Под этими locks нет
+  quota/runtime DB maintenance: Store пишет только WAL/process queue.
+- Контролируемый новый backend начинает с zero baseline; hot reload сохраняет
+  известные counters. Pre-panel runtime и отсутствовавшие cold counters
+  прогреваются при первой observation, без повторного учёта старых bytes.
+- Periodic job и shutdown используют CollectMtprotoWebTrafficPersisted;
+  name-based WEB re-batching удалён. Shutdown replay выполняется даже тогда,
+  когда owned collector не вернул legacy samples, без runtime maintenance.
+
+Проверки:
+- Код восстановлен после сброса scratch и перепроверен заново. Восстановленный
+  исходник предварительно сохранён checkpoint 19d1be8028d021d044818c136d5b11ec7655a9b6
+  без изменения main; он не заменяет финальный проверенный commit.
+- Targeted service/job/sidecartraffic tests ×3 PASS: 8.433s / 2.125s / 0.154s.
+  16 новых WEB scenarios проверяют original/replacement IDs, inbound totals,
+  disk retry, missing metrics/sample, failed activation, rollback/new restart,
+  revocation, queued poll, pinned zero-byte WAL, cancellation и cold boundaries.
+  Каждый replay batch применяется дважды для проверки idempotent receipts.
+- Новый shutdown regression: 23-byte owned WAL сохраняется и начисляется даже
+  без legacy return samples. Прежние partial/DB-failure/shutdown tests проходят.
+- Full Go build и full go vet PASS. Full configured golangci-lint 2.15.0 PASS
+  для всех 87 packages: 14 последовательных batches, все exit 0. Ни один
+  настроенный linter не отключался. Ограничение памяти: -p 1/GOMAXPROCS=1,
+  GOMEMLIMIT=650MiB/GOGC=20. Прежние OOM/mixed-tree checks не считаются успехом.
+- Во время проверки main получил 48fb790 (core crash reports/native settings).
+  Incoming paths с A96 не пересекались, commit сохранён fast-forward. На новом
+  объединённом дереве снова PASS: service 3.275s, job 0.854s, sidecartraffic 0.115s,
+  singbox 0.025s, sub 0.140s, full Go build и full go vet. Включены upstream
+  crash/recovery, Naive QUIC, TUIC/TLS, MASQUE automatic TLS и diagnostic logs.
+- Все 4 Go packages, изменённые последним incoming commit (service/job/singbox/sub),
+  дополнительно прошли полный настроенный lint, каждый 0 issues. Остальные
+  пакеты не менялись. Набор Go packages остался тем же: 87.
+- Incoming privacy/metadata/dashboard regressions отдельно PASS: middleware
+  0.022s, service 0.034s. afc73e6 уже содержал dashboard fixture isolation fix;
+  он сохранён. Frontend этим исправлением не менялся и не пересобирался.
+- git diff --check PASS. Go embed использовал существующий Makefile dist-stub.
+
+Реестр и пределы результата:
+- Полностью перечитаны incoming go.mod, query interface, recovery.go/test и
+  domain_certificate_inventory_nodes.go; marks обновлены по этим проверкам.
+  Изменённые reviewed WEB/job paths перепроверены, новые tracker/tests рассмотрены
+  отдельно. telemt.go читался по затронутым цепочкам, полного review не заявлено.
+- Incoming stale не переподписывались автоматически. Остаются 7 re-review paths:
+  frontend/src/pages/inbounds/form/security/SniSearchInput.tsx,
+  internal/domainfront/manager.go, internal/singbox/process.go,
+  internal/database/model/model.go,
+  internal/web/runtime/remote.go, internal/web/service/domain_front.go,
+  internal/web/web.go. Inventory check сообщает эти 7 stale, а не успешный
+  полностью актуальный audit; всего осталось 2099 pending + 7 re-review = 2106.
+- Binding/cursor остаются process-global. WAL/receipts переживают exec, сами
+  runtime binding/cursor после полной перезагрузки панели требуют conservative
+  bootstrap. Следующий приоритет — durable owner/source-generation/cursor contract.
+- Это snapshot boundary, не upstream ACK/drain всех соединений. Недоступный
+  final snapshot, cold bootstrap, counter destruction и crash до fsync могут
+  терять bytes. Неожиданный auto-restart без config transition/counter drop
+  ещё требует generation contract. Name-based online UI не исправлялся.
+- Только temporary SQLite, fake stats и собственные test children. Live host
+  Telemt/WEB/systemctl/firewall/ACME, PostgreSQL и отдельный race run не запускались.
+
+Итог A96: код/тесты/отчёт публикуются одним проверенным коммитом в main поверх
+23f6675, без потери входящих изменений. Весь общий audit ещё не завершён.

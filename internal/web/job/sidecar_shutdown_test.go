@@ -12,6 +12,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
@@ -157,5 +158,41 @@ func TestShutdownTrafficPersistsPartialSampleAndReportsCollectorError(t *testing
 	}
 	if row.Down != 83 {
 		t.Fatalf("lost successful raw sample after WEB failure: %d", row.Down)
+	}
+}
+
+func TestShutdownTrafficReplaysOwnedWALWithoutLegacySamples(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dir)
+	dbtest.InitDB(t, filepath.Join(dir, "x-ui.db"))
+	db := database.GetDB()
+	ib := model.Inbound{Tag: "web-owned-shutdown", Protocol: model.MTProto, Settings: `{"clients":[]}`}
+	if err := db.Create(&ib).Error; err != nil {
+		t.Fatal(err)
+	}
+	row := coremodel.ClientTraffic{InboundId: ib.Id, Email: "web-owned", Enable: true}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	owner, err := sidecartraffic.Capture("mtproto", ib.Id, []string{row.Email}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	stopped := false
+	if err := flushShutdownTrafficSource(shutdownTrafficSource{name: "mtproto", mu: &mu, protocols: []model.Protocol{model.MTProto}, stop: func() { stopped = true }, collect: func() ([]shutdownTrafficSample, error) {
+		accepted, err := owner.Store([]sidecartraffic.Sample{{Email: row.Email, Down: 23}})
+		if !accepted {
+			t.Error("WAL rejected")
+		}
+		return nil, err
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&row, row.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !stopped || row.Down != 23 {
+		t.Fatalf("stop=%v down=%d", stopped, row.Down)
 	}
 }

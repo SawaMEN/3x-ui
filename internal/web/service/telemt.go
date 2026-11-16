@@ -630,28 +630,38 @@ func (TelemtService) SaveConfig(c TelemtConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := ensureTelemtConfig(); err != nil {
-		return err
-	}
-	old, oldErr := os.ReadFile(telemtConfigPath)
-	wasActive := systemctl("is-active", "--quiet", telemtServiceName) == nil
-	if err := os.WriteFile(telemtConfigPath, []byte(data), 0o600); err != nil {
-		return err
-	}
-	if err := systemctl("daemon-reload"); err != nil {
-		return err
-	}
-	if wasActive {
-		if err := systemctl("restart", telemtServiceName); err != nil {
-			if oldErr == nil {
-				_ = os.WriteFile(telemtConfigPath, old, 0o600)
-				_ = systemctl("daemon-reload")
-				_ = systemctl("restart", telemtServiceName)
+	return withMtprotoWebTrafficConfig(context.Background(), data, true, func() (bool, error) {
+		reset := false
+		err := func() error {
+			if err := ensureTelemtConfig(); err != nil {
+				return err
 			}
-			return fmt.Errorf("telemt: new configuration was rejected: %w", err)
-		}
-	}
-	return nil
+			old, oldErr := os.ReadFile(telemtConfigPath)
+			wasActive := systemctl("is-active", "--quiet", telemtServiceName) == nil
+			reset = !wasActive
+			if err := os.WriteFile(telemtConfigPath, []byte(data), 0o600); err != nil {
+				return err
+			}
+			if err := systemctl("daemon-reload"); err != nil {
+				return err
+			}
+			if wasActive {
+				if err := systemctl("restart", telemtServiceName); err != nil {
+					if oldErr == nil {
+						_ = os.WriteFile(telemtConfigPath, old, 0o600)
+						_ = systemctl("daemon-reload")
+						if systemctl("restart", telemtServiceName) == nil {
+							reset = true
+						}
+					}
+					return fmt.Errorf("telemt: new configuration was rejected: %w", err)
+				}
+				reset = true
+			}
+			return nil
+		}()
+		return reset, err
+	})
 }
 
 func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
