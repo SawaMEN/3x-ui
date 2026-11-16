@@ -13,8 +13,8 @@ import (
 	"time"
 
 	xraygeodata "github.com/xtls/xray-core/common/geodata"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 )
 
 func writeSiteDB(t *testing.T, dir, name string, sites ...*xraygeodata.GeoSite) string {
