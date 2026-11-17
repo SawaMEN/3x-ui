@@ -124,6 +124,154 @@ func TestInstallChecksAndAtomicallyPublishes(t *testing.T) {
 	}
 }
 
+func TestCachedReleaseInstallSkipsForbiddenGitHubTagAPI(t *testing.T) {
+	for _, engine := range []string{"xray", "sing-box-upstream"} {
+		t.Run(engine, func(t *testing.T) {
+			repo, err := repository(engine)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tag := "v1.15.0-alpha.12"
+			assetName, err := AssetName(engine, tag, "linux", "amd64", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			binary := "sing-box"
+			if engine == "xray" {
+				binary = "xray"
+			}
+			archive := archiveFixture(t, assetName, binary)
+			digest := sha256.Sum256(archive)
+			assetURL := "https://github.com/" + repo + "/releases/download/" + tag + "/" + assetName
+			release := Release{Tag: tag, Assets: []Asset{{
+				Name: assetName, URL: assetURL, Digest: "sha256:" + hex.EncodeToString(digest[:]),
+			}}}
+			list, err := json.Marshal([]Release{release})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var listCalls, tagCalls, downloads int
+			client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+				var content []byte
+				status := http.StatusOK
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/releases"):
+					listCalls++
+					content = list
+				case strings.Contains(r.URL.Path, "/releases/tags/"):
+					tagCalls++
+					status = http.StatusForbidden
+				case r.URL.String() == assetURL:
+					downloads++
+					content = archive
+				default:
+					t.Fatalf("unexpected request %s", r.URL)
+				}
+				return &http.Response{
+					StatusCode: status, Body: io.NopCloser(bytes.NewReader(content)), Header: make(http.Header),
+				}, nil
+			})}
+			installer := NewCachedInstaller(client)
+			for attempt := 0; attempt < 2; attempt++ {
+				versions, err := installer.Versions(context.Background(), engine, "linux", "amd64", "")
+				if err != nil || len(versions) != 1 || versions[0].Tag != tag {
+					t.Fatalf("versions=%v err=%v", versions, err)
+				}
+			}
+			target := filepath.Join(t.TempDir(), "core")
+			if err := os.WriteFile(target, []byte("old core"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			selected, err := installer.Install(context.Background(), engine, tag, "linux", "amd64", "", target, func(staged string) error {
+				if content, err := os.ReadFile(target); err != nil || string(content) != "old core" {
+					t.Fatalf("live core replaced before validation: %q %v", content, err)
+				}
+				return nil
+			})
+			if err != nil || selected != tag || listCalls != 1 || tagCalls != 0 || downloads != 1 {
+				t.Fatalf("selected=%q list=%d tags=%d downloads=%d err=%v",
+					selected, listCalls, tagCalls, downloads, err)
+			}
+			if content, err := os.ReadFile(target); err != nil || string(content) != "new executable" {
+				t.Fatalf("unexpected installed binary %q: %v", content, err)
+			}
+		})
+	}
+}
+
+func TestForbiddenTagAPIDoesNotReplaceCoreWithoutCachedMetadata(t *testing.T) {
+	for _, engine := range []string{"xray", "sing-box-upstream"} {
+		t.Run(engine, func(t *testing.T) {
+			client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusForbidden,
+					Body: io.NopCloser(strings.NewReader("")),
+					Header: make(http.Header),
+				}, nil
+			})}
+			target := filepath.Join(t.TempDir(), "core")
+			if err := os.WriteFile(target, []byte("old core"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			_, err := NewCachedInstaller(client).Install(context.Background(), engine,
+				"v1.15.0-alpha.12", "linux", "amd64", "", target, func(string) error {
+					t.Fatal("uncached 403 reached binary validation")
+					return nil
+				})
+			if err == nil || !strings.Contains(err.Error(), "HTTP 403") {
+				t.Fatalf("expected HTTP 403, got %v", err)
+			}
+			if content, err := os.ReadFile(target); err != nil || string(content) != "old core" {
+				t.Fatalf("forbidden request replaced live core %q: %v", content, err)
+			}
+		})
+	}
+}
+
+func TestCachedReleaseStillRejectsInvalidChecksum(t *testing.T) {
+	tag := "v1.15.0-alpha.12"
+	assetName, err := AssetName("sing-box-upstream", tag, "linux", "amd64", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assetURL := "https://github.com/SagerNet/sing-box/releases/download/" + tag + "/" + assetName
+	rel := Release{Tag: tag, Assets: []Asset{{
+		Name: assetName, URL: assetURL, Digest: "sha256:" + strings.Repeat("0", 64),
+	}}}
+	list, err := json.Marshal([]Release{rel})
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := archiveFixture(t, assetName, "sing-box")
+	client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		body := list
+		if r.URL.String() == assetURL {
+			body = archive
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(body)), Header: make(http.Header),
+		}, nil
+	})}
+	installer := NewCachedInstaller(client)
+	if _, err := installer.Versions(context.Background(), "sing-box-upstream", "linux", "amd64", ""); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "core")
+	if err := os.WriteFile(target, []byte("old core"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err = installer.Install(context.Background(), "sing-box-upstream", tag, "linux", "amd64", "", target, func(string) error {
+		t.Fatal("bad archive checksum reached validator")
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "release checksum mismatch") {
+		t.Fatalf("invalid checksum accepted: %v", err)
+	}
+	if content, err := os.ReadFile(target); err != nil || string(content) != "old core" {
+		t.Fatalf("invalid checksum replaced live binary %q: %v", content, err)
+	}
+}
+
 func TestAssetNames(t *testing.T) {
 	for _, tc := range []struct {
 		core string
