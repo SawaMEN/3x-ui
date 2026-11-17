@@ -224,6 +224,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	api.GET("/openapi.json", ServeOpenAPISpec)
 	// XDRIVE Yandex Disk wizard; authenticated panel-only, fixed provider URL.
 	api.POST("/xdrive/yandex/probe", handleYandexXDriveProbe)
+	api.POST("/xdrive/yandex/api-probe", handleYandexDiskAPIProbe)
 
 	// Inbounds API
 	inbounds := api.Group("/inbounds")
