@@ -201,6 +201,48 @@ fi
                 if mode=="missing_service": self.assertNotIn("service:disable x-ui", commands)
                 if mode=="disabled": self.assertIn("service:disable x-ui", commands)
 
+
+    def test_explicit_standalone_binaries_survive_release_overwrites(self):
+        # Standalone binary choice is stored in SQLite; the matching executable
+        # and its runtime config must also survive both bin layouts.
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            previous = base / "x-ui-upgrade" / "installation" / "bin"
+            target = base / "x-ui" / "bin"
+            external = base / "external-bin"
+            staged = base / "stage" / "x-ui" / "bin"
+            for directory in (previous, target, external, staged):
+                directory.mkdir(parents=True)
+            filenames = ("xray-linux-amd64", "sing-box-upstream-linux-amd64",
+                         "xray.json", "sing-box-upstream.json")
+            for filename in filenames:
+                (previous / filename).write_text("operator:" + filename)
+                (target / filename).write_text("bundled:" + filename)
+                (external / filename).write_text("operator:" + filename)
+                (staged / filename).write_text("bundled:" + filename)
+            (staged / "hiddify-core-linux-amd64").write_text("latest-owner")
+            (staged / "geoip.dat").write_text("latest-geoip")
+            script = r'''
+set -eu
+xui_folder="$TEST_ROOT/x-ui"
+cm_backup="$TEST_ROOT/x-ui-upgrade"
+source "$HELPER"
+core_migration_restore_custom_bin_files
+for asset in xray-linux-amd64 sing-box-upstream-linux-amd64 xray.json sing-box-upstream.json; do
+    [[ "$(cat "$xui_folder/bin/$asset")" == "operator:$asset" ]] || exit 1
+done
+core_migration_copy_managed_assets "$TEST_ROOT/stage/x-ui/bin" "$TEST_ROOT/external-bin"
+for asset in xray-linux-amd64 sing-box-upstream-linux-amd64 xray.json sing-box-upstream.json; do
+    [[ "$(cat "$TEST_ROOT/external-bin/$asset")" == "operator:$asset" ]] || exit 1
+done
+[[ "$(cat "$TEST_ROOT/external-bin/hiddify-core-linux-amd64")" == latest-owner ]] || exit 1
+[[ "$(cat "$TEST_ROOT/external-bin/geoip.dat")" == latest-geoip ]] || exit 1
+'''
+            result = subprocess.run(["bash", "-c", script], env=dict(
+                os.environ, TEST_ROOT=raw, HELPER=str(ROOT / "scripts/migration/core-migration.sh")),
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_remote_update_download_lock_reclaims_only_abandoned_artifacts(self):
         source = (ROOT / "update.sh").read_text()
         start = source.index("cleanup_update_artifacts() {")

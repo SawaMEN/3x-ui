@@ -37,9 +37,9 @@ func (i Installer) Versions(ctx context.Context, engine, goos, arch, arm string)
 	if err != nil {
 		return nil, err
 	}
-	// Preserve the full list when GitHub is healthy. When a 100-release
-	// response times out or fails at the gateway, smaller pages still let the
-	// user select a recent version without waiting for that large response.
+	// Preserve the full list when GitHub is healthy. When a large response
+	// exceeds the size cap, times out, or fails at the gateway, try smaller
+	// pages rather than failing both Xray and sing-box version selectors.
 	attempts := []struct {
 		pageSize int
 		delay    time.Duration
@@ -47,7 +47,7 @@ func (i Installer) Versions(ctx context.Context, engine, goos, arch, arm string)
 		{100, 0},
 		{30, 200 * time.Millisecond},
 		{10, 400 * time.Millisecond},
-		{10, 800 * time.Millisecond},
+		{5, 800 * time.Millisecond},
 	}
 	var raw []byte
 	for index, attempt := range attempts {
@@ -68,7 +68,10 @@ func (i Installer) Versions(ctx context.Context, engine, goos, arch, arm string)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		if !temporaryReleaseAPIError(err) {
+		// Large GitHub release payloads can exceed our JSON size guard even
+		// with HTTP 200. Request smaller pages instead of returning the
+		// misleading "download exceeds size limit" error to both selectors.
+		if !temporaryReleaseAPIError(err) && !errors.Is(err, errDownloadExceedsLimit) {
 			return nil, err
 		}
 	}

@@ -254,8 +254,16 @@ core_migration_restore_custom_bin_files() {
             hiddify-core-linux-* | \
             telemt | telemt-* | README.md | LICENSE) continue ;;
         esac
-        # The release's updated binaries and geodata win. Restore only
-        # user-provided extras, e.g. custom geoip/geosite files and keys.
+        # Standalone cores and their generated configurations are selected by
+        # persisted DB settings. Never let a bundled release silently replace
+        # the operator's chosen installed engine (or its validated config).
+        case "$rel" in
+            xray-linux-* | sing-box-upstream-linux-* | xray.json | sing-box-upstream.json)
+                mkdir -p "$xui_folder/bin/$(dirname "$rel")" || return 1
+                cp -a -- "$asset" "$xui_folder/bin/$rel" || return 1
+                continue ;;
+        esac
+        # The release's updated managed binaries and geodata win otherwise.
         [[ -e "$xui_folder/bin/$rel" || -L "$xui_folder/bin/$rel" ]] && continue
         mkdir -p "$xui_folder/bin/$(dirname "$rel")" || return 1
         cp -a -- "$asset" "$xui_folder/bin/$rel" || return 1
@@ -267,6 +275,12 @@ core_migration_copy_managed_assets() {
     for asset in "$source"/* "$source"/.[!.]* "$source"/..?*; do
         [[ -e "$asset" || -L "$asset" ]] || continue
         name="${asset##*/}"
+        case "$name" in
+            xray-linux-* | sing-box-upstream-linux-* | xray.json | sing-box-upstream.json)
+                # External managed-bin locations must retain installed
+                # standalone engines even if future releases ship those names.
+                [[ -e "$destination/$name" || -L "$destination/$name" ]] && continue ;;
+        esac
         if [[ "${cm_reuse_core:-0}" == 1 ]]; then
             case "$name" in
                 hiddify-core-linux-* | libcronet.so | libcronet.so.sha256 | target.json)

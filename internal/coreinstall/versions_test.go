@@ -63,6 +63,63 @@ func TestVersionsRecoverFromTemporaryGitHubErrors(t *testing.T) {
 	}
 }
 
+func TestVersionsFallbackWhenGitHubListingExceedsSizeLimit(t *testing.T) {
+	for _, tc := range []struct {
+		engine string
+		repo   string
+		asset  string
+	}{
+		{"xray", "XTLS/Xray-core", "Xray-linux-64.zip"},
+		{"sing-box-upstream", "SagerNet/sing-box", "sing-box-1.12.0-linux-amd64.tar.gz"},
+	} {
+		t.Run(tc.engine, func(t *testing.T) {
+			calls := 0
+			client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+				calls++
+				if r.URL.Path != "/repos/"+tc.repo+"/releases" {
+					t.Fatalf("unexpected repo: %s", r.URL)
+				}
+				want := "100"
+				if calls > 1 {
+					want = "30"
+				}
+				if r.URL.Query().Get("per_page") != want {
+					t.Fatalf("attempt %d expected page %s, got %s", calls, want, r.URL)
+				}
+				body := `[{"tag_name":"v1.12.0","assets":[{"name":"` + tc.asset + `"}]}]`
+				if calls == 1 {
+					body = strings.Repeat(" ", (8<<20)+1)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+			})}
+			versions, err := (Installer{Client: client}).Versions(context.Background(), tc.engine, "linux", "amd64", "")
+			if err != nil || len(versions) != 1 || calls != 2 {
+				t.Fatalf("expected fallback after oversized listing: versions=%+v calls=%d err=%v", versions, calls, err)
+			}
+		})
+	}
+}
+
+func TestVersionsFallbackToFiveWhenIntermediatePagesAreOversized(t *testing.T) {
+	calls := 0
+	client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		pages := []string{"100", "30", "10", "5"}
+		if calls >= len(pages) || r.URL.Query().Get("per_page") != pages[calls] {
+			t.Fatalf("unexpected request %d: %s", calls, r.URL)
+		}
+		calls++
+		body := strings.Repeat(" ", (8<<20)+1)
+		if calls == 4 {
+			body = `[{"tag_name":"v26.1.0","assets":[{"name":"Xray-linux-64.zip"}]}]`
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+	})}
+	versions, err := (Installer{Client: client}).Versions(context.Background(), "xray", "linux", "amd64", "")
+	if err != nil || len(versions) != 1 || calls != 4 {
+		t.Fatalf("five-release fallback failed: versions=%+v calls=%d err=%v", versions, calls, err)
+	}
+}
+
 func TestVersionsDoesNotRetryPermanentGitHubError(t *testing.T) {
 	calls := 0
 	client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
@@ -78,7 +135,7 @@ func TestVersionsDoesNotRetryPermanentGitHubError(t *testing.T) {
 func TestVersionsStopsAfterBoundedRetries(t *testing.T) {
 	calls := 0
 	client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
-		wantSizes := []string{"100", "30", "10", "10"}
+		wantSizes := []string{"100", "30", "10", "5"}
 		if calls >= len(wantSizes) || r.URL.Query().Get("per_page") != wantSizes[calls] {
 			t.Fatalf("unexpected attempt %d: %s", calls+1, r.URL)
 		}

@@ -27,6 +27,8 @@ const (
 	maxBinary  = 256 << 20
 )
 
+var errDownloadExceedsLimit = errors.New("download exceeds size limit")
+
 type Asset struct {
 	Name   string `json:"name"`
 	URL    string `json:"browser_download_url"`
@@ -128,7 +130,7 @@ func (i Installer) get(ctx context.Context, url string, limit int64) ([]byte, er
 		return nil, err
 	}
 	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("download exceeds size limit")
+		return nil, errDownloadExceedsLimit
 	}
 	return data, nil
 }
