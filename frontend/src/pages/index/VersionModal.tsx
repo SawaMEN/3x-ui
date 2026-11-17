@@ -54,7 +54,7 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
   const [loading, setLoading] = useState(false);
 
   const normalizeVersion = (value: string) =>
-    value.match(/v?(\\d+(?:[.-][a-z0-9]+)*)/i)?.[1]?.toLowerCase() || '';
+    value.match(/v?([0-9]+(?:[.-][a-z0-9]+)*)/i)?.[1]?.toLowerCase() || '';
 
   const visibleVersions = versions.filter((version) =>
     releaseChannel === 'beta' ? version.prerelease : !version.prerelease,
@@ -64,7 +64,6 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
     setLoading(true);
     setVersionsError('');
     setVersions([]);
-    setReleaseChannel('stable');
     try {
       const [status, releases] = await Promise.all([
         HttpUtil.get<{ cores: { type: string; version: string }[] }>('/panel/api/setting/cores'),
