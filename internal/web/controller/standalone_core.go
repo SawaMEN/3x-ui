@@ -49,7 +49,7 @@ func (a *SettingController) installStandaloneCore(c *gin.Context) {
 			return
 		}
 	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Minute)
 	defer cancel()
 	version, err := service.InstallStandaloneCore(ctx, c.Param("core"), form.Version)
 	jsonObj(c, gin.H{"version": version}, err)
@@ -105,7 +105,7 @@ func (a *SettingController) deleteStandaloneCore(c *gin.Context) {
 func (a *SettingController) updateStandaloneCore(c *gin.Context) {
 	coreManagementMu.Lock()
 	defer coreManagementMu.Unlock()
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Minute)
 	defer cancel()
 	var form struct {
 		Version string `json:"version" form:"version"`
