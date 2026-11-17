@@ -22,8 +22,10 @@ import (
 
 // Fixed endpoint prevents the panel from becoming an arbitrary S3/SSRF proxy.
 // This check runs on the panel host, never on the visitor's mobile network.
-const yandexS3Endpoint = "https://storage.yandexcloud.net"
-const yandexS3Region = "ru-central1"
+const (
+	yandexS3Endpoint = "https://storage.yandexcloud.net"
+	yandexS3Region   = "ru-central1"
+)
 
 var yandexS3BucketPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
 

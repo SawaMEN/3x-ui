@@ -28,8 +28,8 @@ func safeYandexDiskHref(href string) (*url.URL, error) {
 		return nil, fmt.Errorf("Yandex Disk returned an invalid temporary URL")
 	}
 	host := strings.ToLower(u.Hostname())
-	if !(strings.HasSuffix(host, ".disk.yandex.net") ||
-		strings.HasSuffix(host, ".disk.yandex.ru")) ||
+	if !strings.HasSuffix(host, ".disk.yandex.net") &&
+		!strings.HasSuffix(host, ".disk.yandex.ru") ||
 		(u.Port() != "" && u.Port() != "443") {
 		return nil, fmt.Errorf("Yandex Disk temporary URL uses an unexpected host")
 	}
@@ -49,7 +49,7 @@ func yandexDiskAPIRequest(ctx context.Context, client *http.Client, token, metho
 		return 0, nil, fmt.Errorf("Yandex Disk API request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 2 << 20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
 		return 0, nil, fmt.Errorf("cannot read Yandex Disk API response: %w", err)
 	}

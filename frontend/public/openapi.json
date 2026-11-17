@@ -8058,6 +8058,73 @@
         }
       }
     },
+    "/panel/api/xdrive/yandex/s3-probe": {
+      "post": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Verify Yandex Cloud Object Storage S3 static key permissions with a temporary object.",
+        "operationId": "post_panel_api_xdrive_yandex_s3_probe",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bucket": {
+                    "type": "string",
+                    "description": "Name of an existing Yandex Cloud Object Storage bucket."
+                  },
+                  "folder": {
+                    "type": "string",
+                    "description": "Single safe object prefix (1–64 Latin letters, digits, underscore or hyphen)."
+                  },
+                  "accessKey": {
+                    "type": "string",
+                    "description": "Yandex Cloud service-account static access key ID."
+                  },
+                  "secretKey": {
+                    "type": "string",
+                    "description": "Secret half of the static key. Treat as a secret."
+                  }
+                },
+                "required": [
+                  "bucket",
+                  "folder",
+                  "accessKey",
+                  "secretKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/openflux/install": {
       "get": {
         "tags": [

@@ -134,11 +134,10 @@ export default function XDriveForm() {
 
   const generateFolder = () => {
     setCheck(null);
-    setValue(
-      `${BASE.join('.')}.remoteFolder`,
-      `xdrive-${crypto.randomUUID().slice(0, 8)}`,
-      { shouldDirty: true, shouldValidate: true },
-    );
+    setValue(`${BASE.join('.')}.remoteFolder`, `xdrive-${crypto.randomUUID().slice(0, 8)}`, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
   };
 
   const testYandexStorage = async () => {

@@ -69,65 +69,46 @@ func TestTranslateXDriveTemplate(t *testing.T) {
 }
 
 func TestTranslateXDriveYandexWebDAVToNativeSingBox(t *testing.T) {
-    raw := xdriveInbound()
-    raw["streamSettings"] = map[string]any{
-        "network": "xdrive",
-        "security": "none",
-        "xdriveSettings": map[string]any{
-            "service": "template",
-            "remoteFolder": "xdrive",
-            "secrets": []any{"dedicated-user", "app-password"},
-            "template": map[string]any{
-                "flatten": true,
-                "auth": map[string]any{"type": "basic", "username": "{secret0}", "password": "{secret1}"},
-                "put": map[string]any{"method": "PUT", "url": "https://webdav.yandex.ru/{folder}/{name}"},
-                "get": map[string]any{"method": "GET", "url": "https://webdav.yandex.ru/{folder}/{name}"},
-                "list": map[string]any{"method": "PROPFIND", "url": "https://webdav.yandex.ru/{folder}/", "namesRegex": "<d:href>[^<]*/([^/<]+)</d:href>"},
-                "delete": map[string]any{"method": "DELETE", "url": "https://webdav.yandex.ru/{folder}/{name}"},
-            },
-        },
-    }
-    out, err := TranslateXrayInbound(raw)
-    if err != nil {
-        t.Fatalf("Yandex WebDAV preset must translate to native sing-box: %v", err)
-    }
-    transport := out["transport"].(map[string]any)
-    if transport["type"] != "xdrive" || transport["service"] != "template" || transport["remote_folder"] != "xdrive" {
-        t.Fatalf("native sing-box XDRIVE transport lost fields: %#v", transport)
-    }
-    config := transport["template"].(string)
-    if !strings.Contains(config, "webdav.yandex.ru") || !strings.Contains(config, "PROPFIND") {
-        t.Fatalf("Yandex WebDAV template missing from native sing-box: %s", config)
-    }
-    if out["listen_port"] != nil {
-        t.Fatal("Yandex storage transport must not bind an inbound port")
-    }
+	raw := xdriveInbound()
+	template := map[string]any{"flatten": true}
+	template["auth"] = map[string]any{"type": "basic", "username": "{secret0}", "password": "{secret1}"}
+	template["put"] = map[string]any{"method": "PUT", "url": "https://webdav.yandex.ru/{folder}/{name}"}
+	template["get"] = map[string]any{"method": "GET", "url": "https://webdav.yandex.ru/{folder}/{name}"}
+	template["list"] = map[string]any{"method": "PROPFIND", "url": "https://webdav.yandex.ru/{folder}/", "namesRegex": "<d:href>[^<]*/([^/<]+)</d:href>"}
+	template["delete"] = map[string]any{"method": "DELETE", "url": "https://webdav.yandex.ru/{folder}/{name}"}
+	settings := map[string]any{"service": "template", "remoteFolder": "xdrive", "secrets": []any{"dedicated-user", "app-password"}, "template": template}
+	raw["streamSettings"] = map[string]any{"network": "xdrive", "security": "none", "xdriveSettings": settings}
+
+	out, err := TranslateXrayInbound(raw)
+	if err != nil {
+		t.Fatalf("Yandex WebDAV preset must translate to native sing-box: %v", err)
+	}
+	transport := out["transport"].(map[string]any)
+	if transport["type"] != "xdrive" || transport["service"] != "template" || transport["remote_folder"] != "xdrive" {
+		t.Fatalf("native sing-box XDRIVE transport lost fields: %#v", transport)
+	}
+	config := transport["template"].(string)
+	if !strings.Contains(config, "webdav.yandex.ru") || !strings.Contains(config, "PROPFIND") {
+		t.Fatalf("Yandex WebDAV template missing from native sing-box: %s", config)
+	}
+	if out["listen_port"] != nil {
+		t.Fatal("Yandex storage transport must not bind an inbound port")
+	}
 }
 
 func TestTranslateXDriveYandexS3ToNativeSingBox(t *testing.T) {
-    raw := xdriveInbound()
-    raw["streamSettings"] = map[string]any{
-        "network": "xdrive",
-        "security": "none",
-        "xdriveSettings": map[string]any{
-            "service": "s3",
-            "remoteFolder": "xdrive",
-            "secrets": []any{"access-key", "secret-key"},
-            "s3": map[string]any{
-                "endpoint": "https://storage.yandexcloud.net",
-                "region": "ru-central1",
-                "bucket": "xdrive-bucket",
-                "pathStyle": true,
-            },
-        },
-    }
-    out, err := TranslateXrayInbound(raw)
-    if err != nil {
-        t.Fatalf("Yandex S3 preset must translate to native sing-box: %v", err)
-    }
-    transport := out["transport"].(map[string]any)
-    s3 := transport["s3"].(map[string]any)
-    if s3["endpoint"] != "https://storage.yandexcloud.net" || s3["region"] != "ru-central1" || s3["path_style"] != true {
-        t.Fatalf("Yandex Object Storage S3 settings changed: %#v", s3)
-    }
+	raw := xdriveInbound()
+	s3 := map[string]any{"endpoint": "https://storage.yandexcloud.net", "region": "ru-central1", "bucket": "xdrive-bucket", "pathStyle": true}
+	settings := map[string]any{"service": "s3", "remoteFolder": "xdrive", "secrets": []any{"access-key", "secret-key"}, "s3": s3}
+	raw["streamSettings"] = map[string]any{"network": "xdrive", "security": "none", "xdriveSettings": settings}
+
+	out, err := TranslateXrayInbound(raw)
+	if err != nil {
+		t.Fatalf("Yandex S3 preset must translate to native sing-box: %v", err)
+	}
+	transport := out["transport"].(map[string]any)
+	nativeS3 := transport["s3"].(map[string]any)
+	if nativeS3["endpoint"] != "https://storage.yandexcloud.net" || nativeS3["region"] != "ru-central1" || nativeS3["path_style"] != true {
+		t.Fatalf("Yandex Object Storage S3 settings changed: %#v", nativeS3)
+	}
 }
