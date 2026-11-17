@@ -297,7 +297,7 @@ rc=$?
             with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
                 self.run_script(function(file, "download_release_asset") + r'''
 curl() {
-    printf '%s\\n' "$*" >> "$TEST_CALLS"
+    printf '%s\n' "$*" >> "$TEST_CALLS"
     case " $* " in
         *" -4 "*) printf 200; return 0 ;;
         *) printf 504; return 22 ;;
