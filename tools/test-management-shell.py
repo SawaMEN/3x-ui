@@ -331,7 +331,7 @@ rc=$?
             with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
                 self.run_script(function(file, "download_release_asset") + r'''
 curl() {
-    printf '%s\\n' "$*" >> "$TEST_CALLS"
+    printf '%s\n' "$*" >> "$TEST_CALLS"
     case " $* " in
         *" -4 "*) printf 200; return 0 ;;
         *) printf 504; return 22 ;;
@@ -370,7 +370,41 @@ curl() {
 sleep() { :; }
 download_release_asset https://example.invalid/release "$TEST_ROOT/archive" >/dev/null || exit 1
 [[ "$(cat "$TEST_ROOT/archive")" == first-second ]] || exit 1
-[[ "$(cat "$TEST_ROOT/resume")" == $'0\\n1' ]] || exit 1
+[[ "$(cat "$TEST_ROOT/resume")" ==  ]] || exit 1
+[[ "$download_http_status" == 206 ]] || exit 1
+''', {"TEST_ROOT": raw})
+
+    def test_download_retry_budget_is_finite(self):
+        for file in ("install.sh", "update.sh"):
+            with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
+                self.run_script(function(file, "download_release_asset") + r'''
+curl() {
+    echo called >> "$TEST_ROOT/calls"
+    printf '.' >> "$TEST_ROOT/archive"
+    printf 000
+    return 28
+}
+sleep() { :; }
+download_release_asset https://example.invalid/release "$TEST_ROOT/archive" >/dev/null 2>&1
+rc=$?
+[[ "$rc" == 28 ]] || exit 1
+[[ "$(wc -l < "$TEST_ROOT/calls")" == 5 ]] || exit 1
+[[ "$(wc -c < "$TEST_ROOT/archive")" == 5 ]] || exit 1
+''', {"TEST_ROOT": raw})
+
+    def test_http_404_fails_without_retries(self):
+        for file in ("install.sh", "update.sh"):
+            with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
+                self.run_script(function(file, "download_release_asset") + r'''
+curl() { echo call >> "$TEST_ROOT/calls"; printf 404; return 22; }
+sleep() { :; }
+download_release_asset https://example.invalid/missing "$TEST_ROOT/archive" >/dev/null 2>&1
+rc=$?
+[[ "$rc" == 22 && "$download_http_status" == 404 ]] || exit 1
+[[ "$(wc -l < "$TEST_ROOT/calls")" == 1 ]] || exit 1
+''', {"TEST_ROOT": raw})
+
+0\n1' ]] || exit 1
 [[ "$download_http_status" == 206 ]] || exit 1
 ''', {"TEST_ROOT": raw})
 
