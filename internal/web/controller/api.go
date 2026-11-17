@@ -222,6 +222,8 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	api.Use(firewallAutoSyncMiddleware())
 
 	api.GET("/openapi.json", ServeOpenAPISpec)
+	// XDRIVE Yandex Disk wizard; authenticated panel-only, fixed provider URL.
+	api.POST("/xdrive/yandex/probe", handleYandexXDriveProbe)
 
 	// Inbounds API
 	inbounds := api.Group("/inbounds")
