@@ -47,11 +47,11 @@ func TestYandexXDriveProbeRejectsUnsafeInputs(t *testing.T) {
         password string
         folder string
     }{
-        {"missing-login", "", "pass", "xdrive"},
+        {"missing-login", "", "private-webdav-secret-123", "xdrive"},
         {"missing-password", "user", "", "xdrive"},
-        {"path-traversal", "user", "pass", "../private"},
-        {"nested-folder", "user", "pass", "xdrive/private"},
-        {"invalid-encoding", "user", "pass", "%2Fprivate"},
+        {"path-traversal", "user", "private-webdav-secret-123", "../private"},
+        {"nested-folder", "user", "private-webdav-secret-123", "xdrive/private"},
+        {"invalid-encoding", "user", "private-webdav-secret-123", "%2Fprivate"},
     } {
         t.Run(test.name, func(t *testing.T) {
             router := gin.New()
