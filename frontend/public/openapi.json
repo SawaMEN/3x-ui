@@ -8001,6 +8001,63 @@
         }
       }
     },
+    "/panel/api/xdrive/yandex/api-probe": {
+      "post": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Verify Yandex Disk OAuth access and folder read/write permissions with a temporary test file.",
+        "operationId": "post_panel_api_xdrive_yandex_api_probe",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "description": "Yandex Disk OAuth token. Keep this credential private."
+                  },
+                  "folder": {
+                    "type": "string",
+                    "description": "Single safe folder component (1–64 Latin letters, digits, underscore or hyphen)."
+                  }
+                },
+                "required": [
+                  "token",
+                  "folder"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/openflux/install": {
       "get": {
         "tags": [
