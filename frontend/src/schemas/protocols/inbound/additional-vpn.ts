@@ -3,6 +3,7 @@ import { NaiveClientSchema } from './naive';
 import {
   OPENFLUX_TRANSPORTS,
   validOpenFluxChannelURL,
+  validOpenFluxCupsRooms,
   validOpenFluxMAXToken,
   validOpenFluxMAXUID,
 } from '@/lib/openflux';
@@ -30,7 +31,19 @@ export const OpenFluxTransportSchema = z
           message: 'pages.inbounds.form.openfluxMaxIDInvalid',
         });
     }
-    if (value.type !== 'direct' && value.type !== 'oneme' && !validOpenFluxChannelURL(value.url)) {
+    if (value.type === 'cupsonline' && !validOpenFluxCupsRooms(value.url)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['url'],
+        message: 'pages.inbounds.form.openfluxCupsRoomsRequired',
+      });
+    }
+    if (
+      value.type !== 'direct' &&
+      value.type !== 'oneme' &&
+      value.type !== 'cupsonline' &&
+      !validOpenFluxChannelURL(value.url)
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['url'],
