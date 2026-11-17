@@ -71,5 +71,9 @@ it('does not show installation controls for the bundled sing-box core', async ()
   open();
   await waitFor(() => expect(HttpUtil.get).toHaveBeenCalledWith('/panel/api/setting/cores'));
   expect(screen.queryByRole('radio')).toBeNull();
-  expect(screen.queryByText('Последний стабильный выпуск. Перед заменой проверяется конфигурация; при неудачном запуске восстанавливается прежнее ядро.')).toBeNull();
+  expect(
+    screen.queryByText(
+      'Последний стабильный выпуск. Перед заменой проверяется конфигурация; при неудачном запуске восстанавливается прежнее ядро.',
+    ),
+  ).toBeNull();
 });

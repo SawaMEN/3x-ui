@@ -112,8 +112,7 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
             { version },
             { timeout: 330000 },
           );
-          if (!result.success)
-            throw new Error(result.msg || t('pages.coreSelection.updateFailed'));
+          if (!result.success) throw new Error(result.msg || t('pages.coreSelection.updateFailed'));
           await fetchVersions();
           void queryClient.invalidateQueries({ queryKey: ['server'] });
           window.dispatchEvent(new Event('xui-core-settings-saved'));
