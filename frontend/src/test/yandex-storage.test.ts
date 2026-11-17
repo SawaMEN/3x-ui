@@ -11,6 +11,7 @@ import {
   yandexWebdavTemplate,
 } from '@/lib/xray/yandex-storage';
 import { XDriveStreamSettingsSchema } from '@/schemas/protocols/stream/xdrive';
+import { rawInboundToFormValues, formValuesToWirePayload } from '@/lib/xray/inbound-form-adapter';
 
 describe('native sing-box Yandex XDRIVE presets', () => {
   it('builds a compatible Yandex Disk WebDAV template with no embedded secrets', () => {
@@ -74,4 +75,25 @@ describe('native sing-box Yandex XDRIVE presets', () => {
       expect(validYandexBucket(value)).toBe(false);
     }
   });
+  it('keeps the native WebDAV XDRIVE preset across inbound edit/save', () => {
+    const xdriveSettings = {
+      ...yandexStoragePresetValues('webdav'),
+      secrets: ['dedicated-user', 'application-password'],
+    };
+    const stream = {
+      network: 'xdrive',
+      security: 'none',
+      xdriveSettings,
+    };
+    const inbound = rawInboundToFormValues({
+      protocol: 'vless',
+      port: 443,
+      settings: JSON.stringify({ decryption: 'private', encryption: 'public', clients: [] }),
+      streamSettings: JSON.stringify(stream),
+    });
+    const wire = formValuesToWirePayload(inbound);
+    expect(JSON.parse(wire.streamSettings)).toMatchObject(stream);
+    expect(identifyYandexStoragePreset(JSON.parse(wire.streamSettings).xdriveSettings)).toBe('webdav');
+  });
+
 });
