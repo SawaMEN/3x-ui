@@ -60,3 +60,14 @@ describe('native route rule editor', () => {
     expect(routeRuleSummary({ outbound: 'direct' })).toBe('Любой трафик');
   });
 });
+
+it('preserves geodata references and shows them in the rule summary', () => {
+  const rule = {
+    outbound: 'proxy',
+    routingGeoDomains: ['ext:geosite_RU.dat:ru-available-only-inside'],
+    routingGeoIPs: ['geoip:ru'],
+  };
+  expect(prepareRouteRule(rule)).toEqual({ ...rule, action: 'route' });
+  expect(routeRuleSummary(rule)).toContain('GeoSite: ext:geosite_RU.dat:ru-available-only-inside');
+  expect(routeRuleSummary(rule)).toContain('GeoIP: geoip:ru');
+});

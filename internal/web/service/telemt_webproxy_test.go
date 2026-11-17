@@ -1,6 +1,8 @@
 package service
 
 import (
+	"bytes"
+	"encoding/json"
 	"net"
 	"strconv"
 	"strings"
@@ -151,4 +153,26 @@ func containsTelemtWeb(value, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestTelemtWebReadinessUsesConfiguredMount(t *testing.T) {
+	for base, want := range map[string]string{"": "/", "relay01": "/relay01/", "relay01/nested": "/relay01/nested/"} {
+		if got := telemtWebReadinessPath(base); got != want {
+			t.Fatalf("readiness path=%q want=%q", got, want)
+		}
+	}
+}
+
+func TestTelemtWebCaddyReloadPreservesWebSocketLanes(t *testing.T) {
+	data, err := telemtWebFrontendConfig(TelemtWebProxyState{Domain: "example.com", Frontend: "caddy", ListenPort: 15080}, telemtWebSubscriptionTarget{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, data); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(compact.String(), `"stream_close_delay":"5m"`) {
+		t.Fatalf("Caddy reload would close WEB lanes: %s", data)
+	}
 }

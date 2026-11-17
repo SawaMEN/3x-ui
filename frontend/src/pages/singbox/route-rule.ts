@@ -40,6 +40,9 @@ export function prepareRouteRule(rule: Rule): Rule {
 
 export function routeRuleSummary(rule: Rule): string {
   const labels: Record<string, string> = {
+    routingGeoDomains: 'GeoSite',
+    routingGeoIPs: 'GeoIP',
+    routingGeoSourceIPs: 'GeoIP источника',
     domain: 'Домен',
     domain_suffix: 'Суффикс',
     domain_keyword: 'Ключевое слово',

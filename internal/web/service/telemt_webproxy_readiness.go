@@ -1,6 +1,9 @@
 package service
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 // A WEB decoy is an ordinary user-controlled HTTP site. 301/302 redirects,
 // authorization pages, missing homepages, and HEAD-not-allowed must not be
@@ -15,4 +18,12 @@ func telemtWebHealthyDecoyStatus(status int) bool {
 	default:
 		return false
 	}
+}
+
+// Probe the WEB mount, not an unrelated site's root or subscription route.
+func telemtWebReadinessPath(basePath string) string {
+	if path := strings.Trim(basePath, "/"); path != "" {
+		return "/" + path + "/"
+	}
+	return "/"
 }

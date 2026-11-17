@@ -81,10 +81,7 @@ func vetroffFiles(inst Instance) ([]string, error) {
 		conf["bond_hub"] = true
 		nodes := v.Nodes
 		if len(nodes) == 0 {
-			origin := v.PublicServer
-			if origin == "" {
-				origin = "https://" + net.JoinHostPort(inst.Settings.Hostname, strconv.Itoa(inst.Port))
-			}
+			origin := vetroffPrimaryServer(inst)
 			nodes = []VetroffNode{{URL: origin, Weight: 100}}
 			for _, fallback := range v.FallbackServers {
 				nodes = append(nodes, VetroffNode{URL: fallback, Weight: 100})

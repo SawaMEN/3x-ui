@@ -651,3 +651,33 @@ func TestVetroffInterruptedInstallRecoversPreviousRuntime(t *testing.T) {
 	}
 	assertNoVetroffStages(t, dir)
 }
+
+func TestVetroffH3DiscoveryAdvertisesActualUDPPort(t *testing.T) {
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	options := DefaultVetroffSettings()
+	options.Transport, options.H3Listen, options.BondHub = "h3-connect", "127.0.0.1:19443", true
+	inst := Instance{ID: 833, Protocol: model.VetroffProxy, Port: 18443, Settings: Settings{Hostname: "vpn.example.com", Vetroff: &options}}
+	folder := filepath.Join(directory(), "cert-test")
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cert, key, err := certificate(inst, folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.Settings.Certificate, inst.Settings.PrivateKey = cert, key
+	if _, err := vetroffFiles(inst); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(directory(), "833", "vetroff-cluster.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte("https://vpn.example.com:19443")) || bytes.Contains(raw, []byte(":18443")) {
+		t.Fatalf("wrong discovery endpoint: %s", raw)
+	}
+	options.PublicServer = "https://public.example.com:2443"
+	if got := vetroffPrimaryServer(inst); got != options.PublicServer {
+		t.Fatalf("public override lost: %s", got)
+	}
+}

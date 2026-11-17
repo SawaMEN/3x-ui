@@ -459,6 +459,11 @@ func nativeCatalogHasReferences(template string) bool {
 }
 
 func materializeNativeRoutingLists(template string, sources []model.RoutingList) (string, error) {
+	var err error
+	template, err = materializeNativeGeoData(template)
+	if err != nil {
+		return "", err
+	}
 	if !nativeCatalogHasReferences(template) {
 		return template, nil
 	}

@@ -475,7 +475,7 @@ func TestFileAboveSizeLimitIsRejected(t *testing.T) {
 	}
 
 	store := NewStore(dir)
-	if _, err := store.Categories("huge.dat", "", 0, 10); !errors.Is(err, ErrFileTooLarge) {
+	if _, err := store.Categories("huge.dat", "", 0, 10); !errors.Is(err, ErrFileTooLarge) || errors.Is(err, ErrUnrecognized) {
 		t.Errorf("error = %v, want %v", err, ErrFileTooLarge)
 	}
 
