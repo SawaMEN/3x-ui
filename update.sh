@@ -65,6 +65,10 @@ if [[ "${XUI_UPDATE_RUN_ID:-0}" != "0" ]]; then
 fi
 
 _write_update_status() {
+    # Only detached web updates have a tracking run ID. A console update
+    # (runId=0) must not overwrite a running web update's status, including
+    # on errors such as "Another panel update is in progress".
+    [[ "${xui_update_run_id:-0}" != 0 ]] || return 0
     local state="$1"
     local exit_code="$2"
     local message="${3:-}"

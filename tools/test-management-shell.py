@@ -252,6 +252,41 @@ exit {initial}
             result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
             self.assertEqual(result.returncode, expected, result.stderr)
 
+    def test_console_update_cannot_overwrite_web_update_status(self):
+        # The status file is shared with the web UI. A console attempt has
+        # runId=0 and may fail while a tracked web update is still downloading.
+        for code in (0, 2):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as raw:
+                status_file = Path(raw) / "update-status.json"
+                status_file.write_text('{"runId":"1234","state":"pending","message":"Downloading"}\\n')
+                script = (function("update.sh", "_write_update_status") +
+                          function("update.sh", "_report_update_exit") + f'''
+xui_update_run_id=0
+xui_update_status_file="$TEST_ROOT/update-status.json"
+xui_update_log_file="$TEST_ROOT/update.log"
+_write_update_status "failed" "2" "Another panel update is in progress"
+trap _report_update_exit EXIT
+exit {code}
+''')
+                result = subprocess.run(["bash", "-c", script],
+                                        capture_output=True, text=True,
+                                        env=dict(os.environ, TEST_ROOT=raw))
+                self.assertEqual(result.returncode, code, result.stderr)
+                self.assertEqual(status_file.read_text(),
+                                 '{"runId":"1234","state":"pending","message":"Downloading"}\\n')
+
+    def test_web_update_still_writes_its_status(self):
+        with tempfile.TemporaryDirectory() as raw:
+            self.run_script(function("update.sh", "_write_update_status") + r'''
+xui_update_run_id=1234
+xui_update_status_file="$TEST_ROOT/update-status.json"
+xui_update_log_file="$TEST_ROOT/update.log"
+_write_update_status "pending" "0" "Downloading"
+grep -q '"runId":"1234","state":"pending"' "$xui_update_status_file" || exit 1
+_write_update_status "success" "0" ""
+grep -q '"runId":"1234","state":"success"' "$xui_update_status_file" || exit 1
+''', {"TEST_ROOT": raw})
+
     def test_console_menu_and_usage_have_aligned_borders(self):
         for name in ("show_menu", "show_usage"):
             with self.subTest(command=name):
