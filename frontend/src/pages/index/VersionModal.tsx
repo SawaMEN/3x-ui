@@ -110,7 +110,7 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
           const result = await HttpUtil.post(
             `/panel/api/setting/cores/${coreType}/update`,
             { version },
-            { timeout: 330000 },
+            { timeout: 960000 },
           );
           if (!result.success) throw new Error(result.msg || t('pages.coreSelection.updateFailed'));
           await fetchVersions();
