@@ -1,13 +1,13 @@
 export const OPENFLUX_TRANSPORTS = [
   'direct',
-  'yandex',
+  'oneme',
+  'telemost',
   'vyandex',
+  'yandex',
   'boards',
   'mailru',
   'cupsonline',
   'avito',
-  'telemost',
-  'oneme',
 ] as const;
 export type OpenFluxTransportType = (typeof OPENFLUX_TRANSPORTS)[number];
 export type OpenFluxTransport = {
@@ -63,7 +63,7 @@ export function validOpenFluxMAXToken(value: string): boolean {
   return (
     value.length > 0 &&
     new TextEncoder().encode(value).length <= 16384 &&
-    !/[\x00-\x20\x7f-\uffff#;]/.test(value)
+    [...value].every((char) => char >= '!' && char <= '~' && char !== '#' && char !== ';')
   );
 }
 

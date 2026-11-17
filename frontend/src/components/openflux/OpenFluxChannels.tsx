@@ -157,7 +157,9 @@ export default function OpenFluxChannels({
   const patch = (index: number, next: Partial<OpenFluxTransport>) =>
     onChange(value.map((entry, i) => (i === index ? { ...entry, ...next } : entry)));
   const begin = () => {
-    const type = available.find((entry) => entry !== 'direct') ?? available[0];
+    const type = available.includes('vyandex')
+      ? 'vyandex'
+      : (available.find((entry) => entry !== 'direct') ?? available[0]);
     if (type)
       setDraft({ type, url: '', priority: value.length === 0 || type === 'direct' ? 100 : 50 });
   };
@@ -266,6 +268,7 @@ export default function OpenFluxChannels({
             >
               <Select
                 aria-label={t('pages.inbounds.form.openfluxTransport')}
+                showSearch={{ optionFilterProp: 'label' }}
                 value={draft.type}
                 options={available.map((type) => ({
                   value: type,
