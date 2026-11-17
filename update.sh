@@ -1171,11 +1171,11 @@ download_release_asset() {
     local url="$1"
     local dest="$2"
     local attempt curl_rc=1 offset
-    local -a options=(-fL --retry 0 --connect-timeout 15 --max-time 900
+    local -a options=(-fL --retry 0 --connect-timeout 15 --max-time 420
         --speed-limit 8192 --speed-time 60)
     local -a ip_options resume_options
 
-    # Reconnect at most every 15 minutes while downloading, resuming from
+    # Reconnect at most every 7 minutes while downloading, resuming from
     # the existing byte offset instead of restarting the whole update.
     # Never interrupt the later offline installation/migration phases.
     rm -f -- "$dest"

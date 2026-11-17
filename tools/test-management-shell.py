@@ -327,7 +327,7 @@ rc=$?
 ''', {"TEST_ROOT": raw})
 
     def test_release_download_retries_are_bounded_and_detect_stalled_network(self):
-        # A timed-out transfer reconnects after up to 15 minutes, via IPv4.
+        # A timed-out transfer reconnects after up to 7 minutes, via IPv4.
         for file in ("install.sh", "update.sh"):
             with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
                 self.run_script(function(file, "download_release_asset") + r'''
@@ -341,7 +341,7 @@ curl() {
 sleep() { :; }
 download_release_asset https://example.invalid/release "$TEST_ROOT/archive" >/dev/null
 [[ "$download_http_status" == 200 ]] || exit 1
-grep -q -- '--max-time 900' "$TEST_CALLS" || exit 1
+grep -q -- '--max-time 420' "$TEST_CALLS" || exit 1
 grep -q -- '--retry 0' "$TEST_CALLS" || exit 1
 grep -q -- '--speed-limit 8192' "$TEST_CALLS" || exit 1
 grep -q -- '--speed-time 60' "$TEST_CALLS" || exit 1
