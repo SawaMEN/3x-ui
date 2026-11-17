@@ -37,6 +37,10 @@ func (i Installer) Versions(ctx context.Context, engine, goos, arch, arm string)
 	if err != nil {
 		return nil, err
 	}
+	listKey := versionListKey(repo, goos, arch, arm)
+	if cached, ok := i.rememberedVersions(listKey); ok {
+		return cached, nil
+	}
 	// Preserve the full list when GitHub is healthy. When a large response
 	// exceeds the size cap, times out, or fails at the gateway, try smaller
 	// pages rather than failing both Xray and sing-box version selectors.
@@ -100,6 +104,7 @@ func (i Installer) Versions(ctx context.Context, engine, goos, arch, arm string)
 		for _, asset := range rel.Assets {
 			if asset.Name == name {
 				versions = append(versions, Version{Tag: rel.Tag, Prerelease: rel.Prerelease})
+				i.rememberRelease(repo, rel.Release, asset)
 				seen[rel.Tag] = true
 				break
 			}
@@ -108,5 +113,6 @@ func (i Installer) Versions(ctx context.Context, engine, goos, arch, arm string)
 	if len(versions) == 0 {
 		return nil, fmt.Errorf("no compatible releases available for %s/%s", goos, arch)
 	}
+	i.rememberVersions(listKey, versions)
 	return versions, nil
 }
