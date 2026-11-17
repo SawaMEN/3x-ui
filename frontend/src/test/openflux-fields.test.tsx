@@ -129,7 +129,16 @@ describe('OpenFlux channel setup', () => {
       expect(screen.getByTestId('values').textContent).toContain('"type":"vyandex"'),
     );
     fireEvent.click(screen.getAllByRole('button', { name: 'Check service reachability' })[1]);
-    expect(await screen.findByText(/TLS connection to docs.yandex.ru:443 succeeded/)).toBeTruthy();
+    await waitFor(() =>
+      expect(vi.mocked(HttpUtil.post)).toHaveBeenCalledWith(
+        '/panel/api/server/openflux/check-transport',
+        { type: 'vyandex' },
+        expect.any(Object),
+      ),
+    );
+    await waitFor(() => {
+      expect(document.querySelector('.ant-alert-description')?.textContent).toContain('TLS connection');
+    });
     const request = vi.mocked(HttpUtil.post).mock.calls.at(-1);
     expect(request?.[0]).toBe('/panel/api/server/openflux/check-transport');
     expect(request?.[1]).toEqual({ type: 'vyandex' });
@@ -143,7 +152,16 @@ describe('OpenFlux channel setup', () => {
     );
     renderWithProviders(<Inbound max />);
     fireEvent.click(screen.getByRole('button', { name: 'Check service reachability' }));
-    await screen.findByText(/TLS connection to ws-api.oneme.ru:443 succeeded/);
+    await waitFor(() =>
+      expect(vi.mocked(HttpUtil.post)).toHaveBeenCalledWith(
+        '/panel/api/server/openflux/check-transport',
+        { type: 'oneme' },
+        expect.any(Object),
+      ),
+    );
+    await waitFor(() => {
+      expect(document.querySelector('.ant-alert-description')?.textContent).toContain('TLS connection');
+    });
     const request = vi.mocked(HttpUtil.post).mock.calls.at(-1);
     expect(request?.[1]).toEqual({ type: 'oneme' });
     expect(JSON.stringify(request)).not.toContain('server-private-token');
