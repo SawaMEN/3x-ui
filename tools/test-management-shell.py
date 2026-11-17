@@ -327,6 +327,7 @@ rc=$?
 ''', {"TEST_ROOT": raw})
 
     def test_release_download_retries_are_bounded_and_detect_stalled_network(self):
+        # A timed-out transfer reconnects after up to 15 minutes, via IPv4.
         for file in ("install.sh", "update.sh"):
             with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
                 self.run_script(function(file, "download_release_asset") + r'''
@@ -340,7 +341,7 @@ curl() {
 sleep() { :; }
 download_release_asset https://example.invalid/release "$TEST_ROOT/archive" >/dev/null
 [[ "$download_http_status" == 200 ]] || exit 1
-grep -q -- '--max-time 420' "$TEST_CALLS" || exit 1
+grep -q -- '--max-time 900' "$TEST_CALLS" || exit 1
 grep -q -- '--retry 0' "$TEST_CALLS" || exit 1
 grep -q -- '--speed-limit 8192' "$TEST_CALLS" || exit 1
 grep -q -- '--speed-time 60' "$TEST_CALLS" || exit 1
@@ -370,7 +371,9 @@ curl() {
 sleep() { :; }
 download_release_asset https://example.invalid/release "$TEST_ROOT/archive" >/dev/null || exit 1
 [[ "$(cat "$TEST_ROOT/archive")" == first-second ]] || exit 1
-[[ "$(cat "$TEST_ROOT/resume")" ==  ]] || exit 1
+[[ "$(wc -l < "$TEST_ROOT/resume")" == 2 ]] || exit 1
+[[ "$(head -n1 "$TEST_ROOT/resume")" == 0 ]] || exit 1
+[[ "$(tail -n1 "$TEST_ROOT/resume")" == 1 ]] || exit 1
 [[ "$download_http_status" == 206 ]] || exit 1
 ''', {"TEST_ROOT": raw})
 
@@ -404,38 +407,15 @@ rc=$?
 [[ "$(wc -l < "$TEST_ROOT/calls")" == 1 ]] || exit 1
 ''', {"TEST_ROOT": raw})
 
-0\n1' ]] || exit 1
-[[ "$download_http_status" == 206 ]] || exit 1
-''', {"TEST_ROOT": raw})
-
-    def test_download_retry_budget_is_finite(self):
-        for file in ("install.sh", "update.sh"):
-            with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
-                self.run_script(function(file, "download_release_asset") + r'''
-curl() {
-    echo called >> "$TEST_ROOT/calls"
-    printf '.' >> "$TEST_ROOT/archive"
-    printf 000
-    return 28
-}
+    def test_download_attempt_reports_restarts_to_web_status(self):
+        self.run_script(function("update.sh", "download_release_asset") + r'''
+report_update_progress() { printf '%s\n' "$1" >> "$TEST_ROOT/progress"; }
+curl() { printf 000; return 28; }
 sleep() { :; }
-download_release_asset https://example.invalid/release "$TEST_ROOT/archive" >/dev/null 2>&1
-rc=$?
-[[ "$rc" == 28 ]] || exit 1
-[[ "$(wc -l < "$TEST_ROOT/calls")" == 5 ]] || exit 1
-[[ "$(wc -c < "$TEST_ROOT/archive")" == 5 ]] || exit 1
-''', {"TEST_ROOT": raw})
-
-    def test_http_404_fails_without_retries(self):
-        for file in ("install.sh", "update.sh"):
-            with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
-                self.run_script(function(file, "download_release_asset") + r'''
-curl() { echo call >> "$TEST_ROOT/calls"; printf 404; return 22; }
-sleep() { :; }
-download_release_asset https://example.invalid/missing "$TEST_ROOT/archive" >/dev/null 2>&1
-rc=$?
-[[ "$rc" == 22 && "$download_http_status" == 404 ]] || exit 1
-[[ "$(wc -l < "$TEST_ROOT/calls")" == 1 ]] || exit 1
+download_release_asset https://github.com/SawaMEN/3x-ui/releases/download/dev-latest/x-ui-linux-amd64.tar.gz "$TEST_ROOT/archive" >/dev/null 2>&1
+[[ "$(wc -l < "$TEST_ROOT/progress")" == 5 ]] || exit 1
+grep -q 'попытка 1/5' "$TEST_ROOT/progress" || exit 1
+grep -q 'попытка 5/5' "$TEST_ROOT/progress" || exit 1
 ''', {"TEST_ROOT": raw})
 
     def test_both_installers_require_matching_release_checksum(self):

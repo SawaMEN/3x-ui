@@ -1716,12 +1716,13 @@ download_release_asset() {
     local url="$1"
     local dest="$2"
     local attempt curl_rc=1 offset
-    local -a options=(-fL --retry 0 --connect-timeout 15 --max-time 420
+    local -a options=(-fL --retry 0 --connect-timeout 15 --max-time 900
         --speed-limit 8192 --speed-time 60)
     local -a ip_options resume_options
 
-    # Every attempt keeps the bytes already downloaded. A timeout must not
-    # restart a 125 MiB archive from zero on a slow link.
+    # Reconnect at most every 15 minutes while downloading, resuming from
+    # the existing byte offset instead of restarting the whole update.
+    # Never interrupt the later offline installation/migration phases.
     rm -f -- "$dest"
     download_http_status=""
     for ((attempt = 1; attempt <= 5; attempt++)); do
@@ -1733,6 +1734,9 @@ download_release_asset() {
         offset=0
         if [[ -f "$dest" ]]; then
             offset=$(wc -c < "$dest") || return 1
+        fi
+        if declare -F report_update_progress >/dev/null && [[ "$url" == *x-ui-linux-*.tar.gz ]]; then
+            report_update_progress "Скачивание архива — попытка $attempt/5"
         fi
         if (( offset > 0 )); then
             echo "Resuming release download at byte $offset (attempt $attempt/5)..."

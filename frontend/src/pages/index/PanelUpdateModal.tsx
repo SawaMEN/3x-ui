@@ -54,7 +54,9 @@ export default function PanelUpdateModal({
     await PromiseUtil.sleep(5000);
     // Installing a large release can take far longer than the initial launch.
     // Do not show a false "unknown" result while download/rollback is ongoing.
-    const deadline = Date.now() + 40 * 60_000;
+    // Five 15-minute download attempts plus migration can exceed 40 minutes.
+    // Continue reporting progress instead of abandoning an active update.
+    const deadline = Date.now() + 100 * 60_000;
     let lastStage = '';
     while (Date.now() < deadline) {
       try {
