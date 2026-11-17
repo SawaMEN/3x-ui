@@ -93,3 +93,76 @@ describe('quick route activation', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe('managed node connections', () => {
+  it('removes an unused connection from routing without changing client or inbound lists', async () => {
+    vi.mocked(HttpUtil.get).mockResolvedValue({
+      success: true,
+      obj: [{ ...target, provisioned: true }],
+    } as never);
+    vi.mocked(HttpUtil.post).mockResolvedValue({
+      success: true,
+      obj: { pending: false },
+    } as never);
+    const onChange = vi.fn();
+    render(
+      <QuickRoutingPanel
+        engine="sing-box"
+        rules={[]}
+        inboundTags={['local']}
+        outboundTags={['direct']}
+        onChange={onChange}
+      />,
+    );
+    const button = await screen.findByRole('button', {
+      name: 'Удалить подключение ноды node-route-42',
+    });
+    fireEvent.click(button);
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить' }));
+    await waitFor(() =>
+      expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/xray/node-route/delete', {
+        inboundId: 42,
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', {
+          name: 'Удалить подключение ноды node-route-42',
+        }),
+      ).toBeNull(),
+    );
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the connection visible when saved routes still use it', async () => {
+    vi.mocked(HttpUtil.get).mockResolvedValue({
+      success: true,
+      obj: [{ ...target, provisioned: true }],
+    } as never);
+    vi.mocked(HttpUtil.post).mockResolvedValue({
+      success: false,
+      msg: 'Сначала сохраните удаление правил',
+    } as never);
+    render(
+      <QuickRoutingPanel
+        engine="xray"
+        rules={[]}
+        inboundTags={['local']}
+        outboundTags={['direct']}
+        onChange={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Удалить подключение ноды node-route-42',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить' }));
+    await screen.findByText('Сначала сохраните удаление правил');
+    expect(
+      screen.getByRole('button', {
+        name: 'Удалить подключение ноды node-route-42',
+      }),
+    ).toBeTruthy();
+  });
+});

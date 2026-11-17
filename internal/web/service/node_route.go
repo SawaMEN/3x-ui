@@ -28,16 +28,17 @@ const nodeRoutePrefix = "node-route-"
 var nodeRouteProvisionMu sync.Mutex
 
 type NodeRouteTarget struct {
-	Tag       string `json:"tag"`
-	InboundID int    `json:"inboundId"`
-	NodeID    int    `json:"nodeId"`
-	NodeName  string `json:"nodeName"`
-	Remark    string `json:"remark"`
-	Protocol  string `json:"protocol"`
-	Port      int    `json:"port"`
-	PortLabel string `json:"portLabel,omitempty"`
-	Available bool   `json:"available"`
-	Reason    string `json:"reason,omitempty"`
+	Tag         string `json:"tag"`
+	InboundID   int    `json:"inboundId"`
+	NodeID      int    `json:"nodeId"`
+	NodeName    string `json:"nodeName"`
+	Remark      string `json:"remark"`
+	Protocol    string `json:"protocol"`
+	Port        int    `json:"port"`
+	PortLabel   string `json:"portLabel,omitempty"`
+	Available   bool   `json:"available"`
+	Provisioned bool   `json:"provisioned"`
+	Reason      string `json:"reason,omitempty"`
 }
 
 func nodeRouteTag(inboundID int) string {
@@ -102,6 +103,16 @@ func NodeRouteTargets(userID int, core string) ([]NodeRouteTarget, error) {
 			Protocol: model.Mieru, Port: row.Port, Settings: row.Settings,
 		})
 	}
+	var serviceEmails []string
+	if err := database.GetDB().Model(&model.ClientRecord{}).
+		Where("email LIKE ?", nodeRouteClientPattern).
+		Pluck("email", &serviceEmails).Error; err != nil {
+		return nil, err
+	}
+	provisioned := make(map[string]bool, len(serviceEmails))
+	for _, email := range serviceEmails {
+		provisioned[email] = true
+	}
 	result := make([]NodeRouteTarget, 0)
 	for _, inbound := range inbounds {
 		if inbound.NodeId == nil {
@@ -115,7 +126,7 @@ func NodeRouteTargets(userID int, core string) ([]NodeRouteTarget, error) {
 			Tag: nodeRouteTag(inbound.Id), InboundID: inbound.Id,
 			NodeID: n.Id, NodeName: n.Name, Remark: inbound.Remark,
 			Protocol: inbound.Protocol, Port: inbound.Port,
-			Available: true,
+			Available: true, Provisioned: provisioned[nodeRouteClientEmail(inbound.Id)],
 		}
 		if inbound.Protocol == string(model.Mieru) {
 			target.PortLabel = strings.Join(mieruPlans[inbound.Id].portLabels, ", ")
@@ -198,9 +209,9 @@ func EnsureNodeRoute(userID, inboundID int, core string) (string, bool, error) {
 			return "", false, fmt.Errorf("node route service client is missing subId")
 		}
 	}
-	needRestart, err := (&ClientService{}).Create(&InboundService{}, &ClientCreatePayload{
+	needRestart, err := (&ClientService{}).createClient(&InboundService{}, &ClientCreatePayload{
 		Client: client, InboundIds: []int{inboundID},
-	})
+	}, true)
 	if err != nil {
 		return "", needRestart, fmt.Errorf("provision node route client: %w", err)
 	}

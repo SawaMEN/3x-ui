@@ -68,8 +68,23 @@ func (a *XraySettingController) ensureNodeRoute(c *gin.Context) {
 	if needRestart {
 		markSelectedCoreNeedRestart(&a.SettingService, &a.CoreService, &service.SingBoxService{})
 	}
-	if needRestart || err == nil {
-		notifyClientsChanged()
-	}
 	jsonObj(c, map[string]string{"tag": tag}, err)
+}
+
+func (a *XraySettingController) deleteNodeRoute(c *gin.Context) {
+	user := session.GetLoginUser(c)
+	if user == nil {
+		jsonObj(c, nil, fmt.Errorf("not authenticated"))
+		return
+	}
+	var payload nodeRouteProbeRequest
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	pending, needRestart, err := service.DeleteNodeRoute(user.Id, payload.InboundID)
+	if needRestart {
+		markSelectedCoreNeedRestart(&a.SettingService, &a.CoreService, &service.SingBoxService{})
+	}
+	jsonObj(c, map[string]bool{"pending": pending}, err)
 }

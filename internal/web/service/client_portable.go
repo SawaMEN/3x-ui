@@ -21,7 +21,7 @@ import (
 func (s *ClientService) ExportAll() ([]ClientCreatePayload, error) {
 	db := database.GetDB()
 	var rows []model.ClientRecord
-	if err := db.Order("id ASC").Find(&rows).Error; err != nil {
+	if err := publicClientRecords(db, "email").Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]ClientCreatePayload, 0, len(rows))
@@ -68,6 +68,11 @@ func (s *ClientService) ExportAll() ([]ClientCreatePayload, error) {
 // they are reported in Skipped. The boolean reports whether xray needs a restart.
 func (s *ClientService) ImportClients(inboundSvc *InboundService, items []ClientCreatePayload) (BulkCreateResult, bool, error) {
 	result := BulkCreateResult{}
+	for _, item := range items {
+		if IsManagedNodeRouteClientEmail(item.Client.Email) {
+			return result, false, ErrManagedNodeRouteClient
+		}
+	}
 	if len(items) == 0 {
 		return result, false, nil
 	}
@@ -219,7 +224,7 @@ func (s *ClientService) DeleteOrphans() (int, error) {
 	db := database.GetDB()
 	sub := database.GetDB().Table("client_inbounds").Select("client_id")
 	var rows []model.ClientRecord
-	if err := db.Where("id NOT IN (?)", sub).Order("id ASC").Find(&rows).Error; err != nil {
+	if err := publicClientRecords(db, "email").Where("id NOT IN (?)", sub).Order("id ASC").Find(&rows).Error; err != nil {
 		return 0, err
 	}
 	if len(rows) == 0 {

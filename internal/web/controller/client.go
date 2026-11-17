@@ -53,6 +53,14 @@ func NewClientController(g *gin.RouterGroup) *ClientController {
 }
 
 func (a *ClientController) initRouter(g *gin.RouterGroup) {
+	g.Use(func(c *gin.Context) {
+		if service.IsManagedNodeRouteClientEmail(c.Param("email")) {
+			pureJsonMsg(c, http.StatusConflict, false, service.ErrManagedNodeRouteClient.Error())
+			c.Abort()
+			return
+		}
+		c.Next()
+	})
 	g.GET("/list", a.list)
 	g.GET("/list/paged", a.listPaged)
 	g.GET("/get/:email", a.get)
@@ -120,6 +128,9 @@ func (a *ClientController) listPaged(c *gin.Context) {
 }
 
 func (a *ClientController) buildClientPayload(rec *model.ClientRecord) (gin.H, error) {
+	if service.IsManagedNodeRouteClientEmail(rec.Email) {
+		return nil, service.ErrManagedNodeRouteClient
+	}
 	inboundIds, err := a.clientService.GetInboundIdsForRecord(rec.Id)
 	if err != nil {
 		return nil, err

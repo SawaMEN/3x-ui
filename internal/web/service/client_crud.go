@@ -130,11 +130,19 @@ func (s *ClientService) GetClientsByTrafficReset(period string) ([]ClientResetCy
 // Create applies the client to every requested inbound: one failing inbound no
 // longer aborts the others, so the error can name several and needRestart holds.
 func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreatePayload) (bool, error) {
+	return s.createClient(inboundSvc, payload, false)
+}
+
+// Only EnsureNodeRoute may provision a routing identity through this path.
+func (s *ClientService) createClient(inboundSvc *InboundService, payload *ClientCreatePayload, managed bool) (bool, error) {
 	defer beginLocalConfigBatch()()
 	if payload == nil {
 		return false, common.NewError("empty payload")
 	}
 	client := payload.Client
+	if IsManagedNodeRouteClientEmail(client.Email) && !managed {
+		return false, ErrManagedNodeRouteClient
+	}
 	if strings.TrimSpace(client.Email) == "" {
 		return false, common.NewError("client email is required")
 	}
@@ -604,6 +612,9 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 	existing, err := s.GetByID(id)
 	if err != nil {
 		return false, err
+	}
+	if IsManagedNodeRouteClientEmail(existing.Email) || IsManagedNodeRouteClientEmail(updated.Email) {
+		return false, ErrManagedNodeRouteClient
 	}
 	inboundIds, err := s.GetInboundIdsForRecord(id)
 	if err != nil {
@@ -1099,6 +1110,9 @@ func (s *ClientService) Attach(inboundSvc *InboundService, id int, inboundIds []
 	existing, err := s.GetByID(id)
 	if err != nil {
 		return false, err
+	}
+	if IsManagedNodeRouteClientEmail(existing.Email) {
+		return false, ErrManagedNodeRouteClient
 	}
 	currentIds, err := s.GetInboundIdsForRecord(id)
 	if err != nil {
