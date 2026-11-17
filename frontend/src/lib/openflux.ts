@@ -32,9 +32,15 @@ export function validOpenFluxChannelURL(value: string): boolean {
 export function suggestOpenFluxTransport(value: string): OpenFluxTransportType | undefined {
   try {
     const url = new URL(value);
-    if (url.hostname === 'docs.yandex.ru' || url.hostname === 'docs.yandex.com') return 'vyandex';
+    if (
+      url.hostname === 'docs.yandex.ru' ||
+      url.hostname === 'docs.yandex.com' ||
+      url.hostname === 'disk.yandex.ru' ||
+      url.hostname === 'disk.yandex.com'
+    )
+      return 'vyandex';
     if (url.hostname === 'boards.yandex.ru') return 'boards';
-    if (url.hostname === 'docs.mail.ru') return 'mailru';
+    if (url.hostname === 'docs.mail.ru' || url.hostname === 'cloud.mail.ru') return 'mailru';
     if (url.hostname === 'cups.online') return 'cupsonline';
     if (url.hostname === 'code.avito.ru') return 'avito';
     if (url.hostname === 'telemost.yandex.ru' || url.hostname === 'telemost.yandex.com')
