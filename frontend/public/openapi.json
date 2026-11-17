@@ -7939,6 +7939,68 @@
         }
       }
     },
+    "/panel/api/xdrive/yandex/probe": {
+      "post": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Verify Yandex Disk WebDAV application credentials and folder permissions using a temporary test file.",
+        "operationId": "post_panel_api_xdrive_yandex_probe",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "login": {
+                    "type": "string",
+                    "description": "Yandex Disk account login."
+                  },
+                  "appPassword": {
+                    "type": "string",
+                    "description": "Yandex Disk application-specific WebDAV password. Treat as a secret."
+                  },
+                  "folder": {
+                    "type": "string",
+                    "description": "Single safe folder component (1–64 Latin letters, digits, underscore or hyphen)."
+                  }
+                },
+                "required": [
+                  "login",
+                  "appPassword",
+                  "folder"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/openflux/install": {
       "get": {
         "tags": [
