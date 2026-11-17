@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Collapse, Modal, Select, Space, Spin, Tag, Tooltip } from 'antd';
+import { Alert, Button, Collapse, Modal, Radio, Segmented, Space, Spin, Tag, Tooltip } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
@@ -44,7 +44,7 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
         ? 'sing-box (ядро панели)'
         : 'sing-box (официальное)';
   const [versions, setVersions] = useState<{ tag: string; prerelease: boolean }[]>([]);
-  const [selectedVersion, setSelectedVersion] = useState('latest');
+  const [releaseChannel, setReleaseChannel] = useState<'stable' | 'beta'>('stable');
   const [versionsError, setVersionsError] = useState('');
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState('');
@@ -53,11 +53,18 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
   const [singBoxVersion, setSingBoxVersion] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const normalizeVersion = (value: string) =>
+    value.match(/v?(\\d+(?:[.-][a-z0-9]+)*)/i)?.[1]?.toLowerCase() || '';
+
+  const visibleVersions = versions.filter((version) =>
+    releaseChannel === 'beta' ? version.prerelease : !version.prerelease,
+  );
+
   const fetchVersions = useCallback(async () => {
     setLoading(true);
     setVersionsError('');
     setVersions([]);
-    setSelectedVersion('latest');
+    setReleaseChannel('stable');
     try {
       const [status, releases] = await Promise.all([
         HttpUtil.get<{ cores: { type: string; version: string }[] }>('/panel/api/setting/cores'),
@@ -90,6 +97,35 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
   useEffect(() => {
     if (open) void Promise.resolve().then(fetchVersions);
   }, [open, fetchVersions]);
+
+  function switchCoreVersion(version: string) {
+    modal.confirm({
+      title: t('pages.coreSelection.updateConfirm', { core: `${coreName} · ${version}` }),
+      content: t('pages.coreSelection.restartConnections'),
+      okText: t('confirm'),
+      cancelText: t('cancel'),
+      onOk: async () => {
+        setUpdating(true);
+        setUpdateError('');
+        try {
+          const result = await HttpUtil.post(
+            `/panel/api/setting/cores/${coreType}/update`,
+            { version },
+            { timeout: 330000 },
+          );
+          if (!result.success)
+            throw new Error(result.msg || t('pages.coreSelection.updateFailed'));
+          await fetchVersions();
+          void queryClient.invalidateQueries({ queryKey: ['server'] });
+          window.dispatchEvent(new Event('xui-core-settings-saved'));
+        } catch (error) {
+          setUpdateError(error instanceof Error ? error.message : String(error));
+        } finally {
+          setUpdating(false);
+        }
+      },
+    });
+  }
 
   function updateGeofile(fileName: string) {
     const isSingle = !!fileName;
@@ -130,83 +166,71 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
               label: coreName,
               children: (
                 <>
-                  <Alert
-                    type="info"
-                    showIcon
-                    title={singBoxVersion || coreName}
-                    description={
-                      coreType === 'sing-box'
-                        ? t('pages.coreSelection.bundledUpdateNote')
-                        : t('pages.coreSelection.standaloneUpdateNote')
-                    }
-                  />
                   {updateError && (
-                    <Alert type="error" title={updateError} showIcon style={{ marginTop: 12 }} />
+                    <Alert type="error" title={updateError} showIcon style={{ marginBottom: 12 }} />
                   )}
-                  {coreType !== 'sing-box' && (
-                    <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
+                  {coreType === 'sing-box' ? (
+                    <div className="version-list">
+                      <div className="version-list-item">
+                        <span>{t('pages.index.currentPanelVersion')}</span>
+                        <Tag color="blue">{singBoxVersion || coreName}</Tag>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
                       {versionsError && (
                         <Alert
                           type="warning"
+                          className="mb-12"
                           title={versionsError}
                           action={<Button onClick={() => void fetchVersions()}>Повторить</Button>}
                         />
                       )}
-                      <Select
-                        aria-label="Версия ядра"
-                        value={selectedVersion}
-                        onChange={setSelectedVersion}
-                        disabled={updating}
-                        style={{ width: '100%' }}
-                        showSearch={{ optionFilterProp: 'label' }}
-                        options={[
-                          { value: 'latest', label: 'Последняя стабильная' },
-                          ...versions.map((version) => ({
-                            value: version.tag,
-                            label: `${version.tag}${version.prerelease ? ' · предварительная' : ''}${version.tag.replace(/^v/, '') === singBoxVersion.replace(/^v/, '') ? ' · установлена' : ''}`,
-                          })),
-                        ]}
-                      />
-                      <Button
-                        type="primary"
-                        loading={updating}
-                        style={{ marginTop: 12 }}
-                        onClick={() =>
-                          modal.confirm({
-                            title: t('pages.coreSelection.updateConfirm', {
-                              core: `${coreName} · ${selectedVersion}`,
-                            }),
-                            content: t('pages.coreSelection.restartConnections'),
-                            onOk: async () => {
-                              setUpdating(true);
-                              setUpdateError('');
-                              try {
-                                const result = await HttpUtil.post(
-                                  `/panel/api/setting/cores/${coreType}/update`,
-                                  { version: selectedVersion },
-                                  { timeout: 330000 },
-                                );
-                                if (!result.success)
-                                  throw new Error(
-                                    result.msg || t('pages.coreSelection.updateFailed'),
-                                  );
-                                await fetchVersions();
-                                void queryClient.invalidateQueries({ queryKey: ['server'] });
-                                window.dispatchEvent(new Event('xui-core-settings-saved'));
-                              } catch (error) {
-                                setUpdateError(
-                                  error instanceof Error ? error.message : String(error),
-                                );
-                              } finally {
-                                setUpdating(false);
-                              }
-                            },
+                      <div className="version-filter">
+                        <Segmented
+                          block
+                          aria-label="Тип выпусков ядра"
+                          value={releaseChannel}
+                          onChange={(value) => setReleaseChannel(value as 'stable' | 'beta')}
+                          options={[
+                            { label: 'Стабильные', value: 'stable' },
+                            { label: 'Бета', value: 'beta' },
+                          ]}
+                        />
+                      </div>
+                      <div className="version-list">
+                        {visibleVersions.length === 0 ? (
+                          <div className="version-list-empty">
+                            {loading
+                              ? t('loading')
+                              : versionsError
+                                ? 'Не удалось загрузить версии'
+                                : releaseChannel === 'beta'
+                                  ? 'Нет доступных предварительных выпусков'
+                                  : 'Нет доступных стабильных выпусков'}
+                          </div>
+                        ) : (
+                          visibleVersions.map((version) => {
+                            const installed =
+                              normalizeVersion(version.tag) === normalizeVersion(singBoxVersion);
+                            return (
+                              <div className="version-list-item" key={version.tag}>
+                                <Space size={8} wrap>
+                                  <Tag color={installed ? 'green' : 'blue'}>{version.tag}</Tag>
+                                  {installed && <Tag color="success">Установлена</Tag>}
+                                </Space>
+                                <Radio
+                                  aria-label={`Выбрать ${version.tag}`}
+                                  checked={installed}
+                                  disabled={updating || installed}
+                                  onClick={() => switchCoreVersion(version.tag)}
+                                />
+                              </div>
+                            );
                           })
-                        }
-                      >
-                        {t('update')}
-                      </Button>
-                    </Space>
+                        )}
+                      </div>
+                    </>
                   )}
                 </>
               ),

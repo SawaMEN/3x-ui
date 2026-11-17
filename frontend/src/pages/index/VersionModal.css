@@ -1,9 +1,9 @@
 .version-filter {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 12px;
-  padding: 8px 0;
+}
+
+.version-filter .ant-segmented {
+  width: 100%;
 }
 
 .version-list {
@@ -23,6 +23,12 @@
 
 .version-list-item:last-child {
   border-bottom: 0;
+}
+
+.version-list-empty {
+  padding: 18px 12px;
+  text-align: center;
+  color: var(--ant-color-text-secondary);
 }
 
 .reload-icon {
