@@ -51,27 +51,36 @@ func TestResolveRequest_ForwardedHeaderTrust(t *testing.T) {
 		wantHostHeader   string
 	}{
 		{
-			name:             "no stored row keeps trusting forwarded headers",
+			name:             "no stored row rejects untrusted forwarded headers",
 			stored:           nil,
 			remoteAddr:       "203.0.113.9:51000",
-			wantScheme:       "https",
-			wantHost:         "sub.example.net",
-			wantHostWithPort: "sub.example.net",
-			wantHostHeader:   "sub.example.net",
+			wantScheme:       "http",
+			wantHost:         "panel.example.com",
+			wantHostWithPort: "panel.example.com:2096",
+			wantHostHeader:   "panel.example.com",
 		},
 		{
-			name:             "empty stored value keeps trusting forwarded headers",
+			name:             "empty stored value rejects untrusted forwarded headers",
 			stored:           new(""),
 			remoteAddr:       "203.0.113.9:51000",
-			wantScheme:       "https",
-			wantHost:         "sub.example.net",
-			wantHostWithPort: "sub.example.net",
-			wantHostHeader:   "sub.example.net",
+			wantScheme:       "http",
+			wantHost:         "panel.example.com",
+			wantHostWithPort: "panel.example.com:2096",
+			wantHostHeader:   "panel.example.com",
 		},
 		{
-			name:             "stored shipped default keeps trusting forwarded headers",
+			name:             "stored shipped default rejects untrusted forwarded headers",
 			stored:           new(service.DefaultTrustedProxyCIDRs),
 			remoteAddr:       "203.0.113.9:51000",
+			wantScheme:       "http",
+			wantHost:         "panel.example.com",
+			wantHostWithPort: "panel.example.com:2096",
+			wantHostHeader:   "panel.example.com",
+		},
+		{
+			name:             "default trusts loopback reverse proxy",
+			stored:           new(service.DefaultTrustedProxyCIDRs),
+			remoteAddr:       "127.0.0.1:51000",
 			wantScheme:       "https",
 			wantHost:         "sub.example.net",
 			wantHostWithPort: "sub.example.net",
@@ -154,6 +163,21 @@ func TestResolveRequest_GatesRealIPFallback(t *testing.T) {
 	}
 }
 
+func TestResolveRequest_TrustedProxyRealIPDoesNotReplaceHost(t *testing.T) {
+	initSubDB(t)
+	setTrustedProxyCIDRs(t, "127.0.0.1/32")
+	c := requestFrom(t, "127.0.0.1:51000", map[string]string{
+		"X-Real-IP":         "198.51.100.7",
+		"X-Forwarded-Proto": "https",
+	})
+	scheme, host, hostWithPort, header := (&SubService{}).ResolveRequest(c)
+	if scheme != "https" || host != "panel.example.com" ||
+		hostWithPort != "panel.example.com:2096" || header != "panel.example.com" {
+		t.Fatalf("trusted reverse proxy used the subscriber IP as a server: %s %s %s %s",
+			scheme, host, hostWithPort, header)
+	}
+}
+
 func TestHasForwardedHeaders(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -184,6 +208,9 @@ func TestRemoteAddrInCIDRs(t *testing.T) {
 	}{
 		{name: "inside cidr", remoteAddr: "10.1.2.3:1234", cidrs: "10.0.0.0/8", want: true},
 		{name: "ipv4 mapped address inside cidr", remoteAddr: "[::ffff:10.1.2.3]:1234", cidrs: "10.0.0.0/8", want: true},
+		{name: "ipv4 address matches mapped cidr", remoteAddr: "10.1.2.3:1234", cidrs: "::ffff:10.0.0.0/104", want: true},
+		{name: "mapped ipv4 address matches mapped cidr", remoteAddr: "[::ffff:10.1.2.3]:1234", cidrs: "::ffff:10.0.0.0/104", want: true},
+		{name: "outside mapped cidr is rejected", remoteAddr: "203.0.113.9:1234", cidrs: "::ffff:10.0.0.0/104", want: false},
 		{name: "outside cidr", remoteAddr: "203.0.113.9:1234", cidrs: "10.0.0.0/8", want: false},
 		{name: "bare address entry", remoteAddr: "192.168.1.5:80", cidrs: "192.168.1.5", want: true},
 		{name: "ipv6 loopback", remoteAddr: "[::1]:8080", cidrs: "::1/128", want: true},

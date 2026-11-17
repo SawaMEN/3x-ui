@@ -3,9 +3,9 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestAddClientStat_RefreshesStaleRowOnInboundDeleteThenReuse covers #5958:
@@ -48,8 +48,8 @@ func TestAddClientStat_RefreshesStaleRowOnInboundDeleteThenReuse(t *testing.T) {
 	}
 
 	db := database.GetDB()
-	var before xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).First(&before).Error; err != nil {
+	var before coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).First(&before).Error; err != nil {
 		t.Fatalf("lookup client_traffics before delete: %v", err)
 	}
 	if before.Enable || before.Reset != 0 || before.Total != 0 {
@@ -71,8 +71,8 @@ func TestAddClientStat_RefreshesStaleRowOnInboundDeleteThenReuse(t *testing.T) {
 	if len(ids) != 0 {
 		t.Fatalf("client should be fully detached after its only inbound was deleted, still attached to: %v", ids)
 	}
-	var stillThere xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).First(&stillThere).Error; err != nil {
+	var stillThere coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).First(&stillThere).Error; err != nil {
 		t.Fatalf("client_traffics row should survive inbound deletion (Detach parity), lookup failed: %v", err)
 	}
 
@@ -91,8 +91,8 @@ func TestAddClientStat_RefreshesStaleRowOnInboundDeleteThenReuse(t *testing.T) {
 		t.Fatalf("reuse Create: %v", err)
 	}
 
-	var after xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).First(&after).Error; err != nil {
+	var after coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).First(&after).Error; err != nil {
 		t.Fatalf("lookup client_traffics after reuse: %v", err)
 	}
 	if !after.Enable {
@@ -146,7 +146,7 @@ func TestAddClientStat_MultiInboundReattachStaysIdempotent(t *testing.T) {
 
 	db := database.GetDB()
 	// Simulate real accumulated usage before the second attachment.
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"up": int64(123), "down": int64(456)}).Error; err != nil {
 		t.Fatalf("seed usage: %v", err)
 	}
@@ -164,8 +164,8 @@ func TestAddClientStat_MultiInboundReattachStaysIdempotent(t *testing.T) {
 		t.Fatalf("second Create (attach to ibB): %v", err)
 	}
 
-	var row xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).First(&row).Error; err != nil {
+	var row coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).First(&row).Error; err != nil {
 		t.Fatalf("lookup after second attach: %v", err)
 	}
 	if row.Up != 123 || row.Down != 456 {

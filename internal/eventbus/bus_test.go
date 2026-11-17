@@ -48,6 +48,25 @@ func TestBusPublishSubscribe(t *testing.T) {
 	}
 }
 
+func TestBusConcurrentStopAndPublishAfterStop(t *testing.T) {
+	b := New(16)
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			b.Stop()
+		}()
+	}
+	wg.Wait()
+	for range 32 {
+		b.Publish(Event{Type: EventXrayCrash})
+	}
+	if n := len(b.ch); n != 0 {
+		t.Fatalf("stopped bus retained %d new events", n)
+	}
+}
+
 func TestBusMultipleSubscribers(t *testing.T) {
 	b := New(16)
 	defer b.Stop()

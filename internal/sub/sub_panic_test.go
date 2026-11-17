@@ -99,11 +99,11 @@ func TestGetClashEmitsPinnedCertSha256(t *testing.T) {
 	stream := `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"pin.sni","settings":{"pinnedPeerCertSha256":["` + pin + `"]}}}`
 	seedSubInbound(t, "pin1", "pin", 46300, 1, stream)
 
-	out, _, err := NewSubClashService(false, "", NewSubService("")).GetClash("pin1", "sub.example.com")
+	out, _, err := NewSubClashService(false, "", NewSubService(""), false).GetClash("pin1", "sub.example.com")
 	if err != nil {
 		t.Fatalf("GetClash: %v", err)
 	}
-	if !strings.Contains(out, "pin-sha256") {
+	if !strings.Contains(out, "fingerprint: "+pin) || strings.Contains(out, "pin-sha256") {
 		t.Fatalf("Clash proxy dropped the pinned cert sha256:\n%s", out)
 	}
 }
@@ -122,7 +122,7 @@ func TestJsonAndClashTolerateExternalProxyMissingPort(t *testing.T) {
 		t.Fatal("GetJson returned empty for an externalProxy entry missing port")
 	}
 
-	clashOut, _, err := NewSubClashService(false, "", NewSubService("")).GetClash("extp1", "sub.example.com")
+	clashOut, _, err := NewSubClashService(false, "", NewSubService(""), false).GetClash("extp1", "sub.example.com")
 	if err != nil {
 		t.Fatalf("GetClash: %v", err)
 	}

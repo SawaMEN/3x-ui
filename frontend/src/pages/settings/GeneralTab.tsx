@@ -2,30 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  Button,
-  Checkbox,
-  Input,
-  InputNumber,
-  Modal,
-  Radio,
-  Select,
-  Space,
-  Switch,
-  Tabs,
-  Tag,
-  message,
-} from 'antd';
+import { Alert, Checkbox, Input, InputNumber, Modal, Select, Switch, Tabs, message } from 'antd';
 import {
   ApartmentOutlined,
   BellOutlined,
   ClockCircleOutlined,
   GlobalOutlined,
-  SafetyCertificateOutlined,
   SettingOutlined,
-  ReloadOutlined,
-  SwapOutlined,
 } from '@ant-design/icons';
 import type { AllSetting } from '@/models/setting';
 import { isOutboundProtocol } from '@/schemas/primitives';
@@ -35,7 +18,7 @@ import { onNumber } from '@/utils/onNumber';
 import { DefaultSettingTag, SettingListItem } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { catTabLabel } from './catTabLabel';
-import { sanitizePath } from './uriPath';
+import { sanitizePath, normalizePath } from './uriPath';
 import SecretInput from './SecretInput';
 
 interface ApiMsg<T = unknown> {
@@ -46,26 +29,19 @@ interface ApiMsg<T = unknown> {
 interface GeneralTabProps {
   allSetting: AllSetting;
   updateSetting: (patch: Partial<AllSetting>) => void;
-  saveSettings?: () => Promise<{ success?: boolean; msg?: string }>;
-  onOpenSwap?: () => void;
-  onOpenSystemUpdate?: () => void;
 }
 
-export default function GeneralTab({
-  allSetting,
-  updateSetting,
-  saveSettings,
-  onOpenSwap,
-  onOpenSystemUpdate,
-}: GeneralTabProps) {
+export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProps) {
   const { t } = useTranslation();
   const { isMobile } = useMediaQuery();
+  const portOverride =
+    Number(document.querySelector<HTMLMetaElement>('meta[name="panel-port-override"]')?.content) ||
+    0;
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const hashToTab: Record<string, string> = {
     '#general': '1',
-    '#core': 'core',
     '#notifications': '2',
     '#certs': '3',
     '#external': '4',
@@ -77,7 +53,6 @@ export default function GeneralTab({
   const onTabChange = (key: string) => {
     const tabToHash: Record<string, string> = {
       '1': 'general',
-      core: 'core',
       '2': 'notifications',
       '3': 'certs',
       '4': 'external',
@@ -92,9 +67,6 @@ export default function GeneralTab({
   const [inboundOptions, setInboundOptions] = useState<{ label: string; value: string }[]>([]);
   const [outboundTagList, setOutboundTagList] = useState<string[]>([]);
   const [balancerTagList, setBalancerTagList] = useState<string[]>([]);
-  const [singBoxInstalled, setSingBoxInstalled] = useState<boolean | null>(null);
-  const [singBoxInstalling, setSingBoxInstalling] = useState(false);
-  const [runningCore, setRunningCore] = useState<'xray' | 'sing-box' | 'none'>('none');
   const [hiddifyOpen, setHiddifyOpen] = useState(false);
   const [hiddifyFile, setHiddifyFile] = useState<File | null>(null);
   const [hiddifyPreview, setHiddifyPreview] = useState<{
@@ -154,10 +126,15 @@ export default function GeneralTab({
     try {
       const result = await hiddifyRequest('import', hiddifyFile);
       if (result.success) {
-        const skipped = (result.obj?.skipped ?? []) as { email: string; reason: string }[];
+        const skipped = (result.obj?.skipped ?? []) as {
+          email: string;
+          reason: string;
+        }[];
         const created = result.obj?.created ?? 0;
         setHiddifyResult({ created, skipped });
-        void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
+        void queryClient.invalidateQueries({
+          queryKey: keys.settings.defaults(),
+        });
         void queryClient.invalidateQueries({ queryKey: keys.clients.root() });
         if (result.obj?.subscriptionURI) {
           message.success(`URL для импортированных пользователей: ${result.obj.subscriptionURI}`);
@@ -173,85 +150,6 @@ export default function GeneralTab({
     } finally {
       setHiddifyBusy(false);
     }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
-
-    const refreshCoreStatus = async () => {
-      try {
-        const [singMsg, serverMsg] = await Promise.all([
-          HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
-            ApiMsg<{ installed: boolean; running: boolean }>
-          >,
-          HttpUtil.get('/panel/api/server/status') as Promise<
-            ApiMsg<{ xray?: { state?: string } }>
-          >,
-        ]);
-        if (cancelled) return false;
-        setSingBoxInstalled(Boolean(singMsg?.success && singMsg.obj?.installed));
-        const singRunning = Boolean(singMsg?.success && singMsg.obj?.running);
-        const xrayRunning = Boolean(serverMsg?.success && serverMsg.obj?.xray?.state === 'running');
-        const actualCore = singRunning ? 'sing-box' : xrayRunning ? 'xray' : 'none';
-        setRunningCore(actualCore);
-        return actualCore === allSetting.coreType;
-      } catch {
-        if (!cancelled) setRunningCore('none');
-        return false;
-      }
-    };
-
-    void refreshCoreStatus().then((matched) => {
-      if (cancelled || matched) return;
-      // Core restart happens on the server after settings are saved. Poll only
-      // while the selected core and the actually running core differ, so the
-      // status card updates immediately after the switch completes.
-      timer = setInterval(() => {
-        void refreshCoreStatus().then((done) => {
-          if (done && timer) {
-            clearInterval(timer);
-            timer = undefined;
-          }
-        });
-      }, 1000);
-    });
-
-    const onCoreSettingsSaved = () => {
-      void refreshCoreStatus();
-    };
-    window.addEventListener('xui-core-settings-saved', onCoreSettingsSaved);
-
-    return () => {
-      cancelled = true;
-      if (timer) clearInterval(timer);
-      window.removeEventListener('xui-core-settings-saved', onCoreSettingsSaved);
-    };
-  }, [allSetting.coreType]);
-
-  const installSingBox = async () => {
-    setSingBoxInstalling(true);
-    try {
-      const msg = (await HttpUtil.post('/panel/api/setting/singbox/install')) as ApiMsg;
-      if (!msg?.success) return;
-      setSingBoxInstalled(true);
-
-      // The radio choice is kept as a draft until the normal settings save.
-      // Once the binary is installed, finish that pending core switch here so
-      // the selected engine becomes the actually running engine immediately.
-      if (allSetting.coreType === 'sing-box' && saveSettings) {
-        await saveSettings();
-      }
-    } finally {
-      setSingBoxInstalling(false);
-    }
-  };
-
-  const uninstallSingBox = async () => {
-    const msg = (await HttpUtil.post('/panel/api/setting/singbox/uninstall')) as ApiMsg;
-    if (!msg?.success) return;
-    setSingBoxInstalled(false);
-    setRunningCore('none');
   };
 
   useEffect(() => {
@@ -364,7 +262,9 @@ export default function GeneralTab({
   }, [allSetting.ldapInboundTags]);
 
   function setLdapInboundTagList(list: string[]) {
-    updateSetting({ ldapInboundTags: Array.isArray(list) ? list.join(',') : '' });
+    updateSetting({
+      ldapInboundTags: Array.isArray(list) ? list.join(',') : '',
+    });
   }
 
   function onLangChange(value: string) {
@@ -430,12 +330,20 @@ export default function GeneralTab({
                   description={t('pages.settings.panelPortDesc')}
                 >
                   <InputNumber
-                    value={allSetting.webPort}
+                    value={portOverride || allSetting.webPort}
+                    disabled={portOverride > 0}
                     min={1}
                     max={65535}
                     style={{ width: '100%' }}
                     onChange={onNumber((v) => updateSetting({ webPort: v }))}
                   />
+                  {portOverride > 0 && (
+                    <Alert
+                      type="info"
+                      showIcon
+                      title={`Порт ${portOverride} задан переменной XUI_PORT в настройках службы.`}
+                    />
+                  )}
                 </SettingListItem>
 
                 <SettingListItem
@@ -445,7 +353,14 @@ export default function GeneralTab({
                 >
                   <Input
                     value={allSetting.webBasePath}
-                    onChange={(e) => updateSetting({ webBasePath: sanitizePath(e.target.value) })}
+                    onBlur={() =>
+                      updateSetting({ webBasePath: normalizePath(allSetting.webBasePath) })
+                    }
+                    onChange={(e) =>
+                      updateSetting({
+                        webBasePath: sanitizePath(e.target.value),
+                      })
+                    }
                   />
                 </SettingListItem>
 
@@ -526,7 +441,9 @@ export default function GeneralTab({
                       placeholder={t('pages.settings.panelOutboundPh')}
                       options={outboundOptions}
                       onChange={(v) =>
-                        updateSetting({ panelOutbound: (v as string | undefined) || '' })
+                        updateSetting({
+                          panelOutbound: (v as string | undefined) || '',
+                        })
                       }
                     />
                   </SettingListItem>
@@ -573,127 +490,6 @@ export default function GeneralTab({
             ),
           },
           {
-            key: 'core',
-            label: catTabLabel(<SettingOutlined />, t('pages.settings.coreType'), isMobile),
-            children: (
-              <div>
-                <SettingListItem
-                  paddings="small"
-                  title={t('pages.settings.coreType')}
-                  description={t('pages.settings.coreTypeDesc')}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
-                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                      <Radio.Group
-                        value={allSetting.coreType || 'xray'}
-                        onChange={(e) =>
-                          updateSetting({ coreType: e.target.value as 'xray' | 'sing-box' })
-                        }
-                        optionType="button"
-                        buttonStyle="solid"
-                        size="large"
-                        style={{ display: 'flex', width: '100%' }}
-                      >
-                        <Radio.Button value="xray" style={{ flex: 1, textAlign: 'center' }}>
-                          <strong>Xray</strong>
-                        </Radio.Button>
-                        <Radio.Button value="sing-box" style={{ flex: 1, textAlign: 'center' }}>
-                          <strong>sing-box</strong>
-                        </Radio.Button>
-                      </Radio.Group>
-
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 12,
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          background: 'var(--ant-color-fill-quaternary)',
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600 }}>
-                            {allSetting.coreType === 'sing-box' ? 'sing-box' : 'Xray'}
-                          </div>
-                          <div style={{ fontSize: 12, opacity: 0.65 }}>
-                            {allSetting.coreType === 'sing-box'
-                              ? singBoxInstalled
-                                ? t('pages.settings.singBoxInstalled')
-                                : t('pages.settings.installSingBox')
-                              : t('pages.settings.coreTypeDesc')}
-                          </div>
-                          <div style={{ fontSize: 12, marginTop: 4 }}>
-                            Работает сейчас:{' '}
-                            <strong>
-                              {runningCore === 'sing-box'
-                                ? 'sing-box'
-                                : runningCore === 'xray'
-                                  ? 'Xray'
-                                  : 'нет'}
-                            </strong>
-                          </div>
-                        </div>
-                        {allSetting.coreType === 'sing-box' && (
-                          <Tag color={singBoxInstalled ? 'success' : 'warning'}>
-                            {singBoxInstalled ? 'Installed' : 'Not installed'}
-                          </Tag>
-                        )}
-                      </div>
-
-                      {allSetting.coreType === 'sing-box' && !singBoxInstalled && (
-                        <Button
-                          type="primary"
-                          block
-                          loading={singBoxInstalling}
-                          onClick={installSingBox}
-                        >
-                          {t('pages.settings.installSingBox')}
-                        </Button>
-                      )}
-
-                      {allSetting.coreType === 'sing-box' && singBoxInstalled && (
-                        <Button
-                          block
-                          danger
-                          onClick={uninstallSingBox}
-                          disabled={runningCore === 'sing-box'}
-                        >
-                          Удалить sing-box
-                        </Button>
-                      )}
-                      {allSetting.coreType === 'sing-box' &&
-                        singBoxInstalled &&
-                        runningCore === 'sing-box' && (
-                          <div style={{ fontSize: 12, opacity: 0.65 }}>
-                            Сначала переключите ядро на Xray и сохраните настройки.
-                          </div>
-                        )}
-                      <Space wrap style={{ width: '100%' }}>
-                        {allSetting.coreType === 'sing-box' && (
-                          <Button
-                            onClick={() => {
-                              setHiddifyOpen(true);
-                            }}
-                          >
-                            Импорт пользователей Hiddify
-                          </Button>
-                        )}
-                        <Button icon={<SwapOutlined />} onClick={() => onOpenSwap?.()}>
-                          {t('pages.settings.swap.openFromCore')}
-                        </Button>
-                        <Button icon={<ReloadOutlined />} onClick={() => onOpenSystemUpdate?.()}>
-                          {t('pages.settings.swap.systemUpdates')}
-                        </Button>
-                      </Space>
-                    </Space>
-                  </div>
-                </SettingListItem>
-              </div>
-            ),
-          },
-          {
             key: '2',
             label: catTabLabel(<BellOutlined />, t('pages.settings.notifications'), isMobile),
             children: (
@@ -733,34 +529,6 @@ export default function GeneralTab({
             ),
           },
           {
-            key: '3',
-            label: catTabLabel(<SafetyCertificateOutlined />, t('pages.settings.certs'), isMobile),
-            children: (
-              <>
-                <SettingListItem
-                  paddings="small"
-                  title={t('pages.settings.publicKeyPath')}
-                  description={t('pages.settings.publicKeyPathDesc')}
-                >
-                  <Input
-                    value={allSetting.webCertFile}
-                    onChange={(e) => updateSetting({ webCertFile: e.target.value })}
-                  />
-                </SettingListItem>
-                <SettingListItem
-                  paddings="small"
-                  title={t('pages.settings.privateKeyPath')}
-                  description={t('pages.settings.privateKeyPathDesc')}
-                >
-                  <Input
-                    value={allSetting.webKeyFile}
-                    onChange={(e) => updateSetting({ webKeyFile: e.target.value })}
-                  />
-                </SettingListItem>
-              </>
-            ),
-          },
-          {
             key: '4',
             label: catTabLabel(<GlobalOutlined />, t('pages.settings.externalTraffic'), isMobile),
             children: (
@@ -783,7 +551,11 @@ export default function GeneralTab({
                   <Input
                     value={allSetting.externalTrafficInformURI}
                     placeholder="(http|https)://domain[:port]/path/"
-                    onChange={(e) => updateSetting({ externalTrafficInformURI: e.target.value })}
+                    onChange={(e) =>
+                      updateSetting({
+                        externalTrafficInformURI: e.target.value,
+                      })
+                    }
                   />
                 </SettingListItem>
               </>
@@ -811,11 +583,21 @@ export default function GeneralTab({
                 >
                   <Select
                     value={allSetting.datepicker || 'gregorian'}
-                    onChange={(v) => updateSetting({ datepicker: v as 'gregorian' | 'jalalian' })}
+                    onChange={(v) =>
+                      updateSetting({
+                        datepicker: v as 'gregorian' | 'jalalian',
+                      })
+                    }
                     style={{ width: '100%' }}
                     options={[
-                      { value: 'gregorian', label: t('pages.settings.calendarGregorian') },
-                      { value: 'jalalian', label: t('pages.settings.calendarJalalian') },
+                      {
+                        value: 'gregorian',
+                        label: t('pages.settings.calendarGregorian'),
+                      },
+                      {
+                        value: 'jalalian',
+                        label: t('pages.settings.calendarJalalian'),
+                      },
                     ]}
                   />
                 </SettingListItem>
@@ -1080,7 +862,7 @@ export default function GeneralTab({
               style={{ marginTop: 16 }}
               type="info"
               showIcon
-              message={`Пользователей в копии: ${hiddifyPreview.users}. Выбрано: ${hiddifySelected.length}.`}
+              title={`Пользователей в копии: ${hiddifyPreview.users}. Выбрано: ${hiddifySelected.length}.`}
               description={
                 <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
                   {hiddifyPreview.warnings.map((warning) => (
@@ -1134,7 +916,7 @@ export default function GeneralTab({
             style={{ marginTop: 12 }}
             type="warning"
             showIcon
-            message={`Добавлено: ${hiddifyResult.created}. Пропущено: ${hiddifyResult.skipped.length}.`}
+            title={`Добавлено: ${hiddifyResult.created}. Пропущено: ${hiddifyResult.skipped.length}.`}
             description={hiddifyResult.skipped.map((item) => (
               <div key={item.email}>
                 {item.email}: {item.reason}

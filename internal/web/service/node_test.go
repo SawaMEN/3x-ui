@@ -21,6 +21,9 @@ func TestNormalizeBasePath(t *testing.T) {
 		{"/panel/", "/panel/"},
 		{"  /panel  ", "/panel/"},
 		{"/a/b/c", "/a/b/c/"},
+		{"//other.example/path", "/other.example/path/"},
+		{"/\\other.example/path", "/other.example/path/"},
+		{"\\\\other.example/path", "/other.example/path/"},
 	}
 	for _, c := range cases {
 		t.Run(c.in, func(t *testing.T) {

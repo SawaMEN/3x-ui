@@ -1,0 +1,288 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+func TestPanelConcurrentConfigTransactions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte("0"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	handler := configTransactions(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		n, _ := strconv.Atoi(string(b))
+		if err := atomicConfigWrite(path, []byte(strconv.Itoa(n+1))); err != nil {
+			t.Error(err)
+		}
+	}), func() error { return nil })
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", "/api/clients", nil))
+		}()
+		go func() {
+			defer wg.Done()
+			configTransactionMu.Lock()
+			defer configTransactionMu.Unlock()
+			b, _ := os.ReadFile(path)
+			n, _ := strconv.Atoi(string(b))
+			if err := atomicConfigWrite(path, []byte(strconv.Itoa(n+1))); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	b, _ := os.ReadFile(path)
+	if string(b) != "200" {
+		t.Fatalf("lost updates: %s", b)
+	}
+}
+func TestPanelConfigRollbackAfterReloadFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	_ = os.WriteFile(path, []byte("original"), 0600)
+	restored := false
+	h := configTransactions(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = atomicConfigWrite(path, []byte("broken"))
+		http.Error(w, "reload failed", 500)
+	}), func() error { b, _ := os.ReadFile(path); restored = string(b) == "original"; return nil })
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("POST", "/api/clients", nil))
+	if !restored || w.Code != 500 {
+		t.Fatal("failed update did not roll back")
+	}
+}
+func TestPanelFirewallFailureIsReturned(t *testing.T) {
+	dir := t.TempDir()
+	stub := filepath.Join(dir, "iptables")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nexit 42\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	err := addNetnsFirewall(context.Background(), &netnsRuntime{NsIP: "10.1.1.2", Dev: "eth0", HostIf: "test"})
+	if err == nil || !strings.Contains(err.Error(), "42") {
+		t.Fatalf("NAT failure ignored: %v", err)
+	}
+}
+func TestPanelQuotaUsageCannotBeResetByUpdate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	cfg := Config{Version: 1, Name: "test", Port: 23456, Clients: []Client{{ClientID: "a", Quota: Quota{UsedBytes: 12345, UsedGB: 2}}}}
+	if err := saveConfig(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("PUT", "/api/clients/a", strings.NewReader(`{"quota":{"traffic_gb":100,"used_bytes":0}}`))
+	if err := updateClientFromRequest(context.Background(), path, "", "a", req); err != nil {
+		t.Fatal(err)
+	}
+	next, err := loadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Clients[0].Quota.UsedBytes != 12345 {
+		t.Fatal(fmt.Sprint("usage changed: ", next.Clients[0].Quota))
+	}
+}
+
+func TestPanelQuotaFailureDoesNotConsumeCounterDelta(t *testing.T) {
+	// Generate real loopback traffic so the counter is nonzero on fresh runners.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("traffic")) }))
+	defer server.Close()
+	res, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	q := NewQuotaEnforcer(filepath.Join(t.TempDir(), "missing.json"), nil)
+	q.rules["a"] = quotaRule{ClientID: "a", Iface: "lo", Last: 0, ClassID: 1}
+	if err := q.Collect(context.Background()); err == nil {
+		t.Fatal("missing config must fail")
+	}
+	if q.rules["a"].Last != 0 {
+		t.Fatal("failed persistence consumed traffic delta")
+	}
+}
+
+func TestPanelKernelNetworkAndQuota(t *testing.T) {
+	if os.Getenv("OLCRTC_KERNEL_TEST") != "1" {
+		t.Skip("requires disposable root Linux VM")
+	}
+	loc := Location{ClientID: "kernel-test", DNS: "1.1.1.1:53"}
+	loc.Endpoint.RoomID = "test"
+	loc.Transport.Type = "datachannel"
+	ns, err := setupNetns(context.Background(), loc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanupNetns(context.Background(), ns)
+	if err := applyNetnsSpeed(context.Background(), ns, 10); err != nil {
+		t.Fatal(err)
+	}
+	before, err := interfaceTrafficBytes(ns.HostIf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", ns.HostIP+":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	done := make(chan error, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			done <- err
+			return
+		}
+		defer conn.Close()
+		_, err = io.Copy(io.Discard, conn)
+		done <- err
+	}()
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := runCmd(context.Background(), "ip", "netns", "exec", ns.Name, "bash", "-c", fmt.Sprintf("printf kernel-traffic >/dev/tcp/%s/%d", ns.HostIP, port)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("namespace TCP timeout")
+	}
+	after, err := interfaceTrafficBytes(ns.HostIf)
+	if err != nil || after <= before {
+		t.Fatalf("traffic not counted: %d -> %d: %v", before, after, err)
+	}
+	cleanupNetns(context.Background(), ns)
+	if err := runCmd(context.Background(), "ip", "link", "show", ns.HostIf); err == nil {
+		t.Fatal("veth leaked")
+	}
+}
+
+func TestPanelNamespaceSubnetsAvoidExistingRoutes(t *testing.T) {
+	first, _, err := chooseNamespaceIPs("room", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := chooseNamespaceIPs("room", []string{first + "/30"})
+	if err != nil || second == first {
+		t.Fatalf("overlapping namespace route: %s, %v", second, err)
+	}
+	if _, _, err := chooseNamespaceIPs("room", []string{"10.0.0.0/8"}); err == nil {
+		t.Fatal("host network overlap ignored")
+	}
+}
+
+func TestPanelShutdownWaitsForNamespaceCleanup(t *testing.T) {
+	p := &process{cleaned: make(chan struct{})}
+	s := NewSupervisor("", nil)
+	s.processes["test"] = p
+	finished := make(chan struct{})
+	go func() { s.StopAll(); close(finished) }()
+	select {
+	case <-finished:
+		t.Fatal("shutdown returned before cleanup")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(p.cleaned)
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not finish after cleanup")
+	}
+}
+
+func TestPanelCleanupDoesNotDeleteHostTrafficControl(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "tc-called")
+	for _, name := range []string{"ip", "iptables", "tc"} {
+		script := "#!/bin/sh\nexit 0\n"
+		if name == "tc" {
+			script = "#!/bin/sh\ntouch '" + logPath + "'\n"
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	q := &QuotaEnforcer{}
+	q.cleanupStale(context.Background())
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Fatal("manager altered shared host qdisc")
+	}
+	if ownedNamespace.MatchString("olc-other-vpn") || ownedVeth.MatchString("olh-other-vpn") {
+		t.Fatal("cleanup ownership is too broad")
+	}
+}
+
+func TestPanelStoppingOldProcessPreservesReplacementQuota(t *testing.T) {
+	loc := testLocation("https://meet.handyweb.org/room", "Main")
+	key := locationKey(loc)
+	q := &QuotaEnforcer{rules: map[string]quotaRule{key: {ClientID: loc.ClientID, Iface: "new-interface", Last: 123}}}
+	old := &process{netns: &netnsRuntime{HostIf: "old-interface"}}
+	s := NewSupervisor("unused", nil)
+	s.quota = q
+	s.processes[key] = old
+	s.stopLocked(key)
+	if rule, ok := q.rules[key]; !ok || rule.Iface != "new-interface" || rule.Last != 123 {
+		t.Fatalf("stopping old process deleted replacement accounting: %+v", q.rules)
+	}
+}
+
+func TestPanelFailedReloadRestoresActiveQuotaRules(t *testing.T) {
+	dir := t.TempDir()
+	for _, command := range []string{"ip", "tc"} {
+		if err := os.WriteFile(filepath.Join(dir, command), []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	oldA, oldB := testLocation("room-a", "A"), testLocation("room-b", "B")
+	q := &QuotaEnforcer{rules: map[string]quotaRule{}}
+	starts := 0
+	s := NewSupervisor("unused", func(ctx context.Context, path string, loc Location) (*process, error) {
+		starts++
+		if starts == 2 {
+			return nil, fmt.Errorf("second location failed")
+		}
+		return &process{location: loc, cmd: &exec.Cmd{Process: &os.Process{Pid: 1 << 29}}, netns: &netnsRuntime{HostIf: "lo"}}, nil
+	})
+	s.quota = q
+	for _, loc := range []Location{oldA, oldB} {
+		key := locationKey(loc)
+		s.processes[key] = &process{location: loc}
+		q.rules[key] = quotaRule{ClientID: loc.ClientID, Iface: "old-interface", Last: 123}
+	}
+	nextA, nextB := oldA, oldB
+	nextA.Endpoint.Key, nextB.Endpoint.Key = "changed-key", "changed-key"
+	if err := s.Reload(context.Background(), testConfig(nextA, nextB)); err == nil {
+		t.Fatal("reload should fail")
+	}
+	if starts != 2 || len(q.rules) != 2 {
+		t.Fatalf("failed to exercise staged replacement: starts=%d rules=%+v", starts, q.rules)
+	}
+	for _, rule := range q.rules {
+		if rule.Iface != "old-interface" || rule.Last != 123 {
+			t.Fatalf("failed reload stole active accounting: %+v", rule)
+		}
+	}
+}

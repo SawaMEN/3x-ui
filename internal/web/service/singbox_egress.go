@@ -3,7 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"net"
 	"strconv"
 	"strings"
 
@@ -89,8 +89,29 @@ func injectSingBoxEgressBridge(cfg *singbox.Config, bridgeTag, outboundTag strin
 			usedPorts[port] = struct{}{}
 		}
 	}
+	for _, service := range cfg.Services {
+		if port := singBoxInboundPort(service); port > 0 {
+			usedPorts[port] = struct{}{}
+		}
+	}
+	usedPorts[10086] = struct{}{}
+	usedPorts[10090] = struct{}{}
+	usedPorts[10091] = struct{}{}
+	if clash, ok := cfg.Experimental["clash_api"].(map[string]any); ok {
+		if controller, ok := clash["external_controller"].(string); ok {
+			if _, portText, err := net.SplitHostPort(controller); err == nil {
+				if port, err := strconv.Atoi(portText); err == nil {
+					usedPorts[port] = struct{}{}
+				}
+			}
+		}
+	}
 	port := basePort
 	for {
+		if port <= 0 || port > 65535 {
+			logger.Warning(label, " egress: no valid TCP port is available")
+			return false
+		}
 		if _, used := usedPorts[port]; !used {
 			break
 		}
@@ -158,12 +179,11 @@ func applySingBoxInfrastructureEgress(cfg *singbox.Config) {
 // config file the running managed sing-box process uses. Regenerating from DB
 // here could choose a different port while an older config is still running.
 func singBoxEgressProxyURL(tag string) string {
-	if !singBoxProcess.IsRunning() || strings.TrimSpace(tag) == "" {
+	if !SelectedNativeCore().process().IsRunning() || strings.TrimSpace(tag) == "" {
 		return ""
 	}
-	data, err := os.ReadFile(singbox.GetConfigPath())
-	if err != nil {
-		logger.Warning("read running sing-box config for egress bridge failed:", err)
+	data := SelectedNativeCore().process().AppliedConfig()
+	if len(data) == 0 {
 		return ""
 	}
 	var cfg singbox.Config
@@ -183,54 +203,10 @@ func singBoxEgressProxyURL(tag string) string {
 	return ""
 }
 
-func xrayEgressProxyURL(tag string) string {
-	proc := XrayProcess()
-	if proc == nil || !proc.IsRunning() {
-		return ""
-	}
-	cfg := proc.GetConfig()
-	if cfg == nil {
-		return ""
-	}
-	for i := range cfg.InboundConfigs {
-		if cfg.InboundConfigs[i].Tag == tag {
-			return fmt.Sprintf("socks5://127.0.0.1:%d", cfg.InboundConfigs[i].Port)
-		}
-	}
-	return ""
-}
-
-// coreEgressProxyURL prefers the selected engine while it is running. The
-// other engine is used only when the selected one is stopped, so an accidentally
-// lingering process cannot override the operator's active core.
+// coreEgressProxyURL uses only the managed owner runtime.
 func coreEgressProxyURL(settings *SettingService, tag string) string {
-	if settings == nil {
+	if settings == nil || !SelectedNativeCore().IsRunning() {
 		return ""
 	}
-	coreType, err := settings.GetCoreType()
-	if err != nil {
-		coreType = CoreTypeXray
-	}
-	singBoxRunning := singBoxProcess.IsRunning()
-	xrayRunning := false
-	if proc := XrayProcess(); proc != nil {
-		xrayRunning = proc.IsRunning()
-	}
-
-	if coreType == CoreTypeSingBox {
-		if singBoxRunning {
-			return singBoxEgressProxyURL(tag)
-		}
-		if xrayRunning {
-			return xrayEgressProxyURL(tag)
-		}
-		return ""
-	}
-	if xrayRunning {
-		return xrayEgressProxyURL(tag)
-	}
-	if singBoxRunning {
-		return singBoxEgressProxyURL(tag)
-	}
-	return ""
+	return singBoxEgressProxyURL(tag)
 }

@@ -1,0 +1,12 @@
+[Unit]
+Description=Safely update the 3x-ui Hiddify core to the latest stable compatible release
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/default/x-ui
+EnvironmentFile=-/etc/conf.d/x-ui
+EnvironmentFile=-/etc/sysconfig/x-ui
+ExecStart=/usr/bin/env bash /usr/local/x-ui/hiddify-core-update.sh
+TimeoutStartSec=25min

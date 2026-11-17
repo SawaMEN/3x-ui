@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func seedGlobalTraffic(t *testing.T, email string, up, down int64) {
@@ -43,7 +43,7 @@ func TestAutoRenewClients_TruncatedCatchUpKeepsCrossPanelTraffic(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "capped@x", Enable: false, Reset: 30, ResetMax: 3, ResetCount: 2,
 		Up: 111, Down: 222, ExpiryTime: past,
 	}).Error; err != nil {
@@ -55,7 +55,7 @@ func TestAutoRenewClients_TruncatedCatchUpKeepsCrossPanelTraffic(t *testing.T) {
 		t.Fatalf("autoRenewClients: %v", err)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "capped@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestAutoRenewClients_RenewedClientLosesCrossPanelTraffic(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "rolled@x", Enable: false, Reset: 30,
 		Up: 333, Down: 444, ExpiryTime: past,
 	}).Error; err != nil {
@@ -94,7 +94,7 @@ func TestAutoRenewClients_RenewedClientLosesCrossPanelTraffic(t *testing.T) {
 		t.Fatalf("autoRenewClients: %v", err)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "rolled@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}

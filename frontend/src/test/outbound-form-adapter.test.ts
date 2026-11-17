@@ -9,6 +9,41 @@ import { formValuesToWirePayload, rawOutboundToFormValues } from '@/lib/xray/out
 // emission, blackhole type wrap, dns rule normalization, mux gating.
 
 describe('outbound-form-adapter: round-trip', () => {
+  it('preserves proxySettings through Basic editing without mutating the original', () => {
+    const proxySettings = { tag: 'upstream', transportLayer: true };
+    const form = rawOutboundToFormValues({ protocol: 'vless', tag: 'chain', proxySettings });
+    const wire = formValuesToWirePayload(form);
+    expect(wire.proxySettings).toEqual(proxySettings);
+    expect(form.proxySettings).not.toBe(proxySettings);
+    expect(wire.proxySettings).not.toBe(form.proxySettings);
+    form.proxySettings!.tag = 'renamed';
+    expect(proxySettings.tag).toBe('upstream');
+  });
+  it('preserves a flat VMess target when editing an imported outbound', () => {
+    const form = rawOutboundToFormValues({
+      protocol: 'vmess',
+      tag: 'flat',
+      settings: {
+        address: 'vmess.example',
+        port: 8443,
+        id: '11111111-2222-4333-8444-555555555555',
+        security: 'chacha20-poly1305',
+      },
+    });
+    expect(formValuesToWirePayload(form)).toMatchObject({
+      protocol: 'vmess',
+      tag: 'flat',
+      settings: {
+        vnext: [
+          {
+            address: 'vmess.example',
+            port: 8443,
+            users: [{ id: '11111111-2222-4333-8444-555555555555', security: 'chacha20-poly1305' }],
+          },
+        ],
+      },
+    });
+  });
   it('vmess flattens vnext to address/port/id/security and re-nests', () => {
     const wire = {
       protocol: 'vmess',
@@ -812,5 +847,66 @@ describe('outbound-form-adapter: full optional-block round-trip', () => {
     expect(stream.finalmask).toMatchObject({ tcp: [{ type: 'fragment' }] });
 
     expect(back.mux).toMatchObject({ enabled: true });
+  });
+});
+
+it('does not invent a Vision testseed when converting native-compatible VLESS', () => {
+  const form = rawOutboundToFormValues({
+    protocol: 'vless',
+    tag: 'vision',
+    settings: {
+      address: 'proxy.test',
+      port: 443,
+      id: '2a547fe4-5b0f-4a84-845c-131464875bf8',
+      flow: 'xtls-rprx-vision',
+    },
+    streamSettings: { network: 'tcp', security: 'tls' },
+  });
+  expect(formValuesToWirePayload(form).settings).not.toHaveProperty('testseed');
+});
+
+describe('XHTTP outbound extra precedence', () => {
+  it('hydrates XMUX inside extra and removes the stale extra wrapper on save', () => {
+    const raw = {
+      protocol: 'vless',
+      tag: 'audit',
+      settings: { address: 'edge.example', port: 443, id: '11111111-1111-4111-8111-111111111111' },
+      streamSettings: {
+        network: 'xhttp',
+        security: 'none',
+        xhttpSettings: {
+          path: '/audit',
+          mode: 'packet-up',
+          scMinPostsIntervalMs: '999',
+          extra: {
+            path: '/ignored',
+            scMinPostsIntervalMs: '40-80',
+            xmux: { maxConcurrency: '4-8' },
+            downloadSettings: {
+              address: 'download.example',
+              port: 443,
+              network: 'xhttp',
+              xhttpSettings: { path: '/audit' },
+            },
+          },
+        },
+      },
+    };
+    const form = rawOutboundToFormValues(raw);
+    const wire = formValuesToWirePayload(form);
+    const xhttp = (wire.streamSettings as Record<string, unknown>).xhttpSettings as Record<
+      string,
+      unknown
+    >;
+    expect(xhttp).not.toHaveProperty('extra');
+    expect(xhttp).not.toHaveProperty('enableXmux');
+    expect(xhttp).toMatchObject({
+      path: '/audit',
+      mode: 'packet-up',
+      scMinPostsIntervalMs: '40-80',
+      xmux: { maxConcurrency: '4-8' },
+      downloadSettings: { address: 'download.example' },
+    });
+    expect(raw.streamSettings.xhttpSettings.extra.path).toBe('/ignored');
   });
 });

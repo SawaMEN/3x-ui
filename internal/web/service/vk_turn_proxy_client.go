@@ -13,11 +13,11 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	wingsvproto "github.com/SawaMEN/3x-ui/v3/internal/wingsv/proto"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // vkTurnProxyPeerAllocator hands out the next free 10.0.0.X/32 address
@@ -842,7 +842,7 @@ func (s *InboundService) buildVKTurnProxyManagedWGConfig(settings *VKTurnProxySe
 	}, nil
 }
 
-func (s *InboundService) GetVKTurnProxyClientTraffic(inboundID int, clientID string) (*xray.ClientTraffic, error) {
+func (s *InboundService) GetVKTurnProxyClientTraffic(inboundID int, clientID string) (*coremodel.ClientTraffic, error) {
 	inbound, settings, index, err := s.getVKTurnProxyClient(inboundID, clientID)
 	if err != nil {
 		return nil, err
@@ -850,7 +850,7 @@ func (s *InboundService) GetVKTurnProxyClientTraffic(inboundID int, clientID str
 	client := settings.Clients[index]
 
 	db := database.GetDB()
-	var traffic xray.ClientTraffic
+	var traffic coremodel.ClientTraffic
 	err = db.Where("email = ?", client.Email).First(&traffic).Error
 	if err == nil {
 		return s.GetClientTrafficByEmail(client.Email)

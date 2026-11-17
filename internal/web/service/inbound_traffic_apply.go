@@ -141,9 +141,10 @@ func (s *InboundService) applyTrafficLocalPlan(plan *trafficLocalApplyPlan) (nee
 }
 
 func (s *InboundService) applyTrafficMutationBatch(b *trafficMutationBatch) bool {
-	if b == nil {
+	if b == nil || len(b.localPlans) == 0 {
 		return false
 	}
+	defer beginLocalConfigBatch()()
 	needRestart := false
 	for i := range b.localPlans {
 		needRestart = s.applyTrafficLocalPlan(&b.localPlans[i]) || needRestart

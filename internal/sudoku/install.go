@@ -11,9 +11,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const releasesAPI = "https://api.github.com/repos/SUDOKU-ASCII/sudoku/releases"
@@ -31,17 +33,25 @@ func LatestRelease(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(rel.TagName), nil
+	return releaseVersion(rel)
 }
 
 func fetchLatestRelease(ctx context.Context) (release, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releasesAPI+"/latest", nil)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return fetchRelease(ctx, http.DefaultClient)
+}
+
+// Both stable and development panels use the official stable Sudoku release.
+func fetchRelease(ctx context.Context, client *http.Client) (release, error) {
+	endpoint := releasesAPI + "/latest"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "3x-ui")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return release{}, fmt.Errorf("fetch Sudoku release: %w", err)
 	}
@@ -54,10 +64,18 @@ func fetchLatestRelease(ctx context.Context) (release, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
 		return release{}, err
 	}
-	if strings.TrimSpace(rel.TagName) == "" {
-		return release{}, fmt.Errorf("Sudoku release API returned an empty tag")
+	if _, err := releaseVersion(rel); err != nil {
+		return release{}, err
 	}
 	return rel, nil
+}
+
+func releaseVersion(rel release) (string, error) {
+	tag := strings.TrimSpace(rel.TagName)
+	if tag == "" {
+		return "", fmt.Errorf("Sudoku release API returned an empty tag")
+	}
+	return tag, nil
 }
 
 func GetBinaryPath(binDir string) string {
@@ -71,12 +89,12 @@ func GetBinaryPath(binDir string) string {
 // IsInstalled reports whether the Sudoku tunnel binary is present.
 func IsInstalled(binDir string) bool {
 	st, err := os.Stat(GetBinaryPath(binDir))
-	return err == nil && !st.IsDir()
+	return err == nil && st.Mode().IsRegular() && st.Mode()&0o111 != 0 && readInstalledVersion(binDir) != ""
 }
 
 func EnsureInstalled(ctx context.Context, binDir string) (string, error) {
 	path := GetBinaryPath(binDir)
-	if st, err := os.Stat(path); err == nil && !st.IsDir() {
+	if IsInstalled(binDir) {
 		return path, nil
 	}
 	return InstallLatest(ctx, binDir)
@@ -132,10 +150,26 @@ func InstallLatest(ctx context.Context, binDir string) (string, error) {
 	if err := os.Chmod(staged, 0o755); err != nil {
 		return "", err
 	}
+	// Check the official CLI before replacing an existing working executable.
+	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	output, checkErr := exec.CommandContext(checkCtx, staged, "-h").CombinedOutput()
+	cancel()
+	if checkErr != nil {
+		return "", fmt.Errorf("check downloaded Sudoku executable: %w", checkErr)
+	}
+	for _, flag := range []string{"-c ", "-test", "-keygen"} {
+		if !strings.Contains(string(output), flag) {
+			return "", fmt.Errorf("downloaded Sudoku executable lacks %s support", strings.TrimSpace(flag))
+		}
+	}
 	if err := os.Rename(staged, target); err != nil {
 		return "", err
 	}
-	if err := writeInstalledVersion(binDir, rel.TagName); err != nil {
+	version, err := releaseVersion(rel)
+	if err != nil {
+		return "", err
+	}
+	if err := writeInstalledVersion(binDir, version); err != nil {
 		return "", err
 	}
 	return target, nil
@@ -167,7 +201,8 @@ func pickAsset(assets []struct {
 }) (struct {
 	Name string
 	URL  string
-}, error) {
+}, error,
+) {
 	arch := runtime.GOARCH
 	switch arch {
 	case "amd64", "arm64":

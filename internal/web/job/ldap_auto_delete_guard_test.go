@@ -2,6 +2,24 @@ package job
 
 import "testing"
 
+func TestRejectedLDAPFetchDoesNotLowerDeletionBaseline(t *testing.T) {
+	j := NewLdapSyncJob()
+	if !j.acceptFetchCount(500) {
+		t.Fatal("healthy first fetch rejected")
+	}
+	for _, count := range []int{1, 1, 0, 1, 249, 249} {
+		if j.acceptFetchCount(count) {
+			t.Errorf("partial fetch of %d users accepted", count)
+		}
+		if got := j.lastFlagCount.Load(); got != 500 {
+			t.Errorf("rejected fetch lowered baseline to %d", got)
+		}
+	}
+	if !j.acceptFetchCount(450) || j.lastFlagCount.Load() != 450 {
+		t.Fatal("recovered directory did not update baseline")
+	}
+}
+
 // A bind that succeeds with an unusable search returns (empty, nil); the only
 // guard was `err != nil`, so that answer detached the entire inbound.
 func TestAutoDeleteAllowed(t *testing.T) {

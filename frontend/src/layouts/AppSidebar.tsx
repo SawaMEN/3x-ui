@@ -12,7 +12,6 @@ import {
   CodeOutlined,
   DashboardOutlined,
   DatabaseOutlined,
-  DiscordOutlined,
   ExportOutlined,
   GlobalOutlined,
   ImportOutlined,
@@ -32,6 +31,7 @@ import {
 import { HttpUtil } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import { useAllSettings } from '@/api/queries/useAllSettings';
+import { getAdditionalSettingsTab } from '@/pages/settings/additional-settings';
 import './AppSidebar.css';
 
 const LOGOUT_KEY = '__logout__';
@@ -74,7 +74,6 @@ type IconName =
   | 'logout'
   | 'outbound'
   | 'routing'
-  | 'telemt'
   | 'tool';
 const iconByName: Record<IconName, ComponentType> = {
   dashboard: DashboardOutlined,
@@ -88,7 +87,6 @@ const iconByName: Record<IconName, ComponentType> = {
   logout: LogoutOutlined,
   outbound: ExportOutlined,
   routing: SwapOutlined,
-  telemt: MessageOutlined,
   tool: ToolOutlined,
 };
 function readSidebarPinned() {
@@ -105,20 +103,42 @@ function saveSidebarPinned(pinned: boolean) {
 }
 
 function AppSidebar() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { mode } = useTheme();
   const navigate = useNavigate();
   const { pathname, hash } = useLocation();
   const { allSetting } = useAllSettings();
   const showSubFormats = !!(allSetting.subJsonEnable || allSetting.subClashEnable);
   const showSubBalancers = !!allSetting.subJsonEnable;
-  const isXray = allSetting.coreType === 'xray';
-  const isSingBox = allSetting.coreType === 'sing-box';
-  const firewallTitle = (i18n.resolvedLanguage || i18n.language || '')
-    .toLowerCase()
-    .startsWith('ru')
-    ? 'Файрволл'
-    : 'Firewall';
+  const [olcrtcInstalled, setOlcrtcInstalled] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const refreshOlcRTC = async () => {
+      try {
+        const response = (await HttpUtil.get('/panel/api/olcrtc/status', undefined, {
+          silent: true,
+        })) as { success?: boolean; obj?: { installed?: boolean } };
+        if (active && response.success && response.obj) {
+          setOlcrtcInstalled(response.obj.installed === true);
+        }
+      } catch {
+        // Do not show the menu before a confirmed installation. Preserve the
+        // last successful state if a later request fails temporarily.
+      }
+    };
+    void refreshOlcRTC();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refreshOlcRTC();
+    }, 15000);
+    window.addEventListener('focus', refreshOlcRTC);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshOlcRTC);
+    };
+  }, []);
+
   const [hovered, setHovered] = useState(() => hoveredAcrossRemounts);
   const [pinned, setPinned] = useState(readSidebarPinned);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -160,17 +180,6 @@ function AppSidebar() {
   }, [updateHovered]);
   const currentTheme: 'light' | 'dark' = mode === 'light' || mode === 'colorful' ? 'light' : 'dark';
 
-  const xrayChildren = useMemo<NonNullable<MenuProps['items']>>(
-    () => [
-      { key: '/xray#basic', icon: <SettingOutlined />, label: t('pages.xray.basicTemplate') },
-      { key: '/settings#gateway', icon: <ApartmentOutlined />, label: 'Режим шлюза' },
-      { key: '/xray#balancer', icon: <ClusterOutlined />, label: t('pages.xray.Balancers') },
-      { key: '/xray#dns', icon: <DatabaseOutlined />, label: 'DNS' },
-      { key: '/xray#advanced', icon: <CodeOutlined />, label: t('pages.xray.advancedTemplate') },
-    ],
-    [t],
-  );
-
   const singBoxChildren = useMemo<NonNullable<MenuProps['items']>>(
     () => [
       {
@@ -179,44 +188,24 @@ function AppSidebar() {
         label: t('pages.singBox.sections.basic'),
       },
       {
-        key: '/settings#gateway',
-        icon: <ApartmentOutlined />,
-        label: 'Режим шлюза',
-      },
-      {
         key: '/singbox#dns',
         icon: <DatabaseOutlined />,
         label: t('pages.singBox.sections.dns'),
       },
       {
-        key: '/singbox#routing',
-        icon: <ApartmentOutlined />,
-        label: t('pages.singBox.sections.route'),
-      },
-      {
-        key: '/singbox#outbound',
-        icon: <ExportOutlined />,
-        label: t('pages.singBox.sections.outbounds'),
-      },
-      {
-        key: '/singbox#endpoints',
-        icon: <GlobalOutlined />,
-        label: t('pages.singBox.sections.endpoints'),
-      },
-      {
-        key: '/singbox#certificates',
+        key: '/singbox#adblock',
         icon: <SafetyOutlined />,
-        label: t('pages.singBox.sections.certificates'),
+        label: 'AdBlock',
       },
       {
-        key: '/singbox#network',
-        icon: <CloudServerOutlined />,
-        label: t('pages.singBox.sections.network'),
+        key: '/singbox#gateway',
+        icon: <ApartmentOutlined />,
+        label: 'Режим шлюза',
       },
       {
         key: '/singbox#advanced',
         icon: <CodeOutlined />,
-        label: t('pages.singBox.sections.advanced'),
+        label: 'Дополнительно / JSON',
       },
     ],
     [t],
@@ -230,6 +219,11 @@ function AppSidebar() {
         label: t('pages.settings.panelSettings'),
       },
       {
+        key: '/settings#advanced',
+        icon: <CloudServerOutlined />,
+        label: t('pages.settings.advanced.title'),
+      },
+      {
         key: '/settings#security',
         icon: <SafetyOutlined />,
         label: t('security'),
@@ -240,11 +234,6 @@ function AppSidebar() {
         label: t('pages.settings.TGBotSettings'),
       },
       { key: '/settings#email', icon: <MailOutlined />, label: t('pages.settings.emailSettings') },
-      {
-        key: '/settings#discord',
-        icon: <DiscordOutlined />,
-        label: t('pages.settings.discordSettings'),
-      },
       {
         key: '/settings#subscription',
         icon: <CloudServerOutlined />,
@@ -273,38 +262,36 @@ function AppSidebar() {
       { key: '/', icon: 'dashboard' as IconName, title: t('menu.dashboard') },
       { key: '/inbounds', icon: 'inbound' as IconName, title: t('menu.inbounds') },
       { key: '/clients', icon: 'team' as IconName, title: t('menu.clients') },
+      ...(olcrtcInstalled
+        ? [{ key: '/olcrtc', icon: 'team' as IconName, title: 'OlcRTC — клиенты' }]
+        : []),
       { key: '/groups', icon: 'groups' as IconName, title: t('menu.groups') },
       { key: '/nodes', icon: 'cluster' as IconName, title: t('menu.nodes') },
+      { key: '/manager', icon: 'tool' as IconName, title: t('menu.manager') },
       { key: '/hosts', icon: 'hosts' as IconName, title: t('menu.hosts') },
-      { key: '/firewall', icon: 'firewall' as IconName, title: firewallTitle },
       { key: '/outbound', icon: 'outbound' as IconName, title: t('menu.outbounds') },
       { key: '/routing', icon: 'routing' as IconName, title: t('menu.routing') },
-      { key: '/telemt', icon: 'telemt' as IconName, title: t('menu.telemt') },
       { key: '/settings', icon: 'setting' as IconName, title: t('menu.settings') },
-      ...(isXray
-        ? [
-            {
-              key: '/xray',
-              icon: 'tool' as IconName,
-              title: t('menu.xray'),
-              children: xrayChildren,
-            },
-          ]
-        : []),
-      ...(isSingBox
-        ? [
-            {
-              key: '/singbox',
-              icon: 'tool' as IconName,
-              title: t('menu.singBox'),
-              children: singBoxChildren,
-            },
-          ]
-        : []),
+      {
+        key: allSetting.coreType === 'xray' ? '/xray' : '/singbox',
+        icon: 'tool' as IconName,
+        title: allSetting.coreType === 'xray' ? 'Xray' : t('menu.singBox'),
+        children:
+          allSetting.coreType === 'xray'
+            ? singBoxChildren
+                .filter(
+                  (item) =>
+                    item && !['/singbox#adblock', '/singbox#gateway'].includes(String(item.key)),
+                )
+                .map((item) =>
+                  item ? { ...item, key: String(item.key).replace('/singbox', '/xray') } : item,
+                )
+            : singBoxChildren,
+      },
       { key: LOGOUT_KEY, icon: 'logout' as IconName, title: t('logout') },
     ];
     return base;
-  }, [t, firewallTitle, isXray, isSingBox, xrayChildren, singBoxChildren]);
+  }, [t, singBoxChildren, olcrtcInstalled, allSetting.coreType]);
 
   const navItems = useMemo(() => tabs.filter((tab) => tab.icon !== 'logout'), [tabs]);
   const utilItems = useMemo(() => tabs.filter((tab) => tab.icon === 'logout'), [tabs]);
@@ -314,7 +301,7 @@ function AppSidebar() {
   const singBoxActive = pathname === '/singbox';
   const gatewayActive = settingsActive && hash === '#gateway';
   const selectedKey = settingsActive
-    ? `/settings${hash || '#general'}`
+    ? `/settings${getAdditionalSettingsTab(hash) ? '#advanced' : hash || '#general'}`
     : xrayActive
       ? `/xray${hash || '#basic'}`
       : singBoxActive
@@ -322,7 +309,7 @@ function AppSidebar() {
         : pathname === ''
           ? '/'
           : pathname;
-  const gatewaySubmenu = isSingBox ? '/singbox' : isXray ? '/xray' : '/settings';
+  const gatewaySubmenu = '/settings';
   const openSubmenu = gatewayActive
     ? gatewaySubmenu
     : settingsActive

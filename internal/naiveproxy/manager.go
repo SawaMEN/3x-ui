@@ -5,16 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,38 +19,26 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 const (
-	releasesAPI       = "https://api.github.com/repos/klzgrad/forwardproxy/releases/latest"
-	releaseAssetName  = "caddy-forwardproxy-naive.tar.xz"
-	reconcileInterval = 3 * time.Second
+	releasesAPI      = "https://api.github.com/repos/klzgrad/forwardproxy/releases/latest"
+	releaseAssetName = "caddy-forwardproxy-naive.tar.xz"
 )
 
 var managerMu sync.Mutex
 
 type Status struct {
-	Installed       bool   `json:"installed"`
-	Version         string `json:"version"`
-	LatestVersion   string `json:"latestVersion"`
-	UpdateAvailable bool   `json:"updateAvailable"`
-	Binary          string `json:"binary"`
-	Running         bool   `json:"running"`
-}
-
-type User struct {
-	Username string
-	Password string
-}
-
-type Inbound struct {
-	Tag             string
-	Listen          string
-	Port            int
-	CertificatePath string
-	KeyPath         string
-	Users           []User
+	Source            string `json:"source,omitempty"`
+	FallbackReason    string `json:"fallbackReason,omitempty"`
+	Supported         bool   `json:"supported"`
+	UnsupportedReason string `json:"unsupportedReason,omitempty"`
+	Installed         bool   `json:"installed"`
+	Version           string `json:"version"`
+	LatestVersion     string `json:"latestVersion"`
+	UpdateAvailable   bool   `json:"updateAvailable"`
+	Binary            string `json:"binary"`
+	Running           bool   `json:"running"`
 }
 
 type releaseAsset struct {
@@ -67,27 +52,29 @@ type release struct {
 	Assets  []releaseAsset `json:"assets"`
 }
 
-type inboundSettings struct {
-	Clients []model.Client `json:"clients"`
-	TLS     struct {
-		CertificatePath string `json:"certificatePath"`
-		KeyPath         string `json:"keyPath"`
-	} `json:"tls"`
-}
-
 func GetStatus(ctx context.Context) (Status, error) {
 	binary := BinaryPath()
-	_, statErr := os.Stat(binary)
+	info, statErr := os.Stat(binary)
 	status := Status{
-		Installed: statErr == nil,
+		Supported: runtime.GOOS == "linux" && runtime.GOARCH == "amd64",
+		Installed: statErr == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0,
 		Version:   installedVersion(binary),
 		Binary:    binary,
-		Running:   processRunning(),
 	}
 
+	if !status.Supported {
+		status.Installed = false
+		status.UnsupportedReason = fmt.Sprintf("Caddy-Naive server is published only for linux/amd64; current platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+		return status, nil
+	}
 	rel, err := fetchLatestRelease(ctx)
 	if err != nil {
 		// Network failure must not make an installed component look absent.
+		return status, nil
+	}
+	if _, err := pickAsset(rel.Assets); err != nil {
+		status.Supported = false
+		status.UnsupportedReason = err.Error()
 		return status, nil
 	}
 	status.LatestVersion = strings.TrimSpace(rel.TagName)
@@ -151,12 +138,11 @@ func Update(ctx context.Context) (Status, error) {
 		_ = os.Remove(staged)
 		return Status{}, err
 	}
-	if err := os.WriteFile(versionPath(), []byte(strings.TrimSpace(rel.TagName)+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(VersionPath(), []byte(strings.TrimSpace(rel.TagName)+"\n"), 0o644); err != nil {
 		return Status{}, err
 	}
 
-	// Do not recurse through the manager lock. Ensure/reconciler starts the
-	// newly installed binary after Update returns.
+	// The protocolserver owner restarts current listeners after Update returns.
 	status, err := statusWithoutRelease()
 	if err != nil {
 		return Status{}, err
@@ -166,153 +152,8 @@ func Update(ctx context.Context) (Status, error) {
 	return status, nil
 }
 
-// Sync writes and validates a complete Caddyfile, then atomically restarts the
-// sidecar only when its effective configuration changed.
-func Sync(ctx context.Context, inbounds []Inbound) error {
-	managerMu.Lock()
-	defer managerMu.Unlock()
-
-	if len(inbounds) == 0 {
-		return stopLocked()
-	}
-	if _, err := os.Stat(BinaryPath()); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("NaiveProxy server is not installed; install Caddy-Naive from System Updates")
-		}
-		return err
-	}
-
-	content, err := RenderConfig(inbounds)
-	if err != nil {
-		return err
-	}
-	old, _ := os.ReadFile(configPath())
-	if string(old) == content && processRunning() {
-		return nil
-	}
-
-	if err := os.MkdirAll(config.GetBinFolderPath(), 0o755); err != nil {
-		return err
-	}
-	staged := configPath() + ".new"
-	if err := os.WriteFile(staged, []byte(content), 0o600); err != nil {
-		return err
-	}
-	if err := validateConfig(ctx, staged); err != nil {
-		_ = os.Remove(staged)
-		return err
-	}
-	if err := os.Rename(staged, configPath()); err != nil {
-		_ = os.Remove(staged)
-		return err
-	}
-	if err := stopLocked(); err != nil {
-		return err
-	}
-	return startLocked()
-}
-
-func RenderConfig(inbounds []Inbound) (string, error) {
-	if len(inbounds) == 0 {
-		return "", nil
-	}
-	items := append([]Inbound(nil), inbounds...)
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].Port == items[j].Port {
-			return items[i].Tag < items[j].Tag
-		}
-		return items[i].Port < items[j].Port
-	})
-	ports := make(map[int]string, len(items))
-	var b strings.Builder
-	b.WriteString("{\n\tadmin off\n\torder forward_proxy before file_server\n}\n\n")
-
-	for _, inbound := range items {
-		if inbound.Port < 1 || inbound.Port > 65535 {
-			return "", fmt.Errorf("Naive inbound %q has invalid port %d", inbound.Tag, inbound.Port)
-		}
-		if previous, exists := ports[inbound.Port]; exists {
-			return "", fmt.Errorf("Naive inbounds %q and %q use the same port %d", previous, inbound.Tag, inbound.Port)
-		}
-		ports[inbound.Port] = inbound.Tag
-		if inbound.CertificatePath == "" || inbound.KeyPath == "" {
-			return "", fmt.Errorf("Naive inbound %q requires certificatePath and keyPath", inbound.Tag)
-		}
-		users := make([]User, 0, len(inbound.Users))
-		for _, user := range inbound.Users {
-			username := strings.TrimSpace(user.Username)
-			if username == "" || user.Password == "" {
-				continue
-			}
-			users = append(users, User{Username: username, Password: user.Password})
-		}
-		if len(users) == 0 {
-			return "", fmt.Errorf("Naive inbound %q has no enabled users", inbound.Tag)
-		}
-
-		fmt.Fprintf(&b, ":%d {\n", inbound.Port)
-		listen := strings.TrimSpace(inbound.Listen)
-		if listen != "" && listen != "0.0.0.0" && listen != "::" && listen != "[::]" {
-			if strings.HasPrefix(listen, "@") || strings.HasPrefix(listen, "/") {
-				return "", fmt.Errorf("Naive inbound %q cannot bind to a unix socket", inbound.Tag)
-			}
-			if host, _, err := net.SplitHostPort(listen); err == nil {
-				listen = host
-			}
-			listen = strings.Trim(listen, "[]")
-			fmt.Fprintf(&b, "\tbind %s\n", caddyQuote(listen))
-		}
-		fmt.Fprintf(&b, "\ttls %s %s\n", caddyQuote(inbound.CertificatePath), caddyQuote(inbound.KeyPath))
-		b.WriteString("\tforward_proxy {\n")
-		for _, user := range users {
-			fmt.Fprintf(&b, "\t\tbasic_auth %s %s\n", caddyQuote(user.Username), caddyQuote(user.Password))
-		}
-		b.WriteString("\t\thide_ip\n\t\thide_via\n\t\tprobe_resistance\n\t}\n}\n\n")
-	}
-	return b.String(), nil
-}
-
-func caddyQuote(value string) string { return strconv.Quote(value) }
-
-func Stop() error {
-	managerMu.Lock()
-	defer managerMu.Unlock()
-	return stopLocked()
-}
-
-func startLocked() error {
-	if processRunning() {
-		return nil
-	}
-	logFile, err := os.OpenFile(logPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	cmd := exec.Command(BinaryPath(), "run", "--config", configPath(), "--adapter", "caddyfile")
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-	if err := cmd.Start(); err != nil {
-		_ = logFile.Close()
-		return fmt.Errorf("start Caddy-Naive: %w", err)
-	}
-	_ = logFile.Close()
-	if err := os.WriteFile(pidPath(), []byte(strconv.Itoa(cmd.Process.Pid)+"\n"), 0o600); err != nil {
-		_ = cmd.Process.Kill()
-		return err
-	}
-	go func() {
-		_ = cmd.Wait()
-		if data, err := os.ReadFile(pidPath()); err == nil && strings.TrimSpace(string(data)) == strconv.Itoa(cmd.Process.Pid) {
-			_ = os.Remove(pidPath())
-		}
-	}()
-	time.Sleep(250 * time.Millisecond)
-	if !processRunning() {
-		return fmt.Errorf("Caddy-Naive exited immediately; see %s", logPath())
-	}
-	return nil
-}
-
+// stopLocked retires a PID-file process left by older installations before
+// replacing its binary. Current listeners are owned by protocolserver.
 func stopLocked() error {
 	pid, ok := readPID()
 	if !ok {
@@ -339,14 +180,6 @@ func stopLocked() error {
 	_ = proc.Kill()
 	_ = os.Remove(pidPath())
 	return nil
-}
-
-func processRunning() bool {
-	pid, ok := readPID()
-	if !ok || !pidAlive(pid) {
-		return false
-	}
-	return runtime.GOOS != "linux" || pidBelongsToBinary(pid)
 }
 
 func readPID() (int, bool) {
@@ -382,19 +215,9 @@ func pidBelongsToBinary(pid int) bool {
 	return got == want
 }
 
-func validateConfig(ctx context.Context, path string) error {
-	cmd := exec.CommandContext(ctx, BinaryPath(), "validate", "--config", path, "--adapter", "caddyfile")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("validate Caddy-Naive config: %w: %s", err, strings.TrimSpace(string(output)))
-	}
-	return nil
-}
-
 func BinaryPath() string  { return filepath.Join(config.GetBinFolderPath(), "caddy-naive") }
-func versionPath() string { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.version") }
-func configPath() string  { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.Caddyfile") }
+func VersionPath() string { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.version") }
 func pidPath() string     { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.pid") }
-func logPath() string     { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.log") }
 func normalizeVersion(v string) string {
 	return strings.TrimPrefix(strings.TrimSpace(v), "v")
 }
@@ -402,11 +225,11 @@ func normalizeVersion(v string) string {
 func statusWithoutRelease() (Status, error) {
 	binary := BinaryPath()
 	_, err := os.Stat(binary)
-	return Status{Installed: err == nil, Version: installedVersion(binary), Binary: binary, Running: processRunning()}, nil
+	return Status{Installed: err == nil, Version: installedVersion(binary), Binary: binary}, nil
 }
 
 func installedVersion(binary string) string {
-	if data, err := os.ReadFile(versionPath()); err == nil {
+	if data, err := os.ReadFile(VersionPath()); err == nil {
 		if value := strings.TrimSpace(string(data)); value != "" {
 			return value
 		}
@@ -498,7 +321,7 @@ func extractTarXZ(ctx context.Context, archivePath, dst string) error {
 	if _, err := exec.LookPath("tar"); err != nil {
 		return fmt.Errorf("tar with xz support is required to install Caddy-Naive: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, "tar", "-xJf", archivePath, "-C", dst)
+	cmd := exec.CommandContext(ctx, "tar", "--no-same-owner", "--no-same-permissions", "-xJf", archivePath, "-C", dst)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("extract Caddy-Naive: %w: %s", err, strings.TrimSpace(string(output)))
 	}

@@ -11,10 +11,14 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/link"
@@ -29,21 +33,25 @@ import (
 // core predates that rejection, unencrypted outbounds are kept, mirroring
 // CheckXrayConfig's version gate.
 func filterOutboundsRejectedByCore(label string, outbounds []any) ([]any, []string) {
-	coreVersion := "Unknown"
-	if process := currentXrayProcess(); process != nil {
-		coreVersion = process.GetXrayVersion()
-	}
 	kept := make([]any, 0, len(outbounds))
 	var dropped []string
 	for _, ob := range outbounds {
+		if row, ok := ob.(map[string]any); ok && externalvpn.IsAdditionalOutbound(row) {
+			if err := externalvpn.ValidateAdditionalOutbound(row); err != nil {
+				dropped = append(dropped, err.Error())
+			} else {
+				kept = append(kept, ob)
+			}
+			continue
+		}
 		raw, err := json.Marshal(ob)
 		if err == nil {
-			if buildErr := xray.ValidateOutboundConfig(raw); buildErr != nil && !shouldSkipLegacyUnencryptedOutboundRejection(coreVersion, buildErr) {
+			if buildErr := xray.ValidateOutboundConfig(raw); buildErr != nil {
 				tag := ""
 				if m, ok := ob.(map[string]any); ok {
 					tag, _ = m["tag"].(string)
 				}
-				logger.Warningf("%s: dropping outbound %q rejected by xray-core: %v", label, tag, buildErr)
+				logger.Warningf("%s: incompatible xray outbound %q: %v", label, tag, buildErr)
 				dropped = append(dropped, fmt.Sprintf("%s: %v", tag, buildErr))
 				continue
 			}
@@ -74,6 +82,40 @@ func readBoundedOutboundSubscriptionBody(r io.Reader) ([]byte, error) {
 }
 
 // OutboundSubscriptionService manages remote outbound subscriptions.
+var (
+	subscriptionOrderMu sync.Mutex
+	subscriptionLocks   = struct {
+		sync.Mutex
+		entries map[int]*subscriptionLock
+	}{entries: make(map[int]*subscriptionLock)}
+)
+
+type subscriptionLock struct {
+	sync.Mutex
+	users int
+}
+
+func lockSubscription(id int) func() {
+	subscriptionLocks.Lock()
+	entry := subscriptionLocks.entries[id]
+	if entry == nil {
+		entry = &subscriptionLock{}
+		subscriptionLocks.entries[id] = entry
+	}
+	entry.users++
+	subscriptionLocks.Unlock()
+	entry.Lock()
+	return func() {
+		entry.Unlock()
+		subscriptionLocks.Lock()
+		entry.users--
+		if entry.users == 0 {
+			delete(subscriptionLocks.entries, id)
+		}
+		subscriptionLocks.Unlock()
+	}
+}
+
 type OutboundSubscriptionService struct {
 	settingService SettingService
 }
@@ -92,11 +134,37 @@ func (s *OutboundSubscriptionService) List() ([]*model.OutboundSubscription, err
 	}
 	for _, sub := range subs {
 		sub.OutboundCount = countOutbounds(sub.LastFetchedOutbounds)
+		var stored []any
+		if json.Unmarshal([]byte(sub.LastFetchedOutbounds), &stored) == nil {
+			compatible, issues, coreName := filterSubscriptionOutboundsWithIssues("subscription status", stored)
+			sub.SupportedCount = len(compatible)
+			sub.LastWarning = currentSubscriptionCompatibilityWarning(sub.LastWarning, issues, coreName)
+		}
 		// Don't ship the heavy raw blobs to the list view.
 		sub.LastFetchedOutbounds = ""
 		sub.LinkIdentities = ""
 	}
 	return subs, nil
+}
+
+// Compatibility is rechecked against the current core on each list read.
+// Preserve independent parser warnings when removing an old core warning.
+var storedCompatibilityWarning = regexp.MustCompile(`(?:^|\s)\d+ подключений не поддерживаются текущим ядром [^;]+; сохранены в подписке, но не применены:.*$`)
+
+func currentSubscriptionCompatibilityWarning(previous string, issues []string, core string) string {
+	if location := storedCompatibilityWarning.FindStringIndex(previous); location != nil {
+		previous = previous[:location[0]]
+	}
+	previous = strings.TrimSpace(previous)
+	if len(issues) == 0 {
+		return previous
+	}
+	summary := fmt.Sprintf("%d подключений не поддерживаются текущим ядром %s; сохранены в подписке, но не применены: %s",
+		len(issues), core, strings.Join(issues, "; "))
+	if previous == "" {
+		return summary
+	}
+	return previous + " " + summary
 }
 
 // countOutbounds returns the number of outbounds in a stored LastFetchedOutbounds
@@ -166,7 +234,26 @@ func (s *OutboundSubscriptionService) nextDefaultSubPrefix(excludeId int) (strin
 	return fmt.Sprintf("sub%d-", defaultPrefixNumber(subs, excludeId)), nil
 }
 
-func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgent string, enabled bool, updateInterval int, allowPrivate, prepend, allowInsecure bool) (*model.OutboundSubscription, error) {
+// Reserved prefixes prevent two managed subscriptions from generating
+// identical tags and stopping the core on its next config reload.
+func checkSubscriptionPrefixAvailable(prefix string, excludeID int) error {
+	var count int64
+	query := database.GetDB().Model(&model.OutboundSubscription{}).Where("tag_prefix = ?", prefix)
+	if excludeID > 0 {
+		query = query.Where("id <> ?", excludeID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return err
+	}
+	if count != 0 {
+		return fmt.Errorf("префикс %q уже используется другой подпиской", prefix)
+	}
+	return nil
+}
+
+func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgent string, enabled bool, updateInterval int, allowPrivate, prepend, allowInsecure bool, balance ...*BalanceOptions) (*model.OutboundSubscription, error) {
+	subscriptionOrderMu.Lock()
+	defer subscriptionOrderMu.Unlock()
 	cleanURL, err := SanitizePublicHTTPURL(rawURL, allowPrivate)
 	if err != nil {
 		return nil, common.NewError("invalid subscription URL:", err)
@@ -184,9 +271,12 @@ func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgen
 			return nil, err
 		}
 	}
+	if err := checkSubscriptionPrefixAvailable(prefix, 0); err != nil {
+		return nil, err
+	}
 	// New subscriptions go to the end of the priority order.
-	var count int64
-	if err := database.GetDB().Model(&model.OutboundSubscription{}).Count(&count).Error; err != nil {
+	var lastPriority int
+	if err := database.GetDB().Model(&model.OutboundSubscription{}).Select("COALESCE(MAX(priority), -1)").Scan(&lastPriority).Error; err != nil {
 		return nil, err
 	}
 	sub := &model.OutboundSubscription{
@@ -197,9 +287,19 @@ func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgen
 		AllowInsecure:  allowInsecure,
 		UserAgent:      strings.TrimSpace(userAgent),
 		Prepend:        prepend,
-		Priority:       int(count),
+		Priority:       lastPriority + 1,
 		TagPrefix:      prefix,
 		UpdateInterval: updateInterval,
+	}
+	if len(balance) == 0 || balance[0] == nil {
+		balance = []*BalanceOptions{{Enabled: true, Mode: "latency", Interval: 300, Tolerance: 50, SwitchInterval: 900, HealthInterval: 30}}
+		sub.Prepend = true
+	}
+	if len(balance) > 0 && balance[0] != nil {
+		if err := balance[0].Validate(allowPrivate); err != nil {
+			return nil, err
+		}
+		balance[0].apply(sub)
 	}
 	if err := database.GetDB().Create(sub).Error; err != nil {
 		return nil, err
@@ -208,7 +308,11 @@ func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgen
 }
 
 // Update updates editable fields.
-func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, userAgent string, enabled bool, updateInterval int, allowPrivate, prepend, allowInsecure bool) error {
+func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, userAgent string, enabled bool, updateInterval int, allowPrivate, prepend, allowInsecure bool, balance ...*BalanceOptions) error {
+	unlock := lockSubscription(id)
+	defer unlock()
+	subscriptionOrderMu.Lock()
+	defer subscriptionOrderMu.Unlock()
 	sub, err := s.Get(id)
 	if err != nil {
 		return err
@@ -230,6 +334,27 @@ func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, 
 			return err
 		}
 	}
+	if err := checkSubscriptionPrefixAvailable(prefix, id); err != nil {
+		return err
+	}
+	// Changing the source must schedule an immediate re-fetch. Keep the
+	// previous working profiles until the replacement has been validated.
+	sourceChanged := sub.Url != cleanURL || sub.TagPrefix != prefix ||
+		sub.UserAgent != strings.TrimSpace(userAgent) ||
+		sub.AllowPrivate != allowPrivate || sub.AllowInsecure != allowInsecure
+	if sourceChanged {
+		sub.LastUpdated = 0
+	}
+	resetSelection, resetRanking, resetHealth := false, false, false
+	if len(balance) > 0 && balance[0] != nil {
+		if err := balance[0].Validate(allowPrivate); err != nil {
+			return err
+		}
+		policy := balance[0]
+		resetSelection = sub.AutoBalance != policy.Enabled || sub.BalanceMode != policy.Mode || sub.ProbeURL != policy.URL
+		resetRanking = resetSelection || sub.ProbeInterval != policy.Interval || sub.Tolerance != policy.Tolerance
+		resetHealth = resetRanking || sub.HealthInterval != policy.HealthInterval
+	}
 	sub.Remark = strings.TrimSpace(remark)
 	sub.Url = cleanURL
 	sub.Enabled = enabled
@@ -239,12 +364,32 @@ func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, 
 	sub.Prepend = prepend
 	sub.TagPrefix = prefix
 	sub.UpdateInterval = updateInterval
-	return database.GetDB().Save(sub).Error
+	if len(balance) > 0 && balance[0] != nil {
+		balance[0].apply(sub)
+	}
+	fields := []string{"remark", "url", "enabled", "allow_private", "allow_insecure", "user_agent", "prepend", "tag_prefix", "update_interval"}
+	if sourceChanged {
+		fields = append(fields, "last_updated")
+	}
+	if len(balance) > 0 && balance[0] != nil {
+		fields = append(fields, "auto_balance", "balance_mode", "probe_url", "probe_interval", "tolerance", "switch_interval", "health_interval")
+		// Don't overwrite concurrent probe results on a metadata-only edit.
+		if resetRanking {
+			fields = append(fields, "last_probe", "probe_error", "probe_results")
+		}
+		if resetHealth {
+			fields = append(fields, "last_health")
+		}
+		if resetSelection {
+			fields = append(fields, "selected_tag", "last_switch", "switch_reason", "applied_tag", "apply_error")
+		}
+	}
+	return database.GetDB().Model(&model.OutboundSubscription{}).Where("id = ?", id).Select(fields).Updates(sub).Error
 }
 
 // Delete removes a subscription.
 func (s *OutboundSubscriptionService) Delete(id int) error {
-	return database.GetDB().Delete(&model.OutboundSubscription{}, id).Error
+	return s.DeleteReplacing(id, "")
 }
 
 // GetLastOutbounds returns the last successfully fetched outbounds for a subscription
@@ -265,7 +410,7 @@ func (s *OutboundSubscriptionService) GetLastOutbounds(id int) ([]any, error) {
 }
 
 // Refresh fetches the subscription URL, parses the links, assigns stable tags,
-// persists the results, and returns the generated outbounds.
+// persists the results, and returns the runtime-compatible outbounds.
 func (s *OutboundSubscriptionService) Refresh(id int) ([]any, error) {
 	sub, err := s.Get(id)
 	if err != nil {
@@ -275,11 +420,11 @@ func (s *OutboundSubscriptionService) Refresh(id int) ([]any, error) {
 	return outbounds, err
 }
 
-// RefreshAllEnabled fetches every enabled subscription whose due time has passed
-// (lastUpdated + updateInterval <= now). It returns the number of subscriptions
-// that were actually refreshed.
-func (s *OutboundSubscriptionService) RefreshAllEnabled() (int, error) {
-	db := database.GetDB()
+// RefreshAllEnabled refreshes due subscriptions and counts changed configurations.
+// The optional lifecycle context cancels network work when the panel restarts.
+func (s *OutboundSubscriptionService) RefreshAllEnabled(parents ...context.Context) (int, error) {
+	ctx := outboundRefreshContext(parents)
+	db := database.GetDB().WithContext(ctx)
 	var subs []*model.OutboundSubscription
 	if err := db.Where("enabled = ?", true).Find(&subs).Error; err != nil {
 		return 0, err
@@ -287,17 +432,23 @@ func (s *OutboundSubscriptionService) RefreshAllEnabled() (int, error) {
 	now := time.Now().Unix()
 	refreshed := 0
 	for _, sub := range subs {
+		if err := ctx.Err(); err != nil {
+			return refreshed, err
+		}
 		due := sub.LastUpdated + int64(sub.UpdateInterval)
 		if sub.LastUpdated == 0 || due <= now {
-			if _, err := s.fetchAndStore(sub); err != nil {
+			if _, changed, err := s.fetchAndStoreWithChange(sub, ctx); err != nil {
+				if ctx.Err() != nil {
+					return refreshed, ctx.Err()
+				}
 				logger.Warningf("outbound sub %d (%s) refresh failed: %v", sub.Id, sub.Remark, err)
 				// continue with others
-			} else {
+			} else if changed {
 				refreshed++
 			}
 		}
 	}
-	return refreshed, nil
+	return refreshed, ctx.Err()
 }
 
 // subscriptionFetchClient builds the HTTP client used to fetch a subscription.
@@ -332,6 +483,42 @@ func (s *OutboundSubscriptionService) subscriptionFetchClient(timeout time.Durat
 
 // fetchAndStore does the actual network + parse + stability + persist work.
 func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscription) ([]any, error) {
+	out, _, err := s.fetchAndStoreWithChange(sub)
+	return out, err
+}
+
+func (s *OutboundSubscriptionService) fetchAndStoreWithChange(sub *model.OutboundSubscription, parents ...context.Context) ([]any, bool, error) {
+	ctx := outboundRefreshContext(parents)
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	unlock := lockSubscription(sub.Id)
+	defer unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	fresh, err := s.Get(sub.Id)
+	if err != nil {
+		return nil, false, err
+	}
+	*sub = *fresh
+	previous := sub.LastFetchedOutbounds
+	out, err := s.fetchAndStoreLocked(sub, ctx)
+	return out, err == nil && previous != sub.LastFetchedOutbounds, err
+}
+
+func outboundRefreshContext(parents []context.Context) context.Context {
+	if len(parents) > 0 && parents[0] != nil {
+		return parents[0]
+	}
+	return context.Background()
+}
+
+func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSubscription, parents ...context.Context) ([]any, error) {
+	ctx := outboundRefreshContext(parents)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// Re-sanitize on every fetch (handles legacy rows + defense in depth against
 	// any direct DB tampering). Private targets are blocked unless this
 	// subscription was explicitly created with AllowPrivate.
@@ -361,7 +548,7 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 		return rejectPrivateHost(ctx, req.URL.Hostname())
 	}
 
-	reqCtx := netsafe.ContextWithAllowPrivate(context.Background(), sub.AllowPrivate)
+	reqCtx := netsafe.ContextWithAllowPrivate(ctx, sub.AllowPrivate)
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, sub.Url, nil)
 	if err != nil {
 		s.recordError(sub, err)
@@ -375,6 +562,9 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 
 	resp, err := client.Do(req)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		s.recordError(sub, err)
 		return nil, err
 	}
@@ -386,25 +576,43 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 		return nil, err
 	}
 	body, err := readBoundedOutboundSubscriptionBody(resp.Body)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if err != nil {
 		s.recordError(sub, err)
 		return nil, err
 	}
 
-	parsed, identities, err := link.ParseSubscriptionBody(body)
+	parsed, identities, parseWarnings, err := parseOutboundSubscriptionReport(body, true)
+	if errors.Is(err, errNoSupportedSubscriptionConnections) {
+		warning := err.Error() + ". Предыдущие настройки подписки сохранены."
+		result := database.GetDB().Model(&model.OutboundSubscription{}).Where("id = ? AND url = ? AND tag_prefix = ? AND last_fetched_outbounds = ?", sub.Id, sub.Url, sub.TagPrefix, sub.LastFetchedOutbounds).Updates(map[string]any{"last_error": "", "last_warning": warning, "last_updated": time.Now().Unix()})
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil, fmt.Errorf("subscription changed during refresh; retry")
+		}
+		var previous []any
+		_ = json.Unmarshal([]byte(sub.LastFetchedOutbounds), &previous)
+		compatible, _, _ := filterSubscriptionOutboundsWithIssues("previous subscription", previous)
+		return compatible, nil
+	}
 	if err != nil {
 		s.recordError(sub, err)
 		return nil, err
 	}
 
-	// Load previous identities -> tags for stability
+	// Load previous identities -> tags for stability.
 	prev := map[string]string{}
 	if strings.TrimSpace(sub.LinkIdentities) != "" {
 		_ = json.Unmarshal([]byte(sub.LinkIdentities), &prev)
 	}
 
 	// Also load previous outbounds so we can reuse tags even for identities we
-	// temporarily lost (defensive).
+	// temporarily lost (defensive). All parsed profiles are persisted regardless
+	// of the currently selected core, so positional stability is core-independent.
 	prevTagByIndex := map[int]string{}
 	if strings.TrimSpace(sub.LastFetchedOutbounds) != "" {
 		var prevObs []any
@@ -419,58 +627,92 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 		}
 	}
 
-	// Drop core-rejected links before tagging: prevTagByIndex indexes the persisted
-	// (filtered) list, so positions must be counted in that same list.
-	var droppedByCore []string
-	keptLinks, keptIdentities := parsed[:0], identities[:0]
-	for i, ob := range parsed {
-		if _, dropped := filterOutboundsRejectedByCore(fmt.Sprintf("outbound sub %d", sub.Id), []any{map[string]any(ob)}); len(dropped) > 0 {
-			droppedByCore = append(droppedByCore, dropped...)
-			continue
-		}
-		keptLinks = append(keptLinks, ob)
-		keptIdentities = append(keptIdentities, identities[i])
-	}
+	// Assign tags to every parsed profile before compatibility filtering. A
+	// profile unsupported by the active core stays stored with a stable identity
+	// and can become usable after switching cores or upgrading the core.
+	assigned := assignStableTags(parsed, identities, prev, prevTagByIndex, sub.Id, sub.TagPrefix)
 
-	// Assign tags with stability (identity reuse, positional fallback, then a
-	// fresh allocation), keeping tags unique within this batch. Extracted into a
-	// pure function so it can be unit-tested without network/DB. Tags are written
-	// back into the parsed outbounds in place.
-	assigned := assignStableTags(keptLinks, keptIdentities, prev, prevTagByIndex, sub.Id, sub.TagPrefix)
-
-	// Persist identities for next time
+	// Persist identities for next time.
 	newIdent := map[string]string{}
-	for i, id := range keptIdentities {
-		newIdent[id] = assigned[i]
+	for i, id := range identities {
+		if i < len(assigned) {
+			newIdent[id] = assigned[i]
+		}
 	}
 	identJSON, _ := json.Marshal(newIdent)
 
-	kept := make([]any, len(keptLinks))
-	for i := range keptLinks {
-		kept[i] = map[string]any(keptLinks[i])
+	stored := make([]any, len(parsed))
+	for i := range parsed {
+		stored[i] = map[string]any(parsed[i])
 	}
 
-	// Persist the outbounds (as compact JSON array)
-	obsJSON, _ := json.Marshal(kept)
+	// Compatibility is a runtime property, not a storage filter. Validate all
+	// members against the selected core to produce an explicit user-facing
+	// status. The same compatible slice is returned by Refresh for backwards
+	// compatibility; the full source set remains persisted for future core
+	// switches/upgrades.
+	runtimeCompatible, compatibilityIssues, coreName := filterSubscriptionOutboundsWithIssues(
+		fmt.Sprintf("outbound sub %d", sub.Id), stored,
+	)
 
+	// An unusable provider update must not replace a previously working
+	// subscription and disconnect the running automatic route.
+	if len(runtimeCompatible) == 0 && sub.LastFetchedOutbounds != "" {
+		var previous []any
+		if json.Unmarshal([]byte(sub.LastFetchedOutbounds), &previous) == nil {
+			compatible, _, _ := filterSubscriptionOutboundsWithIssues("previous subscription", previous)
+			if len(compatible) > 0 {
+				warning := "В новом ответе нет совместимых подключений. Предыдущие рабочие подключения сохранены. " + strings.Join(append(parseWarnings, compatibilityIssues...), "; ")
+				result := database.GetDB().Model(&model.OutboundSubscription{}).Where("id = ? AND url = ? AND tag_prefix = ? AND last_fetched_outbounds = ?", sub.Id, sub.Url, sub.TagPrefix, sub.LastFetchedOutbounds).Updates(map[string]any{"last_error": "", "last_warning": warning, "last_updated": time.Now().Unix()})
+				if result.Error != nil {
+					return nil, result.Error
+				}
+				if result.RowsAffected == 0 {
+					return nil, fmt.Errorf("subscription changed during refresh; retry")
+				}
+				return compatible, nil
+			}
+		}
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	// Persist the complete outbound set (as compact JSON array).
+	obsJSON, _ := json.Marshal(stored)
+
+	changed := sub.LastFetchedOutbounds != string(obsJSON)
+	if changed {
+		sub.LastProbe = 0
+	}
 	sub.LastFetchedOutbounds = string(obsJSON)
 	sub.LinkIdentities = string(identJSON)
 	sub.LastUpdated = time.Now().Unix()
 	sub.LastError = ""
-	if len(droppedByCore) > 0 {
-		sub.LastError = fmt.Sprintf("dropped %d outbound(s) the xray core rejects: %s", len(droppedByCore), droppedByCore[0])
-	}
+	sub.LastWarning = currentSubscriptionCompatibilityWarning(strings.Join(parseWarnings, "; "), compatibilityIssues, coreName)
 
-	if err := database.GetDB().Save(sub).Error; err != nil {
-		return nil, err
+	updates := map[string]any{
+		"last_fetched_outbounds": sub.LastFetchedOutbounds, "link_identities": sub.LinkIdentities,
+		"last_updated": sub.LastUpdated, "last_error": sub.LastError, "last_warning": sub.LastWarning,
 	}
-
-	return kept, nil
+	if changed {
+		updates["last_probe"] = 0
+	}
+	// A fetch must not overwrite automatic selection or concurrently edited settings.
+	result := database.GetDB().Model(&model.OutboundSubscription{}).
+		Where("id = ? AND url = ? AND tag_prefix = ?", sub.Id, sub.Url, sub.TagPrefix).Updates(updates)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, fmt.Errorf("subscription changed during refresh; retry")
+	}
+	return runtimeCompatible, nil
 }
 
 func (s *OutboundSubscriptionService) recordError(sub *model.OutboundSubscription, err error) {
 	sub.LastError = err.Error()
-	_ = database.GetDB().Model(sub).Update("last_error", sub.LastError).Error
+	_ = database.GetDB().Model(&model.OutboundSubscription{}).Where("id = ? AND url = ? AND tag_prefix = ?", sub.Id, sub.Url, sub.TagPrefix).Update("last_error", sub.LastError).Error
 }
 
 // assignStableTags assigns a tag to each parsed outbound, preferring stability:
@@ -482,6 +724,10 @@ func (s *OutboundSubscriptionService) recordError(sub *model.OutboundSubscriptio
 // written back into parsed[i]["tag"]. The returned slice holds the assigned tags
 // in order. When tagPrefix is empty a "sub<subID>-" prefix is used for fresh tags.
 func assignStableTags(parsed []link.Outbound, identities []string, prev map[string]string, prevTagByIndex map[int]string, subID int, tagPrefix string) []string {
+	originalTags := make([]string, len(parsed))
+	for i, row := range parsed {
+		originalTags[i], _ = row["tag"].(string)
+	}
 	reservedStableTags := map[string]bool{}
 	for i := range parsed {
 		if i < len(identities) && prev[identities[i]] != "" {
@@ -531,6 +777,15 @@ func assignStableTags(parsed []link.Outbound, identities []string, prev map[stri
 		// write back the tag into the outbound
 		parsed[i]["tag"] = final
 	}
+	names := map[string]string{}
+	for i, old := range originalTags {
+		if old != "" {
+			names[old] = assigned[i]
+		}
+	}
+	for _, row := range parsed {
+		retagNativeShareReferences(map[string]any(row), names)
+	}
 	return assigned
 }
 
@@ -557,16 +812,30 @@ func (s *OutboundSubscriptionService) activeOutboundsSplit() (prepend []any, app
 	if err := db.Where("enabled = ?", true).Order("priority asc, id asc").Find(&subs).Error; err != nil {
 		return nil, nil, err
 	}
+	return splitActiveOutbounds(subs)
+}
+
+func splitActiveOutbounds(subs []*model.OutboundSubscription) (prepend []any, appendList []any, err error) {
+	core, _ := (&SettingService{}).GetCoreType()
+	return splitActiveOutboundsForCore(subs, core)
+}
+
+func splitActiveOutboundsForCore(subs []*model.OutboundSubscription, core string) (prepend []any, appendList []any, err error) {
 	for _, sub := range subs {
-		if strings.TrimSpace(sub.LastFetchedOutbounds) == "" {
-			continue
+		raw := sub.LastFetchedOutbounds
+		if strings.TrimSpace(raw) == "" {
+			if !sub.AutoBalance {
+				continue
+			}
+			raw = "[]"
 		}
 		var arr []any
-		if err := json.Unmarshal([]byte(sub.LastFetchedOutbounds), &arr); err != nil {
+		if err := json.Unmarshal([]byte(raw), &arr); err != nil {
 			logger.Warningf("outbound sub %d has corrupt LastFetchedOutbounds: %v", sub.Id, err)
 			continue
 		}
-		arr, _ = filterOutboundsRejectedByCore(fmt.Sprintf("outbound sub %d", sub.Id), arr)
+		arr, _, _ = filterSubscriptionOutboundsForCore(fmt.Sprintf("outbound sub %d", sub.Id), core, arr)
+		arr = subscriptionAutoOutbound(sub, arr)
 		if sub.Prepend {
 			prepend = append(prepend, arr...)
 		} else {
@@ -579,37 +848,40 @@ func (s *OutboundSubscriptionService) activeOutboundsSplit() (prepend []any, app
 // Move shifts a subscription one step up or down in the priority order and
 // re-normalizes all priorities to a 0..n-1 sequence.
 func (s *OutboundSubscriptionService) Move(id int, up bool) error {
-	db := database.GetDB()
-	var subs []*model.OutboundSubscription
-	if err := db.Order("priority asc, id asc").Find(&subs).Error; err != nil {
-		return err
-	}
-	idx := -1
-	for i, sub := range subs {
-		if sub.Id == id {
-			idx = i
-			break
+	subscriptionOrderMu.Lock()
+	defer subscriptionOrderMu.Unlock()
+	return database.GetDB().Transaction(func(db *gorm.DB) error {
+		var subs []*model.OutboundSubscription
+		if err := db.Order("priority asc, id asc").Find(&subs).Error; err != nil {
+			return err
 		}
-	}
-	if idx == -1 {
-		return common.NewError("subscription not found")
-	}
-	swap := idx + 1
-	if up {
-		swap = idx - 1
-	}
-	if swap < 0 || swap >= len(subs) {
-		return nil // already at the edge
-	}
-	subs[idx], subs[swap] = subs[swap], subs[idx]
-	for i, sub := range subs {
-		if sub.Priority != i {
-			if err := db.Model(sub).Update("priority", i).Error; err != nil {
-				return err
+		idx := -1
+		for i, sub := range subs {
+			if sub.Id == id {
+				idx = i
+				break
 			}
 		}
-	}
-	return nil
+		if idx == -1 {
+			return common.NewError("subscription not found")
+		}
+		swap := idx + 1
+		if up {
+			swap = idx - 1
+		}
+		if swap < 0 || swap >= len(subs) {
+			return nil // already at the edge
+		}
+		subs[idx], subs[swap] = subs[swap], subs[idx]
+		for i, sub := range subs {
+			if sub.Priority != i {
+				if err := db.Model(sub).Update("priority", i).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
 }
 
 // AllActiveOutboundTags returns only the tags of active subscription outbounds.
@@ -668,3 +940,9 @@ Consequences for balancers / routing:
 We deliberately do *not* mutate the saved xrayTemplateConfig. Subscription
 outbounds are always injected at runtime in GetXrayConfig.
 */
+
+func (s *OutboundSubscriptionService) activeAutomaticSubscriptions() ([]*model.OutboundSubscription, error) {
+	var subs []*model.OutboundSubscription
+	err := database.GetDB().Where("enabled = ? AND auto_balance = ?", true, true).Order("priority asc, id asc").Find(&subs).Error
+	return subs, err
+}

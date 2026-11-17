@@ -13,22 +13,15 @@ fi
 package=$1
 shard=$2
 count=$3
-test_list=$(mktemp)
-trap 'rm -f "$test_list"' EXIT
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
 
-# Go's list output contains the top-level tests, examples and fuzz seed tests.
-# Match only names, not TestMain's setup output or the final package summary.
-go test -race -short -vet=off -list . "$package" > "$test_list"
-mapfile -t names < <(grep -E '^(Test|Example|Fuzz)[[:alnum:]_]+$' "$test_list" || true)
-if (( ${#names[@]} == 0 )); then
-  echo "no tests found in $package" >&2
-  exit 1
-fi
-
-selected=()
-for (( i=shard; i<${#names[@]}; i+=count )); do
-  selected+=("${names[i]}")
-done
+go test -race -short -vet=off -list . "$package" > "$tmp/names"
+python3 tools/ci/race-balance.py plan \
+  --package "$package" --tests "$tmp/names" \
+  --profile "${RACE_PROFILE_FILE:-tools/ci/race-test-durations.json}" \
+  --index "$shard" --count "$count" > "$tmp/selected"
+mapfile -t selected < "$tmp/selected"
 if (( ${#selected[@]} == 0 )); then
   echo "shard $shard/$count has no tests" >&2
   exit 1
@@ -39,7 +32,13 @@ if [[ ${4:-} == --list ]]; then
   exit 0
 fi
 
-printf 'Running %s race shard %d/%d (%d of %d top-level tests)\n' \
-  "$package" "$shard" "$count" "${#selected[@]}" "${#names[@]}"
+printf 'Running %s race shard %d/%d (%d tests)\n' \
+  "$package" "$shard" "$count" "${#selected[@]}"
 pattern="^($(IFS='|'; echo "${selected[*]}"))$"
-go test -race -short -vet=off -timeout 20m -run "$pattern" "$package"
+events=${RACE_EVENTS_FILE:-"$tmp/events.jsonl"}
+fragment=${RACE_FRAGMENT_FILE:-"$tmp/durations.json"}
+
+# Preserve real test failures with pipefail; record elapsed time for passing top-level tests.
+go test -race -short -vet=off -timeout 20m -json -run "$pattern" "$package" | tee "$events"
+python3 tools/ci/race-balance.py extract \
+  --package "$package" --input "$events" --output "$fragment"

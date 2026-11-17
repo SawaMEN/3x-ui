@@ -1,0 +1,58 @@
+name: Hysteria compatibility
+on:
+  push:
+    branches: [main, update]
+    paths:
+      - "internal/singbox/**"
+      - "deploy/hiddify/hiddify-core-target.json"
+      - ".github/workflows/hysteria-compat.yml"
+  pull_request:
+    paths:
+      - "internal/singbox/**"
+      - "deploy/hiddify/hiddify-core-target.json"
+      - ".github/workflows/hysteria-compat.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hysteria-compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hysteria-tests:
+    name: Panel Hysteria protocol and race regressions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub embedded frontend
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Run Hysteria regressions
+        run: go test -p 4 ./internal/singbox -run 'Hysteria' -shuffle=on -count=1 -v
+      - name: Race check Hysteria
+        run: go test -race -p 4 ./internal/singbox -run 'Hysteria' -count=1 -timeout=10m
+
+  hysteria-native:
+    name: Verify maintained Hysteria1/2 sources, no patch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: SawaMEN/hiddify-sing-box
+          ref: main
+          path: native-sing-box
+          submodules: recursive
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: native-sing-box/go.mod
+          cache-dependency-path: native-sing-box/go.sum
+          cache: true
+      - name: Compile and run native Hysteria protocol tests
+        working-directory: native-sing-box
+        run: |
+          go test -tags with_quic -count=1 ./protocol/hysteria ./protocol/hysteria2

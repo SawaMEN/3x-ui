@@ -101,7 +101,7 @@ func (s *HappService) currentSource(clientID int, host string) (string, *model.C
 		return "", nil, "service_unavailable"
 	}
 	client, err := s.clientService.GetByID(clientID)
-	if err != nil {
+	if err != nil || IsManagedNodeRouteClientEmail(client.Email) {
 		return "", nil, "client_unavailable"
 	}
 	settings, err := s.settingService.GetDefaultSettings(host)

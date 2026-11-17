@@ -16,3 +16,79 @@
 .sniffing-options .ant-checkbox-wrapper {
   margin-inline-start: 0;
 }
+
+/* Outbound editor — responsive, theme-neutral layout with a focused import area. */
+.outbound-form-modal .ant-modal-body {
+  max-height: min(78vh, 820px);
+  overflow-y: auto;
+  padding-inline: 2px;
+  scrollbar-gutter: stable;
+}
+
+.outbound-form-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--ant-color-border-secondary, rgba(125, 125, 125, 0.2));
+  border-radius: 12px;
+  background: var(--ant-color-fill-quaternary, rgba(125, 125, 125, 0.045));
+}
+
+.outbound-form-heading .ant-typography {
+  margin-bottom: 0;
+}
+
+.outbound-form-tabs .ant-tabs-nav {
+  margin-bottom: 20px;
+}
+
+.outbound-form-tabs .ant-tabs-tab {
+  padding: 9px 14px;
+}
+
+.outbound-form-tabs .ant-form-item {
+  margin-bottom: 17px;
+}
+
+.outbound-form-tabs .ant-form-item-label > label {
+  font-weight: 500;
+}
+
+.outbound-form-import {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--ant-color-border-secondary, rgba(125, 125, 125, 0.2));
+  background: var(--ant-color-fill-quaternary, rgba(125, 125, 125, 0.045));
+}
+
+.outbound-form-import .ant-typography {
+  margin: 0;
+}
+
+@media (max-width: 767px) {
+  .outbound-form-modal {
+    top: 8px;
+    padding-bottom: 8px;
+  }
+  .outbound-form-modal .ant-modal {
+    max-width: calc(100vw - 16px);
+    margin: 0 auto;
+  }
+  .outbound-form-modal .ant-modal-body {
+    max-height: calc(100dvh - 180px);
+    overflow-x: hidden;
+  }
+  .outbound-form-heading,
+  .outbound-form-import {
+    padding: 12px;
+  }
+  .outbound-form-tabs .ant-form-item {
+    margin-bottom: 13px;
+  }
+}

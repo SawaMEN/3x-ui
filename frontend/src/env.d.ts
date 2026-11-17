@@ -1,6 +1,14 @@
 /// <reference types="vite/client" />
 
 interface SubPageData {
+  appearance?: {
+    theme?: import('@/schemas/setting').SubscriptionTheme | 'whitemax';
+    enabled: boolean;
+    title: string;
+    description: string;
+    logoURL: string;
+    accent: string;
+  };
   sId?: string;
   enabled?: boolean;
   download?: string;
@@ -13,6 +21,7 @@ interface SubPageData {
   lastOnline?: string | number;
   subUrl?: string;
   subJsonUrl?: string;
+  subFormatMode?: string;
   subClashUrl?: string;
   subTitle?: string;
   subSupportUrl?: string;

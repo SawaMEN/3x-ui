@@ -148,14 +148,14 @@ func TestSetRemoteTraffic_RemapsActiveInboundTreeAndCentralTags(t *testing.T) {
 	setupConflictDB(t)
 	db := database.GetDB()
 
-	previousProcess, previousResult := xrayState.snapshot()
-	process := xray.NewTestProcess(nil, "")
-	xrayState.replace(process)
+	previousProcess, previousResult := presenceRegistry.snapshot()
+	process := xray.NewPresence()
+	presenceRegistry.replace(process)
 	t.Cleanup(func() {
-		xrayState.mu.Lock()
-		xrayState.process = previousProcess
-		xrayState.result = previousResult
-		xrayState.mu.Unlock()
+		presenceRegistry.mu.Lock()
+		presenceRegistry.process = previousProcess
+		presenceRegistry.result = previousResult
+		presenceRegistry.mu.Unlock()
 	})
 
 	// Force the remote inbound to be adopted with an n1- prefix on the master:
@@ -206,14 +206,14 @@ func TestSetRemoteTraffic_NormalizesForwardedActiveInboundSubtreeTags(t *testing
 	setupConflictDB(t)
 	db := database.GetDB()
 
-	previousProcess, previousResult := xrayState.snapshot()
-	process := xray.NewTestProcess(nil, "")
-	xrayState.replace(process)
+	previousProcess, previousResult := presenceRegistry.snapshot()
+	process := xray.NewPresence()
+	presenceRegistry.replace(process)
 	t.Cleanup(func() {
-		xrayState.mu.Lock()
-		xrayState.process = previousProcess
-		xrayState.result = previousResult
-		xrayState.mu.Unlock()
+		presenceRegistry.mu.Lock()
+		presenceRegistry.process = previousProcess
+		presenceRegistry.result = previousResult
+		presenceRegistry.mu.Unlock()
 	})
 
 	for _, tag := range []string{"own-tag", "child-tag"} {
@@ -267,14 +267,14 @@ func TestSetRemoteTraffic_DropsForeignActiveInboundGuid(t *testing.T) {
 	setupConflictDB(t)
 	db := database.GetDB()
 
-	previousProcess, previousResult := xrayState.snapshot()
-	process := xray.NewTestProcess(nil, "")
-	xrayState.replace(process)
+	previousProcess, previousResult := presenceRegistry.snapshot()
+	process := xray.NewPresence()
+	presenceRegistry.replace(process)
 	t.Cleanup(func() {
-		xrayState.mu.Lock()
-		xrayState.process = previousProcess
-		xrayState.result = previousResult
-		xrayState.mu.Unlock()
+		presenceRegistry.mu.Lock()
+		presenceRegistry.process = previousProcess
+		presenceRegistry.result = previousResult
+		presenceRegistry.mu.Unlock()
 	})
 
 	for _, n := range []*model.Node{

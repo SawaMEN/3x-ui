@@ -15,6 +15,7 @@ import (
 	"time"
 
 	yaml "github.com/goccy/go-yaml"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -22,9 +23,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 )
-
-// Remote sources reuse the existing settings fields (one HTTPS URL = remote,
-// else inline) so no second mode toggle can disagree with the field contents.
 
 type remoteRoutingKind string
 
@@ -76,7 +74,7 @@ type remoteRoutingFetch struct {
 type remoteRoutingResolver struct {
 	refreshWG    sync.WaitGroup
 	mu           sync.Mutex
-	loadMu       sync.Mutex
+	loadMu       *semaphore.Weighted
 	loaded       bool
 	loadInFlight bool
 	entries      map[remoteRoutingKey]remoteRoutingCacheEntry
@@ -89,6 +87,7 @@ type remoteRoutingResolver struct {
 
 func newRemoteRoutingResolver(client *http.Client, persist bool) *remoteRoutingResolver {
 	return &remoteRoutingResolver{
+		loadMu:      semaphore.NewWeighted(1),
 		entries:     make(map[remoteRoutingKey]remoteRoutingCacheEntry),
 		inflight:    make(map[remoteRoutingKey]*remoteRoutingFetch),
 		lastAttempt: make(map[remoteRoutingKey]time.Time),
@@ -166,7 +165,7 @@ func (r *remoteRoutingResolver) resolveEntry(kind remoteRoutingKind, raw string)
 	r.refreshWG.Add(1)
 	common.GoRecover("remote-routing-refresh", func() {
 		defer r.refreshWG.Done()
-		r.refresh(key, cached, hasCached, fetch)
+		r.refresh(context.Background(), key, cached, hasCached, fetch)
 	})
 	if hasCached {
 		return cached, true, nil
@@ -177,31 +176,54 @@ func (r *remoteRoutingResolver) resolveEntry(kind remoteRoutingKind, raw string)
 // RefreshRemoteRoutingSources warms and refreshes configured remote sources
 // from the cron job; concurrent resolver reads are safe, fetches coalesce.
 func RefreshRemoteRoutingSources(happ, clash, jsonRouting string) {
-	for kind, raw := range map[remoteRoutingKind][]string{
-		remoteRoutingHapp:  {happ},
-		remoteRoutingJson:  {jsonRouting},
-		remoteRoutingClash: {clash},
+	_ = RefreshRemoteRoutingSourcesContext(context.Background(), happ, clash, jsonRouting)
+}
+
+// RefreshRemoteRoutingSourcesContext ties scheduled network and persistence work
+// to the panel lifecycle. Readers keep serving the last validated cache value.
+func RefreshRemoteRoutingSourcesContext(ctx context.Context, happ, clash, jsonRouting string) error {
+	for _, source := range []struct {
+		kind remoteRoutingKind
+		raw  string
+	}{
+		{remoteRoutingHapp, happ}, {remoteRoutingJson, jsonRouting}, {remoteRoutingClash, clash},
 	} {
-		for _, source := range raw {
-			_, remote, parseErr := common.ParseRemoteRoutingURL(source)
-			if parseErr != nil {
-				logger.Warningf("Remote %s routing source is invalid", kind)
-				continue
-			}
-			if remote {
-				_ = routingSourceResolver.refreshSource(kind, source)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		_, remote, parseErr := common.ParseRemoteRoutingURL(source.raw)
+		if parseErr != nil {
+			logger.Warningf("Remote %s routing source is invalid", source.kind)
+			continue
+		}
+		if remote {
+			if err := routingSourceResolver.refreshSourceContext(ctx, source.kind, source.raw); err != nil {
+				// URLs may contain credentials/tokens. Public job diagnostics need only
+				// the routing kind and a cancellation identity, never the raw HTTP error.
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 			}
 		}
 	}
+	return nil
 }
 
 func (r *remoteRoutingResolver) refreshSource(kind remoteRoutingKind, raw string) error {
+	return r.refreshSourceContext(context.Background(), kind, raw)
+}
+
+func (r *remoteRoutingResolver) refreshSourceContext(ctx context.Context, kind remoteRoutingKind, raw string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	source, remote, err := common.ParseRemoteRoutingURL(raw)
 	if err != nil || !remote {
 		return err
 	}
-	r.ensurePersistedLoaded()
-
+	if err := r.ensurePersistedLoadedContext(ctx); err != nil {
+		return err
+	}
 	key := remoteRoutingKey{kind: kind, source: source}
 	now := r.now()
 	r.mu.Lock()
@@ -213,8 +235,12 @@ func (r *remoteRoutingResolver) refreshSource(kind remoteRoutingKind, raw string
 	if fetch, ok := r.inflight[key]; ok {
 		done := fetch.done
 		r.mu.Unlock()
-		<-done
-		return fetch.err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-done:
+			return fetch.err
+		}
 	}
 	if attemptedAt, attempted := r.lastAttempt[key]; attempted && now.Sub(attemptedAt) < remoteRoutingRetryDelay {
 		r.mu.Unlock()
@@ -223,26 +249,33 @@ func (r *remoteRoutingResolver) refreshSource(kind remoteRoutingKind, raw string
 	fetch := &remoteRoutingFetch{done: make(chan struct{})}
 	r.inflight[key] = fetch
 	r.mu.Unlock()
-
-	r.refresh(key, previous, hasPrevious, fetch)
+	r.refresh(ctx, key, previous, hasPrevious, fetch)
 	return fetch.err
 }
 
-func (r *remoteRoutingResolver) refresh(key remoteRoutingKey, previous remoteRoutingCacheEntry, hasPrevious bool, fetch *remoteRoutingFetch) {
-	entry, err := r.fetch(key, previous, hasPrevious)
+func (r *remoteRoutingResolver) refresh(ctx context.Context, key remoteRoutingKey, previous remoteRoutingCacheEntry, hasPrevious bool, fetch *remoteRoutingFetch) {
+	entry, err := r.fetch(ctx, key, previous, hasPrevious)
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
 	now := r.now()
-
 	r.mu.Lock()
-	r.lastAttempt[key] = now
-	if err == nil {
-		r.entries[key] = entry
+	// A stopped panel is not a failed source: let a replacement panel retry
+	// immediately and keep the previous successful cache untouched.
+	if ctx.Err() == nil {
+		r.lastAttempt[key] = now
+		if err == nil {
+			r.entries[key] = entry
+		}
 	}
 	delete(r.inflight, key)
 	r.trimLocked()
 	fetch.err = err
 	close(fetch.done)
 	r.mu.Unlock()
-
+	if ctx.Err() != nil {
+		return
+	}
 	if err != nil {
 		if hasPrevious {
 			logger.Warningf("Remote %s routing refresh from %s failed; keeping the last valid value", key.kind, remoteRoutingHost(key.source))
@@ -252,7 +285,7 @@ func (r *remoteRoutingResolver) refresh(key remoteRoutingKey, previous remoteRou
 		return
 	}
 	if r.persist {
-		r.persistEntry(key.kind, entry)
+		r.persistEntryContext(ctx, key.kind, entry)
 	}
 }
 
@@ -298,7 +331,7 @@ func (r *remoteRoutingResolver) trimLocked() {
 	}
 }
 
-func (r *remoteRoutingResolver) fetch(key remoteRoutingKey, previous remoteRoutingCacheEntry, hasPrevious bool) (entry remoteRoutingCacheEntry, err error) {
+func (r *remoteRoutingResolver) fetch(ctx context.Context, key remoteRoutingKey, previous remoteRoutingCacheEntry, hasPrevious bool) (entry remoteRoutingCacheEntry, err error) {
 	// Remote bytes reach the YAML/JSON parsers below; a parser panic must
 	// degrade to a failed refresh (keeping last-good), not crash the panel.
 	defer func() {
@@ -307,7 +340,7 @@ func (r *remoteRoutingResolver) fetch(key remoteRoutingKey, previous remoteRouti
 		}
 	}()
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, key.source, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, key.source, nil)
 	if err != nil {
 		return remoteRoutingCacheEntry{}, err
 	}
@@ -494,7 +527,7 @@ func normalizeClashRouting(body []byte) (string, map[string]any, error) {
 	}
 	hasSupportedKey := false
 	for key := range document {
-		if remoteClashAllowedKey(key) {
+		if remoteClashKeyClasses[key] == remoteClashRouteGraph {
 			hasSupportedKey = true
 			break
 		}
@@ -509,7 +542,7 @@ func normalizeClashRouting(body []byte) (string, map[string]any, error) {
 		}},
 		"rules": []string{"MATCH,PROXY"},
 	}
-	if err := mergeRemoteClashRules(base, document); err != nil {
+	if err := mergeRemoteClashRules(base, document, false); err != nil {
 		return "", nil, fmt.Errorf("invalid remote Clash routing schema: %w", err)
 	}
 	return text, document, nil
@@ -569,36 +602,53 @@ func remoteRoutingSettingKey(kind remoteRoutingKind) string {
 }
 
 func (r *remoteRoutingResolver) ensurePersistedLoaded() {
+	_ = r.ensurePersistedLoadedContext(context.Background())
+}
+
+func (r *remoteRoutingResolver) ensurePersistedLoadedContext(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if !r.persist {
-		return
+		return nil
 	}
 	r.mu.Lock()
 	loaded := r.loaded
 	r.mu.Unlock()
 	if loaded {
-		return
+		return nil
 	}
-
-	r.loadMu.Lock()
-	defer r.loadMu.Unlock()
+	if err := r.loadMu.Acquire(ctx, 1); err != nil {
+		return err
+	}
+	defer r.loadMu.Release(1)
 	r.mu.Lock()
 	loaded = r.loaded
 	r.mu.Unlock()
 	if loaded {
-		return
+		return nil
 	}
 	db := database.GetDB()
 	if db == nil {
-		return
+		return nil
 	}
 	sqlDB, err := db.DB()
-	if err != nil || sqlDB.Ping() != nil {
-		return
+	if err != nil {
+		return nil
 	}
-	r.loadPersisted()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return ctx.Err()
+	}
+	if !r.loadPersistedContext(ctx) {
+		return ctx.Err()
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	r.mu.Lock()
 	r.loaded = true
 	r.mu.Unlock()
+	return nil
 }
 
 // triggerPersistedLoad keeps SQLite off the subscription request path: requests
@@ -625,16 +675,29 @@ func (r *remoteRoutingResolver) triggerPersistedLoad() {
 	})
 }
 
-func (r *remoteRoutingResolver) loadPersisted() {
+func (r *remoteRoutingResolver) loadPersistedContext(ctx context.Context) bool {
+	complete := true
 	loaded := make(map[remoteRoutingKey]remoteRoutingCacheEntry, 2)
 	for _, kind := range []remoteRoutingKind{remoteRoutingHapp, remoteRoutingJson, remoteRoutingClash} {
 		var setting model.Setting
-		err := database.GetDB().Where("key = ?", remoteRoutingSettingKey(kind)).First(&setting).Error
+		err := database.GetDB().WithContext(ctx).Where("key = ?", remoteRoutingSettingKey(kind)).First(&setting).Error
 		if err != nil {
+			if !database.IsNotFound(err) {
+				complete = false
+			}
 			continue
 		}
 		var entry remoteRoutingCacheEntry
 		if json.Unmarshal([]byte(setting.Value), &entry) != nil || entry.Source == "" || entry.Content == "" || entry.FetchedAt <= 0 {
+			continue
+		}
+		// Persisted last-good data must obey the same input caps as a fresh
+		// response, before handing it to the YAML/JSON content parsers.
+		limit := remoteRoutingHappMaxBody
+		if kind == remoteRoutingClash {
+			limit = remoteRoutingClashMaxBody
+		}
+		if len(entry.Content) > limit {
 			continue
 		}
 		if _, remote, err := common.ParseRemoteRoutingURL(entry.Source); err != nil || !remote {
@@ -659,13 +722,22 @@ func (r *remoteRoutingResolver) loadPersisted() {
 		}
 	}
 	r.mu.Unlock()
+	return complete
 }
 
 func (r *remoteRoutingResolver) persistEntry(kind remoteRoutingKind, entry remoteRoutingCacheEntry) {
+	r.persistEntryContext(context.Background(), kind, entry)
+}
+
+func (r *remoteRoutingResolver) persistEntryContext(ctx context.Context, kind remoteRoutingKind, entry remoteRoutingCacheEntry) {
+	if ctx.Err() != nil {
+		return
+	}
 	db := database.GetDB()
 	if db == nil {
 		return
 	}
+	db = db.WithContext(ctx)
 	encoded, err := json.Marshal(entry)
 	if err != nil {
 		return

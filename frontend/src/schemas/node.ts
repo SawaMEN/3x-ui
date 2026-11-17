@@ -1,5 +1,29 @@
 import { z } from 'zod';
 
+export const NodeCoreCapabilitiesSchema = z
+  .object({
+    ruleSets: z.boolean(),
+    outboundDelayProbe: z.boolean(),
+    connectionStats: z.boolean(),
+    hotInboundReload: z.boolean(),
+    clashApi: z.boolean(),
+    geoIp: z.boolean(),
+    geoSite: z.boolean(),
+    shadowTls: z.boolean(),
+  })
+  .loose();
+
+export const NodeProtocolAvailabilitySchema = z.record(
+  z.string(),
+  z.object({
+    supported: z.boolean(),
+    ready: z.boolean(),
+    version: z.string(),
+    speedLimit: z.boolean(),
+    component: z.string(),
+  }),
+);
+
 export const NodeRecordSchema = z
   .object({
     id: z.number(),
@@ -21,12 +45,19 @@ export const NodeRecordSchema = z
     singboxVersion: z.string().optional(),
     singboxInstalled: z.boolean().optional(),
     singboxKnown: z.boolean().optional(),
+    coreVersion: z.string().optional(),
+    coreState: z.string().optional(),
+    coreError: z.string().optional(),
+    coreCapabilities: NodeCoreCapabilitiesSchema.nullish(),
+    protocolAvailability: NodeProtocolAvailabilitySchema.nullish(),
     coreType: z.string().optional(),
     runningCore: z.string().optional(),
     panelVersion: z.string().optional(),
+    panelEdition: z.string().optional(),
     uptimeSecs: z.number().optional(),
     netUp: z.number().optional(),
     netDown: z.number().optional(),
+    unavailableMetrics: z.array(z.string()).optional(),
     inboundCount: z.number().optional(),
     clientCount: z.number().optional(),
     onlineCount: z.number().optional(),
@@ -62,11 +93,17 @@ export const NodeListSchema = z.array(NodeRecordSchema);
 export const ProbeResultSchema = z
   .object({
     status: z.string(),
+    unavailableMetrics: z.array(z.string()).optional(),
     latencyMs: z.number().optional(),
     xrayVersion: z.string().optional(),
     singboxVersion: z.string().optional(),
     singboxInstalled: z.boolean().optional(),
     singboxKnown: z.boolean().optional(),
+    coreVersion: z.string().optional(),
+    coreState: z.string().optional(),
+    coreError: z.string().optional(),
+    coreCapabilities: NodeCoreCapabilitiesSchema.nullish(),
+    protocolAvailability: NodeProtocolAvailabilitySchema.nullish(),
     coreType: z.string().optional(),
     runningCore: z.string().optional(),
     error: z.string().optional(),

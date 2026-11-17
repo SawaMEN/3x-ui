@@ -1,0 +1,145 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Button, Space } from 'antd';
+import { useFormContext, useWatch } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
+
+import { HttpUtil } from '@/utils';
+
+type MekoStatus = {
+  enabled: boolean;
+  applied: boolean;
+  healthy: boolean;
+  backend?: string;
+  statusError?: string;
+  ports: number[];
+  appliedPorts: number[];
+  verifiedPorts: number[];
+};
+
+export default function MtprotoMekoStatus() {
+  const { control } = useFormContext();
+  const { i18n } = useTranslation();
+  const russian = i18n.resolvedLanguage?.startsWith('ru') ?? false;
+  const port = useWatch({ control, name: 'port' }) as number | undefined;
+  const [status, setStatus] = useState<MekoStatus | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = (await HttpUtil.get('/panel/api/telemt/meko/config', undefined, {
+        silent: true,
+      })) as { success: boolean; msg?: string; obj?: MekoStatus };
+      if (!response.success || !response.obj) {
+        setError(response.msg || 'MEKO status unavailable');
+        return;
+      }
+      setStatus(response.obj);
+      setError('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const applyNow = useCallback(async () => {
+    setApplying(true);
+    try {
+      const response = (await HttpUtil.post('/panel/api/telemt/meko/reconcile', {})) as {
+        success: boolean;
+        msg?: string;
+        obj?: MekoStatus;
+      };
+      if (!response.success || !response.obj) {
+        setError(response.msg || 'MEKO firewall apply failed');
+        return;
+      }
+      setStatus(response.obj);
+      setError(response.obj.statusError || '');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setApplying(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Defer the initial network request to avoid synchronous state updates
+    // while React is committing the inbound form.
+    const timer = window.setTimeout(() => void refresh(), 0);
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
+
+  const wanted = !!port && status?.ports?.includes(port);
+  const active =
+    !!port &&
+    status?.appliedPorts?.includes(port) &&
+    status?.verifiedPorts?.includes(port) &&
+    status?.applied;
+  const message = error || status?.statusError;
+  let type: 'success' | 'warning' | 'error' | 'info' = 'info';
+  let description = russian
+    ? 'После сохранения прокси проверьте применение правил к выбранному TCP-порту.'
+    : 'Save the inbound, then verify the firewall rules for this TCP port.';
+  if (message) {
+    type = 'error';
+    description = message;
+  } else if (wanted && active && status?.healthy) {
+    // The iptables fallback handles IPv4 only. It must not look like full
+    // dual-stack protection when the host also exposes the MTProto port on IPv6.
+    type = status.backend === 'iptables' ? 'warning' : 'success';
+    description =
+      status.backend === 'iptables'
+        ? russian
+          ? `MEKO применён к TCP-порту ${port} только для IPv4 (iptables). Для IPv6 нужен nftables.`
+          : `MEKO applies to TCP port ${port} on IPv4 only (iptables). Install nftables for IPv6.`
+        : russian
+          ? `MEKO применён к TCP-порту ${port}. Firewall: ${status.backend || 'неизвестно'}.`
+          : `MEKO applied to TCP port ${port}. Firewall: ${status.backend || 'unknown'}.`;
+  } else if (wanted) {
+    type = 'warning';
+    const incomplete =
+      !!status?.appliedPorts?.includes(port) && !status?.verifiedPorts?.includes(port);
+    description = incomplete
+      ? russian
+        ? `На порту ${port} обнаружены неполные правила MEKO. Проверьте nftables/iptables и повторите применение.`
+        : `Incomplete MEKO firewall rules detected on port ${port}. Check nftables/iptables and retry.`
+      : russian
+        ? `Для порта ${port} MEKO выбран, но применение правил не подтверждено. Проверьте журнал x-ui.`
+        : `MEKO is selected for port ${port}, but firewall rules are not confirmed. Check x-ui logs.`;
+  } else if (status) {
+    type = 'info';
+    description = russian
+      ? 'Новые настройки MEKO вступят в силу после сохранения входящего подключения.'
+      : 'New MEKO settings take effect after saving the inbound.';
+  }
+
+  return (
+    <Alert
+      showIcon
+      type={type}
+      title={russian ? 'Фактический статус Fix by MEKO' : 'Fix by MEKO firewall status'}
+      description={description}
+      action={
+        <Space size="small" wrap>
+          <Button size="small" loading={loading} disabled={applying} onClick={() => void refresh()}>
+            {russian ? 'Проверить' : 'Check'}
+          </Button>
+          {wanted && (
+            <Button
+              size="small"
+              loading={applying}
+              disabled={loading}
+              onClick={() => void applyNow()}
+            >
+              {russian ? 'Применить повторно' : 'Retry MEKO'}
+            </Button>
+          )}
+        </Space>
+      }
+    />
+  );
+}

@@ -16,9 +16,26 @@ func EnsureURLScheme(raw string) string {
 	if trimmed == "" {
 		return ""
 	}
-	if strings.Contains(trimmed, "://") ||
-		strings.HasPrefix(trimmed, "mailto:") ||
-		strings.HasPrefix(trimmed, "tel:") {
+	// Links are included in subscription metadata and consumed by clients.
+	// Reject control characters (including CR/LF and embedded tabs) and URL
+	// schemes capable of script execution or local file access.
+	if strings.IndexFunc(trimmed, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return ""
+	}
+	if colon := strings.IndexByte(trimmed, ':'); colon > 0 {
+		switch strings.ToLower(trimmed[:colon]) {
+		case "javascript", "vbscript", "data", "file", "blob":
+			return ""
+		}
+	}
+	if strings.HasPrefix(trimmed, "//") {
+		return "https:" + trimmed
+	}
+	scheme, _, explicit := strings.Cut(trimmed, "://")
+	lower := strings.ToLower(trimmed)
+	if (explicit && !strings.ContainsAny(scheme, "/?#")) ||
+		strings.HasPrefix(lower, "mailto:") ||
+		strings.HasPrefix(lower, "tel:") {
 		return trimmed
 	}
 	return "https://" + trimmed

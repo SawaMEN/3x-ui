@@ -91,6 +91,7 @@ type fileKey struct {
 }
 
 type index struct {
+	fileInfo   os.FileInfo
 	kind       GeoKind
 	categories []GeoCategory
 	byCode     map[string]GeoCategory
@@ -119,6 +120,15 @@ type Store struct {
 // NewStore returns a Store reading databases from dir.
 func NewStore(dir string) *Store {
 	return &Store{dir: dir, indexes: make(map[fileKey]*index)}
+}
+
+// Kind validates a database and reports its actual wire format.
+func (s *Store) Kind(name string) (GeoKind, error) {
+	idx, err := s.index(name)
+	if err != nil {
+		return "", err
+	}
+	return idx.kind, nil
 }
 
 // ListFiles reports every .dat database in the asset directory. A database that
@@ -187,18 +197,19 @@ func (s *Store) index(name string) (*index, error) {
 		return nil, err
 	}
 	key := fileKey{name: name, size: info.Size(), modTime: info.ModTime().UnixNano()}
-	if cached, ok := s.cachedIndex(key); ok {
+	if cached, ok := s.cachedIndex(key, info); ok {
 		return cached, cached.err
 	}
 
 	s.scan.Lock()
 	defer s.scan.Unlock()
 	// Another request may have built this index while this one waited.
-	if cached, ok := s.cachedIndex(key); ok {
+	if cached, ok := s.cachedIndex(key, info); ok {
 		return cached, cached.err
 	}
 
 	idx := buildIndex(s.dir, name)
+	idx.fileInfo = info
 	if idx.err != nil && !isPermanent(idx.err) {
 		// A transient read failure (out of memory on a large file, too many open
 		// files) must not latch: the file is fine and the next request should
@@ -219,11 +230,11 @@ func isPermanent(err error) bool {
 	return errors.Is(err, ErrUnrecognized) || errors.Is(err, ErrInvalidName) || errors.Is(err, ErrFileTooLarge)
 }
 
-func (s *Store) cachedIndex(key fileKey) (*index, bool) {
+func (s *Store) cachedIndex(key fileKey, info os.FileInfo) (*index, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cached, ok := s.indexes[key]
-	return cached, ok
+	return cached, ok && os.SameFile(cached.fileInfo, info)
 }
 
 // buildIndex never fails outright: a database that cannot be read is cached as

@@ -74,13 +74,13 @@ func TestRenderSubPlaceholders(t *testing.T) {
 }
 
 func TestMetadataForSubRequestOmitsUnconfiguredProfileURL(t *testing.T) {
+	initSubDB(t)
 	a := &SUBController{
 		subTitle:      "isVPN",
 		subSupportUrl: "https://support.example/",
 	}
 	metadata := a.metadataForSubRequest(func() *SubService {
-		t.Fatal("metadataForSubRequest loaded a subscription context without configured placeholders")
-		return nil
+		return &SubService{}
 	}, "sub-123", "https://sub.example/sub-123")
 
 	if metadata.ProfileURL != "" {
@@ -178,7 +178,7 @@ func TestMetadataForSubRequestUsesStableClientIdentity(t *testing.T) {
 	}
 	metadata := a.metadataForSubRequest(func() *SubService { return &SubService{} }, "sub-123", "https://sub.example/sub-123")
 
-	if metadata.Title != "isVPN — john doe@example.com" {
+	if metadata.Title != "john doe@example.com" {
 		t.Fatalf("Title = %q", metadata.Title)
 	}
 	if metadata.SupportURL != "https://support.example/?email=john+doe%40example.com&tg=42" {

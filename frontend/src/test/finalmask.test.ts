@@ -96,3 +96,33 @@ describe('parseGeckoPacketSize', () => {
     expect(parseGeckoPacketSize('512-9999')).toBeNull();
   });
 });
+
+describe('current xDNS wire shape', () => {
+  it('rejects legacy lists without dropping the source values', () => {
+    const settings = {
+      domains: ['example.com:txt'],
+      resolvers: ['example.com:txt+udp://1.1.1.1:53'],
+    };
+    const before = structuredClone(settings);
+    expect(
+      FinalMaskStreamSettingsSchema.safeParse({ udp: [{ type: 'xdns', settings }] }).success,
+    ).toBe(false);
+    expect(settings).toEqual(before);
+  });
+  it('preserves explicit RR types and advanced resolver options', () => {
+    const settings = {
+      domains: [{ names: ['example.com'], types: [16], labelLimit: 50 }],
+      resolvers: [
+        {
+          addrs: ['https://dns.example/dns-query'],
+          worker: 8,
+          tlsConfig: { serverName: 'dns.example' },
+        },
+      ],
+      extraPoll: 2,
+    };
+    expect(
+      FinalMaskStreamSettingsSchema.parse({ udp: [{ type: 'xdns', settings }] }).udp[0]?.settings,
+    ).toEqual(settings);
+  });
+});

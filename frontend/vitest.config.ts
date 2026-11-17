@@ -17,13 +17,15 @@ export default defineConfig({
   test: {
     globals: false,
     // Keep jsdom-heavy form tests within the memory budget of local and CI runners.
-    maxWorkers: 2,
+    // CI has enough CPU capacity for an extra worker; retain a conservative
+    // default on developer machines. Measure peak RAM before raising further.
+    maxWorkers: process.env.CI ? 3 : 2,
     projects: [
       {
         extends: true,
         test: {
           name: 'unit',
-          include: ['src/test/**/*.test.ts'],
+          include: ['src/**/*.test.ts'],
           environment: 'node',
           setupFiles: ['./src/test/setup.ts', './src/test/setup.msw.ts'],
         },
@@ -32,7 +34,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'components',
-          include: ['src/test/**/*.test.tsx'],
+          include: ['src/**/*.test.tsx'],
           environment: 'jsdom',
           setupFiles: ['./src/test/setup.ts', './src/test/setup.components.ts'],
         },

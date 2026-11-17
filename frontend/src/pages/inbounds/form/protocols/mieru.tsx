@@ -1,3 +1,4 @@
+import CascadeHint from './cascade-hint';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Collapse, InputNumber, Select, Switch } from 'antd';
@@ -59,6 +60,7 @@ export default function MieruFields() {
 
   return (
     <>
+      <CascadeHint protocol="mieru" />
       <div
         style={{
           color: 'var(--ant-color-text-secondary)',

@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	awgconn "github.com/amnezia-vpn/amneziawg-go/v3/conn"
 	"github.com/amnezia-vpn/amneziawg-go/v3/device"
 	"github.com/amnezia-vpn/amneziawg-go/v3/tun/netstack"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
@@ -130,6 +129,27 @@ func newTestStack(t *testing.T, addr string) *stack.Stack {
 	return gstack
 }
 
+// Fixed ports in the ephemeral range can collide with unrelated outbound
+// sockets on CI runners. Select a currently free TCP/UDP pair for each test.
+func freeForwardTestPort(t *testing.T) int {
+	t.Helper()
+	for range 100 {
+		tcp, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := tcp.Addr().(*net.TCPAddr).Port
+		udp, err := net.ListenPacket("udp4", fmt.Sprintf("127.0.0.1:%d", port))
+		_ = tcp.Close()
+		if err == nil {
+			_ = udp.Close()
+			return port
+		}
+	}
+	t.Fatal("could not allocate a free TCP/UDP port")
+	return 0
+}
+
 func dialLoopback(t *testing.T, network string, port int) {
 	t.Helper()
 	conn, err := net.DialTimeout(network, fmt.Sprintf("127.0.0.1:%d", port), time.Second)
@@ -142,8 +162,9 @@ func dialLoopback(t *testing.T, network string, port int) {
 func TestPortForwardSetReconcileOpensAndClosesListeners(t *testing.T) {
 	gs := newTestStack(t, "10.211.0.1")
 	set := NewPortForwardSet(gs, 501)
+	t.Cleanup(set.Close)
 
-	const port = 58910
+	port := freeForwardTestPort(t)
 	inst := amneziawg.Instance{Peers: []amneziawg.Peer{
 		peerWithPortsAndIPs("a@x", fmt.Sprintf("%d", port), "10.211.0.2/32"),
 	}}
@@ -187,10 +208,11 @@ func TestPortForwardSetReconcileOpensAndClosesListeners(t *testing.T) {
 func TestPortForwardSetReconcileSurvivesPreBoundPort(t *testing.T) {
 	gs := newTestStack(t, "10.211.1.1")
 	set := NewPortForwardSet(gs, 502)
+	t.Cleanup(set.Close)
 
-	const collidingPort = 58911
-	const okPort = 58912
-	blocker, err := net.Listen("tcp", fmt.Sprintf(":%d", collidingPort))
+	collidingPort := freeForwardTestPort(t)
+	okPort := freeForwardTestPort(t)
+	blocker, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", collidingPort))
 	if err != nil {
 		t.Fatalf("pre-bind test port: %v", err)
 	}
@@ -240,9 +262,9 @@ func TestPortForwardRoundTripTCPAndUDP(t *testing.T) {
 		t.Fatalf("generate client keypair: %v", err)
 	}
 
-	const listenPort = 58920 // fixed loopback test port, matches this package's existing test convention
-	const tcpPort = 58921
-	const udpPort = 58922
+	listenPort := freeForwardTestPort(t)
+	tcpPort := freeForwardTestPort(t)
+	udpPort := freeForwardTestPort(t)
 	const clientAddr = "10.202.0.2"
 
 	inst := amneziawg.Instance{
@@ -284,7 +306,7 @@ func TestPortForwardRoundTripTCPAndUDP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client CreateNetTUN: %v", err)
 	}
-	clientDev := device.NewDevice(clientTun, awgconn.NewDefaultBind(), device.NewLogger(device.LogLevelSilent, ""))
+	clientDev := device.NewDevice(clientTun, newListenBind(""), device.NewLogger(device.LogLevelSilent, ""))
 	defer clientDev.Close()
 	// clientDev.Close() closes the tun's packet channel without waiting for
 	// writers, so every goroutine writing into clientNet must be gone first.

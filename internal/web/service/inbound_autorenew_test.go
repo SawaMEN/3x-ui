@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestAutoRenewClients_MultiInbound covers the renew loop across more than one
@@ -42,7 +42,7 @@ func TestAutoRenewClients_MultiInbound(t *testing.T) {
 
 	// Seed traffic rows: expired+depleted for the three renewable clients, and a
 	// healthy row for keep@x.
-	rows := []xray.ClientTraffic{
+	rows := []coremodel.ClientTraffic{
 		{InboundId: ib1.Id, Email: "a@x", Enable: false, Up: 100, Down: 200, Reset: 30, ExpiryTime: past},
 		{InboundId: ib1.Id, Email: "b@x", Enable: false, Up: 300, Down: 400, Reset: 30, ExpiryTime: past},
 		{InboundId: ib2.Id, Email: "c@x", Enable: false, Up: 500, Down: 600, Reset: 7, ExpiryTime: past},
@@ -60,7 +60,7 @@ func TestAutoRenewClients_MultiInbound(t *testing.T) {
 
 	now := time.Now().UnixMilli()
 	for _, email := range []string{"a@x", "b@x", "c@x"} {
-		var row xray.ClientTraffic
+		var row coremodel.ClientTraffic
 		if err := db.Where("email = ?", email).First(&row).Error; err != nil {
 			t.Fatalf("read %s: %v", email, err)
 		}
@@ -76,7 +76,7 @@ func TestAutoRenewClients_MultiInbound(t *testing.T) {
 	}
 
 	// The non-expiring client must be left exactly as seeded.
-	var keep xray.ClientTraffic
+	var keep coremodel.ClientTraffic
 	if err := db.Where("email = ?", "keep@x").First(&keep).Error; err != nil {
 		t.Fatalf("read keep@x: %v", err)
 	}

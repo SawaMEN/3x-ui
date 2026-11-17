@@ -188,7 +188,7 @@ func TestGetXrayConfig_HealsFinalMaskRealityCombo(t *testing.T) {
 	seedInboundConflict(t, "in-44302-tcp", "0.0.0.0", 44302, model.VLESS,
 		realityFinalMaskStream, `{"clients":[]}`)
 
-	svc := &XrayService{}
+	svc := &CoreService{}
 	cfg, err := svc.GetXrayConfig()
 	if err != nil {
 		t.Fatalf("GetXrayConfig: %v", err)

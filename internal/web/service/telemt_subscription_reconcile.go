@@ -63,6 +63,8 @@ func (TelemtService) ReconcileSubscriptionProxies(enabled bool, host string) err
 func deleteAllTelemtSubscriptionUsers() error {
 	telemtSubscriptionProfileMu.Lock()
 	defer telemtSubscriptionProfileMu.Unlock()
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 
 	usernames, err := telemtSubscriptionUsernamesFromConfig()
 	if err != nil {

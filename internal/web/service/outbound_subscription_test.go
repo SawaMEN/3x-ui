@@ -24,16 +24,23 @@ func TestOutboundSubscriptionCreatePropagatesAllocationDatabaseFailures(t *testi
 	db := database.GetDB()
 	const callback = "test:fail_outbound_subscription_query"
 	errInjected := errors.New("injected outbound subscription query failure")
-	if err := db.Callback().Query().Before("gorm:query").Register(callback, func(tx *gorm.DB) {
+	failAllocation := func(tx *gorm.DB) {
 		if tx.Statement != nil && tx.Statement.Table == "outbound_subscriptions" {
 			tx.AddError(errInjected)
 		}
-	}); err != nil {
+	}
+	if err := db.Callback().Query().Before("gorm:query").Register(callback, failAllocation); err != nil {
 		t.Fatalf("register query callback: %v", err)
+	}
+	if err := db.Callback().Row().Before("gorm:row").Register(callback, failAllocation); err != nil {
+		t.Fatalf("register row callback: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := db.Callback().Query().Remove(callback); err != nil {
 			t.Errorf("remove query callback: %v", err)
+		}
+		if err := db.Callback().Row().Remove(callback); err != nil {
+			t.Errorf("remove row callback: %v", err)
 		}
 	})
 
@@ -43,7 +50,7 @@ func TestOutboundSubscriptionCreatePropagatesAllocationDatabaseFailures(t *testi
 		operation string
 	}{
 		{name: "default prefix query", tagPrefix: "", operation: "prefix allocation"},
-		{name: "priority count query", tagPrefix: "custom-", operation: "priority allocation"},
+		{name: "maximum priority query", tagPrefix: "custom-", operation: "priority allocation"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			created, err := (&OutboundSubscriptionService{}).Create("test", "https://1.1.1.1/sub", tc.tagPrefix, "", true, 600, false, false, false)
@@ -225,7 +232,7 @@ func TestOutboundSubscriptionRefreshKeepsTagsOfRepeatedLink(t *testing.T) {
 
 func TestOutboundSubscriptionRefreshAlignsPositionsPastCoreRejectedLink(t *testing.T) {
 	setupSettingTestDB(t)
-	// The unencrypted first link is dropped by the core; B and C then rotate their UUID.
+	// The owner core supports plain VLESS; all tags survive rotating UUIDs.
 	subID := serveOutboundSubscription(t, "p-", func(n int) string {
 		uuid := fmt.Sprintf("00000000-0000-4000-8000-%012d", n)
 		return "vless://00000000-0000-4000-8000-000000000000@1.1.1.1:443?security=none&type=tcp#Plain\n" +
@@ -233,7 +240,7 @@ func TestOutboundSubscriptionRefreshAlignsPositionsPastCoreRejectedLink(t *testi
 			"vless://" + uuid + "@9.9.9.9:443?security=tls&type=tcp#C"
 	})
 
-	want := map[string]string{"8.8.8.8": "p-b", "9.9.9.9": "p-c"}
+	want := map[string]string{"1.1.1.1": "p-plain", "8.8.8.8": "p-b", "9.9.9.9": "p-c"}
 	for refresh := 1; refresh <= 2; refresh++ {
 		if _, got := refreshOutboundTags(t, subID); !maps.Equal(got, want) {
 			t.Fatalf("refresh %d: tags by address = %v, want %v", refresh, got, want)
@@ -452,4 +459,30 @@ func outboundsContainTag(outbounds []any, tag string) bool {
 		}
 	}
 	return false
+}
+
+func TestSubscriptionRejectsDuplicateTagPrefixes(t *testing.T) {
+	setupSettingTestDB(t)
+	svc := &OutboundSubscriptionService{}
+	first, err := svc.Create("first", "https://1.1.1.1/sub-one", "shared-", "", true, 600, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Create("second", "https://1.1.1.1/sub-two", "shared-", "", true, 600, false, false, false); err == nil {
+		t.Fatal("accepted a duplicate subscription tag prefix")
+	}
+	second, err := svc.Create("second", "https://1.1.1.1/sub-two", "unique-", "", true, 600, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Update(second.Id, "second", second.Url, "shared-", "", true, 600, false, false, false); err == nil {
+		t.Fatal("accepted a duplicate prefix during update")
+	}
+	saved, err := svc.Get(second.Id)
+	if err != nil || saved.TagPrefix != "unique-" {
+		t.Fatalf("rejected update modified the saved subscription: %+v err=%v", saved, err)
+	}
+	if err := svc.Update(first.Id, "renamed", first.Url, "shared-", "", true, 600, false, false, false); err != nil {
+		t.Fatalf("subscription cannot retain its own prefix: %v", err)
+	}
 }

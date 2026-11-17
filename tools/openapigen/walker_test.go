@@ -43,3 +43,35 @@ type HappLinkResult struct {
 		t.Fatalf("generated types expose DI interface:\n%s", apiSurface)
 	}
 }
+
+func TestGeneratedServiceAPIExcludesInternalAliases(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := t.TempDir()
+	rel, err := filepath.Rel(root, output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := run(root, rel); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"types.ts", "zod.ts"} {
+		data, err := os.ReadFile(filepath.Join(output, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, internal := range []string{"SidecarTrafficBatch", "SidecarTrafficDelta", "clientResetPolicy", "nearbySNIProbe"} {
+			if strings.Contains(string(data), internal) {
+				t.Errorf("%s exports internal alias %s", name, internal)
+			}
+		}
+		if !strings.Contains(string(data), "ProcessState") {
+			t.Errorf("%s lost the public ProcessState alias", name)
+		}
+		if !strings.Contains(string(data), "VKTurnProxyForwardType") {
+			t.Errorf("%s lost the public VKTurnProxyForwardType alias", name)
+		}
+	}
+}

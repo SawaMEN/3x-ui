@@ -19,6 +19,10 @@ var ErrPrivateAddressBlocked = errors.New("blocked private/internal address")
 // Ranges Go's net.IP predicates do not treat as internal. The transition
 // mechanisms here are deprecated (RFC 7526) or local-use, so none carry public traffic.
 var blockedPrefixes = []netip.Prefix{
+	// Not globally routable even though Go considers some globally unicast.
+	netip.MustParsePrefix("0.0.0.0/8"),      // IPv4 current-network addresses
+	netip.MustParsePrefix("198.18.0.0/15"),  // Benchmarking networks (RFC 2544)
+	netip.MustParsePrefix("240.0.0.0/4"),    // Reserved/class E IPv4
 	netip.MustParsePrefix("100.64.0.0/10"),  // CGNAT (RFC 6598)
 	netip.MustParsePrefix("2002::/16"),      // 6to4 (RFC 3056)
 	netip.MustParsePrefix("2001::/32"),      // Teredo (RFC 4380)
@@ -31,13 +35,15 @@ var blockedPrefixes = []netip.Prefix{
 var nat64WellKnown = netip.MustParsePrefix("64:ff9b::/96")
 
 func IsBlockedIP(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+	// IsGlobalUnicast excludes multicast, broadcast, loopback and unspecified
+	// addresses; IsPrivate additionally excludes RFC 1918 and IPv6 ULA.
+	if !ip.IsGlobalUnicast() || ip.IsPrivate() {
 		return true
 	}
 	addr, ok := netip.AddrFromSlice(ip)
 	if !ok {
-		return false
+		// Malformed addresses must never bypass the SSRF guard.
+		return true
 	}
 	addr = addr.Unmap()
 	for _, prefix := range blockedPrefixes {
@@ -66,6 +72,17 @@ func AllowPrivateFromContext(ctx context.Context) bool {
 var defaultDialer = &net.Dialer{Timeout: 10 * time.Second}
 
 func SSRFGuardedDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return SSRFGuardedDialWith(ctx, network, addr, defaultDialer.DialContext)
+}
+
+// SSRFGuardedDialWith enforces the same destination checks when the actual
+// connection is made through a SOCKS dialer instead of a direct net.Dialer.
+// Resolving to the approved numeric IP prevents the proxy from resolving the
+// original hostname to an internal address after validation (DNS rebinding).
+func SSRFGuardedDialWith(ctx context.Context, network, addr string, dial func(context.Context, string, string) (net.Conn, error)) (net.Conn, error) {
+	if dial == nil {
+		return nil, errors.New("missing guarded dialer")
+	}
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -86,7 +103,11 @@ func SSRFGuardedDialContext(ctx context.Context, network, addr string) (net.Conn
 			blockedErr = fmt.Errorf("%w %s", ErrPrivateAddressBlocked, ipAddr.IP)
 			continue
 		}
-		conn, derr := defaultDialer.DialContext(ctx, network, net.JoinHostPort(ipAddr.IP.String(), port))
+		target := ipAddr.IP.String()
+		if ipAddr.Zone != "" {
+			target += "%" + ipAddr.Zone
+		}
+		conn, derr := dial(ctx, network, net.JoinHostPort(target, port))
 		if derr == nil {
 			return conn, nil
 		}
@@ -116,11 +137,17 @@ func NormalizeHost(addr string) (string, error) {
 	if strings.HasPrefix(addr, "[") && strings.HasSuffix(addr, "]") {
 		addr = addr[1 : len(addr)-1]
 	}
+	addr = strings.TrimSuffix(addr, ".")
 	if ip := net.ParseIP(addr); ip != nil {
 		return ip.String(), nil
 	}
 	if len(addr) > 253 || !hostnamePattern.MatchString(addr) {
 		return "", fmt.Errorf("invalid host %q", addr)
+	}
+	for label := range strings.SplitSeq(addr, ".") {
+		if len(label) > 63 {
+			return "", fmt.Errorf("invalid DNS label in host %q", addr)
+		}
 	}
 	return addr, nil
 }

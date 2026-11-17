@@ -1,25 +1,31 @@
 package job
 
 import (
+	"context"
+	"errors"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
 )
 
-// OutboundSubscriptionJob periodically re-fetches enabled outbound subscriptions,
-// updates the stored outbounds (with stable tags), and signals that xray
-// should be reloaded so the new outbounds take effect.
+// OutboundSubscriptionJob refreshes subscriptions and requests a reload after changes.
 type OutboundSubscriptionJob struct {
+	ctx        context.Context
 	subService *service.OutboundSubscriptionService
-	xraySvc    *service.XrayService
+	xraySvc    *service.CoreService
 }
 
-// NewOutboundSubscriptionJob creates the job (zero-value services are populated
-// on first Run via method calls, same pattern as other jobs).
-func NewOutboundSubscriptionJob() *OutboundSubscriptionJob {
+// NewOutboundSubscriptionJob optionally binds network work to the panel lifecycle.
+func NewOutboundSubscriptionJob(parents ...context.Context) *OutboundSubscriptionJob {
+	ctx := context.Background()
+	if len(parents) > 0 && parents[0] != nil {
+		ctx = parents[0]
+	}
 	return &OutboundSubscriptionJob{
+		ctx:        ctx,
 		subService: &service.OutboundSubscriptionService{},
-		xraySvc:    &service.XrayService{},
+		xraySvc:    &service.CoreService{},
 	}
 }
 
@@ -29,18 +35,22 @@ func (j *OutboundSubscriptionJob) Run() {
 		j.subService = &service.OutboundSubscriptionService{}
 	}
 	if j.xraySvc == nil {
-		j.xraySvc = &service.XrayService{}
+		j.xraySvc = &service.CoreService{}
 	}
 
-	count, err := j.subService.RefreshAllEnabled()
-	if err != nil {
+	count, err := j.subService.RefreshAllEnabled(j.ctx)
+	if err != nil && !errors.Is(err, context.Canceled) {
 		logger.Warning("outbound subscription auto-update error:", err)
-		return
 	}
 	if count > 0 {
 		logger.Infof("Refreshed %d outbound subscription(s)", count)
 		// Ask the xray manager to restart/reload on the next 30s check.
-		j.xraySvc.SetToNeedRestart()
+		core, _ := (&service.SettingService{}).GetCoreType()
+		if service.IsNativeCore(core) {
+			service.SelectedNativeCore().SetToNeedRestart()
+		} else {
+			j.xraySvc.SetToNeedRestart()
+		}
 		// Also broadcast an invalidate so the UI can refresh the xray setting
 		// view (new outbounds will be visible after the reload cycle).
 		websocket.BroadcastInvalidate(websocket.MessageTypeOutbounds)

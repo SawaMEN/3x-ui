@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Collapse, Modal, Radio, Spin, Switch, Tag, Tooltip } from 'antd';
+import { Alert, Button, Collapse, Modal, Select, Space, Spin, Tag, Tooltip } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
+import { useAllSettings } from '@/api/queries/useAllSettings';
+import { useQueryClient } from '@tanstack/react-query';
 import { activateOnKey } from '@/utils/a11y';
 import type { Status } from '@/models/status';
 import GeodataSection from './GeodataSection';
@@ -30,69 +32,54 @@ const GEOFILES = [
   'geoip_RU.dat',
 ];
 
-type ReleaseVersion = {
-  version: string;
-  prerelease: boolean;
-};
-
-function isDevVersion(version: string): boolean {
-  return /^v?\d+\.\d+\.\d+-/.test(version);
-}
-
-export default function VersionModal({ open, status, onClose, onBusy }: VersionModalProps) {
+export default function VersionModal({ open, onClose, onBusy }: VersionModalProps) {
   const { t } = useTranslation();
+  const { allSetting } = useAllSettings();
+  const queryClient = useQueryClient();
+  const coreType = allSetting.coreType;
+  const coreName =
+    coreType === 'xray'
+      ? 'Xray'
+      : coreType === 'sing-box'
+        ? 'sing-box (ядро панели)'
+        : 'sing-box (официальное)';
+  const [versions, setVersions] = useState<{ tag: string; prerelease: boolean }[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState('latest');
+  const [versionsError, setVersionsError] = useState('');
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState('');
   const [modal, modalContextHolder] = Modal.useModal();
   const [activeKey, setActiveKey] = useState<string | string[]>('1');
-  const [versions, setVersions] = useState<ReleaseVersion[]>([]);
-  const [coreType, setCoreType] = useState<'xray' | 'sing-box'>('xray');
-  const [showDevVersions, setShowDevVersions] = useState(false);
   const [singBoxVersion, setSingBoxVersion] = useState('');
   const [loading, setLoading] = useState(false);
 
   const fetchVersions = useCallback(async () => {
+    setLoading(true);
+    setVersionsError('');
+    setVersions([]);
+    setSelectedVersion('latest');
     try {
-      const settingsMsg = await HttpUtil.post<{ coreType?: 'xray' | 'sing-box' }>(
-        '/panel/api/setting/all',
-      );
-      const selectedCore =
-        settingsMsg?.success && settingsMsg.obj?.coreType === 'sing-box' ? 'sing-box' : 'xray';
-      setCoreType(selectedCore);
-
-      if (selectedCore === 'sing-box') {
-        const [versionMsg, statusMsg] = await Promise.all([
-          HttpUtil.get<Array<ReleaseVersion | string>>('/panel/api/setting/singbox/versions'),
-          HttpUtil.get<{ version?: string }>('/panel/api/setting/singbox/status'),
-        ]);
-        if (versionMsg?.success) {
-          setVersions(
-            (versionMsg.obj || [])
-              .map((item) =>
-                typeof item === 'string'
-                  ? { version: item, prerelease: isDevVersion(item) }
-                  : {
-                      version: item?.version || '',
-                      prerelease: !!item?.prerelease,
-                    },
-              )
-              .filter((item) => !!item.version),
-          );
-        }
-        if (statusMsg?.success) setSingBoxVersion(statusMsg.obj?.version || '');
-      } else {
-        const msg = await HttpUtil.get<string[]>('/panel/api/server/getXrayVersion');
-        if (msg?.success) {
-          setVersions(
-            (msg.obj || []).map((version) => ({
-              version,
-              prerelease: isDevVersion(version),
-            })),
-          );
-        }
+      const [status, releases] = await Promise.all([
+        HttpUtil.get<{ cores: { type: string; version: string }[] }>('/panel/api/setting/cores'),
+        coreType === 'sing-box'
+          ? Promise.resolve(null)
+          : HttpUtil.get<{ tag: string; prerelease: boolean }[]>(
+              `/panel/api/setting/cores/${coreType}/versions`,
+              undefined,
+              { silent: true },
+            ),
+      ]);
+      setSingBoxVersion(status.obj?.cores.find((core) => core.type === coreType)?.version || '');
+      if (releases) {
+        if (!releases.success) setVersionsError(releases.msg || 'Не удалось загрузить версии');
+        else setVersions(releases.obj || []);
       }
+    } catch (error) {
+      setVersionsError(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [coreType]);
 
   const [wasOpen, setWasOpen] = useState(false);
   if (open !== wasOpen) {
@@ -101,35 +88,8 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   }
 
   useEffect(() => {
-    if (open) void fetchVersions();
+    if (open) void Promise.resolve().then(fetchVersions);
   }, [open, fetchVersions]);
-
-  function switchCoreVersion(version: string) {
-    const isSingBox = coreType === 'sing-box';
-    modal.confirm({
-      title: isSingBox ? 'Переключить версию sing-box?' : t('pages.index.xraySwitchVersionDialog'),
-      content: isSingBox
-        ? `Установить sing-box ${version} и заменить текущую версию?`
-        : t('pages.index.xraySwitchVersionDialogDesc').replace('#version#', version),
-      okText: t('confirm'),
-      cancelText: t('cancel'),
-      onOk: async () => {
-        onClose();
-        onBusy({ busy: true, tip: t('pages.index.dontRefresh') });
-        try {
-          if (isSingBox) {
-            await HttpUtil.post(
-              `/panel/api/setting/singbox/install/${encodeURIComponent(version)}`,
-            );
-          } else {
-            await HttpUtil.post(`/panel/api/server/installXray/${encodeURIComponent(version)}`);
-          }
-        } finally {
-          onBusy({ busy: false });
-        }
-      },
-    });
-  }
 
   function updateGeofile(fileName: string) {
     const isSingle = !!fileName;
@@ -156,20 +116,8 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   }
 
   const activeKeyStr = Array.isArray(activeKey) ? activeKey[0] : activeKey;
-  const currentVersion =
-    coreType === 'sing-box' ? singBoxVersion.replace(/^v/, '') : status?.xray?.version || '';
-  const visibleVersions = versions.filter(
-    (item) =>
-      showDevVersions || !item.prerelease || item.version.replace(/^v/, '') === currentVersion,
-  );
-
   return (
-    <Modal
-      open={open}
-      title={coreType === 'sing-box' ? 'Обновления sing-box' : t('pages.index.xrayUpdates')}
-      footer={null}
-      onCancel={onClose}
-    >
+    <Modal open={open} title={`${coreName} · ${t('update')}`} footer={null} onCancel={onClose}>
       {modalContextHolder}
       <Spin spinning={loading}>
         <Collapse
@@ -179,38 +127,87 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
           items={[
             {
               key: '1',
-              label: coreType === 'sing-box' ? 'sing-box' : 'Xray',
+              label: coreName,
               children: (
                 <>
-                  <div className="version-filter">
-                    <span>Показывать dev версии</span>
-                    <Switch checked={showDevVersions} onChange={setShowDevVersions} size="small" />
-                  </div>
                   <Alert
-                    type="warning"
-                    className="mb-12"
-                    title={
-                      coreType === 'sing-box'
-                        ? 'Выберите версию sing-box'
-                        : t('pages.index.xraySwitchClickDesk')
-                    }
+                    type="info"
                     showIcon
+                    title={singBoxVersion || coreName}
+                    description={
+                      coreType === 'sing-box'
+                        ? t('pages.coreSelection.bundledUpdateNote')
+                        : t('pages.coreSelection.standaloneUpdateNote')
+                    }
                   />
-                  <div className="version-list">
-                    {visibleVersions.map((item, index) => (
-                      <div key={item.version} className="version-list-item">
-                        <Tag color={index % 2 === 0 ? 'purple' : 'green'}>{item.version}</Tag>
-                        <Radio
-                          checked={
-                            coreType === 'sing-box'
-                              ? singBoxVersion.includes(item.version.replace(/^v/, ''))
-                              : item.version === `v${status?.xray?.version}`
-                          }
-                          onClick={() => switchCoreVersion(item.version)}
+                  {updateError && (
+                    <Alert type="error" title={updateError} showIcon style={{ marginTop: 12 }} />
+                  )}
+                  {coreType !== 'sing-box' && (
+                    <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
+                      {versionsError && (
+                        <Alert
+                          type="warning"
+                          title={versionsError}
+                          action={<Button onClick={() => void fetchVersions()}>Повторить</Button>}
                         />
-                      </div>
-                    ))}
-                  </div>
+                      )}
+                      <Select
+                        aria-label="Версия ядра"
+                        value={selectedVersion}
+                        onChange={setSelectedVersion}
+                        disabled={updating}
+                        style={{ width: '100%' }}
+                        showSearch={{ optionFilterProp: 'label' }}
+                        options={[
+                          { value: 'latest', label: 'Последняя стабильная' },
+                          ...versions.map((version) => ({
+                            value: version.tag,
+                            label: `${version.tag}${version.prerelease ? ' · предварительная' : ''}${version.tag.replace(/^v/, '') === singBoxVersion.replace(/^v/, '') ? ' · установлена' : ''}`,
+                          })),
+                        ]}
+                      />
+                      <Button
+                        type="primary"
+                        loading={updating}
+                        style={{ marginTop: 12 }}
+                        onClick={() =>
+                          modal.confirm({
+                            title: t('pages.coreSelection.updateConfirm', {
+                              core: `${coreName} · ${selectedVersion}`,
+                            }),
+                            content: t('pages.coreSelection.restartConnections'),
+                            onOk: async () => {
+                              setUpdating(true);
+                              setUpdateError('');
+                              try {
+                                const result = await HttpUtil.post(
+                                  `/panel/api/setting/cores/${coreType}/update`,
+                                  { version: selectedVersion },
+                                  { timeout: 330000 },
+                                );
+                                if (!result.success)
+                                  throw new Error(
+                                    result.msg || t('pages.coreSelection.updateFailed'),
+                                  );
+                                await fetchVersions();
+                                void queryClient.invalidateQueries({ queryKey: ['server'] });
+                                window.dispatchEvent(new Event('xui-core-settings-saved'));
+                              } catch (error) {
+                                setUpdateError(
+                                  error instanceof Error ? error.message : String(error),
+                                );
+                              } finally {
+                                setUpdating(false);
+                              }
+                            },
+                          })
+                        }
+                      >
+                        {t('update')}
+                      </Button>
+                    </Space>
+                  )}
                 </>
               ),
             },

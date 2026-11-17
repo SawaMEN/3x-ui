@@ -58,7 +58,6 @@ func TestGetFactoryDefaultsOmitsSensitiveMaterial(t *testing.T) {
 		"twoFactorToken",
 		"ldapPassword",
 		"smtpPassword",
-		"discordBotToken",
 	} {
 		t.Run(key, func(t *testing.T) {
 			if _, ok := defaults[key]; ok {

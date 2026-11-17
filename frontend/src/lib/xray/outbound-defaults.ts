@@ -1,4 +1,4 @@
-import { RandomUtil, Wireguard } from '@/utils';
+import { Wireguard } from '@/utils';
 
 import type { BlackholeOutboundSettings } from '@/schemas/protocols/outbound/blackhole';
 import type { DNSOutboundSettings } from '@/schemas/protocols/outbound/dns';
@@ -148,12 +148,7 @@ export type AnyOutboundSettings =
 // `Outbound.Settings.getSettings(protocol)` switch. Note: the inbound
 // dispatcher returns `null` for unknown protocols and so does this one,
 // keeping the contract identical so callers can stay protocol-agnostic.
-//
-// The `RandomUtil` reference is held to silence unused-import warnings
-// when no per-call randomization happens at the dispatcher level —
-// individual factories may pull from it via their own seeds.
 export function createDefaultOutboundSettings(protocol: string): AnyOutboundSettings | null {
-  void RandomUtil;
   switch (protocol) {
     case 'freedom':
       return createDefaultFreedomOutboundSettings();

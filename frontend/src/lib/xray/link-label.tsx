@@ -35,6 +35,7 @@ const PROTOCOL_LABELS: Record<string, string> = {
   mieru: 'Mieru',
   mierus: 'Mieru',
   sudoku: 'Sudoku',
+  vetroff: 'VetroffProxy',
 };
 
 const PROTOCOL_COLORS: Record<string, string> = {
@@ -52,6 +53,7 @@ const PROTOCOL_COLORS: Record<string, string> = {
   Naive: 'orange',
   Mieru: 'purple',
   Sudoku: 'gold',
+  VetroffProxy: 'cyan',
 };
 
 const SECURITY_COLORS: Record<string, string> = {
@@ -120,6 +122,35 @@ export function parseLinkParts(link: string): LinkParts | null {
       port = typeof payload.p === 'number' ? String(payload.p) : '';
     } catch {
       /* malformed payload, keep the protocol label */
+    }
+  } else if (scheme === 'vetroff') {
+    // VetroffProxy exports a strict base64url JSON profile without a URL
+    // fragment. Extract display-only fields; never surface its credentials.
+    try {
+      const profile = JSON.parse(fromBase64Url(trimmed.slice('vetroff://'.length))) as {
+        v?: number;
+        servers?: string[];
+        sni?: string;
+        transport?: string;
+      };
+      const server =
+        profile.v === 1 && Array.isArray(profile.servers)
+          ? profile.servers.find(
+              (value) => typeof value === 'string' && value.startsWith('https://'),
+            )
+          : undefined;
+      if (server) {
+        const endpoint = new URL(server);
+        network = typeof profile.transport === 'string' ? profile.transport : '';
+        security = 'tls';
+        remark =
+          typeof profile.sni === 'string' && profile.sni.trim()
+            ? profile.sni.trim()
+            : endpoint.hostname;
+        port = endpoint.port || '443';
+      }
+    } catch {
+      /* invalid native profile, retain the VetroffProxy protocol tag */
     }
   } else if (scheme === 'vpn') {
     /* AmneziaWG's vpn:// links are base64url of a plain .conf text (matching

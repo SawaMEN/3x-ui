@@ -10,6 +10,7 @@ import { SockoptStreamSettingsSchema } from './sockopt';
 import { TcpStreamSettingsSchema } from './tcp';
 import { WsStreamSettingsSchema } from './ws';
 import { XHttpStreamSettingsSchema } from './xhttp';
+import { XDriveStreamSettingsSchema } from './xdrive';
 
 export * from './external-proxy';
 export * from './finalmask';
@@ -21,6 +22,7 @@ export * from './sockopt';
 export * from './tcp';
 export * from './ws';
 export * from './xhttp';
+export * from './xdrive';
 
 export const NetworkSchema = z.enum([
   'tcp',
@@ -29,6 +31,7 @@ export const NetworkSchema = z.enum([
   'grpc',
   'httpupgrade',
   'xhttp',
+  'xdrive',
   'hysteria',
 ]);
 export type Network = z.infer<typeof NetworkSchema>;
@@ -43,6 +46,7 @@ export type Network = z.infer<typeof NetworkSchema>;
 // network selector hides it for other protocols. xray-core enforces
 // the constraint server-side too.
 const TransportNetworkSettingsSchema = z.discriminatedUnion('network', [
+  z.object({ network: z.literal('xdrive'), xdriveSettings: XDriveStreamSettingsSchema }),
   z.object({ network: z.literal('tcp'), tcpSettings: TcpStreamSettingsSchema }),
   z.object({ network: z.literal('kcp'), kcpSettings: KcpStreamSettingsSchema }),
   z.object({ network: z.literal('ws'), wsSettings: WsStreamSettingsSchema }),

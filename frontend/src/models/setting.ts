@@ -1,13 +1,28 @@
 import { ObjectUtil } from '@/utils';
-import type { SubProfileMode } from '@/schemas/setting';
+import type { SubProfileMode, SubHostSortMode, SubscriptionTheme } from '@/schemas/setting';
 
 export class AllSetting {
-  coreType: 'xray' | 'sing-box' = 'xray';
+  coreType: 'xray' | 'sing-box' | 'sing-box-upstream' = 'sing-box';
   webListen = '';
   webDomain = '';
   webPort = 2053;
   webCertFile = '';
   webKeyFile = '';
+  rootRedirectEnable = false;
+  rootRedirectURL = 'https://www.wikipedia.org/';
+  subTelegramLocalEnable = true;
+  subTelegramRemoteEnable = true;
+  subTelegramWebEnable = true;
+  subAppearanceTheme: SubscriptionTheme = 'classic';
+  subAppearanceEnable = false;
+  subAppearanceTitle = '';
+  subAppearanceDescription = '';
+  subAppearanceLogoURL = '';
+  subAppearanceAccent = '#808080';
+  subPublicURL = '';
+  subAllowedDomains = '';
+  subRestrictDomains = false;
+  subCDNEnable = false;
   webBasePath = '/';
   sessionMaxAge = 360;
   trustedProxyCIDRs = '127.0.0.1/32,::1/128';
@@ -21,6 +36,7 @@ export class AllSetting {
   remarkTemplate = '{{INBOUND}}-{{EMAIL}}|📊{{TRAFFIC_LEFT}}|⏳{{DAYS_LEFT}}D';
   subShowIdentityOnAllLinks = false;
   subInfoNodeEnable = false;
+  subHostSortMode: SubHostSortMode = 'inbound-first';
   subCalendarExpireInclusive = false;
   subExpiredTemplate = '⛔ {{EMAIL}} | Expired: {{EXPIRE_DATE}}';
   subTrafficDepletedTemplate =
@@ -40,6 +56,8 @@ export class AllSetting {
   xrayTemplateConfig = '';
   happLinkEnable = false;
   subEnable = true;
+  subFormatMode = 'both';
+  subDefaultFormat = 'auto';
   subJsonEnable = false;
   subJsonAutoDetect = false;
   subJsonAlwaysArray = false;
@@ -74,6 +92,7 @@ export class AllSetting {
   subClashURI = '';
   subClashEnableRouting = false;
   subClashRules = '';
+  subClashRemoteDNS = false;
   subJsonMux = '';
   subJsonRules = '';
   subJsonRoutingRules = '';
@@ -143,6 +162,7 @@ export class AllSetting {
   smtpCpu = 80;
   smtpMemory = 80;
   outboundDownThreshold = 3;
+  nodeDownThreshold = 1;
   hasTgBotToken = false;
   hasTwoFactorToken = false;
   hasLdapPassword = false;
@@ -153,22 +173,13 @@ export class AllSetting {
   clearTgBotToken = false;
   clearLdapPassword = false;
   clearSmtpPassword = false;
-  discordBotEnable = false;
-  discordBotToken = '';
-  discordChannelId = '';
-  discordAdminIds = '';
-  discordRunTime = '@daily';
-  discordBotBackup = false;
-  discordCpu = 80;
-  discordMemory = 80;
-  discordLang = 'en-US';
-  discordEnabledEvents = 'login.attempt,cpu.high';
-  hasDiscordBotToken = false;
-  clearDiscordBotToken = false;
 
   constructor(data?: unknown) {
     if (data != null) {
       ObjectUtil.cloneProps(this, data);
+      if ((data as { subAppearanceTheme?: string }).subAppearanceTheme === 'whitemax') {
+        this.subAppearanceTheme = 'luna';
+      }
     }
     // Legacy settings with a custom URL retain it until an explicit mode is saved.
     if (
@@ -185,6 +196,10 @@ export class AllSetting {
     this.outboundDownThreshold = Number.isFinite(threshold)
       ? Math.min(100, Math.max(1, threshold))
       : 3;
+    const nodeThreshold = Math.round(Number(this.nodeDownThreshold));
+    this.nodeDownThreshold = Number.isFinite(nodeThreshold)
+      ? Math.min(100, Math.max(1, nodeThreshold))
+      : 1;
   }
 
   equals(other: AllSetting): boolean {

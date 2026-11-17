@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -21,7 +21,7 @@ import (
 func (s *ClientService) ExportAll() ([]ClientCreatePayload, error) {
 	db := database.GetDB()
 	var rows []model.ClientRecord
-	if err := db.Order("id ASC").Find(&rows).Error; err != nil {
+	if err := publicClientRecords(db, "email").Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]ClientCreatePayload, 0, len(rows))
@@ -68,6 +68,11 @@ func (s *ClientService) ExportAll() ([]ClientCreatePayload, error) {
 // they are reported in Skipped. The boolean reports whether xray needs a restart.
 func (s *ClientService) ImportClients(inboundSvc *InboundService, items []ClientCreatePayload) (BulkCreateResult, bool, error) {
 	result := BulkCreateResult{}
+	for _, item := range items {
+		if IsManagedNodeRouteClientEmail(item.Client.Email) {
+			return result, false, ErrManagedNodeRouteClient
+		}
+	}
 	if len(items) == 0 {
 		return result, false, nil
 	}
@@ -128,6 +133,18 @@ func (s *ClientService) ImportClients(inboundSvc *InboundService, items []Client
 				continue
 			}
 			if verr := validateClientResetDay(client.ResetDay); verr != nil {
+				skipOrphan(email, verr.Error())
+				continue
+			}
+			if verr := validateClientReset(client.Reset); verr != nil {
+				skipOrphan(email, verr.Error())
+				continue
+			}
+			if verr := client.ValidateConnectionNameMode(); verr != nil {
+				skipOrphan(email, verr.Error())
+				continue
+			}
+			if verr := client.SpeedLimit.Validate(); verr != nil {
 				skipOrphan(email, verr.Error())
 				continue
 			}
@@ -207,7 +224,7 @@ func (s *ClientService) DeleteOrphans() (int, error) {
 	db := database.GetDB()
 	sub := database.GetDB().Table("client_inbounds").Select("client_id")
 	var rows []model.ClientRecord
-	if err := db.Where("id NOT IN (?)", sub).Order("id ASC").Find(&rows).Error; err != nil {
+	if err := publicClientRecords(db, "email").Where("id NOT IN (?)", sub).Order("id ASC").Find(&rows).Error; err != nil {
 		return 0, err
 	}
 	if len(rows) == 0 {
@@ -243,7 +260,7 @@ func (s *ClientService) DeleteOrphans() (int, error) {
 		}
 		if len(emails) > 0 {
 			for _, batch := range chunkStrings(emails, sqlInChunk) {
-				if e := tx.Where("email IN ?", batch).Delete(&xray.ClientTraffic{}).Error; e != nil {
+				if e := tx.Where("email IN ?", batch).Delete(&coremodel.ClientTraffic{}).Error; e != nil {
 					return e
 				}
 				if e := tx.Where("client_email IN ?", batch).Delete(&model.InboundClientIps{}).Error; e != nil {

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // Identity now comes from the clients table, so settings JSON that drifted from
@@ -92,14 +92,14 @@ func TestEmailsUsedByOtherInboundsMatchesCaseInsensitively(t *testing.T) {
 		}
 	}
 
-	shared, err := is.emailsUsedByOtherInbounds([]string{"alice@x"}, ibA.Id)
+	shared, err := is.emailsUsedByOtherInbounds(database.GetDB(), []string{"alice@x"}, ibA.Id)
 	if err != nil {
 		t.Fatalf("emailsUsedByOtherInbounds: %v", err)
 	}
 	if !shared["alice@x"] {
 		t.Error("lower-cased lookup missed a stored mixed-case email")
 	}
-	used, err := is.emailUsedByOtherInbounds("alice@x", ibA.Id)
+	used, err := is.emailUsedByOtherInbounds(database.GetDB(), "alice@x", ibA.Id)
 	if err != nil {
 		t.Fatalf("emailUsedByOtherInbounds: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestEmailsUsedByOtherInboundsMatchesCaseInsensitively(t *testing.T) {
 	}
 
 	// The traffic row is shared, so removing the client from one inbound keeps it.
-	if err := database.GetDB().Create(&xray.ClientTraffic{
+	if err := database.GetDB().Create(&coremodel.ClientTraffic{
 		InboundId: ibA.Id, Email: "Alice@x", Enable: true,
 	}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
@@ -117,7 +117,7 @@ func TestEmailsUsedByOtherInboundsMatchesCaseInsensitively(t *testing.T) {
 		t.Fatalf("DelInboundClientByEmail: %v", err)
 	}
 	var count int64
-	if err := database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", "Alice@x").Count(&count).Error; err != nil {
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).Where("email = ?", "Alice@x").Count(&count).Error; err != nil {
 		t.Fatalf("count traffic: %v", err)
 	}
 	if count == 0 {

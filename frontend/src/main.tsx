@@ -10,6 +10,7 @@ import '@/styles/sidebar-brand-alignment.css';
 
 import { setupHttp } from '@/api/http-init';
 import { readyI18n } from '@/i18n/react';
+import { AntdRootConfig } from '@/i18n/AntdRootConfig';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { QueryProvider } from '@/api/QueryProvider';
 import { installChunkLoadRecovery } from '@/lib/chunk-load-recovery';
@@ -26,11 +27,13 @@ if (messageContainer) {
 function AppProviders() {
   const { antdThemeConfig } = useTheme();
   return (
-    <ConfigProvider theme={antdThemeConfig}>
-      <QueryProvider>
-        <RouterProvider router={router} />
-      </QueryProvider>
-    </ConfigProvider>
+    <AntdRootConfig>
+      <ConfigProvider theme={antdThemeConfig}>
+        <QueryProvider>
+          <RouterProvider router={router} />
+        </QueryProvider>
+      </ConfigProvider>
+    </AntdRootConfig>
   );
 }
 

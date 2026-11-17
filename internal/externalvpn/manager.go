@@ -11,8 +11,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math/big"
 	"net"
 	"net/http"
@@ -24,17 +26,26 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 type running struct {
+	trafficEpoch uint64 // Writes hold both manager.mu and statsMu.
+
+	statsMu     sync.Mutex
+	accounting  *sidecartraffic.Owner
+	stopping    atomic.Bool
 	protocol    model.Protocol
 	metricsAddr string
 	tag         string
+	instance    Instance
 	counters    map[string]trafficCounters
 	fingerprint string
 	cancel      context.CancelFunc
@@ -61,26 +72,63 @@ func directory() string {
 }
 
 func binary(protocol model.Protocol) string {
-	name := string(protocol)
-	if protocol == model.TrustTunnel {
+	return findBinary(protocol, true)
+}
+
+func findBinary(protocol model.Protocol, managed bool) string {
+	var name string
+	switch protocol {
+	case model.Pingtunnel:
+		name = "pingtunnel"
+	case model.TrustTunnel:
 		name = "trusttunnel_endpoint"
+	case model.FPTN:
+		name = "fptn"
+	case model.VetroffProxy:
+		path, _ := filepath.Abs(filepath.Join(config.GetBinFolderPath(), "vetroff-bundle", "vetroff-necko", "vetroff"))
+		return path
+	case model.OpenFlux:
+		name = "openflux"
+	default:
+		return ""
 	}
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	for _, path := range []string{filepath.Join(config.GetBinFolderPath(), name), "/usr/local/bin/" + name, "/usr/bin/" + name} {
+	target := filepath.Join(config.GetBinFolderPath(), name)
+	candidates := []string{"/usr/local/bin/" + name, "/usr/bin/" + name}
+	if path, err := exec.LookPath(name); err == nil {
+		candidates = append(candidates, path)
+	}
+	if managed {
+		candidates = append([]string{target}, candidates...)
+	}
+	targetAbs, _ := filepath.Abs(target)
+	for _, path := range candidates {
+		pathAbs, _ := filepath.Abs(path)
+		if !managed && pathAbs == targetAbs {
+			continue
+		}
 		if info, err := os.Stat(path); err == nil && !info.IsDir() {
 			return path
 		}
 	}
-	if path, err := exec.LookPath(name); err == nil {
-		return path
+	if managed {
+		return target
 	}
-	return filepath.Join(config.GetBinFolderPath(), name)
+	return ""
+}
+
+// Do not claim removal while a separately installed system binary remains usable.
+func CheckManagedRemoval(protocol model.Protocol) error {
+	if path := findBinary(protocol, false); path != "" {
+		return fmt.Errorf("%s is also installed outside the panel at %s; remove that installation manually first", protocol, path)
+	}
+	return nil
 }
 
 func writePrivate(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	temp, err := os.CreateTemp(filepath.Dir(path), ".config-*")
@@ -89,7 +137,7 @@ func writePrivate(path string, data []byte) error {
 	}
 	defer os.Remove(temp.Name())
 	defer temp.Close()
-	if err := temp.Chmod(0600); err != nil {
+	if err := temp.Chmod(0o600); err != nil {
 		return err
 	}
 	if _, err := temp.Write(data); err != nil {
@@ -156,20 +204,23 @@ func certificate(inst Instance, folder string) (string, string, error) {
 }
 
 func files(inst Instance, metricsAddr string) ([]string, error) {
+	if inst.Protocol == model.VetroffProxy {
+		return vetroffFiles(inst)
+	}
 	folder := filepath.Join(directory(), strconv.Itoa(inst.ID))
-	if err := os.MkdirAll(folder, 0700); err != nil {
+	if err := os.MkdirAll(folder, 0o700); err != nil {
 		return nil, err
 	}
 	if inst.Protocol == model.Pingtunnel {
 		path := filepath.Join(folder, "server.json")
-		data, err := json.Marshal(map[string]any{"type": "server", "key": inst.Settings.Key, "encrypt": inst.Settings.Encrypt, "encrypt_key": inst.Settings.EncryptKey, "icmp_listen": defaultListen(inst.Listen), "maxconn": inst.Settings.MaxConn, "conntt": inst.Settings.ConnectTimeout, "forward": inst.Settings.Forward, "nolog": 1})
+		data, err := json.Marshal(map[string]any{"type": "server", "key": inst.Settings.Key, "encrypt": inst.Settings.Encrypt, "encrypt_key": inst.Settings.EncryptKey, "icmp_listen": defaultListen(inst.Listen), "maxconn": inst.Settings.MaxConn, "conntt": inst.Settings.ConnectTimeout, "forward": "socks5://" + sidecaregress.Address(inst.ID), "nolog": 1})
 		if err != nil {
 			return nil, err
 		}
 		if err := writePrivate(path, data); err != nil {
 			return nil, err
 		}
-		args := []string{"-c", path}
+		args := []string{"-c", path, "-forward", "socks5://" + sidecaregress.Address(inst.ID)}
 		if inst.Settings.Congestion == "none" {
 			// Pingtunnel's JSON loader ignores empty strings; disable via an explicit flag.
 			args = append(args, "-congestion", "")
@@ -191,7 +242,7 @@ func files(inst Instance, metricsAddr string) ([]string, error) {
 		return nil, err
 	}
 	vpn := filepath.Join(folder, "vpn.toml")
-	settings := fmt.Sprintf("listen_address = %s\ncredentials_file = %s\nallow_private_network_connections = false\n[listen_protocols.http2]\n[listen_protocols.quic]\n[forward_protocol]\ndirect = {}\n[metrics]\naddress = %s\nper_client_metrics = true\n", tomlString(inst.Bind()), tomlString(credentials), tomlString(metricsAddr))
+	settings := fmt.Sprintf("listen_address = %s\ncredentials_file = %s\nallow_private_network_connections = false\n[listen_protocols.http1]\n[listen_protocols.http2]\n[listen_protocols.quic]\n[forward_protocol.socks5]\naddress = %s\nextended_auth = false\n[metrics]\naddress = %s\nper_client_metrics = true\n", tomlString(inst.Bind()), tomlString(credentials), tomlString(sidecaregress.Address(inst.ID)), tomlString(metricsAddr))
 	if err := writePrivate(vpn, []byte(settings)); err != nil {
 		return nil, err
 	}
@@ -212,6 +263,14 @@ func defaultListen(listen string) string {
 
 func fingerprint(inst Instance) string {
 	data, _ := json.Marshal(inst)
+	if inst.Protocol == model.VetroffProxy {
+		if pair, err := tls.LoadX509KeyPair(inst.Settings.Certificate, inst.Settings.PrivateKey); err == nil {
+			for _, cert := range pair.Certificate {
+				digest := sha256.Sum256(cert)
+				data = append(data, digest[:]...)
+			}
+		}
+	}
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }
@@ -233,16 +292,97 @@ func certificateRenewalNeeded(inst Instance) bool {
 	return err != nil || time.Until(cert.NotAfter) < 30*24*time.Hour
 }
 
-func (m *Manager) Ensure(inst Instance) error {
-	if err := inst.Validate(); err != nil {
-		return err
+// Releases before 3.0 can forward TCP while sending UDP directly. Do not
+// accept them for a managed cascade, even if they recognize the forward flag.
+func requirePingtunnelForwardVersion(path string) error {
+	version, err := binaryVersion(context.Background(), path, []string{"-version"})
+	if err != nil {
+		return fmt.Errorf("Pingtunnel 3.0+ is required for TCP/UDP egress: %w", err)
 	}
+	major, err := strconv.Atoi(strings.Split(version, ".")[0])
+	if err != nil || major < 3 {
+		return fmt.Errorf("Pingtunnel 3.0+ is required for TCP/UDP egress; installed: %s", version)
+	}
+	return nil
+}
+
+func (m *Manager) Ensure(inst Instance) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := sidecartraffic.ValidateDesired(inst.desiredState()); err != nil {
+		return err
+	}
 	return m.ensureLocked(inst)
 }
 
 func (m *Manager) ensureLocked(inst Instance) error {
+	if err := inst.Validate(); err != nil {
+		return err
+	}
+	old := m.procs[inst.ID]
+	if old != nil {
+		select {
+		case <-old.done:
+			old = nil
+		default:
+		}
+	}
+	err := m.startLocked(inst)
+	if err == nil {
+		if current := m.procs[inst.ID]; current != nil && current != old {
+			err = waitInboundStartup(current)
+		}
+	}
+	if err == nil {
+		return nil
+	}
+	if current := m.procs[inst.ID]; current != nil && current != old {
+		m.removeLocked(inst.ID)
+	}
+	if old != nil {
+		// A successful rollback must not restore a password/client set that
+		// the panel has already revoked, even if the replacement failed.
+		if restoreErr := sidecartraffic.ValidateDesired(old.instance.desiredState()); restoreErr != nil {
+			m.removeLocked(inst.ID)
+			return errors.Join(err, fmt.Errorf("restore previous external VPN rejected: %w", restoreErr))
+		}
+		if m.procs[inst.ID] == old {
+			// Preflight may have written part of a shared config. Restore its files
+			// while preserving the still-running child.
+			_, cancel, restoreErr := m.prepareInboundCommand(old.instance, old.metricsAddr)
+			if cancel != nil {
+				cancel()
+			}
+			return errors.Join(err, restoreErr)
+		}
+		if restoreErr := m.startLocked(old.instance); restoreErr != nil {
+			return errors.Join(err, fmt.Errorf("restore previous external VPN: %w", restoreErr))
+		}
+		if restored := m.procs[inst.ID]; restored != nil {
+			restored.accounting = old.accounting
+			err = errors.Join(err, waitInboundStartup(restored))
+		}
+	}
+	return err
+}
+
+func waitInboundStartup(proc *running) error {
+	if proc.protocol == model.FPTN {
+		return waitFPTNReady(fmt.Sprintf("FPTN inbound %d", proc.instance.ID), proc.done, proc.cmd, func() bool {
+			return fptnExecReady(containerName(proc.instance.ID), `[ -n "$(ss -H -lnt 'sport = :443')" ] && [ -n "$(ss -H -lnt 'sport = :4430')" ]`)
+		})
+	}
+	timer := time.NewTimer(200 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-proc.done:
+		return fmt.Errorf("%s exited during startup: %v", proc.protocol, proc.cmd.ProcessState)
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (m *Manager) startLocked(inst Instance) error {
 	fp := fingerprint(inst)
 	if old := m.procs[inst.ID]; old != nil {
 		select {
@@ -250,61 +390,123 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			delete(m.procs, inst.ID)
 		default:
 			if old.fingerprint == fp && !certificateRenewalNeeded(inst) {
+				owner, err := captureTrafficOwner(inst)
+				if err != nil {
+					return err
+				}
+				if err := m.rebindTrafficOwnerLocked(old, owner); err != nil {
+					return err
+				}
+				// Fingerprints exclude provenance: refresh it when only the
+				// saved representation changed, without restarting the child.
+				old.instance.Revision = inst.Revision
+				old.instance.ClientRevision = inst.ClientRevision
 				return nil
 			}
-			m.removeLocked(inst.ID)
 		}
 	}
-	if inst.Protocol == model.TrustTunnel {
+	if inst.Protocol == model.VetroffProxy || inst.Protocol == model.TrustTunnel || inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
 		active := false
 		for _, c := range inst.Settings.Clients {
 			active = active || c.Enable
 		}
 		if !active {
+			m.removeLocked(inst.ID)
 			return nil
 		}
 	}
 	if inst.Protocol == model.Pingtunnel {
+		if err := requirePingtunnelForwardVersion(binary(inst.Protocol)); err != nil {
+			return err
+		}
 		for id, proc := range m.procs {
 			if id != inst.ID && proc.protocol == model.Pingtunnel {
 				return fmt.Errorf("only one Pingtunnel listener may run per server")
 			}
 		}
 	}
+	accounting, err := captureTrafficOwner(inst)
+	if err != nil {
+		return err
+	}
 	metricsAddr := ""
-	if inst.Protocol == model.TrustTunnel {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if inst.Protocol == model.TrustTunnel || inst.Protocol == model.FPTN {
+		listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			return err
 		}
 		metricsAddr = listener.Addr().String()
 		_ = listener.Close()
 	}
-	args, err := files(inst, metricsAddr)
+	// Preflight can overwrite shared credential/certificate files. Read the old
+	// process with its old trust material before writing any replacement files.
+	if old := m.procs[inst.ID]; old != nil {
+		m.handoffTrafficLocked(old)
+	}
+	cmd, cancel, err := m.prepareInboundCommand(inst, metricsAddr)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, binary(inst.Protocol), args...)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	m.stopLocked(inst.ID)
+	cleanupAdditional(inst.ID, inst.Protocol)
+
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return fmt.Errorf("%s: %w", inst.Protocol, err)
 	}
-	proc := &running{protocol: inst.Protocol, fingerprint: fp, cancel: cancel, cmd: cmd, done: make(chan struct{}), metricsAddr: metricsAddr, tag: inst.Tag, counters: map[string]trafficCounters{}}
+	// Snapshot only when starting a new child; unchanged reconciles stay allocation-light.
+	snapshot := inst
+	data, _ := json.Marshal(inst)
+	_ = json.Unmarshal(data, &snapshot)
+	proc := &running{accounting: accounting, instance: snapshot, protocol: inst.Protocol, fingerprint: fp, cancel: cancel, cmd: cmd, done: make(chan struct{}), metricsAddr: metricsAddr, tag: inst.Tag, counters: map[string]trafficCounters{}}
 	m.procs[inst.ID] = proc
 	go func() {
 		err := cmd.Wait()
 		close(proc.done)
-		if ctx.Err() == nil {
+		if !proc.stopping.Load() {
 			logger.Warningf("%s inbound %d exited: %v", inst.Protocol, inst.ID, err)
 		}
 	}()
 	return nil
 }
 
+func (m *Manager) prepareInboundCommand(inst Instance, metricsAddr string) (*exec.Cmd, context.CancelFunc, error) {
+	var cmd *exec.Cmd
+	var cancel context.CancelFunc
+	var ctx context.Context
+	if inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
+		var err error
+		cmd, cancel, err = m.additionalCommand(inst, metricsAddr)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		args, err := files(inst, metricsAddr)
+		if err != nil {
+			return nil, nil, err
+		}
+		ctx, cancel = context.WithCancel(context.Background())
+		cmd = exec.CommandContext(ctx, binary(inst.Protocol), args...)
+	}
+	if inst.Protocol == model.VetroffProxy {
+		cmd.Dir = filepath.Dir(binary(inst.Protocol))
+	}
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	prepareVetroffCommand(cmd)
+	return cmd, cancel, nil
+}
+
 func (m *Manager) removeLocked(id int) {
 	if proc := m.procs[id]; proc != nil {
+		m.handoffTrafficLocked(proc)
+	}
+	m.stopLocked(id)
+}
+
+func (m *Manager) stopLocked(id int) {
+	if proc := m.procs[id]; proc != nil {
+		proc.stopping.Store(true)
+		cleanupAdditional(id, proc.protocol)
 		proc.cancel()
 		select {
 		case <-proc.done:
@@ -327,6 +529,26 @@ func (m *Manager) StopAll() {
 func (m *Manager) Reconcile(instances []Instance) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	_, _ = m.reconcileLocked(instances)
+}
+
+func (m *Manager) reconcileLocked(instances []Instance) ([]Instance, error) {
+	requests := make([]sidecartraffic.Desired, len(instances))
+	for i, inst := range instances {
+		requests[i] = inst.desiredState()
+	}
+	allowed, err := sidecartraffic.Current(requests)
+	if err != nil {
+		logger.Warningf("externalvpn: reconcile skipped: %v", err)
+		return nil, err
+	}
+	current := make([]Instance, 0, len(instances))
+	for i, inst := range instances {
+		if allowed[i] {
+			current = append(current, inst)
+		}
+	}
+	instances = current
 	sort.Slice(instances, func(i, j int) bool { return instances[i].ID < instances[j].ID })
 	desired := map[int]bool{}
 	for _, inst := range instances {
@@ -347,6 +569,7 @@ func (m *Manager) Reconcile(instances []Instance) {
 			delete(m.lastErrors, inst.ID)
 		}
 	}
+	return instances, nil
 }
 
 func ExportTrustTunnelLink(inst Instance, email, address string, port int) (string, error) {
@@ -389,55 +612,155 @@ func ExportTrustTunnelLink(inst Instance, email, address string, port int) (stri
 	return link, nil
 }
 
-type trafficCounters struct{ up, down uint64 }
-type TrafficDelta struct {
-	Tag, Email string
-	Up, Down   int64
-	Active     bool
-}
+type (
+	trafficCounters struct{ up, down uint64 }
+	TrafficDelta    struct {
+		Tag, Email string
+		Up, Down   int64
+		Active     bool
+	}
+)
 
 func (m *Manager) CollectTraffic() []TrafficDelta {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var deltas []TrafficDelta
-	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}}
-	for _, proc := range m.procs {
-		if proc.metricsAddr == "" {
-			continue
-		}
-		response, err := client.Get("http://" + proc.metricsAddr + "/clients")
-		if err != nil {
-			continue
-		}
-		var clients []struct {
-			Username string `json:"username"`
-			Sessions int    `json:"sessions"`
-			Inbound  uint64 `json:"inbound"`
-			Outbound uint64 `json:"outbound"`
-		}
-		if response.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&clients) != nil {
-			response.Body.Close()
-			continue
-		}
-		response.Body.Close()
-		for _, row := range clients {
-			if row.Username == "" {
-				continue
-			}
-			old := proc.counters[row.Username]
-			up, down := row.Inbound, row.Outbound
-			delta := TrafficDelta{
-				Tag:    proc.tag,
-				Email:  row.Username,
-				Up:     cumulativeTrafficDelta(up, old.up),
-				Down:   cumulativeTrafficDelta(down, old.down),
-				Active: row.Sessions > 0,
-			}
-			if delta.Up > 0 || delta.Down > 0 || delta.Active {
-				deltas = append(deltas, delta)
-			}
-			proc.counters[row.Username] = trafficCounters{up: up, down: down}
-		}
-	}
+	deltas, _ := m.CollectTrafficChecked()
 	return deltas
+}
+
+func (m *Manager) CollectTrafficChecked() ([]TrafficDelta, error) {
+	return m.collectTrafficChecked(false)
+}
+
+// CollectTrafficPersisted accepts bytes with the immutable runtime owner before returning.
+func (m *Manager) CollectTrafficPersisted() ([]TrafficDelta, error) {
+	return m.collectTrafficChecked(true)
+}
+
+func (m *Manager) collectTrafficChecked(persist bool) ([]TrafficDelta, error) {
+	var collectErr error
+	m.mu.Lock()
+	processes := make([]*running, 0, len(m.procs))
+	owners := make(map[*running]*sidecartraffic.Owner, len(m.procs))
+	epochs := make(map[*running]uint64, len(m.procs))
+	for _, proc := range m.procs {
+		processes = append(processes, proc)
+		owners[proc] = proc.accounting
+		epochs[proc] = proc.trafficEpoch
+	}
+	m.mu.Unlock()
+	// Poll independent processes concurrently without blocking inbound CRUD on
+	// every socket/HTTP timeout. Each process serializes its counter baseline.
+	var resultMu sync.Mutex
+	var wg sync.WaitGroup
+	limit := make(chan struct{}, 8)
+	var deltas []TrafficDelta
+	for _, proc := range processes {
+		limit <- struct{}{}
+		wg.Add(1)
+		go func(proc *running) {
+			defer wg.Done()
+			defer func() { <-limit }()
+			proc.statsMu.Lock()
+			defer proc.statsMu.Unlock()
+			if proc.stopping.Load() {
+				return
+			}
+			if persist && proc.trafficEpoch != epochs[proc] {
+				resultMu.Lock()
+				collectErr = errors.Join(collectErr, fmt.Errorf("%s inbound %d: accounting owner changed during metrics poll", proc.protocol, proc.instance.ID))
+				resultMu.Unlock()
+				return
+			}
+			if persist && owners[proc] == nil {
+				resultMu.Lock()
+				collectErr = errors.Join(collectErr, fmt.Errorf("%s inbound %d: runtime traffic owner unavailable", proc.protocol, proc.instance.ID))
+				resultMu.Unlock()
+				return
+			}
+			var previous map[string]trafficCounters
+			if persist {
+				previous = maps.Clone(proc.counters)
+			}
+			rows, err := m.collectProcessTrafficChecked(proc)
+			if persist {
+				samples := make([]sidecartraffic.Sample, 0, len(rows))
+				for _, d := range rows {
+					samples = append(samples, sidecartraffic.Sample{Email: d.Email, Up: d.Up, Down: d.Down, Active: d.Active})
+				}
+				accepted, storeErr := owners[proc].Store(samples)
+				err = errors.Join(err, storeErr)
+				if !accepted {
+					proc.counters = previous
+					rows = nil
+				}
+			}
+			resultMu.Lock()
+			if err != nil {
+				collectErr = errors.Join(collectErr, fmt.Errorf("%s inbound %d: %w", proc.protocol, proc.instance.ID, err))
+			}
+			deltas = append(deltas, rows...)
+			resultMu.Unlock()
+		}(proc)
+	}
+	wg.Wait()
+	return deltas, collectErr
+}
+
+var metricsHTTPClient = &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil, MaxIdleConns: 32, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}}
+
+func (m *Manager) collectProcessTrafficChecked(proc *running) ([]TrafficDelta, error) {
+	return m.collectProcessTrafficMode(proc, false)
+}
+
+func (m *Manager) collectProcessTrafficMode(proc *running, includeIdle bool) ([]TrafficDelta, error) {
+	var deltas []TrafficDelta
+	if proc.protocol == model.FPTN || proc.protocol == model.OpenFlux {
+		return m.collectAdditionalTrafficMode(proc, includeIdle)
+	}
+	if proc.metricsAddr == "" {
+		if proc.protocol == model.TrustTunnel {
+			return nil, errors.New("client metrics unavailable")
+		}
+		return nil, nil // This protocol does not expose per-client metrics.
+	}
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+proc.metricsAddr+"/clients", nil)
+	if err != nil {
+		return nil, errors.New("client metrics unavailable")
+	}
+	response, err := metricsHTTPClient.Do(request)
+	if err != nil {
+		return nil, errors.New("client metrics unavailable")
+	}
+	var clients []struct {
+		Username string `json:"username"`
+		Sessions int    `json:"sessions"`
+		Inbound  uint64 `json:"inbound"`
+		Outbound uint64 `json:"outbound"`
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, errors.New("client metrics response rejected")
+	}
+	data, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
+	if err != nil || len(data) > 1<<20 || json.Unmarshal(data, &clients) != nil || clients == nil {
+		return nil, errors.New("invalid client metrics response")
+	}
+	for _, row := range clients {
+		if row.Username == "" {
+			continue
+		}
+		old := proc.counters[row.Username]
+		up, down := row.Inbound, row.Outbound
+		delta := TrafficDelta{
+			Tag:    proc.tag,
+			Email:  row.Username,
+			Up:     cumulativeTrafficDelta(up, old.up),
+			Down:   cumulativeTrafficDelta(down, old.down),
+			Active: row.Sessions > 0,
+		}
+		if includeIdle || delta.Up > 0 || delta.Down > 0 || delta.Active {
+			deltas = append(deltas, delta)
+		}
+		proc.counters[row.Username] = trafficCounters{up: up, down: down}
+	}
+	return deltas, nil
 }

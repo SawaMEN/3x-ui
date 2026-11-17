@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -55,30 +56,40 @@ type telemtUserStats struct {
 }
 
 var (
-	telemtMonitorOnce sync.Once
-	telemtRefreshMu   sync.Mutex
-	telemtGeoState    struct {
+	telemtRefreshMu sync.Mutex
+	telemtGeoState  struct {
 		sync.Mutex
 		retryUntil time.Time
 	}
 )
 
-func StartTelemtConnectionMonitor() {
-	telemtMonitorOnce.Do(func() {
-		go func() {
-			_ = refreshTelemtConnectionSnapshot()
-			ticker := time.NewTicker(telemtConnectionMonitorInterval)
-			defer ticker.Stop()
-			for range ticker.C {
-				_ = refreshTelemtConnectionSnapshot()
+// RunTelemtConnectionMonitor owns no goroutine; the panel joins it on shutdown.
+func RunTelemtConnectionMonitor(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
+	_ = refreshTelemtConnectionSnapshot(ctx)
+	ticker := time.NewTicker(telemtConnectionMonitorInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if ctx.Err() == nil {
+				_ = refreshTelemtConnectionSnapshot(ctx)
 			}
-		}()
-	})
+		}
+	}
+}
+
+type telemtMonitorTransport struct{ ctx context.Context }
+
+func (t telemtMonitorTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	return http.DefaultTransport.RoundTrip(request.WithContext(t.ctx))
 }
 
 func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
-	StartTelemtConnectionMonitor()
-
 	db := database.GetDB()
 	if db == nil {
 		return []TelemtConnection{}, nil
@@ -169,7 +180,7 @@ func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
 	return out, nil
 }
 
-func refreshTelemtConnectionSnapshot() error {
+func refreshTelemtConnectionSnapshot(ctx context.Context) error {
 	telemtRefreshMu.Lock()
 	defer telemtRefreshMu.Unlock()
 
@@ -177,7 +188,7 @@ func refreshTelemtConnectionSnapshot() error {
 		return nil
 	}
 
-	client := &http.Client{Timeout: 4 * time.Second}
+	client := &http.Client{Timeout: 4 * time.Second, Transport: telemtMonitorTransport{ctx}}
 	users, err := fetchTelemtUserStats(client)
 	if err != nil {
 		return err
@@ -194,7 +205,7 @@ func refreshTelemtConnectionSnapshot() error {
 }
 
 func fetchTelemtUserStats(client *http.Client) ([]telemtUserStats, error) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:9091/v1/users", nil)
+	req, err := telemtAPIRequest(http.MethodGet, "/v1/users")
 	if err != nil {
 		return nil, fmt.Errorf("telemt: create users request: %w", err)
 	}
@@ -216,24 +227,43 @@ func fetchTelemtUserStats(client *http.Client) ([]telemtUserStats, error) {
 			CurrentConnections int      `json:"current_connections"`
 			ActiveUniqueIPs    []string `json:"active_unique_ips_list"`
 			RecentUniqueIPs    []string `json:"recent_unique_ips_list"`
-			TotalOctets        int64    `json:"total_octets"`
+			TotalOctets        *int64   `json:"total_octets"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+	decoder := json.NewDecoder(resp.Body)
+	if err := decoder.Decode(&envelope); err != nil {
 		return nil, fmt.Errorf("telemt: decode users: %w", err)
+	}
+	// Validate the complete response before exposing any sample. Missing counters
+	// must never become zero: consumers interpret a lower value as a source reset
+	// and would count the old bytes again on the next successful poll.
+	if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
+		return nil, errors.New("telemt: users API returned trailing data")
 	}
 	if !envelope.OK {
 		return nil, errors.New("telemt: users API rejected request")
 	}
+	if envelope.Data == nil {
+		return nil, errors.New("telemt: users API omitted the users array")
+	}
 
 	out := make([]telemtUserStats, 0, len(envelope.Data))
+	seen := make(map[string]struct{}, len(envelope.Data))
 	for _, user := range envelope.Data {
+		username := strings.TrimSpace(user.Username)
+		if username == "" || user.TotalOctets == nil || *user.TotalOctets < 0 {
+			return nil, errors.New("telemt: users API returned an invalid counter sample")
+		}
+		if _, duplicate := seen[username]; duplicate {
+			return nil, errors.New("telemt: users API returned duplicate user samples")
+		}
+		seen[username] = struct{}{}
 		out = append(out, telemtUserStats{
-			Username:           strings.TrimSpace(user.Username),
+			Username:           username,
 			CurrentConnections: max(user.CurrentConnections, 0),
 			ActiveUniqueIPs:    normalizeTelemtIPs(user.ActiveUniqueIPs),
 			RecentUniqueIPs:    normalizeTelemtIPs(user.RecentUniqueIPs),
-			TotalOctets:        maxInt64(user.TotalOctets, 0),
+			TotalOctets:        *user.TotalOctets,
 		})
 	}
 	return out, nil
@@ -424,13 +454,13 @@ func persistTelemtUserSnapshot(users []telemtUserStats) error {
 			row.CurrentConnections = user.CurrentConnections
 
 			if !exists {
-				row.TotalBytes = user.TotalOctets
+				row.TotalBytes = sumTrafficDelta(0, user.TotalOctets)
 			} else if user.TotalOctets >= row.SourceTotalBytes {
-				row.TotalBytes += user.TotalOctets - row.SourceTotalBytes
+				row.TotalBytes = sumTrafficDelta(row.TotalBytes, user.TotalOctets-max(row.SourceTotalBytes, 0))
 			} else {
 				// Telemt restarted or reset its runtime counter. Keep the
 				// panel's cumulative total and start a new source baseline.
-				row.TotalBytes += user.TotalOctets
+				row.TotalBytes = sumTrafficDelta(row.TotalBytes, user.TotalOctets)
 			}
 			row.SourceTotalBytes = user.TotalOctets
 
@@ -497,11 +527,4 @@ func normalizeTelemtIP(raw string) string {
 		}
 	}
 	return ""
-}
-
-func maxInt64(value, minValue int64) int64 {
-	if value < minValue {
-		return minValue
-	}
-	return value
 }

@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // resetGate holds every node reset open until released, counting how many nodes
@@ -115,7 +115,7 @@ func TestPeriodicResetReachesClientNodesConcurrently(t *testing.T) {
 		if err := db.Create(&model.ClientInbound{ClientId: rec.Id, InboundId: ib.Id}).Error; err != nil {
 			t.Fatalf("link client: %v", err)
 		}
-		if err := db.Create(&xray.ClientTraffic{InboundId: ib.Id, Email: email, Enable: true, Up: 500, Down: 700}).Error; err != nil {
+		if err := db.Create(&coremodel.ClientTraffic{InboundId: ib.Id, Email: email, Enable: true, Up: 500, Down: 700}).Error; err != nil {
 			t.Fatalf("create traffic: %v", err)
 		}
 	}

@@ -1,13 +1,20 @@
 import { z } from 'zod';
 
-import { PingtunnelInboundSettingsSchema, TrustTunnelInboundSettingsSchema } from './external-vpn';
+import {
+  PingtunnelInboundSettingsSchema,
+  TrustTunnelInboundSettingsSchema,
+  VetroffInboundSettingsSchema,
+} from './external-vpn';
 import { AmneziawgInboundSettingsSchema } from './amneziawg';
+import { FptnInboundSettingsSchema, OpenFluxInboundSettingsSchema } from './additional-vpn';
+import { SnellInboundSettingsSchema } from './snell';
 import { AnyTlsInboundSettingsSchema } from './anytls';
 import { ShadowTlsInboundSettingsSchema } from './shadowtls';
 import { HttpInboundSettingsSchema } from './http';
 import { HysteriaInboundSettingsSchema } from './hysteria';
 import { MixedInboundSettingsSchema } from './mixed';
 import { MtprotoInboundSettingsSchema } from './mtproto';
+import { MasqueInboundSettingsSchema } from './masque';
 import { NaiveInboundSettingsSchema } from './naive';
 import { MieruInboundSettingsSchema } from './mieru';
 import { SudokuInboundSettingsSchema } from './sudoku';
@@ -23,12 +30,15 @@ import { WireguardInboundSettingsSchema } from './wireguard';
 
 export * from './external-vpn';
 export * from './amneziawg';
+export * from './snell';
+export * from './additional-vpn';
 export * from './anytls';
 export * from './shadowtls';
 export * from './http';
 export * from './hysteria';
 export * from './mixed';
 export * from './mtproto';
+export * from './masque';
 export * from './naive';
 export * from './mieru';
 export * from './sudoku';
@@ -61,11 +71,16 @@ export const InboundSettingsSchema = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('tun'), settings: TunInboundSettingsSchema }),
   z.object({ protocol: z.literal('mtproto'), settings: MtprotoInboundSettingsSchema }),
   z.object({ protocol: z.literal('amneziawg'), settings: AmneziawgInboundSettingsSchema }),
+  z.object({ protocol: z.literal('snell'), settings: SnellInboundSettingsSchema }),
+  z.object({ protocol: z.literal('fptn'), settings: FptnInboundSettingsSchema }),
+  z.object({ protocol: z.literal('openflux'), settings: OpenFluxInboundSettingsSchema }),
   z.object({ protocol: z.literal('anytls'), settings: AnyTlsInboundSettingsSchema }),
   z.object({ protocol: z.literal('shadowtls'), settings: ShadowTlsInboundSettingsSchema }),
   z.object({ protocol: z.literal('tuic'), settings: TuicInboundSettingsSchema }),
   z.object({ protocol: z.literal('pingtunnel'), settings: PingtunnelInboundSettingsSchema }),
   z.object({ protocol: z.literal('trusttunnel'), settings: TrustTunnelInboundSettingsSchema }),
+  z.object({ protocol: z.literal('vetroff'), settings: VetroffInboundSettingsSchema }),
+  z.object({ protocol: z.literal('masque'), settings: MasqueInboundSettingsSchema }),
   z.object({ protocol: z.literal('naive'), settings: NaiveInboundSettingsSchema }),
   z.object({ protocol: z.literal('mieru'), settings: MieruInboundSettingsSchema }),
   z.object({ protocol: z.literal('sudoku'), settings: SudokuInboundSettingsSchema }),

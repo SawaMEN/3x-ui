@@ -2,19 +2,58 @@ import { z } from 'zod';
 
 const port = z.number().int().min(1).max(65535);
 const nonNegativeInt = z.number().int().min(0);
-const absolutePath = z.string().regex(/^\//, 'pages.settings.validation.pathLeadingSlash');
+const absolutePath = z
+  .string()
+  .regex(/^\//, 'pages.settings.validation.pathLeadingSlash')
+  .refine(
+    (value) => !value.split('/').some((part) => part === '.' || part === '..'),
+    'URI path cannot contain . or .. segments',
+  );
+
+export const SubscriptionThemeSchema = z.enum([
+  'classic',
+  'luna',
+  'underground',
+  'light',
+  'dark',
+  'ultra-dark',
+  'colorful',
+  'blue-gray',
+  'cyberpunk',
+]);
+export type SubscriptionTheme = z.infer<typeof SubscriptionThemeSchema>;
 
 export const SubProfileModeSchema = z.enum(['none', 'builtin', 'custom']);
 export type SubProfileMode = z.infer<typeof SubProfileModeSchema>;
 
+export const SubHostSortModeSchema = z.enum(['inbound-first', 'hosts-first']);
+export type SubHostSortMode = z.infer<typeof SubHostSortModeSchema>;
+
 export const AllSettingSchema = z
   .object({
-    coreType: z.enum(['xray', 'sing-box']).optional(),
+    coreType: z.enum(['xray', 'sing-box', 'sing-box-upstream']).optional(),
     webListen: z.string().optional(),
     webDomain: z.string().optional(),
     webPort: port.optional(),
     webCertFile: z.string().optional(),
     webKeyFile: z.string().optional(),
+    rootRedirectEnable: z.boolean().optional(),
+    rootRedirectURL: z.string().optional(),
+    subTelegramLocalEnable: z.boolean().optional(),
+    subTelegramRemoteEnable: z.boolean().optional(),
+    subTelegramWebEnable: z.boolean().optional(),
+    subAppearanceTheme: z
+      .preprocess((value) => (value === 'whitemax' ? 'luna' : value), SubscriptionThemeSchema)
+      .optional(),
+    subAppearanceEnable: z.boolean().optional(),
+    subAppearanceTitle: z.string().optional(),
+    subAppearanceDescription: z.string().optional(),
+    subAppearanceLogoURL: z.string().optional(),
+    subAppearanceAccent: z.string().optional(),
+    subPublicURL: z.string().optional(),
+    subAllowedDomains: z.string().optional(),
+    subRestrictDomains: z.boolean().optional(),
+    subCDNEnable: z.boolean().optional(),
     webBasePath: absolutePath.optional(),
     sessionMaxAge: z.number().int().min(1).max(525600).optional(),
     trustedProxyCIDRs: z.string().optional(),
@@ -27,6 +66,7 @@ export const AllSettingSchema = z
     remarkTemplate: z.string().optional(),
     subShowIdentityOnAllLinks: z.boolean().optional(),
     subInfoNodeEnable: z.boolean().optional(),
+    subHostSortMode: SubHostSortModeSchema.optional(),
     subCalendarExpireInclusive: z.boolean().optional(),
     subExpiredTemplate: z.string().optional(),
     subTrafficDepletedTemplate: z.string().optional(),
@@ -40,12 +80,15 @@ export const AllSettingSchema = z
     tgBotBackup: z.boolean().optional(),
     tgCpu: z.number().int().min(0).max(100).optional(),
     outboundDownThreshold: z.number().int().min(1).max(100).optional(),
+    nodeDownThreshold: z.number().int().min(1).max(100).optional(),
     tgLang: z.string().optional(),
     twoFactorEnable: z.boolean().optional(),
     twoFactorToken: z.string().optional(),
     xrayTemplateConfig: z.string().optional(),
     happLinkEnable: z.boolean().optional(),
     subEnable: z.boolean().optional(),
+    subFormatMode: z.enum(['both', 'xray', 'sing-box']).optional(),
+    subDefaultFormat: z.enum(['auto', 'links', 'xray', 'sing-box']).optional(),
     subJsonEnable: z.boolean().optional(),
     subJsonAutoDetect: z.boolean().optional(),
     subJsonAlwaysArray: z.boolean().optional(),
@@ -80,6 +123,7 @@ export const AllSettingSchema = z
     subClashURI: z.string().optional(),
     subClashEnableRouting: z.boolean().optional(),
     subClashRules: z.string().optional(),
+    subClashRemoteDNS: z.boolean().optional(),
     subJsonMux: z.string().optional(),
     subJsonRules: z.string().optional(),
     subJsonRoutingRules: z.string().optional(),
@@ -139,17 +183,6 @@ export const AllSettingSchema = z
     hasWarpSecret: z.boolean().optional(),
     hasNordSecret: z.boolean().optional(),
     hasSmtpPassword: z.boolean().optional(),
-    hasDiscordBotToken: z.boolean().optional(),
-    discordBotEnable: z.boolean().optional(),
-    discordBotToken: z.string().optional(),
-    discordChannelId: z.string().optional(),
-    discordAdminIds: z.string().optional(),
-    discordRunTime: z.string().optional(),
-    discordBotBackup: z.boolean().optional(),
-    discordCpu: z.number().int().min(0).max(100).optional(),
-    discordMemory: z.number().int().min(0).max(100).optional(),
-    discordLang: z.string().optional(),
-    discordEnabledEvents: z.string().optional(),
   })
   .loose();
 

@@ -7,8 +7,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestAddTrafficCommitsDespiteDisableHelperError(t *testing.T) {
@@ -35,7 +35,7 @@ func TestAddTrafficCommitsDespiteDisableHelperError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Callback().Update().Remove(cbName) })
 
-	if _, _, err := svc.AddTraffic([]*xray.Traffic{{IsInbound: true, Tag: "in-normal", Up: 500, Down: 700}}, nil); err != nil {
+	if _, _, err := svc.AddTraffic([]*coremodel.Traffic{{IsInbound: true, Tag: "in-normal", Up: 500, Down: 700}}, nil); err != nil {
 		t.Fatalf("AddTraffic: %v", err)
 	}
 
@@ -52,7 +52,7 @@ func TestResetAllTrafficsReenablesDepletedClients(t *testing.T) {
 	db := initTrafficTestDB(t)
 	svc := &ClientService{}
 
-	if err := db.Create(&xray.ClientTraffic{InboundId: 1, Email: "spent@x", Enable: false, Up: 60, Down: 60, Total: 100}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: 1, Email: "spent@x", Enable: false, Up: 60, Down: 60, Total: 100}).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
@@ -73,7 +73,7 @@ func TestResetAllTrafficsClearsNodeBaselines(t *testing.T) {
 	db := initTrafficTestDB(t)
 	svc := &ClientService{}
 
-	if err := db.Create(&xray.ClientTraffic{InboundId: 1, Email: "spent@x", Enable: true, Up: 60, Down: 60, Total: 100}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: 1, Email: "spent@x", Enable: true, Up: 60, Down: 60, Total: 100}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
 	}
 	if err := db.Create(&model.NodeClientTraffic{NodeId: 1, Email: "spent@x", Up: 60, Down: 60}).Error; err != nil {

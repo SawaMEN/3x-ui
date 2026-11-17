@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestAggregateTrafficByEmails_FallsBackToClientLimits(t *testing.T) {
@@ -30,7 +30,7 @@ func TestAggregateTrafficByEmails_FallsBackToClientLimits(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seed client record: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		Email:      email,
 		Up:         111,
 		Down:       222,

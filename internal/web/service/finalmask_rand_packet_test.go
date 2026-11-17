@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
@@ -120,7 +122,7 @@ func TestHealedConfigsBuildInXray(t *testing.T) {
 			StreamSettings: `{"network":"hysteria","hysteriaSettings":{"version":1,"udpIdleTimeout":60}}`,
 		}
 
-		raw, err := json.Marshal(in.GenXrayInboundConfig())
+		raw, err := json.Marshal(xray.InboundFromPanel(in.GenInboundConfig()))
 		if err != nil {
 			t.Fatalf("marshal generated inbound: %v", err)
 		}

@@ -6,8 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
 )
 
 type domainValidatorSubServer struct {
@@ -54,5 +55,28 @@ func TestDomainValidatorAllowsOnlyValidatedLegacySubscriptionOnOtherDomain(t *te
 	}
 	if status := domainValidatorStatus("panel.example.com", "/panel/settings"); status != http.StatusOK {
 		t.Fatalf("configured domain status = %d, want %d", status, http.StatusOK)
+	}
+}
+
+func TestDomainValidatorCanonicalHostnamesAndIPv6(t *testing.T) {
+	for _, tc := range []struct {
+		domain, host string
+		want         int
+	}{
+		{"panel.example.com", "PANEL.EXAMPLE.COM.:2053", http.StatusOK},
+		{"::1", "[::1]", http.StatusOK},
+		{"::1", "[0:0:0:0:0:0:0:1]:2053", http.StatusOK},
+		{"panel.example.com", "other.example.com:2053", http.StatusForbidden},
+	} {
+		engine := gin.New()
+		engine.Use(DomainValidatorMiddleware(tc.domain))
+		engine.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = tc.host
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, req)
+		if recorder.Code != tc.want {
+			t.Errorf("domain %q host %q: %d, want %d", tc.domain, tc.host, recorder.Code, tc.want)
+		}
 	}
 }

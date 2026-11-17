@@ -1,4 +1,14 @@
+import { isBalancerLoopbackTag } from '../balancers/balancer-loopback';
 import type { RuleRow } from './types';
+
+/** Keep the first occurrence of each selectable inbound tag. */
+export function uniqueSelectableInboundTags(tags: Iterable<string | undefined>): string[] {
+  const seen = new Set<string>();
+  for (const tag of tags) {
+    if (tag && !isBalancerLoopbackTag(tag)) seen.add(tag);
+  }
+  return [...seen];
+}
 
 export function arrJoin(v: unknown): string | undefined {
   if (v == null) return undefined;
@@ -40,7 +50,7 @@ export function chipPreview(value?: string): string {
 export function buildRemarkByTag(
   options: Array<{ tag?: string; remark?: string }>,
 ): Record<string, string> {
-  const map: Record<string, string> = {};
+  const map = Object.create(null) as Record<string, string>;
   for (const ib of options) {
     if (ib.tag) map[ib.tag] = ib.remark?.trim() || ib.tag;
   }
@@ -49,7 +59,7 @@ export function buildRemarkByTag(
 
 /** Format a single inbound tag as `tag (remark)`, or just `tag` when no distinct remark. */
 export function formatInboundTag(tag: string, remarkByTag: Record<string, string> = {}): string {
-  const label = remarkByTag[tag]?.trim();
+  const label = Object.hasOwn(remarkByTag, tag) ? remarkByTag[tag]?.trim() : undefined;
   if (!label || label === tag) return tag;
   return `${tag} (${label})`;
 }

@@ -56,6 +56,19 @@ func TestGenTuicLinkBasic(t *testing.T) {
 	}
 }
 
+func TestGenTuicLinkIgnoresMalformedExternalProxyEntries(t *testing.T) {
+	inbound := &model.Inbound{
+		Listen: "198.51.100.1", Port: 8443, Protocol: model.TUIC,
+		Settings:       `{"server":{},"clients":[{"uuid":"11111111-1111-1111-1111-111111111111","password":"secret","email":"alice"}]}`,
+		StreamSettings: `{"externalProxy":[null,"invalid",123]}`,
+	}
+	link := (&SubService{}).genTuicLink(inbound, "alice")
+	u, err := url.Parse(link)
+	if err != nil || u.Host != "198.51.100.1:8443" {
+		t.Fatalf("lost fallback endpoint: %q, %v", link, err)
+	}
+}
+
 func TestGenTuicLinkExplicitParams(t *testing.T) {
 	inbound := &model.Inbound{
 		Listen:   "198.51.100.1",
@@ -146,7 +159,7 @@ func TestBuildTuicProxy_ExternalProxyOverrides(t *testing.T) {
 		Port:     8443,
 		Protocol: model.TUIC,
 		Remark:   "tuic-base",
-		Settings: `{"server":{"certificate":"/path/cert","private_key":"/path/key","sni":"base.example.com","alpn":["h3"]},"clients":[{"uuid":"11111111-1111-1111-1111-111111111111","password":"testpassword","email":"user@test"}]}`,
+		Settings: `{"server":{"certificate":"/path/cert","private_key":"/path/key","congestion_control":"new_reno","udp_relay_mode":"quic","sni":"base.example.com","alpn":["h3"]},"clients":[{"uuid":"11111111-1111-1111-1111-111111111111","password":"testpassword","email":"user@test"}]}`,
 	}
 	client := model.Client{Email: "user@test"}
 
@@ -160,6 +173,12 @@ func TestBuildTuicProxy_ExternalProxyOverrides(t *testing.T) {
 	}
 	if !reflect.DeepEqual(baseProxy["alpn"], []string{"h3"}) {
 		t.Fatalf("base alpn = %v, want [h3]", baseProxy["alpn"])
+	}
+	if baseProxy["congestion-controller"] != "new_reno" {
+		t.Fatalf("base congestion controller = %v, want new_reno", baseProxy["congestion-controller"])
+	}
+	if baseProxy["udp-relay-mode"] != "quic" {
+		t.Fatalf("base UDP relay mode = %v, want quic", baseProxy["udp-relay-mode"])
 	}
 	if _, ok := baseProxy["skip-cert-verify"]; ok {
 		t.Fatalf("base skip-cert-verify should not be set")

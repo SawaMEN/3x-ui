@@ -1,6 +1,8 @@
+import { openFluxMAXChannels } from '@/lib/openflux';
+import { useServerLinks } from '../useServerLinks';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Collapse, Modal } from 'antd';
+import { Alert, Collapse, Modal, Typography, Spin } from 'antd';
 import type { CollapseProps } from 'antd';
 
 import { Protocols } from '@/schemas/primitives';
@@ -169,6 +171,26 @@ export default function QrCodeModal({
     setSubJsonLink(nextSubJson);
   }
 
+  const maxChannels =
+    dbInbound?.protocol === 'openflux'
+      ? openFluxMAXChannels(dbInbound.settings)
+      : { present: false, only: false };
+  const serverLinks = useServerLinks(
+    open && !maxChannels.only,
+    dbInbound?.id,
+    dbInbound?.protocol,
+    client?.email,
+  );
+  const displayLinks = useMemo(
+    () =>
+      ['fptn', 'openflux', 'trusttunnel', 'vetroff'].includes(dbInbound?.protocol ?? '')
+        ? maxChannels.only
+          ? []
+          : (serverLinks.data ?? [])
+        : links,
+    [dbInbound?.protocol, serverLinks.data, links, maxChannels.only],
+  );
+
   const qrItems = useMemo<QrItem[]>(() => {
     const items: QrItem[] = [];
     if (subLink) {
@@ -181,7 +203,7 @@ export default function QrCodeModal({
         value: subJsonLink,
       });
     }
-    links.forEach((link, idx) => {
+    displayLinks.forEach((link, idx) => {
       items.push({ key: `l${idx}`, header: link.remark || `Link ${idx + 1}`, value: link.link });
     });
     wireguardConfigs.forEach((cfg, idx) => {
@@ -220,7 +242,7 @@ export default function QrCodeModal({
   }, [
     subLink,
     subJsonLink,
-    links,
+    displayLinks,
     wireguardConfigs,
     wireguardLinks,
     amneziawgConfigs,
@@ -261,6 +283,15 @@ export default function QrCodeModal({
       width={420}
       destroyOnHidden
     >
+      {maxChannels.present && (
+        <Typography.Paragraph type="secondary">
+          {t('pages.inbounds.form.openfluxMaxNoQR')}
+        </Typography.Paragraph>
+      )}
+      {serverLinks.isFetching && <Spin />}
+      {!maxChannels.only && serverLinks.error && (
+        <Alert type="error" showIcon description={serverLinks.error.message} />
+      )}
       {dbInbound && collapseItems && collapseItems.length > 0 && (
         <Collapse
           ghost

@@ -334,7 +334,7 @@ func TestHTTPClientForNodeProxyMTLSRebuildKeepsProxyAndNewCredential(t *testing.
 	t.Cleanup(func() { SetMasterClientCertProvider(nil) })
 
 	const proxyURL = "http://127.0.0.1:18080"
-	client, err := HTTPClientForNode(&model.Node{Scheme: "https", TlsVerifyMode: "mtls"}, proxyURL)
+	client, err := HTTPClientForNode(&model.Node{Scheme: "https", TlsVerifyMode: "mtls", AllowPrivateAddress: true}, proxyURL)
 	if err != nil {
 		t.Fatalf("HTTPClientForNode: %v", err)
 	}

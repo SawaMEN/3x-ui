@@ -10,16 +10,18 @@ import {
   CloudDownloadOutlined,
   CloudServerOutlined,
   ControlOutlined,
+  GlobalOutlined,
   PoweroffOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
 
 import { formatPanelVersion } from '@/lib/panel-version';
+import { activateOnKey } from '@/utils/a11y';
 import type { Status } from '@/models/status';
 
 interface OverviewActionBarProps {
   status: Status;
-  coreType: 'xray' | 'sing-box';
+  coreType: 'xray' | 'sing-box' | 'sing-box-upstream';
   coreVersion: string;
   coreRunning: boolean;
   coreError: string;
@@ -33,6 +35,7 @@ interface OverviewActionBarProps {
   onRestartXray: () => void;
   onOpenLogs: () => void;
   onOpenXrayLogs: () => void;
+  onOpenDomainActivity: () => void;
   onOpenAmneziaWGLogs: () => void;
   onOpenConfig: () => void;
   onOpenBackup: () => void;
@@ -74,6 +77,7 @@ export default function OverviewActionBar({
   onRestartXray,
   onOpenLogs,
   onOpenXrayLogs,
+  onOpenDomainActivity,
   onOpenAmneziaWGLogs,
   onOpenConfig,
   onOpenBackup,
@@ -86,17 +90,17 @@ export default function OverviewActionBar({
 }: OverviewActionBarProps) {
   const { t } = useTranslation();
   const effectiveState =
-    coreType === 'sing-box' ? (coreRunning ? 'running' : 'stop') : status.xray.state;
+    coreType !== 'xray' ? (coreRunning ? 'running' : 'stop') : status.xray.state;
   const stateText =
-    coreType === 'sing-box'
+    coreType !== 'xray'
       ? coreRunning
         ? 'Работает'
         : coreError
           ? 'Ошибка'
           : 'Остановлен'
       : t(XRAY_STATE_KEYS[status.xray.state] ?? 'pages.index.xrayStatusUnknown');
-  const coreName = coreType === 'sing-box' ? 'sing-box' : 'Xray';
-  const displayedVersion = coreType === 'sing-box' ? coreVersion : status.xray.version;
+  const coreName = coreType === 'xray' ? 'Xray' : 'sing-box';
+  const displayedVersion = coreType !== 'xray' ? coreVersion : status.xray.version;
   const hasVersion = !!displayedVersion && displayedVersion !== 'Unknown';
   const size = isMobile ? ('small' as const) : ('middle' as const);
 
@@ -105,14 +109,14 @@ export default function OverviewActionBar({
       {
         key: 'restart',
         icon: <ReloadOutlined />,
-        text: coreType === 'sing-box' ? 'Перезапустить sing-box' : t('pages.index.restartXray'),
+        text: coreType !== 'xray' ? 'Перезапустить sing-box' : t('pages.index.restartXray'),
         onClick: onRestartXray,
         primary: true,
       },
       {
         key: 'stop',
         icon: <PoweroffOutlined />,
-        text: coreType === 'sing-box' ? 'Остановить sing-box' : t('pages.index.stopXray'),
+        text: coreType !== 'xray' ? 'Остановить sing-box' : t('pages.index.stopXray'),
         onClick: onStopXray,
       },
     ],
@@ -121,7 +125,7 @@ export default function OverviewActionBar({
         key: 'logs',
         icon: <BarsOutlined />,
         text: t('pages.index.logs'),
-        onClick: coreType === 'sing-box' ? onOpenXrayLogs : onOpenLogs,
+        onClick: coreType !== 'xray' ? onOpenXrayLogs : onOpenLogs,
       },
       ...(coreType === 'xray' && accessLogEnable
         ? [
@@ -133,11 +137,21 @@ export default function OverviewActionBar({
             },
           ]
         : []),
+      ...(['xray', 'sing-box', 'sing-box-upstream'].includes(coreType)
+        ? [
+            {
+              key: 'domainActivity',
+              icon: <GlobalOutlined />,
+              text: t('pages.index.domainActivityTitle'),
+              onClick: onOpenDomainActivity,
+            },
+          ]
+        : []),
       ...(status.amneziawg.configured
         ? [
             {
               key: 'amneziawgLogs',
-              icon: <ApiOutlined />,
+              icon: <ApiOutlined aria-hidden />,
               text: t('pages.index.amneziawgLogs'),
               onClick: onOpenAmneziaWGLogs,
             },
@@ -145,13 +159,13 @@ export default function OverviewActionBar({
         : []),
       {
         key: 'config',
-        icon: <ControlOutlined />,
+        icon: <ControlOutlined aria-hidden />,
         text: t('pages.index.config'),
         onClick: onOpenConfig,
       },
       {
         key: 'backup',
-        icon: <CloudServerOutlined />,
+        icon: <CloudServerOutlined aria-hidden />,
         text: t('pages.index.backupTitle'),
         onClick: onOpenBackup,
       },
@@ -159,7 +173,7 @@ export default function OverviewActionBar({
     [
       {
         key: 'history',
-        icon: <AreaChartOutlined />,
+        icon: <AreaChartOutlined aria-hidden />,
         text: t('pages.index.systemHistoryTitle'),
         onClick: onOpenSystemHistory,
       },
@@ -218,8 +232,11 @@ export default function OverviewActionBar({
         <Tag
           className="ov-update-tag"
           color="warning"
-          icon={<CloudDownloadOutlined />}
+          icon={<CloudDownloadOutlined aria-hidden />}
+          role="button"
+          tabIndex={0}
           onClick={onOpenPanelUpdate}
+          onKeyDown={activateOnKey(onOpenPanelUpdate)}
         >
           {`${t('update')} ${formatPanelVersion(latestVersion)}`}
         </Tag>

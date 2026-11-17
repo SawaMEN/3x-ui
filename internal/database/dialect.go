@@ -20,10 +20,10 @@ func ClampedAddExpr(col string) string {
 
 func clampedAddExpr(col string, postgres bool) string {
 	if postgres {
-		base := fmt.Sprintf("GREATEST(LEAST(%s, %d), 0)", col, TrafficMax)
+		base := fmt.Sprintf("GREATEST(LEAST(COALESCE(%s, 0), %d), 0)", col, TrafficMax)
 		return fmt.Sprintf("%s + LEAST(GREATEST(CAST(? AS BIGINT), 0), %d - %s)", base, TrafficMax, base)
 	}
-	base := fmt.Sprintf("MAX(MIN(%s, %d), 0)", col, TrafficMax)
+	base := fmt.Sprintf("MAX(MIN(COALESCE(%s, 0), %d), 0)", col, TrafficMax)
 	return fmt.Sprintf("%s + MIN(MAX(?, 0), %d - %s)", base, TrafficMax, base)
 }
 

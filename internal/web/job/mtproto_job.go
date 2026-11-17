@@ -1,102 +1,83 @@
 package job
 
 import (
-	"sync"
+	"context"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-// MtprotoJob reconciles the running mtg sidecar processes against the enabled
-// mtproto inbounds in the database, restarts any that crashed, and folds the
-// per-client traffic scraped from each mtg /stats endpoint into the usual client
-// and inbound traffic accounting.
+// MtprotoJob reconciles the running Telemt sidecar processes against the enabled
+// MTProto inbounds in the database, restarts any that crashed, and folds the
+// per-client traffic scraped from each Telemt API into the usual client and
+// inbound traffic accounting.
 type MtprotoJob struct {
+	ctx            context.Context
 	inboundService service.InboundService
-	mu             sync.Mutex
-	pending        pendingTrafficBatch
+	journal        sidecarTrafficJournal
 }
 
-// NewMtprotoJob creates a new mtproto reconcile/traffic job instance.
-func NewMtprotoJob() *MtprotoJob {
-	return new(MtprotoJob)
+// NewMtprotoJob creates a new MTProto reconcile/traffic job instance.
+func NewMtprotoJob(parents ...context.Context) *MtprotoJob {
+	ctx := context.Background()
+	if len(parents) > 0 && parents[0] != nil {
+		ctx = parents[0]
+	}
+	return &MtprotoJob{ctx: ctx}
 }
 
-// Run reconciles desired mtproto inbounds with running mtg processes and records
-// per-client traffic deltas and online status.
+// Run reconciles desired MTProto inbounds with running Telemt processes and
+// records per-client traffic deltas and online status.
 func (j *MtprotoJob) Run() {
-	// CollectTrafficConsistent advances mtg's per-client snapshot baseline.
+	ctx := j.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	// CollectTrafficConsistent advances Telemt's per-client snapshot baseline.
 	// Serialize the poll so two scheduler runs cannot consume overlapping snapshots.
-	j.mu.Lock()
-	defer j.mu.Unlock()
+	mtprotoTrafficMu.Lock()
+	defer mtprotoTrafficMu.Unlock()
 
-	desired, err := j.inboundService.DesiredMtprotoInstances()
+	_, _, retryErr := j.journal.replay("mtproto", &j.inboundService)
+	if retryErr != nil {
+		logger.Warning("mtproto job: replay traffic journal:", retryErr)
+		return
+	}
+
+	mgr := mtproto.GetManager()
+	desired, err := mgr.ReconcileCurrent(ctx, j.inboundService.DesiredMtprotoInstancesContext)
 	if err != nil {
 		logger.Warning("mtproto job: get desired instances failed:", err)
 		return
 	}
 
-	routedTags := make(map[string]bool)
 	activeTags := make([]string, 0, len(desired))
 	for _, inst := range desired {
 		activeTags = append(activeTags, inst.Tag)
-		if inst.RouteThroughXray {
-			routedTags[inst.Tag] = true
-		}
 	}
 
-	mgr := mtproto.GetManager()
-	mgr.Reconcile(desired)
-
-	// The manager advances its cumulative-counter baseline when traffic collection
-	// returns. Retry an uncommitted batch before sampling again so a transient DB
-	// failure cannot create a permanent hole in a client's traffic history.
-	if j.pending.hasData() {
-		if _, _, retryErr := j.pending.flush(j.inboundService.AddTraffic); retryErr != nil {
-			logger.Warning("mtproto job: retry pending traffic failed:", retryErr)
-			return
-		}
+	if err := (service.TelemtService{}).RefreshMekoFix(); err != nil {
+		logger.Warning("mtproto job: reconcile MEKO V3 rules failed:", err)
 	}
 
-	deltas, onlineEmails := mgr.CollectTrafficConsistent()
-
-	// A routed inbound's total is already metered through the Xray bridge by
-	// xray_traffic_job, so only non-routed inbounds are rolled up here; per-client
-	// deltas are always kept, since the bridge cannot tell mtproto users apart.
-	clientTraffics := make([]*xray.ClientTraffic, 0, len(deltas))
-	inboundUp := make(map[string]int64)
-	inboundDown := make(map[string]int64)
-	for _, d := range deltas {
-		clientTraffics = append(clientTraffics, &xray.ClientTraffic{
-			Email: d.Email,
-			Up:    d.Up,
-			Down:  d.Down,
-		})
-		if !routedTags[d.Tag] {
-			inboundUp[d.Tag] = accumulateTrafficDelta(inboundUp[d.Tag], d.Up)
-			inboundDown[d.Tag] = accumulateTrafficDelta(inboundDown[d.Tag], d.Down)
-		}
+	_, onlineEmails, collectErr := mgr.CollectTrafficPersisted()
+	if collectErr != nil {
+		logger.Warning("mtproto job: traffic poll incomplete:", collectErr)
 	}
-
-	traffics := make([]*xray.Traffic, 0, len(inboundUp))
-	for tag, up := range inboundUp {
-		traffics = append(traffics, &xray.Traffic{
-			IsInbound: true,
-			Tag:       tag,
-			Up:        up,
-			Down:      inboundDown[tag],
-		})
+	webOnline, webTag, webErr := service.CollectMtprotoWebTrafficPersisted(ctx)
+	if webErr != nil {
+		logger.Warning("mtproto job: WEB traffic poll failed:", webErr)
 	}
-
-	if len(traffics) > 0 || len(clientTraffics) > 0 {
-		if _, _, err := j.inboundService.AddTraffic(traffics, clientTraffics); err != nil {
-			// The collector has already moved mtg's baseline. Preserve the exact
-			// delta batch and retry it before collecting a newer snapshot.
-			j.pending.remember(traffics, clientTraffics)
-			logger.Warning("mtproto job: add traffic failed; batch queued for retry:", err)
-		}
+	onlineEmails = append(onlineEmails, webOnline...)
+	if webTag != "" {
+		activeTags = append(activeTags, webTag)
+	}
+	if _, _, err := j.journal.replay("mtproto", &j.inboundService); err != nil {
+		logger.Warning("mtproto job: replay owned traffic:", err)
 	}
 
 	j.inboundService.RefreshLocalOnlineClients(onlineEmails, activeTags)

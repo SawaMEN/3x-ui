@@ -1,42 +1,32 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Menu, Popover, Space } from 'antd';
-import {
-  MoonFilled,
-  MoonOutlined,
-  SunOutlined,
-  TranslationOutlined,
-  WifiOutlined,
-} from '@ant-design/icons';
+import { TranslationOutlined, WifiOutlined } from '@ant-design/icons';
 
 import { LanguageManager } from '@/utils';
-import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
 
 interface SubHeaderProps {
+  isDark: boolean;
+  isLuna?: boolean;
   title: string;
+  logoURL?: string;
   sId: string;
   email: string;
   lang: string;
   onLangChange: (lang: string) => void;
 }
 
-export default function SubHeader({ title, sId, email, lang, onLangChange }: SubHeaderProps) {
+export default function SubHeader({
+  title,
+  isDark,
+  isLuna = false,
+  logoURL,
+  sId,
+  email,
+  lang,
+  onLangChange,
+}: SubHeaderProps) {
   const { t } = useTranslation();
-  const { isDark, isUltra, toggleTheme, toggleUltra } = useTheme();
-
-  const cycleTheme = () => {
-    pauseAnimationsUntilLeave('sub-theme-cycle');
-    if (!isDark) {
-      toggleTheme();
-      if (isUltra) toggleUltra();
-    } else if (!isUltra) {
-      toggleUltra();
-    } else {
-      toggleUltra();
-      toggleTheme();
-    }
-  };
-
   const langMenuItems = useMemo(
     () =>
       (LanguageManager.supportedLanguages as { value: string; name: string; icon: string }[]).map(
@@ -53,14 +43,23 @@ export default function SubHeader({ title, sId, email, lang, onLangChange }: Sub
     [],
   );
 
-  const themeIcon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
+  const [failedLogo, setFailedLogo] = useState('');
   const initial = Array.from(title)[0]?.toUpperCase();
 
   return (
     <header className="sub-header">
       <div className="sub-brand">
         <span className="sub-brand-mark" aria-hidden="true">
-          {initial ?? <WifiOutlined />}
+          {logoURL && failedLogo !== logoURL ? (
+            <img
+              src={logoURL}
+              alt=""
+              referrerPolicy="no-referrer"
+              onError={() => setFailedLogo(logoURL)}
+            />
+          ) : (
+            (initial ?? <WifiOutlined />)
+          )}
         </span>
         <div className="sub-brand-text">
           <div className="sub-brand-title" dir="auto">
@@ -72,18 +71,8 @@ export default function SubHeader({ title, sId, email, lang, onLangChange }: Sub
         </div>
       </div>
       <div className="sub-toolbar">
-        <Button
-          id="sub-theme-cycle"
-          shape="circle"
-          size="large"
-          className="toolbar-btn"
-          aria-label={t('menu.theme')}
-          title={t('menu.theme')}
-          icon={themeIcon}
-          onClick={cycleTheme}
-        />
         <Popover
-          rootClassName={isDark ? 'dark' : 'light'}
+          rootClassName={isLuna ? 'sub-luna-popover dark' : isDark ? 'dark' : 'light'}
           placement="bottomRight"
           trigger="click"
           styles={{ content: { padding: 4 } }}
@@ -103,7 +92,7 @@ export default function SubHeader({ title, sId, email, lang, onLangChange }: Sub
             size="large"
             className="toolbar-btn"
             aria-label={t('pages.settings.language')}
-            icon={<TranslationOutlined />}
+            icon={<TranslationOutlined aria-hidden />}
           />
         </Popover>
       </div>

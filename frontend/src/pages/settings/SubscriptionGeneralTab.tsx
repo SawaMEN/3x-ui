@@ -5,13 +5,12 @@ import {
   IdcardOutlined,
   InfoCircleOutlined,
   NodeIndexOutlined,
-  SafetyCertificateOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { AllSetting } from '@/models/setting';
-import type { SubProfileMode } from '@/schemas/setting';
+import type { SubProfileMode, SubHostSortMode } from '@/schemas/setting';
 import { onNumber } from '@/utils/onNumber';
 import { DefaultSettingTag, SettingListItem } from '@/components/ui';
 import { RemarkTemplateField } from '@/components/form';
@@ -19,6 +18,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { catTabLabel } from './catTabLabel';
 import { sanitizePath, normalizePath } from './uriPath';
 import HappSettingsContent from './HappSettingsContent';
+import SubscriptionDomains from './SubscriptionDomains';
 import { remoteSourceBadge } from './subscriptionShared';
 
 interface SubscriptionGeneralTabProps {
@@ -91,9 +91,66 @@ export default function SubscriptionGeneralTab({
       items={[
         {
           key: '1',
-          label: catTabLabel(<SettingOutlined />, t('pages.settings.panelSettings'), isMobile),
+          label: catTabLabel(
+            <SettingOutlined aria-hidden />,
+            t('pages.settings.panelSettings'),
+            isMobile,
+          ),
           children: (
             <>
+              <SettingListItem
+                title="Форматы подписки"
+                description="Общая ссылка со всеми подключениями или отдельные JSON-конфигурации Xray и sing-box."
+              >
+                <Select
+                  aria-label="Форматы подписки"
+                  value={allSetting.subFormatMode}
+                  style={{ minWidth: 240 }}
+                  options={[
+                    { value: 'both', label: 'Все вместе + Xray + sing-box' },
+                    { value: 'xray', label: 'Только Xray JSON' },
+                    { value: 'sing-box', label: 'Только sing-box JSON' },
+                  ]}
+                  onChange={(mode) =>
+                    updateSetting({
+                      subFormatMode: mode,
+                      subDefaultFormat: mode === 'both' ? 'auto' : mode,
+                    })
+                  }
+                />
+              </SettingListItem>
+              <SettingListItem
+                title="По умолчанию по основной ссылке"
+                description="Формат ответа для VPN-клиента. Страница подписки в браузере остаётся доступна. Явный format в ссылке имеет приоритет. После сохранения применяется без перезапуска панели."
+              >
+                <Select
+                  aria-label="Формат по умолчанию"
+                  value={allSetting.subDefaultFormat}
+                  style={{ minWidth: 240 }}
+                  options={[
+                    ...(allSetting.subFormatMode === 'both'
+                      ? [
+                          { value: 'auto', label: 'Автоматически по приложению' },
+                          { value: 'links', label: 'Все подключения (список ссылок)' },
+                        ]
+                      : []),
+                    ...(allSetting.subFormatMode !== 'sing-box'
+                      ? [{ value: 'xray', label: 'Xray JSON' }]
+                      : []),
+                    ...(allSetting.subFormatMode !== 'xray'
+                      ? [{ value: 'sing-box', label: 'sing-box JSON' }]
+                      : []),
+                  ]}
+                  onChange={(value) => updateSetting({ subDefaultFormat: value })}
+                />
+              </SettingListItem>
+              <Alert
+                type="info"
+                showIcon
+                title="Отдельные ссылки"
+                description="Добавьте к основной ссылке ?format=xray, ?format=sing-box или ?format=links. На странице подписки доступны кнопки копирования и QR-коды разрешённых форматов."
+                style={{ marginBottom: 16 }}
+              />
               <SettingListItem
                 paddings="small"
                 title={t('pages.settings.subEnable')}
@@ -106,8 +163,8 @@ export default function SubscriptionGeneralTab({
               </SettingListItem>
               <SettingListItem
                 paddings="small"
-                title={t('pages.settings.subJsonEnableTitle')}
-                description={t('pages.settings.subJsonEnable')}
+                title="Дополнительный JSON-адрес"
+                description="Включает отдельный путь JSON-подписки. Форматы и ответ по основной ссылке настраиваются выше."
               >
                 <Switch
                   checked={allSetting.subJsonEnable}
@@ -120,7 +177,9 @@ export default function SubscriptionGeneralTab({
                   onChange={(v) => updateSetting({ subClashEnable: v })}
                 />
               </SettingListItem>
-              {(allSetting.subJsonEnable || allSetting.subClashEnable) && (
+              {(allSetting.subFormatMode ||
+                allSetting.subJsonEnable ||
+                allSetting.subClashEnable) && (
                 <Alert
                   type="info"
                   showIcon
@@ -134,6 +193,23 @@ export default function SubscriptionGeneralTab({
                   }
                 />
               )}
+              <SubscriptionDomains allSetting={allSetting} updateSetting={updateSetting} />
+              <SettingListItem
+                paddings="small"
+                title={t('pages.settings.subHostSortMode')}
+                description={t('pages.settings.subHostSortModeDesc')}
+              >
+                <Select
+                  id="sub-host-sort-mode"
+                  aria-label={t('pages.settings.subHostSortMode')}
+                  value={allSetting.subHostSortMode}
+                  onChange={(value: SubHostSortMode) => updateSetting({ subHostSortMode: value })}
+                  options={[
+                    { value: 'inbound-first', label: t('pages.settings.subHostSortInbound') },
+                    { value: 'hosts-first', label: t('pages.settings.subHostSortHosts') },
+                  ]}
+                />
+              </SettingListItem>
               <SettingListItem
                 paddings="small"
                 title={t('pages.settings.subListen')}
@@ -209,7 +285,11 @@ export default function SubscriptionGeneralTab({
         },
         {
           key: '2',
-          label: catTabLabel(<InfoCircleOutlined />, t('pages.settings.information'), isMobile),
+          label: catTabLabel(
+            <InfoCircleOutlined aria-hidden />,
+            t('pages.settings.information'),
+            isMobile,
+          ),
           children: (
             <>
               <SettingListItem
@@ -309,7 +389,7 @@ export default function SubscriptionGeneralTab({
         },
         {
           key: '3',
-          label: catTabLabel(<IdcardOutlined />, t('pages.settings.profile'), isMobile),
+          label: catTabLabel(<IdcardOutlined aria-hidden />, t('pages.settings.profile'), isMobile),
           children: (
             <>
               <SettingListItem
@@ -388,6 +468,100 @@ export default function SubscriptionGeneralTab({
                   metadataOnly
                 />
               </SettingListItem>
+
+              {(
+                [
+                  'subTelegramLocalEnable',
+                  'subTelegramRemoteEnable',
+                  'subTelegramWebEnable',
+                ] as const
+              ).map((key) => (
+                <SettingListItem
+                  key={key}
+                  paddings="small"
+                  title={t(`pages.settings.${key}`)}
+                  description={t(`pages.settings.${key}Desc`)}
+                >
+                  <Switch
+                    aria-label={t(`pages.settings.${key}`)}
+                    checked={allSetting[key]}
+                    onChange={(value) => updateSetting({ [key]: value })}
+                  />
+                </SettingListItem>
+              ))}
+              <SettingListItem paddings="small" title={t('pages.settings.subAppearanceTheme')}>
+                <Select
+                  id="sub-appearance-theme"
+                  aria-label={t('pages.settings.subAppearanceTheme')}
+                  value={allSetting.subAppearanceTheme}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: 'classic', label: t('pages.settings.subAppearanceClassic') },
+                    { value: 'luna', label: t('subscription.themes.luna') },
+                    { value: 'underground', label: t('subscription.themes.underground') },
+                    ...(
+                      ['light', 'dark', 'ultra-dark', 'colorful', 'blue-gray', 'cyberpunk'] as const
+                    ).map((value) => ({ value, label: t(`subscription.themes.${value}`) })),
+                  ]}
+                  onChange={(value) => updateSetting({ subAppearanceTheme: value })}
+                />
+              </SettingListItem>
+              <SettingListItem
+                paddings="small"
+                title={t('pages.settings.subAppearanceEnable')}
+                description={t('pages.settings.subAppearanceDesc')}
+              >
+                <Switch
+                  checked={allSetting.subAppearanceEnable}
+                  onChange={(v) => updateSetting({ subAppearanceEnable: v })}
+                />
+              </SettingListItem>
+              {allSetting.subAppearanceEnable && (
+                <>
+                  <SettingListItem paddings="small" title={t('pages.settings.subAppearanceTitle')}>
+                    <Input
+                      value={allSetting.subAppearanceTitle}
+                      maxLength={160}
+                      onChange={(e) => updateSetting({ subAppearanceTitle: e.target.value })}
+                    />
+                  </SettingListItem>
+                  <SettingListItem
+                    paddings="small"
+                    title={t('pages.settings.subAppearanceDescription')}
+                  >
+                    <Input.TextArea
+                      rows={3}
+                      maxLength={2000}
+                      value={allSetting.subAppearanceDescription}
+                      onChange={(e) => updateSetting({ subAppearanceDescription: e.target.value })}
+                    />
+                  </SettingListItem>
+                  <SettingListItem
+                    paddings="small"
+                    title={t('pages.settings.subAppearanceLogoURL')}
+                  >
+                    <Input
+                      placeholder="https://example.com/logo.png"
+                      value={allSetting.subAppearanceLogoURL}
+                      onChange={(e) => updateSetting({ subAppearanceLogoURL: e.target.value })}
+                    />
+                  </SettingListItem>
+                  <SettingListItem paddings="small" title={t('pages.settings.subAppearanceAccent')}>
+                    <Input
+                      type="color"
+                      aria-label={t('pages.settings.subAppearanceAccent')}
+                      value={allSetting.subAppearanceAccent}
+                      onChange={(e) => updateSetting({ subAppearanceAccent: e.target.value })}
+                    />
+                  </SettingListItem>
+                  <Alert
+                    showIcon
+                    type="info"
+                    style={{ margin: '12px 20px' }}
+                    title={t('pages.settings.subAppearancePreviewHint')}
+                  />
+                </>
+              )}
               <SettingListItem
                 paddings="small"
                 title={t('pages.settings.subThemeDir')}
@@ -414,36 +588,8 @@ export default function SubscriptionGeneralTab({
           ),
         },
         {
-          key: '4',
-          label: catTabLabel(<SafetyCertificateOutlined />, t('pages.settings.certs'), isMobile),
-          children: (
-            <>
-              <SettingListItem
-                paddings="small"
-                title={t('pages.settings.subCertPath')}
-                description={t('pages.settings.subCertPathDesc')}
-              >
-                <Input
-                  value={allSetting.subCertFile}
-                  onChange={(e) => updateSetting({ subCertFile: e.target.value })}
-                />
-              </SettingListItem>
-              <SettingListItem
-                paddings="small"
-                title={t('pages.settings.subKeyPath')}
-                description={t('pages.settings.subKeyPathDesc')}
-              >
-                <Input
-                  value={allSetting.subKeyFile}
-                  onChange={(e) => updateSetting({ subKeyFile: e.target.value })}
-                />
-              </SettingListItem>
-            </>
-          ),
-        },
-        {
           key: '5',
-          label: catTabLabel(<BranchesOutlined />, 'Happ', isMobile),
+          label: catTabLabel(<BranchesOutlined aria-hidden />, 'Happ', isMobile),
           children: (
             <HappSettingsContent
               allSetting={allSetting}
@@ -457,7 +603,7 @@ export default function SubscriptionGeneralTab({
         },
         {
           key: '6',
-          label: catTabLabel(<NodeIndexOutlined />, 'Clash / Mihomo', isMobile),
+          label: catTabLabel(<NodeIndexOutlined aria-hidden />, 'Clash / Mihomo', isMobile),
           children: (
             <>
               <SettingListItem
@@ -485,12 +631,22 @@ export default function SubscriptionGeneralTab({
                   onChange={(e) => updateSetting({ subClashRules: e.target.value })}
                 />
               </SettingListItem>
+              <SettingListItem
+                paddings="small"
+                title={t('pages.settings.subClashRemoteDNS')}
+                description={t('pages.settings.subClashRemoteDNSDesc')}
+              >
+                <Switch
+                  checked={allSetting.subClashRemoteDNS}
+                  onChange={(v) => updateSetting({ subClashRemoteDNS: v })}
+                />
+              </SettingListItem>
             </>
           ),
         },
         {
           key: '7',
-          label: catTabLabel(<CompassOutlined />, 'Incy', isMobile),
+          label: catTabLabel(<CompassOutlined aria-hidden />, 'Incy', isMobile),
           children: (
             <>
               <SettingListItem

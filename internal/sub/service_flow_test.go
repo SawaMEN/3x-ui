@@ -7,9 +7,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
-// Issue #5232: a vision flow set on a VLESS+XHTTP+REALITY (vlessenc) client
-// must survive into subscription output, not just the inbound JSON.
-
 const testMlkemEncryption = "mlkem768x25519plus.native.0rtt.dGVzdC1rZXk"
 
 func TestVlessFlowAllowed(t *testing.T) {
@@ -32,6 +29,7 @@ func TestVlessFlowAllowed(t *testing.T) {
 		{"xhttp tls vlessenc", "xhttp", "tls", enc, true},
 		{"xhttp reality no vlessenc", "xhttp", "reality", noEnc, false},
 		{"ws tls", "ws", "tls", noEnc, false},
+		{"xdrive vlessenc (xray-core #7182)", "xdrive", "none", enc, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

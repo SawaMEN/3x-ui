@@ -1,8 +1,9 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import AppSidebar from '@/layouts/AppSidebar';
+import { HttpUtil } from '@/utils';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { renderWithProviders } from './test-utils';
 
@@ -10,7 +11,15 @@ vi.mock('@/api/queries/useAllSettings', () => ({
   useAllSettings: vi.fn(() => ({ allSetting: {} })),
 }));
 
+beforeEach(() => {
+  vi.spyOn(HttpUtil, 'get').mockResolvedValue({
+    success: true,
+    obj: { installed: false },
+  } as never);
+});
+
 afterEach(() => {
+  vi.restoreAllMocks();
   localStorage.clear();
 });
 
@@ -84,7 +93,7 @@ test('returns to the compact rail after unpinning', () => {
   expect(localStorage.getItem('sidebar-pinned')).toBe('false');
 });
 
-test('keeps core and swap controls in general settings, not the sidebar submenu', () => {
+test('groups host tools under additional settings instead of separate sidebar entries', () => {
   vi.mocked(useAllSettings).mockReturnValue({ allSetting: { coreType: 'xray' } } as never);
   const view = renderWithProviders(
     <MemoryRouter initialEntries={['/settings#general']}>
@@ -95,10 +104,12 @@ test('keeps core and swap controls in general settings, not the sidebar submenu'
   const sidebarRoot = view.container.querySelector('.ant-sidebar');
   fireEvent.mouseEnter(sidebarRoot!);
   expect(screen.getByText('General')).toBeTruthy();
+  expect(screen.getByText('Additional settings')).toBeTruthy();
+  expect(screen.queryByText('Firewall')).toBeNull();
   expect(screen.queryByText('Proxy Core')).toBeNull();
   expect(screen.queryByText('Swap / ZRAM')).toBeNull();
   expect(screen.queryByText('API Docs')).toBeNull();
-  expect(screen.getByText('Xray Configs')).toBeTruthy();
+  expect(screen.getByText('Xray')).toBeTruthy();
 });
 
 test('shows only the active core configuration menu', () => {
@@ -111,9 +122,9 @@ test('shows only the active core configuration menu', () => {
 
   const xrayRoot = xrayView.container.querySelector('.ant-sidebar');
   fireEvent.mouseEnter(xrayRoot!);
-  expect(screen.getByText('Xray Configs')).toBeTruthy();
-  expect(screen.getByText('Basics')).toBeTruthy();
-  expect(screen.queryByText('sing-box Configs')).toBeNull();
+  expect(screen.getByText('Xray')).toBeTruthy();
+  expect(screen.getAllByText('General').length).toBeGreaterThan(0);
+  expect(screen.queryByText('Xray Configs')).toBeNull();
   expect(screen.queryByText('Proxy Core')).toBeNull();
   expect(screen.queryByText('Swap / ZRAM')).toBeNull();
   expect(screen.queryByText('API Docs')).toBeNull();
@@ -128,9 +139,34 @@ test('shows only the active core configuration menu', () => {
 
   const singBoxRoot = singBoxView.container.querySelector('.ant-sidebar');
   fireEvent.mouseEnter(singBoxRoot!);
-  expect(screen.getByText('sing-box Configs')).toBeTruthy();
+  expect(screen.getByText('Core settings')).toBeTruthy();
   expect(screen.queryByText('Xray Configs')).toBeNull();
   expect(screen.queryByText('Proxy Core')).toBeNull();
   expect(screen.queryByText('Swap / ZRAM')).toBeNull();
   expect(screen.queryByText('API Docs')).toBeNull();
+});
+
+test('shows OlcRTC only after a successful installed status response', async () => {
+  const view = renderSidebar();
+  fireEvent.mouseEnter(view.container.querySelector('.ant-sidebar')!);
+  await waitFor(() =>
+    expect(HttpUtil.get).toHaveBeenCalledWith('/panel/api/olcrtc/status', undefined, {
+      silent: true,
+    }),
+  );
+  expect(screen.queryByText('OlcRTC — клиенты')).toBeNull();
+
+  vi.mocked(HttpUtil.get).mockResolvedValue({
+    success: true,
+    obj: { installed: true },
+  } as never);
+  window.dispatchEvent(new Event('focus'));
+  await waitFor(() => expect(screen.getByText('OlcRTC — клиенты')).toBeTruthy());
+
+  vi.mocked(HttpUtil.get).mockResolvedValue({
+    success: true,
+    obj: { installed: false },
+  } as never);
+  window.dispatchEvent(new Event('focus'));
+  await waitFor(() => expect(screen.queryByText('OlcRTC — клиенты')).toBeNull());
 });

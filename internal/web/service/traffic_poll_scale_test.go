@@ -5,18 +5,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-func pollReport(ds scaleDataset, k int) ([]*xray.Traffic, []*xray.ClientTraffic) {
-	traffics := make([]*xray.Traffic, 0, len(ds.tags))
+func pollReport(ds scaleDataset, k int) ([]*coremodel.Traffic, []*coremodel.ClientTraffic) {
+	traffics := make([]*coremodel.Traffic, 0, len(ds.tags))
 	for _, tag := range ds.tags {
-		traffics = append(traffics, &xray.Traffic{IsInbound: true, Tag: tag, Up: 1 << 20, Down: 2 << 20})
+		traffics = append(traffics, &coremodel.Traffic{IsInbound: true, Tag: tag, Up: 1 << 20, Down: 2 << 20})
 	}
-	clientTraffics := make([]*xray.ClientTraffic, 0, k)
+	clientTraffics := make([]*coremodel.ClientTraffic, 0, k)
 	for _, email := range sampleEmails(ds.emails, k) {
-		clientTraffics = append(clientTraffics, &xray.ClientTraffic{Email: email, Up: 1 << 20, Down: 2 << 20})
+		clientTraffics = append(clientTraffics, &coremodel.ClientTraffic{Email: email, Up: 1 << 20, Down: 2 << 20})
 	}
 	return traffics, clientTraffics
 }
@@ -53,7 +53,7 @@ func TestAddTrafficPollScale(t *testing.T) {
 					perPoll := time.Since(start) / reps
 					t.Logf("N=%-7d shape=%-8s K=%-6d steady=%v/poll", n, shape.name, k, perPoll.Round(time.Millisecond))
 
-					var probe xray.ClientTraffic
+					var probe coremodel.ClientTraffic
 					if err := db.Where("email = ?", clientTraffics[0].Email).First(&probe).Error; err != nil {
 						t.Fatalf("load probe row: %v", err)
 					}
@@ -63,7 +63,7 @@ func TestAddTrafficPollScale(t *testing.T) {
 				}
 
 				depleted := ds.perInbound[0][:100]
-				if err := db.Model(&xray.ClientTraffic{}).
+				if err := db.Model(&coremodel.ClientTraffic{}).
 					Where("email IN ?", emailsOf(depleted)).
 					Updates(map[string]any{"up": int64(100 << 30), "down": int64(0)}).Error; err != nil {
 					t.Fatalf("mark depleted: %v", err)
@@ -74,7 +74,7 @@ func TestAddTrafficPollScale(t *testing.T) {
 				}
 				t.Logf("N=%-7d shape=%-8s disable100=%v", n, shape.name, time.Since(start).Round(time.Millisecond))
 				var disabledCount int64
-				if err := db.Model(&xray.ClientTraffic{}).Where("enable = ?", false).Count(&disabledCount).Error; err != nil {
+				if err := db.Model(&coremodel.ClientTraffic{}).Where("enable = ?", false).Count(&disabledCount).Error; err != nil {
 					t.Fatalf("count disabled: %v", err)
 				}
 				if disabledCount != 100 {
@@ -83,7 +83,7 @@ func TestAddTrafficPollScale(t *testing.T) {
 
 				renew := ds.perInbound[0][100:200]
 				past := time.Now().Add(-time.Hour).UnixMilli()
-				if err := db.Model(&xray.ClientTraffic{}).
+				if err := db.Model(&coremodel.ClientTraffic{}).
 					Where("email IN ?", emailsOf(renew)).
 					Updates(map[string]any{"reset": 30, "expiry_time": past, "up": int64(1 << 30)}).Error; err != nil {
 					t.Fatalf("mark renewable: %v", err)
@@ -93,7 +93,7 @@ func TestAddTrafficPollScale(t *testing.T) {
 					t.Fatalf("AddTraffic renew: %v", err)
 				}
 				t.Logf("N=%-7d shape=%-8s renew100=%v", n, shape.name, time.Since(start).Round(time.Millisecond))
-				var renewed xray.ClientTraffic
+				var renewed coremodel.ClientTraffic
 				if err := db.Where("email = ?", renew[0].Email).First(&renewed).Error; err != nil {
 					t.Fatalf("load renewed row: %v", err)
 				}

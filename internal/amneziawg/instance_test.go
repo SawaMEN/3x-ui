@@ -2,6 +2,8 @@ package amneziawg
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -185,6 +187,24 @@ func TestFirstIPv6(t *testing.T) {
 	for _, c := range cases {
 		if got := FirstIPv6(c.ips); got != c.want {
 			t.Errorf("%s: FirstIPv6(%v) = %q, want %q", c.name, c.ips, got, c.want)
+		}
+	}
+}
+
+// The retired opt-in must not prevent old database rows from loading into the
+// always-on embedded relay, regardless of the value saved by an older panel.
+func TestInstanceFromInboundIgnoresRetiredRouteOptIn(t *testing.T) {
+	settings := mkInboundSettings(t, validServer(), []model.Client{{Email: "a@x", Enable: true, PublicKey: "pubA", AllowedIPs: []string{"10.8.1.2/32"}}})
+	inbound := &model.Inbound{Id: 7, Protocol: model.AmneziaWG, Port: 51820, Settings: settings}
+	expected, ok := InstanceFromInbound(inbound)
+	if !ok {
+		t.Fatal("baseline inbound did not load")
+	}
+	for _, flag := range []string{"true", "false"} {
+		inbound.Settings = strings.Replace(settings, `"server":{`, `"server":{"routeThroughXray":`+flag+`,`, 1)
+		got, ok := InstanceFromInbound(inbound)
+		if !ok || !reflect.DeepEqual(got, expected) {
+			t.Fatalf("retired route flag %s changed embedded instance: %+v", flag, got)
 		}
 	}
 }

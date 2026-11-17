@@ -73,7 +73,7 @@ func TestWireguardClientsToPeersIdempotent(t *testing.T) {
 	}
 }
 
-func TestGenXrayInboundConfigWireguardConvertsPeers(t *testing.T) {
+func TestGenInboundConfigWireguardConvertsPeers(t *testing.T) {
 	ib := &Inbound{
 		Protocol: WireGuard,
 		Port:     51820,
@@ -81,15 +81,15 @@ func TestGenXrayInboundConfigWireguardConvertsPeers(t *testing.T) {
 		Settings: `{"secretKey": "k", "peers": [], "clients": [{"email": "alice", "enable": true, "publicKey": "cHVi", "allowedIPs": ["10.0.0.2/32"]}]}`,
 	}
 
-	cfg := ib.GenXrayInboundConfig()
+	cfg := ib.GenInboundConfig()
 	parsed := wgSettingsParsed(t, string(cfg.Settings))
 
 	if _, has := parsed["clients"]; has {
-		t.Error("GenXrayInboundConfig left clients in a wireguard inbound")
+		t.Error("GenInboundConfig left clients in a wireguard inbound")
 	}
 	peers, ok := parsed["peers"].([]any)
 	if !ok || len(peers) != 1 {
-		t.Fatalf("GenXrayInboundConfig did not emit peers: %v", parsed["peers"])
+		t.Fatalf("GenInboundConfig did not emit peers: %v", parsed["peers"])
 	}
 	if peers[0].(map[string]any)["publicKey"] != "cHVi" {
 		t.Errorf("peer publicKey = %v, want cHVi", peers[0].(map[string]any)["publicKey"])

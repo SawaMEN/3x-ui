@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 )
 
 func TestClientWithAttachmentsMarshalJSONIncludesExtras(t *testing.T) {
 	c := ClientWithAttachments{
 		Id: 1, Email: "alice@example.com",
 		InboundIds: []int{3, 5},
-		Traffic:    &xray.ClientTraffic{Email: "alice@example.com", Up: 1024, Down: 4096, Enable: true},
+		Traffic:    &coremodel.ClientTraffic{Email: "alice@example.com", Up: 1024, Down: 4096, Enable: true},
 	}
 	out, err := json.Marshal(c)
 	if err != nil {

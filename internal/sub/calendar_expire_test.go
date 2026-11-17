@@ -11,10 +11,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestSubscriptionCalendarExpireInclusive(t *testing.T) {
@@ -77,7 +77,7 @@ func TestSubscriptionCalendarExpireInclusive(t *testing.T) {
 				t.Fatal(err)
 			}
 			// Node snapshots may omit limits; the clients table still owns the calendar.
-			if err := db.Create(&xray.ClientTraffic{
+			if err := db.Create(&coremodel.ClientTraffic{
 				Email: "monthly@e", Enable: true, Up: 11, Down: 22, ResetDay: tt.trafficDay, ResetCount: 7,
 			}).Error; err != nil {
 				t.Fatal(err)
@@ -114,7 +114,7 @@ func TestSubscriptionCalendarExpireInclusive(t *testing.T) {
 				t.Fatalf("info cutoff=%d, want canonical %d", info.Expire, expiry/1000)
 			}
 			var client model.ClientRecord
-			var traffic xray.ClientTraffic
+			var traffic coremodel.ClientTraffic
 			if err := db.Where("email = ?", "monthly@e").First(&client).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -162,7 +162,7 @@ func TestSubscriptionCalendarExpireInclusiveMixedClients(t *testing.T) {
 				}).Error; err != nil {
 					t.Fatal(err)
 				}
-				if err := db.Create(&xray.ClientTraffic{Email: tag + "@e", Enable: true}).Error; err != nil {
+				if err := db.Create(&coremodel.ClientTraffic{Email: tag + "@e", Enable: true}).Error; err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -188,7 +188,7 @@ func TestSubscriptionCalendarExpireInclusiveSettingRoundTrip(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{Email: "monthly@e", Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: "monthly@e", Enable: true}).Error; err != nil {
 		t.Fatal(err)
 	}
 	settings := &service.SettingService{}
@@ -229,7 +229,7 @@ func TestSubscriptionCalendarExpireInclusiveFirstUseDuration(t *testing.T) {
 	if err := db.Create(&model.ClientRecord{Email: "first-use@e", ExpiryTime: duration, ResetDay: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{Email: "first-use@e", ExpiryTime: duration, ResetDay: 1}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: "first-use@e", ExpiryTime: duration, ResetDay: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
 	before := time.Now().UnixMilli()

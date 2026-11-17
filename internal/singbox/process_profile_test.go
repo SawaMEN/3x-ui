@@ -1,0 +1,107 @@
+package singbox
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+func TestProcessProfileUsesRawCommandAndPinnedCapabilities(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture")
+	}
+	dir := t.TempDir()
+	binary := filepath.Join(dir, "core")
+	cfg := filepath.Join(dir, "candidate.json")
+	script := `#!/bin/sh
+case "$1" in
+ version) printf 'hiddify-core version v5.0.0 hiddify-sing-box version 1.13.0-rc.2\nTags: with_xui_panel,with_v2ray_api\n' ;;
+ check) exit 0 ;;
+ srun) printf 'raw command reached\n' >&2; exit 9 ;;
+ *) printf 'unexpected command: %s\n' "$1" >&2; exit 10 ;;
+esac
+`
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg, []byte(`{"inbounds":[{"type":"snell"}],"endpoints":[{"type":"masque-server"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	profile := ProcessOptions{Binary: binary, RunCommand: "srun", VersionPrefix: "hiddify-core version ", RequiredVersion: "v5.0.0", RequiredTags: []string{"with_xui_panel", "with_v2ray_api"}, MASQUE: true}
+	p := NewProcessWithOptions(cfg, profile, true)
+	if err := p.Validate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if p.GetVersion() != "v5.0.0" || !p.SupportsMASQUE() || p.SupportsNativeAPI() {
+		t.Fatal("profile capabilities use stock version gates")
+	}
+	if err := p.Start(context.Background()); err == nil || !strings.Contains(err.Error(), "raw command reached") {
+		t.Fatalf("wrong command or startup error hidden: %v", err)
+	}
+	if p.IsRunning() {
+		t.Fatal("failed child reported running")
+	}
+	profile.RequiredTags = append(profile.RequiredTags, "missing_capability")
+	if err := NewProcessWithOptions(cfg, profile, true).Validate(context.Background()); err == nil {
+		t.Fatal("incomplete build accepted")
+	}
+	profile.RequiredTags = nil
+	profile.RequiredVersion = "v4.1.0"
+	if _, err := NewProcessWithOptions(cfg, profile, true).Version(context.Background()); err == nil {
+		t.Fatal("unpinned version accepted")
+	}
+}
+
+func TestProcessProfileRejectsMisleadingIdentity(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture")
+	}
+	dir := t.TempDir()
+	binary := filepath.Join(dir, "core")
+	profile := ProcessOptions{Binary: binary, Name: "hiddify-core", VersionPrefix: "hiddify-core version ", RequiredVersion: "panel-test", RequiredRevision: "pinned", RequiredTags: []string{"with_v2ray_api"}}
+	for _, output := range []string{
+		"panel-test\nTags: with_v2ray_api\nRevision: pinned\n",
+		"hiddify-core version panel-test\nTags: without_with_v2ray_api\nRevision: pinned\n",
+		"hiddify-core version panel-test\nTags: with_v2ray_api\nRevision: other\n",
+	} {
+		script := "#!/bin/sh\ncat <<'VERSION'\n" + output + "VERSION\n"
+		if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewProcessWithOptions("", profile, true).Version(context.Background()); err == nil {
+			t.Fatalf("misleading identity accepted: %q", output)
+		}
+	}
+}
+
+func TestProcessProfileXrayChecksWithRunTest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture")
+	}
+	dir := t.TempDir()
+	binary := filepath.Join(dir, "xray")
+	cfg := filepath.Join(dir, "config.json")
+	script := `#!/bin/sh
+case "$1" in
+version) echo 'Xray 26.10.21';;
+run) [ "$2" = '-test' ] && [ "$3" = '-c' ] && [ -f "$4" ];;
+*) exit 14;;
+esac
+`
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := NewProcessWithOptions(cfg, ProcessOptions{Binary: binary, Name: "Xray", Xray: true, VersionPrefix: "Xray "}, true)
+	if err := p.Validate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if p.GetVersion() != "26.10.21" {
+		t.Fatal("Xray version not parsed")
+	}
+}

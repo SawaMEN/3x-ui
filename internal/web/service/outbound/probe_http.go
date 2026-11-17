@@ -65,13 +65,12 @@ const (
 	egressTracePath = "/cdn-cgi/trace"
 )
 
-// httpTestSemaphore serialises HTTP-mode batches (each spawns a temp xray
+// httpTestSemaphore serialises HTTP-mode batches (each spawns a temporary Sing-box
 // instance, which is too expensive to run in parallel). TCP-mode probes are
 // dial-only and don't need the semaphore.
 var httpTestSemaphore sync.Mutex
 
-// batchProcess is the slice of xray.Process the batch engine needs; a seam
-// so unit tests can stub the process without an xray binary.
+// batchProcess is the lifecycle seam used by isolated probes and their tests.
 type batchProcess interface {
 	Start() error
 	Stop() error
@@ -79,9 +78,7 @@ type batchProcess interface {
 	GetResult() string
 }
 
-var newBatchProcess = func(cfg *xray.Config, configPath string) batchProcess {
-	return xray.NewTestProcess(cfg, configPath)
-}
+var newBatchProcess = newXrayBatchProcess
 
 var egressTraceProbe = probeEgressTrace
 
@@ -96,7 +93,7 @@ type httpBatchItem struct {
 
 func probeModeLabel(mode string) string {
 	switch mode {
-	case "tcp", "real":
+	case "tcp", "real", "speed":
 		return mode
 	default:
 		return "http"
@@ -143,6 +140,7 @@ func (s *OutboundService) TestOutbounds(outboundsJSON string, testURL string, al
 // worker pool) and the HTTP lane (one shared temp xray instance), runs both,
 // and returns results aligned with items. A nil item marks unparseable input.
 func (s *OutboundService) testOutboundsParsed(items []map[string]any, testURL string, allOutboundsJSON string, mode string) []*TestOutboundResult {
+	ctx := s.probeContext()
 	results := make([]*TestOutboundResult, len(items))
 
 	modeLabel := probeModeLabel(mode)
@@ -179,15 +177,15 @@ func (s *OutboundService) testOutboundsParsed(items []map[string]any, testURL st
 		results[i] = r
 		protocol, _ := ob["protocol"].(string)
 		// The core lowercases the id before it resolves the handler.
-		protocol = strings.ToLower(protocol)
+		protocol = normalizedProbeProtocol(protocol)
 		switch {
 		case tag == "":
 			r.Error = "Outbound has no tag"
-		case protocol == "blackhole" || tag == "blocked":
+		case protocol == "blackhole" || protocol == "block" || tag == "blocked":
 			r.Error = "Blocked/blackhole outbound cannot be tested"
 		case protocol == "loopback":
 			r.Error = "Loopback outbound cannot be tested"
-		case protocol == "freedom" || protocol == "dns":
+		case protocol == "freedom" || protocol == "direct" || protocol == "dns":
 			// Direct/DNS outbounds aren't proxies — an HTTP probe through them
 			// would only measure the host's own reachability, not a tunnel.
 			r.Error = "Direct/DNS outbound cannot be tested"
@@ -206,7 +204,13 @@ func (s *OutboundService) testOutboundsParsed(items []map[string]any, testURL st
 			wg.Add(1)
 			go func(e tcpEntry) {
 				defer wg.Done()
-				sem <- struct{}{}
+				select {
+				case sem <- struct{}{}:
+				case <-ctx.Done():
+					tag, _ := e.ob["tag"].(string)
+					results[e.idx] = &TestOutboundResult{Tag: tag, Mode: "tcp", Error: ctx.Err().Error()}
+					return
+				}
 				defer func() { <-sem }()
 				obJSON, err := json.Marshal(e.ob)
 				if err != nil {
@@ -240,6 +244,10 @@ func (s *OutboundService) testOutboundsParsed(items []map[string]any, testURL st
 		}
 	}
 
+	if ctx.Err() != nil {
+		failAll(ctx.Err().Error())
+		return results
+	}
 	if testURL == "" {
 		testURL = defaultTestURL
 	}
@@ -250,7 +258,7 @@ func (s *OutboundService) testOutboundsParsed(items []map[string]any, testURL st
 	}
 	defer httpTestSemaphore.Unlock()
 
-	retryPerItem, err := runHTTPProbeBatch(httpItems, allOutbounds, testURL, realDelay)
+	retryPerItem, err := runHTTPProbeBatchForCore(ctx, httpItems, allOutbounds, testURL, realDelay, s.CoreType)
 	if err == nil {
 		return results
 	}
@@ -263,7 +271,11 @@ func (s *OutboundService) testOutboundsParsed(items []map[string]any, testURL st
 	// instance so the broken outbound reports xray's real error and the
 	// rest still get tested. Serial: the poisoned case fails fast (~1s).
 	for _, it := range httpItems {
-		if _, ferr := runHTTPProbeBatch([]*httpBatchItem{it}, allOutbounds, testURL, realDelay); ferr != nil {
+		if ctx.Err() != nil {
+			failAll(ctx.Err().Error())
+			return results
+		}
+		if _, ferr := runHTTPProbeBatchForCore(ctx, []*httpBatchItem{it}, allOutbounds, testURL, realDelay, s.CoreType); ferr != nil {
 			it.result.Success = false
 			it.result.Error = ferr.Error()
 		}
@@ -271,13 +283,11 @@ func (s *OutboundService) testOutboundsParsed(items []map[string]any, testURL st
 	return results
 }
 
-// runHTTPProbeBatch makes one shared-process attempt for the given items,
-// writing per-request outcomes into the items' results. It returns a non-nil
-// error only when the process never became usable; retryPerItem reports
-// whether splitting the batch into per-item instances could help (true for
-// start failures / early exits that a poisoned config would explain, false
-// for environmental failures like a missing binary or no free ports).
-func runHTTPProbeBatch(items []*httpBatchItem, allOutbounds []any, testURL string, realDelay bool) (retryPerItem bool, err error) {
+func runHTTPProbeBatchForCore(ctx context.Context, items []*httpBatchItem, allOutbounds []any, testURL string, realDelay bool, coreType string) (retryPerItem bool, err error) {
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	coreName := "sing-box"
 	ports, release, err := reserveLoopbackPorts(len(items))
 	if err != nil {
 		return false, fmt.Errorf("Failed to reserve test ports: %w", err)
@@ -285,6 +295,11 @@ func runHTTPProbeBatch(items []*httpBatchItem, allOutbounds []any, testURL strin
 	defer release()
 
 	cfg := buildBatchTestConfig(items, allOutbounds, ports)
+	cleanupVPN, err := bridgeManagedProbeOutbounds(ctx, cfg)
+	if err != nil {
+		return false, err
+	}
+	defer cleanupVPN()
 
 	configPath, err := createTestConfigPath()
 	if err != nil {
@@ -292,38 +307,65 @@ func runHTTPProbeBatch(items []*httpBatchItem, allOutbounds []any, testURL strin
 	}
 	defer os.Remove(configPath)
 
-	proc := newBatchProcess(cfg, configPath)
-	defer func() {
-		if proc.IsRunning() {
-			_ = proc.Stop()
+	var proc batchProcess
+	if coreType == "sing-box" || coreType == "hiddify-core" || coreType == "sing-box-upstream" {
+		singBoxConfig, err := buildSingBoxBatchTestConfigForCore(cfg, coreType)
+		if err != nil {
+			return true, fmt.Errorf("Build sing-box test config: %w", err)
 		}
-	}()
+		if coreType == "sing-box-upstream" {
+			proc = newUpstreamBatchProcess(singBoxConfig, configPath)
+		} else {
+			proc = newSingBoxBatchProcess(singBoxConfig, configPath)
+		}
+	} else {
+		proc = newBatchProcess(cfg, configPath)
+	}
+	defer func() { _ = proc.Stop() }()
 
-	// Free the reserved ports just before xray binds them; the window is
-	// milliseconds, and a lost race makes xray exit fast, which surfaces
+	// Free the reserved ports just before Sing-box binds them; the window is
+	// milliseconds, and a lost race makes Sing-box exit fast, which surfaces
 	// below and triggers the per-item retry with fresh ports.
 	release()
-	if err := proc.Start(); err != nil {
+	start := func() error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if contextual, ok := proc.(interface{ StartContext(context.Context) error }); ok {
+			return contextual.StartContext(ctx)
+		}
+		return proc.Start()
+	}
+	if err := start(); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			// Binary missing — per-item retries would all fail the same way.
-			return false, fmt.Errorf("Failed to start test xray instance: %w", err)
+			return false, fmt.Errorf("Failed to start test %s instance: %w", coreName, err)
 		}
-		return true, fmt.Errorf("Failed to start test xray instance: %w", err)
+		return true, fmt.Errorf("Failed to start test %s instance: %w", coreName, err)
 	}
 
-	if err := waitForPortsReady(proc, ports, batchPortsReadyTimeout); err != nil {
+	if err := waitForPortsReady(ctx, proc, ports, batchPortsReadyTimeout); err != nil {
 		return err.exited, err
 	}
 
-	sem := make(chan struct{}, httpProbeConcurrency)
+	concurrency := httpProbeConcurrency
+	if items[0].result.Mode == "speed" {
+		concurrency = 1
+	}
+	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	for i := range items {
 		wg.Add(1)
 		go func(it *httpBatchItem, port int) {
 			defer wg.Done()
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				it.result.Error = ctx.Err().Error()
+				return
+			}
 			defer func() { <-sem }()
-			probeThroughSocks(port, testURL, httpProbeTimeout, realDelay, it.result)
+			probeThroughSocksContext(ctx, port, testURL, httpProbeTimeout, realDelay, it.result)
 		}(items[i], ports[i])
 	}
 	wg.Wait()
@@ -332,7 +374,7 @@ func runHTTPProbeBatch(items []*httpBatchItem, allOutbounds []any, testURL strin
 		detail := proc.GetResult()
 		for _, it := range items {
 			if !it.result.Success {
-				it.result.Error = "Xray process exited: " + detail
+				it.result.Error = "Proxy core process exited: " + detail
 			}
 		}
 	}
@@ -350,22 +392,31 @@ func (e *portsReadyError) Error() string { return e.msg }
 
 // waitForPortsReady polls until every test inbound accepts connections,
 // aborting as soon as the process exits.
-func waitForPortsReady(proc batchProcess, ports []int, timeout time.Duration) *portsReadyError {
+func waitForPortsReady(ctx context.Context, proc batchProcess, ports []int, timeout time.Duration) *portsReadyError {
 	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
 	for _, port := range ports {
 		for {
-			if !proc.IsRunning() {
-				return &portsReadyError{msg: "Xray process exited: " + proc.GetResult(), exited: true}
+			if ctx.Err() != nil {
+				return &portsReadyError{msg: ctx.Err().Error()}
 			}
-			conn, err := (&net.Dialer{Timeout: 100 * time.Millisecond}).DialContext(context.Background(), "tcp", fmt.Sprintf("127.0.0.1:%d", port))
+			if !proc.IsRunning() {
+				return &portsReadyError{msg: "Proxy core process exited: " + proc.GetResult(), exited: true}
+			}
+			conn, err := (&net.Dialer{Timeout: 100 * time.Millisecond}).DialContext(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", port))
 			if err == nil {
 				conn.Close()
 				break
 			}
 			if time.Now().After(deadline) {
-				return &portsReadyError{msg: fmt.Sprintf("Xray failed to open test inbounds: port %d not ready after %v", port, timeout)}
+				return &portsReadyError{msg: fmt.Sprintf("Proxy core failed to open test inbounds: port %d not ready after %v", port, timeout)}
 			}
-			time.Sleep(50 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return &portsReadyError{msg: ctx.Err().Error()}
+			case <-ticker.C:
+			}
 		}
 	}
 	return nil
@@ -396,6 +447,7 @@ func buildBatchTestConfig(items []*httpBatchItem, allOutbounds []any, ports []in
 			bridged = append(bridged, ob)
 			continue
 		}
+
 		if p, _ := m["protocol"].(string); !strings.EqualFold(p, "amneziawg") {
 			bridged = append(bridged, ob)
 			continue
@@ -491,6 +543,10 @@ func outboundsContainTag(outbounds []any, tag string) bool {
 // fails. The test URL's hostname is resolved by xray (Go's SOCKS5 client
 // sends the domain to the proxy), so DNS goes through the outbound too.
 func probeThroughSocks(port int, testURL string, timeout time.Duration, realDelay bool, result *TestOutboundResult) {
+	probeThroughSocksContext(context.Background(), port, testURL, timeout, realDelay, result)
+}
+
+func probeThroughSocksContext(ctx context.Context, port int, testURL string, timeout time.Duration, realDelay bool, result *TestOutboundResult) {
 	proxyURL := &url.URL{Scheme: "socks5", Host: net.JoinHostPort("127.0.0.1", strconv.Itoa(port))}
 	tr := &http.Transport{
 		Proxy:               http.ProxyURL(proxyURL),
@@ -548,7 +604,7 @@ func probeThroughSocks(port int, testURL string, timeout time.Duration, realDela
 		},
 	}
 
-	req, err := http.NewRequestWithContext(httptrace.WithClientTrace(context.Background(), trace), http.MethodGet, testURL, nil)
+	req, err := http.NewRequestWithContext(httptrace.WithClientTrace(ctx, trace), http.MethodGet, testURL, nil)
 	if err != nil {
 		result.Error = err.Error()
 		return
@@ -557,6 +613,28 @@ func probeThroughSocks(port int, testURL string, timeout time.Duration, realDela
 	coldDelay := time.Since(start).Milliseconds()
 	if err != nil {
 		result.Error = err.Error()
+		return
+	}
+	if result.Mode == "speed" {
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			result.Error = fmt.Sprintf("Speed probe HTTP status %d", resp.StatusCode)
+			return
+		}
+		bodyStart := time.Now()
+		n, err := io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+		if err != nil || n < 64<<10 {
+			result.Error = "Speed probe requires at least 64 KiB of download data"
+			if err != nil {
+				result.Error = err.Error()
+			}
+			return
+		}
+		result.DownloadBytes = n
+		result.DownloadMbps = float64(n) * 8 / time.Since(bodyStart).Seconds() / 1e6
+		result.Delay = max(coldDelay, 1)
+		result.HTTPStatus = resp.StatusCode
+		result.Success = true
 		return
 	}
 	drainAndClose(resp)
@@ -575,13 +653,13 @@ func probeThroughSocks(port int, testURL string, timeout time.Duration, realDela
 
 	delay := coldDelay
 	if !realDelay {
-		if warmDelay, ok := timedWarmGet(client, testURL); ok {
+		if warmDelay, ok := timedWarmGet(ctx, client, testURL); ok {
 			delay = warmDelay
 		}
 	}
 	result.Delay = max(delay, 1)
 	if !realDelay {
-		result.Egress = egressTraceProbe(proxyURL)
+		result.Egress = egressTraceProbe(ctx, proxyURL)
 	}
 }
 
@@ -590,8 +668,8 @@ func probeThroughSocks(port int, testURL string, timeout time.Duration, realDela
 // Cloudflare address directly, when available, while keeping the TLS SNI as
 // cloudflare.com. Failures are intentionally ignored by the caller: egress
 // metadata is diagnostic, not reachability.
-func probeEgressTrace(proxyURL *url.URL) *TestEgressResult {
-	ipv4, ipv6 := cloudflareTraceTargets()
+func probeEgressTrace(ctx context.Context, proxyURL *url.URL) *TestEgressResult {
+	ipv4, ipv6 := cloudflareTraceTargets(ctx)
 	if ipv4 == nil && ipv6 == nil {
 		return nil
 	}
@@ -620,7 +698,7 @@ func probeEgressTrace(proxyURL *url.URL) *TestEgressResult {
 	results := make(chan map[string]string, len(targets))
 	for _, target := range targets {
 		go func(ip net.IP) {
-			results <- fetchCloudflareTrace(client, ip)
+			results <- fetchCloudflareTrace(ctx, client, ip)
 		}(target)
 	}
 	for range targets {
@@ -633,8 +711,8 @@ func probeEgressTrace(proxyURL *url.URL) *TestEgressResult {
 	return egress
 }
 
-func cloudflareTraceTargets() (net.IP, net.IP) {
-	ctx, cancel := context.WithTimeout(context.Background(), egressTraceTimeout)
+func cloudflareTraceTargets(parent context.Context) (net.IP, net.IP) {
+	ctx, cancel := context.WithTimeout(parent, egressTraceTimeout)
 	defer cancel()
 
 	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, egressTraceHost)
@@ -660,7 +738,7 @@ func cloudflareTraceTargets() (net.IP, net.IP) {
 	return ipv4, ipv6
 }
 
-func fetchCloudflareTrace(client *http.Client, ip net.IP) map[string]string {
+func fetchCloudflareTrace(ctx context.Context, client *http.Client, ip net.IP) map[string]string {
 	if ip == nil {
 		return nil
 	}
@@ -669,7 +747,7 @@ func fetchCloudflareTrace(client *http.Client, ip net.IP) map[string]string {
 		Host:   net.JoinHostPort(ip.String(), "443"),
 		Path:   egressTracePath,
 	}).String()
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, traceURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, traceURL, nil)
 	if err != nil {
 		return nil
 	}
@@ -728,8 +806,8 @@ func parseCloudflareTrace(body string) map[string]string {
 
 // timedWarmGet re-issues the probe request over the transport's kept-alive
 // connection and returns its duration — the tunnel's per-request round-trip.
-func timedWarmGet(client *http.Client, testURL string) (int64, bool) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, testURL, nil)
+func timedWarmGet(ctx context.Context, client *http.Client, testURL string) (int64, bool) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
 	if err != nil {
 		return 0, false
 	}

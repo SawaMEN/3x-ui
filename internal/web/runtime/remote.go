@@ -17,13 +17,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/wirecodec"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const remoteHTTPTimeout = 10 * time.Second
@@ -48,6 +48,29 @@ const errBodyDiagBytes = 8 << 10 // 8 KiB
 
 // errRemoteResponseTooLarge is returned when a node response exceeds the cap.
 var errRemoteResponseTooLarge = errors.New("remote response exceeds size limit")
+
+// Only a successful inventory lookup can establish that an inbound is absent.
+var errRemoteInboundNotFound = errors.New("remote inbound not found")
+
+type remoteHTTPError struct {
+	method, path string
+	status       int
+	snippet      string
+}
+
+func (e *remoteHTTPError) Error() string {
+	if e.snippet != "" {
+		return fmt.Sprintf("%s %s: HTTP %d: %q", e.method, e.path, e.status, e.snippet)
+	}
+	return fmt.Sprintf("%s %s: HTTP %d", e.method, e.path, e.status)
+}
+
+// IsRemoteHTTPStatus distinguishes a response status from the text of a node
+// API failure or transport error, including errors wrapped by callers.
+func IsRemoteHTTPStatus(err error, status int) bool {
+	var httpErr *remoteHTTPError
+	return errors.As(err, &httpErr) && httpErr.status == status
+}
 
 // readCappedBody reads all of r but rejects bodies larger than limit, returning
 // errRemoteResponseTooLarge. It reads at most limit+1 bytes so a body of exactly
@@ -194,6 +217,18 @@ func (r *Remote) baseURL() (string, error) {
 }
 
 func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelope, error) {
+	return r.doWithTimeout(ctx, method, path, body, remoteHTTPTimeout)
+}
+
+// doWithTimeout allows launch operations with a bounded, longer handshake
+// without increasing the deadline of every ordinary node API call.
+func (r *Remote) doWithTimeout(ctx context.Context, method, path string, body any, timeout time.Duration) (result *envelope, failure error) {
+	started := time.Now()
+	defer func() {
+		if failure != nil {
+			logger.Errorf("Node RPC failed node_id=%d operation=%s method=%s duration_ms=%d error=%s", r.node.Id, remoteDiagnosticOperation(), method, time.Since(started).Milliseconds(), logger.ErrorSummary(failure))
+		}
+	}()
 	// mtls nodes authenticate via the client certificate, so a bearer token is
 	// optional for them; every other mode still requires one.
 	if r.node.ApiToken == "" && r.node.TlsVerifyMode != "mtls" {
@@ -241,7 +276,7 @@ func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelo
 		reqBody = bytes.NewReader(bodyBytes)
 	}
 
-	cctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(ctx, r.node.AllowPrivateAddress), remoteHTTPTimeout)
+	cctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(ctx, r.node.AllowPrivateAddress), timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(cctx, method, target, reqBody)
 	if err != nil {
@@ -255,6 +290,7 @@ func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelo
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set(wirecodec.MasterPushHeader, "1")
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
@@ -269,6 +305,18 @@ func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelo
 	if err != nil {
 		return nil, err
 	}
+	// Proxied node clients carry a 10-second http.Client.Timeout in addition
+	// to the per-request context deadline. Keep their pooled transport but
+	// remove that shorter cap for operations needing a longer response window.
+	// Never mutate a shared cached client: another node RPC may use it now.
+	if client.Timeout > 0 && client.Timeout < timeout {
+		client = &http.Client{
+			Transport:     client.Transport,
+			CheckRedirect: client.CheckRedirect,
+			Jar:           client.Jar,
+			Timeout:       timeout,
+		}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("%s %s: %w", method, path, err)
@@ -281,12 +329,7 @@ func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelo
 	// to buffer a large body just to return an HTTP error.
 	if resp.StatusCode != http.StatusOK {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, errBodyDiagBytes))
-		if msg := bytes.TrimSpace(snippet); len(msg) > 0 {
-			// %q quotes/escapes the untrusted node body so control characters or
-			// newlines in it can't garble or inject into the error/log output.
-			return nil, fmt.Errorf("%s %s: HTTP %d: %q", method, path, resp.StatusCode, msg)
-		}
-		return nil, fmt.Errorf("%s %s: HTTP %d", method, path, resp.StatusCode)
+		return nil, &remoteHTTPError{method: method, path: path, status: resp.StatusCode, snippet: string(bytes.TrimSpace(snippet))}
 	}
 
 	// Fast-fail on an honestly-declared oversize body; the LimitReader below is
@@ -324,7 +367,7 @@ func (r *Remote) resolveRemoteID(ctx context.Context, tag string) (int, error) {
 	if id, ok := r.cacheGetTag(tag); ok {
 		return id, nil
 	}
-	return 0, fmt.Errorf("remote inbound with tag %q not found on node %s", tag, r.node.Name)
+	return 0, fmt.Errorf("%w: tag %q on node %s", errRemoteInboundNotFound, tag, r.node.Name)
 }
 
 // nodeInboundTagPrefix is the central-panel alias for an inbound on nodeID.
@@ -375,6 +418,42 @@ func (r *Remote) cacheDel(tag string) {
 	defer r.mu.Unlock()
 	delete(r.remoteIDByTag, tag)
 	delete(r.pushedFP, tag)
+}
+
+// forgetRemoteInbound removes all aliases of one mutated/deleted remote ID.
+// Prefix and adopted forms can both outlive the central tag's cache entry.
+func (r *Remote) forgetRemoteInbound(tag string, id int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	prefix := nodeInboundTagPrefix(r.node.Id)
+	bareTag := strings.TrimPrefix(tag, prefix)
+	forgetFingerprint := func(tag string) {
+		bare := strings.TrimPrefix(tag, prefix)
+		delete(r.pushedFP, bare)
+		delete(r.pushedFP, prefix+bare)
+	}
+	for central, deployed := range r.adoptedAliases {
+		if strings.TrimPrefix(central, prefix) == bareTag || (id > 0 && (r.remoteIDByTag[central] == id || r.remoteIDByTag[deployed] == id)) {
+			delete(r.adoptedAliases, central)
+			forgetFingerprint(central)
+		}
+	}
+	for cachedTag, cachedID := range r.remoteIDByTag {
+		if strings.TrimPrefix(cachedTag, prefix) == bareTag || (id > 0 && cachedID == id) {
+			delete(r.remoteIDByTag, cachedTag)
+			forgetFingerprint(cachedTag)
+		}
+	}
+	forgetFingerprint(tag)
+}
+
+// forgetTag drops every tag form cacheGetTag would match, once the node reports
+// none of them, so the next resolve re-reads the node instead of a deleted id.
+func (r *Remote) forgetTag(tag string) {
+	prefix := nodeInboundTagPrefix(r.node.Id)
+	bare := strings.TrimPrefix(tag, prefix)
+	r.cacheDel(bare)
+	r.cacheDel(prefix + bare)
 }
 
 func (r *Remote) ListRemoteTags(ctx context.Context) ([]string, error) {
@@ -461,27 +540,38 @@ func (r *Remote) AddInbound(ctx context.Context, ib *model.Inbound) error {
 func (r *Remote) DelInbound(ctx context.Context, ib *model.Inbound) error {
 	id, err := r.resolveRemoteID(ctx, ib.Tag)
 	if err != nil {
-		logger.Warning("remote DelInbound: tag", ib.Tag, "not found on", r.node.Name)
-		return nil
+		if errors.Is(err, errRemoteInboundNotFound) {
+			r.forgetRemoteInbound(ib.Tag, 0)
+			return nil
+		}
+		return err
 	}
 	if _, err := r.do(ctx, http.MethodPost, "panel/api/inbounds/del/"+strconv.Itoa(id), nil); err != nil {
 		return err
 	}
-	r.cacheDel(ib.Tag)
+	r.forgetRemoteInbound(ib.Tag, id)
 	return nil
 }
 
 func (r *Remote) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) error {
 	id, err := r.resolveRemoteID(ctx, oldIb.Tag)
 	if err != nil {
-		return r.AddInbound(ctx, newIb)
+		if errors.Is(err, errRemoteInboundNotFound) {
+			return r.AddInbound(ctx, newIb)
+		}
+		return err
 	}
 	payload := wireInbound(newIb, r.node.Id)
 	if _, err := r.do(ctx, http.MethodPost, "panel/api/inbounds/update/"+strconv.Itoa(id), payload); err != nil {
 		return err
 	}
-	if oldIb.Tag != newIb.Tag {
-		r.cacheDel(oldIb.Tag)
+	r.mu.RLock()
+	adoptedTag, adopted := r.adoptedAliases[oldIb.Tag]
+	r.mu.RUnlock()
+	// A full push also renames an adopted node tag to the wire tag, even
+	// when the central tag itself has not changed.
+	if oldIb.Tag != newIb.Tag || (adopted && adoptedTag != payload.Get("tag")) {
+		r.forgetRemoteInbound(oldIb.Tag, id)
 	}
 	r.cacheSet(newIb.Tag, id)
 	r.recordPushedInbound(newIb)
@@ -512,6 +602,8 @@ func (r *Remote) ReconcileInbound(ctx context.Context, ib *model.Inbound, exists
 		if ok && prev == fp {
 			return false, nil
 		}
+	} else {
+		r.forgetTag(ib.Tag)
 	}
 	if err := r.UpdateInbound(ctx, ib, ib); err != nil {
 		return false, err
@@ -532,6 +624,17 @@ func (r *Remote) recordPushedInbound(ib *model.Inbound) {
 // adopts a node's settings serialization.
 func (r *Remote) RecordAdoptedInbound(ib *model.Inbound) {
 	r.recordPushedInbound(ib)
+}
+
+// ForgetPushedInbound drops the reconcile-skip fingerprint once the node is seen
+// without the payload it stamped, so the next reconcile re-sends the inbound.
+func (r *Remote) ForgetPushedInbound(tag string) {
+	prefix := nodeInboundTagPrefix(r.node.Id)
+	bare := strings.TrimPrefix(tag, prefix)
+	r.mu.Lock()
+	delete(r.pushedFP, bare)
+	delete(r.pushedFP, prefix+bare)
+	r.mu.Unlock()
 }
 
 // AdoptInboundAlias records a deployed alias without mutating either panel.
@@ -666,8 +769,7 @@ func (r *Remote) RestartXray(ctx context.Context) error {
 	// Older nodes predate restartCoreService and only expose restartXrayService.
 	// Fall back only when the endpoint itself is missing; a real 5xx/core error
 	// from a new node must be surfaced rather than hidden by a second restart.
-	msg := err.Error()
-	if !strings.Contains(msg, "HTTP 404") && !strings.Contains(msg, "HTTP 405") {
+	if !IsRemoteHTTPStatus(err, http.StatusNotFound) && !IsRemoteHTTPStatus(err, http.StatusMethodNotAllowed) {
 		return err
 	}
 	_, legacyErr := r.do(ctx, http.MethodPost, "panel/api/server/restartXrayService", nil)
@@ -678,17 +780,70 @@ func (r *Remote) RestartXray(ctx context.Context) error {
 // and restart onto the latest release. The node returns as soon as the job is
 // launched; the new version surfaces on the next heartbeat. When dev is true the
 // node is moved to the rolling dev channel instead of the latest stable release.
-func (r *Remote) UpdatePanel(ctx context.Context, dev bool) error {
-	var body any
-	if dev {
-		body = url.Values{"dev": {"true"}}
+// RemotePanelUpdateStatus is the terminal status written by the remote
+// installer. RunID distinguishes this update from a previous node update.
+type RemotePanelUpdateStatus struct {
+	RunID      string `json:"runId"`
+	State      string `json:"state"`
+	ExitCode   int    `json:"exitCode"`
+	Message    string `json:"message,omitempty"`
+	LogFile    string `json:"logFile,omitempty"`
+	FinishedAt int64  `json:"finishedAt"`
+}
+
+// StartPanelUpdate launches a remote update and returns the run identifier.
+// An accepted launch is NOT proof that the release installed successfully.
+func (r *Remote) StartPanelUpdate(ctx context.Context, dev bool) (string, error) {
+	body := url.Values{"dev": {strconv.FormatBool(dev)}}
+	// The node downloads update.sh before acknowledging this request, and that
+	// downloader has a 15-second deadline. Ten seconds would report an RPC
+	// failure while the remote update may already be starting.
+	env, err := r.doWithTimeout(ctx, http.MethodPost, "panel/api/server/updatePanel", body, 22*time.Second)
+	if err != nil {
+		return "", err
 	}
-	_, err := r.do(ctx, http.MethodPost, "panel/api/server/updatePanel", body)
+	// Old node builds acknowledge the launch with null/empty obj. They have
+	// already started the updater, so rejecting that response as an error
+	// invites repeated upgrades. We cannot poll those builds by run ID.
+	if len(env.Obj) == 0 || string(bytes.TrimSpace(env.Obj)) == "null" ||
+		string(bytes.TrimSpace(env.Obj)) == "{}" {
+		return "", nil
+	}
+	var result struct {
+		RunID string `json:"runId"`
+	}
+	if err := json.Unmarshal(env.Obj, &result); err != nil {
+		return "", fmt.Errorf("decode remote panel update run id: %w", err)
+	}
+	if result.RunID == "" {
+		return "", fmt.Errorf("remote node returned an update response without a valid run ID")
+	}
+	return result.RunID, nil
+}
+
+// GetPanelUpdateStatus reads the remote updater's last status via a node-admin
+// token. The central panel must compare RunID to the requested update.
+func (r *Remote) GetPanelUpdateStatus(ctx context.Context) (*RemotePanelUpdateStatus, error) {
+	env, err := r.do(ctx, http.MethodGet, "panel/api/server/getUpdateStatus", nil)
+	if err != nil {
+		return nil, err
+	}
+	var result RemotePanelUpdateStatus
+	if err := json.Unmarshal(env.Obj, &result); err != nil {
+		return nil, fmt.Errorf("decode remote panel update status: %w", err)
+	}
+	return &result, nil
+}
+
+// UpdatePanel preserves the original launch-only contract for existing callers.
+func (r *Remote) UpdatePanel(ctx context.Context, dev bool) error {
+	_, err := r.StartPanelUpdate(ctx, dev)
 	return err
 }
 
 // WebCertFiles holds a node's own web TLS certificate and key file paths.
 type WebCertFiles struct {
+	WebDomain   string `json:"webDomain,omitempty"`
 	WebCertFile string `json:"webCertFile"`
 	WebKeyFile  string `json:"webKeyFile"`
 }
@@ -697,6 +852,98 @@ type WebCertFiles struct {
 // the central panel can offer them as the "Set Cert from Panel" default for a
 // node-assigned inbound — those paths exist on the node, the central panel's
 // don't. See issue #4854.
+// RemoteManagedSNI identifies a cover site on the node. Its certificate
+// file paths are checked on that node and must never be copied to another.
+type RemoteManagedSNI struct {
+	Name          string `json:"name"`
+	Source        string `json:"source"`
+	CertFile      string `json:"certFile"`
+	KeyFile       string `json:"keyFile"`
+	ExpiresAt     int64  `json:"expiresAt,omitempty"`
+	Issuer        string `json:"issuer,omitempty"`
+	RealityTarget string `json:"realityTarget,omitempty"`
+}
+
+// RemoteCertificateSummary is the node's read-only certificate metadata.
+// It contains no private keys and deliberately omits certificate paths.
+type RemoteCertificateSummary struct {
+	CoverSite bool     `json:"coverSite,omitempty"`
+	CanObtain bool     `json:"canObtain,omitempty"`
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Names     []string `json:"names"`
+	Manager   string   `json:"manager"`
+	Challenge string   `json:"challenge"`
+	State     string   `json:"state"`
+	Issuer    string   `json:"issuer"`
+	ExpiresAt int64    `json:"expiresAt"`
+	DaysLeft  int      `json:"daysLeft"`
+	AutoRenew bool     `json:"autoRenew"`
+	Warning   string   `json:"warning,omitempty"`
+}
+
+// ListCertificateSummaries uses the node's existing authenticated API and
+// disables recursion. Nothing in the response is used as a local file path.
+// ProbePublicHTTP01 performs an independent reachability check on the
+// selected authenticated node; only the random challenge token is sent.
+type RemoteHTTP01Observation struct {
+	Name      string   `json:"name"`
+	CheckedAt int64    `json:"checkedAt"`
+	Addresses []string `json:"addresses"`
+	Verified  bool     `json:"verified"`
+	Detail    string   `json:"detail"`
+}
+
+func (r *Remote) ProbePublicHTTP01(ctx context.Context, name, token string) (RemoteHTTP01Observation, error) {
+	env, err := r.do(ctx, http.MethodPost, "panel/api/domains/probe/http01",
+		struct {
+			Name  string `json:"name"`
+			Token string `json:"token"`
+		}{Name: name, Token: token})
+	if err != nil {
+		return RemoteHTTP01Observation{}, err
+	}
+	var result RemoteHTTP01Observation
+	if err := json.Unmarshal(env.Obj, &result); err != nil {
+		return RemoteHTTP01Observation{}, errors.New("invalid node HTTP-01 observation response")
+	}
+	if len(result.Addresses) > 16 || len(result.Detail) > 256 || result.Name != name {
+		return RemoteHTTP01Observation{}, errors.New("invalid node HTTP-01 observation data")
+	}
+	return result, nil
+}
+
+func (r *Remote) ListCertificateSummaries(ctx context.Context) ([]RemoteCertificateSummary, error) {
+	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/certificates?local=1&summary=1", nil)
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Items []RemoteCertificateSummary `json:"items"`
+	}
+	if err := json.Unmarshal(env.Obj, &response); err != nil {
+		return nil, fmt.Errorf("decode node certificate summaries: %w", err)
+	}
+	if len(response.Items) > 250 {
+		return nil, fmt.Errorf("node returned too many certificates")
+	}
+	return response.Items, nil
+}
+
+// ListManagedSNI uses the existing authenticated node API. The local flag
+// prevents recursive discovery when nodes themselves manage child panels.
+func (r *Remote) ListManagedSNI(ctx context.Context) ([]RemoteManagedSNI, error) {
+	env, err := r.do(ctx, http.MethodGet, "panel/api/domains/sni?local=1&summary=1", nil)
+	if err != nil {
+		return nil, err
+	}
+	var sites []RemoteManagedSNI
+	if err := json.Unmarshal(env.Obj, &sites); err != nil {
+		return nil, fmt.Errorf("decode node SNI cover sites: %w", err)
+	}
+	return sites, nil
+}
+
 func (r *Remote) GetWebCertFiles(ctx context.Context) (*WebCertFiles, error) {
 	env, err := r.do(ctx, http.MethodGet, "panel/api/server/getWebCertFiles", nil)
 	if err != nil {
@@ -799,29 +1046,37 @@ func (r *Remote) FetchTrafficSnapshot(ctx context.Context) (*TrafficSnapshot, er
 	// node is an old build without the per-GUID endpoint (#4983).
 	envTree, err := r.do(ctx, http.MethodPost, "panel/api/clients/onlinesByGuid", nil)
 	if err == nil && len(envTree.Obj) > 0 {
-		_ = json.Unmarshal(envTree.Obj, &snap.OnlineTree)
+		if err := json.Unmarshal(envTree.Obj, &snap.OnlineTree); err != nil {
+			logger.Errorf("Node traffic decode failed node_id=%d field=online_tree error=%s", r.node.Id, logger.ErrorSummary(err))
+		}
 	}
 	if len(snap.OnlineTree) == 0 {
 		envOnlines, err := r.do(ctx, http.MethodPost, "panel/api/clients/onlines", nil)
 		if err != nil {
-			logger.Warning("remote", r.node.Name, "onlines fetch failed:", err)
+			logger.Errorf("Node traffic onlines fetch failed node_id=%d error=%s", r.node.Id, logger.ErrorSummary(err))
 		} else if len(envOnlines.Obj) > 0 {
-			_ = json.Unmarshal(envOnlines.Obj, &snap.OnlineEmails)
+			if err := json.Unmarshal(envOnlines.Obj, &snap.OnlineEmails); err != nil {
+				logger.Errorf("Node traffic decode failed node_id=%d field=online_emails error=%s", r.node.Id, logger.ErrorSummary(err))
+			}
 		}
 	}
 
 	envLastOnline, err := r.do(ctx, http.MethodPost, "panel/api/clients/lastOnline", nil)
 	if err != nil {
-		logger.Warning("remote", r.node.Name, "lastOnline fetch failed:", err)
+		logger.Errorf("Node traffic lastOnline fetch failed node_id=%d error=%s", r.node.Id, logger.ErrorSummary(err))
 	} else if len(envLastOnline.Obj) > 0 {
-		_ = json.Unmarshal(envLastOnline.Obj, &snap.LastOnlineMap)
+		if err := json.Unmarshal(envLastOnline.Obj, &snap.LastOnlineMap); err != nil {
+			logger.Errorf("Node traffic decode failed node_id=%d field=last_online error=%s", r.node.Id, logger.ErrorSummary(err))
+		}
 	}
 
 	envActiveInbounds, err := r.do(ctx, http.MethodPost, "panel/api/clients/activeInbounds", nil)
 	if err != nil {
-		logger.Debugf("remote %s active inbounds fetch failed: %v", r.node.Name, err)
+		logger.Errorf("Node traffic active inbounds fetch failed node_id=%d error=%s", r.node.Id, logger.ErrorSummary(err))
 	} else if len(envActiveInbounds.Obj) > 0 {
-		_ = json.Unmarshal(envActiveInbounds.Obj, &snap.ActiveInboundTree)
+		if err := json.Unmarshal(envActiveInbounds.Obj, &snap.ActiveInboundTree); err != nil {
+			logger.Errorf("Node traffic decode failed node_id=%d field=active_inbounds error=%s", r.node.Id, logger.ErrorSummary(err))
+		}
 	}
 
 	return snap, nil
@@ -832,7 +1087,7 @@ func (r *Remote) FetchTrafficSnapshot(ctx context.Context) (*TrafficSnapshot, er
 // pushing master. Display/enforcement input on the node only — the node never
 // folds these into the counters it reports back, so this panel's (and any
 // other master's) delta accounting over the node snapshot stays intact.
-func (r *Remote) PushGlobalClientTraffics(ctx context.Context, masterGuid string, traffics []*xray.ClientTraffic) error {
+func (r *Remote) PushGlobalClientTraffics(ctx context.Context, masterGuid string, traffics []*coremodel.ClientTraffic) error {
 	payload := map[string]any{
 		"masterGuid": masterGuid,
 		"traffics":   traffics,
@@ -980,4 +1235,11 @@ func (r *Remote) FetchClientIpsByGuid(ctx context.Context) (map[string]map[strin
 		}
 	}
 	return out, nil
+}
+
+func (r *Remote) PreflightInbound(ctx context.Context, ib *model.Inbound) error {
+	payload := *ib
+	payload.NodeID = nil
+	_, err := r.do(ctx, http.MethodPost, "panel/api/inbounds/preflight", &payload)
+	return err
 }

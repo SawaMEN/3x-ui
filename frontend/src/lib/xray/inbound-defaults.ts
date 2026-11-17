@@ -1,3 +1,8 @@
+import { VetroffOptionsSchema } from '@/schemas/protocols/inbound/vetroff';
+import {
+  FptnInboundSettingsSchema,
+  OpenFluxInboundSettingsSchema,
+} from '@/schemas/protocols/inbound/additional-vpn';
 import { RandomUtil, Wireguard } from '@/utils';
 import { generateAwgObfuscation } from '@/lib/xray/amneziawg-obfuscation';
 
@@ -11,7 +16,12 @@ import type { HttpInboundSettings } from '@/schemas/protocols/inbound/http';
 import type { HysteriaClient, HysteriaInboundSettings } from '@/schemas/protocols/inbound/hysteria';
 import type { MixedInboundSettings } from '@/schemas/protocols/inbound/mixed';
 import type { MtprotoClient, MtprotoInboundSettings } from '@/schemas/protocols/inbound/mtproto';
+import {
+  MasqueInboundSettingsSchema,
+  type MasqueInboundSettings,
+} from '@/schemas/protocols/inbound/masque';
 import type { NaiveInboundSettings } from '@/schemas/protocols/inbound/naive';
+import type { SnellInboundSettings } from '@/schemas/protocols/inbound/snell';
 import type { MieruInboundSettings } from '@/schemas/protocols/inbound/mieru';
 import type { SudokuInboundSettings } from '@/schemas/protocols/inbound/sudoku';
 import type {
@@ -22,6 +32,7 @@ import type { TrojanClient, TrojanInboundSettings } from '@/schemas/protocols/in
 import type {
   PingtunnelInboundSettings,
   TrustTunnelInboundSettings,
+  VetroffInboundSettings,
 } from '@/schemas/protocols/inbound/external-vpn';
 import type { TuicClient, TuicInboundSettings } from '@/schemas/protocols/inbound/tuic';
 import type { TunInboundSettings } from '@/schemas/protocols/inbound/tun';
@@ -257,7 +268,12 @@ export function generateMtprotoSecret(domain: string): string {
 
 export function createDefaultMtprotoInboundSettings(): MtprotoInboundSettings {
   return {
+    mekoFix: false,
     fakeTlsDomain: 'www.cloudflare.com',
+    tlsMask: true,
+    allowLegacyModes: false,
+    tlsEmulation: true,
+    unknownSniAction: 'mask',
     clients: [],
   };
 }
@@ -448,7 +464,7 @@ export function createDefaultTuicInboundSettings(): TuicInboundSettings {
       congestion_control: 'bbr',
       alpn: ['h3', 'spdy/3.1'],
       udp_relay_mode: 'native',
-      zero_rtt_handshake: true,
+      zero_rtt_handshake: false,
       log_level: 'info',
       max_idle_time: 15,
       authentication_timeout: 3,
@@ -478,11 +494,14 @@ export type AnyInboundSettings =
   | MtprotoInboundSettings
   | VkTurnProxyInboundSettings
   | AmneziawgInboundSettings
+  | SnellInboundSettings
   | AnyTlsInboundSettings
   | ShadowTlsInboundSettings
   | TuicInboundSettings
   | PingtunnelInboundSettings
   | TrustTunnelInboundSettings
+  | VetroffInboundSettings
+  | MasqueInboundSettings
   | NaiveInboundSettings
   | MieruInboundSettings
   | SudokuInboundSettings;
@@ -515,6 +534,20 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
       return createDefaultVkTurnProxyInboundSettings();
     case 'amneziawg':
       return createDefaultAmneziawgInboundSettings();
+    case 'fptn':
+      return FptnInboundSettingsSchema.parse({});
+    case 'openflux':
+      return OpenFluxInboundSettingsSchema.parse({});
+    case 'snell':
+      return {
+        version: 6,
+        psk: '',
+        mode: 'default',
+        obfsMode: 'none',
+        obfsHost: 'bing.com',
+        quicProxy: false,
+        clients: [],
+      };
     case 'anytls':
       return createDefaultAnyTlsInboundSettings();
     case 'shadowtls':
@@ -532,8 +565,18 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
         congestion: 'bb',
         clients: [],
       };
+    case 'vetroff':
+      return {
+        hostname: '',
+        certificate: '',
+        privateKey: '',
+        vetroff: VetroffOptionsSchema.parse({}),
+        clients: [],
+      };
     case 'trusttunnel':
       return { hostname: 'trusttunnel.local', certificate: '', privateKey: '', clients: [] };
+    case 'masque':
+      return MasqueInboundSettingsSchema.parse({});
     case 'naive':
       return createDefaultNaiveInboundSettings();
     case 'mieru':

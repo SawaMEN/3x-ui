@@ -33,7 +33,7 @@ func getGitHubReleaseVersions(repo string) ([]string, error) {
 
 	// Check HTTP status code - GitHub API returns object instead of array on error
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		var errorResponse struct {
 			Message string `json:"message"`
 		}
@@ -44,7 +44,7 @@ func getGitHubReleaseVersions(repo string) ([]string, error) {
 	}
 
 	var releases []Release
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+	if err := decodeReleaseMetadata(resp.Body, &releases); err != nil {
 		return nil, err
 	}
 

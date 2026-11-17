@@ -73,14 +73,14 @@ export const SudokuInboundSettingsSchema = z.preprocess(
     .superRefine((settings, ctx) => {
       if (settings.paddingMax < settings.paddingMin) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['paddingMax'],
           message: 'pages.inbounds.form.sudokuPaddingRangeError',
         });
       }
       if (settings.suspiciousAction === 'fallback' && !settings.fallbackAddress.trim()) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['fallbackAddress'],
           message: 'pages.inbounds.form.sudokuFallbackRequired',
         });

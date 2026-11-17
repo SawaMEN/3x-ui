@@ -35,7 +35,7 @@ const MieruPortEntrySchema = z
       end < start
     ) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         message: 'Ports must be in 1025-65535',
       });
     }

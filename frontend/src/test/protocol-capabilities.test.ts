@@ -13,10 +13,10 @@ import {
 
 describe('protocol capability predicates', () => {
   it('gates TLS by protocol and transport', () => {
-    for (const network of ['tcp', 'ws', 'http', 'grpc', 'httpupgrade', 'xhttp']) {
+    for (const network of ['tcp', 'kcp', 'ws', 'http', 'grpc', 'httpupgrade', 'xhttp']) {
       expect(canEnableTls({ protocol: 'vless', streamSettings: { network } })).toBe(true);
     }
-    for (const network of ['', 'kcp', 'quic']) {
+    for (const network of ['', 'quic']) {
       expect(canEnableTls({ protocol: 'vless', streamSettings: { network } })).toBe(false);
     }
     for (const protocol of ['vmess', 'vless', 'trojan', 'shadowsocks']) {

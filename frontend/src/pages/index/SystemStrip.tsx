@@ -22,14 +22,14 @@ interface SystemStripProps {
 
 function SystemStrip({ status, coreType, showIp, onToggleIp }: SystemStripProps) {
   const { t } = useTranslation();
-  const activeCore = coreType === 'sing-box' ? 'sing-box' : 'Xray';
+  const activeCore = coreType === 'xray' ? 'Xray' : coreType;
 
   return (
     <Card hoverable styles={{ body: { padding: 0 } }}>
       <div className="ov-strip-grid">
         <div className="ov-strip-cell">
           <div className="ov-kicker ov-kicker-icon">
-            <ClockCircleOutlined />
+            <ClockCircleOutlined aria-hidden />
             {t('pages.index.uptime')}
           </div>
           <div className="ov-strip-split">
@@ -39,15 +39,19 @@ function SystemStrip({ status, coreType, showIp, onToggleIp }: SystemStripProps)
             </div>
             <span className="ov-strip-split-sep" />
             <div>
-              <div className="ov-strip-sub">OS</div>
-              <div className="ov-strip-value">{TimeFormatter.formatSecond(status.uptime)}</div>
+              <div className="ov-strip-sub">
+                {status.resourceScope === 'container' ? 'CT' : 'OS'}
+              </div>
+              <div className="ov-strip-value">
+                {status.metricAvailable('uptime') ? TimeFormatter.formatSecond(status.uptime) : '—'}
+              </div>
             </div>
           </div>
         </div>
 
         <div className="ov-strip-cell">
           <div className="ov-kicker ov-kicker-icon">
-            <DatabaseOutlined />
+            <DatabaseOutlined aria-hidden />
             {t('pages.index.panel')}
           </div>
           <div className="ov-strip-split">
@@ -65,7 +69,7 @@ function SystemStrip({ status, coreType, showIp, onToggleIp }: SystemStripProps)
 
         <div className="ov-strip-cell">
           <div className="ov-kicker ov-kicker-icon">
-            <GlobalOutlined />
+            <GlobalOutlined aria-hidden />
             {t('pages.index.ipAddresses')}
             <Tooltip title={t('pages.index.toggleIpVisibility')}>
               {showIp ? (

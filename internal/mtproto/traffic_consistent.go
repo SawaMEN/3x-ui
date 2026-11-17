@@ -1,16 +1,22 @@
 package mtproto
 
 import (
+	"errors"
+	"fmt"
 	"maps"
 	"sync"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 var consistentTrafficCollectMu sync.Mutex
 
-// mergeCounterSnapshots advances one successful /stats snapshot while keeping
-// baselines for users omitted from that particular response. mtg counters are
-// cumulative, so dropping an omitted user's baseline would lose all bytes
-// accumulated between the last visible sample and the next one.
+// mergeCounterSnapshots advances one successful Telemt /v1/stats/users
+// snapshot while keeping baselines for users omitted from that particular
+// response. Telemt exposes total_octets as one cumulative bidirectional counter,
+// so 3x-ui records the aggregate delta in Down and keeps Up at zero. This keeps
+// quota/inbound totals exact without inventing a direction Telemt does not
+// report.
 func mergeCounterSnapshots(previous map[string]clientCounters, users map[string]statsUser) (map[string]clientCounters, map[string]clientCounters, []string) {
 	next := make(map[string]clientCounters, len(previous)+len(users))
 	maps.Copy(next, previous)
@@ -18,9 +24,9 @@ func mergeCounterSnapshots(previous map[string]clientCounters, users map[string]
 	online := make([]string, 0, len(users))
 
 	for email, user := range users {
-		current := clientCounters{up: user.BytesIn, down: user.BytesOut}
+		current := clientCounters{down: user.TotalOctets}
 		next[email] = current
-		if user.Connections > 0 {
+		if user.CurrentConnections > 0 {
 			online = append(online, email)
 		}
 
@@ -29,10 +35,9 @@ func mergeCounterSnapshots(previous map[string]clientCounters, users map[string]
 			continue
 		}
 		delta := clientCounters{
-			up:   monotonicCounterDelta(current.up, prev.up),
 			down: monotonicCounterDelta(current.down, prev.down),
 		}
-		if delta.up > 0 || delta.down > 0 {
+		if delta.down > 0 {
 			deltas[email] = delta
 		}
 	}
@@ -40,37 +45,57 @@ func mergeCounterSnapshots(previous map[string]clientCounters, users map[string]
 }
 
 // CollectTrafficConsistent is the race-safe traffic collector used by the web
-// job. It preserves cumulative baselines across temporarily incomplete /stats
-// responses and discards a scrape if the owning mtg process was replaced while
-// the HTTP request was in flight.
+// job. It preserves cumulative baselines across temporarily incomplete Telemt
+// stats responses and discards a scrape if the owning Telemt process was
+// replaced while the HTTP request was in flight.
 func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
+	deltas, online, _ := m.CollectTrafficConsistentChecked()
+	return deltas, online
+}
+
+func (m *Manager) CollectTrafficConsistentChecked() ([]Traffic, []string, error) {
+	return m.collectTrafficChecked(false)
+}
+
+// CollectTrafficPersisted accepts the pinned-owner batch before committing baselines.
+func (m *Manager) CollectTrafficPersisted() ([]Traffic, []string, error) {
+	return m.collectTrafficChecked(true)
+}
+
+func (m *Manager) collectTrafficChecked(persist bool) ([]Traffic, []string, error) {
+	var collectErr error
 	// The scheduler already serializes its own calls, but keeping this guard in
 	// the manager makes the baseline contract safe for any other caller too.
 	consistentTrafficCollectMu.Lock()
 	defer consistentTrafficCollectMu.Unlock()
 
 	type snap struct {
-		id       int
-		apiPort  int
-		apiToken string
-		owner    *managed
-		last     map[string]clientCounters
+		id         int
+		apiPort    int
+		apiToken   string
+		owner      *managed
+		epoch      uint64
+		last       map[string]clientCounters
+		userEmails map[string]string
 	}
 
 	m.mu.Lock()
 	snaps := make([]snap, 0, len(m.procs))
 	for id, cur := range m.procs {
 		if cur.proc == nil || !cur.proc.IsRunning() {
+			collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: process is not running", id))
 			continue
 		}
 		lastCopy := make(map[string]clientCounters, len(cur.last))
 		maps.Copy(lastCopy, cur.last)
 		snaps = append(snaps, snap{
-			id:       id,
-			apiPort:  cur.apiPort,
-			apiToken: cur.apiToken,
-			owner:    cur,
-			last:     lastCopy,
+			id:         id,
+			apiPort:    cur.apiPort,
+			apiToken:   cur.apiToken,
+			owner:      cur,
+			epoch:      cur.trafficEpoch,
+			last:       lastCopy,
+			userEmails: maps.Clone(cur.userEmails),
 		})
 	}
 	m.mu.Unlock()
@@ -78,8 +103,9 @@ func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
 	var out []Traffic
 	var online []string
 	for _, s := range snaps {
-		users, ok := scrapeStats(s.apiPort, s.apiToken)
-		if !ok {
+		users, err := scrapeStatsChecked(s.apiPort, s.apiToken)
+		if err != nil {
+			collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: %w", s.id, err))
 			continue
 		}
 		next, deltas, instanceOnline := mergeCounterSnapshots(s.last, users)
@@ -88,23 +114,51 @@ func (m *Manager) CollectTrafficConsistent() ([]Traffic, []string) {
 		// seed a newly started process with counters from the old process.
 		m.mu.Lock()
 		cur, stillSameProcess := m.procs[s.id]
-		if !stillSameProcess || cur != s.owner {
+		if !stillSameProcess || cur != s.owner || cur.trafficEpoch != s.epoch {
 			m.mu.Unlock()
+			collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: process changed during metrics poll", s.id))
 			continue
+		}
+		if persist {
+			if cur.accounting == nil {
+				m.mu.Unlock()
+				collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: runtime traffic owner unavailable", s.id))
+				continue
+			}
+			samples := make([]sidecartraffic.Sample, 0, len(deltas))
+			panelOnline := make([]string, 0, len(instanceOnline))
+			for name, d := range deltas {
+				samples = append(samples, sidecartraffic.Sample{Email: panelUsername(name, s.userEmails), Up: d.up, Down: d.down})
+			}
+			for _, name := range instanceOnline {
+				panelOnline = append(panelOnline, panelUsername(name, s.userEmails))
+			}
+			accepted, err := cur.accounting.Store(sidecartraffic.WithActivity(samples, panelOnline))
+			if err != nil {
+				collectErr = errors.Join(collectErr, fmt.Errorf("mtproto inbound %d: traffic journal: %w", s.id, err))
+			}
+			if !accepted {
+				m.mu.Unlock()
+				continue
+			}
 		}
 		cur.last = next
 		tag := cur.tag
+		routed := cur.routed
 		m.mu.Unlock()
 
-		online = append(online, instanceOnline...)
+		for _, name := range instanceOnline {
+			online = append(online, panelUsername(name, s.userEmails))
+		}
 		for email, delta := range deltas {
 			out = append(out, Traffic{
-				Tag:   tag,
-				Email: email,
-				Up:    delta.up,
-				Down:  delta.down,
+				Tag:    tag,
+				Routed: routed,
+				Email:  panelUsername(email, s.userEmails),
+				Up:     delta.up,
+				Down:   delta.down,
 			})
 		}
 	}
-	return out, online
+	return out, online, collectErr
 }

@@ -119,14 +119,14 @@ export default function SudokuFields() {
                   label={t('pages.inbounds.form.sudokuPaddingMin')}
                   tooltip={t('pages.inbounds.form.sudokuPaddingHint')}
                 >
-                  <InputNumber min={0} max={100} addonAfter="%" style={{ width: '100%' }} />
+                  <InputNumber min={0} max={100} suffix="%" style={{ width: '100%' }} />
                 </FormField>
                 <FormField
                   name={['settings', 'paddingMax']}
                   label={t('pages.inbounds.form.sudokuPaddingMax')}
                   tooltip={t('pages.inbounds.form.sudokuPaddingHint')}
                 >
-                  <InputNumber min={0} max={100} addonAfter="%" style={{ width: '100%' }} />
+                  <InputNumber min={0} max={100} suffix="%" style={{ width: '100%' }} />
                 </FormField>
                 <FormField
                   name={['settings', 'ascii']}

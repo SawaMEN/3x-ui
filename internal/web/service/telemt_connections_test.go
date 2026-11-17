@@ -92,15 +92,6 @@ func TestDecodeTelemtIPs(t *testing.T) {
 	}
 }
 
-func TestMaxInt64(t *testing.T) {
-	if got := maxInt64(-1, 0); got != 0 {
-		t.Fatalf("maxInt64(-1, 0) = %d, want 0", got)
-	}
-	if got := maxInt64(42, 0); got != 42 {
-		t.Fatalf("maxInt64(42, 0) = %d, want 42", got)
-	}
-}
-
 func TestTelemtConnectionActiveIPsJSONIsArray(t *testing.T) {
 	payload, err := json.Marshal(TelemtConnection{
 		Username:  "inactive",

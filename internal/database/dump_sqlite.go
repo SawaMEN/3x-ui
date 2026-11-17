@@ -1,14 +1,20 @@
 package database
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
+	"github.com/mattn/go-sqlite3"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -20,102 +26,149 @@ import (
 // loaded by the sqlite3 CLI. The source database is opened read-only in effect
 // and left untouched.
 func DumpSQLite(srcPath, outPath string) error {
-	data, err := DumpSQLiteToBytes(srcPath)
+	file, err := os.CreateTemp(filepath.Dir(outPath), ".x-ui-dump-*")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(outPath, data, 0o600)
+	defer os.Remove(file.Name())
+	if err := dumpSQLiteTo(srcPath, file); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), outPath)
 }
 
 // DumpSQLiteToBytes builds the same `sqlite3 .dump`-style SQL text as DumpSQLite
 // but returns it in memory, which the panel uses to stream a migration download.
 func DumpSQLiteToBytes(srcPath string) ([]byte, error) {
+	var output bytes.Buffer
+	if err := dumpSQLiteTo(srcPath, &output); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+// File backups stream the snapshot instead of retaining the full SQL dump in RAM.
+// The in-memory export uses this same serializer to keep both formats identical.
+func dumpSQLiteTo(srcPath string, out io.Writer) error {
 	if _, err := os.Stat(srcPath); err != nil {
-		return nil, fmt.Errorf("source sqlite not found at %s: %w", srcPath, err)
+		return fmt.Errorf("source sqlite not found at %s: %w", srcPath, err)
 	}
 
 	gdb, err := gorm.Open(sqlite.Open(srcPath), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	sqlDB, err := gdb.DB()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer sqlDB.Close()
+	tx, err := sqlDB.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
 
-	var b strings.Builder
-	b.WriteString("PRAGMA foreign_keys=OFF;\n")
-	b.WriteString("BEGIN TRANSACTION;\n")
+	b := bufio.NewWriter(out)
+	if _, err := b.WriteString("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n"); err != nil {
+		return err
+	}
 
 	// Tables in creation order, each followed by its data.
 	type object struct{ name, ddl string }
 	var tables []object
-	rows, err := sqlDB.QueryContext(context.Background(), `SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND sql IS NOT NULL ORDER BY rowid`)
+	rows, err := tx.QueryContext(context.Background(), `SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND sql IS NOT NULL ORDER BY rowid`)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var o object
 		if err := rows.Scan(&o.name, &o.ddl); err != nil {
-			return nil, err
+			return err
 		}
 		tables = append(tables, o)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return err
 	}
 
 	for _, t := range tables {
-		b.WriteString(t.ddl)
-		b.WriteString(";\n")
-		if err := dumpTableData(sqlDB, t.name, &b); err != nil {
-			return nil, err
+		if _, err := b.WriteString(t.ddl + ";\n"); err != nil {
+			return err
+		}
+		if err := dumpTableData(tx, t.name, b); err != nil {
+			return err
 		}
 	}
 
 	// AUTOINCREMENT bookkeeping, restored verbatim like the sqlite3 CLI does.
-	if sqliteTableExists(sqlDB, "sqlite_sequence") {
-		b.WriteString("DELETE FROM sqlite_sequence;\n")
-		if err := dumpTableData(sqlDB, "sqlite_sequence", &b); err != nil {
-			return nil, err
+	if sqliteTableExists(tx, "sqlite_sequence") {
+		if _, err := b.WriteString("DELETE FROM sqlite_sequence;\n"); err != nil {
+			return err
+		}
+		if err := dumpTableData(tx, "sqlite_sequence", b); err != nil {
+			return err
 		}
 	}
 
 	// Indexes, triggers and views after the data is in place.
-	rows2, err := sqlDB.QueryContext(context.Background(), `SELECT sql FROM sqlite_master WHERE type IN ('index','trigger','view') AND sql IS NOT NULL ORDER BY rowid`)
+	rows2, err := tx.QueryContext(context.Background(), `SELECT sql FROM sqlite_master WHERE type IN ('index','trigger','view') AND sql IS NOT NULL ORDER BY rowid`)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows2.Close()
 	for rows2.Next() {
 		var ddl string
 		if err := rows2.Scan(&ddl); err != nil {
-			return nil, err
+			return err
 		}
-		b.WriteString(ddl)
-		b.WriteString(";\n")
+		if _, err := b.WriteString(ddl + ";\n"); err != nil {
+			return err
+		}
 	}
 	if err := rows2.Err(); err != nil {
-		return nil, err
+		return err
 	}
 
-	b.WriteString("COMMIT;\n")
+	if _, err := b.WriteString("COMMIT;\n"); err != nil {
+		return err
+	}
 
-	return []byte(b.String()), nil
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return b.Flush()
 }
 
 // RestoreSQLite rebuilds a SQLite database at dstPath from a SQL text dump
 // produced by DumpSQLite (or `sqlite3 .dump`). dstPath must not already exist so
 // an existing database is never clobbered silently.
-func RestoreSQLite(dumpPath, dstPath string) error {
+func RestoreSQLite(dumpPath, dstPath string) (err error) {
 	script, err := os.ReadFile(dumpPath)
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(dstPath); err == nil {
+	if _, err := os.Lstat(dstPath); err == nil {
 		return fmt.Errorf("destination already exists: %s", dstPath)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	file, err := os.OpenFile(dstPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = os.Remove(dstPath)
+		}
+	}()
+	if err := file.Close(); err != nil {
+		return err
 	}
 
 	gdb, err := gorm.Open(sqlite.Open(dstPath), &gorm.Config{Logger: logger.Discard})
@@ -127,18 +180,87 @@ func RestoreSQLite(dumpPath, dstPath string) error {
 		return err
 	}
 
-	// mattn/go-sqlite3 executes every statement in a multi-statement string.
-	if _, err := sqlDB.ExecContext(context.Background(), string(script)); err != nil {
+	if err := replayDump(sqlDB, string(script)); err != nil {
 		sqlDB.Close()
-		os.Remove(dstPath)
 		return fmt.Errorf("restore failed: %w", err)
 	}
 	return sqlDB.Close()
 }
 
+// replayDump runs the script on one connection that cannot open a second database
+// file: ATTACH and VACUUM INTO both attach, and a dump only rebuilds its own tables.
+func replayDump(sqlDB *sql.DB, script string) error {
+	ctx := context.Background()
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	err = conn.Raw(func(driverConn any) error {
+		sc, ok := driverConn.(*sqlite3.SQLiteConn)
+		if !ok {
+			return fmt.Errorf("unexpected sqlite driver connection %T", driverConn)
+		}
+		sc.SetLimit(sqlite3.SQLITE_LIMIT_ATTACHED, 0)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	// mattn/go-sqlite3 executes every statement in a multi-statement string.
+	_, err = conn.ExecContext(ctx, script)
+	if err != nil {
+		return err
+	}
+	err = conn.Raw(func(driverConn any) error {
+		sc := driverConn.(*sqlite3.SQLiteConn)
+		if !sc.AutoCommit() {
+			return fmt.Errorf("incomplete dump: transaction was not committed")
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	var tables int
+	if err := conn.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&tables); err != nil {
+		return err
+	}
+	if tables == 0 {
+		return fmt.Errorf("incomplete dump: no tables restored")
+	}
+	var integrity string
+	if err := conn.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrity); err != nil {
+		return err
+	}
+	if integrity != "ok" {
+		return fmt.Errorf("restored database failed integrity check: %s", integrity)
+	}
+	return nil
+}
+
 // dumpTableData appends one INSERT statement per row of table to b.
-func dumpTableData(db *sql.DB, table string, b *strings.Builder) error {
-	rows, err := db.QueryContext(context.Background(), `SELECT * FROM "`+table+`"`)
+type sqliteQuerier interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func quoteSQLiteIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+type sqliteDumpWriter interface {
+	WriteString(string) (int, error)
+	WriteByte(byte) error
+}
+
+func dumpTableData(db sqliteQuerier, table string, b sqliteDumpWriter) error {
+	columns, err := sqliteWritableColumns(db, table)
+	if err != nil {
+		return err
+	}
+	columnList := strings.Join(columns, ",")
+	rows, err := db.QueryContext(context.Background(), `SELECT `+columnList+` FROM `+quoteSQLiteIdentifier(table))
 	if err != nil {
 		return err
 	}
@@ -149,27 +271,64 @@ func dumpTableData(db *sql.DB, table string, b *strings.Builder) error {
 		return err
 	}
 	n := len(cols)
-	prefix := `INSERT INTO "` + table + `" VALUES(`
+	prefix := `INSERT INTO ` + quoteSQLiteIdentifier(table) + ` (` + columnList + `) VALUES(`
 
+	vals := make([]any, n)
+	ptrs := make([]any, n)
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
 	for rows.Next() {
-		vals := make([]any, n)
-		ptrs := make([]any, n)
-		for i := range vals {
-			ptrs[i] = &vals[i]
-		}
 		if err := rows.Scan(ptrs...); err != nil {
 			return err
 		}
-		b.WriteString(prefix)
+		if _, err := b.WriteString(prefix); err != nil {
+			return err
+		}
 		for i, v := range vals {
 			if i > 0 {
-				b.WriteByte(',')
+				if err := b.WriteByte(','); err != nil {
+					return err
+				}
 			}
-			b.WriteString(sqliteLiteral(v))
+			if _, err := b.WriteString(sqliteLiteral(v)); err != nil {
+				return err
+			}
 		}
-		b.WriteString(");\n")
+		if _, err := b.WriteString(");\n"); err != nil {
+			return err
+		}
 	}
 	return rows.Err()
+}
+
+// Generated columns are recomputed by SQLite. SELECT * includes their values,
+// but INSERT must only specify writable columns (also excluding hidden fields).
+func sqliteWritableColumns(db sqliteQuerier, table string) ([]string, error) {
+	rows, err := db.QueryContext(context.Background(), `PRAGMA table_xinfo(`+quoteSQLiteIdentifier(table)+`)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var columns []string
+	for rows.Next() {
+		var cid, notNull, primaryKey, hidden int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey, &hidden); err != nil {
+			return nil, err
+		}
+		if hidden == 0 {
+			columns = append(columns, quoteSQLiteIdentifier(name))
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(columns) == 0 {
+		return nil, fmt.Errorf("table %q has no writable columns", table)
+	}
+	return columns, nil
 }
 
 // sqliteLiteral renders a scanned column value as a SQLite SQL literal.
@@ -180,6 +339,12 @@ func sqliteLiteral(v any) string {
 	case int64:
 		return strconv.FormatInt(x, 10)
 	case float64:
+		if math.IsInf(x, 1) {
+			return "1e999"
+		}
+		if math.IsInf(x, -1) {
+			return "-1e999"
+		}
 		return strconv.FormatFloat(x, 'g', -1, 64)
 	case bool:
 		if x {
@@ -189,26 +354,20 @@ func sqliteLiteral(v any) string {
 	case string:
 		return quoteSQLiteText(x)
 	case []byte:
-		if utf8.Valid(x) {
-			return quoteSQLiteText(string(x))
-		}
-		var sb strings.Builder
-		sb.WriteString("X'")
-		for _, c := range x {
-			fmt.Fprintf(&sb, "%02x", c)
-		}
-		sb.WriteByte('\'')
-		return sb.String()
+		return "X'" + hex.EncodeToString(x) + "'"
 	default:
 		return quoteSQLiteText(fmt.Sprintf("%v", x))
 	}
 }
 
 func quoteSQLiteText(s string) string {
+	if strings.ContainsRune(s, 0) {
+		return "CAST(X'" + hex.EncodeToString([]byte(s)) + "' AS TEXT)"
+	}
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
-func sqliteTableExists(db *sql.DB, name string) bool {
+func sqliteTableExists(db sqliteQuerier, name string) bool {
 	var found string
 	err := db.QueryRowContext(context.Background(), `SELECT name FROM sqlite_master WHERE type='table' AND name=?`, name).Scan(&found)
 	return err == nil

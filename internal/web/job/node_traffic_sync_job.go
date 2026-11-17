@@ -2,17 +2,17 @@ package job
 
 import (
 	"context"
-	"strings"
+	"net/http"
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const (
@@ -40,8 +40,7 @@ type NodeTrafficSyncJob struct {
 	nodeService    service.NodeService
 	inboundService service.InboundService
 	settingService service.SettingService
-	xrayService    service.XrayService
-	singBoxService service.SingBoxService
+	xrayService    service.CoreService
 	running        sync.Mutex
 	structural     atomicBool
 	ipSyncMu       sync.Mutex
@@ -167,13 +166,13 @@ func (j *NodeTrafficSyncJob) Run() {
 			coreType, coreErr := j.settingService.GetCoreType()
 			if coreErr != nil {
 				logger.Warning("node traffic sync: get selected core after disabling clients failed:", coreErr)
-			} else if coreType == service.CoreTypeSingBox {
+			} else if service.IsNativeCore(coreType) {
 				// A stopped or absent sing-box has no live sessions to drop. The
 				// next explicit start writes the current client configuration.
-				if j.singBoxService.IsRunning() {
-					if err := j.singBoxService.Restart(context.Background()); err != nil {
+				if service.SelectedNativeCore().IsRunning() {
+					if err := service.SelectedNativeCore().Restart(context.Background()); err != nil {
 						logger.Warning("node traffic sync: restart sing-box after disabling clients failed:", err)
-						j.singBoxService.SetToNeedRestart()
+						service.SelectedNativeCore().SetToNeedRestart()
 					}
 				}
 			} else if err := j.xrayService.RestartXray(true); err != nil {
@@ -211,7 +210,7 @@ func (j *NodeTrafficSyncJob) Run() {
 		snapshot = false
 	}
 
-	var stats []*xray.ClientTraffic
+	var stats []*coremodel.ClientTraffic
 	var statsErr error
 	if snapshot {
 		stats, statsErr = j.inboundService.GetAllClientTraffics()
@@ -287,13 +286,13 @@ func (j *NodeTrafficSyncJob) Run() {
 // moves, so an idle stretch is averaged correctly when traffic resumes. A reset
 // rebaselines to the lower value; a first-seen tag yields no delta until the
 // next poll.
-func (j *NodeTrafficSyncJob) nodeInboundSpeed() []*xray.Traffic {
+func (j *NodeTrafficSyncJob) nodeInboundSpeed() []*coremodel.Traffic {
 	totals, err := j.inboundService.GetNodeInboundTrafficTotals()
 	if err != nil {
 		return nil
 	}
 	now := time.Now().UnixMilli()
-	deltas := make([]*xray.Traffic, 0, len(totals))
+	deltas := make([]*coremodel.Traffic, 0, len(totals))
 	next := make(map[string]inboundSample, len(totals))
 	for tag, cur := range totals {
 		prev, ok := j.prevInboundTotals[tag]
@@ -324,7 +323,7 @@ func (j *NodeTrafficSyncJob) nodeInboundSpeed() []*xray.Traffic {
 		up := dUp * nodeInboundSpeedWindowMs / elapsed
 		down := dDown * nodeInboundSpeedWindowMs / elapsed
 		if up > 0 || down > 0 {
-			deltas = append(deltas, &xray.Traffic{Tag: tag, IsInbound: true, Up: up, Down: down})
+			deltas = append(deltas, &coremodel.Traffic{Tag: tag, IsInbound: true, Up: up, Down: down})
 		}
 		next[tag] = inboundSample{up: cur[0], down: cur[1], at: now}
 	}
@@ -381,7 +380,7 @@ func (j *NodeTrafficSyncJob) maybePushGlobals(mgr *runtime.Manager, nodes []*mod
 			if err := remote.PushGlobalClientTraffics(ctx, masterGuid, traffics); err != nil {
 				// An old-build node without the endpoint answers 404 — not worth a
 				// warning every cycle.
-				if strings.Contains(err.Error(), "HTTP 404") {
+				if runtime.IsRemoteHTTPStatus(err, http.StatusNotFound) {
 					logger.Debugf("node traffic sync: node %s has no global-traffic endpoint (old build)", n.Name)
 				} else {
 					logger.Warningf("node traffic sync: push globals to %s failed: %v", n.Name, err)
@@ -502,7 +501,7 @@ func (j *NodeTrafficSyncJob) syncOne(mgr *runtime.Manager, n *model.Node, doIpSy
 	// IP is on. Old nodes without the endpoint return HTTP 404 every cycle — note
 	// it once per node (re-armed on recovery) instead of flooding the log.
 	if guidTrees, err := rt.FetchClientIpsByGuid(ipCtx); err != nil {
-		if strings.Contains(err.Error(), "HTTP 404") {
+		if runtime.IsRemoteHTTPStatus(err, http.StatusNotFound) {
 			if _, seen := j.noGuidIpEndpoint.LoadOrStore(n.Id, true); !seen {
 				logger.Debugf("node traffic sync: node %s has no client-IP attribution endpoint (old build)", n.Name)
 			}

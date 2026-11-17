@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/cronspec"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/uripath"
 )
 
 type Msg struct {
@@ -19,18 +22,35 @@ type Msg struct {
 }
 
 type AllSetting struct {
-	CoreType              string `json:"coreType" form:"coreType"`
-	WebListen             string `json:"webListen" form:"webListen"`
-	WebDomain             string `json:"webDomain" form:"webDomain"`
-	WebPort               int    `json:"webPort" form:"webPort" validate:"gte=1,lte=65535"`
-	WebCertFile           string `json:"webCertFile" form:"webCertFile"`
-	WebKeyFile            string `json:"webKeyFile" form:"webKeyFile"`
-	WebBasePath           string `json:"webBasePath" form:"webBasePath"`
-	SessionMaxAge         int    `json:"sessionMaxAge" form:"sessionMaxAge" validate:"gte=1,lte=525600"`
-	TrustedProxyCIDRs     string `json:"trustedProxyCIDRs" form:"trustedProxyCIDRs"`
-	RealityScanCandidates string `json:"realityScanCandidates" form:"realityScanCandidates"`
-	IpLimitAllowlist      string `json:"ipLimitAllowlist" form:"ipLimitAllowlist"`
-	PanelOutbound         string `json:"panelOutbound" form:"panelOutbound"`
+	SubFormatMode            string `json:"subFormatMode" form:"subFormatMode"`
+	SubDefaultFormat         string `json:"subDefaultFormat" form:"subDefaultFormat"`
+	CoreType                 string `json:"coreType" form:"coreType"`
+	WebListen                string `json:"webListen" form:"webListen"`
+	WebDomain                string `json:"webDomain" form:"webDomain"`
+	WebPort                  int    `json:"webPort" form:"webPort" validate:"gte=1,lte=65535"`
+	WebCertFile              string `json:"webCertFile" form:"webCertFile"`
+	WebKeyFile               string `json:"webKeyFile" form:"webKeyFile"`
+	RootRedirectEnable       bool   `json:"rootRedirectEnable" form:"rootRedirectEnable"`
+	RootRedirectURL          string `json:"rootRedirectURL" form:"rootRedirectURL"`
+	SubTelegramLocalEnable   bool   `json:"subTelegramLocalEnable" form:"subTelegramLocalEnable"`
+	SubTelegramRemoteEnable  bool   `json:"subTelegramRemoteEnable" form:"subTelegramRemoteEnable"`
+	SubTelegramWebEnable     bool   `json:"subTelegramWebEnable" form:"subTelegramWebEnable"`
+	SubAppearanceTheme       string `json:"subAppearanceTheme" form:"subAppearanceTheme"`
+	SubAppearanceEnable      bool   `json:"subAppearanceEnable" form:"subAppearanceEnable"`
+	SubAppearanceTitle       string `json:"subAppearanceTitle" form:"subAppearanceTitle"`
+	SubAppearanceDescription string `json:"subAppearanceDescription" form:"subAppearanceDescription"`
+	SubAppearanceLogoURL     string `json:"subAppearanceLogoURL" form:"subAppearanceLogoURL"`
+	SubAppearanceAccent      string `json:"subAppearanceAccent" form:"subAppearanceAccent"`
+	SubPublicURL             string `json:"subPublicURL" form:"subPublicURL"`
+	SubRestrictDomains       bool   `json:"subRestrictDomains" form:"subRestrictDomains"`
+	SubAllowedDomains        string `json:"subAllowedDomains" form:"subAllowedDomains"`
+	SubCDNEnable             bool   `json:"subCDNEnable" form:"subCDNEnable"`
+	WebBasePath              string `json:"webBasePath" form:"webBasePath"`
+	SessionMaxAge            int    `json:"sessionMaxAge" form:"sessionMaxAge" validate:"gte=1,lte=525600"`
+	TrustedProxyCIDRs        string `json:"trustedProxyCIDRs" form:"trustedProxyCIDRs"`
+	RealityScanCandidates    string `json:"realityScanCandidates" form:"realityScanCandidates"`
+	IpLimitAllowlist         string `json:"ipLimitAllowlist" form:"ipLimitAllowlist"`
+	PanelOutbound            string `json:"panelOutbound" form:"panelOutbound"`
 
 	PageSize                   int    `json:"pageSize" form:"pageSize" validate:"gte=0,lte=1000"`
 	ExpireDiff                 int    `json:"expireDiff" form:"expireDiff" validate:"gte=0"`
@@ -38,6 +58,7 @@ type AllSetting struct {
 	RemarkTemplate             string `json:"remarkTemplate" form:"remarkTemplate"`
 	SubShowIdentityOnAllLinks  bool   `json:"subShowIdentityOnAllLinks" form:"subShowIdentityOnAllLinks"`
 	SubInfoNodeEnable          bool   `json:"subInfoNodeEnable" form:"subInfoNodeEnable"`
+	SubHostSortMode            string `json:"subHostSortMode" form:"subHostSortMode" example:"inbound-first"`
 	SubCalendarExpireInclusive bool   `json:"subCalendarExpireInclusive" form:"subCalendarExpireInclusive"`
 	SubExpiredTemplate         string `json:"subExpiredTemplate" form:"subExpiredTemplate"`
 	SubTrafficDepletedTemplate string `json:"subTrafficDepletedTemplate" form:"subTrafficDepletedTemplate"`
@@ -68,18 +89,8 @@ type AllSetting struct {
 	SmtpCpu            int    `json:"smtpCpu" form:"smtpCpu" validate:"gte=0,lte=100"`
 	SmtpMemory         int    `json:"smtpMemory" form:"smtpMemory" validate:"gte=0,lte=100"`
 
-	DiscordBotEnable     bool   `json:"discordBotEnable" form:"discordBotEnable"`
-	DiscordBotToken      string `json:"discordBotToken" form:"discordBotToken"`
-	DiscordChannelId     string `json:"discordChannelId" form:"discordChannelId"`
-	DiscordAdminIds      string `json:"discordAdminIds" form:"discordAdminIds"`
-	DiscordRunTime       string `json:"discordRunTime" form:"discordRunTime"`
-	DiscordBotBackup     bool   `json:"discordBotBackup" form:"discordBotBackup"`
-	DiscordCpu           int    `json:"discordCpu" form:"discordCpu" validate:"gte=0,lte=100"`
-	DiscordMemory        int    `json:"discordMemory" form:"discordMemory" validate:"gte=0,lte=100"`
-	DiscordLang          string `json:"discordLang" form:"discordLang"`
-	DiscordEnabledEvents string `json:"discordEnabledEvents" form:"discordEnabledEvents"`
-
 	OutboundDownThreshold int `json:"outboundDownThreshold" form:"outboundDownThreshold" validate:"gte=1,lte=100"`
+	NodeDownThreshold     int `json:"nodeDownThreshold" form:"nodeDownThreshold" validate:"gte=1,lte=100"`
 
 	TimeLocation    string `json:"timeLocation" form:"timeLocation"`
 	TwoFactorEnable bool   `json:"twoFactorEnable" form:"twoFactorEnable"`
@@ -121,6 +132,7 @@ type AllSetting struct {
 	SubClashURI                 string `json:"subClashURI" form:"subClashURI"`
 	SubClashEnableRouting       bool   `json:"subClashEnableRouting" form:"subClashEnableRouting"`
 	SubClashRules               string `json:"subClashRules" form:"subClashRules"`
+	SubClashRemoteDNS           bool   `json:"subClashRemoteDNS" form:"subClashRemoteDNS"`
 	SubJsonMux                  string `json:"subJsonMux" form:"subJsonMux"`
 	SubJsonRules                string `json:"subJsonRules" form:"subJsonRules"`
 	SubJsonRoutingRules         string `json:"subJsonRoutingRules" form:"subJsonRoutingRules"`
@@ -183,23 +195,13 @@ type AllSetting struct {
 type AllSettingView struct {
 	AllSetting
 
-	HasTgBotToken      bool `json:"hasTgBotToken"`
-	HasTwoFactorToken  bool `json:"hasTwoFactorToken"`
-	HasLdapPassword    bool `json:"hasLdapPassword"`
-	HasApiToken        bool `json:"hasApiToken"`
-	HasWarpSecret      bool `json:"hasWarpSecret"`
-	HasNordSecret      bool `json:"hasNordSecret"`
-	HasSmtpPassword    bool `json:"hasSmtpPassword"`
-	HasDiscordBotToken bool `json:"hasDiscordBotToken"`
-}
-
-func pathHasForbiddenChar(s string) bool {
-	for _, r := range s {
-		if r == '\\' || r == ' ' || r < 0x20 || r == 0x7f {
-			return true
-		}
-	}
-	return false
+	HasTgBotToken     bool `json:"hasTgBotToken"`
+	HasTwoFactorToken bool `json:"hasTwoFactorToken"`
+	HasLdapPassword   bool `json:"hasLdapPassword"`
+	HasApiToken       bool `json:"hasApiToken"`
+	HasWarpSecret     bool `json:"hasWarpSecret"`
+	HasNordSecret     bool `json:"hasNordSecret"`
+	HasSmtpPassword   bool `json:"hasSmtpPassword"`
 }
 
 // CheckNetipAddrOrPrefixList mirrors parseIpLimitAllowlist exactly: net and netip
@@ -239,10 +241,21 @@ func checkIPOrCIDRList(list, message string) error {
 }
 
 func (s *AllSetting) CheckValid() error {
-	if s.CoreType != "" && s.CoreType != "xray" && s.CoreType != "sing-box" {
+	if s.CoreType != "" && s.CoreType != "xray" && s.CoreType != "sing-box" && s.CoreType != "hiddify-core" && s.CoreType != "sing-box-upstream" {
 		return common.NewError("core type is not supported:", s.CoreType)
 	}
 
+	for _, domain := range []*string{&s.WebDomain, &s.SubDomain} {
+		if strings.TrimSpace(*domain) == "" {
+			*domain = ""
+			continue
+		}
+		normalized, err := netsafe.NormalizeHost(strings.TrimSuffix(strings.TrimSpace(*domain), "."))
+		if err != nil {
+			return common.NewError("Domain must contain only a hostname or IP address, without scheme, port or path: ", err)
+		}
+		*domain = strings.ToLower(normalized)
+	}
 	if s.WebListen != "" {
 		ip := net.ParseIP(s.WebListen)
 		if ip == nil {
@@ -285,43 +298,30 @@ func (s *AllSetting) CheckValid() error {
 
 	for _, p := range []struct {
 		name  string
-		value string
+		value *string
 	}{
-		{"web base path", s.WebBasePath},
-		{"subscription path", s.SubPath},
-		{"subscription JSON path", s.SubJsonPath},
-		{"subscription Clash path", s.SubClashPath},
+		{"web base path", &s.WebBasePath},
+		{"subscription path", &s.SubPath},
+		{"subscription JSON path", &s.SubJsonPath},
+		{"subscription Clash path", &s.SubClashPath},
 	} {
-		if pathHasForbiddenChar(p.value) {
-			return common.NewError("URI path contains an invalid character:", p.name)
+		normalized, err := uripath.Normalize(*p.value)
+		if err != nil {
+			return common.NewError(p.name, ": ", err)
 		}
+		*p.value = normalized
 	}
 
-	if !strings.HasPrefix(s.WebBasePath, "/") {
-		s.WebBasePath = "/" + s.WebBasePath
-	}
-	if !strings.HasSuffix(s.WebBasePath, "/") {
-		s.WebBasePath += "/"
-	}
-	if !strings.HasPrefix(s.SubPath, "/") {
-		s.SubPath = "/" + s.SubPath
-	}
-	if !strings.HasSuffix(s.SubPath, "/") {
-		s.SubPath += "/"
-	}
-
-	if !strings.HasPrefix(s.SubJsonPath, "/") {
-		s.SubJsonPath = "/" + s.SubJsonPath
-	}
-	if !strings.HasSuffix(s.SubJsonPath, "/") {
-		s.SubJsonPath += "/"
-	}
-
-	if !strings.HasPrefix(s.SubClashPath, "/") {
-		s.SubClashPath = "/" + s.SubClashPath
-	}
-	if !strings.HasSuffix(s.SubClashPath, "/") {
-		s.SubClashPath += "/"
+	for _, sched := range []struct{ name, spec string }{
+		{"tgRunTime", s.TgRunTime},
+		{"ldapSyncCron", s.LdapSyncCron},
+	} {
+		if strings.TrimSpace(sched.spec) == "" {
+			continue
+		}
+		if _, err := cronspec.Parse(sched.spec); err != nil {
+			return common.NewError(sched.name+":", err)
+		}
 	}
 
 	if err := checkIPOrCIDRList(s.TrustedProxyCIDRs, "trusted proxy CIDR is not valid:"); err != nil {
@@ -343,6 +343,14 @@ func (s *AllSetting) CheckValid() error {
 		if _, err := mail.ParseAddress(s.SmtpFrom); err != nil {
 			return common.NewError("SMTP from address is not valid:", s.SmtpFrom)
 		}
+	}
+	if s.SmtpTo != "" {
+		if _, err := mail.ParseAddressList(s.SmtpTo); err != nil {
+			return common.NewError("SMTP recipients are not valid:", s.SmtpTo)
+		}
+	}
+	if s.SmtpEncryptionType != "" && s.SmtpEncryptionType != "none" && s.SmtpEncryptionType != "starttls" && s.SmtpEncryptionType != "tls" {
+		return common.NewError("SMTP encryption type must be none, starttls or tls")
 	}
 
 	return nil
@@ -383,6 +391,8 @@ type HostGroup struct {
 	Port                   int      `json:"port" validate:"gte=0,lte=65535"`
 	Security               string   `json:"security" validate:"omitempty,oneof=same tls none reality"`
 	Sni                    string   `json:"sni"`
+	Snis                   []string `json:"snis"`
+	SniSharedRandom        bool     `json:"sniSharedRandom"`
 	HostHeader             string   `json:"hostHeader"`
 	Path                   string   `json:"path"`
 	Alpn                   []string `json:"alpn"`
@@ -403,4 +413,5 @@ type HostGroup struct {
 	MihomoIpVersion        string   `json:"mihomoIpVersion" validate:"omitempty,oneof=dual ipv4 ipv6 ipv4-prefer ipv6-prefer"`
 	MihomoX25519           bool     `json:"mihomoX25519"`
 	ShuffleHost            bool     `json:"shuffleHost"`
+	RandomCount            int      `json:"randomCount" validate:"omitempty,min=1,max=100"`
 }

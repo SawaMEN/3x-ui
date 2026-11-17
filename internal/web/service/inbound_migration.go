@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -36,6 +36,9 @@ func (s *InboundService) MigrationRemoveOrphanedTraffics() {
 func (s *InboundService) MigrationRequirements() (err error) {
 	db := database.GetDB()
 	tx := db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
 	defer func() {
 		if err == nil {
 			if commitErr := tx.Commit().Error; commitErr != nil {
@@ -57,8 +60,8 @@ func (s *InboundService) MigrationRequirements() (err error) {
 			return
 		}
 	}
-	if tx.Migrator().HasColumn(&xray.ClientTraffic{}, "all_time") {
-		if err = tx.Migrator().DropColumn(&xray.ClientTraffic{}, "all_time"); err != nil {
+	if tx.Migrator().HasColumn(&coremodel.ClientTraffic{}, "all_time") {
+		if err = tx.Migrator().DropColumn(&coremodel.ClientTraffic{}, "all_time"); err != nil {
 			return
 		}
 	}
@@ -117,7 +120,10 @@ func (s *InboundService) MigrationRequirements() (err error) {
 			newClients := make([]any, 0, len(clients))
 			hasVisionFlow := false
 			for client_index := range clients {
-				c := clients[client_index].(map[string]any)
+				c, valid := clients[client_index].(map[string]any)
+				if !valid {
+					return fmt.Errorf("inbound %d client %d must be an object", inbounds[inbound_index].Id, client_index+1)
+				}
 
 				// Add email='' if it is not exists
 				if _, ok := c["email"]; !ok {
@@ -179,7 +185,7 @@ func (s *InboundService) MigrationRequirements() (err error) {
 		for _, modelClient := range modelClients {
 			if len(modelClient.Email) > 0 {
 				var count int64
-				if err = tx.Model(xray.ClientTraffic{}).Where("email = ?", modelClient.Email).Count(&count).Error; err != nil {
+				if err = tx.Model(coremodel.ClientTraffic{}).Where("email = ?", modelClient.Email).Count(&count).Error; err != nil {
 					return
 				}
 				if count == 0 {
@@ -196,12 +202,14 @@ func (s *InboundService) MigrationRequirements() (err error) {
 			return
 		}
 	}
-	if err = tx.Save(inbounds).Error; err != nil {
-		return
+	if len(inbounds) > 0 {
+		if err = tx.Save(inbounds).Error; err != nil {
+			return
+		}
 	}
 
 	// Remove orphaned traffics
-	if err = tx.Where("inbound_id = 0").Delete(xray.ClientTraffic{}).Error; err != nil {
+	if err = tx.Where("inbound_id = 0").Delete(coremodel.ClientTraffic{}).Error; err != nil {
 		return
 	}
 
@@ -224,7 +232,7 @@ func (s *InboundService) MigrationRequirements() (err error) {
 	  AND NULLIF(stream_settings, '')::jsonb #> '{tlsSettings,settings,domains}' IS NOT NULL`
 	}
 	err = tx.Raw(externalProxyQuery).Scan(&externalProxy).Error
-	if err != nil || len(externalProxy) == 0 {
+	if err != nil {
 		return
 	}
 
@@ -276,12 +284,13 @@ func (s *InboundService) MigrationRequirements() (err error) {
 	return err
 }
 
-func (s *InboundService) MigrateDB() {
+func (s *InboundService) MigrateDB() error {
 	if err := s.MigrationRequirements(); err != nil {
-		logger.Errorf("MigrationRequirements failed: %v", err)
+		return fmt.Errorf("migration requirements failed: %w", err)
 	}
 	s.MigrationRemoveOrphanedTraffics()
 	s.MigrationRestoreVisionFlow()
+	return nil
 }
 
 // MigrationRestoreVisionFlow repairs VLESS inbounds whose clients lost their

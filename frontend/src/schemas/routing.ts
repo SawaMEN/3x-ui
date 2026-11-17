@@ -34,6 +34,7 @@ export const RuleObjectSchema = z.object({
   outboundTag: z.string().optional(),
   balancerTag: z.string().optional(),
   ruleTag: z.string().optional(),
+  routingListId: z.number().int().positive().optional(),
   webhook: RuleWebhookSchema.optional(),
 });
 export type RuleObject = z.infer<typeof RuleObjectSchema>;

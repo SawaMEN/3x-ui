@@ -1,7 +1,11 @@
 package service
 
 import (
+	"bytes"
+	"encoding/json"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -37,6 +41,22 @@ func TestAppendTelemtWebProxyConfig(t *testing.T) {
 	got, err = appendTelemtWebProxyConfig(base, state)
 	if err != nil || !containsTelemtWeb(got, "port = 15081") {
 		t.Fatalf("chosen backend port was not written: err=%v config=%s", err, got)
+	}
+}
+
+func TestRemoveTelemtWebUserPreservesOtherTables(t *testing.T) {
+	base := "[access.users]\nwebproxy = \"old-secret\"\nxui = \"user-secret\"\n\n[other.settings]\nwebproxy = \"keep-this-setting\"\n"
+	want := "[access.users]\nxui = \"user-secret\"\n\n[other.settings]\nwebproxy = \"keep-this-setting\"\n"
+	if got := removeTelemtWebUser(base); got != want {
+		t.Fatalf("removing Telemt WEB user modified unrelated settings:\n%s", got)
+	}
+}
+
+func TestRemoveTelemtWebManagedUsers(t *testing.T) {
+	base := "[access.users]\n\"mtweb_12_alice\" = \"old-secret\"\nwebproxy = \"legacy\"\nxui = \"keep\"\n\n[other]\n\"mtweb_12_alice\" = \"keep-setting\"\n"
+	want := "[access.users]\nxui = \"keep\"\n\n[other]\n\"mtweb_12_alice\" = \"keep-setting\"\n"
+	if got := removeTelemtWebUser(base); got != want {
+		t.Fatalf("stale credential or unrelated setting changed: %s", got)
 	}
 }
 
@@ -135,4 +155,30 @@ func containsTelemtWeb(value, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestTelemtWebCaddyReloadPreservesWebSocketLanes(t *testing.T) {
+	for _, tc := range []struct {
+		version   string
+		supported bool
+	}{{"v2.6.2", false}, {"v2.7.0", true}, {"v2.11.9", true}} {
+		t.Run(tc.version, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "caddy"), []byte("#!/bin/sh\nprintf '%s\\n' '"+tc.version+"'\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", dir)
+			data, err := telemtWebFrontendConfig(TelemtWebProxyState{Domain: "example.com", Frontend: "caddy", ListenPort: 15080}, telemtWebSubscriptionTarget{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var compact bytes.Buffer
+			if err := json.Compact(&compact, data); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(compact.String(), `"stream_close_delay":"5m"`); got != tc.supported {
+				t.Fatalf("Caddy %s stream delay=%v want=%v", tc.version, got, tc.supported)
+			}
+		})
+	}
 }

@@ -1,0 +1,86 @@
+package runtime
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+)
+
+// TLSCertificateInstall carries a certificate and its matching private key
+// only inside a verified node-to-node HTTPS request. Never log or return the
+// contents to the browser.
+type TLSCertificateInstall struct {
+	Domain         string `json:"domain"`
+	CoverSite      bool   `json:"coverSite,omitempty"`
+	Apply          bool   `json:"apply,omitempty"`
+	CertificatePEM string `json:"certificatePem"`
+	PrivateKeyPEM  string `json:"privateKeyPem"`
+}
+
+type InstalledTLSCertificate struct {
+	CoverSiteApplied bool   `json:"coverSiteApplied,omitempty"`
+	Applied          bool   `json:"applied,omitempty"`
+	Domain           string `json:"domain"`
+	CertFile         string `json:"certFile"`
+	KeyFile          string `json:"keyFile"`
+	ExpiresAt        int64  `json:"expiresAt"`
+}
+
+func (r *Remote) InstallTLSCertificate(ctx context.Context, payload TLSCertificateInstall) (InstalledTLSCertificate, error) {
+	var installed InstalledTLSCertificate
+	if r.node == nil || r.node.Scheme != "https" || r.node.TlsVerifyMode == "skip" {
+		return installed, errors.New("certificate distribution requires a verified HTTPS node connection (verify, pin or mTLS)")
+	}
+	env, err := r.do(ctx, http.MethodPost, "panel/api/domains/certificates/install", payload)
+	if err != nil {
+		return installed, err
+	}
+	if err := json.Unmarshal(env.Obj, &installed); err != nil {
+		return InstalledTLSCertificate{}, errors.New("invalid node certificate installation response")
+	}
+	if installed.Domain != payload.Domain || installed.CertFile == "" || installed.KeyFile == "" || (payload.Apply && !installed.Applied) || (payload.CoverSite && !installed.CoverSiteApplied) {
+		return InstalledTLSCertificate{}, errors.New("node returned incomplete certificate paths")
+	}
+	return installed, nil
+}
+
+type TLSCertificateLookup struct {
+	Domain  string `json:"domain"`
+	RSAOnly bool   `json:"rsaOnly,omitempty"`
+}
+
+// ResolveLocalTLSCertificate asks the selected node to resolve its own files.
+// Only paths for its locally validated, public TLS identity are returned.
+func (r *Remote) ResolveLocalTLSCertificate(ctx context.Context, domain string, rsaOnly bool) (InstalledTLSCertificate, error) {
+	env, err := r.do(ctx, http.MethodPost, "panel/api/domains/certificates/resolve-local",
+		TLSCertificateLookup{Domain: domain, RSAOnly: rsaOnly})
+	if err != nil {
+		return InstalledTLSCertificate{}, err
+	}
+	var result InstalledTLSCertificate
+	if err := json.Unmarshal(env.Obj, &result); err != nil {
+		return InstalledTLSCertificate{}, errors.New("invalid node TLS certificate lookup response")
+	}
+	if result.Domain != domain || result.CertFile == "" || result.KeyFile == "" {
+		return InstalledTLSCertificate{}, errors.New("node returned an incomplete TLS certificate reference")
+	}
+	return result, nil
+}
+
+// ExportCoverCertificate is server-to-server only; callers must never forward
+// its return value to a browser or log its fields.
+func (r *Remote) ExportCoverCertificate(ctx context.Context, domain string) (TLSCertificateInstall, error) {
+	var result TLSCertificateInstall
+	if r.node == nil || r.node.Scheme != "https" || r.node.TlsVerifyMode == "skip" {
+		return result, errors.New("source requires verified HTTPS")
+	}
+	env, err := r.do(ctx, http.MethodPost, "panel/api/domains/certificates/export-cover", TLSCertificateLookup{Domain: domain})
+	if err != nil {
+		return result, errors.New("source certificate is unavailable")
+	}
+	if json.Unmarshal(env.Obj, &result) != nil || result.Domain != domain || len(result.CertificatePEM) > 64<<10 || len(result.PrivateKeyPEM) > 64<<10 {
+		return TLSCertificateInstall{}, errors.New("invalid source certificate response")
+	}
+	return result, nil
+}

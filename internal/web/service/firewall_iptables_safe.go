@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
@@ -49,7 +50,8 @@ func managedIPTablesJumpExists(ctx context.Context, binary string) (bool, error)
 	cmd := exec.CommandContext(ctx, binary, "-C", "INPUT", "-j", managedIPTablesChain)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	if err := cmd.Run(); err != nil {
-		if _, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return false, nil
 		}
 		return false, err
@@ -75,10 +77,14 @@ func resetManagedIPTablesJump(ctx context.Context, binary string) error {
 }
 
 func applyManagedIPTablesSafe(ctx context.Context, binary string, rules []FirewallRule) error {
+	ip6, err := managedIP6TablesPath(binary)
+	if err != nil {
+		return err
+	}
 	if err := applyManagedIPTablesBinarySafe(ctx, binary, "icmp", rules); err != nil {
 		return err
 	}
-	if ip6, err := exec.LookPath("ip6tables"); err == nil {
+	if ip6 != "" {
 		if err := applyManagedIPTablesBinarySafe(ctx, ip6, "ipv6-icmp", rules); err != nil {
 			return err
 		}

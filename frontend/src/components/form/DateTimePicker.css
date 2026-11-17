@@ -13,21 +13,14 @@
   unicode-bidi: plaintext;
 }
 
-.jdp-dark .jdp-wrap input,
-.jdp-dark input {
-  color: rgba(255, 255, 255, 0.88) !important;
-  background-color: #23252b !important;
+.jdp-wrap input {
+  color: var(--xui-on-surface) !important;
+  background-color: var(--xui-surface-container) !important;
+  border-color: var(--xui-outline) !important;
 }
 
-.jdp-ultra .jdp-wrap input,
-.jdp-ultra input {
-  color: rgba(255, 255, 255, 0.88) !important;
-  background-color: #101013 !important;
-}
-
-.jdp-dark input::placeholder,
-.jdp-ultra input::placeholder {
-  color: rgba(255, 255, 255, 0.3) !important;
+.jdp-wrap input::placeholder {
+  color: var(--xui-on-surface-variant) !important;
 }
 
 .jdp-disabled {
@@ -53,21 +46,12 @@
   cursor: pointer;
   font-size: 12px;
   line-height: 1;
-  color: rgba(0, 0, 0, 0.25);
+  color: var(--xui-on-surface-variant);
   transition: color 0.2s;
 }
 
 .jdp-wrap .jdp-clear:hover {
-  color: rgba(0, 0, 0, 0.45);
-}
-
-.jdp-dark .jdp-clear {
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.jdp-dark .jdp-clear:hover,
-.jdp-ultra .jdp-clear:hover {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--xui-on-surface);
 }
 
 /* With no value the library still paints today's date into its readOnly input;

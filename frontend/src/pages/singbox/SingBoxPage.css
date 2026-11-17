@@ -48,11 +48,16 @@
   margin: 6px 0 0;
   padding-left: 20px;
 }
+
 .singbox-page .singbox-main-tabs > .ant-tabs-nav {
-  margin-bottom: 12px;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  padding-inline: 16px;
+  margin-bottom: 16px;
 }
-.singbox-page .singbox-main-tabs > .ant-tabs-nav .ant-tabs-tab {
-  padding: 10px 12px;
+.singbox-page .singbox-main-tabs > .ant-tabs-content-holder .ant-tabs > .ant-tabs-nav {
+  margin-bottom: 16px;
 }
 .singbox-page .ant-card {
   border-radius: 12px;
@@ -96,9 +101,6 @@
   .singbox-page .singbox-list-toolbar {
     align-items: stretch;
     flex-direction: column;
-  }
-  .singbox-page .singbox-main-tabs > .ant-tabs-nav-wrap {
-    overflow-x: auto;
   }
 }
 
@@ -168,5 +170,240 @@
   }
   .singbox-page .singbox-item-actions {
     justify-content: flex-start;
+  }
+}
+
+.singbox-page .singbox-toolbar-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: baseline;
+  margin-bottom: 16px;
+}
+.singbox-page .singbox-toolbar-heading span,
+.singbox-page .singbox-description {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.singbox-page label.singbox-field-label {
+  display: block;
+}
+.singbox-page .singbox-switch-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 62px;
+}
+.singbox-page .singbox-switch-setting p {
+  margin: 4px 0 0;
+}
+
+.singbox-section-navigation .ant-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.singbox-section-navigation .ant-radio-button-wrapper {
+  border-radius: 6px;
+  border-inline-start-width: 1px;
+}
+.singbox-section-navigation .ant-radio-button-wrapper::before {
+  display: none;
+}
+.singbox-settings-body .setting-list-item + .setting-list-item {
+  border-top: 1px solid var(--ant-color-border-secondary);
+}
+
+/* One level of navigation and shared editor cards for DNS, routes,
+   connections, Gateway and rarely used advanced settings. */
+.singbox-page .singbox-settings-body {
+  min-width: 0;
+}
+.singbox-page .singbox-settings-body > .ant-card,
+.singbox-page .singbox-settings-body > .ant-space {
+  width: 100%;
+}
+.singbox-page .singbox-subtabs > .ant-tabs-nav {
+  padding: 4px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  background: var(--ant-color-bg-container);
+}
+.singbox-page .singbox-subtabs .ant-tabs-content-holder {
+  min-width: 0;
+}
+.singbox-page .singbox-section-navigation .ant-card-body {
+  padding: 12px;
+}
+@media (max-width: 720px) {
+  .singbox-page .singbox-section-navigation .ant-radio-group {
+    width: 100%;
+    gap: 6px;
+  }
+  .singbox-page .singbox-section-navigation .ant-radio-button-wrapper {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+  .singbox-page .singbox-subtabs > .ant-tabs-nav {
+    padding-inline: 8px;
+  }
+}
+
+/* Unified sing-box settings: compact, readable, responsive */
+.singbox-page .singbox-toolbar,
+.singbox-page .singbox-section-navigation,
+.singbox-page .singbox-settings-body .ant-card,
+.singbox-page .singbox-advanced-groups {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.singbox-page .singbox-toolbar {
+  background: var(--ant-color-bg-container);
+}
+
+.singbox-page .singbox-section-navigation {
+  position: sticky;
+  top: 4px;
+  z-index: 8;
+  background: var(--ant-color-bg-container);
+}
+
+.singbox-page .singbox-section-navigation .ant-radio-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.singbox-page .singbox-section-navigation .ant-radio-button-wrapper {
+  height: 35px;
+  line-height: 33px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ant-color-text-secondary);
+  box-shadow: none;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.singbox-page .singbox-section-navigation .ant-radio-button-wrapper:hover {
+  color: var(--ant-color-primary);
+  background: var(--ant-color-fill-tertiary);
+}
+
+.singbox-page .singbox-section-navigation .ant-radio-button-wrapper-checked {
+  background: var(--ant-color-primary-bg);
+  border-color: var(--ant-color-primary-border);
+  color: var(--ant-color-primary);
+}
+
+.singbox-page .singbox-settings-body .ant-collapse {
+  background: transparent;
+  border-color: var(--ant-color-border-secondary);
+}
+
+.singbox-page .singbox-advanced-groups .ant-collapse-item {
+  border-color: var(--ant-color-border-secondary);
+}
+
+.singbox-page .singbox-advanced-groups .ant-collapse-header {
+  font-weight: 600;
+}
+
+.singbox-page .singbox-rule-condition-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.singbox-page .singbox-settings-body .ant-card-head {
+  min-height: 48px;
+}
+
+@media (max-width: 640px) {
+  .singbox-page .singbox-section-navigation {
+    top: 0;
+  }
+  .singbox-page .singbox-section-navigation .ant-card-body {
+    padding: 8px;
+  }
+  .singbox-page .singbox-section-navigation .ant-radio-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .singbox-page .singbox-section-navigation .ant-radio-button-wrapper {
+    text-align: center;
+    padding-inline: 8px;
+  }
+  .singbox-page .singbox-toolbar .ant-card-body {
+    padding: 14px;
+  }
+}
+
+.singbox-page .singbox-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.singbox-page .singbox-overview-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 18px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 12px;
+  background: var(--ant-color-bg-layout);
+  text-align: left;
+  color: var(--ant-color-text);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
+}
+
+.singbox-page .singbox-overview-link:hover,
+.singbox-page .singbox-overview-link:focus-visible {
+  border-color: var(--ant-color-primary);
+  background: var(--ant-color-primary-bg);
+  outline: none;
+}
+
+.singbox-page .singbox-overview-label {
+  font-size: 13px;
+  color: var(--ant-color-text-secondary);
+}
+
+.singbox-page .singbox-overview-link strong {
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 650;
+}
+
+.singbox-page .singbox-overview-unit {
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+@media (max-width: 800px) {
+  .singbox-page .singbox-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 460px) {
+  .singbox-page .singbox-overview-link {
+    padding: 12px;
   }
 }

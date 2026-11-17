@@ -29,6 +29,18 @@ function baseTemplate(): XraySettingsValue {
 }
 
 describe('propagateOutboundTagRename', () => {
+  it('updates Xray proxySettings references without changing their options', () => {
+    const t = baseTemplate();
+    t.outbounds!.push({
+      protocol: 'vless',
+      tag: 'chain',
+      proxySettings: { tag: 'To-External-Proxy', transportLayer: true },
+    } as never);
+    propagateOutboundTagRename(t, 'To-External-Proxy', 'renamed');
+    expect(t.outbounds![2]).toMatchObject({
+      proxySettings: { tag: 'renamed', transportLayer: true },
+    });
+  });
   it('updates routing rule outboundTag when outbound is renamed', () => {
     const t = baseTemplate();
     propagateOutboundTagRename(t, 'To-External-Proxy', 'external-vps');
@@ -60,5 +72,31 @@ describe('propagateOutboundTagRename', () => {
     const t = baseTemplate();
     propagateOutboundTagRename(t, 'To-External-Proxy', 'To-External-Proxy');
     expect(t.routing?.rules?.[0]?.outboundTag).toBe('To-External-Proxy');
+  });
+});
+
+describe('native sing-box tag references', () => {
+  it('renames group members, defaults and detours without changing credentials', () => {
+    const t = baseTemplate();
+    t.outbounds!.push(
+      {
+        protocol: 'singbox:selector',
+        tag: 'group',
+        settings: { outbounds: ['To-External-Proxy', 'direct'], default: 'To-External-Proxy' },
+      } as never,
+      { protocol: 'urltest', tag: 'auto', settings: { outbounds: ['To-External-Proxy'] } } as never,
+      {
+        protocol: 'singbox:shadowsocks',
+        tag: 'chain',
+        settings: { detour: 'To-External-Proxy', password: 'To-External-Proxy' },
+      } as never,
+    );
+    propagateOutboundTagRename(t, 'To-External-Proxy', 'renamed');
+    const settings = t
+      .outbounds!.slice(2)
+      .map((o) => (o as unknown as { settings: Record<string, unknown> }).settings);
+    expect(settings[0]).toEqual({ outbounds: ['renamed', 'direct'], default: 'renamed' });
+    expect(settings[1]).toEqual({ outbounds: ['renamed'] });
+    expect(settings[2]).toEqual({ detour: 'renamed', password: 'To-External-Proxy' });
   });
 });

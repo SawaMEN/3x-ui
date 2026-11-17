@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // The node traffic poll runs every 5s and re-syncs every node inbound from its
@@ -18,10 +18,10 @@ func TestNodeSyncDoesNotChurnInboundLinks(t *testing.T) {
 
 	emails := []string{"n1@x", "n2@x", "n3@x"}
 	entries := make([]string, 0, len(emails))
-	stats := make([]xray.ClientTraffic, 0, len(emails))
+	stats := make([]coremodel.ClientTraffic, 0, len(emails))
 	for i, e := range emails {
 		entries = append(entries, fmt.Sprintf(`{"email": %q, "enable": true}`, e))
-		stats = append(stats, xray.ClientTraffic{Email: e, Up: int64(100 * (i + 1)), Down: 100, Enable: true})
+		stats = append(stats, coremodel.ClientTraffic{Email: e, Up: int64(100 * (i + 1)), Down: 100, Enable: true})
 	}
 	settings := `{"clients": [` + strings.Join(entries, ",") + `]}`
 

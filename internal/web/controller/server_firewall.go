@@ -22,14 +22,13 @@ type FirewallController struct {
 
 type firewallStatusResponse struct {
 	service.FirewallManagedStatus
-	PingEnabled  bool `json:"pingEnabled"`
+	PingEnabled   bool `json:"pingEnabled"`
 	CanInstallUFW bool `json:"canInstallUfw"`
 }
 
 func NewFirewallController(g *gin.RouterGroup) *FirewallController {
 	a := &FirewallController{}
 	a.initRouter(g.Group("/firewall"))
-	a.firewallService.StartAutoSync()
 	return a
 }
 
@@ -42,6 +41,7 @@ func (a *FirewallController) initRouter(g *gin.RouterGroup) {
 	g.POST("/install-ufw", a.installUFW)
 	g.POST("/rules/add", a.addRule)
 	g.POST("/rules/delete", a.deleteRule)
+	g.POST("/rules/delete-external", a.deleteExternalRule)
 }
 
 func (a *FirewallController) jsonStatus(c *gin.Context, status service.FirewallManagedStatus, err error) {
@@ -64,8 +64,9 @@ func (a *FirewallController) jsonStatus(c *gin.Context, status service.FirewallM
 }
 
 func (a *FirewallController) status(c *gin.Context) {
-	if err := a.firewallService.MigrateManagedBackendIfNeeded(c.Request.Context()); err != nil {
-		jsonMsg(c, "failed to reconcile firewall backend", err)
+	// Visiting the authenticated management page initializes background sync
+	// for existing installations too, without enabling a disabled firewall.
+	if !a.initializeControl(c) {
 		return
 	}
 	status, err := a.firewallService.GetManagedStatusSafe(c.Request.Context(), firewallSafetyPort(c))
@@ -108,16 +109,25 @@ func (a *FirewallController) setEnabled(c *gin.Context) {
 
 func (a *FirewallController) setAutoSync(c *gin.Context) {
 	var req struct {
-		Enabled bool `json:"enabled" form:"enabled"`
+		Enabled      bool `json:"enabled" form:"enabled"`
+		SyncInterval *int `json:"syncInterval" form:"syncInterval"`
 	}
 	if err := c.ShouldBind(&req); err != nil {
 		jsonMsg(c, "invalid firewall auto-sync state", err)
 		return
 	}
+	var interval []int
+	if req.SyncInterval != nil {
+		if err := service.ValidateFirewallSyncInterval(*req.SyncInterval); err != nil {
+			jsonMsg(c, "invalid firewall sync interval", err)
+			return
+		}
+		interval = []int{*req.SyncInterval}
+	}
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.SetManagedAutoSyncPreferenceSafe(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	status, err := a.firewallService.SetManagedAutoSyncPreferenceSafe(c.Request.Context(), req.Enabled, firewallSafetyPort(c), interval...)
 	a.jsonStatus(c, status, err)
 }
 
@@ -238,4 +248,16 @@ func firewallSafetyPort(c *gin.Context) int {
 		return 443
 	}
 	return 0
+}
+
+func (a *FirewallController) deleteExternalRule(c *gin.Context) {
+	var req struct {
+		ID string `json:"id" binding:"required,len=64"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid firewall rule ID", err)
+		return
+	}
+	status, err := a.firewallService.DeleteExternalFirewallRule(c.Request.Context(), req.ID, firewallSafetyPort(c))
+	a.jsonStatus(c, status, err)
 }

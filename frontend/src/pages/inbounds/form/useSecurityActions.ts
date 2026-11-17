@@ -5,6 +5,8 @@ import type { MessageInstance } from 'antd/es/message/interface';
 import type { HookAPI as ModalHookAPI } from 'antd/es/modal/useModal';
 
 import { HttpUtil, RandomUtil } from '@/utils';
+import { runSNIScan } from './security/sni-scanner';
+import type { SNIScanCallback } from './security/sni-scanner';
 import { createTlsSettingsWithDefaultCert } from '@/lib/xray/inbound-tls-defaults';
 import { RealityStreamSettingsSchema } from '@/schemas/protocols/security/reality';
 import type { InboundFormValues } from '@/schemas/forms/inbound-form';
@@ -96,6 +98,8 @@ export function useSecurityActions({
      */
     if (replaceServerNames) {
       setValue('streamSettings.realitySettings.serverNames', r.serverNames ?? []);
+      // Bulk-discovered targets were checked without a PROXY header.
+      setValue('streamSettings.realitySettings.xver', 0);
     } else if ((r.certValid || r.certChainValid) && r.serverNames?.length) {
       setValue('streamSettings.realitySettings.serverNames', r.serverNames);
     }
@@ -160,17 +164,24 @@ export function useSecurityActions({
     }
   };
 
-  const scanRealityCandidates = async (targets?: string): Promise<RealityScanResult[]> => {
-    const msg = await HttpUtil.post<RealityScanResult[]>(
-      '/panel/api/server/scanRealityTargets',
-      targets ? { targets } : {},
-      { silent: true },
-    );
-    if (!msg?.success || !Array.isArray(msg.obj)) {
-      messageApi.error(msg?.msg || t('pages.inbounds.toasts.scanRealityTargetError'));
-      return [];
+  const scanRealityCandidates: SNIScanCallback = async (
+    targets,
+    mode,
+    signal,
+    progress,
+    recheck,
+  ) => {
+    try {
+      return await runSNIScan(nodeId, 'reality', targets, mode, signal, progress, recheck);
+    } catch (error) {
+      if (!signal?.aborted)
+        messageApi.error(
+          error instanceof Error
+            ? error.message
+            : t('pages.inbounds.toasts.scanRealityTargetError'),
+        );
+      throw error;
     }
-    return msg.obj;
   };
 
   const randomizeShortIds = () => {
@@ -251,7 +262,7 @@ export function useSecurityActions({
    * remote certificate hash via `xray tls ping`. Useful when the panel doesn't
    * hold the cert file (a CDN front / external endpoint).
    */
-  const pinFromRemote = async () => {
+  const pinFromRemote = async (allowPrivate = false) => {
     const server = (
       (getValues('streamSettings.tlsSettings.serverName') as string | undefined) ?? ''
     ).trim();
@@ -268,7 +279,23 @@ export function useSecurityActions({
     const target = /:\d+$/.test(server) || !port ? server : `${server}:${port}`;
     setSaving(true);
     try {
-      const msg = await HttpUtil.post('/panel/api/server/getRemoteCertHash', { server: target });
+      const msg = await HttpUtil.post(
+        '/panel/api/server/getRemoteCertHash',
+        { server: target, allowPrivate },
+        { silent: true },
+      );
+      // The SSRF guard refuses a LAN/loopback endpoint until the operator confirms it.
+      const blocked = (msg?.obj as { privateTarget?: boolean } | null | undefined)?.privateTarget;
+      if (!msg?.success && blocked && !allowPrivate) {
+        modal.confirm({
+          title: t('pages.inbounds.form.scanPrivateConfirmTitle'),
+          content: t('pages.inbounds.form.scanPrivateConfirmContent', { target }),
+          okText: t('confirm'),
+          cancelText: t('cancel'),
+          onOk: () => pinFromRemote(true),
+        });
+        return;
+      }
       if (!msg?.success) {
         messageApi.warning(msg?.msg || t('pages.inbounds.form.pinFromRemoteFailed'));
         return;
@@ -328,7 +355,7 @@ export function useSecurityActions({
     delete cleaned.tlsSettings;
     delete cleaned.realitySettings;
     if (next === 'tls') {
-      cleaned.tlsSettings = createTlsSettingsWithDefaultCert();
+      cleaned.tlsSettings = createTlsSettingsWithDefaultCert(String(current.network || 'tcp'));
     }
     if (next === 'reality') {
       const reality = RealityStreamSettingsSchema.parse({}) as Record<string, unknown>;

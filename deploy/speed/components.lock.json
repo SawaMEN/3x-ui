@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "mieru": {
+    "repository": "https://github.com/enfein/mieru",
+    "commit": "b961978c3be9dd26b94158487c760858e19d1db2",
+    "command": "./cmd/mita",
+    "sdk": "pkg/xuispeed"
+  },
+  "sudoku": {
+    "repository": "https://github.com/SUDOKU-ASCII/sudoku",
+    "commit": "56ce6f1aeea18aa69b9bc1d57557ed312b59e5f5",
+    "command": "./cmd/sudoku-tunnel",
+    "sdk": "internal/xuispeed"
+  }
+}

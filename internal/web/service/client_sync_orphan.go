@@ -3,10 +3,10 @@ package service
 import (
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -68,7 +68,7 @@ func (s *ClientService) ReapSyncOrphans() (int, error) {
 			if err := tx.Where("email IN ?", batch).Delete(&model.ClientRecord{}).Error; err != nil {
 				return err
 			}
-			if err := tx.Where("email IN ?", batch).Delete(&xray.ClientTraffic{}).Error; err != nil {
+			if err := tx.Where("email IN ?", batch).Delete(&coremodel.ClientTraffic{}).Error; err != nil {
 				return err
 			}
 			if err := tx.Where("email IN ?", batch).Delete(&model.NodeClientTraffic{}).Error; err != nil {

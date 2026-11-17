@@ -18,7 +18,11 @@ const LINK_PROTOCOLS: ReadonlySet<string> = new Set([
   Protocols.HYSTERIA,
   Protocols.MTPROTO,
   Protocols.TUIC,
+  Protocols.SNELL,
+  Protocols.VETROFF,
   Protocols.TRUSTTUNNEL,
+  Protocols.FPTN,
+  Protocols.OPENFLUX,
 ]);
 
 export function hasShareLink(protocol: string): boolean {

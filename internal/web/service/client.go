@@ -14,14 +14,14 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 type ClientWithAttachments struct {
 	model.ClientRecord
-	InboundIds []int               `json:"inboundIds"`
-	Traffic    *xray.ClientTraffic `json:"traffic,omitempty"`
+	InboundIds []int                    `json:"inboundIds"`
+	Traffic    *coremodel.ClientTraffic `json:"traffic,omitempty"`
 }
 
 // MarshalJSON is required because model.ClientRecord defines its own
@@ -34,8 +34,8 @@ func (c ClientWithAttachments) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	extras := struct {
-		InboundIds []int               `json:"inboundIds"`
-		Traffic    *xray.ClientTraffic `json:"traffic,omitempty"`
+		InboundIds []int                    `json:"inboundIds"`
+		Traffic    *coremodel.ClientTraffic `json:"traffic,omitempty"`
 	}{InboundIds: c.InboundIds, Traffic: c.Traffic}
 	extra, err := json.Marshal(extras)
 	if err != nil {

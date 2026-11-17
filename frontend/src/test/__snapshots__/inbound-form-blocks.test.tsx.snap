@@ -34,8 +34,9 @@ exports[`inbound security forms > TlsForm field structure is stable 1`] = `
   "Digital Certificate",
   "Master Key Log",
   "ECH Sockopt",
+  "ECH config list",
+  "Preset combination",
   "ECH key",
-  "ECH config",
   "Pinned Peer Cert SHA-256",
   "Verify Peer Cert By Name",
 ]
@@ -55,17 +56,6 @@ exports[`inbound transport forms > HttpUpgradeForm field structure is stable 1`]
   "Host",
   "Path",
   "Headers",
-]
-`;
-
-exports[`inbound transport forms > KcpForm field structure is stable 1`] = `
-[
-  "MTU",
-  "TTI (ms)",
-  "Uplink (MB/s)",
-  "Downlink (MB/s)",
-  "CWND Multiplier",
-  "Max Sending Window",
 ]
 `;
 

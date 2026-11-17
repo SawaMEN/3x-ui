@@ -1,3 +1,4 @@
+import CascadeHint from './cascade-hint';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Divider, Form, Input, InputNumber, Modal, Select, Space, Switch } from 'antd';
@@ -178,6 +179,7 @@ export default function VkTurnProxyFields() {
 
   return (
     <>
+      <CascadeHint protocol="vk" />
       <Divider titlePlacement="center">{t('pages.inbounds.protocols.vkTurnProxy.forward')}</Divider>
       <FormField
         name={['settings', 'forward', 'type']}
@@ -238,7 +240,7 @@ export default function VkTurnProxyFields() {
             name={['settings', 'forward', 'host']}
             label={t('pages.inbounds.protocols.vkTurnProxy.host')}
           >
-            <Input placeholder="127.0.0.1" />
+            <Input placeholder="vpn.example.com" />
           </FormField>
           <FormField name={['settings', 'forward', 'port']} label={t('pages.inbounds.port')}>
             <InputNumber min={0} max={65535} />

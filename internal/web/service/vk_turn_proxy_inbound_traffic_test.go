@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestBuildVKTurnProxyInboundTraffics asserts the per-client relay deltas are
@@ -36,7 +36,7 @@ func TestBuildVKTurnProxyInboundTraffics(t *testing.T) {
 	}
 
 	svc := &InboundService{}
-	clientTraffics := []*xray.ClientTraffic{
+	clientTraffics := []*coremodel.ClientTraffic{
 		{InboundId: vk.Id, Email: "a@x", Up: 100, Down: 200},
 		{InboundId: vk.Id, Email: "b@x", Up: 50, Down: 0},
 		{InboundId: vk.Id, Email: "c@x", Up: 0, Down: 0}, // zero delta ignored

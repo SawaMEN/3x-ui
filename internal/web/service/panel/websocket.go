@@ -56,10 +56,8 @@ func (s *WebSocketService) HandleConnection(conn *ws.Conn, remoteIP string) {
 // readPump consumes inbound frames so the gorilla deadline/pong machinery keeps
 // running. Clients send no commands today; frames are discarded.
 func (s *WebSocketService) readPump(client *websocket.Client, conn *ws.Conn) {
+	defer common.Recover("WebSocket readPump panic")
 	defer func() {
-		if r := common.Recover("WebSocket readPump panic"); r != nil {
-			logger.Error("WebSocket readPump panic recovered:", r)
-		}
 		s.hub.Unregister(client)
 		conn.Close()
 	}()
@@ -83,10 +81,8 @@ func (s *WebSocketService) readPump(client *websocket.Client, conn *ws.Conn) {
 // writePump pushes hub messages to the connection and emits keepalive pings.
 func (s *WebSocketService) writePump(client *websocket.Client, conn *ws.Conn) {
 	ticker := time.NewTicker(wsPingPeriod)
+	defer common.Recover("WebSocket writePump panic")
 	defer func() {
-		if r := common.Recover("WebSocket writePump panic"); r != nil {
-			logger.Error("WebSocket writePump panic recovered:", r)
-		}
 		ticker.Stop()
 		conn.Close()
 	}()

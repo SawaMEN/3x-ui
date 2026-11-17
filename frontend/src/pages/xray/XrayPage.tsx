@@ -199,6 +199,7 @@ export default function XrayPage() {
       navigate('/xray#advanced');
       return;
     }
+    let validatedTemplate: XraySettingsValue | undefined;
     if (templateSettings) {
       const clone = JSON.parse(JSON.stringify(templateSettings));
       ensureMissingBalancerLoopbacks(clone);
@@ -212,8 +213,13 @@ export default function XrayPage() {
       const serialized = JSON.stringify(clone, null, 2);
       setXraySetting(serialized);
       setTemplateSettings(clone);
+      validatedTemplate = clone;
     }
-    saveAll();
+    // Send the validated object directly: React state updates are async, so
+    // saving a stale JSON ref can otherwise drop a freshly added route.
+    void saveAll(validatedTemplate).catch((error) =>
+      messageApi.error(error instanceof Error ? error.message : String(error)),
+    );
   }
 
   const scrollTarget = () => document.getElementById('content-layout') || window;
@@ -254,6 +260,7 @@ export default function XrayPage() {
             onShowNord={() => setNordOpen(true)}
             onShowPia={() => setPiaOpen(true)}
             onRefreshXrayData={fetchAll}
+            onSaveTemplate={saveAll}
           />
         );
       case 'balancer':

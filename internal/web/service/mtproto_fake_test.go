@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const (
@@ -23,7 +23,7 @@ const (
 
 func seedClientTraffic(t *testing.T, inboundId int, email string, enable bool) {
 	t.Helper()
-	row := xray.ClientTraffic{InboundId: inboundId, Email: email, Enable: enable}
+	row := coremodel.ClientTraffic{InboundId: inboundId, Email: email, Enable: enable}
 	if err := database.GetDB().Create(&row).Error; err != nil {
 		t.Fatalf("seed traffic %s: %v", email, err)
 	}

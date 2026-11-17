@@ -8,9 +8,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestRecordSubscriptionFetch(t *testing.T) {
@@ -25,7 +25,7 @@ func TestRecordSubscriptionFetch(t *testing.T) {
 		if err := db.Create(&clients[i]).Error; err != nil {
 			t.Fatalf("create client %s: %v", clients[i].Email, err)
 		}
-		if err := db.Create(&xray.ClientTraffic{Email: clients[i].Email}).Error; err != nil {
+		if err := db.Create(&coremodel.ClientTraffic{Email: clients[i].Email}).Error; err != nil {
 			t.Fatalf("create traffic %s: %v", clients[i].Email, err)
 		}
 	}
@@ -35,7 +35,7 @@ func TestRecordSubscriptionFetch(t *testing.T) {
 		t.Fatalf("RecordSubscriptionFetch: %v", err)
 	}
 
-	var alpha, bravo xray.ClientTraffic
+	var alpha, bravo coremodel.ClientTraffic
 	if err := db.Where("email = ?", "alpha@example.com").First(&alpha).Error; err != nil {
 		t.Fatalf("load alpha traffic: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestRecordSubscriptionFetchStatusGate(t *testing.T) {
 	if err := db.Create(client).Error; err != nil {
 		t.Fatalf("create client: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{Email: client.Email}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: client.Email}).Error; err != nil {
 		t.Fatalf("create traffic: %v", err)
 	}
 
@@ -76,7 +76,7 @@ func TestRecordSubscriptionFetchStatusGate(t *testing.T) {
 	notFound.Status(http.StatusNotFound)
 	controller.recordSubscriptionFetch(notFound)
 
-	var traffic xray.ClientTraffic
+	var traffic coremodel.ClientTraffic
 	if err := db.Where("email = ?", client.Email).First(&traffic).Error; err != nil {
 		t.Fatalf("load traffic after 404: %v", err)
 	}

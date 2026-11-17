@@ -57,14 +57,14 @@ function rowsToMap(
   mode: HeaderMapMode,
 ): Record<string, string> | Record<string, string[]> {
   if (mode === 'v1') {
-    const map: Record<string, string> = {};
+    const map = Object.create(null) as Record<string, string>;
     for (const r of rows) {
       if (!r.name) continue;
       map[r.name] = r.value ?? '';
     }
     return map;
   }
-  const map: Record<string, string[]> = {};
+  const map = Object.create(null) as Record<string, string[]>;
   for (const r of rows) {
     if (!r.name) continue;
     const list = map[r.name] ?? [];
@@ -125,21 +125,23 @@ export default function HeaderMapEditor({ mode, value, onChange }: HeaderMapEdit
           <Input
             value={row.name}
             placeholder="Name"
+            aria-label={t('pages.inbounds.form.headerName')}
             onChange={(e) => setRow(idx, { name: e.target.value })}
           />
           <Input
             value={row.value}
             placeholder="Value"
+            aria-label={t('pages.inbounds.form.headerValue')}
             onChange={(e) => setRow(idx, { value: e.target.value })}
           />
           <Button
             aria-label={t('remove')}
-            icon={<MinusOutlined />}
+            icon={<MinusOutlined aria-hidden />}
             onClick={() => removeRow(idx)}
           />
         </Space.Compact>
       ))}
-      <Button size="small" type="primary" icon={<PlusOutlined />} onClick={addRow}>
+      <Button size="small" type="primary" icon={<PlusOutlined aria-hidden />} onClick={addRow}>
         Add
       </Button>
     </>

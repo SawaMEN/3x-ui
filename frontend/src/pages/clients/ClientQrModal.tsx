@@ -24,6 +24,7 @@ import {
 import { buildTuicClientConfig, findTuicInbound, isTuicClient } from './tuicConfig';
 import { isSudokuLink, loadClientLinks } from './clientLinks';
 import { clientSubscriptionLink } from '@/lib/subscription-link';
+import AmneziaVpnExport from './AmneziaVpnExport';
 
 interface SubSettings {
   enable: boolean;
@@ -512,7 +513,15 @@ function ClientQrModalContent({
       out.push({
         key: `awg-config-${inbound.id}`,
         label,
-        children: <QrPanel value={text} remark={meta.qrRemark} downloadName={meta.fileName} />,
+        children: (
+          <AmneziaVpnExport
+            config={text}
+            remark={meta.qrRemark}
+            downloadName={meta.fileName}
+            inbound={inbound}
+            clientOptions={client?.awgClientOptions}
+          />
+        ),
       });
     });
     if (tuicConfigText) {
@@ -545,6 +554,7 @@ function ClientQrModalContent({
     awgConfigs,
     links,
     client?.email,
+    client?.awgClientOptions,
     selectVariant,
     regenerateHappLink,
     openHappSettings,

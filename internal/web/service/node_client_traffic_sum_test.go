@@ -1,17 +1,22 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
+	"maps"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"gorm.io/gorm"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func initTrafficTestDB(t *testing.T) *gorm.DB {
@@ -46,7 +51,7 @@ func createNodeInboundWithClient(t *testing.T, db *gorm.DB, nodeID int, tag stri
 	}
 }
 
-func syncNode(t *testing.T, svc *InboundService, nodeID int, tag string, stats ...xray.ClientTraffic) {
+func syncNode(t *testing.T, svc *InboundService, nodeID int, tag string, stats ...coremodel.ClientTraffic) {
 	t.Helper()
 	snap := &runtime.TrafficSnapshot{
 		Inbounds: []*model.Inbound{{Tag: tag, ClientStats: stats}},
@@ -60,7 +65,7 @@ func syncNode(t *testing.T, svc *InboundService, nodeID int, tag string, stats .
 // the snapshot inbound, like production nodes do — the sync mirrors snapshot
 // settings onto the central row, and the shared-accumulator guard reads the
 // clients out of those settings.
-func syncNodeWithSettings(t *testing.T, svc *InboundService, nodeID int, tag, settings string, stats ...xray.ClientTraffic) {
+func syncNodeWithSettings(t *testing.T, svc *InboundService, nodeID int, tag, settings string, stats ...coremodel.ClientTraffic) {
 	t.Helper()
 	snap := &runtime.TrafficSnapshot{
 		Inbounds: []*model.Inbound{{Tag: tag, Settings: settings, ClientStats: stats}},
@@ -70,16 +75,16 @@ func syncNodeWithSettings(t *testing.T, svc *InboundService, nodeID int, tag, se
 	}
 }
 
-func readTraffic(t *testing.T, db *gorm.DB, email string) xray.ClientTraffic {
+func readTraffic(t *testing.T, db *gorm.DB, email string) coremodel.ClientTraffic {
 	t.Helper()
-	var ct xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).First(&ct).Error; err != nil {
+	var ct coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).First(&ct).Error; err != nil {
 		t.Fatalf("read client_traffics %q: %v", email, err)
 	}
 	return ct
 }
 
-func assertUpDown(t *testing.T, ct xray.ClientTraffic, wantUp, wantDown int64, when string) {
+func assertUpDown(t *testing.T, ct coremodel.ClientTraffic, wantUp, wantDown int64, when string) {
 	t.Helper()
 	if ct.Up != wantUp || ct.Down != wantDown {
 		t.Errorf("%s: up=%d down=%d, want %d/%d", when, ct.Up, ct.Down, wantUp, wantDown)
@@ -96,13 +101,13 @@ func TestTwoNodesShareEmail_SumsCorrectly(t *testing.T) {
 
 	// First-ever sync from each node: the row is created at 0 and the current
 	// node counters become the baseline. Only deltas beyond those baselines count.
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
-	syncNode(t, svc, 2, "n2-in", xray.ClientTraffic{Email: email, Up: 200, Down: 200, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
+	syncNode(t, svc, 2, "n2-in", coremodel.ClientTraffic{Email: email, Up: 200, Down: 200, Enable: true})
 
 	assertUpDown(t, readTraffic(t, db, email), 0, 0, "after baselines — historical node traffic not imported")
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 150, Down: 150, Enable: true})
-	syncNode(t, svc, 2, "n2-in", xray.ClientTraffic{Email: email, Up: 260, Down: 260, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 150, Down: 150, Enable: true})
+	syncNode(t, svc, 2, "n2-in", coremodel.ClientTraffic{Email: email, Up: 260, Down: 260, Enable: true})
 
 	assertUpDown(t, readTraffic(t, db, email), 110, 110, "after both nodes grow — deltas (50+60) accrue")
 }
@@ -114,11 +119,11 @@ func TestSingleNode_MirrorsCorrectly(t *testing.T) {
 
 	const email = "solo"
 	// First sync: row seeded at 0, current counter becomes the baseline.
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 500, Down: 600, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 500, Down: 600, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 0, 0, "first sync — historical traffic not imported")
 
 	// Second sync: delta (700-500=200 / 800-600=200) accrues normally.
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 700, Down: 800, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 700, Down: 800, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 200, 200, "second sync — delta accrues")
 }
 
@@ -129,10 +134,10 @@ func TestNodeAdd_ImportsClientHistoryWithNewInbound(t *testing.T) {
 	const email = "newnode-client"
 	const histUp, histDown int64 = 6_000_000_000, 200_000_000_000
 
-	syncNode(t, svc, 1, "fresh-in", xray.ClientTraffic{Email: email, Up: histUp, Down: histDown, Enable: true})
+	syncNode(t, svc, 1, "fresh-in", coremodel.ClientTraffic{Email: email, Up: histUp, Down: histDown, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), histUp, histDown, "node-add: client history imported with its brand-new inbound")
 
-	syncNode(t, svc, 1, "fresh-in", xray.ClientTraffic{Email: email, Up: histUp + 1024, Down: histDown + 2048, Enable: true})
+	syncNode(t, svc, 1, "fresh-in", coremodel.ClientTraffic{Email: email, Up: histUp + 1024, Down: histDown + 2048, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), histUp+1024, histDown+2048, "post-import delta accrues, no double count")
 }
 
@@ -147,21 +152,21 @@ func TestStaleSnapshot_DeletedClientNotResurrected(t *testing.T) {
 
 	const email = "victim-5739"
 	withClient := fmt.Sprintf(`{"clients": [{"email": %q, "enable": true}]}`, email)
-	syncNodeWithSettings(t, svc, 1, "n1-in", withClient, xray.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
+	syncNodeWithSettings(t, svc, 1, "n1-in", withClient, coremodel.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
 
 	if err := db.Model(&model.Inbound{}).Where("tag = ?", "n1-in").
 		Update("settings", `{"clients": []}`).Error; err != nil {
 		t.Fatalf("clear central settings: %v", err)
 	}
-	if err := db.Where("email = ?", email).Delete(&xray.ClientTraffic{}).Error; err != nil {
+	if err := db.Where("email = ?", email).Delete(&coremodel.ClientTraffic{}).Error; err != nil {
 		t.Fatalf("delete stats row: %v", err)
 	}
 	tombstoneClientEmail(email)
 
-	syncNodeWithSettings(t, svc, 1, "n1-in", withClient, xray.ClientTraffic{Email: email, Up: 120, Down: 120, Enable: true})
+	syncNodeWithSettings(t, svc, 1, "n1-in", withClient, coremodel.ClientTraffic{Email: email, Up: 120, Down: 120, Enable: true})
 
 	var rows int64
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).Count(&rows).Error; err != nil {
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).Count(&rows).Error; err != nil {
 		t.Fatalf("count stats rows: %v", err)
 	}
 	if rows != 0 {
@@ -185,7 +190,7 @@ func TestNodeAdd_TombstonedClientNotResurrected(t *testing.T) {
 	const stale int64 = 50_000_000_000
 
 	tombstoneClientEmail(email)
-	syncNode(t, svc, 1, "fresh-in", xray.ClientTraffic{Email: email, Up: stale, Down: stale, Enable: true})
+	syncNode(t, svc, 1, "fresh-in", coremodel.ClientTraffic{Email: email, Up: stale, Down: stale, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 0, 0, "tombstoned client must not resurrect via node-add seed")
 }
 
@@ -199,14 +204,14 @@ func TestUpgrade_PreExistingRow_NoDoubleCount(t *testing.T) {
 	if err := db.Where("tag = ?", "n1-in").First(&ib).Error; err != nil {
 		t.Fatalf("load inbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{InboundId: ib.Id, Email: email, Up: 1000, Down: 2000, Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: ib.Id, Email: email, Up: 1000, Down: 2000, Enable: true}).Error; err != nil {
 		t.Fatalf("seed pre-existing row: %v", err)
 	}
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 1000, Down: 2000, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 1000, Down: 2000, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 1000, 2000, "first snapshot must not double-count")
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 1100, Down: 2100, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 1100, Down: 2100, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 1100, 2100, "growth after upgrade accrues")
 }
 
@@ -225,7 +230,7 @@ func TestGhostData_NoPhantomTraffic(t *testing.T) {
 
 	// Node reports a client with a large pre-existing counter (ghost data from a
 	// deleted account that survived on the node). Master has no row for this email.
-	syncNode(t, svc, 1, "de1-in", xray.ClientTraffic{Email: email, Up: staleBytes, Down: staleBytes, Enable: true})
+	syncNode(t, svc, 1, "de1-in", coremodel.ClientTraffic{Email: email, Up: staleBytes, Down: staleBytes, Enable: true})
 
 	ct := readTraffic(t, db, email)
 	if ct.Up >= staleBytes || ct.Down >= staleBytes {
@@ -234,7 +239,7 @@ func TestGhostData_NoPhantomTraffic(t *testing.T) {
 	assertUpDown(t, ct, 0, 0, "first sync of ghost email — imported as 0, not 50 GB")
 
 	// Subsequent syncs only add incremental usage beyond the baseline.
-	syncNode(t, svc, 1, "de1-in", xray.ClientTraffic{Email: email, Up: staleBytes + 1024, Down: staleBytes + 2048, Enable: true})
+	syncNode(t, svc, 1, "de1-in", coremodel.ClientTraffic{Email: email, Up: staleBytes + 1024, Down: staleBytes + 2048, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 1024, 2048, "only incremental traffic beyond baseline counts")
 }
 
@@ -245,14 +250,14 @@ func TestNodeCounterReset_NoReAdd(t *testing.T) {
 
 	const email = "restart"
 	// First sync seeds at 0 (baseline=900). Second sync adds delta 950-900=50.
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 900, Down: 900, Enable: true})
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 950, Down: 950, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 900, Down: 900, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 950, Down: 950, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 50, 50, "before node reset")
 
 	// Node reboot drops the counter to 50. delta=50-950=-900 is a counter reset,
 	// not new traffic: add 0 and rebaseline to 50, never re-add the node's full
 	// cumulative counter onto the master total (#5456).
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 50, Down: 50, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 50, Down: 50, Enable: true})
 	ct := readTraffic(t, db, email)
 	if ct.Up < 0 || ct.Down < 0 {
 		t.Fatalf("row went negative after node reset: up=%d down=%d", ct.Up, ct.Down)
@@ -260,7 +265,7 @@ func TestNodeCounterReset_NoReAdd(t *testing.T) {
 	assertUpDown(t, ct, 50, 50, "after node counter reset: rebaselined, not re-added")
 
 	// Post-reset accrual resumes from the new baseline: 80-50=30.
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 80, Down: 80, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 80, Down: 80, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 80, 80, "post-reset delta accrues from rebaselined counter")
 }
 
@@ -271,18 +276,18 @@ func TestCentralReset_NoReAdd(t *testing.T) {
 	svc := &InboundService{}
 
 	const email = "reset"
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
-	syncNode(t, svc, 2, "n2-in", xray.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 200, Down: 200, Enable: true})
-	syncNode(t, svc, 2, "n2-in", xray.ClientTraffic{Email: email, Up: 200, Down: 200, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
+	syncNode(t, svc, 2, "n2-in", coremodel.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 200, Down: 200, Enable: true})
+	syncNode(t, svc, 2, "n2-in", coremodel.ClientTraffic{Email: email, Up: 200, Down: 200, Enable: true})
 
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"up": 0, "down": 0}).Error; err != nil {
 		t.Fatalf("simulate central reset: %v", err)
 	}
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 210, Down: 210, Enable: true})
-	syncNode(t, svc, 2, "n2-in", xray.ClientTraffic{Email: email, Up: 205, Down: 205, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 210, Down: 210, Enable: true})
+	syncNode(t, svc, 2, "n2-in", coremodel.ClientTraffic{Email: email, Up: 205, Down: 205, Enable: true})
 
 	assertUpDown(t, readTraffic(t, db, email), 15, 15, "after central reset only increments accrue")
 }
@@ -297,8 +302,8 @@ func TestCentralResetClearsNodeBaseline_NoLeak(t *testing.T) {
 	svc := &InboundService{}
 
 	const email = "reset-revert"
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 300, Down: 300, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 300, Down: 300, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 200, 200, "before reset")
 
 	if err := svc.ResetClientTrafficByEmail(email); err != nil {
@@ -316,11 +321,11 @@ func TestCentralResetClearsNodeBaseline_NoLeak(t *testing.T) {
 
 	// Node still reports its pre-reset cumulative (340 > last synced 300: usage it
 	// had not synced before the reset). It must not revert the reset.
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 340, Down: 340, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 340, Down: 340, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 0, 0, "stale node counter must not revert reset")
 
 	// Genuine post-reset usage accrues from the rebaselined counter: 370-340=30.
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 370, Down: 370, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 370, Down: 370, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 30, 30, "post-reset usage accrues")
 }
 
@@ -333,11 +338,11 @@ func TestInboundRemoval_KeepsSharedEmailRow(t *testing.T) {
 	const email = "shared"
 	settings := fmt.Sprintf(`{"clients": [{"email": %q, "enable": true}]}`, email)
 	// Baselines set: node1=100, node2=200. Row seeded at 0.
-	syncNodeWithSettings(t, svc, 1, "n1-in", settings, xray.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
-	syncNodeWithSettings(t, svc, 2, "n2-in", settings, xray.ClientTraffic{Email: email, Up: 200, Down: 200, Enable: true})
+	syncNodeWithSettings(t, svc, 1, "n1-in", settings, coremodel.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
+	syncNodeWithSettings(t, svc, 2, "n2-in", settings, coremodel.ClientTraffic{Email: email, Up: 200, Down: 200, Enable: true})
 	// node1 delta=50, node2 delta=60 → total=110.
-	syncNodeWithSettings(t, svc, 1, "n1-in", settings, xray.ClientTraffic{Email: email, Up: 150, Down: 150, Enable: true})
-	syncNodeWithSettings(t, svc, 2, "n2-in", settings, xray.ClientTraffic{Email: email, Up: 260, Down: 260, Enable: true})
+	syncNodeWithSettings(t, svc, 1, "n1-in", settings, coremodel.ClientTraffic{Email: email, Up: 150, Down: 150, Enable: true})
+	syncNodeWithSettings(t, svc, 2, "n2-in", settings, coremodel.ClientTraffic{Email: email, Up: 260, Down: 260, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 110, 110, "baseline sum")
 
 	// Node 1 rebuilt (reinstall / another master's reconcile): its inbound
@@ -350,7 +355,7 @@ func TestInboundRemoval_KeepsSharedEmailRow(t *testing.T) {
 	assertUpDown(t, readTraffic(t, db, email), 110, 110, "after node 1 inbound removal")
 
 	// Node 2 keeps accruing onto the surviving row. node2 delta=300-260=40 → 150.
-	syncNodeWithSettings(t, svc, 2, "n2-in", settings, xray.ClientTraffic{Email: email, Up: 300, Down: 300, Enable: true})
+	syncNodeWithSettings(t, svc, 2, "n2-in", settings, coremodel.ClientTraffic{Email: email, Up: 300, Down: 300, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 150, 150, "after node 2 grows")
 }
 
@@ -363,8 +368,8 @@ func TestClientGoneFromOneNode_KeepsSharedEmailRow(t *testing.T) {
 	const email = "shared"
 	settings := fmt.Sprintf(`{"clients": [{"email": %q, "enable": true}]}`, email)
 	// First syncs set baselines (node1=100, node2=200). Row seeded at 0.
-	syncNodeWithSettings(t, svc, 1, "n1-in", settings, xray.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
-	syncNodeWithSettings(t, svc, 2, "n2-in", settings, xray.ClientTraffic{Email: email, Up: 200, Down: 200, Enable: true})
+	syncNodeWithSettings(t, svc, 1, "n1-in", settings, coremodel.ClientTraffic{Email: email, Up: 100, Down: 100, Enable: true})
+	syncNodeWithSettings(t, svc, 2, "n2-in", settings, coremodel.ClientTraffic{Email: email, Up: 200, Down: 200, Enable: true})
 
 	// Client detached from node 1's inbound only: its stats vanish from that
 	// inbound's snapshot while node 2 still hosts the email.
@@ -372,7 +377,7 @@ func TestClientGoneFromOneNode_KeepsSharedEmailRow(t *testing.T) {
 	assertUpDown(t, readTraffic(t, db, email), 0, 0, "after client left node 1 — row unchanged at 0")
 
 	// Node 2 delta: 240-200=40 → accrues to 40.
-	syncNodeWithSettings(t, svc, 2, "n2-in", settings, xray.ClientTraffic{Email: email, Up: 240, Down: 240, Enable: true})
+	syncNodeWithSettings(t, svc, 2, "n2-in", settings, coremodel.ClientTraffic{Email: email, Up: 240, Down: 240, Enable: true})
 	assertUpDown(t, readTraffic(t, db, email), 40, 40, "node 2 keeps accruing")
 }
 
@@ -395,7 +400,7 @@ func TestStatsUnderSiblingInbound_KeepsNodeBaseline(t *testing.T) {
 	}
 	// Master-side row created when the client was added on the panel, owned by
 	// n1-b's mirror (e.g. the client form targeted that inbound).
-	if err := db.Create(&xray.ClientTraffic{InboundId: ibB.Id, Email: email, Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: ibB.Id, Email: email, Enable: true}).Error; err != nil {
 		t.Fatalf("seed master row: %v", err)
 	}
 
@@ -403,7 +408,7 @@ func TestStatsUnderSiblingInbound_KeepsNodeBaseline(t *testing.T) {
 	sync := func(up, down int64) {
 		t.Helper()
 		snap := &runtime.TrafficSnapshot{Inbounds: []*model.Inbound{
-			{Tag: "n1-a", Settings: settings, ClientStats: []xray.ClientTraffic{{Email: email, Up: up, Down: down, Enable: true}}},
+			{Tag: "n1-a", Settings: settings, ClientStats: []coremodel.ClientTraffic{{Email: email, Up: up, Down: down, Enable: true}}},
 			{Tag: "n1-b", Settings: `{"clients": []}`},
 		}}
 		if _, err := svc.setRemoteTrafficLocked(1, snap, false, false); err != nil {
@@ -447,9 +452,9 @@ func TestMultiAttach_SameNode_DivergentSiblings(t *testing.T) {
 	sync := func(a, b, c int64) {
 		t.Helper()
 		snap := &runtime.TrafficSnapshot{Inbounds: []*model.Inbound{
-			{Tag: "n1-a", Settings: settings, ClientStats: []xray.ClientTraffic{{Email: email, Up: a, Down: a, Enable: true}}},
-			{Tag: "n1-b", Settings: settings, ClientStats: []xray.ClientTraffic{{Email: email, Up: b, Down: b, Enable: true}}},
-			{Tag: "n1-c", Settings: settings, ClientStats: []xray.ClientTraffic{{Email: email, Up: c, Down: c, Enable: true}}},
+			{Tag: "n1-a", Settings: settings, ClientStats: []coremodel.ClientTraffic{{Email: email, Up: a, Down: a, Enable: true}}},
+			{Tag: "n1-b", Settings: settings, ClientStats: []coremodel.ClientTraffic{{Email: email, Up: b, Down: b, Enable: true}}},
+			{Tag: "n1-c", Settings: settings, ClientStats: []coremodel.ClientTraffic{{Email: email, Up: c, Down: c, Enable: true}}},
 		}}
 		if _, err := svc.setRemoteTrafficLocked(1, snap, false, false); err != nil {
 			t.Fatalf("sync: %v", err)
@@ -473,12 +478,169 @@ func TestMultiAttach_SameNode_DivergentSiblings(t *testing.T) {
 	assertUpDown(t, readTraffic(t, db, email), 100, 100, "equal siblings accrue the single increment")
 }
 
+var clientWriteSQL = regexp.MustCompile(`(?i)^\s*(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+["` + "`" + `]?(clients|client_inbounds|client_traffics|node_client_traffics)\b`)
+
+// countClientRowWrites returns, per client table, how many rows fn's
+// INSERT/UPDATE/DELETE statements touched.
+func countClientRowWrites(t *testing.T, fn func()) map[string]int64 {
+	t.Helper()
+	db := database.GetDB()
+	var mu sync.Mutex
+	rows := map[string]int64{}
+	record := func(tx *gorm.DB) {
+		if tx.Error != nil || tx.RowsAffected == 0 || tx.Statement == nil {
+			return
+		}
+		if m := clientWriteSQL.FindStringSubmatch(tx.Statement.SQL.String()); m != nil {
+			mu.Lock()
+			rows[m[1]] += tx.RowsAffected
+			mu.Unlock()
+		}
+	}
+	const name = "test:count_client_row_writes"
+	cb := db.Callback()
+	for _, err := range []error{
+		cb.Create().After("gorm:create").Register(name, record),
+		cb.Update().After("gorm:update").Register(name, record),
+		cb.Delete().After("gorm:delete").Register(name, record),
+		cb.Raw().After("gorm:raw").Register(name, record),
+	} {
+		if err != nil {
+			t.Fatalf("register write callback: %v", err)
+		}
+	}
+	defer func() {
+		for _, err := range []error{
+			cb.Create().Remove(name), cb.Update().Remove(name),
+			cb.Delete().Remove(name), cb.Raw().Remove(name),
+		} {
+			if err != nil {
+				t.Errorf("remove write callback: %v", err)
+			}
+		}
+	}()
+	fn()
+	return rows
+}
+
+func TestNodeMerge_WritesOnlyChangedClients(t *testing.T) {
+	const clientCount = 20
+	type snapInbound struct {
+		tag      string
+		protocol model.Protocol
+		entry    func(i int, email string) map[string]any
+	}
+	vlessEntry := func(flow string) func(int, string) map[string]any {
+		return func(i int, email string) map[string]any {
+			e := map[string]any{"email": email, "id": fmt.Sprintf("%08d-0000-4000-8000-000000000000", i), "subId": email, "enable": true}
+			if flow != "" {
+				e["flow"] = flow
+			}
+			return e
+		}
+	}
+	wgEntry := func(tunnel int) func(int, string) map[string]any {
+		return func(i int, email string) map[string]any {
+			return map[string]any{
+				"email": email, "subId": email, "enable": true,
+				"privateKey":   fmt.Sprintf("priv-%d-%d", tunnel, i),
+				"publicKey":    fmt.Sprintf("pub-%d-%d", tunnel, i),
+				"allowedIPs":   []string{fmt.Sprintf("10.%d.0.%d/32", tunnel, i+2)},
+				"preSharedKey": fmt.Sprintf("psk-%d-%d", tunnel, i),
+				"keepAlive":    25 * tunnel,
+			}
+		}
+	}
+
+	cases := []struct {
+		name     string
+		inbounds []snapInbound
+	}{
+		{"vless with and without flow", []snapInbound{
+			{"n1-reality", model.VLESS, vlessEntry("xtls-rprx-vision")},
+			{"n1-ws", model.VLESS, vlessEntry("")},
+		}},
+		{"wireguard and vless", []snapInbound{
+			{"n1-wg", model.WireGuard, wgEntry(1)},
+			{"n1-vless", model.VLESS, vlessEntry("")},
+		}},
+		{"two wireguard tunnels", []snapInbound{
+			{"n1-wg-a", model.WireGuard, wgEntry(1)},
+			{"n1-wg-b", model.WireGuard, wgEntry(2)},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := initTrafficTestDB(t)
+			svc := &InboundService{}
+
+			emails := make([]string, clientCount)
+			stats := make([]coremodel.ClientTraffic, clientCount)
+			for i := range emails {
+				emails[i] = fmt.Sprintf("multi-%d", i)
+				stats[i] = coremodel.ClientTraffic{Email: emails[i], Up: 1000, Down: 2000, Enable: true, LastOnline: 5000}
+			}
+			settings := make([]string, len(tc.inbounds))
+			for n, ib := range tc.inbounds {
+				entries := make([]map[string]any, clientCount)
+				for i, email := range emails {
+					entries[i] = ib.entry(i, email)
+				}
+				raw, err := json.Marshal(map[string]any{"clients": entries})
+				if err != nil {
+					t.Fatalf("marshal settings: %v", err)
+				}
+				settings[n] = string(raw)
+				nodeID := 1
+				if err := db.Create(&model.Inbound{
+					UserId: 1, NodeID: &nodeID, Tag: ib.tag, Enable: true,
+					Port: 42000 + n, Protocol: ib.protocol, Settings: settings[n],
+				}).Error; err != nil {
+					t.Fatalf("create inbound %q: %v", ib.tag, err)
+				}
+			}
+			merge := func(stats []coremodel.ClientTraffic) {
+				t.Helper()
+				// A node copies a multi-attached client's one counter onto every inbound it is on.
+				snap := &runtime.TrafficSnapshot{}
+				for n, ib := range tc.inbounds {
+					snap.Inbounds = append(snap.Inbounds, &model.Inbound{
+						Tag: ib.tag, Enable: true, Port: 42000 + n, Protocol: ib.protocol,
+						Settings: settings[n], ClientStats: slices.Clone(stats),
+					})
+				}
+				if _, err := svc.setRemoteTrafficLocked(1, snap, false, false); err != nil {
+					t.Fatalf("setRemoteTrafficLocked: %v", err)
+				}
+			}
+
+			merge(stats)
+			if got := countClientRowWrites(t, func() { merge(stats) }); len(got) != 0 {
+				t.Errorf("repeating an unchanged snapshot wrote client rows %v, want none", got)
+			}
+
+			active := slices.Clone(stats)
+			active[0].Up, active[0].Down, active[0].LastOnline = 1300, 2600, 6000
+			got := countClientRowWrites(t, func() { merge(active) })
+			want := map[string]int64{"client_traffics": 1, "node_client_traffics": 1}
+			if !maps.Equal(got, want) {
+				t.Errorf("one client's traffic tick wrote client rows %v, want %v", got, want)
+			}
+			ct := readTraffic(t, db, emails[0])
+			assertUpDown(t, ct, 300, 600, "active client after its tick")
+			if ct.LastOnline != 6000 {
+				t.Errorf("last_online = %d, want 6000", ct.LastOnline)
+			}
+		})
+	}
+}
+
 func TestDelClientStat_CleansNodeBaselines(t *testing.T) {
 	db := initTrafficTestDB(t)
 	svc := &InboundService{}
 
 	const email = "gone"
-	if err := db.Create(&xray.ClientTraffic{InboundId: 1, Email: email, Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: 1, Email: email, Enable: true}).Error; err != nil {
 		t.Fatalf("seed client_traffics: %v", err)
 	}
 	if err := db.Create(&model.NodeClientTraffic{NodeId: 1, Email: email, Up: 10, Down: 10}).Error; err != nil {

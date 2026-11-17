@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func payloadClientEmails(t *testing.T, settings string) []string {
@@ -43,12 +43,12 @@ func TestNodePushKeepsDisabledClientsLocalPushStripsThem(t *testing.T) {
 	ib := mkInbound(t, 30301, model.VLESS, clientsSettings(t, clients))
 
 	for _, c := range clients {
-		row := &xray.ClientTraffic{InboundId: ib.Id, Email: c.Email, Enable: true}
+		row := &coremodel.ClientTraffic{InboundId: ib.Id, Email: c.Email, Enable: true}
 		if err := db.Create(row).Error; err != nil {
 			t.Fatalf("seed traffic %s: %v", c.Email, err)
 		}
 	}
-	if err := db.Model(xray.ClientTraffic{}).
+	if err := db.Model(coremodel.ClientTraffic{}).
 		Where("email = ?", "quota@x").
 		Update("enable", false).Error; err != nil {
 		t.Fatalf("deplete quota@x: %v", err)

@@ -1,3 +1,4 @@
+import { isClientAttachableProtocol } from '@/lib/inbounds/client-attachable';
 import { isSSMultiUser } from '@/lib/xray/protocol-capabilities';
 import { coerceInboundJsonField } from '@/models/dbinbound';
 import type { HostRecord } from '@/schemas/api/host';
@@ -100,8 +101,20 @@ export function inboundNetworkLabels(record: {
       return ['UDP'];
     case 'pingtunnel':
       return ['ICMP'];
+    case 'fptn':
+    case 'openflux':
+    case 'vetroff':
     case 'trusttunnel':
       return ['TCP', 'UDP'];
+    case 'masque': {
+      const versions = readSettings(record.settings).version;
+      const values = Array.isArray(versions) && versions.length ? versions : [3, 2, 1];
+      return [
+        ...(values.some((v) => v === 1 || v === 2) ? ['TCP'] : []),
+        ...(values.includes(3) ? ['UDP'] : []),
+      ];
+    }
+    case 'snell':
     case 'anytls':
       return ['TCP'];
     case 'shadowtls':
@@ -148,32 +161,21 @@ export function readSettings(settings: unknown): {
   method?: string;
   network?: string;
   allowedNetwork?: string;
+  version?: number[];
 } {
   return coerceInboundJsonField(settings) as {
     method?: string;
     network?: string;
     allowedNetwork?: string;
+    version?: number[];
   };
 }
 
 export function isInboundMultiUser(record: { protocol: string; settings: unknown }): boolean {
-  switch (record.protocol) {
-    case 'vmess':
-    case 'vless':
-    case 'trojan':
-    case 'hysteria':
-    case 'mtproto':
-    case 'wireguard':
-    case 'amneziawg':
-    case 'tuic':
-    case 'trusttunnel':
-    case 'vk-turn-proxy':
-      return true;
-    case 'shadowsocks':
-      return isSSMultiUser({ protocol: 'shadowsocks', settings: readSettings(record.settings) });
-    default:
-      return false;
+  if (record.protocol === 'shadowsocks') {
+    return isSSMultiUser({ protocol: 'shadowsocks', settings: readSettings(record.settings) });
   }
+  return isClientAttachableProtocol(record.protocol);
 }
 
 export function showQrCodeMenu(dbInbound: DBInboundRecord): boolean {

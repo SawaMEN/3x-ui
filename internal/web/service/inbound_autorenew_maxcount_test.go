@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // A prepaid plan must stop itself: once as many renewals have fired as the
@@ -26,7 +26,7 @@ func TestAutoRenewClients_StopsAtMaxCount(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	rows := []xray.ClientTraffic{
+	rows := []coremodel.ClientTraffic{
 		{InboundId: ib.Id, Email: "spent@x", Enable: false, Reset: 30, ResetMax: 2, ResetCount: 2, ExpiryTime: past},
 		{InboundId: ib.Id, Email: "left@x", Enable: false, Reset: 30, ResetMax: 2, ResetCount: 1, ExpiryTime: past},
 	}
@@ -40,7 +40,7 @@ func TestAutoRenewClients_StopsAtMaxCount(t *testing.T) {
 		t.Fatalf("renewed count = %d, want 1: only the client with an allowance left", count)
 	}
 
-	var spent xray.ClientTraffic
+	var spent coremodel.ClientTraffic
 	if err := db.Where("email = ?", "spent@x").First(&spent).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestAutoRenewClients_StopsAtMaxCount(t *testing.T) {
 		t.Fatalf("a client that used its allowance was renewed anyway: expiry %d", spent.ExpiryTime)
 	}
 
-	var left xray.ClientTraffic
+	var left coremodel.ClientTraffic
 	if err := db.Where("email = ?", "left@x").First(&left).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestAutoRenewClients_CatchUpSpendsOneAllowancePerPeriod(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "away@x", Enable: false, Reset: 30, ResetMax: 2, ExpiryTime: past,
 	}).Error; err != nil {
 		t.Fatalf("seed client_traffics: %v", err)
@@ -86,7 +86,7 @@ func TestAutoRenewClients_CatchUpSpendsOneAllowancePerPeriod(t *testing.T) {
 		t.Fatalf("autoRenewClients: %v", err)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "away@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestAutoRenewClients_NoCapRenewsAsBefore(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "forever@x", Enable: false, Reset: 30, ResetCount: 99, ExpiryTime: past,
 	}).Error; err != nil {
 		t.Fatalf("seed client_traffics: %v", err)
@@ -206,7 +206,7 @@ func TestAutoRenewClients_TruncatedCatchUpLeavesTheClientDisabled(t *testing.T) 
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "short@x", Enable: false, Reset: 30, ResetMax: 3, ResetCount: 2,
 		Up: 111, Down: 222, ExpiryTime: past,
 	}).Error; err != nil {
@@ -217,7 +217,7 @@ func TestAutoRenewClients_TruncatedCatchUpLeavesTheClientDisabled(t *testing.T) 
 		t.Fatalf("autoRenewClients: %v", err)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "short@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}

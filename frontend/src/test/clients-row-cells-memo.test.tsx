@@ -104,6 +104,7 @@ describe('clients table row cells', () => {
               email="alice@x"
               onShowQr={onShowQr}
               onShowInfo={noop}
+              onShowActivity={noop}
               onResetTraffic={noop}
               onEdit={onEdit}
               onDelete={noop}
@@ -117,11 +118,11 @@ describe('clients table row cells', () => {
 
     // Queried by position rather than label: the suite loads the real en-US
     // bundle, so the aria-labels are translated strings, not keys. Order is
-    // QR, info, reset traffic, edit, delete.
+    // QR, info, activity, reset traffic, edit, delete.
     const buttons = screen.getAllByRole('button');
-    expect(buttons).toHaveLength(5);
+    expect(buttons).toHaveLength(6);
     await userEvent.click(buttons[0]);
-    await userEvent.click(buttons[3]);
+    await userEvent.click(buttons[4]);
 
     expect(onShowQr).toHaveBeenCalledExactlyOnceWith('alice@x');
     expect(onEdit).toHaveBeenCalledExactlyOnceWith('alice@x');

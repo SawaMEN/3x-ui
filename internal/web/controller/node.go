@@ -16,7 +16,7 @@ import (
 
 type NodeController struct {
 	nodeService    service.NodeService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	settingService service.SettingService
 	singBoxService service.SingBoxService
 }
@@ -42,6 +42,7 @@ func (a *NodeController) initRouter(g *gin.RouterGroup) {
 	g.POST("/inbounds", a.inbounds)
 	g.POST("/probe/:id", a.probe)
 	g.POST("/updatePanel", a.updatePanel)
+	g.GET("/updatePanelStatus/:id", a.updatePanelStatus)
 	g.POST("/reorder", a.reorder)
 	g.GET("/history/:id/:metric/:bucket", a.history)
 	g.POST("/mtls/ca", a.mtlsCa)
@@ -164,28 +165,40 @@ func (a *NodeController) add(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
 		return
 	}
+	// Once inserted, every subsequent failure must remove this new node.
+	// Otherwise retrying the form creates hidden duplicate entries/bridges.
+	fail := func(cause error) {
+		if cleanupErr := a.nodeService.Delete(view.Id); cleanupErr != nil {
+			cause = errors.Join(cause, fmt.Errorf("remove incomplete node: %w", cleanupErr))
+		}
+		if n.OutboundTag != "" {
+			markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
+		}
+		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), cause)
+	}
 	if n.OutboundTag != "" {
 		if err := restartSelectedCoreNow(c.Request.Context(), &a.settingService, &a.xrayService, &a.singBoxService); err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
+			fail(err)
 			return
 		}
 		initialPatch, err = a.ensureReachable(c, n, view.Id)
 		if err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
+			fail(err)
 			return
 		}
 		havePatch = true
 	}
 	if havePatch {
 		if err := a.nodeService.UpdateHeartbeat(view.Id, initialPatch); err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
+			fail(err)
 			return
 		}
-		view, err = a.nodeService.GetViewById(view.Id)
+		updatedView, err := a.nodeService.GetViewById(view.Id)
 		if err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
+			fail(err)
 			return
 		}
+		view = updatedView
 	}
 	jsonMsgObj(c, I18nWeb(c, "pages.nodes.toasts.add"), view, nil)
 }
@@ -224,6 +237,8 @@ func (a *NodeController) update(c *gin.Context) {
 			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
 			return
 		}
+	}
+	if !havePatch && (!n.ClearApiToken || n.Enable) {
 		probePatch, err = a.ensureReachable(c, n, id)
 		if err != nil {
 			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
@@ -389,8 +404,30 @@ func (a *NodeController) updatePanel(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("no nodes selected"))
 		return
 	}
+	// A single HTTP request must finish before the server's 30-second write
+	// deadline. The UI batches longer lists; API callers must do likewise.
+	if len(req.Ids) > 32 {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("at most 32 nodes per update request; split larger selections into batches"))
+		return
+	}
 	results, err := a.nodeService.UpdatePanels(req.Ids, req.Dev)
 	jsonMsgObj(c, I18nWeb(c, "pages.nodes.toasts.updateStarted"), results, err)
+}
+
+// updatePanelStatus checks the remote installation result, not merely whether
+// the update was started. The frontend compares the returned run ID.
+func (a *NodeController) updatePanelStatus(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		jsonMsg(c, "invalid node ID", fmt.Errorf("invalid node ID"))
+		return
+	}
+	status, err := a.nodeService.PanelUpdateStatus(id)
+	if err != nil {
+		jsonMsg(c, "failed to check remote panel update status", err)
+		return
+	}
+	jsonObj(c, status, nil)
 }
 
 func (a *NodeController) history(c *gin.Context) {

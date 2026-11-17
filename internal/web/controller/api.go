@@ -1,8 +1,12 @@
 package controller
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"sync"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
@@ -10,13 +14,15 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/tgbot"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
-
-	"github.com/gin-gonic/gin"
 )
 
 // APIController handles the main API routes for the 3x-ui panel, including inbounds and server management.
 type APIController struct {
 	BaseController
+	backgroundOnce        sync.Once
+	backgroundWG          sync.WaitGroup
+	firewallController    *FirewallController
+	adBlockController     *AdBlockController
 	inboundController     *InboundController
 	serverController      *ServerController
 	nodeController        *NodeController
@@ -37,37 +43,48 @@ func NewAPIController(g *gin.RouterGroup, settingService service.SettingService)
 }
 
 func (a *APIController) checkAPIAuth(c *gin.Context) {
-	// A verified client certificate (a completed mTLS handshake) authenticates
-	// the caller, equivalent to a valid bearer token. api_authed must be set so
-	// the CSRF middleware lets cert-authed mutations through.
-	if c.Request.TLS != nil && len(c.Request.TLS.VerifiedChains) > 0 {
-		if u, err := a.userService.GetFirstUser(); err == nil {
-			session.SetAPIAuthUser(c, u)
+	setAuthenticated := func(scope string) bool {
+		u, err := a.userService.GetFirstUser()
+		if err != nil || u == nil {
+			c.AbortWithStatus(http.StatusServiceUnavailable)
+			return false
 		}
+		session.SetAPIAuthUser(c, u)
 		c.Set("api_authed", true)
-		c.Set("api_token_scope", model.ApiScopeNodeSync)
-		c.Next()
+		c.Set("api_token_scope", scope)
+		return true
+	}
+	matchedScope := ""
+	scheme, credential, _ := strings.Cut(strings.TrimSpace(c.GetHeader("Authorization")), " ")
+	isBearer := strings.EqualFold(scheme, "Bearer")
+	if isBearer {
+		if row, matched := a.apiTokenService.MatchToken(strings.TrimSpace(credential)); matched {
+			matchedScope = row.Scope
+		}
+	}
+	// Verified mTLS alone authenticates as node-sync. A valid explicit admin
+	// or node-admin bearer keeps its full authority instead of being downgraded.
+	if c.Request.TLS != nil && len(c.Request.TLS.VerifiedChains) > 0 {
+		scope := model.ApiScopeNodeSync
+		if matchedScope == model.ApiScopeAdmin || matchedScope == model.ApiScopeNodeAdmin {
+			scope = matchedScope
+		}
+		if setAuthenticated(scope) {
+			c.Next()
+		}
 		return
 	}
-	auth := c.GetHeader("Authorization")
-	if after, ok := strings.CutPrefix(auth, "Bearer "); ok {
-		tok := after
-		if row, ok := a.apiTokenService.MatchToken(tok); ok {
-			if u, err := a.userService.GetFirstUser(); err == nil {
-				session.SetAPIAuthUser(c, u)
-			}
-			c.Set("api_authed", true)
-			c.Set("api_token_scope", row.Scope)
+	if matchedScope != "" {
+		if setAuthenticated(matchedScope) {
 			c.Next()
-			return
 		}
+		return
 	}
 	if !session.IsLogin(c) {
 		// A presented Bearer token is not an anonymous scan: return 401 so
 		// callers can distinguish a bad/disabled token from a wrong base path
 		// (NoRoute still 404s). XHR keeps 401; bare unauthenticated stays 404.
-		authHdr := c.GetHeader("Authorization")
-		if strings.HasPrefix(authHdr, "Bearer ") || c.GetHeader("X-Requested-With") == "XMLHttpRequest" {
+		if isBearer || c.GetHeader("X-Requested-With") == "XMLHttpRequest" {
 			c.AbortWithStatus(http.StatusUnauthorized)
 		} else {
 			c.AbortWithStatus(http.StatusNotFound)
@@ -80,6 +97,7 @@ func (a *APIController) checkAPIAuth(c *gin.Context) {
 // monitorScopeAllow exposes only status/metrics routes without sensitive data.
 // Keys are route patterns relative to /panel/api.
 var monitorScopeAllow = map[string]struct{}{
+	"/server/amneziawgMetrics":                    {},
 	"/server/status":                              {},
 	"/server/cpuHistory/:bucket":                  {},
 	"/server/history/:metric/:bucket":             {},
@@ -94,35 +112,52 @@ var monitorScopeAllow = map[string]struct{}{
 
 // nodeSyncScopeAllow is the node-sync route/method allowlist relative to /panel/api; Gin patterns prevent concrete parameters broadening authority.
 var nodeSyncScopeAllow = map[string]map[string]struct{}{
-	"/server/status":               {http.MethodGet: {}},
-	"/inbounds/list":               {http.MethodGet: {}},
-	"/inbounds/add":                {http.MethodPost: {}},
-	"/inbounds/del/:id":            {http.MethodPost: {}},
-	"/inbounds/update/:id":         {http.MethodPost: {}},
-	"/inbounds/:id/subSortIndex":   {http.MethodPost: {}},
-	"/clients/add":                 {http.MethodPost: {}},
-	"/clients/del/:email":          {http.MethodPost: {}},
-	"/clients/:email/detach":       {http.MethodPost: {}},
-	"/clients/update/:email":       {http.MethodPost: {}},
-	"/server/restartXrayService":   {http.MethodPost: {}},
-	"/server/restartCoreService":   {http.MethodPost: {}},
-	"/server/updatePanel":          {http.MethodPost: {}},
-	"/server/getWebCertFiles":      {http.MethodGet: {}},
-	"/server/descendants":          {http.MethodGet: {}},
-	"/clients/resetTraffic/:email": {http.MethodPost: {}},
-	"/inbounds/resetAllTraffics":   {http.MethodPost: {}},
-	"/inbounds/:id/resetTraffic":   {http.MethodPost: {}},
-	"/clients/onlinesByGuid":       {http.MethodPost: {}},
-	"/clients/onlines":             {http.MethodPost: {}},
-	"/clients/activeInbounds":      {http.MethodPost: {}},
-	"/clients/lastOnline":          {http.MethodPost: {}},
-	"/inbounds/pushClientTraffics": {http.MethodPost: {}},
-	"/server/clientIps":            {http.MethodGet: {}, http.MethodPost: {}},
-	"/clients/clientIpsByGuid":     {http.MethodPost: {}},
-	"/hosts/list":                  {http.MethodGet: {}},
+	"/server/openflux/status":                     {http.MethodGet: {}},
+	"/domains/sni":                                {http.MethodGet: {}},
+	"/domains/certificates":                       {http.MethodGet: {}},
+	"/domains/certificates/export-cover":          {http.MethodPost: {}},
+	"/domains/certificates/install":               {http.MethodPost: {}},
+	"/domains/certificates/resolve-local":         {http.MethodPost: {}},
+	"/domains/cover-sites/local":                  {http.MethodGet: {}},
+	"/domains/cover-sites/template":               {http.MethodPost: {}},
+	"/domains/probe/http01":                       {http.MethodPost: {}},
+	"/inbounds/preflight":                         {http.MethodPost: {}},
+	"/server/status":                              {http.MethodGet: {}},
+	"/server/domainActivity":                      {http.MethodGet: {}},
+	"/inbounds/list":                              {http.MethodGet: {}},
+	"/inbounds/add":                               {http.MethodPost: {}},
+	"/inbounds/del/:id":                           {http.MethodPost: {}},
+	"/inbounds/update/:id":                        {http.MethodPost: {}},
+	"/inbounds/:id/subSortIndex":                  {http.MethodPost: {}},
+	"/clients/add":                                {http.MethodPost: {}},
+	"/clients/del/:email":                         {http.MethodPost: {}},
+	"/clients/:email/detach":                      {http.MethodPost: {}},
+	"/clients/update/:email":                      {http.MethodPost: {}},
+	"/server/restartXrayService":                  {http.MethodPost: {}},
+	"/server/restartCoreService":                  {http.MethodPost: {}},
+	"/server/getWebCertFiles":                     {http.MethodGet: {}},
+	"/server/singbox/sessions":                    {http.MethodGet: {}},
+	"/server/singbox/sessions/disconnect-user":    {http.MethodPost: {}},
+	"/server/singbox/sessions/disconnect-users":   {http.MethodPost: {}},
+	"/server/singbox/sessions/disconnect-inbound": {http.MethodPost: {}},
+	"/server/descendants":                         {http.MethodGet: {}},
+	"/clients/resetTraffic/:email":                {http.MethodPost: {}},
+	"/clients/bulkResetTraffic":                   {http.MethodPost: {}},
+	"/inbounds/resetAllTraffics":                  {http.MethodPost: {}},
+	"/inbounds/:id/resetTraffic":                  {http.MethodPost: {}},
+	"/clients/onlinesByGuid":                      {http.MethodPost: {}},
+	"/clients/onlines":                            {http.MethodPost: {}},
+	"/clients/activeInbounds":                     {http.MethodPost: {}},
+	"/clients/lastOnline":                         {http.MethodPost: {}},
+	"/inbounds/pushClientTraffics":                {http.MethodPost: {}},
+	"/server/clientIps":                           {http.MethodGet: {}, http.MethodPost: {}},
+	"/clients/clientIpsByGuid":                    {http.MethodPost: {}},
+	"/hosts/list":                                 {http.MethodGet: {}},
+	"/telemt/subscription/:subid":                 {http.MethodGet: {}},
+	"/telemt/published":                           {http.MethodGet: {}},
 }
 
-// enforceTokenScope applies explicit allowlists to monitor and node-sync tokens.
+// enforceTokenScope applies explicit allowlists to restricted API tokens.
 // Admin tokens and session-login users retain their existing behavior.
 func (a *APIController) enforceTokenScope(c *gin.Context) {
 	scopeVal, ok := c.Get("api_token_scope")
@@ -149,11 +184,14 @@ func (a *APIController) enforceTokenScope(c *gin.Context) {
 			return
 		}
 	case model.ApiScopeNodeSync:
-		if methods, allowed := nodeSyncScopeAllow[rel]; allowed {
-			if _, allowedMethod := methods[c.Request.Method]; allowedMethod {
-				c.Next()
-				return
-			}
+		if scopeAllows(nodeSyncScopeAllow, rel, c.Request.Method) {
+			c.Next()
+			return
+		}
+	case model.ApiScopeNodeAdmin:
+		if scopeAllows(nodeSyncScopeAllow, rel, c.Request.Method) || scopeAllows(nodeAdminScopeAllow, rel, c.Request.Method) {
+			c.Next()
+			return
 		}
 	default:
 		deny()
@@ -180,7 +218,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Decode + verify the node config envelope (zstd + X-Config-Sha256) and
 	// advertise support, before CSRF/handlers read the body.
 	api.Use(middleware.ConfigEnvelopeMiddleware())
-	api.Use(middleware.CSRFMiddleware())
+	api.Use(middleware.CSRFMiddleware(getRemoteIp))
 	api.Use(firewallAutoSyncMiddleware())
 
 	api.GET("/openapi.json", ServeOpenAPISpec)
@@ -196,7 +234,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Server API
 	server := api.Group("/server")
 	a.serverController = NewServerController(server)
-	NewFirewallController(server)
+	a.firewallController = NewFirewallController(server)
 
 	// Nodes API — multi-panel management
 	nodes := api.Group("/nodes")
@@ -206,6 +244,12 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	hosts := api.Group("/hosts")
 	a.hostController = NewHostController(hosts)
 
+	// OxiDNS belongs to the built-in sing-box DNS settings.
+	NewOxiDNSController(api.Group("/oxidns"))
+
+	// DNSTT is an independent DNS TCP tunnel, not a resolver or OxiDNS listener.
+	NewDNSTTController(api.Group("/dnstt"))
+
 	// Telemt standalone MTProto service
 	telemt := api.Group("/telemt")
 	NewTelemtController(telemt, a.settingService)
@@ -213,8 +257,12 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Standalone NaiveProxy is used only when Xray is selected.
 	NewNaiveProxyController(api)
 
+	// Independent OlcRTC component and user management.
+	NewOlcRTCController(api)
+
 	routingPresets := api.Group("/xray/routingPresets")
 	NewRoutingPresetController(routingPresets)
+	NewRoutingCatalogController(api.Group("/xray/routingCatalog"))
 
 	// Settings + core config management live under the API surface too, so the
 	// same authenticated panel session drives them. Gateway routes are kept as
@@ -222,9 +270,12 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	a.settingController = NewSettingController(api)
 	a.xraySettingController = NewXraySettingController(api)
 	NewGatewayController(api)
+	NewDomainController(api)
+	a.adBlockController = NewAdBlockController(api)
 
 	// Subscription balancers — client-side balancers for the JSON sub output
 	NewSubBalancerController(api)
+	NewManagerController(api)
 
 	// Extra routes
 	api.POST("/backuptotgbot", a.BackuptoTgbot)
@@ -233,4 +284,38 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 // BackuptoTgbot sends a backup of the panel data to Telegram bot admins.
 func (a *APIController) BackuptoTgbot(c *gin.Context) {
 	a.Tgbot.SendBackupToAdmins()
+}
+
+// StartBackground starts workers only for an active panel, never route registration.
+func (a *APIController) StartBackground(ctx context.Context) {
+	a.backgroundOnce.Do(func() {
+		workers := []func(){
+			func() { a.firewallController.firewallService.RunAutoSync(ctx) },
+			func() { a.adBlockController.runAdBlockScheduler(ctx) },
+			func() { service.RunTelemtConnectionMonitor(ctx) },
+			func() { (&service.ManagerService{}).Run(ctx) },
+		}
+		for _, worker := range workers {
+			a.backgroundWG.Add(1)
+			go func() { defer a.backgroundWG.Done(); worker() }()
+		}
+	})
+}
+
+// WaitBackground joins every cancelled worker before the database can be closed.
+func (a *APIController) WaitBackground() { a.backgroundWG.Wait() }
+
+var nodeAdminScopeAllow = map[string]map[string]struct{}{
+	"/server/openflux/install": {http.MethodGet: {}, http.MethodPost: {}},
+	"/server/updatePanel":      {http.MethodPost: {}},
+	"/server/getUpdateStatus":  {http.MethodGet: {}},
+}
+
+func scopeAllows(allow map[string]map[string]struct{}, path, method string) bool {
+	methods, exists := allow[path]
+	if !exists {
+		return false
+	}
+	_, exists = methods[method]
+	return exists
 }

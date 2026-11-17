@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-
-	"gorm.io/gorm"
 )
 
 // Short-lived tombstone of just-deleted client emails so that a node snapshot
@@ -261,7 +261,7 @@ func stripTombstonedClients(settings string) (string, bool) {
 
 // liftClientLifecycleInSettings rewrites adopted settings from master traffic
 // so a lagging node blob cannot store pre-extension expiry/enable (#6228).
-func liftClientLifecycleInSettings(settings string, trafficByEmail map[string]*xray.ClientTraffic) (string, bool) {
+func liftClientLifecycleInSettings(settings string, trafficByEmail map[string]*coremodel.ClientTraffic) (string, bool) {
 	if settings == "" || len(trafficByEmail) == 0 {
 		return settings, false
 	}
@@ -350,4 +350,16 @@ func jsonClientInt64(v any) (int64, bool) {
 		return 0, false
 	}
 	return int64(n), true
+}
+
+// liftTombstonesOnCommit withdraws the delete tombstones of clients a serialized
+// tx re-created once it commits; a rolled-back create leaves them standing.
+func liftTombstonesOnCommit(tx *gorm.DB, created []*model.ClientRecord) {
+	state := serializedTxOf(tx)
+	if state == nil {
+		return
+	}
+	for _, rec := range created {
+		state.createdClientEmails = append(state.createdClientEmails, rec.Email)
+	}
 }

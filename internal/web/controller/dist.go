@@ -6,6 +6,7 @@ import (
 	htmlpkg "html"
 	"io/fs"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -106,20 +107,14 @@ func serveDistPage(c *gin.Context, name string) {
 	}
 
 	if basePath != "/" {
-		body = bytes.ReplaceAll(body, []byte(`src="/assets/`), []byte(`src="`+basePath+`assets/`))
-		body = bytes.ReplaceAll(body, []byte(`href="/assets/`), []byte(`href="`+basePath+`assets/`))
+		assetPrefix := htmlpkg.EscapeString(basePath + "assets/")
+		body = bytes.ReplaceAll(body, []byte(`src="/assets/`), []byte(`src="`+assetPrefix))
+		body = bytes.ReplaceAll(body, []byte(`href="/assets/`), []byte(`href="`+assetPrefix))
 	}
 
-	jsEscape := strings.NewReplacer(
-		`\`, `\\`,
-		`"`, `\"`,
-		"\n", `\n`,
-		"\r", `\r`,
-		"<", `<`,
-		">", `>`,
-		"&", `&`,
-	)
-	escapedBase := jsEscape.Replace(basePath)
+	// JSON string encoding also escapes HTML delimiters: a configured path
+	// containing </script> must remain data inside the inline script.
+	escapedBase, _ := json.Marshal(basePath)
 	csrfToken, err := session.EnsureCSRFToken(c)
 	if err != nil {
 		logger.Warning("Unable to mint CSRF token for", name+":", err)
@@ -132,16 +127,23 @@ func serveDistPage(c *gin.Context, name string) {
 	if nonce := c.GetString("csp_nonce"); nonce != "" {
 		nonceAttr = ` nonce="` + htmlpkg.EscapeString(nonce) + `"`
 	}
-	script := `<script data-cfasync="false"` + nonceAttr + `>window.X_UI_BASE_PATH="` + escapedBase + `"`
+	script := `<script data-cfasync="false"` + nonceAttr + `>window.X_UI_BASE_PATH=` + string(escapedBase)
 	if name != "login.html" {
-		escapedVer := jsEscape.Replace(config.GetPanelVersion())
-		script += `;window.X_UI_CUR_VER="` + escapedVer + `"`
-		script += `;window.X_UI_DB_TYPE="` + config.GetDBKind() + `"`
+		escapedVer, _ := json.Marshal(config.GetPanelVersion())
+		escapedDBKind, _ := json.Marshal(config.GetDBKind())
+		script += `;window.X_UI_CUR_VER=` + string(escapedVer)
+		script += `;window.X_UI_DB_TYPE=` + string(escapedDBKind)
 	}
 	script += `;</script>`
 	inject := []byte(script)
 	inject = append(inject, csrfMeta...)
 	inject = append(inject, basePathMeta...)
+	inject = append(inject, []byte(`<meta name="panel-instance" content="`+htmlpkg.EscapeString(c.GetString("panel_instance"))+`"><meta name="panel-port-override" content="`+strconv.Itoa(c.GetInt("panel_port_override"))+`">`)...)
+
+	if port := c.GetInt("panel_port"); port > 0 {
+		addressMeta := `<meta name="panel-port" content="` + strconv.Itoa(port) + `"><meta name="panel-tls" content="` + strconv.FormatBool(c.GetBool("panel_tls")) + `">`
+		inject = append(inject, []byte(addressMeta)...)
+	}
 	inject = append(inject, pwaHeadInjection(basePath, name)...)
 	inject = append(inject, []byte(`</head>`)...)
 	out := bytes.Replace(body, []byte("</head>"), inject, 1)

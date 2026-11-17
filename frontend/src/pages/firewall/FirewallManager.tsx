@@ -33,13 +33,20 @@ type FirewallManualRule = {
   label?: string;
 };
 
+type FirewallExternalRule = { id: string; label: string };
+
 type FirewallStatus = {
+  externalRules?: FirewallExternalRule[];
+  inspectionError?: string;
   supported: boolean;
   backend: string;
   enabled: boolean;
   autoSync: boolean;
+  syncInterval?: number;
   pingEnabled: boolean;
   canInstallUfw?: boolean;
+  recoveryCode?: string;
+  kernelRelease?: string;
   rules: FirewallRule[];
   manualRules: FirewallManualRule[];
   message?: string;
@@ -69,12 +76,19 @@ function useFirewallText() {
             unsupported:
               '3x-ui не может безопасно управлять обнаруженным файрволлом. Проверьте его конфигурацию и сообщение выше.',
             noFirewall: 'Поддерживаемый файрволл не найден.',
+            kernelModulesMissing:
+              'Панель попыталась восстановить поддержку файрволла, но модули запущенного ядра отсутствуют. На обычном сервере проверьте установленное ядро и перезагрузите его через консоль провайдера. В контейнере исправлять поддержку Netfilter нужно на хосте.',
+            kernelUnavailable:
+              'Панель автоматически проверила доступные backend и попыталась загрузить совместимые модули. Ядро по-прежнему не предоставляет доступ к правилам. Проверьте поддержку Netfilter в ядре или ограничения контейнера.',
+            permissionDenied:
+              'Недостаточно прав для доступа к правилам файрволла. Панель не будет автоматически обходить ограничения безопасности; проверьте права процесса или контейнера.',
             installUfw: 'Установить UFW',
             installUfwHint:
               'UFW будет установлен через пакетный менеджер системы, но не будет включён автоматически. После установки включите его переключателем выше, когда будете готовы.',
             enabled: 'Файрволл включён',
             disabled: 'Файрволл выключен',
             auto: 'Автоматически открывать и закрывать порты подключений',
+            interval: 'Период проверки правил, сек',
             autoHint:
               'При создании, изменении, включении или удалении inbound правила синхронизируются автоматически.',
             ping: 'Разрешить ping (ICMP)',
@@ -82,8 +96,10 @@ function useFirewallText() {
               'Отвечать на входящие ICMP Echo Request по IPv4 и IPv6. Служебный ICMP остаётся доступен. Настройка применяется, когда файрволл включён.',
             safety:
               'Порт панели, текущий внешний порт панели, порт подписок и SSH защищаются автоматически, чтобы не потерять доступ к серверу.',
-            sync: 'Синхронизировать сейчас',
             rules: 'Активные и ожидаемые правила',
+            unknown: 'НЕИЗВЕСТНО',
+            deleteExternal: 'Удалить это существующее правило файрволла?',
+            inspectFailed: 'Не удалось прочитать существующие правила',
             manual: 'Ручные правила',
             add: 'Добавить',
             port: 'Порт',
@@ -112,12 +128,19 @@ function useFirewallText() {
             unsupported:
               '3x-ui cannot safely manage the detected firewall. Check its configuration and the message above.',
             noFirewall: 'No supported firewall was found.',
+            kernelModulesMissing:
+              'The panel attempted to recover firewall support, but modules for the running kernel are missing. On a regular server, check the installed kernel and reboot through the provider console. In a container, Netfilter support must be fixed on the host.',
+            kernelUnavailable:
+              'The panel automatically checked the available backends and attempted to load compatible modules. The kernel still cannot access firewall rules. Check kernel Netfilter support or container restrictions.',
+            permissionDenied:
+              'The process cannot access firewall rules. The panel will not bypass security restrictions automatically; check process or container privileges.',
             installUfw: 'Install UFW',
             installUfwHint:
               'UFW will be installed with the system package manager, but it will not be enabled automatically. Enable it with the switch above when you are ready.',
             enabled: 'Firewall enabled',
             disabled: 'Firewall disabled',
             auto: 'Automatically open and close inbound ports',
+            interval: 'Rule check interval, seconds',
             autoHint:
               'Rules are synchronized after inbound create, update, enable, disable, and delete.',
             ping: 'Allow ping (ICMP)',
@@ -125,8 +148,10 @@ function useFirewallText() {
               'Respond to incoming ICMP Echo Requests over IPv4 and IPv6. Control ICMP remains available. This setting applies while the firewall is enabled.',
             safety:
               'Panel, current external panel port, subscription port, and SSH are protected automatically to prevent lockout.',
-            sync: 'Sync now',
             rules: 'Active and expected rules',
+            unknown: 'UNKNOWN',
+            deleteExternal: 'Delete this existing firewall rule?',
+            inspectFailed: 'Could not inspect existing rules',
             manual: 'Manual rules',
             add: 'Add',
             port: 'Port',
@@ -156,17 +181,22 @@ function useFirewallText() {
 export function FirewallManager() {
   const text = useFirewallText();
   const [status, setStatus] = useState<FirewallStatus | null>(null);
-  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [action, setAction] = useState('');
   const [port, setPort] = useState<number | null>(null);
   const [protocol, setProtocol] = useState('both');
   const [label, setLabel] = useState('');
+  const [interval, setInterval] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    void (async () => {
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      if (document.hidden) {
+        timer = setTimeout(() => void refresh(), 15000);
+        return;
+      }
       try {
         const msg = await HttpUtil.get<FirewallStatus>('/panel/api/server/firewall/status');
         if (cancelled) return;
@@ -179,12 +209,14 @@ export function FirewallManager() {
       } catch {
         if (!cancelled) setLoadError(true);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) timer = setTimeout(() => void refresh(), 15000);
       }
-    })();
+    };
+    void refresh();
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, []);
 
@@ -200,6 +232,25 @@ export function FirewallManager() {
     } finally {
       setAction('');
     }
+  }
+
+  async function saveInterval() {
+    if (
+      !status ||
+      interval === null ||
+      interval < 5 ||
+      interval > 3600 ||
+      interval === (status.syncInterval ?? 60)
+    )
+      return;
+    if (
+      await post(
+        '/panel/api/server/firewall/auto-sync',
+        { enabled: status.autoSync, syncInterval: interval },
+        'interval',
+      )
+    )
+      setInterval(null);
   }
 
   const sourceLabel = (rule: FirewallRule) => {
@@ -300,14 +351,22 @@ export function FirewallManager() {
 
   if (!supported) {
     const canInstallUfw = Boolean(status.canInstallUfw);
+    const recoveryHint =
+      status.recoveryCode === 'kernel-modules-missing'
+        ? text.kernelModulesMissing
+        : status.recoveryCode === 'kernel-netfilter-unavailable'
+          ? text.kernelUnavailable
+          : status.recoveryCode === 'permission-denied'
+            ? text.permissionDenied
+            : '';
     return (
       <Alert
         type="warning"
         showIcon
-        title={canInstallUfw ? text.noFirewall : status.message || text.unsupported}
+        title={canInstallUfw ? text.noFirewall : text.unsupported}
         description={
           canInstallUfw ? (
-            <Space direction="vertical" size="small">
+            <Space orientation="vertical" size="small">
               <Typography.Text>{text.installUfwHint}</Typography.Text>
               <Button
                 type="primary"
@@ -320,7 +379,21 @@ export function FirewallManager() {
               </Button>
             </Space>
           ) : (
-            text.unsupported
+            <Space orientation="vertical" size="small">
+              {recoveryHint && <Typography.Text>{recoveryHint}</Typography.Text>}
+              {status.kernelRelease && (
+                <Typography.Text type="secondary">Linux: {status.kernelRelease}</Typography.Text>
+              )}
+              {status.message && (
+                <Typography.Text
+                  type="secondary"
+                  copyable
+                  style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                >
+                  {status.message}
+                </Typography.Text>
+              )}
+            </Space>
           )
         }
       />
@@ -328,7 +401,7 @@ export function FirewallManager() {
   }
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       <Space size="large" wrap>
         <Space>
           <Switch
@@ -341,12 +414,6 @@ export function FirewallManager() {
           <Typography.Text strong>{status.enabled ? text.enabled : text.disabled}</Typography.Text>
         </Space>
         <Tag>{status.backend}</Tag>
-        <Button
-          loading={action === 'sync' || loading}
-          onClick={() => void post('/panel/api/server/firewall/sync', undefined, 'sync')}
-        >
-          {text.sync}
-        </Button>
       </Space>
 
       <Alert type="info" showIcon title={text.safety} />
@@ -364,6 +431,21 @@ export function FirewallManager() {
             <Typography.Text strong>{text.auto}</Typography.Text>
             <br />
             <Typography.Text type="secondary">{text.autoHint}</Typography.Text>
+            <br />
+            <Space>
+              <Typography.Text>{text.interval}</Typography.Text>
+              <InputNumber
+                aria-label={text.interval}
+                min={5}
+                max={3600}
+                precision={0}
+                value={interval ?? status.syncInterval ?? 60}
+                disabled={action === 'interval'}
+                onChange={setInterval}
+                onBlur={() => void saveInterval()}
+                onPressEnter={() => void saveInterval()}
+              />
+            </Space>
           </div>
         </Space>
       </div>
@@ -395,6 +477,48 @@ export function FirewallManager() {
         pagination={false}
         scroll={{ x: 620 }}
       />
+
+      {status.inspectionError && (
+        <Alert type="warning" title={text.inspectFailed} description={status.inspectionError} />
+      )}
+      {Boolean(status.externalRules?.length) && (
+        <Table<FirewallExternalRule>
+          size="small"
+          rowKey="id"
+          dataSource={status.externalRules}
+          pagination={false}
+          showHeader={false}
+          columns={[
+            { key: 'state', width: 140, render: () => <Tag color="warning">{text.unknown}</Tag> },
+            {
+              dataIndex: 'label',
+              render: (value: string) => (
+                <Typography.Text style={{ overflowWrap: 'anywhere' }}>{value}</Typography.Text>
+              ),
+            },
+            {
+              key: 'delete',
+              width: 100,
+              render: (_: unknown, rule: FirewallExternalRule) => (
+                <Popconfirm
+                  title={text.deleteExternal}
+                  onConfirm={() =>
+                    void post(
+                      '/panel/api/server/firewall/rules/delete-external',
+                      { id: rule.id },
+                      `external-${rule.id}`,
+                    )
+                  }
+                >
+                  <Button danger size="small" loading={action === `external-${rule.id}`}>
+                    {text.remove}
+                  </Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
+      )}
 
       <Divider titlePlacement="start">{text.manual}</Divider>
       <Space wrap>
@@ -452,7 +576,6 @@ export function FirewallManager() {
         pagination={false}
         locale={{ emptyText: text.noManual }}
       />
-      {loading ? <Typography.Text type="secondary">{text.loading}</Typography.Text> : null}
     </Space>
   );
 }

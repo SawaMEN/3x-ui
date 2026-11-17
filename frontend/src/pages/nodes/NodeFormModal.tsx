@@ -164,6 +164,12 @@ export default function NodeFormModal({
     setTestResult(null);
     try {
       const payload = buildPayload(methods.getValues());
+      // A new/changed outbound bridge exists only after the server saves and
+      // applies the node. This is pending setup, not a failed connection.
+      if (payload.outboundTag && (mode === 'add' || payload.outboundTag !== node?.outboundTag)) {
+        setTestResult({ status: 'pending' });
+        return;
+      }
       const msg = await testConnection(payload);
       if (msg?.success && msg.obj) {
         setTestResult(msg.obj);
@@ -217,18 +223,13 @@ export default function NodeFormModal({
     setSubmitting(true);
     try {
       const payload = buildPayload(result.data);
-      const test = await testConnection(payload);
-      const probe = test?.success ? test.obj : null;
-      if (!probe || probe.status !== 'online') {
-        setTestResult(
-          probe ?? { status: 'offline', error: test?.msg || t('pages.nodes.connectionFailed') },
-        );
-        return;
-      }
-      setTestResult(probe);
+      // The save endpoint checks reachability itself. For a routed node it
+      // first creates/applies the bridge, then probes through that exact route.
       const msg = await save(payload);
       if (msg?.success) {
         onOpenChange(false);
+      } else {
+        setTestResult({ status: 'offline', error: msg?.msg || t('pages.nodes.connectionFailed') });
       }
     } finally {
       setSubmitting(false);
@@ -470,6 +471,8 @@ export default function NodeFormModal({
                         testResult.xrayVersion ? `Xray ${testResult.xrayVersion}` : undefined
                       }
                     />
+                  ) : testResult.status === 'pending' ? (
+                    <Alert type="info" showIcon title={t('pages.nodes.connectionRequiresSave')} />
                   ) : (
                     <Alert
                       type="error"

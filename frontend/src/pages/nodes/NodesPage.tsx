@@ -30,6 +30,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNodesQuery } from '@/api/queries/useNodesQuery';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 import { useNodeMutations } from '@/api/queries/useNodeMutations';
+import type { NodeUpdateResult, RemotePanelUpdateStatus } from '@/api/queries/useNodeMutations';
 import AppSidebar from '@/layouts/AppSidebar';
 import NodeList from './NodeList';
 import NodeFormModal from './NodeFormModal';
@@ -37,12 +38,55 @@ import { setMessageInstance } from '@/utils/messageBus';
 import { HttpUtil } from '@/utils';
 import type { PanelUpdateInfo } from '../index/PanelUpdateModal';
 
+// The remote API acknowledges only the launch. Keep checking the run-specific
+// status across the service restart so a failed installation is never reported
+// as a successful update.
+type RemoteUpdateCheck = { status: RemotePanelUpdateStatus | null; error?: string };
+
+async function pollRemotePanelUpdate(nodeId: number, runId: string): Promise<RemoteUpdateCheck> {
+  // The release fetch can spend up to 15 minutes per network attempt.
+  // Do not mark a slow, otherwise healthy node as "unknown" after 3 minutes.
+  const deadline = Date.now() + 40 * 60_000;
+  while (Date.now() < deadline) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 10_000));
+    try {
+      const response = await HttpUtil.get<RemotePanelUpdateStatus>(
+        `/panel/api/nodes/updatePanelStatus/${nodeId}`,
+        undefined,
+        { silent: true, timeout: 12_000 },
+      );
+      // An authentication/permission failure or missing API endpoint will not
+      // recover just by waiting for the node to restart. Surface it immediately.
+      if (!response?.success) {
+        const error = response?.msg ?? '';
+        if (/\b(401|403|404)\b|not permitted|unauthorized|forbidden/i.test(error)) {
+          return { status: null, error };
+        }
+        continue;
+      }
+      const status = response.obj;
+      if (status?.runId === runId && (status.state === 'success' || status.state === 'failed')) {
+        return { status };
+      }
+    } catch {
+      // Expected while the node is restarting; retry until the deadline.
+    }
+  }
+  return { status: null };
+}
+
 // Confirm-dialog body that lets the operator pick the stable or dev channel for
 // a node panel update. Reports changes via onChange so the imperative
 // modal.confirm onOk can read the latest choice through a ref.
-function UpdateChannelChoice({ onChange }: { onChange: (dev: boolean) => void }) {
+function UpdateChannelChoice({
+  onChange,
+  defaultDev,
+}: {
+  onChange: (dev: boolean) => void;
+  defaultDev: boolean;
+}) {
   const { t } = useTranslation();
-  const [dev, setDev] = useState(false);
+  const [dev, setDev] = useState(defaultDev);
   return (
     <div>
       <p>{t('pages.nodes.updateConfirmContent')}</p>
@@ -90,14 +134,17 @@ export default function NodesPage() {
     updatePanels,
   } = useNodeMutations();
 
-  const { data: latestVersion = '' } = useQuery({
+  const { data: panelUpdateInfo } = useQuery({
     queryKey: ['server', 'panelUpdateInfo'],
     queryFn: async () => {
       const msg = await HttpUtil.get<PanelUpdateInfo>('/panel/api/server/getPanelUpdateInfo');
-      return msg?.obj?.latestVersion || '';
+      return msg?.obj ?? null;
     },
     staleTime: 5 * 60 * 1000,
   });
+  const latestVersion = panelUpdateInfo?.latestVersion ?? '';
+  // Match the default channel used by direct panel updates.
+  const defaultDevChannel = panelUpdateInfo?.channel === 'dev';
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
@@ -246,17 +293,74 @@ export default function NodesPage() {
         messageApi.warning(firstError ? `${base} — ${firstError}` : base);
       }
       setSelectedIds([]);
+
+      const untracked = results.filter((r) => r.ok && !r.runId);
+      if (untracked.length > 0) {
+        messageApi.warning(
+          t('pages.nodes.toasts.updateUntracked', { number: untracked.length }),
+          10,
+        );
+      }
+      const launched = results.filter(
+        (r): r is NodeUpdateResult & { runId: string } =>
+          r.ok && typeof r.runId === 'string' && r.runId.length > 0,
+      );
+      if (launched.length > 0) {
+        void Promise.all(
+          launched.map(async (result) => ({
+            result,
+            check: await pollRemotePanelUpdate(result.id, result.runId),
+          })),
+        ).then((outcomes) => {
+          const failures = outcomes.filter(({ check }) => check.status?.state === 'failed');
+          const successes = outcomes.filter(({ check }) => check.status?.state === 'success');
+          const unknown = outcomes.filter(({ check }) => !check.status);
+          if (failures.length > 0) {
+            modal.error({
+              title: t('pages.index.panelUpdateFailedTitle'),
+              content: (
+                <div>
+                  {failures.map(({ result, check }) => (
+                    <p key={result.id}>
+                      <strong>{result.name || `#${result.id}`}</strong>:{' '}
+                      {check.status?.message || `Exit code ${check.status?.exitCode}`}
+                      {check.status?.logFile && (
+                        <>
+                          {' — '}
+                          <code>{check.status.logFile}</code>
+                        </>
+                      )}
+                    </p>
+                  ))}
+                </div>
+              ),
+            });
+          }
+          if (successes.length > 0) {
+            messageApi.success(
+              t('pages.nodes.toasts.updateInstalled', { number: successes.length }),
+            );
+          }
+          if (unknown.length > 0) {
+            const diagnostic = unknown.find(({ check }) => check.error)?.check.error;
+            const base = t('pages.nodes.toasts.updateStatusUnknown', { number: unknown.length });
+            messageApi.warning(diagnostic ? `${base} — ${diagnostic}` : base, 10);
+          }
+          void refetch();
+        });
+      }
     },
-    [updatePanels, messageApi, t],
+    [updatePanels, messageApi, t, modal, refetch],
   );
 
   const onUpdateNode = useCallback(
     (node: NodeRecord) => {
-      devRef.current = false;
+      devRef.current = defaultDevChannel;
       modal.confirm({
         title: t('pages.nodes.updateConfirmTitle', { count: 1 }),
         content: (
           <UpdateChannelChoice
+            defaultDev={defaultDevChannel}
             onChange={(v) => {
               devRef.current = v;
             }}
@@ -267,7 +371,7 @@ export default function NodesPage() {
         onOk: () => runUpdate([node.id], devRef.current),
       });
     },
-    [modal, t, runUpdate],
+    [modal, t, runUpdate, defaultDevChannel],
   );
 
   const onUpdateSelected = useCallback(() => {
@@ -278,11 +382,12 @@ export default function NodesPage() {
       messageApi.warning(t('pages.nodes.toasts.updateNoneEligible'));
       return;
     }
-    devRef.current = false;
+    devRef.current = defaultDevChannel;
     modal.confirm({
       title: t('pages.nodes.updateConfirmTitle', { count: eligible.length }),
       content: (
         <UpdateChannelChoice
+          defaultDev={defaultDevChannel}
           onChange={(v) => {
             devRef.current = v;
           }}
@@ -292,7 +397,7 @@ export default function NodesPage() {
       cancelText: t('cancel'),
       onOk: () => runUpdate(eligible, devRef.current),
     });
-  }, [modal, t, nodes, selectedIds, runUpdate, messageApi]);
+  }, [modal, t, nodes, selectedIds, runUpdate, messageApi, defaultDevChannel]);
 
   const pageClass = useMemo(() => {
     const classes = ['nodes-page'];
@@ -333,7 +438,7 @@ export default function NodesPage() {
                           <Statistic
                             title={t('pages.nodes.totalNodes')}
                             value={String(totals.total)}
-                            prefix={<CloudServerOutlined />}
+                            prefix={<CloudServerOutlined aria-hidden />}
                           />
                         </Col>
                         <Col xs={12} sm={12} md={6}>
@@ -341,7 +446,10 @@ export default function NodesPage() {
                             title={t('pages.nodes.onlineNodes')}
                             value={String(totals.online)}
                             prefix={
-                              <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />
+                              <CheckCircleOutlined
+                                aria-hidden
+                                style={{ color: 'var(--ant-color-success)' }}
+                              />
                             }
                           />
                         </Col>
@@ -350,7 +458,10 @@ export default function NodesPage() {
                             title={t('pages.nodes.offlineNodes')}
                             value={String(totals.offline)}
                             prefix={
-                              <CloseCircleOutlined style={{ color: 'var(--ant-color-error)' }} />
+                              <CloseCircleOutlined
+                                aria-hidden
+                                style={{ color: 'var(--ant-color-error)' }}
+                              />
                             }
                           />
                         </Col>
@@ -358,7 +469,7 @@ export default function NodesPage() {
                           <Statistic
                             title={t('pages.nodes.avgLatency')}
                             value={totals.avgLatency > 0 ? `${totals.avgLatency} ms` : '-'}
-                            prefix={<ThunderboltOutlined />}
+                            prefix={<ThunderboltOutlined aria-hidden />}
                           />
                         </Col>
                       </Row>
@@ -419,6 +530,7 @@ export default function NodesPage() {
           </Typography.Paragraph>
           <Typography.Text strong>{t('pages.nodes.mtls.trustLabel')}</Typography.Text>
           <Input.TextArea
+            aria-label={t('pages.nodes.mtls.trustLabel')}
             rows={5}
             value={trustCa}
             onChange={(e) => setTrustCa(e.target.value)}

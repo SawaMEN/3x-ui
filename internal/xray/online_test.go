@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func newOnlineTestProcess() *Process {
-	return &Process{newProcess(nil)}
+func newOnlineTestProcess() *Presence {
+	return NewPresence()
 }
 
 func assertSameSet(t *testing.T, label string, got, want []string) {
@@ -166,23 +166,5 @@ func TestSetNodeTreesEmptyInputDropsNode(t *testing.T) {
 	}
 	if _, ok := p.GetMergedActiveInboundTrees()["guid-a"]; ok {
 		t.Errorf("empty active-inbound tree should remove node 3's subtree")
-	}
-}
-
-// TestOnlineAPISupportTriState pins the lazy capability probe contract: a new
-// process starts Unknown (so the first caller probes), and the flag holds
-// whatever the probe recorded until the process is replaced on restart.
-func TestOnlineAPISupportTriState(t *testing.T) {
-	p := newOnlineTestProcess()
-	if got := p.OnlineAPISupport(); got != OnlineAPIUnknown {
-		t.Fatalf("new process must start with OnlineAPIUnknown, got %v", got)
-	}
-	p.SetOnlineAPISupport(OnlineAPISupported)
-	if got := p.OnlineAPISupport(); got != OnlineAPISupported {
-		t.Fatalf("expected OnlineAPISupported, got %v", got)
-	}
-	p.SetOnlineAPISupport(OnlineAPIUnsupported)
-	if got := p.OnlineAPISupport(); got != OnlineAPIUnsupported {
-		t.Fatalf("expected OnlineAPIUnsupported, got %v", got)
 	}
 }

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // remarkContext carries the per-client data a remark template can interpolate.
@@ -20,7 +20,7 @@ import (
 // name (use {{INBOUND}} and {{HOST}} side by side to show both).
 type remarkContext struct {
 	client     model.Client
-	stats      xray.ClientTraffic
+	stats      coremodel.ClientTraffic
 	inbound    *model.Inbound
 	hostRemark string
 	transport  string
@@ -193,7 +193,7 @@ func expandSegment(seg string, ctx remarkContext) (string, bool) {
 func remarkVarValue(token string, ctx remarkContext) string {
 	c := ctx.client
 	st := ctx.stats
-	used := st.Up + st.Down
+	used := common.TrafficUsage(st.Up, st.Down)
 	switch token {
 	case "EMAIL", "USERNAME":
 		return c.Email
@@ -290,14 +290,14 @@ func remarkVarValue(token string, ctx remarkContext) string {
 }
 
 // clientStatus collapses enable/expiry/quota into a single word.
-func clientStatus(st xray.ClientTraffic) string {
+func clientStatus(st coremodel.ClientTraffic) string {
 	if !st.Enable {
 		return "disabled"
 	}
-	if st.ExpiryTime > 0 && st.ExpiryTime/1000 < time.Now().Unix() {
+	if common.Expired(st.ExpiryTime, time.Now().UnixMilli()) {
 		return "expired"
 	}
-	if st.Total > 0 && st.Up+st.Down >= st.Total {
+	if st.Total > 0 && common.TrafficUsage(st.Up, st.Down) >= st.Total {
 		return "depleted"
 	}
 	return "active"
@@ -340,7 +340,7 @@ func max64(a, b int64) int64 {
 }
 
 // statusEmoji maps clientStatus to a single emoji character.
-func statusEmoji(st xray.ClientTraffic) string {
+func statusEmoji(st coremodel.ClientTraffic) string {
 	switch clientStatus(st) {
 	case "active":
 		return "✅"
@@ -357,11 +357,11 @@ func statusEmoji(st xray.ClientTraffic) string {
 
 // usagePercentage computes the traffic usage as a percentage string (e.g. "52.3％").
 // Uses U+FF05: an ASCII percent encodes to %25, which Happ rejects, dropping the remark.
-func usagePercentage(st xray.ClientTraffic) string {
+func usagePercentage(st coremodel.ClientTraffic) string {
 	if st.Total <= 0 {
 		return ""
 	}
-	used := st.Up + st.Down
+	used := common.TrafficUsage(st.Up, st.Down)
 	pct := float64(used) / float64(st.Total) * 100
 	if pct > 100 {
 		pct = 100 // clamp over-quota usage, consistent with TRAFFIC_LEFT
@@ -414,15 +414,25 @@ func jalaliExpireDateLabel(expiryMs int64) string {
 // (2024-01-01 = 1402-10-11 JAL) and walks the Jalali calendar forward/backward.
 func gregorianToJalali(gy, gm, gd int) (jy, jm, jd int) {
 	// Compute Julian Day Number for the input Gregorian date
-	a := (14 - gm) / 12
-	y := gy + 4800 - a
-	m := gm + 12*a - 3
-	jdn := gd + (153*m+2)/5 + 365*y + y/4 - y/100 + y/400 - 32045
+	// int64 intermediates also keep distant int64-millisecond expiries valid
+	// on 32-bit panel builds.
+	a := (14 - int64(gm)) / 12
+	y := int64(gy) + 4800 - a
+	m := int64(gm) + 12*a - 3
+	jdn := int64(gd) + (153*m+2)/5 + 365*y + y/4 - y/100 + y/400 - 32045
 
 	// Reference: 2024-01-01 = JDN 2460311 = 1402-10-11 JAL
-	refJDN := 2460311
-	days := int64(jdn - refJDN)
+	const refJDN = 2460311
+	days := jdn - refJDN
 	jy, jm, jd = 1402, 10, 11
+	// The existing calendar repeats after 33 years (8 leap days). Skip whole
+	// cycles so a far-future expiry cannot require billions of month steps.
+	if days > 0 {
+		const cycleDays = 33*365 + 8
+		cycles := days / cycleDays
+		jy += int(cycles) * 33
+		days %= cycleDays
+	}
 
 	// Walk forward
 	for days > 0 {
@@ -481,9 +491,20 @@ func isJalaliLeap(y int) bool {
 // statsForClient returns the client's live traffic record, or a minimal one
 // synthesized from the client (enable/expiry/total) when no live stats exist —
 // so expiry/total/status tokens still resolve on links that have no counters yet.
-func (s *SubService) statsForClient(inbound *model.Inbound, client model.Client) xray.ClientTraffic {
-	if stats, ok := s.findClientStats(inbound, client.Email); ok {
+func (s *SubService) statsForClient(inbound *model.Inbound, client model.Client) coremodel.ClientTraffic {
+	// Node snapshots can omit configured limits. Use the same zero-value
+	// fallback as Subscription-Userinfo, retaining runtime usage and status.
+	withConfiguredLimits := func(stats coremodel.ClientTraffic) coremodel.ClientTraffic {
+		if stats.Total == 0 {
+			stats.Total = client.TotalGB
+		}
+		if stats.ExpiryTime == 0 {
+			stats.ExpiryTime = client.ExpiryTime
+		}
 		return stats
+	}
+	if stats, ok := s.findClientStats(inbound, client.Email); ok {
+		return withConfiguredLimits(stats)
 	}
 	// client_traffics.email is globally unique, so a client shared across several
 	// inbounds of one subscription has a single traffic row owned by exactly one
@@ -491,16 +512,16 @@ func (s *SubService) statsForClient(inbound *model.Inbound, client model.Client)
 	// the per-request map built from all the subscription's inbounds so
 	// {{TRAFFIC_*}} reflect real usage instead of the full quota (#5443).
 	if stats, ok := s.statsByEmail[client.Email]; ok {
-		return stats
+		return withConfiguredLimits(stats)
 	}
 	// Both in-memory paths key off client_traffics.inbound_id, which goes stale
 	// when an inbound is deleted and recreated, orphaning the row from every
 	// loaded inbound. Fall back to a direct lookup by the globally-unique email
 	// so usage still resolves for clients predating that recreation (#5567).
 	if stats, ok := s.statsByEmailFromDB(client.Email); ok {
-		return stats
+		return withConfiguredLimits(stats)
 	}
-	return xray.ClientTraffic{
+	return coremodel.ClientTraffic{
 		Enable:     client.Enable,
 		ExpiryTime: client.ExpiryTime,
 		Total:      client.TotalGB,
@@ -651,11 +672,9 @@ func inboundSecurity(inbound *model.Inbound) string {
 func (s *SubService) genTemplatedRemark(inbound *model.Inbound, client model.Client, hostRemark string, transport string) string {
 	ctx := remarkContext{
 		client:     client,
-		stats:      s.statsForClient(inbound, client),
 		inbound:    inbound,
 		hostRemark: hostRemark,
 		transport:  transport,
-		security:   inboundSecurity(inbound),
 	}
 	var tmpl string
 	if s.subscriptionBody {
@@ -663,10 +682,29 @@ func (s *SubService) genTemplatedRemark(inbound *model.Inbound, client model.Cli
 	} else {
 		tmpl = filterRemarkTemplate(translateUISingleBrackets(s.remarkTemplate), displayRemoveTokens)
 	}
+	// Display/repeated-link templates usually contain names only. Avoid a
+	// traffic lookup and decoding stream settings for values they never use.
+	var needTraffic, needSecurity bool
+	for _, token := range remarkTokens(tmpl) {
+		needTraffic = needTraffic || usageInfoTokens[token.name]
+		needSecurity = needSecurity || token.name == "SECURITY"
+	}
+	if needTraffic {
+		ctx.stats = s.statsForClient(inbound, client)
+	}
+	if needSecurity {
+		ctx.security = inboundSecurity(inbound)
+	}
 	if out := expandRemarkVars(tmpl, ctx); strings.TrimSpace(out) != "" {
 		return out
 	}
-	return ctx.configName()
+	if name := ctx.configName(); name != "" {
+		return name
+	}
+	if name := fallbackRemark(hostRemark, client.Email); name != "" {
+		return name
+	}
+	return string(inbound.Protocol)
 }
 
 // genHostRemark builds one host endpoint's remark for a specific client. With a
@@ -674,6 +712,9 @@ func (s *SubService) genTemplatedRemark(inbound *model.Inbound, client model.Cli
 // first link and the name-only part thereafter; displays render the name-only
 // part). With no template it falls back to inbound, host and email joined by "-".
 func (s *SubService) genHostRemark(inbound *model.Inbound, client model.Client, hostRemark string, transport string) string {
+	if name := client.ConnectionDisplayName(inbound.Remark); name != "" {
+		return name
+	}
 	if s.remarkTemplate != "" {
 		return s.genTemplatedRemark(inbound, client, hostRemark, transport)
 	}

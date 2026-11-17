@@ -7,6 +7,6 @@ import { PortSchema } from '@/schemas/primitives';
 export const HysteriaOutboundSettingsSchema = z.object({
   address: z.string().min(1),
   port: PortSchema,
-  version: z.number().int().min(1).default(2),
+  version: z.union([z.literal(1), z.literal(2)]).default(2),
 });
 export type HysteriaOutboundSettings = z.infer<typeof HysteriaOutboundSettingsSchema>;

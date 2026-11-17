@@ -10,7 +10,6 @@ import (
 	"syscall"
 
 	awgtun "github.com/amnezia-vpn/amneziawg-go/v3/tun"
-
 	"gvisor.dev/gvisor/pkg/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
@@ -63,6 +62,15 @@ func createNetTUNWithStack(localAddresses []netip.Addr, mtu int) (awgtun.Device,
 	if err := dev.stack.SetTransportProtocolOption(tcp.ProtocolNumber, &sackEnabledOpt); err != nil {
 		return nil, nil, fmt.Errorf("amneziawgnet: enable TCP SACK: %s", err)
 	}
+	// Connections start at gVisor's 1 MB default and only grow while the
+	// relay drains them faster per RTT, so idle peers cost no more memory.
+	rcvBufOpt := tcpip.TCPReceiveBufferSizeRangeOption{Min: tcp.MinBufferSize, Default: tcp.DefaultReceiveBufferSize, Max: maxReceiveBuffer}
+	moderateOpt := tcpip.TCPModerateReceiveBufferOption(true)
+	for _, opt := range []tcpip.SettableTransportProtocolOption{&rcvBufOpt, &moderateOpt} {
+		if err := dev.stack.SetTransportProtocolOption(tcp.ProtocolNumber, opt); err != nil {
+			return nil, nil, fmt.Errorf("amneziawgnet: tune TCP receive buffer: %s", err)
+		}
+	}
 	dev.notifyHandle = dev.ep.AddNotify(dev)
 	if err := dev.stack.CreateNIC(1, dev.ep); err != nil {
 		return nil, nil, fmt.Errorf("amneziawgnet: CreateNIC: %s", err)
@@ -99,11 +107,15 @@ func createNetTUNWithStack(localAddresses []netip.Addr, mtu int) (awgtun.Device,
 	return dev, dev.stack, nil
 }
 
-func (t *stackTun) Name() (string, error)       { return "amneziawgnet", nil }
-func (t *stackTun) File() *os.File              { return nil }
+func (t *stackTun) Name() (string, error) { return "amneziawgnet", nil }
+
+func (t *stackTun) File() *os.File { return nil }
+
 func (t *stackTun) Events() <-chan awgtun.Event { return t.events }
-func (t *stackTun) MTU() (int, error)           { return t.mtu, nil }
-func (t *stackTun) BatchSize() int              { return 1 }
+
+func (t *stackTun) MTU() (int, error) { return t.mtu, nil }
+
+func (t *stackTun) BatchSize() int { return 1 }
 
 // Read drains incomingPacket into buf, supporting batched reads. Each view is
 // released once copied out, so the download path reuses gVisor's pooled chunks.
@@ -224,3 +236,7 @@ func addrFromTcpip(a tcpip.Address) netip.Addr {
 	copy(b[:], a.AsSlice())
 	return netip.AddrFrom16(b)
 }
+
+// maxReceiveBuffer caps per-connection receive autotuning; gVisor's own 4 MB
+// cap held a single client upload near 310 Mbit/s at 50 ms RTT.
+const maxReceiveBuffer = 8 << 20

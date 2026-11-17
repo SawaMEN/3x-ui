@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 
 	"github.com/xtls/xray-core/infra/conf"
@@ -197,7 +199,7 @@ func TestGoldenInboundFixturesBuildInXray(t *testing.T) {
 }
 
 // TestGoldenInboundFullFixturesBuildInXray runs the complete panel Inbound
-// model through GenXrayInboundConfig, the conversion both the full-config and
+// model through GenInboundConfig, the conversion both the full-config and
 // the live AddInbound paths use, and builds the result.
 func TestGoldenInboundFullFixturesBuildInXray(t *testing.T) {
 	for name, fixture := range goldenFixtures(t, "inbound-full") {
@@ -233,7 +235,7 @@ func TestGoldenInboundFullFixturesBuildInXray(t *testing.T) {
 				StreamSettings: section("streamSettings"),
 				Sniffing:       section("sniffing"),
 			}
-			raw, err := json.Marshal(ib.GenXrayInboundConfig())
+			raw, err := json.Marshal(xray.InboundFromPanel(ib.GenInboundConfig()))
 			if err != nil {
 				t.Fatalf("marshal generated inbound: %v", err)
 			}

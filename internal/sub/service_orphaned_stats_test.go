@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // statsForClient recovers a client's usage by email when the client_traffics row
@@ -26,7 +26,7 @@ func TestStatsForClient_OrphanedInboundIdFallback(t *testing.T) {
 	const total = int64(100) * gb
 
 	db := database.GetDB()
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: 999,
 		Email:     email,
 		Up:        15 * gb,
@@ -37,7 +37,7 @@ func TestStatsForClient_OrphanedInboundIdFallback(t *testing.T) {
 		t.Fatalf("seed orphaned traffic: %v", err)
 	}
 
-	s := &SubService{statsByEmail: map[string]xray.ClientTraffic{}}
+	s := &SubService{statsByEmail: map[string]coremodel.ClientTraffic{}}
 	inbound := &model.Inbound{Id: 1, Remark: "DE"}
 	client := model.Client{Email: email, TotalGB: total, Enable: true}
 

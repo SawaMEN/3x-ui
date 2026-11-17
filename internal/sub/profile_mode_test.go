@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,6 +39,7 @@ func TestSubscriptionProfileModesFromSavedSettings(t *testing.T) {
 			seedInfoEndpointSub(t, "profile-sub", "profile@example.com")
 			settings := []model.Setting{
 				{Key: "subPath", Value: "/sub/"},
+				{Key: "subTitle", Value: "Panel title"},
 				{Key: "subJsonPath", Value: "/json/"},
 				{Key: "subClashPath", Value: "/clash/"},
 				{Key: "subJsonEnable", Value: "true"},
@@ -68,6 +70,9 @@ func TestSubscriptionProfileModesFromSavedSettings(t *testing.T) {
 						router.ServeHTTP(resp, req)
 						if resp.Code != http.StatusOK {
 							t.Fatalf("status = %d; body=%s", resp.Code, resp.Body.String())
+						}
+						if got, want := resp.Header().Get("Profile-Title"), "base64:"+base64.StdEncoding.EncodeToString([]byte("profile@example.com")); got != want {
+							t.Fatalf("Profile-Title = %q, want %q", got, want)
 						}
 						want := config.want
 						if config.mode == "builtin" {

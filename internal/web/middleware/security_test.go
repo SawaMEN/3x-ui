@@ -6,17 +6,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
-
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 )
 
 func TestCSRFMiddlewareAllowsSafeMethods(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.Use(CSRFMiddleware())
+	router.Use(CSRFMiddleware(func(*gin.Context) string { return "" }))
 	router.GET("/safe", func(c *gin.Context) {
 		c.String(http.StatusOK, "ok")
 	})
@@ -42,7 +42,7 @@ func TestCSRFMiddlewareRejectsMissingTokenAndAcceptsValidToken(t *testing.T) {
 		}
 		c.String(http.StatusOK, token)
 	})
-	router.POST("/submit", CSRFMiddleware(), func(c *gin.Context) {
+	router.POST("/submit", CSRFMiddleware(func(*gin.Context) string { return "" }), func(c *gin.Context) {
 		c.String(http.StatusOK, "ok")
 	})
 

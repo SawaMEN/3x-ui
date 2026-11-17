@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func setupInfoNodeTestDB(t *testing.T) {
@@ -26,7 +26,7 @@ func setupInfoNodeTestDB(t *testing.T) {
 		&model.Inbound{},
 		&model.ClientRecord{},
 		&model.ClientInbound{},
-		&xray.ClientTraffic{},
+		&coremodel.ClientTraffic{},
 		&model.Setting{},
 	); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
@@ -67,7 +67,7 @@ func TestSubService_InfoNode_Active(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{InboundId: 1, ClientId: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: 1,
 		Email:     "user1@test.com",
 		Up:        1073741824, // 1 GB
@@ -146,7 +146,7 @@ func TestSubService_InfoNode_Expired(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{InboundId: 1, ClientId: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId:  1,
 		Email:      "exp@test.com",
 		ExpiryTime: expiredTime,
@@ -207,7 +207,7 @@ func TestSubService_InfoNode_TrafficDepleted(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{InboundId: 1, ClientId: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: 1,
 		Email:     "dep@test.com",
 		Up:        3221225472, // 3 GB
@@ -270,7 +270,7 @@ func TestSubService_GetSubs_NonSubscriptionBody_NoInfoNode(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{InboundId: 1, ClientId: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: 1,
 		Email:     "user1@test.com",
 		Up:        1073741824,
@@ -334,12 +334,12 @@ func TestSubService_InfoNode_MultiClient_DeterministicPrimaryEmail(t *testing.T)
 	if err := db.Create(&model.ClientInbound{InboundId: 1, ClientId: 2}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: 1, Email: "zeta@test.com", Up: 100, Down: 100, Total: 10737418240, Enable: true,
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: 1, Email: "alpha@test.com", Up: 100, Down: 100, Total: 10737418240, Enable: true,
 	}).Error; err != nil {
 		t.Fatal(err)

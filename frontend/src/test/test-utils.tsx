@@ -1,8 +1,9 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { render, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ThemeProvider } from '@/hooks/useTheme';
+import { AntdRootConfig } from '@/i18n/AntdRootConfig';
 
 export function makeTestQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -10,11 +11,15 @@ export function makeTestQueryClient() {
 
 export function renderWithProviders(ui: ReactElement, options?: { queryClient?: QueryClient }) {
   const queryClient = options?.queryClient ?? makeTestQueryClient();
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>{ui}</ThemeProvider>
-    </QueryClientProvider>,
-  );
+  return render(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <AntdRootConfig>
+          <ThemeProvider>{children}</ThemeProvider>
+        </AntdRootConfig>
+      </QueryClientProvider>
+    ),
+  });
 }
 
 export function fieldLabels(): string[] {

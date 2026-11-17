@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AwgClientOptionsSchema } from '../../awg-client-options';
 
 // AntD InputNumber emits null (not undefined) when the user clears it, and
 // the form store hands that null straight to safeParse on submit — a bare
@@ -25,6 +26,7 @@ export const AmneziawgClientSchema = z.object({
   allowedIPs: z.array(z.string()).default([]),
   keepAlive: optionalClearedInt(z.number().int().min(0)),
   forwardedPorts: z.string().default(''),
+  awgClientOptions: AwgClientOptionsSchema.nullable().optional(),
   email: z.string().min(1),
   limitIp: z.number().int().min(0).default(0),
   totalGB: z.number().int().min(0).default(0),
@@ -60,12 +62,6 @@ export const AmneziawgServerSchema = z.object({
   ipv6Enabled: z.boolean().default(false),
   ipv6Subnet: z.string().default(''),
   ipv6ExternalInterface: z.string().default(''),
-  // routeThroughXray is vestigial on the Go side (see ServerSettings' own
-  // doc comment) -- the embedded relay is always on, this field is read by
-  // nothing. Kept here anyway, with no corresponding form control, purely so
-  // z.object's default unknown-key stripping doesn't silently drop it from
-  // an existing stored settings blob on the next save.
-  routeThroughXray: z.boolean().default(false).optional(),
   // Upper bounds match amneziawg-go's own UAPI parsers (device/uapi.go):
   // jc/jmin/jmax are uint32, s1-s4 uint16. Wider values make IpcSet fail.
   jc: clearedToDefault(z.number().int().min(0).max(4294967295).default(5)),

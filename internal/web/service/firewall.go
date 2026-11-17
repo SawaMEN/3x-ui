@@ -342,6 +342,24 @@ func (s *FirewallService) desiredRules(auto bool, safetyPort int) ([]FirewallRul
 	if safetyPort > 0 {
 		add(safetyPort, "tcp", "session", "Current panel connection")
 	}
+	// Serving listeners are normal permanent rules. Challenge-only ports are
+	// temporary leases and must be returned to their original state afterwards.
+	if cfg, err := settings.GetDomainFrontConfig(); err == nil {
+		var telemt *TelemtWebProxyState
+		if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled {
+			telemt = &state
+		}
+		for _, rule := range certificateFirewallRules(cfg, nil, nil, telemt) {
+			addRule(rule)
+		}
+	}
+	leases, err := loadFirewallRenewalLeases()
+	if err != nil {
+		return nil, err
+	}
+	for _, rule := range firewallRenewalRules(leases, time.Now()) {
+		addRule(rule)
+	}
 	for _, p := range detectSSHPorts() {
 		add(p, "tcp", "ssh", "SSH")
 	}
@@ -401,6 +419,10 @@ func firewallSourcePriority(s string) int {
 		return 40
 	case "subscription":
 		return 30
+	case "domain-gateway", "telemt":
+		return 28
+	case "certificate-renewal":
+		return 26
 	case "manual":
 		return 20
 	case "inbound":
@@ -411,6 +433,9 @@ func firewallSourcePriority(s string) int {
 }
 
 func firewallProtocolsForInbound(protocol model.Protocol, network string) []string {
+	if strings.EqualFold(strings.TrimSpace(network), "xdrive") {
+		return nil
+	}
 	switch protocol {
 	case model.WireGuard, model.AmneziaWG, model.Hysteria, model.TUIC:
 		return []string{"udp"}
@@ -538,6 +563,12 @@ func ufwFirewallSpec(spec string) string {
 }
 
 func firewallSetting(key, fallback string) (string, error) {
+	// Background workers may start before the database is initialized.
+	// Treat an unavailable database as an error: never assume persisted
+	// firewall preferences or reconcile rules using fallback values.
+	if database.GetDB() == nil {
+		return "", fmt.Errorf("firewall settings database is not initialized")
+	}
 	st, err := (&SettingService{}).getSetting(key)
 	if database.IsNotFound(err) {
 		return fallback, nil
@@ -614,7 +645,8 @@ func detectFirewallBackend(ctx context.Context) (firewallBackend, error) {
 				if err == nil {
 					return true, nil
 				}
-				if _, ok := err.(*exec.ExitError); ok {
+				var exitErr *exec.ExitError
+				if errors.As(err, &exitErr) {
 					return false, nil
 				}
 				return false, err
@@ -631,13 +663,26 @@ func detectFirewallBackend(ctx context.Context) (firewallBackend, error) {
 		}
 		candidates = append(candidates, b)
 	}
+	var usable []firewallBackend
+	var probeErrors []error
 	for _, b := range candidates {
-		if on, _ := b.enabled(ctx); on {
+		on, err := b.enabled(ctx)
+		if err != nil {
+			probeErrors = append(probeErrors, fmt.Errorf("%s: %w", b.name, err))
+			continue
+		}
+		if on {
 			return b, nil
 		}
+		usable = append(usable, b)
 	}
-	if len(candidates) > 0 {
-		return candidates[0], nil
+	// A failed probe may belong to an enabled firewall. Do not prefer an
+	// inactive alternative and accidentally start another filtering layer.
+	if len(probeErrors) > 0 {
+		return firewallBackend{}, errors.Join(probeErrors...)
+	}
+	if len(usable) > 0 {
+		return usable[0], nil
 	}
 	return firewallBackend{}, errors.New("no supported firewall found (install ufw or firewalld)")
 }

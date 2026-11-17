@@ -10,15 +10,45 @@ import (
 	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecartraffic"
 )
 
 type Client struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Enable   bool   `json:"enable"`
+	ExpiryTime int64  `json:"expiryTime,omitempty"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	Enable     bool   `json:"enable"`
+}
+
+type OpenFluxTransport struct {
+	Token    string `json:"token,omitempty"`
+	UID      string `json:"uid,omitempty"`
+	Type     string `json:"type"`
+	URL      string `json:"url,omitempty"`
+	Priority int    `json:"priority,omitempty"`
+	Dial     string `json:"dial,omitempty"`
 }
 
 type Settings struct {
+	Vetroff         *VetroffSettings    `json:"vetroff,omitempty"`
+	CertificatePEM  string              `json:"certificatePEM"`
+	PrivateKeyPEM   string              `json:"privateKeyPEM"`
+	Image           string              `json:"image"`
+	MTU             int                 `json:"mtu"`
+	MaxSessions     int                 `json:"maxSessions"`
+	Bandwidth       int                 `json:"bandwidth"`
+	DetectProbing   bool                `json:"detectProbing"`
+	AllowedSNI      string              `json:"allowedSni"`
+	AdsFilter       bool                `json:"adsFilter"`
+	TorrentFilter   bool                `json:"torrentFilter"`
+	SpamFilter      bool                `json:"spamFilter"`
+	MetricsKey      string              `json:"metricsKey"`
+	MaxPacketSize   int                 `json:"maxPacketSize,omitempty"`
+	RefusePeerLogin bool                `json:"refusePeerLogin,omitempty"`
+	Debug           int                 `json:"debug,omitempty"`
+	Context         string              `json:"context"`
+	Transports      []OpenFluxTransport `json:"transports"`
+
 	Key            int      `json:"key"`
 	Encrypt        string   `json:"encrypt"`
 	EncryptKey     string   `json:"encryptKey"`
@@ -33,28 +63,41 @@ type Settings struct {
 }
 
 type Instance struct {
-	ID       int
-	Tag      string
-	Protocol model.Protocol
-	Listen   string
-	Port     int
-	Settings Settings
+	Revision       string `json:"-"`
+	ClientRevision string `json:"-"`
+	ID             int
+	Tag            string
+	Protocol       model.Protocol
+	Listen         string
+	Port           int
+	Settings       Settings
 }
 
 func FromInbound(ib *model.Inbound) (Instance, error) {
-	if ib == nil || (ib.Protocol != model.Pingtunnel && ib.Protocol != model.TrustTunnel) {
+	if ib == nil || !IsManaged(ib.Protocol) {
 		return Instance{}, fmt.Errorf("unsupported external VPN inbound")
+	}
+	if ib.Protocol == model.VetroffProxy {
+		if err := validateVetroffPanelLimits(ib); err != nil {
+			return Instance{}, err
+		}
 	}
 	var settings Settings
 	if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil {
 		return Instance{}, fmt.Errorf("%s settings: %w", ib.Protocol, err)
 	}
-	inst := Instance{ID: ib.Id, Tag: ib.Tag, Protocol: ib.Protocol, Listen: ib.Listen, Port: ib.Port, Settings: settings}
+	inst := Instance{Revision: sidecartraffic.RevisionOf(ib), ClientRevision: ib.RuntimeClientRevision, ID: ib.Id, Tag: ib.Tag, Protocol: ib.Protocol, Listen: ib.Listen, Port: ib.Port, Settings: settings}
 	return inst, inst.Validate()
 }
 
 func (inst Instance) Validate() error {
+	if inst.Protocol == model.VetroffProxy {
+		return validateVetroff(inst)
+	}
 	s := inst.Settings
+	if inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
+		return inst.validateAdditional()
+	}
 	if inst.Protocol == model.Pingtunnel {
 		if inst.Port != 0 {
 			return fmt.Errorf("Pingtunnel uses ICMP and requires port 0")
@@ -119,7 +162,7 @@ func (inst Instance) Validate() error {
 }
 
 func (inst Instance) Bind() string {
-	addr := inst.Listen
+	addr := strings.Trim(inst.Listen, "[]")
 	if addr == "" {
 		addr = "0.0.0.0"
 	}
@@ -145,4 +188,8 @@ func GenerateSecret() (string, error) {
 		out[i*2], out[i*2+1] = alphabet[b>>4], alphabet[b&15]
 	}
 	return string(out[:]), nil
+}
+
+func IsManaged(p model.Protocol) bool {
+	return p == model.VetroffProxy || p == model.Pingtunnel || p == model.TrustTunnel || p == model.FPTN || p == model.OpenFlux
 }

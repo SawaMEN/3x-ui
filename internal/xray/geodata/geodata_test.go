@@ -13,6 +13,7 @@ import (
 	"time"
 
 	xraygeodata "github.com/xtls/xray-core/common/geodata"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -406,6 +407,66 @@ func TestBrokenFileIsListedWithReason(t *testing.T) {
 	}
 }
 
+// RuNetFreedom geosite databases contain records larger than 32 MiB. A large
+// unrelated category must not prevent expanding a small routing category.
+func TestLargeGeositeRecordStreamsWithoutRejectingRoute(t *testing.T) {
+	dir := t.TempDir()
+	file, err := os.Create(filepath.Join(dir, "geosite_RU.dat"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	raw, err := proto.Marshal(domain(xraygeodata.Domain_Domain, strings.Repeat("a", 8192)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	domainField := protowire.AppendBytes(protowire.AppendTag(nil, fieldEntryPayload, protowire.BytesType), raw)
+	codeField := protowire.AppendString(protowire.AppendTag(nil, fieldEntryCode, protowire.BytesType), "ru-blocked-all")
+	const recordCount = 4100
+	recordSize := len(codeField) + recordCount*len(domainField)
+	if recordSize <= 32<<20 {
+		t.Fatalf("test record too small: %d bytes", recordSize)
+	}
+	write := func(data []byte) {
+		t.Helper()
+		if _, err := file.Write(data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(protowire.AppendVarint(protowire.AppendTag(nil, fieldListEntry, protowire.BytesType), uint64(recordSize)))
+	write(codeField)
+	for range recordCount {
+		write(domainField)
+	}
+	small, err := proto.Marshal(site("ru-available-only-inside", domain(xraygeodata.Domain_Domain, "example.ru")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(protowire.AppendBytes(protowire.AppendTag(nil, fieldListEntry, protowire.BytesType), small))
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewStore(dir)
+	category, err := store.Lookup("geosite_RU.dat", "ru-available-only-inside")
+	if err != nil || category.Entries != 1 {
+		t.Fatalf("routing category = %+v, error = %v", category, err)
+	}
+	pages, err := store.Entries("geosite_RU.dat", "ru-blocked-all", "", 0, 1)
+	if err != nil || pages.Total != recordCount || len(pages.Items) != 1 {
+		t.Fatalf("large category page = %+v, error = %v", pages, err)
+	}
+	entries, err := store.AllEntries("geosite_RU.dat", "ru-available-only-inside", 10)
+	if err != nil || len(entries) != 1 || entries[0].Value != "example.ru" {
+		t.Fatalf("routing entries = %+v, error = %v", entries, err)
+	}
+	files, err := store.ListFiles()
+	if err != nil || len(files) != 1 || files[0].Kind != KindSite || files[0].Error != "" {
+		t.Fatalf("large geosite file = %+v, error = %v", files, err)
+	}
+}
+
 func TestFileAboveSizeLimitIsRejected(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "huge.dat", []byte("x"))
@@ -414,7 +475,7 @@ func TestFileAboveSizeLimitIsRejected(t *testing.T) {
 	}
 
 	store := NewStore(dir)
-	if _, err := store.Categories("huge.dat", "", 0, 10); !errors.Is(err, ErrFileTooLarge) {
+	if _, err := store.Categories("huge.dat", "", 0, 10); !errors.Is(err, ErrFileTooLarge) || errors.Is(err, ErrUnrecognized) {
 		t.Errorf("error = %v, want %v", err, ErrFileTooLarge)
 	}
 
@@ -574,5 +635,48 @@ func TestSymlinkOutOfTheAssetFolderIsRefused(t *testing.T) {
 		if file.Name == "escape.dat" && file.Error == "" {
 			t.Error("ListFiles() reported an escaping symlink as a usable database")
 		}
+	}
+}
+
+func TestIndexCacheAtomicReplacementWithSameMetadata(t *testing.T) {
+	dir := t.TempDir()
+	path := writeSiteDB(t, dir, "geosite.dat", site("aa", domain(xraygeodata.Domain_Domain, "old.example")))
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore(dir)
+	if _, err := store.Lookup("geosite.dat", "aa"); err != nil {
+		t.Fatal(err)
+	}
+	replacement := writeSiteDB(t, dir, "next.dat", site("bb", domain(xraygeodata.Domain_Domain, "new.example")))
+	if err := os.Chtimes(replacement, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(replacement, path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Lookup("geosite.dat", "bb"); err != nil {
+		t.Fatalf("stale index after replacement: %v", err)
+	}
+	if _, err := store.Lookup("geosite.dat", "aa"); !errors.Is(err, ErrUnknownCategory) {
+		t.Fatalf("old category survived: %v", err)
+	}
+}
+
+func TestInverseGeoIPDatabaseFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	writeIPDB(t, dir, "geoip.dat", &xraygeodata.GeoIP{Code: "inverse", ReverseMatch: true, Cidr: []*xraygeodata.CIDR{{Ip: []byte{10, 0, 0, 0}, Prefix: 8}}})
+	if _, err := NewStore(dir).AllEntries("geoip.dat", "inverse", 100); err == nil {
+		t.Fatal("inverse category silently became a positive CIDR list")
+	}
+}
+
+func TestOversizedGeoFieldDoesNotReportWrongDatabaseType(t *testing.T) {
+	dir := t.TempDir()
+	writeSiteDB(t, dir, "geosite.dat", site("large", domain(xraygeodata.Domain_Domain, strings.Repeat("a", int(maxGeoRuleSize)+1))))
+	_, err := NewStore(dir).Kind("geosite.dat")
+	if !errors.Is(err, ErrFileTooLarge) || errors.Is(err, ErrUnrecognized) {
+		t.Fatalf("size limit misreported as a wrong database type: %v", err)
 	}
 }

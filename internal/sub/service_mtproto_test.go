@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"encoding/base64"
 	"net/url"
 	"strings"
 	"testing"
@@ -174,5 +175,55 @@ func TestGetInboundsBySubIdIncludesMtproto(t *testing.T) {
 	}
 	if !strings.HasPrefix(links[0], "tg://proxy") || !strings.Contains(links[0], "secret="+mtprotoTestSecret) {
 		t.Fatalf("subscription link is not a tg://proxy carrying the client secret: %q", links[0])
+	}
+}
+
+func TestGenMtprotoWEBProxyLinkUsesInboundDomainAndClientSecret(t *testing.T) {
+	inbound := &model.Inbound{
+		Port:     8443,
+		Protocol: model.MTProto,
+		Settings: `{"webProxy":{"enabled":true,"domain":"web.example.com"},"clients":[{"email":"user","enable":true,"secret":"` + mtprotoTestSecret + `"}]}`,
+	}
+	link := (&SubService{}).genMtprotoLink(inbound, "user")
+	u, err := url.Parse(link)
+	if err != nil {
+		t.Fatalf("WEB link parse failed: %v", err)
+	}
+	if u.Scheme != "tg" || u.Host != "webproxy" {
+		t.Fatalf("want tg://webproxy, got %q", link)
+	}
+	if u.Query().Get("server") != "web.example.com" || u.Query().Get("port") != "" {
+		t.Fatalf("WEB endpoint should use dedicated HTTPS domain without a custom port: %s", link)
+	}
+	if u.Query().Get("secret") != "dd"+mtprotoTestSecret[2:34] {
+		t.Fatal("WEB link did not use this inbound's per-client secret")
+	}
+}
+
+func TestGenMtprotoWEBProxyAliasesWithHiddenPath(t *testing.T) {
+	inbound := &model.Inbound{
+		Protocol: model.MTProto,
+		Settings: `{"webProxy":{"enabled":true,"domain":"web.example.com","aliases":["alt.example.com"],"basePath":"app/sync"},"clients":[{"email":"user","enable":true,"secret":"` + mtprotoTestSecret + `"}]}`,
+	}
+	links := strings.Split((&SubService{}).genMtprotoLink(inbound, "user"), "\n")
+	if len(links) != 2 {
+		t.Fatalf("expected two WEB links, got %v", links)
+	}
+	for i, link := range links {
+		u, err := url.Parse(link)
+		if err != nil {
+			t.Fatal(err)
+		}
+		host := "web.example.com"
+		if i == 1 {
+			host = "alt.example.com"
+		}
+		if got := u.Query().Get("server"); got != host+"/app/sync" {
+			t.Errorf("server %d = %q", i, got)
+		}
+		secret, err := base64.RawURLEncoding.DecodeString(u.Query().Get("secret"))
+		if err != nil || len(secret) != 18 || secret[0] != 0x70 || secret[1] != 0xdd {
+			t.Errorf("link %d has invalid WEB path secret: %v", i, err)
+		}
 	}
 }

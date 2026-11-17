@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -46,7 +47,11 @@ func isTelemtSubscriptionUsername(username string) bool {
 // creating it on first use. Repeated calls keep the same username and secret.
 // It never starts a stopped Telemt service. When Telemt is installed but stopped,
 // the user is persisted to telemt.toml and becomes active on the next normal start.
-func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, error) {
+func (s TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, error) {
+	return s.EnsureSubscriptionProxyContext(context.Background(), subID, host)
+}
+
+func (TelemtService) EnsureSubscriptionProxyContext(ctx context.Context, subID, host string) (TelemtProxy, error) {
 	subID = strings.TrimSpace(subID)
 	host = strings.TrimSpace(host)
 	if subID == "" {
@@ -61,6 +66,8 @@ func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, e
 
 	telemtSubscriptionProfileMu.Lock()
 	defer telemtSubscriptionProfileMu.Unlock()
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 
 	active := systemctl("is-active", "--quiet", telemtServiceName) == nil
 	if err := ensureTelemtConfig(); err != nil {
@@ -124,7 +131,7 @@ func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, e
 		}, nil
 	}
 
-	link, err := telemtGeneratedLink(username, raw.General.Modes.TLS)
+	link, err := telemtGeneratedLinkContext(ctx, username, raw.General.Modes.TLS)
 	if err != nil {
 		return TelemtProxy{}, fmt.Errorf("telemt: failed to obtain subscription link: %w", err)
 	}
@@ -160,6 +167,8 @@ func (TelemtService) DeleteSubscriptionProxy(subID string) error {
 
 	telemtSubscriptionProfileMu.Lock()
 	defer telemtSubscriptionProfileMu.Unlock()
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 
 	username := telemtSubscriptionUsername(subID)
 	active := systemctl("is-active", "--quiet", telemtServiceName) == nil
@@ -173,7 +182,7 @@ func (TelemtService) DeleteSubscriptionProxy(subID string) error {
 
 	if err := deleteTelemtSubscriptionUserLegacy(username, active); err != nil {
 		if apiErr != nil {
-			return fmt.Errorf("telemt: revoke subscription user via API (%v) and config fallback: %w", apiErr, err)
+			return fmt.Errorf("telemt: revoke subscription user via API (%w) and config fallback: %w", apiErr, err)
 		}
 		return err
 	}
@@ -192,10 +201,12 @@ func createTelemtSubscriptionUser(username, secret string) error {
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:9091/v1/users", bytes.NewReader(body))
+	req, err := telemtAPIRequest(http.MethodPost, "/v1/users")
 	if err != nil {
 		return fmt.Errorf("telemt: create subscription user request: %w", err)
 	}
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	req.ContentLength = int64(len(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
@@ -222,7 +233,7 @@ func createTelemtSubscriptionUser(username, secret string) error {
 }
 
 func deleteTelemtSubscriptionUser(username string) error {
-	req, err := http.NewRequest(http.MethodDelete, "http://127.0.0.1:9091/v1/users/"+url.PathEscape(username), nil)
+	req, err := telemtAPIRequest(http.MethodDelete, "/v1/users/"+url.PathEscape(username))
 	if err != nil {
 		return fmt.Errorf("telemt: delete subscription user request: %w", err)
 	}

@@ -1,0 +1,32 @@
+.additional-settings {
+  min-width: 0;
+}
+
+.additional-settings .additional-settings-title {
+  margin: 0 0 16px;
+}
+
+.additional-settings > .ant-tabs > .ant-tabs-nav {
+  margin-bottom: 24px;
+}
+
+.additional-settings .ant-tabs-content-holder,
+.additional-settings .ant-tabs-tabpane {
+  min-width: 0;
+}
+
+.domain-redirect-settings {
+  width: 100%;
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+  padding-bottom: 16px;
+}
+
+@media (max-width: 640px) {
+  .additional-settings > .ant-tabs > .ant-tabs-nav {
+    margin-bottom: 16px;
+  }
+
+  .additional-settings > .ant-tabs > .ant-tabs-nav .ant-tabs-tab {
+    padding-block: 10px;
+  }
+}

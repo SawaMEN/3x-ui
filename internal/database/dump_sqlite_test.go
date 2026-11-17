@@ -1,12 +1,14 @@
 package database
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -40,8 +42,13 @@ func TestCopyAllModelsIntoSQLite(t *testing.T) {
 	if err := src.Create(&model.Inbound{UserId: 1, Remark: "in", Port: 443, Protocol: "vless", Tag: "inbound-443"}).Error; err != nil {
 		t.Fatalf("seed inbound: %v", err)
 	}
-	if err := src.Create(&xray.ClientTraffic{InboundId: 1, Email: "a@b.c", Enable: true, Up: 10, Down: 20}).Error; err != nil {
+	if err := src.Create(&coremodel.ClientTraffic{InboundId: 1, Email: "a@b.c", Enable: true, Up: 10, Down: 20}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
+	}
+
+	checkpoint := model.CoreTrafficCheckpoint{Name: "hiddify:user>>>a@b.c>>>traffic>>>uplink", Epoch: "core-1", Value: 10, TrafficID: 1}
+	if err := src.Create(&checkpoint).Error; err != nil {
+		t.Fatal(err)
 	}
 
 	dst, err := gorm.Open(sqlite.Open(dstPath), &gorm.Config{Logger: logger.Discard})
@@ -59,7 +66,7 @@ func TestCopyAllModelsIntoSQLite(t *testing.T) {
 	}{
 		{&model.User{}, 1},
 		{&model.Inbound{}, 1},
-		{&xray.ClientTraffic{}, 1},
+		{&coremodel.ClientTraffic{}, 1},
 	} {
 		var got int64
 		if err := dst.Model(tc.model).Count(&got).Error; err != nil {
@@ -70,8 +77,16 @@ func TestCopyAllModelsIntoSQLite(t *testing.T) {
 		}
 	}
 
+	var copied model.CoreTrafficCheckpoint
+	if err := dst.Where("name = ?", checkpoint.Name).First(&copied).Error; err != nil {
+		t.Fatal(err)
+	}
+	if copied != checkpoint {
+		t.Fatalf("counter baseline lost during copy: %+v", copied)
+	}
+
 	// Spot-check a copied value survived the round-trip.
-	var ct xray.ClientTraffic
+	var ct coremodel.ClientTraffic
 	if err := dst.Where("email = ?", "a@b.c").First(&ct).Error; err != nil {
 		t.Fatalf("read back traffic: %v", err)
 	}
@@ -133,5 +148,37 @@ func closeGorm(db *gorm.DB) {
 	}
 	if s, err := db.DB(); err == nil {
 		s.Close()
+	}
+}
+
+func TestRestoreSQLiteWritesNoFileOutsideDestination(t *testing.T) {
+	cases := []struct {
+		name      string
+		statement string
+	}{
+		{"attach", "ATTACH DATABASE '%s' AS x; CREATE TABLE x.t (a); INSERT INTO x.t VALUES (1);"},
+		{"vacuum into", "CREATE TABLE t (a); VACUUM INTO '%s';"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			outside := filepath.Join(t.TempDir(), "outside.db")
+			dumpPath := filepath.Join(dir, "in.dump")
+			script := "PRAGMA foreign_keys=OFF;\n" + fmt.Sprintf(tc.statement, outside) + "\n"
+			if err := os.WriteFile(dumpPath, []byte(script), 0o600); err != nil {
+				t.Fatalf("write dump: %v", err)
+			}
+
+			err := RestoreSQLite(dumpPath, filepath.Join(dir, "rebuilt.db"))
+			if err == nil {
+				t.Fatal("RestoreSQLite accepted a dump that writes another database file")
+			}
+			if !strings.Contains(err.Error(), "too many attached databases") {
+				t.Fatalf("restore failed for another reason: %v", err)
+			}
+			if _, statErr := os.Stat(outside); !os.IsNotExist(statErr) {
+				t.Fatalf("restore created %s (stat err %v)", outside, statErr)
+			}
+		})
 	}
 }

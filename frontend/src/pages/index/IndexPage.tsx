@@ -45,6 +45,7 @@ const BackupModal = lazy(() => import('./BackupModal'));
 const SystemHistoryModal = lazy(() => import('./SystemHistoryModal'));
 const XrayMetricsModal = lazy(() => import('./XrayMetricsModal'));
 const XrayLogModal = lazy(() => import('./XrayLogModal'));
+const DomainActivityModal = lazy(() => import('./DomainActivityModal'));
 const AmneziaWGLogModal = lazy(() => import('./AmneziaWGLogModal'));
 const VersionModal = lazy(() => import('./VersionModal'));
 import './IndexPage.css';
@@ -89,6 +90,7 @@ export default function IndexPage() {
   const [sysHistoryOpen, setSysHistoryOpen] = useState(false);
   const [xrayMetricsOpen, setXrayMetricsOpen] = useState(false);
   const [xrayLogsOpen, setXrayLogsOpen] = useState(false);
+  const [domainActivityOpen, setDomainActivityOpen] = useState(false);
   const [amneziawgLogsOpen, setAmneziawgLogsOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
   const [configTextOpen, setConfigTextOpen] = useState(false);
@@ -98,13 +100,12 @@ export default function IndexPage() {
 
   const history = useOverviewHistory(status, fetched && !fetchError, lowPower);
 
-  const coreType = allSetting.coreType === 'sing-box' ? 'sing-box' : 'xray';
-  const displayCoreRunning =
-    coreType === 'sing-box' ? coreRunning : status.xray.state === 'running';
-  const displayCoreVersion = coreType === 'sing-box' ? coreVersion : status.xray.version;
-  const displayCoreError = coreType === 'sing-box' ? coreError : status.xray.errorMsg || '';
+  const coreType = allSetting.coreType;
+  const displayCoreRunning = coreRunning;
+  const displayCoreVersion = coreVersion;
+  const displayCoreError = coreError;
   const portBindError = corePortBindError(displayCoreError);
-  const displayCoreColor = coreType === 'sing-box' ? coreColor : status.xray.color;
+  const displayCoreColor = coreColor;
 
   const refreshSingBoxStatus = useCallback(async () => {
     const msg = await HttpUtil.get<{
@@ -119,8 +120,6 @@ export default function IndexPage() {
   }, []);
 
   useEffect(() => {
-    if (coreType !== 'sing-box') return;
-
     let cancelled = false;
     let timer: number | undefined;
     const syncSingBoxStatus = async () => {
@@ -135,7 +134,7 @@ export default function IndexPage() {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [coreType, refreshSingBoxStatus]);
+  }, [refreshSingBoxStatus]);
   useEffect(() => {
     HttpUtil.post<{ accessLogEnable?: boolean; devChannelEnable?: boolean }>(
       '/panel/api/setting/defaultSettings',
@@ -163,14 +162,14 @@ export default function IndexPage() {
   const stopXray = useCallback(async () => {
     await HttpUtil.post('/panel/api/server/stopCoreService');
     await refresh();
-    if (coreType === 'sing-box') await refreshSingBoxStatus();
-  }, [coreType, refresh, refreshSingBoxStatus]);
+    await refreshSingBoxStatus();
+  }, [refresh, refreshSingBoxStatus]);
 
   const restartXray = useCallback(async () => {
     await HttpUtil.post('/panel/api/server/restartCoreService');
     await refresh();
-    if (coreType === 'sing-box') await refreshSingBoxStatus();
-  }, [coreType, refresh, refreshSingBoxStatus]);
+    await refreshSingBoxStatus();
+  }, [refresh, refreshSingBoxStatus]);
 
   async function handleChannelChange(dev: boolean) {
     const res = await HttpUtil.post('/panel/api/server/setUpdateChannel', { dev });
@@ -258,7 +257,7 @@ export default function IndexPage() {
                     <Alert
                       type="error"
                       showIcon
-                      message={portBindError}
+                      title={portBindError}
                       style={{ marginBottom: 16 }}
                     />
                   )}
@@ -278,6 +277,7 @@ export default function IndexPage() {
                     onRestartXray={restartXray}
                     onOpenLogs={() => setLogsOpen(true)}
                     onOpenXrayLogs={() => setXrayLogsOpen(true)}
+                    onOpenDomainActivity={() => setDomainActivityOpen(true)}
                     onOpenAmneziaWGLogs={() => setAmneziawgLogsOpen(true)}
                     onOpenConfig={openConfig}
                     onOpenBackup={() => setBackupOpen(true)}
@@ -300,18 +300,23 @@ export default function IndexPage() {
 
                   <div className="ov-vitals">
                     <VitalTile
-                      icon={<DashboardOutlined />}
+                      icon={<DashboardOutlined aria-hidden />}
                       label={t('pages.index.cpu')}
+                      available={status.metricAvailable('cpu')}
                       percent={status.cpu.percent}
                       statusColor={status.cpu.color}
-                      detail={`${CPUFormatter.cpuCoreFormat(status.cpuCores)} / ${status.logicalPro}T · ${CPUFormatter.cpuSpeedFormat(status.cpuSpeedMhz)}`}
+                      detail={
+                        status.resourceScope === 'container'
+                          ? `${status.logicalPro} vCPU`
+                          : `${CPUFormatter.cpuCoreFormat(status.cpuCores)} / ${status.logicalPro}T · ${CPUFormatter.cpuSpeedFormat(status.cpuSpeedMhz)}`
+                      }
                       footLeft={`${t('pages.index.avg')} ${mean(history.series.cpu).toFixed(0)}%`}
                       footRight={`${t('pages.index.peak')} ${peak(history.series.cpu).toFixed(0)}%`}
                       data={history.series.cpu}
                       isMobile={isMobile}
                     />
                     <VitalTile
-                      icon={<DatabaseOutlined />}
+                      icon={<DatabaseOutlined aria-hidden />}
                       label={t('pages.index.memory')}
                       percent={status.mem.percent}
                       statusColor={status.mem.color}
@@ -322,8 +327,9 @@ export default function IndexPage() {
                       isMobile={isMobile}
                     />
                     <VitalTile
-                      icon={<SwapOutlined />}
+                      icon={<SwapOutlined aria-hidden />}
                       label={t('pages.index.swap')}
+                      available={status.metricAvailable('swap')}
                       percent={status.swap.percent}
                       statusColor={status.swap.color}
                       detail={`${SizeFormatter.sizeFormat(status.swap.current)} / ${SizeFormatter.sizeFormat(status.swap.total)}`}
@@ -333,7 +339,7 @@ export default function IndexPage() {
                       isMobile={isMobile}
                     />
                     <VitalTile
-                      icon={<HddOutlined />}
+                      icon={<HddOutlined aria-hidden />}
                       label={t('pages.index.storage')}
                       percent={status.disk.percent}
                       statusColor={status.disk.color}
@@ -409,6 +415,13 @@ export default function IndexPage() {
         <LazyMount when={xrayLogsOpen}>
           <XrayLogModal open={xrayLogsOpen} onClose={() => setXrayLogsOpen(false)} />
         </LazyMount>
+        <LazyMount when={domainActivityOpen}>
+          <DomainActivityModal
+            key={domainActivityOpen ? 'all' : 'closed'}
+            open={domainActivityOpen}
+            onClose={() => setDomainActivityOpen(false)}
+          />
+        </LazyMount>
         <LazyMount when={amneziawgLogsOpen}>
           <AmneziaWGLogModal open={amneziawgLogsOpen} onClose={() => setAmneziawgLogsOpen(false)} />
         </LazyMount>
@@ -433,7 +446,7 @@ export default function IndexPage() {
                 key="download"
                 onClick={downloadConfig}
                 size={isMobile ? 'small' : 'middle'}
-                icon={<CloudDownloadOutlined />}
+                icon={<CloudDownloadOutlined aria-hidden />}
               >
                 {isMobile ? 'Download' : 'config.json'}
               </Button>,
@@ -442,7 +455,7 @@ export default function IndexPage() {
                 type="primary"
                 onClick={copyConfig}
                 size={isMobile ? 'small' : 'middle'}
-                icon={<CopyOutlined />}
+                icon={<CopyOutlined aria-hidden />}
               >
                 Copy
               </Button>,

@@ -13,6 +13,30 @@ afterEach(() => {
 });
 
 describe('useAllSettings', () => {
+  it('persists the subscription host ordering mode and reloads it in a fresh session', async () => {
+    let storedMode = 'inbound-first';
+    vi.spyOn(HttpUtil, 'post').mockImplementation(async (url, body) => {
+      if (url === '/panel/api/setting/all')
+        return new Msg(true, '', { subHostSortMode: storedMode });
+      if (url === '/panel/api/setting/update')
+        storedMode = (body as { subHostSortMode: string }).subHostSortMode;
+      return new Msg(true, '', {});
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={makeTestQueryClient()}>{children}</QueryClientProvider>
+    );
+    const first = renderHook(() => useAllSettings(), { wrapper });
+    await waitFor(() => expect(first.result.current.fetched).toBe(true));
+    expect(first.result.current.allSetting.subHostSortMode).toBe('inbound-first');
+    act(() => first.result.current.updateSetting({ subHostSortMode: 'hosts-first' }));
+    await act(async () => {
+      await first.result.current.saveAll();
+    });
+    first.unmount();
+    const second = renderHook(() => useAllSettings(), { wrapper });
+    await waitFor(() => expect(second.result.current.fetched).toBe(true));
+    expect(second.result.current.allSetting.subHostSortMode).toBe('hosts-first');
+  });
   it('refreshes cached default settings after a successful save', async () => {
     vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(true, '', {}));
     const queryClient = makeTestQueryClient();
@@ -173,5 +197,39 @@ describe('useAllSettings', () => {
     expect(result.current.allSetting.tgBotToken).toBe('');
     expect(result.current.allSetting.hasTgBotToken).toBe(true);
     expect(result.current.saveDisabled).toBe(true);
+  });
+
+  it('sends the complete settings when saving a partial security change', async () => {
+    const post = vi.spyOn(HttpUtil, 'post').mockImplementation(async (url) => {
+      if (url === '/panel/api/setting/all') {
+        return new Msg(true, '', {
+          webPort: 2096,
+          webBasePath: '/custom-panel/',
+          webDomain: 'panel.example.com',
+        });
+      }
+      return new Msg(true, '');
+    });
+    const queryClient = makeTestQueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useAllSettings(), { wrapper });
+
+    await waitFor(() => expect(result.current.fetched).toBe(true));
+    await act(async () => {
+      await result.current.savePayload({ twoFactorCode: '123456', twoFactorEnable: true });
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      '/panel/api/setting/update',
+      expect.objectContaining({
+        webPort: 2096,
+        webBasePath: '/custom-panel/',
+        webDomain: 'panel.example.com',
+        twoFactorCode: '123456',
+        twoFactorEnable: true,
+      }),
+    );
   });
 });

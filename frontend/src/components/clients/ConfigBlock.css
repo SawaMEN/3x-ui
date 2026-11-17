@@ -31,7 +31,7 @@ body.light .config-block-text {
   gap: 4px;
 }
 
-.config-block .ant-collapse-content-box {
+.config-block .ant-collapse-body {
   padding: 8px !important;
 }
 

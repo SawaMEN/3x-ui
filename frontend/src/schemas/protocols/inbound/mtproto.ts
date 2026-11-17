@@ -1,8 +1,13 @@
 import { z } from 'zod';
+import {
+  TelemtWebBasePathSchema,
+  TelemtWebDomainSchema,
+  TelemtWebSiteSchema,
+} from '@/schemas/telemt-web';
 
-// mtg's [domain-fronting] section: where the sidecar forwards non-Telegram
-// traffic (e.g. an NGINX fake site). All optional — omitted keys fall back to
-// mtg's defaults (DNS-resolve the FakeTLS host, port 443, no proxy protocol).
+// Legacy mtg-multi domain-fronting payload. Telemt migrates these fields to its native mask host/port;
+// keep the shape in the schema only so existing saved inbounds can round-trip
+// through older/newer panel versions without destructive data loss.
 export const MtprotoDomainFrontingSchema = z.object({
   ip: z.string().optional(),
   port: z.number().int().min(0).max(65535).optional(),
@@ -10,11 +15,11 @@ export const MtprotoDomainFrontingSchema = z.object({
 });
 export type MtprotoDomainFronting = z.infer<typeof MtprotoDomainFrontingSchema>;
 
-// An MTProto (Telegram) inbound client (multi-client model). Each client is one
-// named FakeTLS secret the mtg-multi sidecar serves through its [secrets]
-// section; `secret` is the ee-prefixed FakeTLS secret whose trailing domain the
-// backend rebuilds on save. `fakeTlsDomain` is stored on the inbound as the
-// default domain used when generating a new client's secret.
+// An MTProto (Telegram) client served by Telemt. The persisted secret can be a
+// classic raw 32-hex secret or carry Telegram's dd/ee link prefix. The Telemt
+// runtime normalises it to the shared raw secret internally. Legacy modes are
+// optional; new inbounds default to FakeTLS. fakeTlsDomain is the default SNI
+// used for newly generated FakeTLS links.
 export const MtprotoClientSchema = z.object({
   secret: z.string().default(''),
   adTag: z
@@ -24,6 +29,13 @@ export const MtprotoClientSchema = z.object({
     .optional(),
   email: z.string().min(1),
   limitIp: z.number().int().min(0).default(0),
+  speedLimit: z
+    .object({
+      enabled: z.boolean(),
+      uploadMbps: z.number().int().min(0).max(100000),
+      downloadMbps: z.number().int().min(0).max(100000),
+    })
+    .optional(),
   totalGB: z.number().int().min(0).default(0),
   expiryTime: z.number().int().default(0),
   enable: z.boolean().default(true),
@@ -39,29 +51,68 @@ export const MtprotoClientSchema = z.object({
 });
 export type MtprotoClient = z.infer<typeof MtprotoClientSchema>;
 
-// MTProto (Telegram) inbound. Served by an mtg-multi sidecar process, not Xray,
-// so it has no stream settings. Each client carries its own FakeTLS secret and
-// is served on the shared inbound port. The remaining fields map to optional mtg
-// config knobs and are written to the generated mtg config only when set.
+// MTProto inbounds are owned by one Telemt sidecar per inbound rather than by
+// Xray/Sing-box, so they have no stream settings. Settings below map to native
+// Telemt listener/network/access options or to the optional selected-core egress bridge.
 export const MtprotoInboundSettingsSchema = z.object({
+  showOnParent: z.boolean().optional(),
+  showInSubscription: z.boolean().optional(),
+  // One MTProto protocol, with a separately provisioned HTTPS WEB transport.
+  webProxy: z
+    .object({
+      site: TelemtWebSiteSchema.optional(),
+      enabled: z.boolean().default(false),
+      domain: z.string().default(''),
+      basePath: TelemtWebBasePathSchema.default(''),
+      aliases: z.array(TelemtWebDomainSchema).max(7).default([]),
+      retryJitter: z
+        .object({
+          enabled: z.boolean(),
+          minMs: z.number().int().min(0).max(30000),
+          maxMs: z.number().int().min(0).max(30000),
+        })
+        .refine((value) => value.minMs <= value.maxMs)
+        .default({ enabled: false, minMs: 0, maxMs: 250 }),
+      frontend: z.enum(['nginx', 'caddy', 'haproxy']).default('nginx'),
+      carrier: z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']).default('https'),
+      carriers: z
+        .array(z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']))
+        .default([]),
+    })
+    .optional(),
+  // Optional on older inbounds: leaving it absent must not change persisted fixtures.
+  mekoFix: z.boolean().optional(),
+  mekoRatePerMinute: z.number().int().min(1).max(60000).optional(),
+  mekoBurst: z.number().int().min(1).max(1000).optional(),
+  mekoIosRatePerMinute: z.number().int().min(1).max(60000).optional(),
+  mekoIosBurst: z.number().int().min(1).max(1000).optional(),
   fakeTlsDomain: z.string().default('www.cloudflare.com'),
+  maskHost: z.string().optional(),
+  maskPort: z.number().int().min(0).max(65535).optional(),
+  maskProxyProtocol: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
+  proxyProtocolTrustedCidrs: z.array(z.string()).optional(),
+  tlsMask: z.boolean().optional(),
+  allowLegacyModes: z.boolean().optional(),
+  tlsEmulation: z.boolean().optional(),
+  unknownSniAction: z.enum(['mask', 'drop', 'accept', 'reject_handshake']).optional(),
   clients: z.array(MtprotoClientSchema).default([]),
   proxyProtocolListener: z.boolean().optional(),
   preferIp: z.enum(['prefer-ipv6', 'prefer-ipv4', 'only-ipv6', 'only-ipv4']).optional(),
   debug: z.boolean().optional(),
+  // Compatibility-only. Migrated to native mask settings when no explicit maskHost is set.
   domainFronting: MtprotoDomainFrontingSchema.optional(),
-  // Caps concurrent connections across all users with a fair-share algorithm;
-  // 0 or unset disables throttling.
+  // Telemt's per-user/global connection guard; 0 or unset disables the cap.
   throttleMaxConnections: z.number().int().min(0).optional(),
-  // When set, the mtg sidecar dials Telegram through a loopback SOCKS bridge in
-  // the Xray config so the egress obeys routing rules. `outboundTag` optionally
-  // forces that traffic out a specific outbound/balancer. `routeXrayPort` is the
-  // bridge port; it is allocated and owned by the backend (never edited here).
+  // Route Telegram egress through the loopback SOCKS bridge owned by the selected core.
+  // outboundTag optionally selects a concrete outbound/balancer; routeXrayPort
+  // is allocated by the backend and is never edited manually.
   routeThroughXray: z.boolean().optional(),
   outboundTag: z.string().optional(),
+  fallbackOutboundTags: z.array(z.string().min(1)).max(3).optional(),
   routeXrayPort: z.number().int().min(0).max(65535).optional(),
-  // publicIpv4/publicIpv6 pin this server's reachable address the Telegram
-  // middle proxy needs when clients carry ad-tags; blank = mtg auto-detects.
+  // Public addresses are written to Telemt's listener announce_ip when their
+  // address family matches the listener, so generated links advertise a
+  // reachable endpoint instead of a wildcard bind address.
   publicIpv4: z.string().optional(),
   publicIpv6: z.string().optional(),
 });

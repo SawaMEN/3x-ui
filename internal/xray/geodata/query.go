@@ -6,6 +6,11 @@ import "strings"
 // generation. Unlike Entries, this is not a browser endpoint; refuse very
 // large categories rather than allocating an unbounded sing-box config.
 func (s *Store) AllEntries(name, code string, maxEntries int) ([]GeoEntry, error) {
+	return s.FilteredEntries(name, code, maxEntries, nil)
+}
+
+// FilteredEntries applies all geosite attribute predicates before expansion.
+func (s *Store) FilteredEntries(name, code string, maxEntries int, attributes []string) ([]GeoEntry, error) {
 	idx, err := s.index(name)
 	if err != nil {
 		return nil, err
@@ -23,7 +28,7 @@ func (s *Store) AllEntries(name, code string, maxEntries int) ([]GeoEntry, error
 	}
 	s.scan.Lock()
 	defer s.scan.Unlock()
-	page, err := scanEntriesFromSpans(s.dir, name, idx.spans[code], idx.kind, code, "", 0, maxEntries)
+	page, err := scanEntriesFromSpans(s.dir, name, idx.spans[code], idx.kind, code, "", 0, maxEntries, attributes...)
 	if err != nil {
 		return nil, err
 	}

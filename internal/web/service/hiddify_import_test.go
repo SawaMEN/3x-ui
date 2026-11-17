@@ -1,12 +1,61 @@
 package service
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
+
+func TestHiddifyImportRejectsEquivalentUUIDSpellings(t *testing.T) {
+	const id = "768e8bdd-bee3-4442-9006-b26464148aaa"
+	for _, alias := range []string{strings.ToUpper(id), strings.ReplaceAll(id, "-", ""), "urn:uuid:" + id} {
+		raw := fmt.Sprintf(`{"users":[{"uuid":%q,"name":"first"},{"uuid":%q,"name":"second"}]}`, id, alias)
+		if _, _, err := ParseHiddifyBackup(strings.NewReader(raw)); err == nil {
+			t.Fatalf("import accepted duplicate identity spelled %q", alias)
+		}
+	}
+}
+
+func TestHiddifyLimitedQuotaNeverBecomesUnlimited(t *testing.T) {
+	for _, used := range []float64{1, 1 - math.Exp2(-32)} {
+		backup := HiddifyBackup{Users: []hiddifyUser{{
+			UUID: "768e8bdd-bee3-4442-9006-b26464148aaa", Name: "limited",
+			Enable: true, IsActive: true, UsageLimitGB: 1, CurrentUsageGB: used,
+		}}}
+		items, err := backup.HiddifyClients()
+		if err != nil || len(items) != 1 {
+			t.Fatalf("map limited account: %v", err)
+		}
+		if items[0].Client.TotalGB <= 0 {
+			t.Fatalf("limited account with remaining %g GB became unlimited", 1-used)
+		}
+	}
+	backup := HiddifyBackup{Users: []hiddifyUser{{UUID: "768e8bdd-bee3-4442-9006-b26464148aaa", Name: "overflow", UsageLimitGB: math.Exp2(33)}}}
+	if items, err := backup.HiddifyClients(); err == nil {
+		t.Fatalf("overflowed quota accepted: %+v", items)
+	}
+}
+
+func TestHiddifyImportRejectsInvalidPackageDuration(t *testing.T) {
+	durations := []int{-1}
+	if int64(math.MaxInt) > math.MaxInt64/(24*60*60*1000) {
+		durations = append(durations, math.MaxInt)
+	}
+	for _, days := range durations {
+		raw := fmt.Sprintf(`{"users":[{"uuid":"768e8bdd-bee3-4442-9006-b26464148aaa","name":"duration","package_days":%d,"start_date":"2026-01-01"}]}`, days)
+		backup, _, err := ParseHiddifyBackup(strings.NewReader(raw))
+		if err == nil {
+			_, err = backup.HiddifyClients()
+		}
+		if err == nil {
+			t.Fatalf("invalid package duration %d imported", days)
+		}
+	}
+}
 
 func TestHiddifyClientsPreserveIndependentUserURLs(t *testing.T) {
 	const backup = `{

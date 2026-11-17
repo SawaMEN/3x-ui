@@ -62,11 +62,14 @@ func (m *Manager) SetNodeEgressResolver(r NodeEgressResolver) {
 
 func (m *Manager) NodeEgressProxyURL(nodeID int) string {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	if m.egressResolver == nil {
+	resolver := m.egressResolver
+	m.mu.RUnlock()
+	if resolver == nil {
 		return ""
 	}
-	return m.egressResolver.NodeEgressProxyURL(nodeID)
+	// Never invoke third-party callbacks under the manager lock: a resolver
+	// may legitimately call back into the manager to inspect or refresh state.
+	return resolver.NodeEgressProxyURL(nodeID)
 }
 
 func (m *Manager) RuntimeFor(nodeID *int) (Runtime, error) {
@@ -103,7 +106,7 @@ func (m *Manager) RuntimeFor(nodeID *int) (Runtime, error) {
 	if !n.Enable {
 		return nil, errors.New("node " + n.Name + " is disabled")
 	}
-	rt := NewRemote(n, m.egressResolver)
+	rt := NewRemote(n, m)
 	m.remotes[*nodeID] = rt
 	return rt, nil
 }
@@ -132,11 +135,11 @@ func (m *Manager) RemoteFor(node *model.Node) (*Remote, error) {
 			return rt, nil
 		}
 	} else {
-		rt := NewRemote(cloneRemoteNode(node), m.egressResolver)
+		rt := NewRemote(cloneRemoteNode(node), m)
 		m.remotes[node.Id] = rt
 		return rt, nil
 	}
-	rt := NewRemote(cloneRemoteNode(node), m.egressResolver)
+	rt := NewRemote(cloneRemoteNode(node), m)
 	m.remotes[node.Id] = rt
 	return rt, nil
 }

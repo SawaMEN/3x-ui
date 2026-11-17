@@ -2,6 +2,7 @@ package singbox
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -13,9 +14,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
+
 	gprocess "github.com/shirou/gopsutil/v4/process"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 const (
@@ -24,13 +28,7 @@ const (
 	defaultCommandTimeout      = 10 * time.Second
 )
 
-func GetBinaryName() string {
-	arch := runtime.GOARCH
-	if arch == "arm" {
-		arch = "armv7"
-	}
-	return fmt.Sprintf("sing-box-%s-%s", runtime.GOOS, arch)
-}
+func GetBinaryName() string { return filepath.Base(config.OwnerCoreBinaryPath()) }
 
 func resolveManagedPath(path string) string {
 	if path == "" || filepath.IsAbs(path) {
@@ -45,7 +43,7 @@ func GetBinaryPath() string {
 }
 
 func GetConfigPath() string {
-	return resolveManagedPath(filepath.Join(config.GetBinFolderPath(), "sing-box.json"))
+	return resolveManagedPath(filepath.Join(config.GetBinFolderPath(), "hiddify-core.json"))
 }
 
 // resolvePath is kept as a small compatibility helper for callers that pass
@@ -62,20 +60,60 @@ func configExecutablePath() string {
 	return exe
 }
 
-type Process struct {
-	mu          sync.RWMutex
-	lifecycle   sync.Mutex
-	cmd         *exec.Cmd
-	done        chan struct{}
-	exitErr     error
-	version     string
-	startTime   time.Time
-	config      string
-	externalPID int
+type ProcessOptions struct {
+	Xray             bool
+	Name             string
+	Binary           string
+	RunCommand       string
+	VersionPrefix    string
+	RequiredVersion  string
+	RequiredRevision string
+	RequiredTags     []string
+	RequiredAnyTags  []string
+	NativeAPI        bool
+	MASQUE           bool
 }
 
-func NewProcess(configPath string) *Process {
-	return &Process{config: resolvePath(configPath), version: "Unknown"}
+func (p *Process) coreName() string {
+	if p.profile != nil && p.profile.Name != "" {
+		return p.profile.Name
+	}
+	return "sing-box"
+}
+
+type Process struct {
+	profile       *ProcessOptions
+	mu            sync.RWMutex
+	lifecycle     sync.Mutex
+	cmd           *exec.Cmd
+	done          chan struct{}
+	exitErr       error
+	version       string
+	startTime     time.Time
+	config        string
+	externalPID   int
+	isolated      bool
+	appliedConfig []byte
+	stopRequested bool
+	consoleOutput *runtimeOutput // lifecycle lock; rotation worker is reused across restarts
+}
+
+func NewProcessWithOptions(configPath string, options ProcessOptions, isolated bool) *Process {
+	return &Process{config: resolvePath(configPath), version: "Unknown", profile: &options, isolated: isolated}
+}
+
+func (p *Process) binaryPath() string {
+	if p.profile != nil {
+		return resolvePath(p.profile.Binary)
+	}
+	return GetBinaryPath()
+}
+
+func (p *Process) runCommand() string {
+	if p.profile != nil {
+		return p.profile.RunCommand
+	}
+	return "srun"
 }
 
 func (p *Process) IsRunning() bool {
@@ -94,27 +132,33 @@ func (p *Process) IsRunning() bool {
 			running = true
 		}
 		if running {
-			p.clearErrorWhileRunning()
 			return true
 		}
 	}
-	if externalPID > 0 && processExists(externalPID) {
-		p.clearErrorWhileRunning()
-		return true
+	if p.isolated {
+		return false
 	}
-	if pid := findRunningPID(GetBinaryPath()); pid > 0 {
+	if externalPID > 0 {
+		if processMatchesConfig(externalPID, p.binaryPath(), p.config, p.runCommand()) {
+			return true
+		}
+		p.clearExternalPID(externalPID)
+	}
+	if pid := p.managedPID(); pid > 0 {
 		p.mu.Lock()
 		p.externalPID = pid
-		p.exitErr = nil
 		p.mu.Unlock()
+		p.rememberAppliedConfig()
 		return true
 	}
 	return false
 }
 
-func (p *Process) clearErrorWhileRunning() {
+func (p *Process) clearExternalPID(pid int) {
 	p.mu.Lock()
-	p.exitErr = nil
+	if p.externalPID == pid {
+		p.externalPID = 0
+	}
 	p.mu.Unlock()
 }
 
@@ -135,21 +179,11 @@ func (p *Process) GetVersion() string {
 }
 
 func (p *Process) SupportsNativeAPI() bool {
-	version := strings.TrimSpace(strings.TrimPrefix(p.GetVersion(), "v"))
-	fields := strings.Fields(version)
-	if len(fields) == 0 {
-		return false
-	}
-	parts := strings.Split(fields[0], ".")
-	if len(parts) < 2 {
-		return false
-	}
-	major, err1 := strconv.Atoi(parts[0])
-	minor, err2 := strconv.Atoi(parts[1])
-	if err1 != nil || err2 != nil {
-		return false
-	}
-	return major > 1 || (major == 1 && minor >= 14)
+	return p.profile != nil && p.profile.NativeAPI
+}
+
+func (p *Process) SupportsMASQUE() bool {
+	return p.profile != nil && p.profile.MASQUE
 }
 
 func (p *Process) GetStartTime() time.Time {
@@ -158,17 +192,82 @@ func (p *Process) GetStartTime() time.Time {
 	return p.startTime
 }
 
+// RuntimeID remains stable when the panel adopts an existing process, and
+// changes after a core restart (including PID reuse).
+func (p *Process) RuntimeID() (string, error) {
+	if !p.IsRunning() {
+		return "", fmt.Errorf("%s is not running", p.coreName())
+	}
+	p.mu.RLock()
+	pid := p.externalPID
+	started, isolated := p.startTime, p.isolated
+	owned := p.cmd != nil && p.cmd.Process != nil
+	if owned && p.done != nil {
+		select {
+		case <-p.done:
+			owned = false
+		default:
+		}
+	}
+	if owned {
+		pid = p.cmd.Process.Pid
+	} else {
+		started = time.Time{}
+	}
+	p.mu.RUnlock()
+	if pid <= 0 {
+		return "", fmt.Errorf("%s process identity unavailable", p.coreName())
+	}
+	if isolated && !started.IsZero() {
+		return fmt.Sprintf("isolated:%d:%d", pid, started.UnixNano()), nil
+	}
+	proc, err := gprocess.NewProcess(int32(pid))
+	if err != nil {
+		return "", err
+	}
+	created, err := proc.CreateTime()
+	if err != nil {
+		return "", err
+	}
+	if created <= 0 {
+		return "", fmt.Errorf("invalid process creation time")
+	}
+	return fmt.Sprintf("%d:%d", pid, created), nil
+}
+
 // GetUptime returns the uptime of the sing-box process in seconds.
 func (p *Process) GetUptime() uint64 {
 	p.mu.RLock()
-	startTime, externalPID := p.startTime, p.externalPID
+	startTime, externalPID, cmd, done := p.startTime, p.externalPID, p.cmd, p.done
 	p.mu.RUnlock()
 
-	if !startTime.IsZero() {
-		return uint64(time.Since(startTime).Seconds())
+	if !startTime.IsZero() && cmd != nil && cmd.Process != nil {
+		running := true
+		if done != nil {
+			select {
+			case <-done:
+				running = false
+			default:
+			}
+		}
+		if running {
+			return uint64(time.Since(startTime).Seconds())
+		}
+	}
+	if p.isolated {
+		return 0
+	}
+	if externalPID > 0 && !processMatchesConfig(externalPID, p.binaryPath(), p.config, p.runCommand()) {
+		p.clearExternalPID(externalPID)
+		externalPID = 0
 	}
 	if externalPID <= 0 {
-		externalPID = findRunningPID(GetBinaryPath())
+		externalPID = findRunningPID(p.binaryPath(), p.config, p.runCommand())
+		if externalPID > 0 {
+			p.mu.Lock()
+			p.externalPID = externalPID
+			p.mu.Unlock()
+		}
 	}
 	if externalPID <= 0 {
 		return 0
@@ -190,45 +289,108 @@ func (p *Process) GetUptime() uint64 {
 
 func (p *Process) ConfigPath() string { return p.config }
 
-func (p *Process) Validate(ctx context.Context) error {
-	binary := resolvePath(GetBinaryPath())
+func (p *Process) Validate(ctx context.Context) error { return p.validate(ctx, false) }
+
+func (p *Process) validate(ctx context.Context, versionChecked bool) error {
+	binary := resolvePath(p.binaryPath())
 	cfg := resolvePath(p.config)
 	if _, err := os.Stat(binary); err != nil {
-		err = fmt.Errorf("sing-box binary is not installed: %w", err)
+		err = fmt.Errorf("%s binary is not installed: %w", p.coreName(), err)
 		p.setErr(err)
 		return err
 	}
 	if _, err := os.Stat(cfg); err != nil {
-		err = fmt.Errorf("sing-box config does not exist: %w", err)
+		err = fmt.Errorf("%s config does not exist: %w", p.coreName(), err)
 		p.setErr(err)
 		return err
 	}
+	data, err := os.ReadFile(cfg)
+	needsMASQUE := err == nil && (configUsesProtocol(data, "masque-server") || configUsesProtocol(data, "masque-client"))
+	if !versionChecked && (p.profile != nil || needsMASQUE) {
+		if _, err := p.Version(ctx); err != nil {
+			p.setErr(err)
+			return err
+		}
+	}
+	if needsMASQUE && !p.SupportsMASQUE() {
+		err := fmt.Errorf("MASQUE is unavailable in the configured Sing-box profile; installed: %s", p.GetVersion())
+		p.setErr(err)
+		return err
+	}
+
 	cmdCtx, cancel := context.WithTimeout(ctx, defaultCommandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(cmdCtx, binary, "check", "-c", cfg)
+	args := []string{"check", "-c", cfg}
+	if p.profile != nil && p.profile.Xray {
+		args = []string{"run", "-test", "-c", cfg}
+	}
+	cmd := exec.CommandContext(cmdCtx, binary, args...)
 	cmd.Dir = filepath.Dir(binary)
-	output, err := cmd.CombinedOutput()
+	cmd.Env = clientlimit.Default.Environment(os.Environ())
+	output, err := boundedCommandOutput(cmd)
 	if err != nil {
-		err = fmt.Errorf("sing-box config check failed: %w: %s", err, strings.TrimSpace(string(output)))
+		err = fmt.Errorf("%s config check failed: %w: %s", p.coreName(), err, strings.TrimSpace(string(output)))
 		p.setErr(err)
 		return err
 	}
+	p.setErr(nil)
 	return nil
 }
 
 func (p *Process) Version(ctx context.Context) (string, error) {
-	binary := resolvePath(GetBinaryPath())
+	binary := resolvePath(p.binaryPath())
 	cmdCtx, cancel := context.WithTimeout(ctx, defaultCommandTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(cmdCtx, binary, "version")
 	cmd.Dir = filepath.Dir(binary)
-	output, err := cmd.CombinedOutput()
+	cmd.Env = clientlimit.Default.Environment(os.Environ())
+	output, err := boundedCommandOutput(cmd)
 	if err != nil {
-		return "", fmt.Errorf("sing-box version failed: %w: %s", err, strings.TrimSpace(string(output)))
+		return "", fmt.Errorf("%s version failed: %w: %s", p.coreName(), err, strings.TrimSpace(string(output)))
 	}
 	version := strings.TrimSpace(string(output))
 	if lines := strings.SplitN(version, "\n", 2); len(lines) > 0 {
 		version = strings.TrimSpace(strings.TrimPrefix(lines[0], "sing-box version"))
+	}
+	if p.profile != nil {
+		firstLine := strings.SplitN(string(output), "\n", 2)[0]
+		if !strings.HasPrefix(firstLine, p.profile.VersionPrefix) {
+			return "", fmt.Errorf("unexpected %s version output: %s", p.coreName(), strings.TrimSpace(firstLine))
+		}
+		fields := strings.Fields(strings.TrimPrefix(firstLine, p.profile.VersionPrefix))
+		if len(fields) == 0 || (p.profile.RequiredVersion != "" && fields[0] != p.profile.RequiredVersion) {
+			return "", fmt.Errorf("expected core %s, received %s", p.profile.RequiredVersion, strings.TrimSpace(string(output)))
+		}
+		version = fields[0]
+		buildTags := map[string]bool{}
+		var revision string
+		for _, line := range strings.Split(string(output), "\n") {
+			if tags, ok := strings.CutPrefix(line, "Tags: "); ok {
+				for _, tag := range strings.Split(tags, ",") {
+					buildTags[strings.TrimSpace(tag)] = true
+				}
+			}
+			if value, ok := strings.CutPrefix(line, "Revision: "); ok {
+				revision = strings.TrimSpace(value)
+			}
+		}
+		if p.profile.RequiredRevision != "" && revision != p.profile.RequiredRevision {
+			return "", fmt.Errorf("expected %s revision %s, received %q", p.coreName(), p.profile.RequiredRevision, revision)
+		}
+		for _, tag := range p.profile.RequiredTags {
+			if !buildTags[tag] {
+				return "", fmt.Errorf("core build lacks required tag %s", tag)
+			}
+		}
+		if len(p.profile.RequiredAnyTags) > 0 {
+			found := false
+			for _, tag := range p.profile.RequiredAnyTags {
+				found = found || buildTags[tag]
+			}
+			if !found {
+				return "", fmt.Errorf("core build lacks one of required tags %v", p.profile.RequiredAnyTags)
+			}
+		}
 	}
 	p.mu.Lock()
 	p.version = version
@@ -243,6 +405,9 @@ func (p *Process) Start(ctx context.Context) error {
 }
 
 func (p *Process) startLocked(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	p.mu.RLock()
 	running, done := p.cmd != nil && p.cmd.Process != nil, p.done
 	p.mu.RUnlock()
@@ -253,24 +418,37 @@ func (p *Process) startLocked(ctx context.Context) error {
 			return nil
 		}
 	}
-	if pid := findRunningPID(GetBinaryPath()); pid > 0 {
+	if p.profile != nil {
+		if _, err := p.Version(ctx); err != nil {
+			p.setErr(err)
+			return err
+		}
+	}
+	if pid := p.managedPID(); pid > 0 {
 		p.mu.Lock()
 		p.externalPID = pid
 		p.mu.Unlock()
+		p.rememberAppliedConfig()
 		return nil
 	}
-	if err := p.Validate(ctx); err != nil {
+	if err := p.validate(ctx, p.profile != nil); err != nil {
 		return err
 	}
-	binary, cfg := resolvePath(GetBinaryPath()), resolvePath(p.config)
+	binary, cfg := resolvePath(p.binaryPath()), resolvePath(p.config)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	// The core must outlive the HTTP request that started it.
-	cmd := exec.CommandContext(context.Background(), binary, "run", "-c", cfg)
+	cmd := exec.CommandContext(context.Background(), binary, p.runCommand(), "-c", cfg)
+	cmd.WaitDelay = defaultForceStopTimeout
 	cmd.Dir = filepath.Dir(binary)
-	output := &processOutput{}
+	cmd.Env = clientlimit.Default.Environment(os.Environ())
+	output := p.runtimeConsole()
 	cmd.Stdout = output
 	cmd.Stderr = output
 	if err := cmd.Start(); err != nil {
-		err = fmt.Errorf("start sing-box: %w", err)
+		_ = output.Close()
+		err = fmt.Errorf("start %s: %w", p.coreName(), err)
 		p.setErr(err)
 		return err
 	}
@@ -278,22 +456,51 @@ func (p *Process) startLocked(ctx context.Context) error {
 	p.cmd = cmd
 	p.done = make(chan struct{})
 	p.exitErr = nil
+	p.stopRequested = false
 	p.externalPID = 0
 	p.startTime = time.Now()
 	done = p.done
 	p.mu.Unlock()
 	go func() {
 		err := cmd.Wait()
+		_ = output.Close()
 		if err != nil {
 			if details := output.String(); details != "" {
 				err = fmt.Errorf("%w: %s", err, details)
 			}
 		}
 		p.mu.Lock()
+		unexpected := !p.stopRequested
+		if unexpected && err == nil {
+			err = fmt.Errorf("%s exited with status 0 without a stop request", p.coreName())
+		}
 		p.exitErr = err
 		close(done)
 		p.mu.Unlock()
+		if unexpected {
+			logger.Errorf("%s exited unexpectedly pid=%d error=%s console_log=%s", p.coreName(), cmd.Process.Pid, logger.ErrorSummary(err), p.ConsoleLogPath())
+		}
 	}()
+	// Startup errors (including bind collisions) happen after cmd.Start. Do not
+	// report success while the child is still in that immediate failure window.
+	timer := time.NewTimer(500 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-done:
+		if err := p.GetErr(); err != nil {
+			return fmt.Errorf("%s exited during startup: %w", p.coreName(), err)
+		}
+		return fmt.Errorf("%s exited during startup", p.coreName())
+	case <-ctx.Done():
+		_ = p.stopLocked()
+		return ctx.Err()
+	case <-timer.C:
+	}
+	if err := ctx.Err(); err != nil {
+		_ = p.stopLocked()
+		return err
+	}
+	p.rememberAppliedConfig()
 	return nil
 }
 
@@ -310,14 +517,31 @@ func (p *Process) Stop() error {
 }
 
 func (p *Process) stopLocked() error {
-	p.mu.RLock()
+	p.mu.Lock()
+	p.stopRequested = true
 	cmd, done, externalPID := p.cmd, p.done, p.externalPID
-	p.mu.RUnlock()
+	p.mu.Unlock()
+	if done != nil {
+		select {
+		case <-done:
+			cmd = nil
+		default:
+		}
+	}
 	if cmd == nil || cmd.Process == nil {
-		if externalPID <= 0 {
-			externalPID = findRunningPID(GetBinaryPath())
+		binary := p.binaryPath()
+		if externalPID > 0 && !processMatchesConfig(externalPID, binary, p.config, p.runCommand()) {
+			p.clearExternalPID(externalPID)
+			externalPID = 0
+		}
+		if externalPID <= 0 && !p.isolated {
+			externalPID = findRunningPID(binary, p.config, p.runCommand())
 		}
 		if externalPID <= 0 {
+			return nil
+		}
+		if !processMatchesConfig(externalPID, binary, p.config, p.runCommand()) {
+			p.clearExternalPID(externalPID)
 			return nil
 		}
 		proc, err := os.FindProcess(externalPID)
@@ -325,23 +549,63 @@ func (p *Process) stopLocked() error {
 			return err
 		}
 		if err := proc.Signal(os.Interrupt); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			_ = proc.Kill()
+			// Never escalate a cached PID without verifying it still points at
+			// the configured sing-box binary. The PID may have been reused after
+			// the identity check above.
+			if !processMatchesConfig(externalPID, binary, p.config, p.runCommand()) {
+				p.clearExternalPID(externalPID)
+				return nil
+			}
+			if killErr := proc.Kill(); killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+				return fmt.Errorf("force stop external %s process %d: %w", p.coreName(), externalPID, killErr)
+			}
+			if !p.waitForExternalExit(externalPID, defaultForceStopTimeout) {
+				return fmt.Errorf("external %s process %d did not exit after force stop", p.coreName(), externalPID)
+			}
+			p.setErr(nil)
+			return nil
 		}
-		p.waitForExternalExit(externalPID, defaultGracefulStopTimeout)
+		if p.waitForExternalExit(externalPID, defaultGracefulStopTimeout) {
+			p.setErr(nil)
+			return nil
+		}
+		// Graceful shutdown timed out. Revalidate immediately before SIGKILL so
+		// a PID recycled during the wait cannot cause an unrelated process to be
+		// terminated.
+		if !processMatchesConfig(externalPID, binary, p.config, p.runCommand()) {
+			p.clearExternalPID(externalPID)
+			p.setErr(nil)
+			return nil
+		}
+		proc, err = os.FindProcess(externalPID)
+		if err != nil {
+			return err
+		}
+		if err := proc.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return fmt.Errorf("force stop external %s process %d: %w", p.coreName(), externalPID, err)
+		}
+		if !p.waitForExternalExit(externalPID, defaultForceStopTimeout) {
+			return fmt.Errorf("external %s process %d did not exit after force stop", p.coreName(), externalPID)
+		}
 		p.setErr(nil)
 		return nil
 	}
 	if err := cmd.Process.Signal(os.Interrupt); err != nil && !errors.Is(err, os.ErrProcessDone) {
-		_ = cmd.Process.Kill()
+		if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return fmt.Errorf("force stop %s: %w", p.coreName(), err)
+		}
 	}
 	if done != nil {
 		select {
 		case <-done:
 		case <-time.After(defaultGracefulStopTimeout):
-			_ = cmd.Process.Kill()
+			if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+				return fmt.Errorf("force stop %s: %w", p.coreName(), err)
+			}
 			select {
 			case <-done:
 			case <-time.After(defaultForceStopTimeout):
+				return fmt.Errorf("%s did not exit after force stop", p.coreName())
 			}
 		}
 	}
@@ -355,6 +619,9 @@ func (p *Process) Restart(ctx context.Context) error {
 	if err := p.Validate(ctx); err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := p.stopLocked(); err != nil {
 		return err
 	}
@@ -362,36 +629,57 @@ func (p *Process) Restart(ctx context.Context) error {
 }
 
 func (p *Process) waitForExternalExit(pid int, timeout time.Duration) bool {
+	binary := p.binaryPath()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if !processExists(pid) {
-			p.mu.Lock()
-			if p.externalPID == pid {
-				p.externalPID = 0
-			}
-			p.mu.Unlock()
+		if !processMatchesConfig(pid, binary, p.config, p.runCommand()) {
+			p.clearExternalPID(pid)
 			return true
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return !processExists(pid)
+	if !processMatchesConfig(pid, binary, p.config, p.runCommand()) {
+		p.clearExternalPID(pid)
+		return true
+	}
+	return false
 }
 
-func processExists(pid int) bool {
-	if pid <= 0 {
+func processMatchesBinary(pid int, binary string) bool {
+	if pid <= 0 || runtime.GOOS != "linux" {
 		return false
 	}
-	proc, err := os.FindProcess(pid)
+
+	binary = filepath.Clean(resolvePath(binary))
+	if resolved, err := filepath.EvalSymlinks(binary); err == nil {
+		binary = filepath.Clean(resolved)
+	}
+
+	procDir := filepath.Join("/proc", strconv.Itoa(pid))
+	if exe, err := os.Readlink(filepath.Join(procDir, "exe")); err == nil {
+		exe = strings.TrimSuffix(exe, " (deleted)")
+		return filepath.Clean(exe) == binary
+	}
+
+	// /proc/<pid>/exe can be unavailable under restrictive procfs settings.
+	// Fall back to argv[0], but only when the stronger executable check could
+	// not be read at all.
+	cmdline, err := os.ReadFile(filepath.Join(procDir, "cmdline"))
 	if err != nil {
 		return false
 	}
-	if runtime.GOOS == "windows" {
-		return proc != nil
+	args := strings.Split(string(cmdline), "\x00")
+	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
+		return false
 	}
-	return proc.Signal(nil) == nil
+	arg0 := filepath.Clean(resolvePath(args[0]))
+	if resolved, err := filepath.EvalSymlinks(arg0); err == nil {
+		arg0 = filepath.Clean(resolved)
+	}
+	return arg0 == binary
 }
 
-func findRunningPID(binary string) int {
+func findRunningPID(binary string, configs ...string) int {
 	if runtime.GOOS != "linux" {
 		return 0
 	}
@@ -399,7 +687,6 @@ func findRunningPID(binary string) int {
 	if err != nil {
 		return 0
 	}
-	binary = resolvePath(binary)
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -408,27 +695,35 @@ func findRunningPID(binary string) int {
 		if err != nil || pid <= 0 {
 			continue
 		}
-		exe, err := os.Readlink(filepath.Join("/proc", entry.Name(), "exe"))
-		if err == nil && filepath.Clean(exe) == filepath.Clean(binary) {
-			return pid
-		}
-		cmdline, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
-		if err != nil {
-			continue
-		}
-		args := strings.Split(string(cmdline), "\x00")
-		if len(args) > 0 && filepath.Clean(resolvePath(args[0])) == filepath.Clean(binary) {
+		if processMatchesBinary(pid, binary) {
+			if len(configs) > 0 && !processMatchesConfig(pid, binary, configs[0], configs[1:]...) {
+				continue
+			}
 			return pid
 		}
 	}
 	return 0
 }
 
+// boundedCommandOutput drains both pipes while retaining only recent diagnostics.
+// A broken child must not make a config/version HTTP request exhaust panel RAM.
+func boundedCommandOutput(cmd *exec.Cmd) ([]byte, error) {
+	if cmd.WaitDelay == 0 {
+		cmd.WaitDelay = defaultForceStopTimeout
+	}
+	output := &processOutput{}
+	cmd.Stdout = output
+	cmd.Stderr = output
+	err := cmd.Run()
+	return []byte(output.String()), err
+}
+
 const processOutputLimit = 64 * 1024
 
 type processOutput struct {
-	mu  sync.Mutex
-	buf []byte
+	mu   sync.Mutex
+	buf  []byte
+	head int
 }
 
 func (w *processOutput) Write(b []byte) (int, error) {
@@ -436,17 +731,74 @@ func (w *processOutput) Write(b []byte) (int, error) {
 	defer w.mu.Unlock()
 	if len(b) >= processOutputLimit {
 		w.buf = append(w.buf[:0], b[len(b)-processOutputLimit:]...)
+		w.head = 0
 		return len(b), nil
 	}
-	w.buf = append(w.buf, b...)
-	if len(w.buf) > processOutputLimit {
-		w.buf = append([]byte(nil), w.buf[len(w.buf)-processOutputLimit:]...)
+	n := len(b)
+	if len(w.buf) < processOutputLimit {
+		space := processOutputLimit - len(w.buf)
+		if len(b) <= space {
+			w.buf = append(w.buf, b...)
+			return n, nil
+		}
+		w.buf = append(w.buf, b[:space]...)
+		b = b[space:]
 	}
-	return len(b), nil
+	first := min(len(b), processOutputLimit-w.head)
+	copy(w.buf[w.head:], b[:first])
+	copy(w.buf, b[first:])
+	w.head = (w.head + len(b)) % processOutputLimit
+	return n, nil
 }
 
 func (w *processOutput) String() string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return strings.TrimSpace(string(w.buf))
+	if w.head == 0 {
+		return strings.TrimSpace(string(w.buf))
+	}
+	ordered := make([]byte, len(w.buf))
+	n := copy(ordered, w.buf[w.head:])
+	copy(ordered[n:], w.buf[:w.head])
+	return strings.TrimSpace(string(ordered))
+}
+
+func (p *Process) managedPID() int {
+	if p.isolated {
+		return 0
+	}
+	return findRunningPID(p.binaryPath(), p.config, p.runCommand())
+}
+
+func configUsesProtocol(data []byte, protocol string) bool {
+	var cfg struct {
+		Endpoints []struct {
+			Type string `json:"type"`
+		} `json:"endpoints"`
+		Inbounds []struct {
+			Type string `json:"type"`
+		} `json:"inbounds"`
+		Outbounds []struct {
+			Type string `json:"type"`
+		} `json:"outbounds"`
+	}
+	if json.Unmarshal(data, &cfg) != nil {
+		return false
+	}
+	for _, endpoint := range cfg.Endpoints {
+		if endpoint.Type == protocol {
+			return true
+		}
+	}
+	for _, inbound := range cfg.Inbounds {
+		if inbound.Type == protocol {
+			return true
+		}
+	}
+	for _, outbound := range cfg.Outbounds {
+		if outbound.Type == protocol {
+			return true
+		}
+	}
+	return false
 }

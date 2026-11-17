@@ -1,6 +1,8 @@
+import { openFluxMAXChannels } from '@/lib/openflux';
+import { useServerLinks } from '../useServerLinks';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Divider, Modal, Space, Tabs, Tag, Tooltip } from 'antd';
+import { Alert, Button, Divider, Modal, Typography, Space, Spin, Tabs, Tag, Tooltip } from 'antd';
 import { CopyOutlined, SyncOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil, IntlUtil, SizeFormatter, ColorUtils, Wireguard } from '@/utils';
@@ -53,6 +55,16 @@ export default function InboundInfoModal({
 
   const [inbound, setInbound] = useState<InboundInfo | null>(null);
   const [clientSettings, setClientSettings] = useState<ClientSetting | null>(null);
+  const maxChannels =
+    dbInbound?.protocol === 'openflux'
+      ? openFluxMAXChannels(dbInbound.settings)
+      : { present: false, only: false };
+  const serverLinks = useServerLinks(
+    open && !maxChannels.only,
+    dbInbound?.id,
+    dbInbound?.protocol,
+    clientSettings?.email,
+  );
   const [clientStats, setClientStats] = useState<ClientStats | null>(null);
   const [links, setLinks] = useState<{ remark?: string; link: string }[]>([]);
   const [wireguardConfigs, setWireguardConfigs] = useState<string[]>([]);
@@ -317,6 +329,11 @@ export default function InboundInfoModal({
     );
   }
 
+  const displayLinks = ['fptn', 'openflux', 'trusttunnel', 'vetroff'].includes(dbInbound.protocol)
+    ? maxChannels.only
+      ? []
+      : (serverLinks.data ?? [])
+    : links;
   const clientTab = (
     <>
       <table className="info-table block">
@@ -534,7 +551,7 @@ export default function InboundInfoModal({
             <Tooltip title={t('copy')}>
               <Button
                 size="small"
-                icon={<CopyOutlined />}
+                icon={<CopyOutlined aria-hidden />}
                 aria-label={t('copy')}
                 onClick={() => copyText(clientSettings.tgId, t)}
               />
@@ -543,17 +560,17 @@ export default function InboundInfoModal({
         </>
       )}
 
-      {hasShareLink(dbInbound.protocol) && links.length > 0 && (
+      {hasShareLink(dbInbound.protocol) && displayLinks.length > 0 && (
         <>
           <Divider>{t('pages.inbounds.copyLink')}</Divider>
-          {links.map((link, idx) => (
+          {displayLinks.map((link, idx) => (
             <div key={idx} className="link-panel">
               <div className="link-panel-header">
                 <Tag color="green">{link.remark || `Link ${idx + 1}`}</Tag>
                 <Tooltip title={t('copy')}>
                   <Button
                     size="small"
-                    icon={<CopyOutlined />}
+                    icon={<CopyOutlined aria-hidden />}
                     aria-label={t('copy')}
                     onClick={() => copyText(link.link, t)}
                   />
@@ -574,7 +591,7 @@ export default function InboundInfoModal({
               <Tooltip title={t('copy')}>
                 <Button
                   size="small"
-                  icon={<CopyOutlined />}
+                  icon={<CopyOutlined aria-hidden />}
                   aria-label={t('copy')}
                   onClick={() => copyText(subLink, t)}
                 />
@@ -596,7 +613,7 @@ export default function InboundInfoModal({
                 <Tooltip title={t('copy')}>
                   <Button
                     size="small"
-                    icon={<CopyOutlined />}
+                    icon={<CopyOutlined aria-hidden />}
                     aria-label={t('copy')}
                     onClick={() => copyText(subJsonLink, t)}
                   />
@@ -720,7 +737,7 @@ export default function InboundInfoModal({
                     <Button
                       size="small"
                       className="value-copy"
-                      icon={<CopyOutlined />}
+                      icon={<CopyOutlined aria-hidden />}
                       aria-label={t('copy')}
                       onClick={() => copyText(encryptionLabel, t)}
                     />
@@ -990,7 +1007,7 @@ export default function InboundInfoModal({
                         <Button
                           size="small"
                           type="text"
-                          icon={<CopyOutlined />}
+                          icon={<CopyOutlined aria-hidden />}
                           aria-label={t('copy')}
                           onClick={() => copyText(`${account.user}:${account.pass}`, t)}
                         />
@@ -1106,7 +1123,7 @@ export default function InboundInfoModal({
                     <Tooltip title={t('copy')}>
                       <Button
                         size="small"
-                        icon={<CopyOutlined />}
+                        icon={<CopyOutlined aria-hidden />}
                         aria-label={t('copy')}
                         onClick={() => copyText(`${account.user}:${account.pass}`, t)}
                       />
@@ -1300,7 +1317,7 @@ export default function InboundInfoModal({
       {dbInbound.isSS && !inbound.isSSMultiUser && links.length > 0 && (
         <>
           <Divider>{t('pages.inbounds.copyLink')}</Divider>
-          {links.map((link, idx) => (
+          {displayLinks.map((link, idx) => (
             <div key={idx} className="link-panel">
               <div className="link-panel-header">
                 <Tag color="green">{link.remark || `Link ${idx + 1}`}</Tag>
@@ -1336,6 +1353,15 @@ export default function InboundInfoModal({
       width={640}
       destroyOnHidden
     >
+      {maxChannels.present && (
+        <Typography.Paragraph type="secondary">
+          {t('pages.inbounds.form.openfluxMaxNoQR')}
+        </Typography.Paragraph>
+      )}
+      {serverLinks.isFetching && <Spin />}
+      {!maxChannels.only && serverLinks.error && (
+        <Alert type="error" showIcon description={serverLinks.error.message} />
+      )}
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
     </Modal>
   );

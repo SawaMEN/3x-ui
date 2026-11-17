@@ -27,8 +27,9 @@ type managedOutbound struct {
 // OutboundManager owns the running AmneziaWG client interfaces keyed by tag,
 // keeping the egress registry and listener current; callers just Reconcile.
 type OutboundManager struct {
-	mu    sync.Mutex
-	iface map[string]*managedOutbound
+	mu         sync.Mutex
+	iface      map[string]*managedOutbound
+	nativeTags map[string]bool
 }
 
 var (
@@ -99,6 +100,9 @@ func (m *OutboundManager) Reconcile(desired []OutboundDesired) {
 // ensureLocked picks no-op / reconfigure-in-place / rebuild for one desired
 // outbound (address/MTU are fixed at netstack build time).
 func (m *OutboundManager) ensureLocked(d OutboundDesired) error {
+	if m.nativeTags[d.Instance.Tag] {
+		return nil
+	}
 	inst, opts := d.Instance, d.Options
 	if opts.Logger == nil {
 		opts.Logger = verboseLoggerIfEnabled(0)
@@ -147,6 +151,10 @@ func (m *OutboundManager) ensureLocked(d OutboundDesired) error {
 func (m *OutboundManager) Remove(tag string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.removeLocked(tag)
+}
+
+func (m *OutboundManager) removeLocked(tag string) {
 	cur, exists := m.iface[tag]
 	if !exists {
 		return
@@ -175,4 +183,22 @@ func (m *OutboundManager) HasRunning() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.iface) > 0
+}
+
+// SetNativeTags is called only after a successful core start. Candidate
+// validation or restart failures leave the previous bridge ownership intact.
+func (m *OutboundManager) SetNativeTags(tags []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.nativeTags = make(map[string]bool, len(tags))
+	for _, tag := range tags {
+		m.nativeTags[tag] = true
+		m.removeLocked(tag)
+	}
+}
+
+func (m *OutboundManager) HasNativeTag(tag string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.nativeTags[tag]
 }

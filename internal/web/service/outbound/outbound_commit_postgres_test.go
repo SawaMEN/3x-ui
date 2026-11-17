@@ -7,8 +7,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestAddTrafficReturnsDeferredCommitFailure(t *testing.T) {
@@ -47,7 +47,7 @@ func TestAddTrafficReturnsDeferredCommitFailure(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Callback().Create().Remove(callback) })
 
-	err, _ := (&OutboundService{}).AddTraffic([]*xray.Traffic{{Tag: "commit-test", IsOutbound: true, Up: 1}}, nil)
+	err, _ := (&OutboundService{}).AddTraffic([]*coremodel.Traffic{{Tag: "commit-test", IsOutbound: true, Up: 1}}, nil)
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "foreign key") {
 		t.Fatalf("AddTraffic error = %v, want deferred foreign-key commit failure", err)
 	}

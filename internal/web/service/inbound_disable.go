@@ -5,16 +5,17 @@ import (
 	"slices"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-
 	"gorm.io/gorm"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func (s *InboundService) disableInvalidInbounds(tx *gorm.DB, mutationBatch *trafficMutationBatch) (bool, int64, error) {
 	now := time.Now().Unix() * 1000
 	var inbounds []model.Inbound
-	if err := tx.Where("((total > 0 and up + down >= total) or (expiry_time > 0 and expiry_time <= ?)) and enable = ? and node_id IS NULL", now, true).
+	if err := tx.Where("("+database.TrafficQuotaExpr("up", "down", "total")+" or (expiry_time > 0 and expiry_time <= ?)) and enable = ? and node_id IS NULL", now, true).
 		Find(&inbounds).Error; err != nil {
 		return false, 0, err
 	}
@@ -25,7 +26,7 @@ func (s *InboundService) disableInvalidInbounds(tx *gorm.DB, mutationBatch *traf
 	}
 
 	result := tx.Model(model.Inbound{}).
-		Where("((total > 0 and up + down >= total) or (expiry_time > 0 and expiry_time <= ?)) and enable = ? and node_id IS NULL", now, true).
+		Where("("+database.TrafficQuotaExpr("up", "down", "total")+" or (expiry_time > 0 and expiry_time <= ?)) and enable = ? and node_id IS NULL", now, true).
 		Update("enable", false)
 	err := result.Error
 	count := result.RowsAffected
@@ -34,8 +35,8 @@ func (s *InboundService) disableInvalidInbounds(tx *gorm.DB, mutationBatch *traf
 
 const globalTrafficFreshWindow = 24 * time.Hour
 
-func globalTrafficFreshSince() int64 {
-	return time.Now().Add(-globalTrafficFreshWindow).UnixMilli()
+func globalTrafficFreshSince(now time.Time) int64 {
+	return now.Add(-globalTrafficFreshWindow).UnixMilli()
 }
 
 // depletedClientsCond matches clients that exhausted their quota or expired.
@@ -43,13 +44,13 @@ func globalTrafficFreshSince() int64 {
 // pushed into client_global_traffics — that's what lets a node cut a client
 // whose combined usage exceeds the quota even though the local share doesn't.
 // Only rows a master refreshed recently count (placeholders: now, freshSince).
-const depletedClientsCond = `((total > 0 AND up + down >= total)
+var depletedClientsCond = `(` + database.TrafficQuotaExpr("up", "down", "total") + `
 	OR (expiry_time > 0 AND expiry_time <= ?)
 	OR (total > 0 AND EXISTS (
 		SELECT 1 FROM client_global_traffics g
 		WHERE g.email = client_traffics.email
 			AND g.updated_at >= ?
-			AND g.up + g.down >= client_traffics.total
+			AND ` + database.TrafficQuotaExpr("g.up", "g.down", "client_traffics.total") + `
 	)))`
 
 // depletedClientsCondLocal is depletedClientsCond without the cross-panel
@@ -57,32 +58,30 @@ const depletedClientsCond = `((total > 0 AND up + down >= total)
 // turns every traffic poll into a full client_traffics scan; on a panel no
 // master pushes to (the common case) client_global_traffics is empty, so the
 // branch can never match and is pure CPU cost (#5392). Placeholders: now.
-const depletedClientsCondLocal = `((total > 0 AND up + down >= total)
+var depletedClientsCondLocal = `(` + database.TrafficQuotaExpr("up", "down", "total") + `
 	OR (expiry_time > 0 AND expiry_time <= ?))`
 
-// depletedCond returns the predicate matching depleted clients together with
-// the arguments it binds. The local-only variant is used unless this panel
-// holds a global-traffic row a master still refreshes, in which case the
-// cross-panel EXISTS check is needed to enforce combined quota.
+// depletedCond includes cross-panel quota usage only while a master's row is fresh.
+// Without fresh global rows, the local-only predicate avoids a correlated EXISTS scan.
 func depletedCond(tx *gorm.DB) (string, []any) {
-	now := time.Now().UnixMilli()
-	freshSince := globalTrafficFreshSince()
+	now := tx.NowFunc()
+	freshSince := globalTrafficFreshSince(now)
 	var probe int64
 	err := tx.Model(&model.ClientGlobalTraffic{}).
 		Where("updated_at >= ?", freshSince).
 		Limit(1).Count(&probe).Error
 	if err == nil && probe > 0 {
-		return depletedClientsCond, []any{now, freshSince}
+		return depletedClientsCond, []any{now.UnixMilli(), freshSince}
 	}
-	return depletedClientsCondLocal, []any{now}
+	return depletedClientsCondLocal, []any{now.UnixMilli()}
 }
 
 func (s *InboundService) disableInvalidClients(tx *gorm.DB, mutationBatch *trafficMutationBatch) (bool, int64, []int, error) {
 	now := time.Now().UnixMilli()
 	cond, condArgs := depletedCond(tx)
 
-	var depletedRows []xray.ClientTraffic
-	err := tx.Model(xray.ClientTraffic{}).
+	var depletedRows []coremodel.ClientTraffic
+	err := tx.Model(coremodel.ClientTraffic{}).
 		Where(cond+" AND enable = ?", append(condArgs, true)...).
 		Find(&depletedRows).Error
 	if err != nil {
@@ -160,7 +159,7 @@ func (s *InboundService) disableInvalidClients(tx *gorm.DB, mutationBatch *traff
 	slices.Sort(ids)
 	var count int64
 	for _, batch := range chunkInts(ids, sqlInChunk) {
-		result := tx.Model(xray.ClientTraffic{}).
+		result := tx.Model(coremodel.ClientTraffic{}).
 			Where("id IN ? AND enable = ?", batch, true).
 			Update("enable", false)
 		if result.Error != nil {
@@ -232,5 +231,7 @@ func (s *InboundService) markClientsDisabledInSettings(tx *gorm.DB, inboundID in
 		Update("settings", ib.Settings).Error; err != nil {
 		return nil, nil, err
 	}
+	// A just-disabled client must leave subscriptions within this tick.
+	InvalidateSubData()
 	return &snapshot, &ib, nil
 }

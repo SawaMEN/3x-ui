@@ -6,6 +6,7 @@ import {
   TcpStreamSettingsSchema,
   WsStreamSettingsSchema,
   XHttpStreamSettingsSchema,
+  XDriveStreamSettingsSchema,
 } from '@/schemas/protocols/stream';
 import { RealityStreamSettingsSchema, TlsStreamSettingsSchema } from '@/schemas/protocols/security';
 
@@ -16,6 +17,7 @@ const NETWORK_KEY_MAP = {
   grpc: 'grpcSettings',
   httpupgrade: 'httpupgradeSettings',
   xhttp: 'xhttpSettings',
+  xdrive: 'xdriveSettings',
   hysteria: 'hysteriaSettings',
 } as const;
 
@@ -25,6 +27,17 @@ function parseOrDefault(schema: SchemaWithParse, value: unknown): unknown {
   const parsed = schema.safeParse(value ?? {});
   if (parsed.success) return parsed.data;
   const fallback = schema.safeParse({});
+  // Invalid storage credentials or native options must stay visible to form
+  // validation, never be silently replaced with a fresh empty configuration.
+  if (
+    (schema === HysteriaStreamSettingsSchema || schema === XDriveStreamSettingsSchema) &&
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    fallback.success
+  ) {
+    return { ...(fallback.data as Record<string, unknown>), ...value };
+  }
   return fallback.success ? fallback.data : value;
 }
 
@@ -40,6 +53,8 @@ function networkSchemaFor(network: string): SchemaWithParse | null {
       return GrpcStreamSettingsSchema;
     case 'httpupgrade':
       return HttpUpgradeStreamSettingsSchema;
+    case 'xdrive':
+      return XDriveStreamSettingsSchema;
     case 'xhttp':
       return XHttpStreamSettingsSchema;
     case 'hysteria':

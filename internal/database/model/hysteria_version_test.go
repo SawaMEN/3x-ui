@@ -107,10 +107,10 @@ func TestHealHysteriaStreamVersionWithoutHysteriaSettings(t *testing.T) {
 	}
 }
 
-// TestGenXrayInboundConfigHealsHysteriaVersion is the regression for a stored
+// TestGenInboundConfigHealsHysteriaVersion is the regression for a stored
 // v1 row: xray-core answers "version != 2" and rejects the whole config, so
 // every other inbound on the server stays offline until the row is fixed.
-func TestGenXrayInboundConfigHealsHysteriaVersion(t *testing.T) {
+func TestGenInboundConfigHealsHysteriaVersion(t *testing.T) {
 	in := Inbound{
 		Protocol:       Hysteria,
 		Port:           36715,
@@ -119,7 +119,7 @@ func TestGenXrayInboundConfigHealsHysteriaVersion(t *testing.T) {
 		Settings:       `{"version":1,"clients":[{"auth":"tok","email":"a@x"}]}`,
 		StreamSettings: `{"network":"hysteria","hysteriaSettings":{"version":1,"udpIdleTimeout":60}}`,
 	}
-	cfg := in.GenXrayInboundConfig()
+	cfg := in.GenInboundConfig()
 
 	if got := settingsVersion(t, string(cfg.Settings)); got != float64(2) {
 		t.Fatalf("generated settings.version = %#v, want 2", got)
@@ -138,14 +138,14 @@ func TestGenXrayInboundConfigHealsHysteriaVersion(t *testing.T) {
 	}
 }
 
-func TestGenXrayInboundConfigLeavesOtherProtocolsAlone(t *testing.T) {
+func TestGenInboundConfigLeavesOtherProtocolsAlone(t *testing.T) {
 	in := Inbound{
 		Protocol: VLESS,
 		Port:     443,
 		Tag:      "in-vless",
 		Settings: `{"clients":[],"decryption":"none"}`,
 	}
-	if got := settingsVersion(t, string(in.GenXrayInboundConfig().Settings)); got != nil {
+	if got := settingsVersion(t, string(in.GenInboundConfig().Settings)); got != nil {
 		t.Fatalf("a non-hysteria inbound must not gain a version key, got %#v", got)
 	}
 }
