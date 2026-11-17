@@ -162,6 +162,10 @@ func detectKindFile(dir, name string) (GeoKind, *categoryScan, error) {
 		}
 	}
 	if firstErr != nil {
+		// A size limit is not evidence of an invalid protobuf database.
+		if errors.Is(firstErr, ErrFileTooLarge) {
+			return "", nil, firstErr
+		}
 		return "", nil, fmt.Errorf("%w: %w", ErrUnrecognized, firstErr)
 	}
 	return "", nil, ErrUnrecognized

@@ -251,14 +251,7 @@ func validateVetroffOptions(inst Instance) error {
 	if v.BondHub && v.BondUpstream != "" || v.ProtocolPolicy == "strict" && (v.BondHub || v.BondUpstream != "" || v.Bond || v.Discover) {
 		return fmt.Errorf("strict policy and Bond/discovery cannot be combined")
 	}
-	primary := v.PublicServer
-	if primary == "" {
-		port := strconv.Itoa(inst.Port)
-		if strings.HasPrefix(v.Transport, "h3-") && v.H3Listen != "" {
-			_, port, _ = net.SplitHostPort(v.H3Listen)
-		}
-		primary = "https://" + net.JoinHostPort(inst.Settings.Hostname, port)
-	}
+	primary := vetroffPrimaryServer(inst)
 	if _, err := vetroffServers(primary, v.FallbackServers); err != nil {
 		return err
 	}
@@ -329,4 +322,17 @@ func validateVetroffOptions(inst Instance) error {
 		}
 	}
 	return nil
+}
+
+// Discovery must advertise the same listener as the exported client profile.
+func vetroffPrimaryServer(inst Instance) string {
+	v := vetroffOptions(inst)
+	if v.PublicServer != "" {
+		return v.PublicServer
+	}
+	port := strconv.Itoa(inst.Port)
+	if strings.HasPrefix(v.Transport, "h3-") && v.H3Listen != "" {
+		_, port, _ = net.SplitHostPort(v.H3Listen)
+	}
+	return "https://" + net.JoinHostPort(inst.Settings.Hostname, port)
 }

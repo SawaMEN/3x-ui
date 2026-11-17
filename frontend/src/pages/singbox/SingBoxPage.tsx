@@ -1,3 +1,5 @@
+import { GeoTokenInput } from '@/components/geodata';
+import { parseTokens } from '@/lib/xray/geoTokens';
 import OutboundPingButton from './OutboundPingButton';
 import { singBoxHealthIssues } from './config-health';
 import { prepareRouteRule, routePorts, routeRuleSummary } from './route-rule';
@@ -551,6 +553,34 @@ function SingBoxRouteRuleModal({
                 onChange={(v) => patch('domain_suffix', v)}
               />
             </Field>
+            {!catalogManaged && (
+              <>
+                <Field label="GeoSite / geofile — домены">
+                  <GeoTokenInput
+                    kind="domain"
+                    value={asStringArray(draft.routingGeoDomains).join(', ')}
+                    onChange={(v) => patch('routingGeoDomains', parseTokens(v))}
+                    placeholder="geosite:youtube, ext:geosite_RU.dat:ru-available-only-inside"
+                  />
+                </Field>
+                <Field label="GeoIP / geofile — IP назначения">
+                  <GeoTokenInput
+                    kind="ip"
+                    value={asStringArray(draft.routingGeoIPs).join(', ')}
+                    onChange={(v) => patch('routingGeoIPs', parseTokens(v))}
+                    placeholder="geoip:ru, ext:geoip_RU.dat:ru"
+                  />
+                </Field>
+                <Field label="GeoIP / geofile — IP источника">
+                  <GeoTokenInput
+                    kind="ip"
+                    value={asStringArray(draft.routingGeoSourceIPs).join(', ')}
+                    onChange={(v) => patch('routingGeoSourceIPs', parseTokens(v))}
+                    placeholder="geoip:private"
+                  />
+                </Field>
+              </>
+            )}
             <Field label="Ключевые слова доменов">
               <Select
                 mode="tags"

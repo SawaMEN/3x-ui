@@ -344,7 +344,10 @@ func telemtWebFrontendConfig(s TelemtWebProxyState, sub telemtWebSubscriptionTar
 		if len(sub.Paths) > 0 {
 			routes = append(routes, map[string]any{"match": []any{map[string]any{"path": sub.Paths}}, "handle": []any{proxy(sub.Upstream)}, "terminal": true})
 		}
-		routes = append(routes, map[string]any{"handle": []any{proxy("http://" + backend)}})
+		webProxy := proxy("http://" + backend)
+		// Keep established WEB WebSocket lanes alive during certificate/config reloads.
+		if telemtWebCaddySupportsStreamDelay() { webProxy["stream_close_delay"] = "5m" }
+		routes = append(routes, map[string]any{"handle": []any{webProxy}})
 		server := map[string]any{"listen": []string{":443"}, "automatic_https": map[string]any{"disable": true}, "tls_connection_policies": []any{map[string]any{}}, "routes": []any{map[string]any{"match": []any{map[string]any{"host": telemtWebHosts(s)}}, "handle": []any{map[string]any{"handler": "subroute", "routes": routes}}, "terminal": true}, map[string]any{"handle": []any{map[string]any{"handler": "static_response", "status_code": 404}}}}}
 		config := map[string]any{"admin": map[string]any{"listen": "unix//run/3x-ui-telemt-front/caddy.sock", "config": map[string]any{"persist": false}}, "apps": map[string]any{"tls": map[string]any{"certificates": map[string]any{"load_files": []any{map[string]any{"certificate": s.CertFile, "key": s.KeyFile}}}}, "http": map[string]any{"servers": map[string]any{"web": server}}}}
 		return json.MarshalIndent(config, "", "  ")
@@ -562,7 +565,7 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 	defer cancel()
 	var lastErr error
 	for {
-		req, err := http.NewRequestWithContext(deadline, http.MethodHead, "https://"+net.JoinHostPort(host, "443")+"/", nil)
+		req, err := http.NewRequestWithContext(deadline, http.MethodHead, "https://"+net.JoinHostPort(host, "443")+telemtWebReadinessPath(state.BasePath), nil)
 		if err != nil {
 			return err
 		}
@@ -582,4 +585,13 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+// Distribution packages may still provide Caddy 2.6, whose strict JSON parser
+// rejects stream_close_delay. This optimization was added in Caddy 2.7.
+func telemtWebCaddySupportsStreamDelay() bool {
+ ctx,cancel:=context.WithTimeout(context.Background(),2*time.Second)
+ defer cancel()
+ output,err:=exec.CommandContext(ctx,"caddy","version").Output()
+ return err==nil && telemtWebVersionAtLeast(string(output),"2.7.0")
 }

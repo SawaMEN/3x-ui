@@ -31,6 +31,19 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		}
 	}
 
+	// An explicit native route replaces the compatibility route below. Do not
+	// decode unused legacy geo databases: a stale Xray rule must not break the
+	// active native configuration or prevent opening its editor.
+	var nativeTemplate string
+	if snapshot != nil {
+		nativeTemplate = snapshot.setting(s.templateKey())
+	} else {
+		nativeTemplate, err = singBoxSettingService.GetNativeCoreConfigTemplate(s.coreType())
+		if err != nil {
+			return nil, err
+		}
+	}
+	nativeRoutingOverride := nativeTemplateReplacesRouting(nativeTemplate)
 	cfg := singbox.NewConfig()
 	// Generated outbounds come from the Xray template. Keep NewConfig's
 	// defaults only for its standalone editor fallback.
@@ -139,7 +152,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 					cfg.DNS = dns
 				}
 			}
-			if rawRouting, ok := xrayCfg["routing"].(map[string]any); ok && len(rawRouting) > 0 {
+			if rawRouting, ok := xrayCfg["routing"].(map[string]any); ok && len(rawRouting) > 0 && !nativeRoutingOverride {
 				if route, err := singbox.TranslateXrayRoutingWithGeoData(rawRouting, geodata.NewStore(assetDir())); err != nil {
 					return nil, err
 				} else if len(route) > 0 {

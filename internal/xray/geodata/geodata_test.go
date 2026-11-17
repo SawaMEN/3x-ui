@@ -475,7 +475,7 @@ func TestFileAboveSizeLimitIsRejected(t *testing.T) {
 	}
 
 	store := NewStore(dir)
-	if _, err := store.Categories("huge.dat", "", 0, 10); !errors.Is(err, ErrFileTooLarge) {
+	if _, err := store.Categories("huge.dat", "", 0, 10); !errors.Is(err, ErrFileTooLarge) || errors.Is(err, ErrUnrecognized) {
 		t.Errorf("error = %v, want %v", err, ErrFileTooLarge)
 	}
 
@@ -669,5 +669,14 @@ func TestInverseGeoIPDatabaseFailsClosed(t *testing.T) {
 	writeIPDB(t, dir, "geoip.dat", &xraygeodata.GeoIP{Code: "inverse", ReverseMatch: true, Cidr: []*xraygeodata.CIDR{{Ip: []byte{10, 0, 0, 0}, Prefix: 8}}})
 	if _, err := NewStore(dir).AllEntries("geoip.dat", "inverse", 100); err == nil {
 		t.Fatal("inverse category silently became a positive CIDR list")
+	}
+}
+
+func TestOversizedGeoFieldDoesNotReportWrongDatabaseType(t *testing.T) {
+	dir := t.TempDir()
+	writeSiteDB(t, dir, "geosite.dat", site("large", domain(xraygeodata.Domain_Domain, strings.Repeat("a", int(maxGeoRuleSize)+1))))
+	_, err := NewStore(dir).Kind("geosite.dat")
+	if !errors.Is(err, ErrFileTooLarge) || errors.Is(err, ErrUnrecognized) {
+		t.Fatalf("size limit misreported as a wrong database type: %v", err)
 	}
 }

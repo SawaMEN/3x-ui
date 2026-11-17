@@ -110,3 +110,21 @@ func TestGeoRoutingModifiedSingBoxCheck(t *testing.T) {
 		t.Fatalf("modified Sing-box rejected converted geodata: %v: %s", err, output)
 	}
 }
+
+// Optional acceptance check against the real community release, including its
+// large unrelated categories. GEODATA_TEST_FILE points at the downloaded .dat.
+func TestOfficialRussiaGeoDataRouting(t *testing.T) {
+	path := os.Getenv("GEODATA_TEST_FILE")
+	if path == "" {
+		t.Skip("set GEODATA_TEST_FILE to the official Russian geosite database")
+	}
+	token := "ext:" + filepath.Base(path) + ":ru-available-only-inside"
+	route, err := TranslateXrayRoutingWithGeoData(map[string]any{"rules": []any{map[string]any{"domain": []any{token}, "outboundTag": "direct"}}}, geodata.NewStore(filepath.Dir(path)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(route)
+	if err != nil || !strings.Contains(string(raw), "rzd.ru") {
+		t.Fatalf("Russian route failed: %s %v", raw, err)
+	}
+}
