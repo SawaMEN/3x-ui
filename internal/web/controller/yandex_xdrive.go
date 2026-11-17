@@ -44,7 +44,7 @@ func yandexXDriveRequest(ctx context.Context, client *http.Client, login, passwo
 		return 0, nil, fmt.Errorf("cannot contact Yandex WebDAV: %w", err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1 << 20))
 	if err != nil {
 		return 0, nil, fmt.Errorf("cannot read WebDAV response: %w", err)
 	}
@@ -67,7 +67,7 @@ func handleYandexXDriveProbe(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30 * time.Second)
 	defer cancel()
 	client := &http.Client{
 		Timeout: 10 * time.Second,
@@ -134,7 +134,7 @@ func handleYandexXDriveProbe(c *gin.Context) {
 	result.Written = true
 	// Always attempt cleanup, even when a later read/list operation fails.
 	defer func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5 * time.Second)
 		defer cleanupCancel()
 		_, _, _ = yandexXDriveRequest(cleanupCtx, client, login, password, http.MethodDelete, target, nil, "")
 	}()
