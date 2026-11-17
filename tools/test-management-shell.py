@@ -408,7 +408,8 @@ rc=$?
 ''', {"TEST_ROOT": raw})
 
     def test_download_attempt_reports_restarts_to_web_status(self):
-        self.run_script(function("update.sh", "download_release_asset") + r'''
+        with tempfile.TemporaryDirectory() as raw:
+            self.run_script(function("update.sh", "download_release_asset") + r'''
 report_update_progress() { printf '%s\n' "$1" >> "$TEST_ROOT/progress"; }
 curl() { printf 000; return 28; }
 sleep() { :; }
