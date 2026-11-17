@@ -489,6 +489,33 @@ export const sections: readonly Section[] = [
         responseObjectSchema: { type: 'object', additionalProperties: true },
       },
       {
+        method: 'POST',
+        path: '/panel/api/xdrive/yandex/probe',
+        summary:
+          'Verify Yandex Disk WebDAV application credentials and folder permissions using a temporary test file.',
+        params: [
+          {
+            name: 'login',
+            in: 'body (form)',
+            type: 'string',
+            desc: 'Yandex Disk account login.',
+          },
+          {
+            name: 'appPassword',
+            in: 'body (form)',
+            type: 'string',
+            desc: 'Yandex Disk application-specific WebDAV password. Treat as a secret.',
+          },
+          {
+            name: 'folder',
+            in: 'body (form)',
+            type: 'string',
+            desc: 'Single safe folder component (1–64 Latin letters, digits, underscore or hyphen).',
+          },
+        ],
+        responseObjectSchema: { type: 'object', additionalProperties: true },
+      },
+      {
         method: 'GET',
         path: '/panel/api/server/openflux/install',
         summary: 'Read progress and result of the OpenFlux installation job on the selected node.',
