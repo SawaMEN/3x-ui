@@ -202,24 +202,26 @@ export default function OpenFluxChannels({
       );
       setChecks((previous) => ({
         ...previous,
-        [type]: response.success && response.obj?.reachable
-          ? {
-              ok: true,
-              detail: t('pages.inbounds.form.openfluxProbeReachable', {
-                host: response.obj.host,
-              }),
-            }
-          : {
-              ok: false,
-              detail: response.msg || t('pages.inbounds.form.openfluxProbeFailed'),
-            },
+        [type]:
+          response.success && response.obj?.reachable
+            ? {
+                ok: true,
+                detail: t('pages.inbounds.form.openfluxProbeReachable', {
+                  host: response.obj.host,
+                }),
+              }
+            : {
+                ok: false,
+                detail: response.msg || t('pages.inbounds.form.openfluxProbeFailed'),
+              },
       }));
     } catch (error) {
       setChecks((previous) => ({
         ...previous,
         [type]: {
           ok: false,
-          detail: error instanceof Error ? error.message : t('pages.inbounds.form.openfluxProbeFailed'),
+          detail:
+            error instanceof Error ? error.message : t('pages.inbounds.form.openfluxProbeFailed'),
         },
       }));
     } finally {
