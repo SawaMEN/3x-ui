@@ -15,6 +15,7 @@ import (
 
 func (a *ServerController) initExternalVPNRouter(g *gin.RouterGroup) {
 	g.GET("/openflux/status", a.openFluxStatus)
+	g.POST("/openflux/check-transport", a.checkOpenFluxTransport)
 	g.GET("/openflux/install", a.openFluxInstall)
 	g.POST("/openflux/install", a.openFluxInstall)
 	g.GET("/externalvpn/status", a.getExternalVPNUpdateStatus)
