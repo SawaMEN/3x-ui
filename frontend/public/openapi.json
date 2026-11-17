@@ -7873,6 +7873,72 @@
         }
       }
     },
+    "/panel/api/server/openflux/check-transport": {
+      "post": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Test reachability of a supported OpenFlux carrier from the panel server without exposing provider credentials.",
+        "operationId": "post_panel_api_server_openflux_check_transport",
+        "parameters": [
+          {
+            "name": "nodeId",
+            "in": "query",
+            "required": false,
+            "description": "Only the local panel host is currently supported; remote nodes return an error.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "OpenFlux transport type to test; credentials are not transmitted."
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              "example": {
+                "type": "volga"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/openflux/install": {
       "get": {
         "tags": [
