@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import {
+  Alert,
   Button,
   Card,
   Collapse,
@@ -21,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { onNumber } from '@/utils/onNumber';
+import { HttpUtil } from '@/utils';
 import {
   OPENFLUX_TRANSPORTS,
   openFluxTransportLabel,
@@ -145,17 +147,85 @@ export default function OpenFluxChannels({
   value,
   onChange,
   client = false,
+  nodeId = 0,
 }: {
   value: OpenFluxTransport[];
   onChange: (value: OpenFluxTransport[]) => void;
   client?: boolean;
+  nodeId?: number;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<OpenFluxTransport | null>(null);
+  const [checking, setChecking] = useState<OpenFluxTransportType | null>(null);
+  const [checks, setChecks] = useState<Record<string, { ok: boolean; detail: string }>>({});
   const used = new Set(value.map((entry) => entry.type));
   const available = OPENFLUX_TRANSPORTS.filter((type) => !used.has(type));
-  const patch = (index: number, next: Partial<OpenFluxTransport>) =>
+  const patch = (index: number, next: Partial<OpenFluxTransport>) => {
+    setChecks((previous) => {
+      const updated = { ...previous };
+      delete updated[value[index].type];
+      return updated;
+    });
     onChange(value.map((entry, i) => (i === index ? { ...entry, ...next } : entry)));
+  };
+  const testTransport = async (entry: OpenFluxTransport) => {
+    const type = entry.type;
+    if (type === 'direct') {
+      setChecks((previous) => ({
+        ...previous,
+        [type]: { ok: false, detail: t('pages.inbounds.form.openfluxProbeDirect') },
+      }));
+      return;
+    }
+    if (!openFluxChannelValid(entry, client)) {
+      setChecks((previous) => ({
+        ...previous,
+        [type]: { ok: false, detail: t('pages.inbounds.form.openfluxProbeInvalid') },
+      }));
+      return;
+    }
+    if (nodeId > 0) {
+      setChecks((previous) => ({
+        ...previous,
+        [type]: { ok: false, detail: t('pages.inbounds.form.openfluxProbeRemote') },
+      }));
+      return;
+    }
+    setChecking(type);
+    try {
+      // Do not transmit a URL, MAX token or account ID to the probe.
+      // The server checks TLS to a fixed, trusted provider endpoint only.
+      const response = await HttpUtil.post<{ host: string; reachable: boolean; scope: string }>(
+        '/panel/api/server/openflux/check-transport',
+        { type },
+        { timeout: 12000, silent: true },
+      );
+      setChecks((previous) => ({
+        ...previous,
+        [type]: response.success && response.obj?.reachable
+          ? {
+              ok: true,
+              detail: t('pages.inbounds.form.openfluxProbeReachable', {
+                host: response.obj.host,
+              }),
+            }
+          : {
+              ok: false,
+              detail: response.msg || t('pages.inbounds.form.openfluxProbeFailed'),
+            },
+      }));
+    } catch (error) {
+      setChecks((previous) => ({
+        ...previous,
+        [type]: {
+          ok: false,
+          detail: error instanceof Error ? error.message : t('pages.inbounds.form.openfluxProbeFailed'),
+        },
+      }));
+    } finally {
+      setChecking(null);
+    }
+  };
   const begin = () => {
     const type = available.includes('vyandex')
       ? 'vyandex'
@@ -213,6 +283,22 @@ export default function OpenFluxChannels({
             {t(`pages.inbounds.form.openfluxChannelDescriptions.${entry.type}`)}
           </Typography.Paragraph>
           <ChannelInputs value={entry} change={(next) => patch(index, next)} client={client} />
+          <Space orientation="vertical" style={{ width: '100%' }}>
+            <Button
+              size="small"
+              loading={checking === entry.type}
+              onClick={() => void testTransport(entry)}
+            >
+              {t('pages.inbounds.form.openfluxProbe')}
+            </Button>
+            {checks[entry.type] && (
+              <Alert
+                type={checks[entry.type].ok ? 'success' : 'warning'}
+                showIcon
+                description={checks[entry.type].detail}
+              />
+            )}
+          </Space>
           <Collapse
             ghost
             size="small"
@@ -256,6 +342,11 @@ export default function OpenFluxChannels({
         onOk={() => {
           if (draft && !used.has(draft.type) && openFluxChannelValid(draft, client)) {
             onChange([...value, draft]);
+            setChecks((previous) => {
+              const updated = { ...previous };
+              delete updated[draft.type];
+              return updated;
+            });
             setDraft(null);
           }
         }}
