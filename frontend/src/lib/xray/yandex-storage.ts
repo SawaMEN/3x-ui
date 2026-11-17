@@ -73,14 +73,16 @@ export function identifyYandexStoragePreset(settings: {
 }): YandexStoragePreset {
   if (settings.service === 's3' && settings.s3?.endpoint === YANDEX_OBJECT_STORAGE)
     return 'object-storage';
-  if (settings.service !== 'template' || !settings.template || typeof settings.template !== 'object')
+  if (
+    settings.service !== 'template' ||
+    !settings.template ||
+    typeof settings.template !== 'object'
+  )
     return 'custom';
   const template = settings.template as { get?: { url?: unknown }; auth?: { type?: unknown } };
   const url = String(template.get?.url ?? '');
-  if (url.startsWith(YANDEX_WEBDAV + '/') && template.auth?.type === 'basic')
-    return 'webdav';
-  if (url.startsWith(YANDEX_DISK_API + '/') && template.auth?.type === 'static')
-    return 'disk-api';
+  if (url.startsWith(YANDEX_WEBDAV + '/') && template.auth?.type === 'basic') return 'webdav';
+  if (url.startsWith(YANDEX_DISK_API + '/') && template.auth?.type === 'static') return 'disk-api';
   return 'custom';
 }
 
