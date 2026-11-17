@@ -518,7 +518,8 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/xdrive/yandex/api-probe',
-        summary: 'Verify Yandex Disk OAuth access and folder read/write permissions with a temporary test file.',
+        summary:
+          'Verify Yandex Disk OAuth access and folder read/write permissions with a temporary test file.',
         params: [
           {
             name: 'token',
