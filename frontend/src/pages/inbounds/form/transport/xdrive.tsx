@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Collapse, Input, InputNumber, Select, Space, Switch, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Collapse,
+  Input,
+  InputNumber,
+  Select,
+  Space,
+  Switch,
+  Typography,
+} from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import { JsonEditor } from '@/components/form';
@@ -83,9 +93,15 @@ export default function XDriveForm() {
   const { t } = useTranslation();
   const { control, setValue, getValues } = useFormContext();
   const service = useWatch({ control, name: `${BASE.join('.')}.service` }) as string | undefined;
-  const template = useWatch({ control, name: `${BASE.join('.')}.template` }) as Record<string, unknown> | undefined;
-  const s3 = useWatch({ control, name: `${BASE.join('.')}.s3` }) as { endpoint?: string; bucket?: string } | undefined;
-  const folder = useWatch({ control, name: `${BASE.join('.')}.remoteFolder` }) as string | undefined;
+  const template = useWatch({ control, name: `${BASE.join('.')}.template` }) as
+    | Record<string, unknown>
+    | undefined;
+  const s3 = useWatch({ control, name: `${BASE.join('.')}.s3` }) as
+    | { endpoint?: string; bucket?: string }
+    | undefined;
+  const folder = useWatch({ control, name: `${BASE.join('.')}.remoteFolder` }) as
+    | string
+    | undefined;
   const secrets = useWatch({ control, name: `${BASE.join('.')}.secrets` }) as string[] | undefined;
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | undefined;
   const preset = identifyYandexStoragePreset({ service, template, s3 });
@@ -95,15 +111,23 @@ export default function XDriveForm() {
   const chooseYandex = (next: YandexStoragePreset) => {
     setCheck(null);
     if (next === 'custom') {
-      setValue(BASE.join('.'), { service: 'template', remoteFolder: folder || 'xdrive', template: {}, secrets: [] }, { shouldDirty: true, shouldValidate: true });
+      setValue(
+        BASE.join('.'),
+        { service: 'template', remoteFolder: folder || 'xdrive', template: {}, secrets: [] },
+        { shouldDirty: true, shouldValidate: true },
+      );
       return;
     }
     const values = yandexStoragePresetValues(next);
     const previous = getValues(`${BASE.join('.')}.remoteFolder`) as string | undefined;
-    setValue(BASE.join('.'), {
-      ...values,
-      remoteFolder: previous && validYandexFolder(previous) ? previous : values.remoteFolder,
-    }, { shouldDirty: true, shouldValidate: true });
+    setValue(
+      BASE.join('.'),
+      {
+        ...values,
+        remoteFolder: previous && validYandexFolder(previous) ? previous : values.remoteFolder,
+      },
+      { shouldDirty: true, shouldValidate: true },
+    );
     setValue('streamSettings.address', undefined, { shouldDirty: true });
     setValue('streamSettings.port', undefined, { shouldDirty: true });
   };
@@ -115,15 +139,31 @@ export default function XDriveForm() {
       return;
     }
     const webdav = preset === 'webdav';
-    if (!folder || !validYandexFolder(folder) || !secrets?.[0]?.trim() || (webdav && !secrets?.[1])) {
-      setCheck({ ok: false, message: t(webdav
-        ? 'pages.inbounds.form.xdrive.yandexProbeIncomplete'
-        : 'pages.inbounds.form.xdrive.yandexApiProbeIncomplete') });
+    if (
+      !folder ||
+      !validYandexFolder(folder) ||
+      !secrets?.[0]?.trim() ||
+      (webdav && !secrets?.[1])
+    ) {
+      setCheck({
+        ok: false,
+        message: t(
+          webdav
+            ? 'pages.inbounds.form.xdrive.yandexProbeIncomplete'
+            : 'pages.inbounds.form.xdrive.yandexApiProbeIncomplete',
+        ),
+      });
       return;
     }
     setChecking(true);
     try {
-      const response = await HttpUtil.post<{ folderCreated: boolean; written: boolean; read: boolean; listed: boolean; deleted: boolean }>(
+      const response = await HttpUtil.post<{
+        folderCreated: boolean;
+        written: boolean;
+        read: boolean;
+        listed: boolean;
+        deleted: boolean;
+      }>(
         webdav ? '/panel/api/xdrive/yandex/probe' : '/panel/api/xdrive/yandex/api-probe',
         webdav
           ? { login: secrets[0], appPassword: secrets[1], folder }
@@ -131,11 +171,19 @@ export default function XDriveForm() {
         { silent: true, timeout: 40000 },
       );
       setCheck({
-        ok: response.success && !!response.obj?.written && !!response.obj?.read && !!response.obj?.listed && !!response.obj?.deleted,
+        ok:
+          response.success &&
+          !!response.obj?.written &&
+          !!response.obj?.read &&
+          !!response.obj?.listed &&
+          !!response.obj?.deleted,
         message: response.success
-          ? t(webdav
-            ? 'pages.inbounds.form.xdrive.yandexProbePassed'
-            : 'pages.inbounds.form.xdrive.yandexApiProbePassed', { folder })
+          ? t(
+              webdav
+                ? 'pages.inbounds.form.xdrive.yandexProbePassed'
+                : 'pages.inbounds.form.xdrive.yandexApiProbePassed',
+              { folder },
+            )
           : response.msg || t('pages.inbounds.form.xdrive.yandexProbeFailed'),
       });
     } finally {
@@ -208,7 +256,11 @@ export default function XDriveForm() {
           {preset === 'object-storage' && (
             <Typography.Paragraph type="secondary">
               {t('pages.inbounds.form.xdrive.yandexBucketHint')}{' '}
-              <Typography.Link href="https://console.yandex.cloud/" target="_blank" rel="noopener noreferrer">
+              <Typography.Link
+                href="https://console.yandex.cloud/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 {t('pages.inbounds.form.xdrive.yandexCloudLink')}
               </Typography.Link>
             </Typography.Paragraph>
@@ -259,13 +311,19 @@ export default function XDriveForm() {
             <Input.Password autoComplete="off" />
           </FormField>
           <Space orientation="vertical" style={{ marginBottom: 12, width: '100%' }}>
-            <Typography.Link href="https://id.yandex.ru/security/app-passwords" target="_blank" rel="noopener noreferrer">
+            <Typography.Link
+              href="https://id.yandex.ru/security/app-passwords"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               {t('pages.inbounds.form.xdrive.yandexPasswordLink')}
             </Typography.Link>
             <Button loading={checking} onClick={() => void testYandexStorage()}>
               {t('pages.inbounds.form.xdrive.yandexProbe')}
             </Button>
-            {check && <Alert showIcon type={check.ok ? 'success' : 'warning'} description={check.message} />}
+            {check && (
+              <Alert showIcon type={check.ok ? 'success' : 'warning'} description={check.message} />
+            )}
           </Space>
         </>
       )}
@@ -282,14 +340,23 @@ export default function XDriveForm() {
           <Typography.Paragraph type="secondary">
             {t('pages.inbounds.form.xdrive.yandexOauthHint')}
           </Typography.Paragraph>
-          <Typography.Link href="https://yandex.ru/dev/disk-api/doc/ru/concepts/quickstart" target="_blank" rel="noopener noreferrer">
+          <Typography.Link
+            href="https://yandex.ru/dev/disk-api/doc/ru/concepts/quickstart"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {t('pages.inbounds.form.xdrive.yandexOauthLink')}
           </Typography.Link>
-          <Space orientation="vertical" style={{ display: 'flex', marginTop: 12, marginBottom: 12 }}>
+          <Space
+            orientation="vertical"
+            style={{ display: 'flex', marginTop: 12, marginBottom: 12 }}
+          >
             <Button loading={checking} onClick={() => void testYandexStorage()}>
               {t('pages.inbounds.form.xdrive.yandexProbe')}
             </Button>
-            {check && <Alert showIcon type={check.ok ? 'success' : 'warning'} description={check.message} />}
+            {check && (
+              <Alert showIcon type={check.ok ? 'success' : 'warning'} description={check.message} />
+            )}
           </Space>
         </>
       )}
@@ -312,10 +379,20 @@ export default function XDriveForm() {
         </>
       )}
       {(preset === 'webdav' || preset === 'disk-api') && folder && !validYandexFolder(folder) && (
-        <Alert type="warning" showIcon style={{ marginBottom: 12 }} description={t('pages.inbounds.form.xdrive.yandexFolderInvalid')} />
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          description={t('pages.inbounds.form.xdrive.yandexFolderInvalid')}
+        />
       )}
       {preset === 'object-storage' && s3?.bucket && !validYandexBucket(s3.bucket) && (
-        <Alert type="warning" showIcon style={{ marginBottom: 12 }} description={t('pages.inbounds.form.xdrive.yandexBucketInvalid')} />
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          description={t('pages.inbounds.form.xdrive.yandexBucketInvalid')}
+        />
       )}
       {service !== 'local' && (
         <>
@@ -335,15 +412,21 @@ export default function XDriveForm() {
           </FormField>
         </>
       )}
-      <Collapse ghost style={{ marginBottom: 12 }} items={[{
-        key: 'yandex-other',
-        label: t('pages.inbounds.form.xdrive.yandexOtherServices'),
-        children: (
-          <Typography.Paragraph type="secondary">
-            {t('pages.inbounds.form.xdrive.yandexOtherExplanation')}
-          </Typography.Paragraph>
-        ),
-      }]} />
+      <Collapse
+        ghost
+        style={{ marginBottom: 12 }}
+        items={[
+          {
+            key: 'yandex-other',
+            label: t('pages.inbounds.form.xdrive.yandexOtherServices'),
+            children: (
+              <Typography.Paragraph type="secondary">
+                {t('pages.inbounds.form.xdrive.yandexOtherExplanation')}
+              </Typography.Paragraph>
+            ),
+          },
+        ]}
+      />
       {TUNING_FIELDS.map(([key, label, placeholder]) => (
         <FormField key={key} label={t(`pages.inbounds.form.xdrive.${label}`)} name={[...BASE, key]}>
           <InputNumber min={0} placeholder={String(placeholder)} style={{ width: '100%' }} />
