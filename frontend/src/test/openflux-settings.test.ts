@@ -55,9 +55,13 @@ describe('OpenFlux settings', () => {
     expect(suggestOpenFluxTransport('https://telemost.yandex.ru/j/a')).toBe('telemost');
   });
   it('validates Cups.online packed room lists instead of page URLs', () => {
-    expect(validOpenFluxCupsRooms('WyIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiXQ')).toBe(true);
+    expect(validOpenFluxCupsRooms('WyIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiXQ')).toBe(
+      true,
+    );
     expect(
-      validOpenFluxCupsRooms('https://interview.cups.online/live-coding/?rooms=WyIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiXQ'),
+      validOpenFluxCupsRooms(
+        'https://interview.cups.online/live-coding/?rooms=WyIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiXQ',
+      ),
     ).toBe(true);
     for (const invalid of ['https://cups.online/room/a', 'not-valid', '', 'WyJhIl0']) {
       expect(validOpenFluxCupsRooms(invalid)).toBe(false);

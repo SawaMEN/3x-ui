@@ -137,7 +137,9 @@ describe('OpenFlux channel setup', () => {
       ),
     );
     await waitFor(() => {
-      expect(document.querySelector('.ant-alert-description')?.textContent).toContain('TLS connection');
+      expect(document.querySelector('.ant-alert-description')?.textContent).toContain(
+        'TLS connection',
+      );
     });
     const request = vi.mocked(HttpUtil.post).mock.calls.at(-1);
     expect(request?.[0]).toBe('/panel/api/server/openflux/check-transport');
@@ -160,7 +162,9 @@ describe('OpenFlux channel setup', () => {
       ),
     );
     await waitFor(() => {
-      expect(document.querySelector('.ant-alert-description')?.textContent).toContain('TLS connection');
+      expect(document.querySelector('.ant-alert-description')?.textContent).toContain(
+        'TLS connection',
+      );
     });
     const request = vi.mocked(HttpUtil.post).mock.calls.at(-1);
     expect(request?.[1]).toEqual({ type: 'oneme' });
