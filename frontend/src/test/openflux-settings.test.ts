@@ -72,6 +72,8 @@ describe('OpenFlux settings', () => {
   });
   it('suggests a channel without accepting lookalike provider domains', () => {
     expect(suggestOpenFluxTransport('https://docs.yandex.ru/edit/d/a')).toBe('vyandex');
+    expect(suggestOpenFluxTransport('https://disk.yandex.ru/i/AbCd')).toBe('vyandex');
+    expect(suggestOpenFluxTransport('https://cloud.mail.ru/public/a/b')).toBe('mailru');
     expect(suggestOpenFluxTransport('https://boards.yandex.ru/a')).toBe('boards');
     expect(suggestOpenFluxTransport('https://docs.yandex.ru.attacker.org/a')).toBeUndefined();
   });
