@@ -10,6 +10,7 @@ export default function OpenFluxFields() {
   const { t } = useTranslation();
   const { control, setValue } = useFormContext();
   const settings = useWatch({ control, name: 'settings' }) ?? {};
+  const nodeId = useWatch({ control, name: 'nodeId' }) ?? 0;
   const values = (settings.transports ?? []) as OpenFluxTransport[];
   const max = values.find((entry) => entry.type === 'oneme');
   const secret =
@@ -18,6 +19,7 @@ export default function OpenFluxFields() {
   return (
     <div className="openflux-setup">
       <OpenFluxChannels
+        nodeId={nodeId}
         value={values}
         onChange={(next) =>
           setValue('settings.transports', next, { shouldDirty: true, shouldValidate: true })
