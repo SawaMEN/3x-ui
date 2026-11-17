@@ -29,6 +29,7 @@ import {
   openFluxChannelValid,
   suggestOpenFluxTransport,
   validOpenFluxChannelURL,
+  validOpenFluxCupsRooms,
   validOpenFluxMAXToken,
   validOpenFluxMAXUID,
   type OpenFluxTransport,
@@ -126,10 +127,24 @@ function ChannelInputs({
       label={t('pages.inbounds.form.openfluxChannelURL')}
       htmlFor={`${uid}-url`}
       tooltip={t('pages.inbounds.form.openfluxChannelHint')}
-      validateStatus={value.url && !validOpenFluxChannelURL(value.url) ? 'error' : undefined}
+      validateStatus={
+        value.url &&
+        !(value.type === 'cupsonline'
+          ? validOpenFluxCupsRooms(value.url)
+          : validOpenFluxChannelURL(value.url))
+          ? 'error'
+          : undefined
+      }
       help={
-        value.url && !validOpenFluxChannelURL(value.url)
-          ? t('pages.inbounds.form.openfluxURLRequired')
+        value.url &&
+        !(value.type === 'cupsonline'
+          ? validOpenFluxCupsRooms(value.url)
+          : validOpenFluxChannelURL(value.url))
+          ? t(
+              value.type === 'cupsonline'
+                ? 'pages.inbounds.form.openfluxCupsRoomsRequired'
+                : 'pages.inbounds.form.openfluxURLRequired',
+            )
           : undefined
       }
     >
