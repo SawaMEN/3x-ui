@@ -327,25 +327,82 @@ rc=$?
 ''', {"TEST_ROOT": raw})
 
     def test_release_download_retries_are_bounded_and_detect_stalled_network(self):
-        # The web updater must fail a stalled download before its polling window.
         for file in ("install.sh", "update.sh"):
             with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
                 self.run_script(function(file, "download_release_asset") + r'''
 curl() {
-    printf '%s\n' "$*" >> "$TEST_CALLS"
+    printf '%s\\n' "$*" >> "$TEST_CALLS"
     case " $* " in
         *" -4 "*) printf 200; return 0 ;;
         *) printf 504; return 22 ;;
     esac
 }
+sleep() { :; }
 download_release_asset https://example.invalid/release "$TEST_ROOT/archive" >/dev/null
 [[ "$download_http_status" == 200 ]] || exit 1
-grep -q -- '--max-time 480' "$TEST_CALLS" || exit 1
-grep -q -- '--retry 1' "$TEST_CALLS" || exit 1
+grep -q -- '--max-time 420' "$TEST_CALLS" || exit 1
+grep -q -- '--retry 0' "$TEST_CALLS" || exit 1
 grep -q -- '--speed-limit 8192' "$TEST_CALLS" || exit 1
 grep -q -- '--speed-time 60' "$TEST_CALLS" || exit 1
 grep -q -- '^-4 ' "$TEST_CALLS" || exit 1
 ''', {"TEST_ROOT": raw, "TEST_CALLS": str(Path(raw) / "calls")})
+
+    def test_interrupted_download_resumes_without_losing_previous_bytes(self):
+        for file in ("install.sh", "update.sh"):
+            with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
+                self.run_script(function(file, "download_release_asset") + r'''
+curl() {
+    local dest="" resume=0
+    while (( $# )); do
+        if [[ "$1" == "-o" ]]; then dest="$2"; shift; fi
+        if [[ "$1" == "-C" && "$2" == "-" ]]; then resume=1; fi
+        shift
+    done
+    echo "$resume" >> "$TEST_ROOT/resume"
+    if [[ "$resume" == 0 ]]; then
+        printf 'first-' > "$dest"
+        printf 000
+        return 28
+    fi
+    printf 'second' >> "$dest"
+    printf 206
+}
+sleep() { :; }
+download_release_asset https://example.invalid/release "$TEST_ROOT/archive" >/dev/null || exit 1
+[[ "$(cat "$TEST_ROOT/archive")" == first-second ]] || exit 1
+[[ "$(cat "$TEST_ROOT/resume")" == $'0\\n1' ]] || exit 1
+[[ "$download_http_status" == 206 ]] || exit 1
+''', {"TEST_ROOT": raw})
+
+    def test_download_retry_budget_is_finite(self):
+        for file in ("install.sh", "update.sh"):
+            with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
+                self.run_script(function(file, "download_release_asset") + r'''
+curl() {
+    echo called >> "$TEST_ROOT/calls"
+    printf '.' >> "$TEST_ROOT/archive"
+    printf 000
+    return 28
+}
+sleep() { :; }
+download_release_asset https://example.invalid/release "$TEST_ROOT/archive" >/dev/null 2>&1
+rc=$?
+[[ "$rc" == 28 ]] || exit 1
+[[ "$(wc -l < "$TEST_ROOT/calls")" == 5 ]] || exit 1
+[[ "$(wc -c < "$TEST_ROOT/archive")" == 5 ]] || exit 1
+''', {"TEST_ROOT": raw})
+
+    def test_http_404_fails_without_retries(self):
+        for file in ("install.sh", "update.sh"):
+            with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
+                self.run_script(function(file, "download_release_asset") + r'''
+curl() { echo call >> "$TEST_ROOT/calls"; printf 404; return 22; }
+sleep() { :; }
+download_release_asset https://example.invalid/missing "$TEST_ROOT/archive" >/dev/null 2>&1
+rc=$?
+[[ "$rc" == 22 && "$download_http_status" == 404 ]] || exit 1
+[[ "$(wc -l < "$TEST_ROOT/calls")" == 1 ]] || exit 1
+''', {"TEST_ROOT": raw})
 
     def test_both_installers_require_matching_release_checksum(self):
         # The two installer paths must share the exact same trust decision.

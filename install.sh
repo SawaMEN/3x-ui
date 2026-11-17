@@ -1715,20 +1715,55 @@ prepare_release_host_files() {
 download_release_asset() {
     local url="$1"
     local dest="$2"
+    local attempt curl_rc=1 offset
+    local -a options=(-fL --retry 0 --connect-timeout 15 --max-time 420
+        --speed-limit 8192 --speed-time 60)
+    local -a ip_options resume_options
 
-    # A stalled GitHub transfer must not keep the updater spinning for hours.
-    # Bound retries while preserving sufficient time for a large release file.
-    local options=(-fL --retry 1 --retry-delay 2 --connect-timeout 15
-        --max-time 480 --speed-limit 8192 --speed-time 60)
+    # Every attempt keeps the bytes already downloaded. A timeout must not
+    # restart a 125 MiB archive from zero on a slow link.
+    rm -f -- "$dest"
+    download_http_status=""
+    for ((attempt = 1; attempt <= 5; attempt++)); do
+        ip_options=()
+        resume_options=()
+        if (( attempt > 1 )); then
+            ip_options=(-4)
+        fi
+        offset=0
+        if [[ -f "$dest" ]]; then
+            offset=$(wc -c < "$dest") || return 1
+        fi
+        if (( offset > 0 )); then
+            echo "Resuming release download at byte $offset (attempt $attempt/5)..."
+            resume_options=(-C -)
+        else
+            echo "Downloading release (attempt $attempt/5)..."
+        fi
 
-    rm -f "$dest"
-    if download_http_status=$("${curl_bin:-curl}" "${options[@]}" -w '%{http_code}' -o "$dest" "$url"); then
-        return 0
-    fi
+        if download_http_status=$("${curl_bin:-curl}" "${ip_options[@]}" "${options[@]}" "${resume_options[@]}" -w '%{http_code}' -o "$dest" "$url"); then
+            return 0
+        else
+            curl_rc=$?
+        fi
 
-    echo -e "${yellow}Initial download failed; retrying GitHub over IPv4...${plain}"
-    rm -f "$dest"
-    download_http_status=$("${curl_bin:-curl}" -4 "${options[@]}" -w '%{http_code}' -o "$dest" "$url")
+        # A CDN that does not support byte ranges cannot safely append.
+        # Retry from zero only in this explicit case; otherwise keep partial
+        # data for the next attempt and verify the complete SHA-256 afterward.
+        if (( curl_rc == 33 )) && (( offset > 0 )); then
+            echo "GitHub mirror rejected resume; restarting this download..." >&2
+            rm -f -- "$dest"
+        fi
+        case "$download_http_status" in
+            400|401|403|404|410|422)
+                return "$curl_rc" ;;
+        esac
+        if (( attempt < 5 )); then
+            echo "Download interrupted (HTTP ${download_http_status:-unknown}, curl $curl_rc); retrying over IPv4..." >&2
+            sleep 2
+        fi
+    done
+    return "$curl_rc"
 }
 
 prepare_release_migration() {
