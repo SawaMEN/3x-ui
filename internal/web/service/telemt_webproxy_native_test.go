@@ -27,6 +27,7 @@ func TestNativeTelemtWebCarrierConfig(t *testing.T) {
 	}{
 		{"automatic", nil, "example.com — Fieldnotes"},
 		{"catalog-notes", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "builtin", Template: "notes"}, "Fieldnotes"},
+		{"catalog-media", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "builtin", Template: "video"}, "Frame Library"},
 		{"catalog-stub", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "mtproxyl", Template: "stub"}, "Сайт временно недоступен"},
 		{"catalog-catrunner", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "mtproxyl", Template: "catrunner"}, "Cat Runner"},
 		{"catalog-mekorunner", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "mtproxyl", Template: "mekorunner"}, "Meko Runner"},
@@ -37,7 +38,13 @@ func TestNativeTelemtWebCarrierConfig(t *testing.T) {
 	}
 }
 
-func testNativeTelemtWebSite(t *testing.T, binary string, site *TelemtWebSiteOptions, marker string) {
+func testNativeTelemtWebSite(t *testing.T, binary string, site *TelemtWebSiteOptions, marker string, paths ...string) {
+	basePath := ""
+	if len(paths) > 0 {
+		basePath = paths[0]
+	}
+	// The transport base path does not relocate the public cover website.
+	publicPath := "/"
 	dir := t.TempDir()
 	freePort := func() int {
 		t.Helper()
@@ -50,12 +57,12 @@ func testNativeTelemtWebSite(t *testing.T, binary string, site *TelemtWebSiteOpt
 		return port
 	}
 	rawPort, webPort := freePort(), freePort()
-	siteDir, err := prepareTelemtWebSite("example.com", filepath.Join(dir, "default"), filepath.Join(dir, "sites"), site)
+	siteDir, err := prepareTelemtWebProxySite("example.com", filepath.Join(dir, "default"), filepath.Join(dir, "sites"), site)
 	if err != nil {
 		t.Fatal(err)
 	}
 	base := fmt.Sprintf("[general]\ndata_path = %q\nuse_middle_proxy = false\n\n[general.modes]\nclassic = true\nsecure = true\ntls = false\n\n[network]\nipv4 = true\nipv6 = false\n\n[server]\nport = %d\n\n[[server.listeners]]\nip = \"127.0.0.1\"\n\n[access.users]\nxui = \"0123456789abcdef0123456789abcdef\"\n\n[[upstreams]]\ntype = \"direct\"\n", dir, rawPort)
-	config, err := appendTelemtWebProxyConfig(base, TelemtWebProxyState{Enabled: true, Domain: "example.com", Secret: "abcdef0123456789abcdef0123456789", PublicAddr: "203.0.113.1:443", ListenPort: webPort, DecoyDir: siteDir, Carrier: "https", Carriers: []string{"websocket-lanes", "websocket", "https-lanes", "https"}})
+	config, err := appendTelemtWebProxyConfig(base, TelemtWebProxyState{Enabled: true, Domain: "example.com", BasePath: basePath, Secret: "abcdef0123456789abcdef0123456789", PublicAddr: "203.0.113.1:443", ListenPort: webPort, DecoyDir: siteDir, Carrier: "https", Carriers: []string{"websocket-lanes", "websocket", "https-lanes", "https"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +97,7 @@ func testNativeTelemtWebSite(t *testing.T, binary string, site *TelemtWebSiteOpt
 			t.Fatalf("Telemt exited before WEB startup: %s", logs)
 		default:
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(webPort))+"/", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(webPort))+publicPath, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -111,7 +118,7 @@ func testNativeTelemtWebSite(t *testing.T, binary string, site *TelemtWebSiteOpt
 					if entry.Name() == "index.html" {
 						continue
 					}
-					assetReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(webPort))+"/"+entry.Name(), nil)
+					assetReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(webPort))+publicPath+entry.Name(), nil)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -133,6 +140,12 @@ func testNativeTelemtWebSite(t *testing.T, binary string, site *TelemtWebSiteOpt
 						t.Fatal("invalid JavaScript content type")
 					}
 				}
+				if script := os.Getenv("TELEMT_SITE_BROWSER_SCRIPT"); script != "" {
+					command := exec.CommandContext(ctx, "node", script, req.URL.String(), "example.com", t.Name())
+					if output, err := command.CombinedOutput(); err != nil {
+						t.Fatalf("browser rejected cover site: %v\n%s", err, output)
+					}
+				}
 				return
 			}
 		}
@@ -141,5 +154,23 @@ func testNativeTelemtWebSite(t *testing.T, binary string, site *TelemtWebSiteOpt
 			t.Fatalf("native Telemt rejected WEB carriers or did not start: %v\n%s", err, logs)
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestNativeTelemtWebSiteWithBasePath(t *testing.T) {
+	binary := os.Getenv("TELEMT_TEST_BINARY")
+	if binary == "" {
+		t.Skip("set TELEMT_TEST_BINARY")
+	}
+	for _, tc := range []struct {
+		name   string
+		site   *TelemtWebSiteOptions
+		marker string
+	}{
+		{"automatic", nil, "example.com — Fieldnotes"},
+		{"game", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "mtproxyl", Template: "catrunner"}, "Cat Runner"},
+		{"imported", &TelemtWebSiteOptions{Mode: "html", HTML: `<!doctype html><HTML><HEAD><title>Imported</title><STYLE media="screen">h1{color:rgb(20,40,60)}</STYLE></HEAD><BODY><h1>Imported Page</h1><SCRIPT TYPE="module">document.body.dataset.ready="yes"</SCRIPT></BODY></HTML>`}, "Imported Page"},
+	} {
+		t.Run(tc.name, func(t *testing.T) { testNativeTelemtWebSite(t, binary, tc.site, tc.marker, "relay01/nested") })
 	}
 }

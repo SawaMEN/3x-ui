@@ -445,7 +445,7 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 	if err := telemtWebEnsureFrontendPackage(ctx, state); err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	decoyDir, err := prepareTelemtWebSite(domain, telemtWebDecoyDir, telemtWebDecoyDir+"-sites", options.Site)
+	decoyDir, err := prepareTelemtWebProxySite(domain, telemtWebDecoyDir, telemtWebDecoyDir+"-sites", options.Site)
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}

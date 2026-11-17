@@ -244,6 +244,11 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		strings.Join(state.Carriers, ",") == strings.Join(normalized.Carriers, ",") &&
 		telemtWebSitesEqual(state.Site, normalized.Site) &&
 		telemtWebRetryJitterEqual(state.RetryJitter, normalized.RetryJitter)
+	// An older imported snapshot may still contain CSS/JS blocked by Telemt's
+	// CSP. Reconcile it once into a new immutable snapshot after an upgrade.
+	if unchanged && normalized.Site != nil && normalized.Site.Mode == "html" {
+		unchanged = state.DecoyDir == telemtWebImportedSnapshotPath(telemtWebDecoyDir+"-sites", normalized.Site.HTML)
+	}
 	svc := TelemtService{}
 	if unchanged && state.UserFingerprint == fingerprint && svc.WebProxyTelemtActive() {
 		if err := refreshMtprotoWebTrafficBinding(ctx); err != nil {
