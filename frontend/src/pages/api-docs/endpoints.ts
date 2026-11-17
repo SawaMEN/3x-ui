@@ -537,6 +537,39 @@ export const sections: readonly Section[] = [
         responseObjectSchema: { type: 'object', additionalProperties: true },
       },
       {
+        method: 'POST',
+        path: '/panel/api/xdrive/yandex/s3-probe',
+        summary:
+          'Verify Yandex Cloud Object Storage S3 static key permissions with a temporary object.',
+        params: [
+          {
+            name: 'bucket',
+            in: 'body (form)',
+            type: 'string',
+            desc: 'Name of an existing Yandex Cloud Object Storage bucket.',
+          },
+          {
+            name: 'folder',
+            in: 'body (form)',
+            type: 'string',
+            desc: 'Single safe object prefix (1–64 Latin letters, digits, underscore or hyphen).',
+          },
+          {
+            name: 'accessKey',
+            in: 'body (form)',
+            type: 'string',
+            desc: 'Yandex Cloud service-account static access key ID.',
+          },
+          {
+            name: 'secretKey',
+            in: 'body (form)',
+            type: 'string',
+            desc: 'Secret half of the static key. Treat as a secret.',
+          },
+        ],
+        responseObjectSchema: { type: 'object', additionalProperties: true },
+      },
+      {
         method: 'GET',
         path: '/panel/api/server/openflux/install',
         summary: 'Read progress and result of the OpenFlux installation job on the selected node.',

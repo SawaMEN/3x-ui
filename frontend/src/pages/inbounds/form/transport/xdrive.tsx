@@ -132,25 +132,38 @@ export default function XDriveForm() {
     setValue('streamSettings.port', undefined, { shouldDirty: true });
   };
 
+  const generateFolder = () => {
+    setCheck(null);
+    setValue(
+      `${BASE.join('.')}.remoteFolder`,
+      `xdrive-${crypto.randomUUID().slice(0, 8)}`,
+      { shouldDirty: true, shouldValidate: true },
+    );
+  };
+
   const testYandexStorage = async () => {
-    if (preset !== 'webdav' && preset !== 'disk-api') return;
+    if (preset === 'custom') return;
     if (nodeId && nodeId > 0) {
       setCheck({ ok: false, message: t('pages.inbounds.form.xdrive.yandexProbeRemote') });
       return;
     }
     const webdav = preset === 'webdav';
+    const objectStorage = preset === 'object-storage';
     if (
       !folder ||
       !validYandexFolder(folder) ||
       !secrets?.[0]?.trim() ||
-      (webdav && !secrets?.[1])
+      (!objectStorage && webdav && !secrets?.[1]) ||
+      (objectStorage && (!secrets?.[1] || !validYandexBucket(s3?.bucket ?? '')))
     ) {
       setCheck({
         ok: false,
         message: t(
           webdav
             ? 'pages.inbounds.form.xdrive.yandexProbeIncomplete'
-            : 'pages.inbounds.form.xdrive.yandexApiProbeIncomplete',
+            : objectStorage
+              ? 'pages.inbounds.form.xdrive.yandexS3ProbeIncomplete'
+              : 'pages.inbounds.form.xdrive.yandexApiProbeIncomplete',
         ),
       });
       return;
@@ -164,24 +177,33 @@ export default function XDriveForm() {
         listed: boolean;
         deleted: boolean;
       }>(
-        webdav ? '/panel/api/xdrive/yandex/probe' : '/panel/api/xdrive/yandex/api-probe',
+        webdav
+          ? '/panel/api/xdrive/yandex/probe'
+          : objectStorage
+            ? '/panel/api/xdrive/yandex/s3-probe'
+            : '/panel/api/xdrive/yandex/api-probe',
         webdav
           ? { login: secrets[0], appPassword: secrets[1], folder }
-          : { token: secrets[0], folder },
+          : objectStorage
+            ? { accessKey: secrets[0], secretKey: secrets[1], folder, bucket: s3?.bucket }
+            : { token: secrets[0], folder },
         { silent: true, timeout: 40000 },
       );
+      const passed =
+        response.success &&
+        !!response.obj?.written &&
+        !!response.obj?.read &&
+        !!response.obj?.listed &&
+        !!response.obj?.deleted;
       setCheck({
-        ok:
-          response.success &&
-          !!response.obj?.written &&
-          !!response.obj?.read &&
-          !!response.obj?.listed &&
-          !!response.obj?.deleted,
-        message: response.success
+        ok: passed,
+        message: passed
           ? t(
               webdav
                 ? 'pages.inbounds.form.xdrive.yandexProbePassed'
-                : 'pages.inbounds.form.xdrive.yandexApiProbePassed',
+                : objectStorage
+                  ? 'pages.inbounds.form.xdrive.yandexS3ProbePassed'
+                  : 'pages.inbounds.form.xdrive.yandexApiProbePassed',
               { folder },
             )
           : response.msg || t('pages.inbounds.form.xdrive.yandexProbeFailed'),
@@ -229,17 +251,31 @@ export default function XDriveForm() {
           description={t(`pages.inbounds.form.xdrive.yandexInfo.${preset}`)}
         />
       )}
-      <FormField label={t('pages.inbounds.form.xdrive.service')} name={[...BASE, 'service']}>
-        <Select options={serviceOptions} />
-      </FormField>
+      {preset === 'custom' && (
+        <FormField label={t('pages.inbounds.form.xdrive.service')} name={[...BASE, 'service']}>
+          <Select options={serviceOptions} />
+        </FormField>
+      )}
       <FormField
         label={t('pages.inbounds.form.xdrive.remoteFolder')}
+        tooltip={t(
+          preset === 'object-storage'
+            ? 'pages.inbounds.form.xdrive.yandexFolderS3Tooltip'
+            : preset === 'webdav' || preset === 'disk-api'
+              ? 'pages.inbounds.form.xdrive.yandexFolderTooltip'
+              : 'pages.inbounds.form.xdrive.yandexFolderCustomTooltip',
+        )}
         name={[...BASE, 'remoteFolder']}
         onAfterChange={() => setCheck(null)}
         required
       >
-        <Input placeholder={service === 'local' ? '/var/lib/xdrive' : 'xray-tunnel'} />
+        <Input placeholder={service === 'local' ? '/var/lib/xdrive' : 'xdrive'} />
       </FormField>
+      {preset !== 'custom' && (
+        <Button type="link" onClick={generateFolder} style={{ marginBottom: 12 }}>
+          {t('pages.inbounds.form.xdrive.yandexNewFolder')}
+        </Button>
+      )}
       {service === 'google-drive' &&
         GOOGLE_DRIVE_SECRETS.map((key, index) => (
           <FormField
@@ -253,49 +289,105 @@ export default function XDriveForm() {
         ))}
       {service === 's3' && (
         <>
-          {preset === 'object-storage' && (
-            <Typography.Paragraph type="secondary">
-              {t('pages.inbounds.form.xdrive.yandexBucketHint')}{' '}
-              <Typography.Link
-                href="https://console.yandex.cloud/"
-                target="_blank"
-                rel="noopener noreferrer"
+          {preset === 'object-storage' ? (
+            <>
+              <Typography.Paragraph type="secondary">
+                {t('pages.inbounds.form.xdrive.yandexBucketHint')}{' '}
+                <Typography.Link
+                  href="https://yandex.cloud/ru/docs/storage/operations/buckets/create"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t('pages.inbounds.form.xdrive.yandexCreateBucket')}
+                </Typography.Link>
+                {' · '}
+                <Typography.Link
+                  href="https://yandex.cloud/ru/docs/iam/operations/authentication/manage-access-keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t('pages.inbounds.form.xdrive.yandexCreateS3Key')}
+                </Typography.Link>
+              </Typography.Paragraph>
+              <FormField
+                label={t('pages.inbounds.form.xdrive.s3.bucket')}
+                tooltip={t('pages.inbounds.form.xdrive.yandexBucketTooltip')}
+                name={[...BASE, 's3', 'bucket']}
+                onAfterChange={() => setCheck(null)}
+                required
               >
-                {t('pages.inbounds.form.xdrive.yandexCloudLink')}
-              </Typography.Link>
-            </Typography.Paragraph>
+                <Input placeholder="my-xdrive-bucket" />
+              </FormField>
+              <FormField
+                label={t('pages.inbounds.form.xdrive.s3.accessKey')}
+                tooltip={t('pages.inbounds.form.xdrive.yandexAccessKeyTooltip')}
+                name={[...BASE, 'secrets', 0]}
+                onAfterChange={() => setCheck(null)}
+                required
+              >
+                <Input autoComplete="off" placeholder="Static access key ID" />
+              </FormField>
+              <FormField
+                label={t('pages.inbounds.form.xdrive.s3.secretKey')}
+                tooltip={t('pages.inbounds.form.xdrive.yandexSecretKeyTooltip')}
+                name={[...BASE, 'secrets', 1]}
+                onAfterChange={() => setCheck(null)}
+                required
+              >
+                <Input.Password autoComplete="off" />
+              </FormField>
+              <Button
+                loading={checking}
+                onClick={() => void testYandexStorage()}
+                style={{ marginBottom: 12 }}
+              >
+                {t('pages.inbounds.form.xdrive.yandexProbe')}
+              </Button>
+              {check && (
+                <Alert
+                  showIcon
+                  type={check.ok ? 'success' : 'warning'}
+                  description={check.message}
+                  style={{ marginBottom: 12 }}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              {(['endpoint', 'region', 'bucket'] as const).map((key) => (
+                <FormField
+                  key={key}
+                  name={[...BASE, 's3', key]}
+                  label={t(`pages.inbounds.form.xdrive.s3.${key}`)}
+                >
+                  <Input />
+                </FormField>
+              ))}
+              <FormField
+                name={[...BASE, 's3', 'pathStyle']}
+                label={t('pages.inbounds.form.xdrive.s3.pathStyle')}
+                valueProp="checked"
+              >
+                <Switch />
+              </FormField>
+              {(['accessKey', 'secretKey', 'sessionToken'] as const).map((key, index) => (
+                <FormField
+                  key={key}
+                  name={[...BASE, 'secrets', index]}
+                  label={t(`pages.inbounds.form.xdrive.s3.${key}`)}
+                >
+                  <Input.Password />
+                </FormField>
+              ))}
+            </>
           )}
-          {(['endpoint', 'region', 'bucket'] as const).map((key) => (
-            <FormField
-              key={key}
-              name={[...BASE, 's3', key]}
-              label={t(`pages.inbounds.form.xdrive.s3.${key}`)}
-            >
-              <Input />
-            </FormField>
-          ))}
-          <FormField
-            name={[...BASE, 's3', 'pathStyle']}
-            label={t('pages.inbounds.form.xdrive.s3.pathStyle')}
-            valueProp="checked"
-          >
-            <Switch />
-          </FormField>
-          {(['accessKey', 'secretKey', 'sessionToken'] as const).map((key, index) => (
-            <FormField
-              key={key}
-              name={[...BASE, 'secrets', index]}
-              label={t(`pages.inbounds.form.xdrive.s3.${key}`)}
-            >
-              <Input.Password />
-            </FormField>
-          ))}
         </>
       )}
       {preset === 'webdav' && (
         <>
           <FormField
             label={t('pages.inbounds.form.xdrive.yandexLogin')}
+            tooltip={t('pages.inbounds.form.xdrive.yandexLoginTooltip')}
             name={[...BASE, 'secrets', 0]}
             onAfterChange={() => setCheck(null)}
             required
@@ -304,6 +396,7 @@ export default function XDriveForm() {
           </FormField>
           <FormField
             label={t('pages.inbounds.form.xdrive.yandexAppPassword')}
+            tooltip={t('pages.inbounds.form.xdrive.yandexAppPasswordTooltip')}
             name={[...BASE, 'secrets', 1]}
             onAfterChange={() => setCheck(null)}
             required
@@ -331,6 +424,7 @@ export default function XDriveForm() {
         <>
           <FormField
             label={t('pages.inbounds.form.xdrive.yandexOauthToken')}
+            tooltip={t('pages.inbounds.form.xdrive.yandexOauthTokenTooltip')}
             name={[...BASE, 'secrets', 0]}
             onAfterChange={() => setCheck(null)}
             required
@@ -394,44 +488,53 @@ export default function XDriveForm() {
           description={t('pages.inbounds.form.xdrive.yandexBucketInvalid')}
         />
       )}
-      {service !== 'local' && (
-        <>
-          <FormField
-            label={t('pages.inbounds.form.xdrive.front')}
-            tooltip={t('pages.inbounds.form.xdrive.frontDesc')}
-            name={['streamSettings', 'address']}
-            transform={{ output: (raw) => String(raw ?? '').trim() || undefined }}
-          >
-            <Input placeholder="www.googleapis.com" />
-          </FormField>
-          <FormField
-            label={t('pages.inbounds.form.xdrive.frontPort')}
-            name={['streamSettings', 'port']}
-          >
-            <InputNumber min={1} max={65535} placeholder="443" />
-          </FormField>
-        </>
-      )}
       <Collapse
         ghost
-        style={{ marginBottom: 12 }}
+        style={{ marginTop: 12 }}
         items={[
           {
-            key: 'yandex-other',
-            label: t('pages.inbounds.form.xdrive.yandexOtherServices'),
+            key: 'xdrive-advanced',
+            label: t('pages.inbounds.form.xdrive.yandexAdvanced'),
             children: (
-              <Typography.Paragraph type="secondary">
-                {t('pages.inbounds.form.xdrive.yandexOtherExplanation')}
-              </Typography.Paragraph>
+              <>
+                {service !== 'local' && (
+                  <>
+                    <FormField
+                      label={t('pages.inbounds.form.xdrive.front')}
+                      tooltip={t('pages.inbounds.form.xdrive.frontDesc')}
+                      name={['streamSettings', 'address']}
+                      transform={{ output: (raw) => String(raw ?? '').trim() || undefined }}
+                    >
+                      <Input placeholder="www.googleapis.com" />
+                    </FormField>
+                    <FormField
+                      label={t('pages.inbounds.form.xdrive.frontPort')}
+                      tooltip={t('pages.inbounds.form.xdrive.yandexFrontPortTooltip')}
+                      name={['streamSettings', 'port']}
+                    >
+                      <InputNumber min={1} max={65535} placeholder="443" />
+                    </FormField>
+                  </>
+                )}
+                {TUNING_FIELDS.map(([key, label, placeholder]) => (
+                  <FormField
+                    key={key}
+                    label={t(`pages.inbounds.form.xdrive.${label}`)}
+                    tooltip={t('pages.inbounds.form.xdrive.yandexTuningTooltip')}
+                    name={[...BASE, key]}
+                  >
+                    <InputNumber
+                      min={0}
+                      placeholder={String(placeholder)}
+                      style={{ width: '100%' }}
+                    />
+                  </FormField>
+                ))}
+              </>
             ),
           },
         ]}
       />
-      {TUNING_FIELDS.map(([key, label, placeholder]) => (
-        <FormField key={key} label={t(`pages.inbounds.form.xdrive.${label}`)} name={[...BASE, key]}>
-          <InputNumber min={0} placeholder={String(placeholder)} style={{ width: '100%' }} />
-        </FormField>
-      ))}
     </>
   );
 }
