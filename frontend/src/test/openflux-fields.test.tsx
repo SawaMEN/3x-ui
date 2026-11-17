@@ -113,6 +113,45 @@ describe('OpenFlux channel setup', () => {
     expect(screen.getByTestId('values').textContent).not.toContain('client-private-token');
     download.mockRestore();
   });
+  it('checks provider TLS without sending a document link or account credentials', async () => {
+    vi.mocked(HttpUtil.post).mockClear();
+    vi.mocked(HttpUtil.post).mockResolvedValueOnce(
+      new Msg(true, '', { host: 'docs.yandex.ru', reachable: true, scope: 'provider-tls' }),
+    );
+    renderWithProviders(<Inbound />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add transport' }));
+    const modal = await screen.findByRole('dialog');
+    fireEvent.change(within(modal).getByRole('textbox', { name: 'Channel URL' }), {
+      target: { value: 'https://disk.yandex.ru/i/shared-document' },
+    });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Add' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('values').textContent).toContain('"type":"vyandex"'),
+    );
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Check service reachability' })[1],
+    );
+    expect(
+      await screen.findByText(/TLS connection to docs.yandex.ru:443 succeeded/),
+    ).toBeTruthy();
+    const request = vi.mocked(HttpUtil.post).mock.calls.at(-1);
+    expect(request?.[0]).toBe('/panel/api/server/openflux/check-transport');
+    expect(request?.[1]).toEqual({ type: 'vyandex' });
+    expect(JSON.stringify(request)).not.toContain('shared-document');
+    expect(screen.getByText(/actual OpenFlux tunnel are NOT yet verified/)).toBeTruthy();
+  });
+  it('never sends a MAX session token during the provider network check', async () => {
+    vi.mocked(HttpUtil.post).mockClear();
+    vi.mocked(HttpUtil.post).mockResolvedValueOnce(
+      new Msg(true, '', { host: 'ws-api.oneme.ru', reachable: true, scope: 'provider-tls' }),
+    );
+    renderWithProviders(<Inbound max />);
+    fireEvent.click(screen.getByRole('button', { name: 'Check service reachability' }));
+    await screen.findByText(/TLS connection to ws-api.oneme.ru:443 succeeded/);
+    const request = vi.mocked(HttpUtil.post).mock.calls.at(-1);
+    expect(request?.[1]).toEqual({ type: 'oneme' });
+    expect(JSON.stringify(request)).not.toContain('server-private-token');
+  });
   it('imports client settings while preserving the generated channel values', async () => {
     vi.mocked(HttpUtil.post).mockResolvedValueOnce(
       new Msg(true, '', {
