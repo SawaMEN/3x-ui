@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Collapse, Input, InputNumber, Select, Space, Switch, Typography } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
@@ -92,10 +92,6 @@ export default function XDriveForm() {
   const [checking, setChecking] = useState(false);
   const [check, setCheck] = useState<{ ok: boolean; message: string } | null>(null);
 
-  useEffect(() => {
-    setCheck(null);
-  }, [preset, folder, secrets?.[0], secrets?.[1]]);
-
   const chooseYandex = (next: YandexStoragePreset) => {
     setCheck(null);
     if (next === 'custom') {
@@ -184,6 +180,7 @@ export default function XDriveForm() {
       <FormField
         label={t('pages.inbounds.form.xdrive.remoteFolder')}
         name={[...BASE, 'remoteFolder']}
+        onAfterChange={() => setCheck(null)}
         required
       >
         <Input placeholder={service === 'local' ? '/var/lib/xdrive' : 'xray-tunnel'} />
@@ -241,6 +238,7 @@ export default function XDriveForm() {
           <FormField
             label={t('pages.inbounds.form.xdrive.yandexLogin')}
             name={[...BASE, 'secrets', 0]}
+            onAfterChange={() => setCheck(null)}
             required
           >
             <Input autoComplete="username" placeholder="your-login" />
@@ -248,6 +246,7 @@ export default function XDriveForm() {
           <FormField
             label={t('pages.inbounds.form.xdrive.yandexAppPassword')}
             name={[...BASE, 'secrets', 1]}
+            onAfterChange={() => setCheck(null)}
             required
           >
             <Input.Password autoComplete="off" />
