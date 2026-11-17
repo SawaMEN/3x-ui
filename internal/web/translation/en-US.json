@@ -1046,7 +1046,7 @@
           "vyandex": "New Yandex Docs Volga editor (HTTP + WebSocket). Requires a text DOCX document with link-based edit access.",
           "boards": "A channel through Yandex Boards. Use a separate board for this connection.",
           "mailru": "A channel through Mail.ru Docs. Use a public link to your document.",
-          "cupsonline": "A channel through a Cups.online room. Paste the shared room link.",
+          "cupsonline": "Cups.online rooms. Use the packed base64url list produced by the official OpenFlux exit, not an ordinary page URL.",
           "avito": "A channel through an Avito Code room. Use your room link.",
           "telemost": "A channel through a Yandex Telemost video conference. Use its conference link.",
           "oneme": "Web MAX / OneMe: an encrypted tunnel over a WebRTC call. Server and client need different MAX accounts."
@@ -1056,7 +1056,7 @@
           "vyandex": "https://docs.yandex.ru/…",
           "boards": "https://boards.yandex.ru/…",
           "mailru": "https://docs.mail.ru/…",
-          "cupsonline": "https://cups.online/…",
+          "cupsonline": "W1wi... (base64url room list)",
           "avito": "https://code.avito.ru/…",
           "telemost": "https://telemost.yandex.ru/j/…"
         },
@@ -1247,11 +1247,12 @@
           "vyandex": "1. Go to docs.yandex.ru and create a new TEXT document (DOCX), not an XLSX spreadsheet or presentation. 2. Open it in the NEW Volga editor. 3. Use Share → link access → Editing; copy the full HTTPS sharing link (docs.yandex.ru or disk.yandex.ru/i/...). 4. Paste this same link on the server and client. Login, anti-bot challenges or cookies may be required; a public link alone does not prove the relay works.",
           "boards": "Create a new Yandex Board, enable access via a shared link and copy its HTTPS URL from boards.yandex.ru. Use the same board on the server and client. A link alone does not prove WebSocket connectivity.",
           "mailru": "Create or upload a document to Mail.ru Cloud and share it by link. Paste the full HTTPS public link (cloud.mail.ru/public/...) into both peers. Ensure the link is accessible in a private browser window.",
-          "cupsonline": "Set up a Cups.online room and use its room configuration/link on both peers. Some exit configurations generate a base64 room list in the OpenFlux logs; use that exact value on the client when required. A random page URL may not work.",
+          "cupsonline": "Official OpenFlux expects room identifiers, NOT a page link. Create rooms on an official OpenFlux exit with cupsonline transport and no --url; it prints the packed base64url room list. Paste the entire value into both server and client settings. HTTPS links with ?rooms= / ?room= are also supported. 3x-ui cannot generate rooms automatically yet. Refresh the room list when the rooms expire.",
           "avito": "Prepare an Avito Code room supported by your installed OpenFlux version. Copy its complete HTTPS room URL and use it on both peers; verify it is still active.",
           "telemost": "Create a Yandex Telemost meeting, copy its HTTPS invitation URL and use the same meeting on both peers. Be aware the link can expire and may require authorization.",
           "oneme": "1. Sign in to YOUR account at web.max.ru in a desktop browser. 2. Open Developer Tools → Network → WS and inspect the web.max.ru WebSocket connection to ws-api.oneme.ru/websocket during login. The outgoing login frame with opcode 19 contains payload.token: this is a sensitive WEB SESSION token, NOT a MAX bot token. 3. Enter that token and the numeric user ID of this SERVER account (not its phone number). 4. Sign in to a SECOND MAX account on the client and use its own web-session token, plus the server's numeric ID. Do not publish the tokens. This unofficial technique may stop working if MAX changes its protocol."
-        }
+        },
+        "openfluxCupsRoomsRequired": "Paste the base64url-encoded Cups.online room list printed by the official OpenFlux exit, or an HTTPS link containing ?rooms= / ?room=. A plain page link is not valid."
       },
       "info": {
         "mode": "Mode",
