@@ -1,3 +1,4 @@
+import { useOpenFluxInstalled } from '@/api/useOpenFluxInstalled';
 import AdditionalOutboundEditor from './AdditionalOutboundEditor';
 import { useId, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -116,6 +117,7 @@ export default function OutboundFormModal({
   const uid = useId();
   const [messageApi, messageContextHolder] = message.useMessage();
   const methods = useForm<OutboundFormValues>({ defaultValues: buildAddModeValues() });
+  const openFluxInstalled = useOpenFluxInstalled(open);
   const [activeKey, setActiveKey] = useState('1');
   const [jsonText, setJsonText] = useState('');
   const [jsonDirty, setJsonDirty] = useState(false);
@@ -538,7 +540,15 @@ export default function OutboundFormModal({
                         name="protocol"
                         rules={{ validate: rhfZodValidate(OutboundFormBaseSchema.shape.tag) }}
                       >
-                        <Select id="protocol" options={PROTOCOL_OPTIONS} />
+                        <Select
+                          id="protocol"
+                          options={PROTOCOL_OPTIONS.filter(
+                            (option) =>
+                              option.value !== 'openflux' ||
+                              openFluxInstalled ||
+                              outboundProp?.protocol === 'openflux',
+                          )}
+                        />
                       </FormField>
 
                       <Controller

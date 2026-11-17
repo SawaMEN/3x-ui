@@ -1,9 +1,12 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -76,6 +79,13 @@ func TestManagedNodeRouteClientRejectsOrdinaryMutations(t *testing.T) {
 	if _, _, err := svc.BulkCreate(inboundSvc, []ClientCreatePayload{{Client: model.Client{Email: row.Email}}}); !errors.Is(err, ErrManagedNodeRouteClient) {
 		t.Fatalf("bulk create accepted service identity: %v", err)
 	}
+	if _, err := svc.AddToGroup([]string{row.Email}, "ordinary"); !errors.Is(err, ErrManagedNodeRouteClient) {
+		t.Fatalf("group mutation accepted service identity: %v", err)
+	}
+	happ := NewHappService(svc, &SettingService{})
+	if _, _, reason := happ.currentSource(row.Id, "panel.example.com"); reason != "client_unavailable" {
+		t.Fatalf("managed credential exposed as Happ source: %s", reason)
+	}
 }
 
 func TestManagedNodeRouteDeletionProtectsSavedReferences(t *testing.T) {
@@ -101,5 +111,65 @@ func TestManagedNodeRouteDeletionProtectsSavedReferences(t *testing.T) {
 	used, err := nodeRouteReferenced(db, tag)
 	if err != nil || used {
 		t.Fatalf("unused connection cannot be deleted: %v %v", used, err)
+	}
+}
+
+func TestDeleteManagedNodeRoutePreservesNodeInboundAndOrdinaryClients(t *testing.T) {
+	setupBulkDB(t)
+	nodeID, _ := setupNodeRuntime(t)
+	ib := nodeInbound(t, nodeID, 32040, nil)
+	clients := []model.Client{
+		{ID: "11111111-1111-4111-8111-111111111111", Email: nodeRouteClientEmail(ib.Id), Enable: true},
+		{ID: "22222222-2222-4222-8222-222222222222", Email: "ordinary@example.com", Enable: true},
+	}
+	db := database.GetDB()
+	ib.Settings = clientsSettings(t, clients)
+	if err := db.Save(ib).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := (&ClientService{}).SyncInbound(nil, ib.Id, clients); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := DeleteNodeRoute(ib.UserId+1, ib.Id); err == nil {
+		t.Fatal("another user deleted connection")
+	}
+	if err := saveSettingIn(db, "panelOutbound", nodeRouteTag(ib.Id)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := DeleteNodeRoute(ib.UserId, ib.Id); err == nil {
+		t.Fatal("referenced connection was deleted")
+	}
+	if err := saveSettingIn(db, "panelOutbound", "direct"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Node{}).Where("id = ?", nodeID).Update("enable", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	pending, _, err := DeleteNodeRoute(ib.UserId, ib.Id)
+	if err != nil || !pending {
+		t.Fatalf("offline removal pending=%v err=%v", pending, err)
+	}
+	var stored model.Inbound
+	if err := db.First(&stored, ib.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Clients []model.Client `json:"clients"`
+	}
+	if err := json.Unmarshal([]byte(stored.Settings), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if len(settings.Clients) != 1 || settings.Clients[0].Email != clients[1].Email {
+		t.Fatalf("ordinary client changed: %+v", settings.Clients)
+	}
+	var node model.Node
+	if err := db.First(&node, nodeID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&ClientService{}).GetRecordByEmail(nil, clients[0].Email); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("routing credential still exists: %v", err)
+	}
+	if _, _, err := DeleteNodeRoute(ib.UserId, ib.Id); err != nil {
+		t.Fatalf("repeated delete: %v", err)
 	}
 }

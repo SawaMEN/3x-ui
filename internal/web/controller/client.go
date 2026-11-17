@@ -736,11 +736,6 @@ func (a *ClientController) generateHappLink(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), service.ErrHappLinkUnavailable)
 		return
 	}
-	rec, lookupErr := a.clientService.GetByID(clientID)
-	if lookupErr != nil || service.IsManagedNodeRouteClientEmail(rec.Email) {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), service.ErrHappLinkUnavailable)
-		return
-	}
 	result, err := a.happGenerator.Generate(c.Request.Context(), clientID, c.Request.Host)
 	if err != nil {
 		if errors.Is(err, service.ErrHappSourceTooLong) {

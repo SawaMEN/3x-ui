@@ -125,9 +125,11 @@ describe('managed node connections', () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.queryByRole('button', {
-        name: 'Удалить подключение ноды node-route-42',
-      })).toBeNull(),
+      expect(
+        screen.queryByRole('button', {
+          name: 'Удалить подключение ноды node-route-42',
+        }),
+      ).toBeNull(),
     );
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -150,13 +152,17 @@ describe('managed node connections', () => {
         onChange={vi.fn()}
       />,
     );
-    fireEvent.click(await screen.findByRole('button', {
-      name: 'Удалить подключение ноды node-route-42',
-    }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Удалить', exact: true }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Удалить подключение ноды node-route-42',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить' }));
     await screen.findByText('Сначала сохраните удаление правил');
-    expect(screen.getByRole('button', {
-      name: 'Удалить подключение ноды node-route-42',
-    })).toBeTruthy();
+    expect(
+      screen.getByRole('button', {
+        name: 'Удалить подключение ноды node-route-42',
+      }),
+    ).toBeTruthy();
   });
 });

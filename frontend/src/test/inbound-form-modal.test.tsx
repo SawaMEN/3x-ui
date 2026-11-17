@@ -1,9 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, act, render, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 import InboundFormModal from '@/pages/inbounds/form/InboundFormModal';
 import { DBInbound } from '@/models/dbinbound';
-import { ThemeProvider } from '@/hooks/useTheme';
 import { HttpUtil } from '@/utils';
 import {
   renderWithProviders,
@@ -129,7 +128,7 @@ describe('InboundFormModal', () => {
       }));
       renderModal();
       await act(async () => {});
-      for (const protocol of ['pingtunnel', 'trusttunnel', 'sudoku', 'vetroff']) {
+      for (const protocol of ['pingtunnel', 'trusttunnel', 'sudoku', 'vetroff', 'openflux']) {
         listSelectOptions('protocol');
         fireEvent.change(document.querySelector('#protocol')!, { target: { value: protocol } });
         await act(async () => {});
@@ -261,22 +260,20 @@ describe('InboundFormModal', () => {
     const strategyItem = (title: string) =>
       document.querySelector(`.ant-select-content[title="${title}"]`);
     const modal = (nodes: never[], fetched: boolean) => (
-      <ThemeProvider>
-        <InboundFormModal
-          open
-          mode="edit"
-          dbInbound={buildInbound()}
-          dbInbounds={[]}
-          availableNodes={nodes}
-          availableNodesFetched={fetched}
-          onClose={() => {}}
-          onSaved={() => {}}
-        />
-      </ThemeProvider>
+      <InboundFormModal
+        open
+        mode="edit"
+        dbInbound={buildInbound()}
+        dbInbounds={[]}
+        availableNodes={nodes}
+        availableNodesFetched={fetched}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />
     );
 
     // Baseline: nodes already loaded, so the node option is offered and selected.
-    render(modal([node], true));
+    renderWithProviders(modal([node], true));
     await flush();
     expect(strategyItem('Node address')).toBeTruthy();
     cleanup();
@@ -284,7 +281,7 @@ describe('InboundFormModal', () => {
     // Race: the modal mounts before /nodes/list resolves (empty placeholder),
     // then nodes arrive. The persisted 'node' strategy must survive the gap and
     // stay selected once the option reappears — not silently revert to listen.
-    const { rerender } = render(modal([], false));
+    const { rerender } = renderWithProviders(modal([], false));
     await flush();
     rerender(modal([node], true));
     await flush();

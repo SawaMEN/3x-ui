@@ -7835,6 +7835,127 @@
         }
       }
     },
+    "/panel/api/server/openflux/status": {
+      "get": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Check whether the optional OpenFlux component is installed on the selected node.",
+        "operationId": "get_panel_api_server_openflux_status",
+        "parameters": [
+          {
+            "name": "nodeId",
+            "in": "query",
+            "required": false,
+            "description": "Target node ID; omit or use 0 for the panel host.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/openflux/install": {
+      "get": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Read progress and result of the OpenFlux installation job on the selected node.",
+        "operationId": "get_panel_api_server_openflux_install",
+        "parameters": [
+          {
+            "name": "nodeId",
+            "in": "query",
+            "required": false,
+            "description": "Target node ID; omit or use 0 for the panel host.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Start installing or updating the official OpenFlux executable on the selected node.",
+        "operationId": "post_panel_api_server_openflux_install",
+        "parameters": [
+          {
+            "name": "nodeId",
+            "in": "query",
+            "required": false,
+            "description": "Target node ID; omit or use 0 for the panel host.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/components/remove/{protocol}": {
       "post": {
         "tags": [

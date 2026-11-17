@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { act, fireEvent } from '@testing-library/react';
 
+import { HttpUtil, Msg } from '@/utils';
 import OutboundFormModal from '@/pages/xray/outbounds/OutboundFormModal';
 import {
   renderWithProviders,
@@ -32,6 +33,21 @@ function toggleSockoptsSwitch() {
 }
 
 describe('OutboundFormModal', () => {
+  it.each([false, true])(
+    'offers OpenFlux only after component installation: %s',
+    async (installed) => {
+      vi.mocked(HttpUtil.get).mockResolvedValue(new Msg(true, '', { installed }));
+      renderModal();
+      await act(async () => {});
+      listSelectOptions('protocol');
+      fireEvent.change(document.querySelector('#protocol')!, { target: { value: 'openflux' } });
+      await act(async () => {});
+      expect(listSelectOptions('protocol').some((label) => label.startsWith('openflux'))).toBe(
+        installed,
+      );
+    },
+  );
+
   it('renders add mode without crashing', () => {
     renderModal(null);
     expect(document.querySelector('.ant-modal')).toBeTruthy();

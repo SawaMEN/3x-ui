@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Collapse,
+  Form,
   Input,
   InputNumber,
   Modal,
@@ -18,6 +19,7 @@ import { HttpUtil } from '@/utils';
 import SniSearchInput from '../security/SniSearchInput';
 import {
   OPENFLUX_TRANSPORTS,
+  openFluxTransportLabel,
   suggestOpenFluxTransport,
   validOpenFluxChannelURL,
   type OpenFluxTransportType,
@@ -214,6 +216,7 @@ export function OpenFluxFields() {
           <FormField
             name={['settings', 'transports', i, 'type']}
             label={t('pages.inbounds.form.openfluxTransport')}
+            tooltip={t('pages.inbounds.form.openfluxTransportHint')}
             rules={{
               validate: (value) =>
                 values.every((entry, index) => index === i || entry.type !== value) ||
@@ -224,7 +227,7 @@ export function OpenFluxFields() {
               style={{ width: 150 }}
               options={OPENFLUX_TRANSPORTS.map((value) => ({
                 value,
-                label: value,
+                label: openFluxTransportLabel(value),
                 disabled: used.has(value) && values[i]?.type !== value,
               }))}
             />
@@ -232,7 +235,7 @@ export function OpenFluxFields() {
           <FormField
             name={['settings', 'transports', i, 'priority']}
             label={t('pages.inbounds.form.openfluxPriority')}
-            extra={t('pages.inbounds.form.openfluxPriorityHint')}
+            tooltip={t('pages.inbounds.form.openfluxPriorityHint')}
           >
             <InputNumber min={0} max={1000} />
           </FormField>
@@ -240,6 +243,7 @@ export function OpenFluxFields() {
             <FormField
               name={['settings', 'transports', i, 'url']}
               label="URL"
+              tooltip={t('pages.inbounds.form.openfluxChannelHint')}
               rules={{
                 validate: (value) =>
                   validOpenFluxChannelURL(String(value ?? '')) ||
@@ -264,13 +268,45 @@ export function OpenFluxFields() {
             key: 'context',
             label: t('pages.inbounds.advancedTitle'),
             children: (
-              <FormField
-                name={['settings', 'context']}
-                label={t('pages.inbounds.form.openfluxContext')}
-                extra={t('pages.inbounds.form.openfluxContextHint')}
-              >
-                <Input maxLength={4096} />
-              </FormField>
+              <>
+                <FormField
+                  name={['settings', 'context']}
+                  label={t('pages.inbounds.form.openfluxContext')}
+                  tooltip={t('pages.inbounds.form.openfluxContextHint')}
+                >
+                  <Input
+                    maxLength={4096}
+                    placeholder={t('pages.inbounds.form.additionalSecretAuto')}
+                  />
+                </FormField>
+                <FormField
+                  name={['settings', 'maxPacketSize']}
+                  label={t('pages.inbounds.form.openfluxPacket')}
+                  tooltip={t('pages.inbounds.form.openfluxPacketHint')}
+                >
+                  <InputNumber min={0} max={65000} precision={0} />
+                </FormField>
+                <FormField
+                  name={['settings', 'refusePeerLogin']}
+                  label={t('pages.inbounds.form.openfluxRefuseLogin')}
+                  tooltip={t('pages.inbounds.form.openfluxRefuseLoginHint')}
+                  valueProp="checked"
+                >
+                  <Switch />
+                </FormField>
+                <FormField
+                  name={['settings', 'debug']}
+                  label={t('pages.inbounds.form.openfluxDebug')}
+                  tooltip={t('pages.inbounds.form.openfluxDebugHint')}
+                >
+                  <Select
+                    options={[0, 1, 2].map((value) => ({
+                      value,
+                      label: t(`pages.inbounds.form.openfluxDebug${value}`),
+                    }))}
+                  />
+                </FormField>
+              </>
             ),
           },
         ]}
@@ -298,26 +334,36 @@ export function OpenFluxFields() {
         }}
       >
         <Space orientation="vertical" style={{ width: '100%' }}>
-          <Select
-            aria-label={t('pages.inbounds.form.openfluxTransport')}
-            style={{ width: '100%' }}
-            value={channelType}
-            options={available
-              .filter((type) => !addDirect || type !== 'direct')
-              .map((type) => ({ value: type, label: type }))}
-            onChange={setChannelType}
-          />
-          {channelType !== 'direct' && (
-            <Input
-              aria-label={t('pages.inbounds.form.openfluxChannelURL')}
-              placeholder="https://docs.yandex.ru/edit/d/…"
-              value={channelURL}
-              onChange={(event) => {
-                setChannelURL(event.target.value);
-                const inferred = suggestOpenFluxTransport(event.target.value.trim());
-                if (inferred && available.includes(inferred)) setChannelType(inferred);
-              }}
+          <Form.Item
+            label={t('pages.inbounds.form.openfluxTransport')}
+            tooltip={t('pages.inbounds.form.openfluxTransportHint')}
+          >
+            <Select
+              aria-label={t('pages.inbounds.form.openfluxTransport')}
+              style={{ width: '100%' }}
+              value={channelType}
+              options={available
+                .filter((type) => !addDirect || type !== 'direct')
+                .map((type) => ({ value: type, label: openFluxTransportLabel(type) }))}
+              onChange={setChannelType}
             />
+          </Form.Item>
+          {channelType !== 'direct' && (
+            <Form.Item
+              label={t('pages.inbounds.form.openfluxChannelURL')}
+              tooltip={t('pages.inbounds.form.openfluxChannelHint')}
+            >
+              <Input
+                aria-label={t('pages.inbounds.form.openfluxChannelURL')}
+                placeholder="https://docs.yandex.ru/edit/d/…"
+                value={channelURL}
+                onChange={(event) => {
+                  setChannelURL(event.target.value);
+                  const inferred = suggestOpenFluxTransport(event.target.value.trim());
+                  if (inferred && available.includes(inferred)) setChannelType(inferred);
+                }}
+              />
+            </Form.Item>
           )}
           <Alert type="info" showIcon description={t('pages.inbounds.form.openfluxChannelHint')} />
         </Space>

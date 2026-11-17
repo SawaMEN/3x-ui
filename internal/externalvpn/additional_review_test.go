@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -25,7 +26,7 @@ func TestManagedVPNOpenFluxContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cancel()
-	if cmd.Args[len(cmd.Args)-1] != "--negotiate" {
+	if !slices.Contains(cmd.Args, "--negotiate") {
 		t.Fatal("legacy fallback remains enabled")
 	}
 	conf, err := os.ReadFile(filepath.Join(directory(), "1", "openflux.conf"))

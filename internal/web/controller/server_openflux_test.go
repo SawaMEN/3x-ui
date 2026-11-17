@@ -23,9 +23,11 @@ func (r *openFluxNodeInstaller) StartOpenFluxInstall(context.Context) (json.RawM
 	r.starts++
 	return json.RawMessage(`{"runId":"node-job","state":"running"}`), nil
 }
+
 func (r *openFluxNodeInstaller) ReadOpenFluxInstall(context.Context) (json.RawMessage, error) {
 	return json.RawMessage(`{"runId":"node-job","state":"success"}`), nil
 }
+
 func (r *openFluxNodeInstaller) ReadOpenFluxStatus(context.Context) (json.RawMessage, error) {
 	return json.RawMessage(`{"installed":true,"supported":true}`), nil
 }

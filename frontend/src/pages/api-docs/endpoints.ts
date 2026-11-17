@@ -452,6 +452,49 @@ export const sections: readonly Section[] = [
         ],
       },
       {
+        method: 'GET',
+        path: '/panel/api/server/openflux/status',
+        summary: 'Check whether the optional OpenFlux component is installed on the selected node.',
+        params: [
+          {
+            name: 'nodeId',
+            in: 'query',
+            type: 'integer',
+            optional: true,
+            desc: 'Target node ID; omit or use 0 for the panel host.',
+          },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/openflux/install',
+        summary: 'Read progress and result of the OpenFlux installation job on the selected node.',
+        params: [
+          {
+            name: 'nodeId',
+            in: 'query',
+            type: 'integer',
+            optional: true,
+            desc: 'Target node ID; omit or use 0 for the panel host.',
+          },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/openflux/install',
+        summary:
+          'Start installing or updating the official OpenFlux executable on the selected node.',
+        params: [
+          {
+            name: 'nodeId',
+            in: 'query',
+            type: 'integer',
+            optional: true,
+            desc: 'Target node ID; omit or use 0 for the panel host.',
+          },
+        ],
+      },
+      {
         method: 'POST',
         path: '/panel/api/server/components/remove/:protocol',
         summary:

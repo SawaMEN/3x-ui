@@ -211,6 +211,10 @@ func (s *ClientService) RemoveFromGroup(emails []string) (int, error) {
 }
 
 func (s *ClientService) AddToGroup(emails []string, group string) (int, error) {
+	if err := rejectManagedNodeRouteEmails(emails); err != nil {
+		return 0, err
+	}
+
 	group = strings.TrimSpace(group)
 	emails = trimmedUniqueEmails(emails)
 	if len(emails) == 0 {

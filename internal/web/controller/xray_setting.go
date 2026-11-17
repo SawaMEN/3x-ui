@@ -60,7 +60,6 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/node-route/ensure", a.ensureNodeRoute)
 	g.POST("/node-route/probe", a.probeNodeRoute)
 	g.POST("/node-route/delete", a.deleteNodeRoute)
-	g.POST("/node-route/delete", a.deleteNodeRoute)
 
 	g.GET("/geodata/files", a.geodataFiles)
 	g.GET("/geodata/categories", a.geodataCategories)
