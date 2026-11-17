@@ -43,7 +43,7 @@ it('shows stable releases as selectable rows and updates the chosen Xray version
     expect(HttpUtil.post).toHaveBeenCalledWith(
       '/panel/api/setting/cores/xray/update',
       { version: 'v26.9.0' },
-      { timeout: 330000 },
+      { timeout: 960000 },
     ),
   );
 });
@@ -61,7 +61,7 @@ it('switches between stable and beta releases for upstream sing-box', async () =
     expect(HttpUtil.post).toHaveBeenCalledWith(
       '/panel/api/setting/cores/sing-box-upstream/update',
       { version: 'v26.10.0-beta.1' },
-      { timeout: 330000 },
+      { timeout: 960000 },
     ),
   );
 });
