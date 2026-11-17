@@ -205,8 +205,8 @@ func TestForbiddenTagAPIDoesNotReplaceCoreWithoutCachedMetadata(t *testing.T) {
 			client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusForbidden,
-					Body: io.NopCloser(strings.NewReader("")),
-					Header: make(http.Header),
+					Body:       http.NoBody,
+					Header:     make(http.Header),
 				}, nil
 			})}
 			target := filepath.Join(t.TempDir(), "core")

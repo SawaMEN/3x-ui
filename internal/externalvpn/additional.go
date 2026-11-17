@@ -422,6 +422,7 @@ var openFluxRoomIDPattern = regexp.MustCompile(`^[a-fA-F0-9]{8}-(?:[a-fA-F0-9]{4
 func validOpenFluxCupsRoomID(id string) bool {
 	return openFluxRoomIDPattern.MatchString(id)
 }
+
 // Write credentials only to a private runtime config, never to process arguments.
 func writeOpenFluxTransport(conf *strings.Builder, carrier OpenFluxTransport, endpoint string, exit bool) {
 	fmt.Fprintf(conf, "\n[Transport \"%s\"]\nType = %s\nPriority = %d\n", carrier.Type, carrier.Type, carrier.Priority)

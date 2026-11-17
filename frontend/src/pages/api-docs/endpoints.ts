@@ -466,6 +466,29 @@ export const sections: readonly Section[] = [
         ],
       },
       {
+        method: 'POST',
+        path: '/panel/api/server/openflux/check-transport',
+        summary:
+          'Test reachability of a supported OpenFlux carrier from the panel server without exposing provider credentials.',
+        params: [
+          {
+            name: 'nodeId',
+            in: 'query',
+            type: 'integer',
+            optional: true,
+            desc: 'Only the local panel host is currently supported; remote nodes return an error.',
+          },
+          {
+            name: 'type',
+            in: 'body (json)',
+            type: 'string',
+            desc: 'OpenFlux transport type to test; credentials are not transmitted.',
+          },
+        ],
+        body: '{"type":"volga"}',
+        responseObjectSchema: { type: 'object', additionalProperties: true },
+      },
+      {
         method: 'GET',
         path: '/panel/api/server/openflux/install',
         summary: 'Read progress and result of the OpenFlux installation job on the selected node.',

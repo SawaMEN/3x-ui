@@ -126,9 +126,11 @@ type releaseCache struct {
 	lists    map[string]cachedVersionList
 }
 
-const releaseMetadataTTL = time.Hour
-const releaseListTTL = 10 * time.Minute
-const maxCachedReleases = 256
+const (
+	releaseMetadataTTL = time.Hour
+	releaseListTTL     = 10 * time.Minute
+	maxCachedReleases  = 256
+)
 
 // NewCachedInstaller reuses GitHub-provided release digests across version
 // discovery and installation. The browser cannot supply trusted digests.
