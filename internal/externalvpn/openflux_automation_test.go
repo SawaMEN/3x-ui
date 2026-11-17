@@ -158,6 +158,9 @@ func TestOpenFluxLatestShareableCarriers(t *testing.T) {
 				Clients:    []Client{{Email: "alice", Password: strings.Repeat("a", 32), Enable: true}},
 				Transports: []OpenFluxTransport{{Type: typ, URL: "https://example.org/room", Priority: 50}},
 			}}
+			if typ == "cupsonline" {
+				inst.Settings.Transports[0].URL = "WyIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiXQ"
+			}
 			if err := inst.Validate(); err != nil {
 				t.Fatal(err)
 			}
@@ -193,5 +196,19 @@ func TestOpenFluxLatestShareableCarriers(t *testing.T) {
 				t.Fatal("sensitive debug level accepted")
 			}
 		})
+	}
+}
+
+func TestOpenFluxCupsRoomValidation(t *testing.T) {
+	valid := "WyIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiXQ"
+	for _, value := range []string{valid, "https://interview.cups.online/live-coding/?rooms=" + valid} {
+		if !validOpenFluxCupsRooms(value) {
+			t.Fatalf("valid room list rejected: %q", value)
+		}
+	}
+	for _, value := range []string{"", "https://cups.online/room/a", "not-base64", "WyJhIl0"} {
+		if validOpenFluxCupsRooms(value) {
+			t.Fatalf("invalid room list accepted: %q", value)
+		}
 	}
 }
