@@ -1230,6 +1230,8 @@
           "yandexProbeRemote": "Checking from a remote node is not yet supported. Run the check on the actual node instead.",
           "yandexProbeIncomplete": "Enter a login, application password, and valid folder name containing only Latin letters, digits, _ or -.",
           "yandexProbePassed": "WebDAV is accessible from this server: folder '{{folder}}' is ready. Test-file write, read, list and delete passed. This does not verify mobile whitelist access or the VPN tunnel.",
+                    "yandexApiProbeIncomplete": "Enter a Yandex Disk OAuth token and folder name containing only Latin letters, digits, _ or -.",
+          "yandexApiProbePassed": "Yandex Disk REST API is accessible from this server: folder '{{folder}}' is ready and write, read, list and delete passed. This does not verify mobile whitelist access.",
           "yandexProbeFailed": "WebDAV check failed on this server.",
           "yandexOauthToken": "Yandex Disk OAuth token",
           "yandexOauthHint": "Use an OAuth token for an app with access to the required account files, not your Yandex password. Create the folder beforehand. Both XDRIVE peers must use the same token.",
