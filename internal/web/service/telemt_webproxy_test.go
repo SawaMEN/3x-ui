@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -164,15 +166,27 @@ func TestTelemtWebReadinessUsesConfiguredMount(t *testing.T) {
 }
 
 func TestTelemtWebCaddyReloadPreservesWebSocketLanes(t *testing.T) {
-	data, err := telemtWebFrontendConfig(TelemtWebProxyState{Domain: "example.com", Frontend: "caddy", ListenPort: 15080}, telemtWebSubscriptionTarget{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var compact bytes.Buffer
-	if err := json.Compact(&compact, data); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(compact.String(), `"stream_close_delay":"5m"`) {
-		t.Fatalf("Caddy reload would close WEB lanes: %s", data)
+	for _, tc := range []struct {
+		version   string
+		supported bool
+	}{{"v2.6.2", false}, {"v2.7.0", true}, {"v2.11.9", true}} {
+		t.Run(tc.version, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "caddy"), []byte("#!/bin/sh\nprintf '%s\\n' '"+tc.version+"'\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", dir)
+			data, err := telemtWebFrontendConfig(TelemtWebProxyState{Domain: "example.com", Frontend: "caddy", ListenPort: 15080}, telemtWebSubscriptionTarget{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var compact bytes.Buffer
+			if err := json.Compact(&compact, data); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(compact.String(), `"stream_close_delay":"5m"`); got != tc.supported {
+				t.Fatalf("Caddy %s stream delay=%v want=%v", tc.version, got, tc.supported)
+			}
+		})
 	}
 }
