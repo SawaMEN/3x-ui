@@ -70,3 +70,25 @@ func TestOpenFluxInstallationScopeIsRestricted(t *testing.T) {
 		t.Fatal("component operation scopes are incomplete")
 	}
 }
+
+func TestOpenFluxProviderProbeRejectsRemoteNodeAndUnknownTarget(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	controller := &ServerController{}
+	controller.initExternalVPNRouter(engine.Group("/server"))
+	for _, tc := range []struct {
+		path string
+		body string
+	}{
+		{"/server/openflux/check-transport", `{"type":"http://127.0.0.1"}`},
+		{"/server/openflux/check-transport?nodeId=7", `{"type":"vyandex"}`},
+	} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		engine.ServeHTTP(w, req)
+		if !strings.Contains(w.Body.String(), `"success":false`) {
+			t.Fatalf("untrusted transport probe accepted: %s", w.Body.String())
+		}
+	}
+}
