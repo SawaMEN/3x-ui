@@ -47,11 +47,15 @@ export default function PanelUpdateModal({
 
   const isDev = info.channel === 'dev';
 
-  async function pollUpdateStatus(expectedRunId: string): Promise<UpdateOutcome> {
+  async function pollUpdateStatus(
+    expectedRunId: string,
+    onProgress: (stage: string) => void,
+  ): Promise<UpdateOutcome> {
     await PromiseUtil.sleep(5000);
     // Installing a large release can take far longer than the initial launch.
     // Do not show a false "unknown" result while download/rollback is ongoing.
     const deadline = Date.now() + 40 * 60_000;
+    let lastStage = '';
     while (Date.now() < deadline) {
       try {
         const msg = await HttpUtil.get<PanelUpdateStatus>(
@@ -63,6 +67,10 @@ export default function PanelUpdateModal({
         if (status?.runId === expectedRunId) {
           if (status.state === 'success') return 'success';
           if (status.state === 'failed') return 'failed';
+          if (status.state === 'pending' && status.message && status.message !== lastStage) {
+            lastStage = status.message;
+            onProgress(lastStage);
+          }
         }
       } catch {
         /* still restarting */
@@ -92,7 +100,9 @@ export default function PanelUpdateModal({
       onBusy({ busy: false });
       return;
     }
-    const outcome = await pollUpdateStatus(result.obj?.runId ?? '');
+    const outcome = await pollUpdateStatus(result.obj?.runId ?? '', (stage) => {
+      onBusy({ busy: true, tip: `${tip} — ${stage}` });
+    });
     onBusy({ busy: false });
     if (outcome === 'success') {
       await PromiseUtil.sleep(800);

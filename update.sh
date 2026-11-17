@@ -1167,14 +1167,19 @@ download_release_asset() {
     local url="$1"
     local dest="$2"
 
+    # A stalled GitHub transfer must not keep the updater spinning for hours.
+    # Bound retries while preserving sufficient time for a large release file.
+    local options=(-fL --retry 1 --retry-delay 2 --connect-timeout 15
+        --max-time 480 --speed-limit 8192 --speed-time 60)
+
     rm -f "$dest"
-    if download_http_status=$("${curl_bin:-curl}" -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url"); then
+    if download_http_status=$("${curl_bin:-curl}" "${options[@]}" -w '%{http_code}' -o "$dest" "$url"); then
         return 0
     fi
 
     echo -e "${yellow}Initial download failed; retrying GitHub over IPv4...${plain}"
     rm -f "$dest"
-    download_http_status=$("${curl_bin:-curl}" -4 -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url")
+    download_http_status=$("${curl_bin:-curl}" -4 "${options[@]}" -w '%{http_code}' -o "$dest" "$url")
 }
 
 # Called only while both updater locks are held, before creating this run's files.
@@ -1259,6 +1264,11 @@ preflight_update_download_space() {
     fi
 }
 
+report_update_progress() {
+    [[ "${xui_update_run_id:-0}" != 0 ]] || return 0
+    _write_update_status "pending" "0" "$1"
+}
+
 update_x-ui() {
     load_xui_env || _fail "Cannot load x-ui service environment; current installation was not changed"
     xui_folder="${XUI_MAIN_FOLDER:-/usr/local/x-ui}"
@@ -1286,6 +1296,7 @@ update_x-ui() {
     # Older stage/download remnants are cleaned only after acquiring the lock.
     acquire_update_download_lock "$install_parent" || _fail "Another panel update is in progress or the update lock is unavailable. Existing installation unchanged."
     echo -e "${green}Downloading new x-ui version...${plain}"
+    report_update_progress "Выбор версии обновления"
 
     # XUI_UPDATE_TAG lets the panel target a specific release tag (e.g. the
     # rolling dev-latest pre-release). Empty keeps the default latest-stable flow.
@@ -1309,6 +1320,7 @@ update_x-ui() {
     archive=$(mktemp "${install_parent}/.x-ui-download.XXXXXX.tar.gz") || _fail "Cannot create release download"
     xui_download_archive="$archive"
     local asset_url="https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-${machine_arch}.tar.gz"
+    report_update_progress "Скачивание обновления (${tag_version})"
 
     if ! download_release_asset "${asset_url}" "${archive}"; then
         rm -f "${archive}"
@@ -1323,6 +1335,7 @@ update_x-ui() {
     fi
 
     # Validate before unpacking, sourcing executable helpers or stopping x-ui.
+    report_update_progress "Проверка архива и SHA-256"
     verify_release_checksum "$asset_url" "$archive" || _fail "Release checksum verification failed; existing installation unchanged."
 
     # Validate the complete archive before touching the running installation.
@@ -1347,6 +1360,7 @@ update_x-ui() {
     rm -f "$cm_helper"
     # Keep the download lock until EXIT; the migration helper separately
     # acquires .x-ui-upgrade.lock without an unlock/relock race.
+    report_update_progress "Подготовка обновления и резервной копии"
     core_migration_prepare_archive "$archive" || _fail "Release preflight failed (see error above); current installation was not changed"
     prepare_release_host_files "${script_ref}" || _fail "Release service/menu preflight failed; current installation was not changed"
 
@@ -1355,6 +1369,7 @@ update_x-ui() {
         # must still restart the untouched original installation.
         cm_stopped=1
         echo -e "${green}Stopping x-ui...${plain}"
+        report_update_progress "Остановка службы x-ui"
         if [[ $release == "alpine" ]]; then
             if [ -f "/etc/init.d/x-ui" ]; then
                 rc-service x-ui stop > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
@@ -1416,6 +1431,7 @@ update_x-ui() {
         cp -p "${xui_folder}/bin/telemt" "${telemt_preserved_binary}" || _fail "Cannot preserve installed Telemt"
     fi
     echo -e "${green}Installing new x-ui version...${plain}"
+    report_update_progress "Установка файлов панели"
     if ! tar xzf "${archive}" "${cm_core_tar_args[@]}" -C "${install_parent}" > /dev/null 2>&1; then
         rm -f "${archive}"
         _fail "ERROR: Failed to extract the x-ui release archive -- restoring the previous installation from its snapshot"
@@ -1493,8 +1509,10 @@ update_x-ui() {
         chmod 640 "${xui_folder}/bin/config.json" > /dev/null 2>&1 || _fail "Cannot secure panel configuration permissions"
     fi
 
+    report_update_progress "Применение миграции"
     core_migration_apply || _fail "Modified Sing-box migration failed; restoring previous installation"
 
+    report_update_progress "Запуск обновлённой панели"
     if [[ $release == "alpine" ]]; then
         echo -e "${green}Installing staged startup unit x-ui.rc...${plain}"
         xui_rc_temp="/etc/init.d/x-ui.tmp.$$"
@@ -1532,6 +1550,7 @@ update_x-ui() {
         fi
     fi
 
+    report_update_progress "Проверка запуска и завершение обновления"
     core_migration_commit || _fail "Updated panel did not start its modified Sing-box; restoring snapshot"
     if [[ $release != alpine && -f "${xui_service}/hiddify-core-update.timer" ]]; then
         systemctl enable --now hiddify-core-update.timer 2>/dev/null ||             echo "Warning: Hiddify auto-update timer was not enabled" >&2

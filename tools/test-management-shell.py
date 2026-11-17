@@ -291,6 +291,27 @@ rc=$?
 [[ "$rc" == 22 && "$download_http_status" == 404 ]]
 ''', {"TEST_ROOT": raw})
 
+    def test_release_download_retries_are_bounded_and_detect_stalled_network(self):
+        # The web updater must fail a stalled download before its polling window.
+        for file in ("install.sh", "update.sh"):
+            with self.subTest(file=file), tempfile.TemporaryDirectory() as raw:
+                self.run_script(function(file, "download_release_asset") + r'''
+curl() {
+    printf '%s\\n' "$*" >> "$TEST_CALLS"
+    case " $* " in
+        *" -4 "*) printf 200; return 0 ;;
+        *) printf 504; return 22 ;;
+    esac
+}
+download_release_asset https://example.invalid/release "$TEST_ROOT/archive" >/dev/null
+[[ "$download_http_status" == 200 ]] || exit 1
+grep -q -- '--max-time 480' "$TEST_CALLS" || exit 1
+grep -q -- '--retry 1' "$TEST_CALLS" || exit 1
+grep -q -- '--speed-limit 8192' "$TEST_CALLS" || exit 1
+grep -q -- '--speed-time 60' "$TEST_CALLS" || exit 1
+grep -q -- '^-4 ' "$TEST_CALLS" || exit 1
+''', {"TEST_ROOT": raw, "TEST_CALLS": str(Path(raw) / "calls")})
+
     def test_both_installers_require_matching_release_checksum(self):
         # The two installer paths must share the exact same trust decision.
         self.assertEqual(function("install.sh", "verify_release_checksum"),
@@ -463,7 +484,7 @@ core_migration_resume_gateway() { :; }
                 archive = base / "release.tar.gz"
                 with tarfile.open(archive, "w:gz") as target: target.add(bundle, arcname="x-ui")
                 script = "".join(function("update.sh", name) for name in
-                    ("cleanup_update_artifacts", "acquire_update_download_lock", "preflight_update_download_space", "verify_release_checksum", "rewrite_release_service_paths", "prepare_release_host_files", "_install_xui_service_unit", "update_x-ui")).replace("/usr/bin/x-ui", "${TEST_ROOT}/host-cli") + r'''
+                    ("cleanup_update_artifacts", "acquire_update_download_lock", "preflight_update_download_space", "verify_release_checksum", "rewrite_release_service_paths", "prepare_release_host_files", "_install_xui_service_unit", "report_update_progress", "update_x-ui")).replace("/usr/bin/x-ui", "${TEST_ROOT}/host-cli") + r'''
 _fail() { echo "$*" >&2; exit 2; }
 load_xui_env() { :; }
 select_release_tag() { printf dev-latest; }

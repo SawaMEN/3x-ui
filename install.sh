@@ -1716,14 +1716,19 @@ download_release_asset() {
     local url="$1"
     local dest="$2"
 
+    # A stalled GitHub transfer must not keep the updater spinning for hours.
+    # Bound retries while preserving sufficient time for a large release file.
+    local options=(-fL --retry 1 --retry-delay 2 --connect-timeout 15
+        --max-time 480 --speed-limit 8192 --speed-time 60)
+
     rm -f "$dest"
-    if download_http_status=$("${curl_bin:-curl}" -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url"); then
+    if download_http_status=$("${curl_bin:-curl}" "${options[@]}" -w '%{http_code}' -o "$dest" "$url"); then
         return 0
     fi
 
     echo -e "${yellow}Initial download failed; retrying GitHub over IPv4...${plain}"
     rm -f "$dest"
-    download_http_status=$("${curl_bin:-curl}" -4 -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url")
+    download_http_status=$("${curl_bin:-curl}" -4 "${options[@]}" -w '%{http_code}' -o "$dest" "$url")
 }
 
 prepare_release_migration() {
