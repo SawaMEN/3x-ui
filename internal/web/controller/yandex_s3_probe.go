@@ -107,7 +107,7 @@ func handleYandexS3Probe(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 35*time.Second)
 	defer cancel()
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 10*time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	result := yandexXDriveProbeResult{Folder: folder}

@@ -68,10 +68,10 @@ func handleYandexDiskAPIProbe(c *gin.Context) {
 		jsonObj(c, nil, fmt.Errorf("folder must contain 1–64 Latin letters, digits, '_' or '-'"))
 		return
 	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 35 * time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 35*time.Second)
 	defer cancel()
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 10*time.Second,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -165,7 +165,7 @@ func handleYandexDiskAPIProbe(c *gin.Context) {
 	result.Written = true
 	// After an upload, deletion is best-effort even if a later validation fails.
 	defer func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5 * time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 		target := yandexDiskAPIBase + "/resources?" + url.Values{
 			"path": {path}, "permanently": {"true"},

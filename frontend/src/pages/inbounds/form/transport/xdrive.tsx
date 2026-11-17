@@ -16,7 +16,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { JsonEditor } from '@/components/form';
 import { FormField } from '@/components/form/rhf';
 import { XDriveServiceSchema } from '@/schemas/protocols/stream/xdrive';
-import { HttpUtil } from '@/utils';
+import { HttpUtil, RandomUtil } from '@/utils';
 import {
   identifyYandexStoragePreset,
   validYandexFolder,
@@ -134,7 +134,7 @@ export default function XDriveForm() {
 
   const generateFolder = () => {
     setCheck(null);
-    setValue(`${BASE.join('.')}.remoteFolder`, `xdrive-${crypto.randomUUID().slice(0, 8)}`, {
+    setValue(`${BASE.join('.')}.remoteFolder`, `xdrive-${RandomUtil.randomUUID().slice(0, 8)}`, {
       shouldDirty: true,
       shouldValidate: true,
     });
