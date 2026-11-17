@@ -655,14 +655,14 @@ func TestInjectAmneziawgnetSocks_AlwaysOnRegardlessOfLegacyRouteThroughXrayField
 	// decapsulated in gVisor. A stale RouteThroughXray=false left over from
 	// a pre-cutover install must not suppress the relay inbound.
 	cfg := egressTestConfig()
-	server := amneziawg.ServerSettings{SubnetIP: "10.8.1.0", SubnetCIDR: 24, RouteThroughXray: false}
+	server := amneziawg.ServerSettings{SubnetIP: "10.8.1.0", SubnetCIDR: 24}
 	settings, _ := json.Marshal(amneziawg.InboundSettings{
 		Server: &server,
 		Clients: []model.Client{
 			{Email: "a@x", Enable: true, PublicKey: "pub-a", AllowedIPs: []string{"10.8.1.2/32"}},
 		},
 	})
-	inbound := &model.Inbound{Id: 1, Tag: "awg-1", Protocol: model.AmneziaWG, Enable: true, Settings: string(settings)}
+	inbound := &model.Inbound{Id: 1, Tag: "awg-1", Protocol: model.AmneziaWG, Enable: true, Settings: strings.Replace(string(settings), `"server":{`, `"server":{"routeThroughXray":false,`, 1)}
 	injectAmneziawgnetSocks(cfg, []*model.Inbound{inbound})
 	if len(cfg.InboundConfigs) != 2 {
 		t.Fatalf("the relay inbound must always be created regardless of RouteThroughXray, got %+v", cfg.InboundConfigs)

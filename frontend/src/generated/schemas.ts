@@ -5584,7 +5584,7 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "boolean"
       },
       "externalInterface": {
-        "description": "ExternalInterface, IPv6Enabled, and IPv6ExternalInterface are live\nagain as of Phase 3.5 -- see the matching fields on Instance for what\nthey gate (internal/amneziawgnet's IPv6-address-alias mechanism).\nIPv6Subnet was never actually vestigial either: InstanceFromInbound\nalready consumes it (via serverAddressV6) to build the server's own\ntunnel address, same as always. Only RouteThroughXray, below, remains\ngenuinely vestigial as of the hard cutover to the embedded path\n(internal/amneziawgnet) -- read from existing stored settings for\nbackward compatibility, but not acted on by anything.",
+        "description": "Public egress interface and optional IPv6 addresses for embedded peers.",
         "type": "string"
       },
       "h1": {
@@ -5669,9 +5669,6 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "rekeyTimeout": {
         "type": "string"
-      },
-      "routeThroughXray": {
-        "type": "boolean"
       },
       "s1": {
         "type": "integer"

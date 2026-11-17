@@ -99,8 +99,6 @@ export class DBInbound {
   originNodeGuid: string;
   fallbackParent: FallbackParentRef | null;
 
-  private _clientStatsMap: Map<string, ClientStats> | null = null;
-
   constructor(data?: DBInboundInit) {
     this.id = 0;
     this.sortOrder = 0;
@@ -172,16 +170,8 @@ export class DBInbound {
     return this.protocol === Protocols.WIREGUARD;
   }
 
-  get isAmneziawg() {
-    return this.protocol === Protocols.AMNEZIAWG;
-  }
-
   get isHysteria() {
     return this.protocol === Protocols.HYSTERIA;
-  }
-
-  get isTuic() {
-    return this.protocol === Protocols.TUIC;
   }
 
   get isTunnel() {
@@ -209,33 +199,5 @@ export class DBInbound {
     } else {
       this.expiryTime = t.valueOf();
     }
-  }
-
-  get isExpiry(): boolean {
-    return this.expiryTime < new Date().getTime();
-  }
-
-  invalidateCache(): void {
-    this._clientStatsMap = null;
-  }
-
-  toJSON(): Record<string, unknown> {
-    const out: Record<string, unknown> = { ...(this as unknown as Record<string, unknown>) };
-    delete out._clientStatsMap;
-    return out;
-  }
-
-  getClientStats(email: string): ClientStats | undefined {
-    if (!this._clientStatsMap) {
-      this._clientStatsMap = new Map();
-      if (Array.isArray(this.clientStats)) {
-        for (const stats of this.clientStats) {
-          if (stats && stats.email) {
-            this._clientStatsMap.set(stats.email, stats);
-          }
-        }
-      }
-    }
-    return this._clientStatsMap.get(email);
   }
 }

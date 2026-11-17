@@ -1321,7 +1321,6 @@ export interface ServerSettings {
   rejectAfterTime?: string;
   rekeyAfterTime?: string;
   rekeyTimeout?: string;
-  routeThroughXray?: boolean;
   s1: number;
   s2: number;
   s3: number;

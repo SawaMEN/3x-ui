@@ -62,12 +62,6 @@ export const AmneziawgServerSchema = z.object({
   ipv6Enabled: z.boolean().default(false),
   ipv6Subnet: z.string().default(''),
   ipv6ExternalInterface: z.string().default(''),
-  // routeThroughXray is vestigial on the Go side (see ServerSettings' own
-  // doc comment) -- the embedded relay is always on, this field is read by
-  // nothing. Kept here anyway, with no corresponding form control, purely so
-  // z.object's default unknown-key stripping doesn't silently drop it from
-  // an existing stored settings blob on the next save.
-  routeThroughXray: z.boolean().default(false).optional(),
   // Upper bounds match amneziawg-go's own UAPI parsers (device/uapi.go):
   // jc/jmin/jmax are uint32, s1-s4 uint16. Wider values make IpcSet fail.
   jc: clearedToDefault(z.number().int().min(0).max(4294967295).default(5)),
