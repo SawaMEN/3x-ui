@@ -1,6 +1,21 @@
 name: OpenFlux integration
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "internal/externalvpn/**"
+      - "internal/web/controller/server_openflux*"
+      - "internal/web/runtime/openflux*"
+      - "frontend/src/**openflux*"
+      - "frontend/src/**/OpenFlux*"
+      - "frontend/src/components/openflux/**"
+      - "frontend/src/pages/inbounds/form/protocols/additional-vpn.tsx"
+      - "frontend/src/schemas/protocols/inbound/additional-vpn.ts"
+      - "internal/web/translation/en-US.json"
+      - "internal/web/translation/ru-RU.json"
+      - "docs/openflux-*"
+      - ".github/workflows/openflux.yml"
   pull_request:
     paths:
       - "internal/externalvpn/**"
