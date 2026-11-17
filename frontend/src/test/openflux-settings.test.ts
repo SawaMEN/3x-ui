@@ -5,6 +5,7 @@ import {
   openFluxMAXChannels,
   suggestOpenFluxTransport,
   validOpenFluxChannelURL,
+  validOpenFluxCupsRooms,
 } from '@/lib/openflux';
 
 describe('OpenFlux settings', () => {
@@ -42,14 +43,30 @@ describe('OpenFlux settings', () => {
   it('accepts every shareable carrier from the latest stable release', () => {
     const transports = [
       { type: 'direct' },
-      ...['yandex', 'vyandex', 'boards', 'mailru', 'cupsonline', 'avito', 'telemost'].map(
-        (type) => ({ type, url: 'https://example.org/room' }),
-      ),
+      ...['yandex', 'vyandex', 'boards', 'mailru', 'avito', 'telemost'].map((type) => ({
+        type,
+        url: 'https://example.org/room',
+      })),
+      { type: 'cupsonline', url: 'WyIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiXQ' },
     ];
     expect(OpenFluxInboundSettingsSchema.safeParse({ transports }).success).toBe(true);
     expect(suggestOpenFluxTransport('https://cups.online/room/a')).toBe('cupsonline');
     expect(suggestOpenFluxTransport('https://code.avito.ru/a')).toBe('avito');
     expect(suggestOpenFluxTransport('https://telemost.yandex.ru/j/a')).toBe('telemost');
+  });
+  it('validates Cups.online packed room lists instead of page URLs', () => {
+    expect(validOpenFluxCupsRooms('WyIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiXQ')).toBe(true);
+    expect(
+      validOpenFluxCupsRooms('https://interview.cups.online/live-coding/?rooms=WyIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiXQ'),
+    ).toBe(true);
+    for (const invalid of ['https://cups.online/room/a', 'not-valid', '', 'WyJhIl0']) {
+      expect(validOpenFluxCupsRooms(invalid)).toBe(false);
+      expect(
+        OpenFluxInboundSettingsSchema.safeParse({
+          transports: [{ type: 'cupsonline', url: invalid }],
+        }).success,
+      ).toBe(false);
+    }
   });
   it('validates negotiated packet limits and safe logging levels', () => {
     for (const maxPacketSize of [0, 1280, 65000])
