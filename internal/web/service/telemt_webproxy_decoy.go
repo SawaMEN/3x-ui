@@ -191,6 +191,15 @@ func renderTelemtWebSite(domain string, site *TelemtWebSiteOptions) (string, err
 }
 
 func prepareTelemtWebSite(domain, defaultDir, sitesDir string, site *TelemtWebSiteOptions) (string, error) {
+	return prepareTelemtWebSiteMode(domain, defaultDir, sitesDir, site, false)
+}
+
+// Telemt's static decoy has a strict CSP, unlike the ordinary domain gateway.
+func prepareTelemtWebProxySite(domain, defaultDir, sitesDir string, site *TelemtWebSiteOptions) (string, error) {
+	return prepareTelemtWebSiteMode(domain, defaultDir, sitesDir, site, true)
+}
+
+func prepareTelemtWebSiteMode(domain, defaultDir, sitesDir string, site *TelemtWebSiteOptions, strictCSP bool) (string, error) {
 	if err := validateTelemtWebSite(site); err != nil {
 		return "", err
 	}
@@ -208,7 +217,11 @@ func prepareTelemtWebSite(domain, defaultDir, sitesDir string, site *TelemtWebSi
 	}
 	files := telemtWebPageFiles(page)
 	if site.Mode == "html" {
-		files = map[string]string{"index.html": page}
+		if strictCSP {
+			files = telemtWebImportedPageFiles(page)
+		} else {
+			files = map[string]string{"index.html": page}
+		}
 	}
 	if site.Mode == "catalog" && site.Catalog == "mtproxyl" {
 		license, err := telemtWebCatalogFiles.ReadFile("telemt_sites/mtproxyl/LICENSE.txt")

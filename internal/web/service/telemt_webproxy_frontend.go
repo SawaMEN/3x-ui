@@ -565,7 +565,7 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 	defer cancel()
 	var lastErr error
 	for {
-		req, err := http.NewRequestWithContext(deadline, http.MethodHead, "https://"+net.JoinHostPort(host, "443")+telemtWebReadinessPath(state.BasePath), nil)
+		req, err := http.NewRequestWithContext(deadline, http.MethodHead, "https://"+net.JoinHostPort(host, "443")+"/", nil)
 		if err != nil {
 			return err
 		}

@@ -26,3 +26,17 @@ supports them.
 Run `python3 -m unittest discover -s tools -p test_official_telemt.py`
 for offline source/checksum and updater regressions. Native API and WEB
 integration tests run against upstream binaries on both architectures.
+
+Cover-site acceptance checks use an official Telemt process and Chromium:
+
+```sh
+cd frontend && npm ci && npx playwright install --with-deps chromium && cd ..
+python3 tools/telemt/fetch.py --arch amd64 --output /tmp/telemt-cover
+TELEMT_TEST_BINARY=/tmp/telemt-cover/telemt TELEMT_SITE_BROWSER_SCRIPT="$PWD/tools/telemt/test_site.mjs" go test ./internal/web/service -run '^TestNativeTelemtWeb(CarrierConfig|SiteWithBasePath)$' -count=1 -v
+```
+
+They check page/resources, CSP errors, imported CSS/modules, and game controls.
+A transport `base_path` does not move the public cover website out of `/`.
+Imported owner HTML is converted to same-origin CSS/JS only for Telemt's strict
+CSP; ordinary gateway sites retain the original document. Existing managed WEB
+HTML snapshots are refreshed once during reconciliation, preserving old files.

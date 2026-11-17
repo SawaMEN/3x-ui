@@ -717,6 +717,25 @@ jobs:
           export HAPROXY_TEST_BINARY=$(command -v haproxy)
           go test ./internal/web/service -run '^TestTelemtWeb(AlternativeFrontends|CarrierSelection|RenewalRebuilds|FrontendStops)' -v -count=1
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install cover website browser checks
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Test native Telemt cover pages in Chromium
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/telemt/fetch.py --arch amd64 --output "$RUNNER_TEMP/telemt-cover"
+          export TELEMT_TEST_BINARY="$RUNNER_TEMP/telemt-cover/telemt"
+          export TELEMT_SITE_BROWSER_SCRIPT="$GITHUB_WORKSPACE/tools/telemt/test_site.mjs"
+          go test ./internal/web/service -run '^TestNativeTelemtWeb(CarrierConfig|SiteWithBasePath)$' -count=1 -v -timeout=5m
+
   native-client-speed:
     needs: [changes, resolve-core]
     if: needs.changes.outputs.backend == 'true'

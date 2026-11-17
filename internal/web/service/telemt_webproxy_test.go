@@ -157,14 +157,6 @@ func containsTelemtWeb(value, want string) bool {
 	return false
 }
 
-func TestTelemtWebReadinessUsesConfiguredMount(t *testing.T) {
-	for base, want := range map[string]string{"": "/", "relay01": "/relay01/", "relay01/nested": "/relay01/nested/"} {
-		if got := telemtWebReadinessPath(base); got != want {
-			t.Fatalf("readiness path=%q want=%q", got, want)
-		}
-	}
-}
-
 func TestTelemtWebCaddyReloadPreservesWebSocketLanes(t *testing.T) {
 	for _, tc := range []struct {
 		version   string
