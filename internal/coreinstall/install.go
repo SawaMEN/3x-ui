@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -105,7 +106,96 @@ func AssetName(engine, tag, goos, arch, arm string) (string, error) {
 }
 
 // Installer supports an injected HTTP client for deterministic tests.
-type Installer struct{ Client *http.Client }
+// A panel-owned instance opts into shared release metadata caching.
+type Installer struct {
+	Client *http.Client
+	cache  *releaseCache
+}
+
+type cachedRelease struct {
+	release Release
+	expires time.Time
+}
+type cachedVersionList struct {
+	versions []Version
+	expires  time.Time
+}
+type releaseCache struct {
+	mu       sync.Mutex
+	releases map[string]cachedRelease
+	lists    map[string]cachedVersionList
+}
+
+const releaseMetadataTTL = time.Hour
+const releaseListTTL = 10 * time.Minute
+const maxCachedReleases = 256
+
+// NewCachedInstaller reuses GitHub-provided release digests across version
+// discovery and installation. The browser cannot supply trusted digests.
+func NewCachedInstaller(client *http.Client) Installer {
+	return Installer{Client: client, cache: &releaseCache{
+		releases: make(map[string]cachedRelease),
+		lists:    make(map[string]cachedVersionList),
+	}}
+}
+
+func releaseKey(repo, tag, asset string) string { return repo + "/" + tag + "/" + asset }
+func versionListKey(repo, goos, arch, arm string) string {
+	return repo + "/" + goos + "/" + arch + "/" + arm
+}
+
+func (i Installer) rememberedRelease(repo, tag, asset string) (Release, bool) {
+	if i.cache == nil {
+		return Release{}, false
+	}
+	i.cache.mu.Lock()
+	defer i.cache.mu.Unlock()
+	entry, found := i.cache.releases[releaseKey(repo, tag, asset)]
+	if !found || time.Now().After(entry.expires) {
+		return Release{}, false
+	}
+	return entry.release, true
+}
+
+func (i Installer) rememberRelease(repo string, release Release, asset Asset) {
+	if i.cache == nil {
+		return
+	}
+	i.cache.mu.Lock()
+	defer i.cache.mu.Unlock()
+	if len(i.cache.releases) >= maxCachedReleases {
+		clear(i.cache.releases)
+	}
+	i.cache.releases[releaseKey(repo, release.Tag, asset.Name)] = cachedRelease{
+		release: Release{Tag: release.Tag, Assets: []Asset{asset}},
+		expires: time.Now().Add(releaseMetadataTTL),
+	}
+}
+
+func (i Installer) rememberedVersions(key string) ([]Version, bool) {
+	if i.cache == nil {
+		return nil, false
+	}
+	i.cache.mu.Lock()
+	defer i.cache.mu.Unlock()
+	entry, found := i.cache.lists[key]
+	if !found || time.Now().After(entry.expires) {
+		return nil, false
+	}
+	return append([]Version(nil), entry.versions...), true
+}
+
+func (i Installer) rememberVersions(key string, versions []Version) {
+	if i.cache == nil {
+		return
+	}
+	i.cache.mu.Lock()
+	defer i.cache.mu.Unlock()
+	i.cache.lists[key] = cachedVersionList{
+		versions: append([]Version(nil), versions...),
+		expires:  time.Now().Add(releaseListTTL),
+	}
+}
 
 func (i Installer) get(ctx context.Context, url string, limit int64) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -115,7 +205,12 @@ func (i Installer) get(ctx context.Context, url string, limit int64) ([]byte, er
 	req.Header.Set("User-Agent", "3x-ui-core-installer")
 	client := i.Client
 	if client == nil {
-		client = &http.Client{Timeout: 3 * time.Minute}
+		// GitHub release metadata is small; binaries can download much slower.
+		timeout := 30 * time.Second
+		if limit >= maxArchive {
+			timeout = 12 * time.Minute
+		}
+		client = &http.Client{Timeout: timeout}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -149,13 +244,24 @@ func (i Installer) Install(ctx context.Context, engine, version, goos, arch, arm
 		}
 		endpoint = "https://api.github.com/repos/" + repo + "/releases/tags/" + version
 	}
-	raw, err := i.get(ctx, endpoint, 4<<20)
-	if err != nil {
-		return "", err
-	}
 	var release Release
-	if err = json.Unmarshal(raw, &release); err != nil {
-		return "", err
+	// A listed tag already has a GitHub-provided URL and checksum. Avoid a
+	// redundant releases/tags call that may return 403 after version listing.
+	if version != "" && version != "latest" {
+		name, nameErr := AssetName(engine, version, goos, arch, arm)
+		if nameErr != nil {
+			return "", nameErr
+		}
+		release, _ = i.rememberedRelease(repo, version, name)
+	}
+	if release.Tag == "" {
+		raw, getErr := i.get(ctx, endpoint, 4<<20)
+		if getErr != nil {
+			return "", getErr
+		}
+		if err = json.Unmarshal(raw, &release); err != nil {
+			return "", err
+		}
 	}
 	if !regexp.MustCompile(`^v?[0-9][A-Za-z0-9._-]{0,79}$`).MatchString(release.Tag) {
 		return "", fmt.Errorf("invalid release tag")
