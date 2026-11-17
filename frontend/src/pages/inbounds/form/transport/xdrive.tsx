@@ -108,27 +108,34 @@ export default function XDriveForm() {
     setValue('streamSettings.port', undefined, { shouldDirty: true });
   };
 
-  const testWebdav = async () => {
-    if (preset !== 'webdav') return;
+  const testYandexStorage = async () => {
+    if (preset !== 'webdav' && preset !== 'disk-api') return;
     if (nodeId && nodeId > 0) {
       setCheck({ ok: false, message: t('pages.inbounds.form.xdrive.yandexProbeRemote') });
       return;
     }
-    if (!folder || !validYandexFolder(folder) || !secrets?.[0]?.trim() || !secrets?.[1]) {
-      setCheck({ ok: false, message: t('pages.inbounds.form.xdrive.yandexProbeIncomplete') });
+    const webdav = preset === 'webdav';
+    if (!folder || !validYandexFolder(folder) || !secrets?.[0]?.trim() || (webdav && !secrets?.[1])) {
+      setCheck({ ok: false, message: t(webdav
+        ? 'pages.inbounds.form.xdrive.yandexProbeIncomplete'
+        : 'pages.inbounds.form.xdrive.yandexApiProbeIncomplete') });
       return;
     }
     setChecking(true);
     try {
       const response = await HttpUtil.post<{ folderCreated: boolean; written: boolean; read: boolean; listed: boolean; deleted: boolean }>(
-        '/panel/api/xdrive/yandex/probe',
-        { login: secrets[0], appPassword: secrets[1], folder },
-        { silent: true, timeout: 35000 },
+        webdav ? '/panel/api/xdrive/yandex/probe' : '/panel/api/xdrive/yandex/api-probe',
+        webdav
+          ? { login: secrets[0], appPassword: secrets[1], folder }
+          : { token: secrets[0], folder },
+        { silent: true, timeout: 40000 },
       );
       setCheck({
         ok: response.success && !!response.obj?.written && !!response.obj?.read && !!response.obj?.listed && !!response.obj?.deleted,
         message: response.success
-          ? t('pages.inbounds.form.xdrive.yandexProbePassed', { folder })
+          ? t(webdav
+            ? 'pages.inbounds.form.xdrive.yandexProbePassed'
+            : 'pages.inbounds.form.xdrive.yandexApiProbePassed', { folder })
           : response.msg || t('pages.inbounds.form.xdrive.yandexProbeFailed'),
       });
     } finally {
@@ -255,7 +262,7 @@ export default function XDriveForm() {
             <Typography.Link href="https://id.yandex.ru/security/app-passwords" target="_blank" rel="noopener noreferrer">
               {t('pages.inbounds.form.xdrive.yandexPasswordLink')}
             </Typography.Link>
-            <Button loading={checking} onClick={() => void testWebdav()}>
+            <Button loading={checking} onClick={() => void testYandexStorage()}>
               {t('pages.inbounds.form.xdrive.yandexProbe')}
             </Button>
             {check && <Alert showIcon type={check.ok ? 'success' : 'warning'} description={check.message} />}
@@ -267,6 +274,7 @@ export default function XDriveForm() {
           <FormField
             label={t('pages.inbounds.form.xdrive.yandexOauthToken')}
             name={[...BASE, 'secrets', 0]}
+            onAfterChange={() => setCheck(null)}
             required
           >
             <Input.Password autoComplete="off" />
@@ -277,6 +285,12 @@ export default function XDriveForm() {
           <Typography.Link href="https://yandex.ru/dev/disk-api/doc/ru/concepts/quickstart" target="_blank" rel="noopener noreferrer">
             {t('pages.inbounds.form.xdrive.yandexOauthLink')}
           </Typography.Link>
+          <Space orientation="vertical" style={{ display: 'flex', marginTop: 12, marginBottom: 12 }}>
+            <Button loading={checking} onClick={() => void testYandexStorage()}>
+              {t('pages.inbounds.form.xdrive.yandexProbe')}
+            </Button>
+            {check && <Alert showIcon type={check.ok ? 'success' : 'warning'} description={check.message} />}
+          </Space>
         </>
       )}
       {service === 'template' && preset === 'custom' && (
