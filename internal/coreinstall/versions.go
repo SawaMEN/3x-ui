@@ -3,13 +3,32 @@ package coreinstall
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"regexp"
+	"time"
 )
 
 type Version struct {
 	Tag        string `json:"tag"`
 	Prerelease bool   `json:"prerelease"`
+}
+
+// GitHub occasionally returns 5xx for its large release listings. Retrying with
+// fewer releases avoids repeatedly requesting the same expensive response.
+func temporaryReleaseAPIError(err error) bool {
+	var status *httpStatusError
+	if errors.As(err, &status) {
+		switch status.code {
+		case 429, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			return true
+		}
+		return false
+	}
+	var networkErr net.Error
+	return errors.As(err, &networkErr) && networkErr.Timeout()
 }
 
 // Return only releases with a binary for this machine; GitHub orders newest first.
@@ -18,9 +37,43 @@ func (i Installer) Versions(ctx context.Context, engine, goos, arch, arm string)
 	if err != nil {
 		return nil, err
 	}
-	raw, err := i.get(ctx, "https://api.github.com/repos/"+repo+"/releases?per_page=100", 8<<20)
+	// Preserve the full list when GitHub is healthy. When a 100-release
+	// response times out or fails at the gateway, smaller pages still let the
+	// user select a recent version without waiting for that large response.
+	attempts := []struct {
+		pageSize int
+		delay    time.Duration
+	}{
+		{100, 0},
+		{30, 200 * time.Millisecond},
+		{10, 400 * time.Millisecond},
+		{10, 800 * time.Millisecond},
+	}
+	var raw []byte
+	for index, attempt := range attempts {
+		if index > 0 {
+			timer := time.NewTimer(attempt.delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			case <-timer.C:
+			}
+		}
+		endpoint := fmt.Sprintf("https://api.github.com/repos/%s/releases?per_page=%d", repo, attempt.pageSize)
+		raw, err = i.get(ctx, endpoint, 8<<20)
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if !temporaryReleaseAPIError(err) {
+			return nil, err
+		}
+	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GitHub release list unavailable after retrying smaller responses: %w", err)
 	}
 	var releases []struct {
 		Release

@@ -37,6 +37,17 @@ type Release struct {
 	Assets []Asset `json:"assets"`
 }
 
+// Preserve the status code so release discovery can distinguish transient
+// GitHub failures from permanent errors without parsing error messages.
+type httpStatusError struct {
+	url  string
+	code int
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("download %s: HTTP %d", e.url, e.code)
+}
+
 func repository(engine string) (string, error) {
 	switch engine {
 	case "xray":
@@ -110,7 +121,7 @@ func (i Installer) get(ctx context.Context, url string, limit int64) ([]byte, er
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download %s: HTTP %d", url, resp.StatusCode)
+		return nil, &httpStatusError{url: url, code: resp.StatusCode}
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
