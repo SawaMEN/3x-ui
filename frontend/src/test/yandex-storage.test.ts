@@ -55,14 +55,18 @@ describe('native sing-box Yandex XDRIVE presets', () => {
   });
 
   it('never treats a user-supplied template or arbitrary S3 endpoint as Yandex', () => {
-    expect(identifyYandexStoragePreset({
-      service: 'template',
-      template: { get: { url: 'https://example.org/files' } },
-    })).toBe('custom');
-    expect(identifyYandexStoragePreset({
-      service: 's3',
-      s3: { endpoint: 'https://example.org' },
-    })).toBe('custom');
+    expect(
+      identifyYandexStoragePreset({
+        service: 'template',
+        template: { get: { url: 'https://example.org/files' } },
+      }),
+    ).toBe('custom');
+    expect(
+      identifyYandexStoragePreset({
+        service: 's3',
+        s3: { endpoint: 'https://example.org' },
+      }),
+    ).toBe('custom');
   });
 
   it('rejects unsafe folder and bucket names', () => {
@@ -93,7 +97,8 @@ describe('native sing-box Yandex XDRIVE presets', () => {
     });
     const wire = formValuesToWirePayload(inbound);
     expect(JSON.parse(wire.streamSettings)).toMatchObject(stream);
-    expect(identifyYandexStoragePreset(JSON.parse(wire.streamSettings).xdriveSettings)).toBe('webdav');
+    expect(identifyYandexStoragePreset(JSON.parse(wire.streamSettings).xdriveSettings)).toBe(
+      'webdav',
+    );
   });
-
 });
