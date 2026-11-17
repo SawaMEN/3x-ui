@@ -516,6 +516,26 @@ export const sections: readonly Section[] = [
         responseObjectSchema: { type: 'object', additionalProperties: true },
       },
       {
+        method: 'POST',
+        path: '/panel/api/xdrive/yandex/api-probe',
+        summary: 'Verify Yandex Disk OAuth access and folder read/write permissions with a temporary test file.',
+        params: [
+          {
+            name: 'token',
+            in: 'body (form)',
+            type: 'string',
+            desc: 'Yandex Disk OAuth token. Keep this credential private.',
+          },
+          {
+            name: 'folder',
+            in: 'body (form)',
+            type: 'string',
+            desc: 'Single safe folder component (1–64 Latin letters, digits, underscore or hyphen).',
+          },
+        ],
+        responseObjectSchema: { type: 'object', additionalProperties: true },
+      },
+      {
         method: 'GET',
         path: '/panel/api/server/openflux/install',
         summary: 'Read progress and result of the OpenFlux installation job on the selected node.',
