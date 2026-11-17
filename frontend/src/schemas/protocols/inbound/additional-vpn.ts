@@ -1,15 +1,36 @@
 import { z } from 'zod';
 import { NaiveClientSchema } from './naive';
-import { OPENFLUX_TRANSPORTS, validOpenFluxChannelURL } from '@/lib/openflux';
+import {
+  OPENFLUX_TRANSPORTS,
+  validOpenFluxChannelURL,
+  validOpenFluxMAXToken,
+  validOpenFluxMAXUID,
+} from '@/lib/openflux';
 
 export const OpenFluxTransportSchema = z
   .object({
     type: z.enum(OPENFLUX_TRANSPORTS),
     url: z.string().default(''),
+    token: z.string().max(16384).optional(),
+    uid: z.string().optional(),
     priority: z.number().int().min(0).max(1000).default(50),
   })
   .superRefine((value, ctx) => {
-    if (value.type !== 'direct' && !validOpenFluxChannelURL(value.url)) {
+    if (value.type === 'oneme') {
+      if (!validOpenFluxMAXToken(value.token ?? ''))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['token'],
+          message: 'pages.inbounds.form.openfluxMaxTokenInvalid',
+        });
+      if (value.uid && !validOpenFluxMAXUID(value.uid))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['uid'],
+          message: 'pages.inbounds.form.openfluxMaxIDInvalid',
+        });
+    }
+    if (value.type !== 'direct' && value.type !== 'oneme' && !validOpenFluxChannelURL(value.url)) {
       ctx.addIssue({
         code: 'custom',
         path: ['url'],

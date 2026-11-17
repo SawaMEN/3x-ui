@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { OpenFluxInboundSettingsSchema } from '@/schemas/protocols/inbound/additional-vpn';
-import { suggestOpenFluxTransport, validOpenFluxChannelURL } from '@/lib/openflux';
+import {
+  openFluxMAXClientFiles,
+  openFluxMAXChannels,
+  suggestOpenFluxTransport,
+  validOpenFluxChannelURL,
+} from '@/lib/openflux';
 
 describe('OpenFlux settings', () => {
   it('creates a direct channel with automatic credentials', () => {
@@ -70,4 +75,53 @@ describe('OpenFlux settings', () => {
     expect(suggestOpenFluxTransport('https://boards.yandex.ru/a')).toBe('boards');
     expect(suggestOpenFluxTransport('https://docs.yandex.ru.attacker.org/a')).toBeUndefined();
   });
+});
+
+describe('Web MAX configuration', () => {
+  it('accepts server tokens and validates IDs without rounding 64-bit values', () => {
+    expect(
+      OpenFluxInboundSettingsSchema.safeParse({
+        transports: [{ type: 'oneme', token: 'account-token', uid: '9223372036854775807' }],
+      }).success,
+    ).toBe(true);
+    for (const uid of ['0', '-1', '9223372036854775808', '1.5', '123;UID'])
+      expect(
+        OpenFluxInboundSettingsSchema.safeParse({
+          transports: [{ type: 'oneme', token: 'account-token', uid }],
+        }).success,
+      ).toBe(false);
+    for (const token of ['', 'token\nRole=exit', 'token;comment', 'token#comment'])
+      expect(
+        OpenFluxInboundSettingsSchema.safeParse({ transports: [{ type: 'oneme', token }] }).success,
+      ).toBe(false);
+  });
+  it('prepares a client config with the client account and exact legacy context', () => {
+    const files = openFluxMAXClientFiles(
+      'a'.repeat(32),
+      'http://#',
+      '123456',
+      'client-token',
+      'Instructions',
+    );
+    expect(files?.['openflux-client.conf']).toContain('Token = client-token');
+    expect(files?.['openflux-client.conf']).toContain('UID = 123456');
+    expect(files?.['README.txt']).toContain("--negotiate --session-context 'http://#'");
+    expect(files?.['secret.txt']).toBe('a'.repeat(32));
+    expect(openFluxMAXClientFiles('short', 'context', '123', 'token', '')).toBeUndefined();
+    expect(
+      openFluxMAXClientFiles('a'.repeat(32), 'context', '123', 'token\nUID=1', ''),
+    ).toBeUndefined();
+  });
+});
+
+it('distinguishes MAX-only setups from mixed QR-capable channels', () => {
+  expect(openFluxMAXChannels(JSON.stringify({ transports: [{ type: 'oneme' }] }))).toEqual({
+    present: true,
+    only: true,
+  });
+  expect(openFluxMAXChannels({ transports: [{ type: 'oneme' }, { type: 'direct' }] })).toEqual({
+    present: true,
+    only: false,
+  });
+  expect(openFluxMAXChannels('invalid')).toEqual({ present: false, only: false });
 });

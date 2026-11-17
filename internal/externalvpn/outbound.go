@@ -101,6 +101,9 @@ func ValidateAdditionalOutbound(raw map[string]any) error {
 		return err
 	}
 	for _, t := range s.Transports {
+		if t.Type == "oneme" && !validOpenFluxMAXUID(t.UID) {
+			return fmt.Errorf("MAX outbound requires the server account ID")
+		}
 		if t.Type == "direct" {
 			host, port, err := net.SplitHostPort(t.Dial)
 			n, e := strconv.Atoi(port)
@@ -578,13 +581,8 @@ func startOutboundContext(parent context.Context, tag string, proc *managedOutbo
 		}
 		var conf strings.Builder
 		fmt.Fprintf(&conf, "[Interface]\nRole = client\nInbound = socks5\nSocks5 = 127.0.0.1:%d\nCodec = batched\nEncryptionKeyFile = %s\nSessionContext = %s\nCookieStore = %s\n", proc.port, secret, openFluxINIContext(s.Context), filepath.Join(folder, "cookies.json"))
-		for _, t := range s.Transports {
-			fmt.Fprintf(&conf, "\n[Transport \"%s\"]\nType = %s\nPriority = %d\n", t.Type, t.Type, t.Priority)
-			if t.Type == "direct" {
-				fmt.Fprintf(&conf, "Dial = %s\n", t.Dial)
-			} else {
-				fmt.Fprintf(&conf, "URL = %s\n", t.URL)
-			}
+		for _, carrier := range s.Transports {
+			writeOpenFluxTransport(&conf, carrier, carrier.Dial, false)
 		}
 		path := filepath.Join(folder, "client.conf")
 		if err := writePrivate(path, []byte(conf.String())); err != nil {

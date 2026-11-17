@@ -1,0 +1,90 @@
+.openflux-channels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.openflux-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.openflux-section-heading .ant-typography {
+  margin-bottom: 0;
+}
+.openflux-section-heading .ant-typography + .ant-typography {
+  margin-top: 4px;
+  font-size: 13px;
+}
+.openflux-channel-card {
+  min-width: 0;
+  border-radius: 12px;
+}
+.openflux-channel-card .ant-card-head {
+  padding-inline: 14px;
+  min-height: 44px;
+}
+.openflux-channel-card .ant-card-body {
+  padding: 14px;
+}
+.openflux-channel-card .ant-form-item {
+  margin-bottom: 12px;
+}
+.openflux-channel-card .ant-form-item-control-input-content > .ant-input,
+.openflux-channel-card .ant-form-item-control-input-content > .ant-input-affix-wrapper {
+  width: 100%;
+}
+.openflux-channel-card .ant-collapse-header {
+  padding-inline: 0 !important;
+}
+.openflux-channel-card .ant-collapse-content-box {
+  padding-inline: 0 !important;
+}
+.openflux-channel-description,
+.openflux-channel-note {
+  margin-bottom: 10px !important;
+  font-size: 13px;
+}
+.openflux-channel-note:last-child {
+  margin-bottom: 0 !important;
+}
+.openflux-account-fields {
+  min-width: 0;
+}
+.openflux-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.openflux-setup > .ant-collapse {
+  margin-top: 4px;
+}
+.openflux-max-client {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (max-width: 575px) {
+  .openflux-section-heading {
+    flex-direction: column;
+  }
+  .openflux-section-heading > .ant-btn {
+    width: 100%;
+  }
+  .openflux-channel-card .ant-card-head-title {
+    white-space: normal;
+  }
+  .openflux-channel-card .ant-form-item-row {
+    display: block;
+  }
+  .openflux-channel-card .ant-form-item-label {
+    text-align: start;
+    padding-bottom: 4px;
+  }
+  .openflux-channel-card .ant-form-item-label,
+  .openflux-channel-card .ant-form-item-control {
+    max-width: 100%;
+    flex-basis: 100%;
+  }
+}

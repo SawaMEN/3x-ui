@@ -2,18 +2,29 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { useState } from 'react';
+import { unzipSync, strFromU8 } from 'fflate';
 import { OpenFluxFields } from '@/pages/inbounds/form/protocols/additional-vpn';
 import OpenFluxOutboundEditor from '@/pages/xray/outbounds/OpenFluxOutboundEditor';
-import { HttpUtil, Msg } from '@/utils';
+import { FileManager, HttpUtil, Msg } from '@/utils';
 import { renderWithProviders } from './test-utils';
 
-function Inbound() {
+function Inbound({ max = false }) {
   const form = useForm({
     defaultValues: {
-      nodeId: 7,
       settings: {
         context: 'keep-this-context',
-        transports: [{ type: 'direct', url: '', priority: 100 }],
+        clients: [{ enable: true, password: 'a'.repeat(32) }],
+        transports: max
+          ? [
+              {
+                type: 'oneme',
+                token: 'server-private-token',
+                uid: '123456',
+                url: '',
+                priority: 100,
+              },
+            ]
+          : [{ type: 'direct', url: '', priority: 100 }],
       },
     },
   });
@@ -27,41 +38,82 @@ function Inbound() {
 }
 
 describe('OpenFlux channel setup', () => {
-  it('preserves encryption context when selecting a preset', () => {
+  it('adds a valid channel without replacing the secret or context', async () => {
     renderWithProviders(<Inbound />);
-    fireEvent.click(screen.getByRole('button', { name: 'Direct channel' }));
-    expect(screen.getByTestId('values').textContent).toContain('keep-this-context');
-  });
-  it('collects a valid backup URL before adding a channel', async () => {
-    renderWithProviders(<Inbound />);
-    fireEvent.click(screen.getByRole('button', { name: 'Direct + backup channel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add transport' }));
     const modal = await screen.findByRole('dialog');
-    const ok = within(modal).getByRole('button', { name: /^OK$/ });
-    expect(ok).toHaveProperty('disabled', true);
+    const add = within(modal).getByRole('button', { name: 'Add' });
+    expect(add).toHaveProperty('disabled', true);
     fireEvent.change(within(modal).getByRole('textbox', { name: 'Channel URL' }), {
       target: { value: 'https://docs.yandex.ru/edit/d/channel' },
     });
-    await waitFor(() => expect(ok).toHaveProperty('disabled', false));
-    fireEvent.click(ok);
+    await waitFor(() => expect(add).toHaveProperty('disabled', false));
+    fireEvent.click(add);
     await waitFor(() =>
       expect(screen.getByTestId('values').textContent).toContain('"type":"vyandex"'),
     );
     expect(screen.getByTestId('values').textContent).toContain('keep-this-context');
+    expect(screen.getByTestId('values').textContent).toContain('a'.repeat(32));
   });
-  it('shows question-mark help for channel selection and advanced settings', async () => {
+  it('shows MAX as a usable transport with account fields, not a URL field', async () => {
     renderWithProviders(<Inbound />);
-    expect(document.querySelectorAll('.ant-form-item-tooltip').length).toBeGreaterThanOrEqual(2);
-    fireEvent.click(screen.getByText('Advanced Settings'));
-    expect(await screen.findByText('Maximum session packet (bytes)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add transport' }));
+    const modal = await screen.findByRole('dialog');
+    fireEvent.mouseDown(within(modal).getByRole('combobox', { name: 'Transport' }));
+    fireEvent.click(await screen.findByText('Web MAX (WebRTC)'));
+    expect(within(modal).queryByRole('textbox', { name: 'Channel URL' })).toBeNull();
+    const add = within(modal).getByRole('button', { name: 'Add' });
+    expect(add).toHaveProperty('disabled', true);
+    fireEvent.change(within(modal).getByLabelText('Server Web MAX token'), {
+      target: { value: 'server-token' },
+    });
+    fireEvent.change(within(modal).getByRole('textbox', { name: 'Server MAX account ID' }), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(add);
+    await waitFor(() =>
+      expect(screen.getByTestId('values').textContent).toContain('"type":"oneme"'),
+    );
   });
-  it('offers component guidance without installation controls in the inbound form', () => {
+  it('keeps installation notices out of the form and advanced settings collapsed', () => {
     vi.mocked(HttpUtil.post).mockClear();
     renderWithProviders(<Inbound />);
+    expect(screen.queryByText(/Installation and component updates/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Install OpenFlux' })).toBeNull();
-    expect(screen.getByText(/Installation and component updates/)).toBeTruthy();
+    expect(screen.queryByText('Maximum session packet (bytes)')).toBeNull();
+    fireEvent.click(screen.getByText('Advanced Settings'));
+    expect(screen.getByText('Maximum session packet (bytes)')).toBeTruthy();
+    expect(document.querySelectorAll('.ant-form-item-tooltip').length).toBeGreaterThan(2);
     expect(HttpUtil.post).not.toHaveBeenCalled();
   });
-  it('imports all client connection settings without editing JSON', async () => {
+  it('downloads a MAX client archive without the server account token or a network request', async () => {
+    const download = vi.spyOn(FileManager, 'downloadTextFile').mockImplementation(() => {});
+    vi.mocked(HttpUtil.post).mockClear();
+    renderWithProviders(<Inbound max />);
+    fireEvent.click(screen.getByText('Connect a client through MAX'));
+    const button = screen.getByRole('button', { name: 'Download MAX client settings' });
+    expect(button).toHaveProperty('disabled', true);
+    fireEvent.change(screen.getByLabelText('Client Web MAX token'), {
+      target: { value: 'server-private-token' },
+    });
+    expect(button).toHaveProperty('disabled', true);
+    fireEvent.change(screen.getByLabelText('Client Web MAX token'), {
+      target: { value: 'client-private-token' },
+    });
+    fireEvent.click(button);
+    expect(download).toHaveBeenCalledOnce();
+    const files = unzipSync(download.mock.calls[0][0] as Uint8Array);
+    const text = Object.values(files)
+      .map((bytes) => strFromU8(bytes))
+      .join('\n');
+    expect(text).toContain('client-private-token');
+    expect(text).not.toContain('server-private-token');
+    expect(text).toContain('UID = 123456');
+    expect(HttpUtil.post).not.toHaveBeenCalled();
+    expect(screen.getByTestId('values').textContent).not.toContain('client-private-token');
+    download.mockRestore();
+  });
+  it('imports client settings while preserving the generated channel values', async () => {
     vi.mocked(HttpUtil.post).mockResolvedValueOnce(
       new Msg(true, '', {
         protocol: 'openflux',
@@ -78,7 +130,7 @@ describe('OpenFlux channel setup', () => {
         <>
           <OpenFluxOutboundEditor
             settings={settings}
-            update={(patch) => setSettings((current) => ({ ...current, ...patch }))}
+            update={(patch) => setSettings((s) => ({ ...s, ...patch }))}
           />
           <output data-testid="client">{JSON.stringify(settings)}</output>
         </>

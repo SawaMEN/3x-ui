@@ -798,74 +798,19 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
                     style={{ marginBottom: 10 }}
                   />
                 )}
-                {dependency.key !== 'sudoku' && (
-                  <details className="system-component-details" open={!isMobile}>
-                    <summary>{t('info')}</summary>
-                    {(dependency.key === 'naiveproxy' || dependency.key === 'hysteria2') && (
-                      <>
-                        <Typography.Text type="secondary" className="system-component-description">
-                          {dependency.mixed
-                            ? 'Совместимые входящие подключения используют отдельное ядро; остальные — sing-box.'
-                            : dependency.source === 'sing-box'
-                              ? 'Используется встроенный sing-box. Установка отдельного ядра автоматически переключит входящие подключения на него.'
-                              : 'Используется отдельное ядро. Панель управляет запуском и клиентами, маршрутизация проходит через sing-box.'}
-                        </Typography.Text>
-                      </>
+                <Typography.Paragraph type="secondary" className="system-component-description">
+                  {t(`pages.settings.swap.componentDescriptions.${dependency.key}`)}
+                </Typography.Paragraph>
+                {(dependency.key === 'naiveproxy' || dependency.key === 'hysteria2') && (
+                  <Typography.Text type="secondary" className="system-component-source">
+                    {t(
+                      dependency.mixed
+                        ? 'pages.settings.swap.componentSourceMixed'
+                        : dependency.source === 'sing-box'
+                          ? 'pages.settings.swap.componentSourceBundled'
+                          : 'pages.settings.swap.componentSourceStandalone',
                     )}
-                    {dependency.key === 'oxidns' && (
-                      <Typography.Text type="secondary" className="system-component-description">
-                        {dependency.installed
-                          ? 'Установлен. Создание и настройка DNS доступны в меню «sing-box → DNS».'
-                          : 'Установите OxiDNS здесь. После установки в «sing-box → DNS» появится мастер создания DNS. Установка сама по себе службу не включает.'}
-                      </Typography.Text>
-                    )}
-                    {dependency.key === 'dnstt' && (
-                      <Typography.Text type="secondary" className="system-component-description">
-                        {dependency.installed
-                          ? 'DNSTT установлен. Создание ключей, DNS-делегирование и запуск доступны в меню «sing-box → DNS».'
-                          : 'Установите DNSTT здесь. После установки его настройки появятся в sing-box → DNS; после удаления исчезнут.'}
-                      </Typography.Text>
-                    )}
-                    {dependency.key === 'telemt' && (
-                      <Typography.Text type="secondary" className="system-component-description">
-                        Движок обычного MTProto и WEB Proxy. После установки создавайте подключения
-                        через «Входящие → MTProto». Отдельное включение службы не требуется.
-                      </Typography.Text>
-                    )}
-                    {dependency.key === 'olcrtc' && (
-                      <Typography.Paragraph
-                        type="secondary"
-                        className="system-component-description"
-                      >
-                        Отдельный WebRTC-сервер через Jitsi, Телемост или WB Stream. Не заменяет
-                        sing-box.
-                        {dependency.busy
-                          ? ` Выполняется: ${dependency.operation === 'remove' ? 'удаление' : 'установка или обновление'}.`
-                          : dependency.installed
-                            ? dependency.running
-                              ? ' Служба работает.'
-                              : ' Служба остановлена.'
-                            : ' Нажмите «Установить», чтобы добавить компонент.'}
-                      </Typography.Paragraph>
-                    )}
-                    {dependency.key === 'pingtunnel' && (
-                      <Typography.Text type="secondary" className="system-component-description">
-                        Pingtunnel обновляется отдельным официальным Linux-бинарником из GitHub
-                        Releases.
-                      </Typography.Text>
-                    )}
-                    {dependency.key === 'vetroff' && (
-                      <Typography.Text type="secondary" className="system-component-description">
-                        {t('pages.inbounds.form.vetroffHint')}
-                      </Typography.Text>
-                    )}
-                    {dependency.key === 'trusttunnel' && (
-                      <Typography.Text type="secondary" className="system-component-description">
-                        TrustTunnel обновляется отдельным официальным endpoint-бинарником из GitHub
-                        Releases.
-                      </Typography.Text>
-                    )}
-                  </details>
+                  </Typography.Text>
                 )}
                 <div className="system-component-meta">
                   <div>

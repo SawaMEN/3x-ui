@@ -1,7 +1,8 @@
+import { openFluxMAXChannels } from '@/lib/openflux';
 import { useServerLinks } from '../useServerLinks';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Divider, Modal, Space, Spin, Tabs, Tag, Tooltip } from 'antd';
+import { Alert, Button, Divider, Modal, Typography, Space, Spin, Tabs, Tag, Tooltip } from 'antd';
 import { CopyOutlined, SyncOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil, IntlUtil, SizeFormatter, ColorUtils, Wireguard } from '@/utils';
@@ -54,8 +55,12 @@ export default function InboundInfoModal({
 
   const [inbound, setInbound] = useState<InboundInfo | null>(null);
   const [clientSettings, setClientSettings] = useState<ClientSetting | null>(null);
+  const maxChannels =
+    dbInbound?.protocol === 'openflux'
+      ? openFluxMAXChannels(dbInbound.settings)
+      : { present: false, only: false };
   const serverLinks = useServerLinks(
-    open,
+    open && !maxChannels.only,
     dbInbound?.id,
     dbInbound?.protocol,
     clientSettings?.email,
@@ -325,7 +330,9 @@ export default function InboundInfoModal({
   }
 
   const displayLinks = ['fptn', 'openflux', 'trusttunnel', 'vetroff'].includes(dbInbound.protocol)
-    ? (serverLinks.data ?? [])
+    ? maxChannels.only
+      ? []
+      : (serverLinks.data ?? [])
     : links;
   const clientTab = (
     <>
@@ -1346,8 +1353,15 @@ export default function InboundInfoModal({
       width={640}
       destroyOnHidden
     >
+      {maxChannels.present && (
+        <Typography.Paragraph type="secondary">
+          {t('pages.inbounds.form.openfluxMaxNoQR')}
+        </Typography.Paragraph>
+      )}
       {serverLinks.isFetching && <Spin />}
-      {serverLinks.error && <Alert type="error" showIcon description={serverLinks.error.message} />}
+      {!maxChannels.only && serverLinks.error && (
+        <Alert type="error" showIcon description={serverLinks.error.message} />
+      )}
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
     </Modal>
   );

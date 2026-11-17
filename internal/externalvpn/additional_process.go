@@ -52,13 +52,8 @@ func (m *Manager) additionalCommand(inst Instance, metricsAddr string) (*exec.Cm
 		}
 		var conf strings.Builder
 		fmt.Fprintf(&conf, "[Interface]\nRole = exit\nMode = l4\nCodec = batched\nEncryptionKeyFile = %s\nSessionContext = %s\nIPCSocket = %s\nCookieStore = %s\n", secret, openFluxINIContext(inst.Settings.Context), socket, filepath.Join(folder, "cookies.json"))
-		for _, t := range inst.Settings.Transports {
-			fmt.Fprintf(&conf, "\n[Transport \"%s\"]\nType = %s\nPriority = %d\n", t.Type, t.Type, t.Priority)
-			if t.Type == "direct" {
-				fmt.Fprintf(&conf, "Listen = %s\n", inst.Bind())
-			} else {
-				fmt.Fprintf(&conf, "URL = %s\n", t.URL)
-			}
+		for _, carrier := range inst.Settings.Transports {
+			writeOpenFluxTransport(&conf, carrier, inst.Bind(), true)
 		}
 		path := filepath.Join(folder, "openflux.conf")
 		if err := writePrivate(path, []byte(conf.String())); err != nil {

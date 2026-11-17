@@ -42,8 +42,8 @@
   margin-bottom: 0;
 }
 
-.system-component-details > summary {
-  display: none;
+.system-component-source.ant-typography {
+  font-size: 12px;
 }
 
 .system-component-actions {
@@ -158,18 +158,6 @@
   .system-component-description.ant-typography,
   .system-component-meta .ant-typography {
     font-size: 12px;
-  }
-
-  .system-component-details > summary {
-    display: list-item;
-    color: var(--ant-color-text-secondary);
-    cursor: pointer;
-    min-height: 32px;
-    align-content: center;
-  }
-
-  .system-component-details[open] > summary {
-    margin-bottom: 6px;
   }
 
   .system-component-card .ant-alert {

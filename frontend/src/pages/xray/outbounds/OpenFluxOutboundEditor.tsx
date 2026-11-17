@@ -1,14 +1,9 @@
-import { onNumber } from '@/utils/onNumber';
 import { useState } from 'react';
-import { Alert, Button, Form, Input, InputNumber, Select, Space, message } from 'antd';
+import { Collapse, Form, Input, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
-import {
-  OPENFLUX_TRANSPORTS,
-  openFluxTransportLabel,
-  validOpenFluxChannelURL,
-  type OpenFluxTransport,
-} from '@/lib/openflux';
+import type { OpenFluxTransport } from '@/lib/openflux';
+import OpenFluxChannels from '@/components/openflux/OpenFluxChannels';
 
 export default function OpenFluxOutboundEditor({
   settings,
@@ -24,13 +19,6 @@ export default function OpenFluxOutboundEditor({
   const transports = (
     Array.isArray(settings.transports) ? settings.transports : []
   ) as OpenFluxTransport[];
-  const used = new Set(transports.map((transport) => transport.type));
-  const changeTransport = (index: number, patch: Partial<OpenFluxTransport>) =>
-    update({
-      transports: transports.map((transport, i) =>
-        i === index ? { ...transport, ...patch } : transport,
-      ),
-    });
   const importLink = async () => {
     setBusy(true);
     try {
@@ -89,97 +77,32 @@ export default function OpenFluxOutboundEditor({
           autoComplete="new-password"
         />
       </Form.Item>
-      <Form.Item
-        label={t('pages.inbounds.form.openfluxContext')}
-        tooltip={t('pages.inbounds.form.openfluxContextHint')}
-      >
-        <Input
-          value={String(settings.context ?? '')}
-          maxLength={4096}
-          onChange={(event) => update({ context: event.target.value })}
-        />
-      </Form.Item>
-      <Alert type="info" showIcon description={t('pages.inbounds.form.openfluxOutboundHint')} />
-      {transports.map((transport, index) => (
-        <Space key={index} wrap align="start">
-          <Form.Item
-            label={t('pages.inbounds.form.openfluxTransport')}
-            tooltip={t('pages.inbounds.form.openfluxTransportHint')}
-          >
-            <Select
-              style={{ width: 150 }}
-              value={transport.type}
-              options={OPENFLUX_TRANSPORTS.map((type) => ({
-                value: type,
-                label: openFluxTransportLabel(type),
-                disabled: used.has(type) && transport.type !== type,
-              }))}
-              onChange={(type) => changeTransport(index, { type })}
-            />
-          </Form.Item>
-          <Form.Item
-            label={t('pages.inbounds.form.openfluxPriority')}
-            tooltip={t('pages.inbounds.form.openfluxPriorityHint')}
-          >
-            <InputNumber
-              value={transport.priority ?? 50}
-              min={0}
-              max={1000}
-              onChange={onNumber((priority) => changeTransport(index, { priority }))}
-            />
-          </Form.Item>
-          {transport.type === 'direct' ? (
-            <Form.Item
-              label={t('pages.inbounds.form.openfluxEndpoint')}
-              tooltip={t('pages.inbounds.form.openfluxEndpointHint')}
-            >
-              <Input
-                value={transport.dial ?? ''}
-                placeholder="vpn.example.org:443"
-                onChange={(event) => changeTransport(index, { dial: event.target.value.trim() })}
-              />
-            </Form.Item>
-          ) : (
-            <Form.Item
-              label="URL"
-              tooltip={t('pages.inbounds.form.openfluxChannelHint')}
-              validateStatus={validOpenFluxChannelURL(transport.url ?? '') ? undefined : 'error'}
-              help={
-                validOpenFluxChannelURL(transport.url ?? '')
-                  ? undefined
-                  : t('pages.inbounds.form.openfluxURLRequired')
-              }
-            >
-              <Input
-                value={transport.url ?? ''}
-                placeholder="https://…"
-                onChange={(event) => changeTransport(index, { url: event.target.value.trim() })}
-              />
-            </Form.Item>
-          )}
-          <Button
-            disabled={transports.length === 1}
-            onClick={() => update({ transports: transports.filter((_, i) => i !== index) })}
-          >
-            {t('remove')}
-          </Button>
-        </Space>
-      ))}
-      <Button
-        disabled={used.size >= OPENFLUX_TRANSPORTS.length}
-        onClick={() => {
-          const type = OPENFLUX_TRANSPORTS.find((candidate) => !used.has(candidate));
-          if (type)
-            update({
-              transports: [
-                ...transports,
-                { type, url: '', priority: type === 'direct' ? 100 : 50 },
-              ],
-            });
-        }}
-      >
-        {t('pages.inbounds.form.openfluxAdd')}
-      </Button>
+      <Collapse
+        ghost
+        items={[
+          {
+            key: 'context',
+            label: t('pages.inbounds.advancedTitle'),
+            children: (
+              <Form.Item
+                label={t('pages.inbounds.form.openfluxContext')}
+                tooltip={t('pages.inbounds.form.openfluxContextHint')}
+              >
+                <Input
+                  value={String(settings.context ?? '')}
+                  maxLength={4096}
+                  onChange={(event) => update({ context: event.target.value })}
+                />
+              </Form.Item>
+            ),
+          },
+        ]}
+      />
+      <OpenFluxChannels
+        value={transports}
+        client
+        onChange={(next) => update({ transports: next })}
+      />
     </>
   );
 }

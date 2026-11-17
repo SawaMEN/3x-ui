@@ -8,6 +8,8 @@ on:
       - "internal/web/runtime/openflux*"
       - "frontend/src/**openflux*"
       - "frontend/src/**/OpenFlux*"
+      - "frontend/src/components/openflux/**"
+      - "frontend/src/pages/settings/SystemUpdatePanel*"
       - "frontend/src/pages/inbounds/form/protocols/additional-vpn.tsx"
       - "frontend/src/schemas/protocols/inbound/additional-vpn.ts"
       - ".github/workflows/openflux.yml"

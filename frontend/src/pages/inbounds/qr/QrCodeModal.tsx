@@ -1,7 +1,8 @@
+import { openFluxMAXChannels } from '@/lib/openflux';
 import { useServerLinks } from '../useServerLinks';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Collapse, Modal, Spin } from 'antd';
+import { Alert, Collapse, Modal, Typography, Spin } from 'antd';
 import type { CollapseProps } from 'antd';
 
 import { Protocols } from '@/schemas/primitives';
@@ -170,13 +171,24 @@ export default function QrCodeModal({
     setSubJsonLink(nextSubJson);
   }
 
-  const serverLinks = useServerLinks(open, dbInbound?.id, dbInbound?.protocol, client?.email);
+  const maxChannels =
+    dbInbound?.protocol === 'openflux'
+      ? openFluxMAXChannels(dbInbound.settings)
+      : { present: false, only: false };
+  const serverLinks = useServerLinks(
+    open && !maxChannels.only,
+    dbInbound?.id,
+    dbInbound?.protocol,
+    client?.email,
+  );
   const displayLinks = useMemo(
     () =>
       ['fptn', 'openflux', 'trusttunnel', 'vetroff'].includes(dbInbound?.protocol ?? '')
-        ? (serverLinks.data ?? [])
+        ? maxChannels.only
+          ? []
+          : (serverLinks.data ?? [])
         : links,
-    [dbInbound?.protocol, serverLinks.data, links],
+    [dbInbound?.protocol, serverLinks.data, links, maxChannels.only],
   );
 
   const qrItems = useMemo<QrItem[]>(() => {
@@ -271,8 +283,15 @@ export default function QrCodeModal({
       width={420}
       destroyOnHidden
     >
+      {maxChannels.present && (
+        <Typography.Paragraph type="secondary">
+          {t('pages.inbounds.form.openfluxMaxNoQR')}
+        </Typography.Paragraph>
+      )}
       {serverLinks.isFetching && <Spin />}
-      {serverLinks.error && <Alert type="error" showIcon description={serverLinks.error.message} />}
+      {!maxChannels.only && serverLinks.error && (
+        <Alert type="error" showIcon description={serverLinks.error.message} />
+      )}
       {dbInbound && collapseItems && collapseItems.length > 0 && (
         <Collapse
           ghost

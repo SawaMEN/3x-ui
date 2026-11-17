@@ -154,10 +154,10 @@ it.each([
   ['NaiveProxy', '/panel/api/naiveproxy/update'],
 ])('automatically uses %s after installing its separate binary', async (name, endpoint) => {
   await openComponents();
-  expect(card(name).getByText(/Используется встроенный sing-box/)).toBeTruthy();
+  expect(card(name).getByText(/Currently using the built-in sing-box/)).toBeTruthy();
   fireEvent.click(card(name).getByRole('button', { name: /Установить отдельное ядро/ }));
   await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(endpoint));
-  await waitFor(() => expect(card(name).getByText(/Используется отдельное ядро/)).toBeTruthy());
+  await waitFor(() => expect(card(name).getByText(/Currently using a separate core/)).toBeTruthy());
 });
 
 it('hides the install button and explains an unsupported architecture', async () => {
@@ -165,7 +165,7 @@ it('hides the install button and explains an unsupported architecture', async ()
   await openComponents();
   expect(card('NaiveProxy').getByText('Caddy-Naive is not published for linux/arm64')).toBeTruthy();
   expect(card('NaiveProxy').queryByRole('button', { name: /Установить/ })).toBeNull();
-  expect(card('NaiveProxy').getByText(/Используется встроенный sing-box/)).toBeTruthy();
+  expect(card('NaiveProxy').getByText(/Currently using the built-in sing-box/)).toBeTruthy();
 });
 
 it('updates installed components without updating Linux packages', async () => {
@@ -185,7 +185,7 @@ it('explains native fallback for a preinstalled server with incompatible routing
   installedHysteria = true;
   hysteriaFallback = 'standalone Hysteria cannot preserve routing by authenticated user';
   await openComponents();
-  expect(card('Hysteria2').getByText(/Используется встроенный sing-box/)).toBeTruthy();
+  expect(card('Hysteria2').getByText(/Currently using the built-in sing-box/)).toBeTruthy();
   expect(card('Hysteria2').getByText(hysteriaFallback)).toBeTruthy();
 });
 
@@ -207,7 +207,7 @@ it.each(['NaiveProxy', 'Hysteria2'])(
     await waitFor(() =>
       expect(card(name).queryByRole('button', { name: `Удалить ${name}` })).toBeNull(),
     );
-    expect(card(name).getByText(/Используется встроенный sing-box/)).toBeTruthy();
+    expect(card(name).getByText(/Currently using the built-in sing-box/)).toBeTruthy();
   },
 );
 
@@ -257,7 +257,7 @@ it('does not treat restored connectivity as confirmation that system updates suc
 
 it('manages OxiDNS only as a package; setup is in sing-box DNS', async () => {
   await openComponents();
-  expect(card('OxiDNS').getByText(/После установки в «sing-box → DNS»/)).toBeTruthy();
+  expect(card('OxiDNS').getByText(/Your own DNS server/)).toBeTruthy();
   expect(card('OxiDNS').queryByRole('link')).toBeNull();
   fireEvent.click(card('OxiDNS').getByRole('button', { name: 'Установить OxiDNS' }));
   await waitFor(() =>
@@ -266,7 +266,7 @@ it('manages OxiDNS only as a package; setup is in sing-box DNS', async () => {
     }),
   );
   await waitFor(() =>
-    expect(card('OxiDNS').getByText(/Создание и настройка DNS доступны/)).toBeTruthy(),
+    expect(card('OxiDNS').getByText(/Create and configure it in sing-box/)).toBeTruthy(),
   );
   expect(card('OxiDNS').queryByRole('link')).toBeNull();
   fireEvent.click(card('OxiDNS').getByRole('button', { name: 'Удалить OxiDNS' }));
@@ -325,4 +325,18 @@ it('updates OpenFlux to the available release from the component card', async ()
   await waitFor(() =>
     expect(card('OpenFlux').queryByRole('button', { name: 'Update' })).toBeNull(),
   );
+});
+
+it('shows a short useful description in every component card, including on mobile', async () => {
+  await openComponents();
+  const cards = document.querySelectorAll('.system-component-card');
+  expect(cards.length).toBe(11);
+  for (const card of cards) {
+    const copy = card.querySelector('.system-component-description');
+    expect(copy?.textContent?.length).toBeGreaterThan(25);
+    expect(copy?.textContent?.length).toBeLessThan(180);
+    expect(copy?.closest('details')).toBeNull();
+  }
+  expect(card('OpenFlux').getByText(/Web MAX, Telemost/)).toBeTruthy();
+  expect(card('Pingtunnel').getByText(/ICMP/)).toBeTruthy();
 });

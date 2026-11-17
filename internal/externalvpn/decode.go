@@ -106,5 +106,10 @@ func DecodeOpenFluxLink(link string) (OpenFluxLink, error) {
 	if !result.Negotiate || result.Mode != "" || (result.Codec != "" && result.Codec != "batched") {
 		return result, fmt.Errorf("panel requires negotiated, encrypted batched OpenFlux sessions")
 	}
+	for _, carrier := range result.Transports {
+		if carrier.Type == "oneme" {
+			return result, fmt.Errorf("MAX needs a separate client login and cannot be imported from an openflux:// link")
+		}
+	}
 	return result, nil
 }

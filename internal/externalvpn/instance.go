@@ -21,6 +21,8 @@ type Client struct {
 }
 
 type OpenFluxTransport struct {
+	Token    string `json:"token,omitempty"`
+	UID      string `json:"uid,omitempty"`
 	Type     string `json:"type"`
 	URL      string `json:"url,omitempty"`
 	Priority int    `json:"priority,omitempty"`
