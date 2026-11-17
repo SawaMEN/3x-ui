@@ -128,12 +128,8 @@ describe('OpenFlux channel setup', () => {
     await waitFor(() =>
       expect(screen.getByTestId('values').textContent).toContain('"type":"vyandex"'),
     );
-    fireEvent.click(
-      screen.getAllByRole('button', { name: 'Check service reachability' })[1],
-    );
-    expect(
-      await screen.findByText(/TLS connection to docs.yandex.ru:443 succeeded/),
-    ).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Check service reachability' })[1]);
+    expect(await screen.findByText(/TLS connection to docs.yandex.ru:443 succeeded/)).toBeTruthy();
     const request = vi.mocked(HttpUtil.post).mock.calls.at(-1);
     expect(request?.[0]).toBe('/panel/api/server/openflux/check-transport');
     expect(request?.[1]).toEqual({ type: 'vyandex' });
