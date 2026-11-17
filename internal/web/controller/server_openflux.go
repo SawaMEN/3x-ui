@@ -58,3 +58,25 @@ func (a *ServerController) openFluxStatus(c *gin.Context) {
 	c.Set("openflux_status_only", true)
 	a.openFluxInstall(c)
 }
+
+func (a *ServerController) checkOpenFluxTransport(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	nodeID, err := singBoxSessionNodeIDFromQuery(c)
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	if nodeID != nil {
+		jsonObj(c, nil, fmt.Errorf("provider checks on remote nodes are not yet supported; run the test on the selected node"))
+		return
+	}
+	var input struct {
+		Type string `json:"type"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	result, err := externalvpn.ProbeOpenFluxProvider(c.Request.Context(), input.Type)
+	jsonObj(c, result, err)
+}
