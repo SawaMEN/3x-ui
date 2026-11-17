@@ -29,6 +29,43 @@ export function validOpenFluxChannelURL(value: string): boolean {
   }
 }
 
+// Upstream Cups.online expects a packed base64url JSON list of room UUIDs,
+// or an HTTPS room-list link (?rooms=...), not an arbitrary page URL.
+export function validOpenFluxCupsRooms(value: string): boolean {
+  if (!value || value.trim() !== value || value.length > 8192 || /[\r\n\0#;]/.test(value))
+    return false;
+  let packed = value;
+  if (value.startsWith('https://')) {
+    try {
+      const url = new URL(value);
+      if (url.username || url.password) return false;
+      const single = url.searchParams.get('room');
+      if (single)
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(single);
+      packed = url.searchParams.get('rooms') ?? '';
+    } catch {
+      return false;
+    }
+  }
+  if (!packed || !/^[A-Za-z0-9_-]+$/.test(packed)) return false;
+  try {
+    const raw = atob(packed.replaceAll('-', '+').replaceAll('_', '/'));
+    const rooms: unknown = JSON.parse(raw);
+    return (
+      Array.isArray(rooms) &&
+      rooms.length > 0 &&
+      rooms.length <= 64 &&
+      rooms.every(
+        (id) =>
+          typeof id === 'string' &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function suggestOpenFluxTransport(value: string): OpenFluxTransportType | undefined {
   try {
     const url = new URL(value);
@@ -84,6 +121,7 @@ export function openFluxChannelValid(value: OpenFluxTransport, client = false): 
       validOpenFluxMAXToken(value.token ?? '') &&
       (client || value.uid ? validOpenFluxMAXUID(value.uid ?? '') : true)
     );
+  if (value.type === 'cupsonline') return validOpenFluxCupsRooms(value.url ?? '');
   return validOpenFluxChannelURL(value.url ?? '');
 }
 
