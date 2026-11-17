@@ -241,6 +241,9 @@ export default function OpenFluxChannels({
           <Typography.Paragraph type="secondary">
             {t('pages.inbounds.form.openfluxChannelsHelp')}
           </Typography.Paragraph>
+          <Typography.Paragraph type="secondary">
+            {t('pages.inbounds.form.openfluxProbeScope')}
+          </Typography.Paragraph>
         </div>
         <Button
           icon={<PlusOutlined aria-hidden />}
@@ -282,6 +285,21 @@ export default function OpenFluxChannels({
           <Typography.Paragraph type="secondary" className="openflux-channel-description">
             {t(`pages.inbounds.form.openfluxChannelDescriptions.${entry.type}`)}
           </Typography.Paragraph>
+          <Collapse
+            ghost
+            size="small"
+            items={[
+              {
+                key: 'setup',
+                label: t('pages.inbounds.form.openfluxGuideTitle'),
+                children: (
+                  <Typography.Paragraph type="secondary" className="openflux-channel-note">
+                    {t(`pages.inbounds.form.openfluxSetupGuide.${entry.type}`)}
+                  </Typography.Paragraph>
+                ),
+              },
+            ]}
+          />
           <ChannelInputs value={entry} change={(next) => patch(index, next)} client={client} />
           <Space orientation="vertical" style={{ width: '100%' }}>
             <Button
@@ -372,6 +390,9 @@ export default function OpenFluxChannels({
             </Form.Item>
             <Typography.Paragraph type="secondary">
               {t(`pages.inbounds.form.openfluxChannelDescriptions.${draft.type}`)}
+            </Typography.Paragraph>
+            <Typography.Paragraph type="secondary" className="openflux-channel-note">
+              {t(`pages.inbounds.form.openfluxSetupGuide.${draft.type}`)}
             </Typography.Paragraph>
             <ChannelInputs
               value={draft}
