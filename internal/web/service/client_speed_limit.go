@@ -14,6 +14,13 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
+// Bound generated rules and intermediate routes so enabling a client cap
+// cannot exhaust the panel's memory on a large or imported routing table.
+const (
+	maxClientSpeedInjectedRules = 8192
+	maxClientSpeedProxyRoutes   = 4096
+)
+
 // Wrap terminal routes in place so filtering, outbound choice and rule order survive shaping.
 func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client, inbounds []*model.Inbound) error {
 	hasLimits := false
@@ -30,6 +37,12 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 	}
 	if !hasLimits {
 		return nil
+	}
+	// User-provided native routing templates may omit "route" entirely.
+	// Without this initialization, a valid cap causes a nil-map assignment
+	// panic when the generated return rules are published below.
+	if cfg.Route == nil {
+		cfg.Route = make(map[string]any)
 	}
 	active := map[string]map[string]bool{}
 	for _, inbound := range cfg.Inbounds {
@@ -154,6 +167,9 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 		if tag := routes[key]; tag != "" {
 			return tag, nil
 		}
+		if len(cfg.SpeedLimitPlan.Routes) >= maxClientSpeedProxyRoutes {
+			return "", fmt.Errorf("client speed limiter: too many proxy routes (limit %d); reduce routing targets or disable excessive client caps", maxClientSpeedProxyRoutes)
+		}
 		// Route IDs are non-secret; authentication uses the random process password.
 		// Include rates so config comparison detects edits to an existing cap.
 		id := fmt.Sprintf("%s%d_%d_%d", clientlimit.InternalPrefix, len(routes), limit.UploadMbps, limit.DownloadMbps)
@@ -195,8 +211,14 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 				delete(predicate, "outbound")
 				wrappedRule["outbound"] = proxy
 				wrappedRule["rules"] = []map[string]any{predicate, matchUser(email)}
+				if len(wrapped) >= maxClientSpeedInjectedRules {
+					return fmt.Errorf("client speed limiter: generated routing rules exceed safe limit %d", maxClientSpeedInjectedRules)
+				}
 				wrapped = append(wrapped, wrappedRule)
 			}
+		}
+		if len(wrapped) >= maxClientSpeedInjectedRules {
+			return fmt.Errorf("client speed limiter: generated routing rules exceed safe limit %d", maxClientSpeedInjectedRules)
 		}
 		wrapped = append(wrapped, rule)
 	}
@@ -223,6 +245,9 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 			rule := matchUser(email)
 			rule["action"] = "route"
 			rule["outbound"] = proxy
+			if len(wrapped) >= maxClientSpeedInjectedRules {
+				return fmt.Errorf("client speed limiter: generated routing rules exceed safe limit %d", maxClientSpeedInjectedRules)
+			}
 			wrapped = append(wrapped, rule)
 		}
 	}
