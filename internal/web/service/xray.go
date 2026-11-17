@@ -149,10 +149,17 @@ func (s *CoreService) getXrayConfigWithTemplate(templateConfig string) (*xray.Co
 		if inbound.NodeID != nil {
 			continue
 		}
-		if model.ShadowTLSTransport(inbound.Settings) != nil || inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC || inbound.Protocol == model.VetroffProxy || inbound.Protocol == model.Pingtunnel || inbound.Protocol == model.TrustTunnel || inbound.Protocol == model.VKTurnProxy || inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.MASQUE || inbound.Protocol == model.Snell || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || inbound.Protocol == model.Mieru || inbound.Protocol == model.Sudoku {
-			// NaiveProxy is a sing-box-only inbound. A legacy Naive row may still
-			// exist when the selected core was switched back to Xray; never emit it
-			// into an Xray config because xray-core has no Naive inbound handler.
+		if isLocalSidecarInbound(inbound.Protocol) ||
+			model.ShadowTLSTransport(inbound.Settings) != nil ||
+			inbound.Protocol == model.TUIC ||
+			inbound.Protocol == model.NaiveProxy ||
+			inbound.Protocol == model.MASQUE ||
+			inbound.Protocol == model.Snell ||
+			inbound.Protocol == model.AnyTLS ||
+			inbound.Protocol == model.ShadowTLS {
+			// Sidecar protocols (including OpenFlux and FPTN) have their own
+			// listeners; Xray must never see their protocol names. The remaining
+			// entries are handled by native cores or separate protocol servers.
 			continue
 		}
 		settings := map[string]any{}

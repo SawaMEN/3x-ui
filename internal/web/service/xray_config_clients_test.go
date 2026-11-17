@@ -135,3 +135,44 @@ func TestGetXrayConfig_SkipsMieruInbound(t *testing.T) {
 		}
 	}
 }
+
+func TestGetXrayConfig_SkipsOpenFluxAndFPTNInbounds(t *testing.T) {
+	setupSettingTestDB(t)
+	db := database.GetDB()
+
+	// These protocols run as separate processes, not Xray inbound handlers.
+	// Keep a normal inbound as a control: selecting Xray must not drop it.
+	inbounds := []model.Inbound{
+		{Tag: "in-443-tcp", Enable: true, Port: 443, Protocol: model.OpenFlux, Settings: `{}`},
+		{Tag: "in-8443-tcp", Enable: true, Port: 8443, Protocol: model.FPTN, Settings: `{}`},
+		{Tag: "vless-9443", Enable: true, Port: 9443, Protocol: model.VLESS, Settings: `{"clients":[],"decryption":"none"}`},
+	}
+	for i := range inbounds {
+		if err := db.Create(&inbounds[i]).Error; err != nil {
+			t.Fatalf("create %s inbound: %v", inbounds[i].Protocol, err)
+		}
+	}
+
+	cfg, err := (&CoreService{}).GetXrayConfig()
+	if err != nil {
+		t.Fatalf("GetXrayConfig: %v", err)
+	}
+	foundVLESS := false
+	for _, inbound := range cfg.InboundConfigs {
+		switch inbound.Tag {
+		case "in-443-tcp", "in-8443-tcp":
+			t.Fatalf("external sidecar leaked into Xray config: %+v", inbound)
+		case "vless-9443":
+			if inbound.Protocol != string(model.VLESS) {
+				t.Fatalf("VLESS inbound changed protocol: %+v", inbound)
+			}
+			foundVLESS = true
+		}
+		if inbound.Protocol == string(model.OpenFlux) || inbound.Protocol == string(model.FPTN) {
+			t.Fatalf("unsupported protocol leaked into Xray config: %+v", inbound)
+		}
+	}
+	if !foundVLESS {
+		t.Fatal("ordinary VLESS inbound was dropped from Xray config")
+	}
+}
