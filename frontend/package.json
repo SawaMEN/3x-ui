@@ -49,6 +49,7 @@
     "antd": "^6.6.5",
     "codemirror": "^6.0.2",
     "dayjs": "^1.11.23",
+    "fflate": "^0.8.3",
     "i18next": "^27.0.1",
     "otpauth": "^9.6.0",
     "persian-calendar-suite": "^1.5.6",

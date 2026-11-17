@@ -29,7 +29,7 @@ export default function AdditionalOutboundEditor({
     onChange(JSON.stringify({ ...raw, settings: { ...settings, ...values } }, null, 2));
   return (
     <Space orientation="vertical" style={{ width: '100%' }}>
-      {!isSnell && (
+      {!isSnell && protocol !== 'openflux' && (
         <Alert type="info" showIcon description={t('pages.inbounds.form.vpnOutboundHint')} />
       )}
       {protocol === 'fptn' ? (
@@ -108,11 +108,6 @@ export default function AdditionalOutboundEditor({
         </>
       ) : protocol === 'openflux' ? (
         <>
-          <Alert
-            type="info"
-            showIcon
-            description={t('pages.inbounds.form.openfluxComponentHint')}
-          />
           <OpenFluxOutboundEditor settings={settings} update={update} />
         </>
       ) : (

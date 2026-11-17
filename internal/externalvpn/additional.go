@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -200,8 +201,8 @@ func (inst Instance) validateAdditional() error {
 		if len(s.Clients) > 1 {
 			return fmt.Errorf("OpenFlux supports one client per inbound; create a separate inbound for each user")
 		}
-		if len(s.Transports) < 1 || len(s.Transports) > 8 {
-			return fmt.Errorf("OpenFlux requires 1..8 distinct transports")
+		if len(s.Transports) < 1 || len(s.Transports) > 9 {
+			return fmt.Errorf("OpenFlux requires 1..9 distinct transports")
 		}
 		if s.MaxPacketSize != 0 && (s.MaxPacketSize < 1280 || s.MaxPacketSize > 65000) {
 			return fmt.Errorf("OpenFlux packet size must be automatic (0) or 1280..65000")
@@ -220,6 +221,13 @@ func (inst Instance) validateAdditional() error {
 			}
 			switch t.Type {
 			case "direct":
+			case "oneme":
+				if !validOpenFluxMAXToken(t.Token) {
+					return fmt.Errorf("MAX requires a Web MAX token without whitespace, control characters or INI comments")
+				}
+				if t.UID != "" && !validOpenFluxMAXUID(t.UID) {
+					return fmt.Errorf("MAX account ID must be a positive 64-bit decimal integer")
+				}
 			case "yandex", "vyandex", "boards", "mailru", "cupsonline", "avito", "telemost":
 				u, err := url.Parse(t.URL)
 				if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
@@ -310,7 +318,19 @@ func ExportAdditionalLink(inst Instance, email, address string, port int, remark
 		}
 		return "fptn:" + base64.RawStdEncoding.EncodeToString(raw), nil
 	}
-	transports := append([]OpenFluxTransport(nil), inst.Settings.Transports...)
+	// MAX credentials belong to the server account, never to subscribers.
+	// Upstream shareConfig also omits MAX: each client needs its own login.
+	transports := make([]OpenFluxTransport, 0, len(inst.Settings.Transports))
+	for _, carrier := range inst.Settings.Transports {
+		if carrier.Type == "oneme" {
+			continue
+		}
+		carrier.Token, carrier.UID = "", ""
+		transports = append(transports, carrier)
+	}
+	if len(transports) == 0 {
+		return "", fmt.Errorf("MAX uses a client configuration, not an openflux:// link; prepare it in the inbound's MAX client setup")
+	}
 	for i := range transports {
 		if transports[i].Type == "direct" {
 			transports[i].Dial = net.JoinHostPort(address, fmt.Sprint(port))
@@ -332,4 +352,47 @@ func ExportAdditionalLink(inst Instance, email, address string, port int, remark
 		return "", err
 	}
 	return "openflux://v1/" + base64.RawURLEncoding.EncodeToString(packed.Bytes()), nil
+}
+
+// Match the INI parser and signed int64 account identifiers used by upstream.
+func validOpenFluxMAXToken(token string) bool {
+	if token == "" || len(token) > 16384 {
+		return false
+	}
+	for _, r := range token {
+		if r < 33 || r > 126 || r == '#' || r == ';' {
+			return false
+		}
+	}
+	return true
+}
+
+func validOpenFluxMAXUID(uid string) bool {
+	if len(uid) == 0 || len(uid) > 19 {
+		return false
+	}
+	for _, r := range uid {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	n, err := strconv.ParseInt(uid, 10, 64)
+	return err == nil && n > 0
+}
+
+// Write credentials only to a private runtime config, never to process arguments.
+func writeOpenFluxTransport(conf *strings.Builder, carrier OpenFluxTransport, endpoint string, exit bool) {
+	fmt.Fprintf(conf, "\n[Transport \"%s\"]\nType = %s\nPriority = %d\n", carrier.Type, carrier.Type, carrier.Priority)
+	switch carrier.Type {
+	case "direct":
+		key := "Dial"
+		if exit {
+			key = "Listen"
+		}
+		fmt.Fprintf(conf, "%s = %s\n", key, endpoint)
+	case "oneme":
+		fmt.Fprintf(conf, "Token = %s\nUID = %s\n", carrier.Token, carrier.UID)
+	default:
+		fmt.Fprintf(conf, "URL = %s\n", carrier.URL)
+	}
 }
