@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -63,6 +64,83 @@ func TestClientSpeedLimitPersistenceAndCompatibility(t *testing.T) {
 	if err != nil || len(mtprotoRows) != 1 || mtprotoRows[0].SpeedLimit == nil ||
 		mtprotoRows[0].SpeedLimit.UploadMbps != 1 {
 		t.Fatalf("MTProto native speed cap was not persisted: %v %v", mtprotoRows, err)
+	}
+}
+
+func TestClientSpeedLimitWorksWithoutRouteSection(t *testing.T) {
+	cfg := singbox.NewConfig()
+	cfg.Route = nil // custom native template with no route section
+	cfg.Inbounds = []map[string]any{{
+		"type": "vless", "tag": "in", "users": []map[string]any{{"name": "alice"}},
+	}}
+	clients := map[int][]model.Client{1: {{
+		Email: "alice", Enable: true, SpeedLimit: &model.ClientSpeedLimit{
+			Enabled: true, UploadMbps: 3, DownloadMbps: 5,
+		},
+	}}}
+	err := injectClientSpeedLimits(cfg, clients, []*model.Inbound{{
+		Id: 1, Enable: true, Protocol: model.VLESS, Tag: "in",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Route == nil || len(cfg.SpeedLimitPlan.Routes) != 1 {
+		t.Fatalf("speed limiter did not create a valid route section: %+v", cfg.Route)
+	}
+	if _, err := cfg.Marshal(); err != nil {
+		t.Fatalf("generated core config is not serializable: %v", err)
+	}
+}
+
+func TestClientSpeedLimitBoundsLargeRoutingTable(t *testing.T) {
+	cfg := singbox.NewConfig()
+	cfg.Inbounds = []map[string]any{{
+		"type": "vless", "tag": "in", "users": []map[string]any{{"name": "alice"}},
+	}}
+	rules := make([]map[string]any, maxClientSpeedInjectedRules+1)
+	for i := range rules {
+		rules[i] = map[string]any{"action": "reject", "domain_suffix": []string{"unused.invalid"}}
+	}
+	cfg.Route["rules"] = rules
+	clients := map[int][]model.Client{1: {{
+		Email: "alice", Enable: true, SpeedLimit: &model.ClientSpeedLimit{
+			Enabled: true, DownloadMbps: 2,
+		},
+	}}}
+	err := injectClientSpeedLimits(cfg, clients, []*model.Inbound{{
+		Id: 1, Enable: true, Protocol: model.VLESS, Tag: "in",
+	}})
+	if err == nil || !strings.Contains(err.Error(), "safe limit") {
+		t.Fatalf("unbounded routing expansion: %v", err)
+	}
+	if len(singBoxRouteRules(cfg.Route)) != len(rules) {
+		t.Fatal("failed limiter configuration replaced the original rules")
+	}
+}
+
+func TestClientSpeedLimitBoundsProxyRoutes(t *testing.T) {
+	cfg := singbox.NewConfig()
+	cfg.Inbounds = []map[string]any{{
+		"type": "vless", "tag": "in", "users": []map[string]any{{"name": "alice"}},
+	}}
+	cfg.Outbounds = []map[string]any{{"type": "direct", "tag": "direct"}}
+	rules := make([]map[string]any, 0, maxClientSpeedProxyRoutes+1)
+	for i := 0; i <= maxClientSpeedProxyRoutes; i++ {
+		tag := fmt.Sprintf("route-%d", i)
+		cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "direct", "tag": tag})
+		rules = append(rules, map[string]any{"action": "route", "outbound": tag})
+	}
+	cfg.Route["rules"] = rules
+	clients := map[int][]model.Client{1: {{
+		Email: "alice", Enable: true, SpeedLimit: &model.ClientSpeedLimit{
+			Enabled: true, UploadMbps: 1,
+		},
+	}}}
+	err := injectClientSpeedLimits(cfg, clients, []*model.Inbound{{
+		Id: 1, Enable: true, Protocol: model.VLESS, Tag: "in",
+	}})
+	if err == nil || !strings.Contains(err.Error(), "too many proxy routes") {
+		t.Fatalf("excessive proxy routes not bounded: %v", err)
 	}
 }
 
