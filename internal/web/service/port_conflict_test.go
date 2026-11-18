@@ -995,3 +995,81 @@ func TestCheckPortConflict_SnellQUICReservesUDP(t *testing.T) {
 		t.Fatal("TCP-only Snell should coexist with UDP")
 	}
 }
+
+
+func TestConfiguredLocalTCPPortConflicts(t *testing.T) {
+	t.Run("XUI_PORT overrides the saved admin port", func(t *testing.T) {
+		setupConflictDB(t)
+		settings := &SettingService{}
+		if err := settings.setString("webPort", "2053"); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("XUI_PORT", "443")
+		got, err := (&InboundService{}).checkPortConflict(&model.Inbound{Protocol: model.VLESS, Port: 443}, 0)
+		if err != nil || got == nil || got.Tag != "3x-ui" {
+			t.Fatalf("effective admin port must be reserved: got=%v err=%v", got, err)
+		}
+	})
+
+	t.Run("enabled subscription reserves TCP but not UDP or remote nodes", func(t *testing.T) {
+		setupConflictDB(t)
+		settings := &SettingService{}
+		if err := settings.setBool("subEnable", true); err != nil {
+			t.Fatal(err)
+		}
+		if err := settings.setString("subPort", "443"); err != nil {
+			t.Fatal(err)
+		}
+		if err := settings.setString("subListen", "127.0.0.1"); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			name     string
+			inbound  model.Inbound
+			conflict bool
+		}{
+			{"wildcard TCP", model.Inbound{Protocol: model.VLESS, Port: 443}, true},
+			{"loopback TCP", model.Inbound{Protocol: model.VLESS, Port: 443, Listen: "127.0.0.1"}, true},
+			{"different IPv4 TCP", model.Inbound{Protocol: model.VLESS, Port: 443, Listen: "192.0.2.10"}, false},
+			{"same UDP port", model.Inbound{Protocol: model.Hysteria, Port: 443}, false},
+			{"remote node", model.Inbound{Protocol: model.VLESS, Port: 443, NodeID: new(1)}, false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				got, err := (&InboundService{}).checkPortConflict(&tc.inbound, 0)
+				if err != nil || (got != nil) != tc.conflict {
+					t.Fatalf("conflict=%v err=%v want=%v", got, err, tc.conflict)
+				}
+			})
+		}
+	})
+
+	t.Run("domain gateway HTTPS is reserved even when its process is down", func(t *testing.T) {
+		setupConflictDB(t)
+		settings := &SettingService{}
+		config := `{"enabled":true,"listen":"0.0.0.0","httpPort":80,"httpsPort":443,"publicPort":443,"domains":[{"name":"vpn.example.com","mode":"sni_only","enabled":true}]}`
+		if err := settings.setString("domainFrontConfig", config); err != nil {
+			t.Fatal(err)
+		}
+		got, err := (&InboundService{}).checkPortConflict(&model.Inbound{Protocol: model.VLESS, Port: 443}, 0)
+		if err != nil || got == nil || got.Tag != "Domain Front HTTPS" {
+			t.Fatalf("gateway must reserve TCP 443: got=%v err=%v", got, err)
+		}
+		udp, err := (&InboundService{}).checkPortConflict(&model.Inbound{Protocol: model.Hysteria, Port: 443}, 0)
+		if err != nil || udp != nil {
+			t.Fatalf("gateway TCP 443 must not block UDP: got=%v err=%v", udp, err)
+		}
+	})
+
+	t.Run("certificate-only domains do not reserve HTTPS", func(t *testing.T) {
+		setupConflictDB(t)
+		settings := &SettingService{}
+		config := `{"enabled":true,"listen":"0.0.0.0","httpPort":80,"httpsPort":443,"publicPort":443,"domains":[{"name":"vpn.example.com","mode":"cert_only","enabled":true}]}`
+		if err := settings.setString("domainFrontConfig", config); err != nil {
+			t.Fatal(err)
+		}
+		got, err := (&InboundService{}).checkPortConflict(&model.Inbound{Protocol: model.VLESS, Port: 443}, 0)
+		if err != nil || got != nil {
+			t.Fatalf("certificate-only domains must not reserve TCP 443: got=%v err=%v", got, err)
+		}
+	})
+}
