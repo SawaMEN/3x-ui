@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -21,16 +22,31 @@ func isProtocolStagingFile(name string) bool {
 	if name == ".caddy-naive.new" || name == "telemt.new" {
 		return true
 	}
+	if strings.HasPrefix(name, ".openflux-") {
+		// Permanent release metadata and previous-good binaries are not caches.
+		return isGoTempSuffix(strings.TrimPrefix(name, ".openflux-"))
+	}
 	for _, prefix := range []string{
 		".hysteria-", ".pingtunnel-", ".trusttunnel_endpoint-",
-		".openflux-", ".vetroff-", ".sudoku-tunnel-",
+		".sudoku-tunnel-",
 	} {
 		if strings.HasPrefix(name, prefix) {
-			// A failed OpenFlux replacement may have left its only backup.
-			return !strings.HasPrefix(name, ".openflux-previous-")
+			return isGoTempSuffix(strings.TrimPrefix(name, prefix))
 		}
 	}
 	return false
+}
+
+func isGoTempSuffix(suffix string) bool {
+	if len(suffix) != 8 {
+		return false
+	}
+	for _, char := range suffix {
+		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func isProtocolConfigStagingFile(name string) bool {
@@ -320,6 +336,9 @@ func activeNamedProcess(procDir, process string) (bool, error) {
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() {
+			continue
+		}
+		if _, err := strconv.Atoi(entry.Name()); err != nil {
 			continue
 		}
 		comm, err := os.ReadFile(filepath.Join(procDir, entry.Name(), "comm"))
