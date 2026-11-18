@@ -163,8 +163,6 @@
       "removeDescription": "Settings are preserved. You can install the core again.",
       "switchBeforeRemove": "Switch to another core first",
       "start": "Start",
-      "bundledUpdateNote": "The bundled core is updated with the panel.",
-      "standaloneUpdateNote": "Latest stable release. The configuration is checked before replacement; a failed startup restores the previous core.",
       "updateConfirm": "Update {core}?",
       "restartConnections": "Active connections will restart.",
       "updateFailed": "Unable to update the core"

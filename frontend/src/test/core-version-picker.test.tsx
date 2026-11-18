@@ -38,7 +38,7 @@ it('shows stable releases as selectable rows and updates the chosen Xray version
   await screen.findByRole('radio', { name: 'Выбрать v26.9.0' });
   expect(screen.queryByRole('radio', { name: 'Выбрать v26.10.0-beta.1' })).toBeNull();
   fireEvent.click(screen.getByRole('radio', { name: 'Выбрать v26.9.0' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+  fireEvent.click(await screen.findByRole('button', { name: /^(Confirm|Подтвердить)$/ }));
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith(
       '/panel/api/setting/cores/xray/update',
@@ -56,7 +56,7 @@ it('switches between stable and beta releases for upstream sing-box', async () =
   const beta = await screen.findByRole('radio', { name: 'Выбрать v26.10.0-beta.1' });
   expect(screen.queryByRole('radio', { name: 'Выбрать v26.9.0' })).toBeNull();
   fireEvent.click(beta);
-  fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+  fireEvent.click(await screen.findByRole('button', { name: /^(Confirm|Подтвердить)$/ }));
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith(
       '/panel/api/setting/cores/sing-box-upstream/update',
