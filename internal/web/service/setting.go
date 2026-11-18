@@ -95,7 +95,7 @@ var defaultValueMap = map[string]string{
 	"nodeMtlsClientCAPem":         "",
 	"webBasePath":                 normalizeBasePath(getEnv("XUI_INIT_WEB_BASE_PATH", "/")),
 	"sessionMaxAge":               "360",
-	"logRetentionDays":           "7",
+	"logRetentionDays":            "7",
 	"trustedProxyCIDRs":           DefaultTrustedProxyCIDRs,
 	"realityScanCandidates":       DefaultRealityScanCandidatesCSV,
 	"ipLimitAllowlist":            "",
