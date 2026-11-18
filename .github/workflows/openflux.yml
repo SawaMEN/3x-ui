@@ -67,7 +67,8 @@ jobs:
           files = [
             "internal/externalvpn/additional_review_test.go", "internal/externalvpn/instance.go", "internal/externalvpn/additional.go", "internal/externalvpn/additional_process.go",
             "internal/externalvpn/decode.go", "internal/externalvpn/openflux_install.go",
-            "internal/externalvpn/openflux_automation_test.go", "internal/externalvpn/openflux_component_test.go", "internal/externalvpn/update.go",
+            "internal/externalvpn/openflux_automation_test.go", "internal/externalvpn/openflux_component_test.go",
+            "internal/externalvpn/openflux_diagnostics.go", "internal/externalvpn/openflux_diagnostics_test.go", "internal/externalvpn/update.go",
             "internal/externalvpn/outbound.go", "internal/web/controller/api.go",
             "internal/web/controller/api_auth_test.go", "internal/web/controller/server_externalvpn.go",
             "internal/web/controller/server_openflux.go", "internal/web/controller/server_openflux_test.go",
@@ -101,7 +102,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, pathlib, subprocess
-          files = ["frontend/src/test/outbound-form-modal.test.tsx","frontend/src/test/singbox-outbound-modal.test.tsx","frontend/src/test/native-protocol-option-fields.test.tsx","frontend/src/api/useOpenFluxInstalled.ts","frontend/src/test/openflux-availability.test.tsx","frontend/src/test/inbound-form-modal.test.tsx","frontend/src/pages/singbox/SingBoxOutboundModal.tsx","frontend/src/pages/xray/outbounds/OutboundFormModal.tsx","frontend/src/lib/openflux.ts","frontend/src/schemas/protocols/inbound/additional-vpn.ts","frontend/src/api/openflux-install.ts","frontend/src/pages/inbounds/form/InboundFormModal.tsx","frontend/src/pages/inbounds/form/protocols/additional-vpn.tsx","frontend/src/pages/xray/outbounds/OpenFluxOutboundEditor.tsx","frontend/src/pages/xray/outbounds/AdditionalOutboundEditor.tsx","frontend/src/pages/settings/SystemUpdatePanel.tsx","frontend/src/test/openflux-settings.test.ts","frontend/src/test/openflux-install.test.ts","frontend/src/test/openflux-fields.test.tsx", "frontend/src/test/system-update-components.test.tsx"]
+          files = ["frontend/src/test/outbound-form-modal.test.tsx","frontend/src/test/singbox-outbound-modal.test.tsx","frontend/src/test/native-protocol-option-fields.test.tsx","frontend/src/api/useOpenFluxInstalled.ts","frontend/src/test/openflux-availability.test.tsx","frontend/src/test/inbound-form-modal.test.tsx","frontend/src/pages/singbox/SingBoxOutboundModal.tsx","frontend/src/pages/xray/outbounds/OutboundFormModal.tsx","frontend/src/lib/openflux.ts","frontend/src/schemas/protocols/inbound/additional-vpn.ts","frontend/src/api/openflux-install.ts","frontend/src/pages/inbounds/form/InboundFormModal.tsx","frontend/src/pages/inbounds/form/protocols/additional-vpn.tsx","frontend/src/pages/xray/outbounds/OpenFluxOutboundEditor.tsx","frontend/src/pages/xray/outbounds/AdditionalOutboundEditor.tsx","frontend/src/pages/settings/SystemUpdatePanel.tsx","frontend/src/test/openflux-settings.test.ts","frontend/src/test/openflux-install.test.ts","frontend/src/test/openflux-fields.test.tsx", "frontend/src/test/system-update-components.test.tsx", "frontend/src/components/openflux/OpenFluxChannels.tsx", "frontend/src/pages/inbounds/form/protocols/OpenFluxFields.tsx"]
           formatter = pathlib.Path("frontend/node_modules/.bin/oxfmt")
           if formatter.exists():
               original = {path: pathlib.Path(path).read_text() for path in files}
