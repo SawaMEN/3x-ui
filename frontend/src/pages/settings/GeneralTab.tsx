@@ -397,7 +397,7 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
                     precision={0}
                     style={{ width: '100%' }}
                     onChange={onNumber((v) => updateSetting({ logRetentionDays: v }))}
-                    addonAfter={t('pages.settings.days')}
+                    addonAfter={t('pages.settings.logRetentionUnit')}
                   />
                 </SettingListItem>
 
