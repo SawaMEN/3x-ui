@@ -196,7 +196,7 @@ describe('OpenFlux channel setup', () => {
         expect.any(Object),
       ),
     );
-    expect(await screen.findByText('48 bytes round-trip')).toBeTruthy();
+    expect(await screen.findByText(/48 bytes round-trip/)).toBeTruthy();
     expect(screen.getByText(/Verified: encrypted OpenFlux payload received/)).toBeTruthy();
   });
   it('skips a live MAX test without a separate client account token', async () => {
