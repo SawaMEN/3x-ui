@@ -9,18 +9,18 @@ import (
 
 const (
 	DefaultDomainActivityRetentionSeconds = 300
-	MinDomainActivityRetentionSeconds = 10
-	MaxDomainActivityRetentionSeconds = 86400
-	maxTrackedDomainActivity = 3000
-	maxVisibleDomainActivity = 300
-	maxVisibleDomainActivityPerClient = 30
+	MinDomainActivityRetentionSeconds     = 10
+	MaxDomainActivityRetentionSeconds     = 86400
+	maxTrackedDomainActivity             = 3000
+	maxVisibleDomainActivity             = 300
+	maxVisibleDomainActivityPerClient    = 30
 )
 
 // History is bounded and private to the panel process: it is not written
 // into the database or an access log. Disabling monitoring clears it.
 var domainActivityHistory = struct {
 	sync.Mutex
-	core string
+	core    string
 	entries map[string]DomainActivityEntry
 }{entries: make(map[string]DomainActivityEntry)}
 
@@ -32,7 +32,7 @@ func domainActivityCutoff(now time.Time, retentionSeconds int) time.Time {
 	if !ValidDomainActivityRetentionSeconds(retentionSeconds) {
 		retentionSeconds = DefaultDomainActivityRetentionSeconds
 	}
-	return now.Add(-time.Duration(retentionSeconds)*time.Second)
+	return now.Add(-time.Duration(retentionSeconds) * time.Second)
 }
 
 // RecordDomainActivity keeps the most recent known observation for each
@@ -76,13 +76,18 @@ func pruneDomainActivityLocked(cutoff time.Time) {
 	if len(domainActivityHistory.entries) <= maxTrackedDomainActivity {
 		return
 	}
-	type order struct { key string; at time.Time }
+	type order struct {
+		key string
+		at  time.Time
+	}
 	ordered := make([]order, 0, len(domainActivityHistory.entries))
 	for key, entry := range domainActivityHistory.entries {
-		ordered = append(ordered, order{key,entry.LastSeen})
+		ordered = append(ordered, order{key, entry.LastSeen})
 	}
-	sort.Slice(ordered, func(i,j int) bool {
-		if ordered[i].at.Equal(ordered[j].at) { return ordered[i].key < ordered[j].key }
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].at.Equal(ordered[j].at) {
+			return ordered[i].key < ordered[j].key
+		}
 		return ordered[i].at.Before(ordered[j].at)
 	})
 	for _, entry := range ordered[:len(ordered)-maxTrackedDomainActivity] {
@@ -104,18 +109,26 @@ func DomainActivityHistoryEntries(core string, now time.Time, retentionSeconds i
 	for _, entry := range domainActivityHistory.entries {
 		all = append(all, entry)
 	}
-	sort.Slice(all, func(i,j int) bool {
-		if !all[i].LastSeen.Equal(all[j].LastSeen) { return all[i].LastSeen.After(all[j].LastSeen) }
-		if all[i].Email != all[j].Email { return all[i].Email < all[j].Email }
+	sort.Slice(all, func(i, j int) bool {
+		if !all[i].LastSeen.Equal(all[j].LastSeen) {
+			return all[i].LastSeen.After(all[j].LastSeen)
+		}
+		if all[i].Email != all[j].Email {
+			return all[i].Email < all[j].Email
+		}
 		return all[i].Domain < all[j].Domain
 	})
-	result := make([]DomainActivityEntry, 0, min(len(all),maxVisibleDomainActivity))
+	result := make([]DomainActivityEntry, 0, min(len(all), maxVisibleDomainActivity))
 	perClient := map[string]int{}
 	for _, entry := range all {
-		if perClient[entry.Email] >= maxVisibleDomainActivityPerClient { continue }
+		if perClient[entry.Email] >= maxVisibleDomainActivityPerClient {
+			continue
+		}
 		result = append(result, entry)
 		perClient[entry.Email]++
-		if len(result) >= maxVisibleDomainActivity { break }
+		if len(result) >= maxVisibleDomainActivity {
+			break
+		}
 	}
 	return result
 }
