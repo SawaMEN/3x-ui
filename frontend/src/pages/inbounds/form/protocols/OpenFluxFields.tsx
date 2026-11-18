@@ -19,6 +19,7 @@ export default function OpenFluxFields({ inboundId = 0 }: { inboundId?: number }
   return (
     <div className="openflux-setup">
       <OpenFluxChannels
+        inboundId={inboundId}
         nodeId={nodeId}
         value={values}
         onChange={(next) =>
