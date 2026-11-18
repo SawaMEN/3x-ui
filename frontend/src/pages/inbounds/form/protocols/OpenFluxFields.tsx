@@ -6,7 +6,7 @@ import OpenFluxChannels from '@/components/openflux/OpenFluxChannels';
 import OpenFluxMAXClientSetup from '@/components/openflux/OpenFluxMAXClientSetup';
 import type { OpenFluxTransport } from '@/lib/openflux';
 
-export default function OpenFluxFields() {
+export default function OpenFluxFields({ inboundId = 0 }: { inboundId?: number }) {
   const { t } = useTranslation();
   const { control, setValue } = useFormContext();
   const settings = useWatch({ control, name: 'settings' }) ?? {};
