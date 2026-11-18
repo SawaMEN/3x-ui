@@ -3249,12 +3249,18 @@ func (s *SubService) BuildPageData(subId string, hostHeader string, traffic core
 
 	pageLinks := make([]string, 0, len(subs))
 	pageEmails := make([]string, 0, len(subs))
+	seenLinks := make(map[string]struct{}, len(subs))
 	for i, sub := range subs {
 		email := ""
 		if i < len(emails) {
 			email = emails[i]
 		}
 		for _, link := range splitLinkLines(sub) {
+			key := generatedLinkIdentity(link)
+			if _, duplicate := seenLinks[key]; duplicate {
+				continue
+			}
+			seenLinks[key] = struct{}{}
 			pageLinks = append(pageLinks, link)
 			pageEmails = append(pageEmails, email)
 		}
