@@ -61,17 +61,17 @@ func TestProtocolCleanupTempDirectories(t *testing.T) {
 }
 
 func TestProtocolCleanupConfigAndTempMatch(t *testing.T) {
-	for _, name := range []string{".oxidns-1234567890", ".dnstt-1234567890", ".telemt-1234567890.toml", ".telemt-meko-1234567890.env"} {
+	for _, name := range []string{".oxidns-1234567890", ".dnstt-1234567890", ".telemt-1234567890.toml", ".telemt-meko-1234567890.env", "tls.pem.ABC123"} {
 		if !isProtocolConfigStagingFile(name) {
 			t.Errorf("unrecognized config-stage %q", name)
 		}
 	}
-	for _, name := range []string{"settings.json", "server.key", "telemt.toml", ".openflux-install.json", "telemt.version", ".oxidns-backup", ".dnstt-recovery", ".telemt-previous.toml"} {
+	for _, name := range []string{"settings.json", "server.key", "telemt.toml", ".openflux-install.json", "telemt.version", ".oxidns-backup", ".dnstt-recovery", ".telemt-previous.toml", "tls.pem"} {
 		if isProtocolConfigStagingFile(name) {
 			t.Errorf("must preserve configuration/metadata %q", name)
 		}
 	}
-	for _, name := range []string{"olcrtc-installer-1234567890.sh", "olcrtc-built-revisions-1234567890", "olcrtc-install-log-1234567890.log"} {
+	for _, name := range []string{"olcrtc-installer-1234567890.sh", "olcrtc-built-revisions-1234567890", "olcrtc-install-log-1234567890.log", "x-ui-script.ABC123", "x-ui-install.ABC123"} {
 		if !isProtocolTempFile(name) {
 			t.Errorf("unrecognized OlcRTC scratch file %q", name)
 		}
