@@ -10,6 +10,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
@@ -328,21 +329,11 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 	newBits := inboundTransports(inbound.Protocol, inbound.StreamSettings, inbound.Settings)
 	newSpans := inboundListenerSpans(inbound)
 
-	// The panel itself owns its configured web port outside the inbounds table.
-	// Reserve that listener so a newly added inbound cannot be saved successfully
-	// only to fail later when the panel and core try to bind the same TCP socket.
-	if inbound.NodeID == nil {
-		panelSettings := &SettingService{}
-		if panelPort, portErr := panelSettings.GetPort(); portErr == nil && panelPort > 0 {
-			panelListen, _ := panelSettings.GetListen()
-			if port, _ := spansOverlap(newSpans, []listenerSpan{{panelPort, panelPort, transportTCP}}); port > 0 && listenOverlaps(panelListen, inbound.Listen) {
-				return &portConflictDetail{
-					Tag:        "3x-ui",
-					Listen:     panelListen,
-					Port:       port,
-					Transports: transportTCP,
-				}, nil
-			}
+	// Reserve configured local TCP listeners even when their processes are stopped.
+	if inbound.NodeID == nil && newBits&transportTCP != 0 {
+		conflict, err := configuredLocalTCPPortConflict(inbound.Listen, newSpans)
+		if err != nil || conflict != nil {
+			return conflict, err
 		}
 	}
 
@@ -493,6 +484,76 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 				Port:       port,
 				Transports: shared,
 			}, nil
+		}
+	}
+	return nil, nil
+}
+
+// configuredLocalTCPPortConflict checks panel-managed listeners that are not
+// represented by DB inbounds. TCP/UDP coexistence and remote nodes are unchanged.
+func configuredLocalTCPPortConflict(listen string, spans []listenerSpan) (*portConflictDetail, error) {
+	settings := &SettingService{}
+	check := func(tag, address string, port int) *portConflictDetail {
+		if port < 1 || port > 65535 || !listenOverlaps(address, listen) {
+			return nil
+		}
+		if overlap, _ := spansOverlap(spans, []listenerSpan{{port, port, transportTCP}}); overlap > 0 {
+			return &portConflictDetail{Tag: tag, Listen: address, Port: overlap, Transports: transportTCP}
+		}
+		return nil
+	}
+
+	panelPort, err := settings.GetPort()
+	if err != nil {
+		return nil, err
+	}
+	if override, configured, overrideErr := config.GetPortOverride(); configured {
+		if overrideErr != nil {
+			return nil, overrideErr
+		}
+		panelPort = override
+	}
+	panelListen, err := settings.GetListen()
+	if err != nil {
+		return nil, err
+	}
+	if conflict := check("3x-ui", panelListen, panelPort); conflict != nil {
+		return conflict, nil
+	}
+
+	subEnabled, err := settings.GetSubEnable()
+	if err != nil {
+		return nil, err
+	}
+	if subEnabled {
+		subPort, err := settings.GetSubPort()
+		if err != nil {
+			return nil, err
+		}
+		subListen, err := settings.GetSubListen()
+		if err != nil {
+			return nil, err
+		}
+		if conflict := check("3x-ui subscriptions", subListen, subPort); conflict != nil {
+			return conflict, nil
+		}
+	}
+
+	gateway, err := settings.GetDomainFrontConfig()
+	if err != nil {
+		return nil, err
+	}
+	if gateway.HasPublicSites() {
+		for _, listener := range []struct {
+			tag  string
+			port int
+		}{
+			{"Domain Front HTTP", gateway.HTTPPort},
+			{"Domain Front HTTPS", gateway.HTTPSPort},
+		} {
+			if conflict := check(listener.tag, gateway.Listen, listener.port); conflict != nil {
+				return conflict, nil
+			}
 		}
 	}
 	return nil, nil
