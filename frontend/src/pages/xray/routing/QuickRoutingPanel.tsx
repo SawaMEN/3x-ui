@@ -106,6 +106,7 @@ export default function QuickRoutingPanel({
 }: Props) {
   const [draft, setDraft] = useState<QuickRouteDraft>(blankDraft);
   const [error, setError] = useState('');
+  const [routeSearch, setRouteSearch] = useState('');
   const [nodeTargets, setNodeTargets] = useState<NodeRouteTarget[]>([]);
   const [nodeTargetsLoading, setNodeTargetsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -157,6 +158,14 @@ export default function QuickRoutingPanel({
       rules.map((rule, index) => ({ rule, index })).filter(({ rule }) => isQuickRule(rule, engine)),
     [rules, engine],
   );
+  const filteredManaged = useMemo(() => {
+    const search = routeSearch.trim().toLowerCase();
+    if (!search) return managed;
+    return managed.filter(({ rule }) =>
+      [criteriaSummary(rule, engine), rule.outboundTag, rule.outbound, rule.comment, rule.ruleTag]
+        .filter(Boolean).join(' ').toLowerCase().includes(search),
+    );
+  }, [managed, routeSearch, engine]);
   const warnings = useMemo(
     () => diagnoseRouting(rules, engine, tags, inboundOptions ? inTags : undefined),
     [rules, engine, tags, inboundOptions, inTags],
@@ -440,7 +449,7 @@ export default function QuickRoutingPanel({
                 values: '',
               }));
               setError('');
-            }}
+              }}
             optionType="button"
             buttonStyle="solid"
           >
@@ -590,53 +599,25 @@ export default function QuickRoutingPanel({
         </Card>
 
         <div className="quick-routing-aside">
-          <Card title="Подключения нод" size="small">
-            <Typography.Paragraph type="secondary">
-              Эти подключения управляются здесь и не отображаются в клиентах. Для удаления сначала
-              удалите использующие подключение правила и сохраните настройки.
-            </Typography.Paragraph>
-            {nodeTargets.filter((target) => target.provisioned).length === 0 ? (
+          <Card title="Созданные маршруты" size="small" className="quick-routing-managed">
+            {managed.length > 5 && (
+              <Input.Search
+                allowClear
+                aria-label="Найти маршрут"
+                placeholder="Найти маршрут"
+                value={routeSearch}
+                onChange={(event) => setRouteSearch(event.target.value)}
+                className="quick-routing-search"
+              />
+            )}
+            {filteredManaged.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="Нет подготовленных подключений нод"
+                description={routeSearch.trim() ? 'Ничего не найдено' : 'Маршрутов пока нет'}
               />
             ) : (
-              <Space orientation="vertical" style={{ width: '100%' }}>
-                {nodeTargets
-                  .filter((target) => target.provisioned)
-                  .map((target) => (
-                    <div key={target.tag} className="quick-routing-managed-title">
-                      <Typography.Text>
-                        {target.nodeName} · {target.remark || target.protocol}
-                      </Typography.Text>
-                      <Popconfirm
-                        title="Удалить подключение ноды?"
-                        description="Нода и её входящее подключение останутся на месте."
-                        okText="Удалить"
-                        cancelText="Отмена"
-                        onConfirm={() => void deleteNodeConnection(target)}
-                      >
-                        <Button
-                          size="small"
-                          danger
-                          disabled={creating}
-                          aria-label={'Удалить подключение ноды ' + target.tag}
-                          icon={<DeleteOutlined aria-hidden />}
-                        />
-                      </Popconfirm>
-                    </div>
-                  ))}
-              </Space>
-            )}
-          </Card>
-          <Card title="Быстрые маршруты" size="small" className="quick-routing-managed">
-            {managed.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Пока нет быстрых маршрутов">
-                <Typography.Text type="secondary">Создайте первый маршрут слева.</Typography.Text>
-              </Empty>
-            ) : (
               <div className="quick-routing-managed-list">
-                {managed.map(({ rule, index }) => {
+                {filteredManaged.map(({ rule, index }) => {
                   const marker = markerFor(rule);
                   const destination =
                     engine === 'xray'
@@ -701,7 +682,7 @@ export default function QuickRoutingPanel({
                           </Popconfirm>
                         </Space>
                       </div>
-                      {probeAlert(String(destination))}
+                      {probeResult?.tag === draft.target ? null : probeAlert(String(destination))}
                       <Typography.Paragraph
                         className="quick-routing-criteria"
                         ellipsis={{ rows: 2, expandable: true, symbol: 'Ещё' }}
@@ -714,11 +695,13 @@ export default function QuickRoutingPanel({
               </div>
             )}
           </Card>
-          <Card size="small" title="Проверка конфигурации" className="quick-routing-health">
+          <details className="quick-routing-details" key={warnings.length ? 'warning' : 'healthy'} defaultOpen={warnings.length > 0}>
+            <summary>Проверка правил {warnings.length > 0 && <span className="quick-routing-warning-count">{warnings.length} проблем</span>}</summary>
+            <div className="quick-routing-details-content quick-routing-health">
             {warnings.length === 0 ? (
               <div className="quick-routing-healthy">
                 <CheckCircleOutlined aria-hidden="true" />
-                <span>В выбранных правилах не найдено очевидных конфликтов.</span>
+                <span>Очевидных конфликтов не найдено.</span>
               </div>
             ) : (
               <>
@@ -726,7 +709,6 @@ export default function QuickRoutingPanel({
                   type="warning"
                   showIcon
                   title={`Потенциальных проблем: ${warnings.length}`}
-                  description="Проверьте порядок и существование исходящих подключений перед сохранением."
                 />
                 <div className="quick-routing-issue-list">
                   {warnings.slice(0, 8).map((warning, index) => (
@@ -740,7 +722,46 @@ export default function QuickRoutingPanel({
                 </div>
               </>
             )}
-          </Card>
+            </div>
+          </details>
+          <details className="quick-routing-details">
+            <summary>Подключения нод · {nodeTargets.filter((target) => target.provisioned).length}</summary>
+            <div className="quick-routing-details-content">
+            {nodeTargets.filter((target) => target.provisioned).length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="Нет подготовленных подключений нод"
+              />
+            ) : (
+              <Space orientation="vertical" style={{ width: '100%' }}>
+                {nodeTargets
+                  .filter((target) => target.provisioned)
+                  .map((target) => (
+                    <div key={target.tag} className="quick-routing-managed-title">
+                      <Typography.Text>
+                        {target.nodeName} · {target.remark || target.protocol}
+                      </Typography.Text>
+                      <Popconfirm
+                        title="Удалить подключение ноды?"
+                        description="Нода и её входящее подключение останутся на месте."
+                        okText="Удалить"
+                        cancelText="Отмена"
+                        onConfirm={() => void deleteNodeConnection(target)}
+                      >
+                        <Button
+                          size="small"
+                          danger
+                          disabled={creating}
+                          aria-label={'Удалить подключение ноды ' + target.tag}
+                          icon={<DeleteOutlined aria-hidden />}
+                        />
+                      </Popconfirm>
+                    </div>
+                  ))}
+              </Space>
+            )}
+            </div>
+          </details>
         </div>
       </div>
     </div>
