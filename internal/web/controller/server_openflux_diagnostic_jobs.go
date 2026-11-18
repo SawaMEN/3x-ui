@@ -41,10 +41,10 @@ func startOpenFluxDiagnosticJob(ownerID int, inst externalvpn.Instance, typ, cli
 		return nil, fmt.Errorf("another OpenFlux channel diagnostic is running")
 	}
 	job := &openFluxDiagnosticJob{
-		RunID: hex.EncodeToString(nonce[:]),
-		State: "running",
+		RunID:   hex.EncodeToString(nonce[:]),
+		State:   "running",
 		OwnerID: ownerID,
-		Until: time.Now().Add(6 * time.Minute),
+		Until:   time.Now().Add(6 * time.Minute),
 	}
 	openFluxDiagnosticJobs.Lock()
 	for id, previous := range openFluxDiagnosticJobs.entries {
