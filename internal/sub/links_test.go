@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"encoding/base64"
 	"reflect"
 	"strings"
 	"testing"
@@ -71,6 +72,35 @@ func TestNormalizeGeneratedLinks_DeduplicatesAcrossEntries(t *testing.T) {
 	}
 	if got := normalizeGeneratedLinks(entries); !reflect.DeepEqual(got, want) {
 		t.Fatalf("normalizeGeneratedLinks() = %#v, want %#v", got, want)
+	}
+}
+
+// Two Host entries with different names must not advertise the same
+// AmneziaWG tunnel twice. Different effective endpoints remain distinct.
+func testAWGShareLink(remark, endpoint string) string {
+	conf := "[Interface]\nPrivateKey = client-key\nAddress = 10.0.0.2/32\n\n# " +
+		remark + "\n[Peer]\nPublicKey = server-key\nAllowedIPs = 0.0.0.0/0\nEndpoint = " + endpoint
+	return "vpn://" + base64.RawURLEncoding.EncodeToString([]byte(conf))
+}
+
+func TestNormalizeGeneratedLinks_DeduplicatesAmneziaWGByConnection(t *testing.T) {
+	first := testAWGShareLink("Host A", "vpn.example.com:51820")
+	alias := testAWGShareLink("Host B", "vpn.example.com:51820")
+	other := testAWGShareLink("Different endpoint", "vpn2.example.com:51820")
+	want := []string{first, other}
+	if got := normalizeGeneratedLinks([]string{first, alias, other}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalized AWG links = %v, want %v", got, want)
+	}
+	if got := splitLinkLines(first + "\n" + alias + "\n" + other); !reflect.DeepEqual(got, want) {
+		t.Fatalf("split AWG links = %v, want %v", got, want)
+	}
+}
+
+func TestGeneratedLinkIdentity_LeavesNonAWGAndInvalidAWGUntouched(t *testing.T) {
+	for _, link := range []string{"vless://user@host:443#remark", "vpn://not-base64%%", "vpn://Y29uZmln"} {
+		if got := generatedLinkIdentity(link); got != link {
+			t.Fatalf("generatedLinkIdentity(%q) = %q, want unchanged", link, got)
+		}
 	}
 }
 
