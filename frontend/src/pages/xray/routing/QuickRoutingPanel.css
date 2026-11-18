@@ -38,24 +38,6 @@
   line-height: 1.6;
 }
 
-.quick-routing-stats {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  flex: 0 0 auto;
-}
-
-.quick-routing-stats .ant-statistic-title {
-  font-size: 11px;
-  max-width: 90px;
-  line-height: 1.4;
-}
-
-.quick-routing-stats .ant-statistic-content {
-  font-size: 22px;
-  font-weight: 650;
-}
-
 .quick-routing-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(275px, 1fr);
@@ -120,31 +102,6 @@
 .quick-routing-select {
   width: 100%;
   min-height: 34px;
-}
-
-.quick-routing-flow-preview {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 12px;
-  margin-top: 2px;
-  border: 1px dashed var(--quick-border);
-  border-radius: 9px;
-  background: var(--ant-color-fill-quaternary);
-}
-
-.quick-routing-flow-preview .ant-tag {
-  display: block;
-  max-width: min(250px, 100%);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-inline-end: 0;
-}
-
-.quick-routing-flow-preview > .anticon {
-  color: var(--ant-color-text-tertiary);
 }
 
 .quick-routing-actions {
@@ -239,10 +196,6 @@
     flex-direction: column;
     gap: 15px;
     padding: 14px;
-  }
-  .quick-routing-stats {
-    width: 100%;
-    justify-content: space-between;
   }
   .quick-routing-modes .ant-radio-button-wrapper {
     flex: 1 1 44%;
@@ -394,4 +347,8 @@
   .quick-routing-managed-title .ant-select {
     min-width: 90px !important;
   }
+}
+
+.quick-routing-status-dot.is-idle {
+  background: var(--ant-color-text-quaternary);
 }
