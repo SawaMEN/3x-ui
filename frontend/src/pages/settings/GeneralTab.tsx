@@ -387,7 +387,12 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
                 <SettingListItem
                   paddings="small"
                   title={t('pages.settings.logRetentionDays')}
-                  badge={<DefaultSettingTag settingKey="logRetentionDays" value={allSetting.logRetentionDays} />}
+                  badge={
+                    <DefaultSettingTag
+                      settingKey="logRetentionDays"
+                      value={allSetting.logRetentionDays}
+                    />
+                  }
                   description={t('pages.settings.logRetentionDaysDesc')}
                 >
                   <InputNumber
