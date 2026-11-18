@@ -59,6 +59,7 @@ var defaultValueMap = map[string]string{
 	"subAllowedDomains":     "",
 	"subRestrictDomains":    "false",
 	"domainActivityEnabled": "false",
+	"domainActivityRetentionSeconds": "300",
 	"subCDNEnable":          "false",
 
 	"rootRedirectEnable":       "false",
@@ -1247,6 +1248,17 @@ func (s *SettingService) GetDomainActivityEnabled() (bool, error) {
 
 func (s *SettingService) SetDomainActivityEnabled(enabled bool) error {
 	return s.setBool("domainActivityEnabled", enabled)
+}
+
+func (s *SettingService) GetDomainActivityRetentionSeconds() (int, error) {
+	return s.getInt("domainActivityRetentionSeconds")
+}
+
+func (s *SettingService) SetDomainActivityRetentionSeconds(seconds int) error {
+	if !ValidDomainActivityRetentionSeconds(seconds) {
+		return fmt.Errorf("domain activity retention must be between %d and %d seconds", MinDomainActivityRetentionSeconds, MaxDomainActivityRetentionSeconds)
+	}
+	return s.setInt("domainActivityRetentionSeconds", seconds)
 }
 
 func (s *SettingService) GetAccessLogEnable() (bool, error) {
