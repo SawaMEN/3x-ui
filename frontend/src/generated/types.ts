@@ -55,6 +55,7 @@ export interface AllSetting {
   rootRedirectEnable: boolean;
   rootRedirectURL: string;
   sessionMaxAge: number;
+  logRetentionDays: number;
   smtpCpu: number;
   smtpEnable: boolean;
   smtpEnabledEvents: string;
@@ -223,6 +224,7 @@ export interface AllSettingView {
   rootRedirectEnable: boolean;
   rootRedirectURL: string;
   sessionMaxAge: number;
+  logRetentionDays: number;
   smtpCpu: number;
   smtpEnable: boolean;
   smtpEnabledEvents: string;
