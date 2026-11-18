@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Button, Dropdown, Input, Modal, Select, Space, Table, Tabs, message } from 'antd';
+import { Button, Dropdown, Input, Modal, Select, Space, Switch, Table, Tabs, message } from 'antd';
 import {
   AimOutlined,
   ControlOutlined,
@@ -22,6 +22,7 @@ import { useInboundOptions } from '@/api/queries/useInboundOptions';
 import AdBlockTab from '@/pages/adblock/AdBlockTab';
 import RoutingBasic from './RoutingBasic';
 import QuickRoutingPanel from './QuickRoutingPanel';
+import { isQuickRule } from './quick-routing';
 import RoutingCatalogTab from './RoutingCatalogTab';
 import RouteTester from './RouteTester';
 import RuleFormModal from './RuleFormModal';
@@ -66,6 +67,7 @@ export default function RoutingTab({
     : 'quick';
   const [modal, modalContextHolder] = Modal.useModal();
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
+  const [showQuickInAdvanced, setShowQuickInAdvanced] = useState(false);
   const [editingRule, setEditingRule] = useState<RoutingRule | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const rulesContainerRef = useRef<HTMLDivElement>(null);
@@ -81,6 +83,10 @@ export default function RoutingTab({
   const rules = useMemo(
     () => (templateSettings?.routing?.rules || []) as RoutingRule[],
     [templateSettings?.routing?.rules],
+  );
+  const quickRuleCount = useMemo(
+    () => rules.filter((rule) => isQuickRule(rule, 'xray')).length,
+    [rules],
   );
   const rulesRef = useRef(rules);
   const rowsRef = useRef<RuleRow[]>([]);
@@ -115,8 +121,9 @@ export default function RoutingTab({
         .filter((r) => {
           const inboundTags = (rules[r.key]?.inboundTag || []) as string[];
           return !inboundTags.some(isBalancerLoopbackTag);
-        }),
-    [rules, t],
+        })
+        .filter((r) => showQuickInAdvanced || !isQuickRule(rules[r.key], 'xray')),
+    [rules, t, showQuickInAdvanced],
   );
 
   useEffect(() => {
@@ -450,7 +457,7 @@ export default function RoutingTab({
         items={[
           {
             key: 'quick',
-            label: catTabLabel(<ControlOutlined />, 'Быстрые маршруты', isMobile),
+            label: catTabLabel(<ControlOutlined />, 'Маршруты', isMobile),
             children: (
               <QuickRoutingPanel
                 engine="xray"
@@ -468,7 +475,7 @@ export default function RoutingTab({
           },
           {
             key: 'basic',
-            label: catTabLabel(<ControlOutlined />, t('pages.xray.basicRouting'), isMobile),
+            label: catTabLabel(<ControlOutlined />, 'Общие настройки', isMobile),
             children: (
               <RoutingBasic
                 templateSettings={templateSettings}
@@ -480,12 +487,12 @@ export default function RoutingTab({
           },
           {
             key: 'rules',
-            label: catTabLabel(<UnorderedListOutlined />, t('pages.xray.Routings'), isMobile),
+            label: catTabLabel(<UnorderedListOutlined />, 'Расширенные правила', isMobile),
             children: (
               <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
                 <Space wrap>
                   <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
-                    {t('pages.xray.Routings')}
+                    Добавить правило
                   </Button>
                   <Select
                     allowClear
@@ -546,6 +553,19 @@ export default function RoutingTab({
                   >
                     <Button icon={<MoreOutlined />}>{t('more')}</Button>
                   </Dropdown>
+                  {quickRuleCount > 0 && (
+                    <Space size={6}>
+                      <Switch
+                        size="small"
+                        aria-label="Показывать автоматические маршруты"
+                        checked={showQuickInAdvanced}
+                        onChange={setShowQuickInAdvanced}
+                      />
+                      <span className="routing-advanced-toggle-label">
+                        Показывать автоматические ({quickRuleCount})
+                      </span>
+                    </Space>
+                  )}
                 </Space>
 
                 <div ref={rulesContainerRef}>
