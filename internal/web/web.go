@@ -374,6 +374,7 @@ const (
 	cadenceReapOrphans   = "@every 5m"
 	cadenceRemoteRouting = "@every 5m"
 	cadenceXrayLogPrune  = "@every 1m"
+	cadenceDomainActivity = "@every 3s"
 	cadenceCheckHash     = "@every 2m"
 	// cpu.Percent samples over a full minute (blocking), so a finer cadence just
 	// stacks overlapping samplers; subscribers rate-limit alerts to 1/min anyway.
@@ -454,6 +455,8 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 
 	// check client ips from log file every 10 sec
 	_, _ = s.cron.AddJob(cadenceClientIPScan, job.NewCheckClientIpJob())
+	// Capture short-lived site connections even when the activity dialog is closed.
+	_, _ = s.cron.AddJob(cadenceDomainActivity, job.NewDomainActivityJob())
 
 	_, _ = s.cron.AddJob(cadenceNodeHeartbeat, job.NewNodeHeartbeatJob())
 
