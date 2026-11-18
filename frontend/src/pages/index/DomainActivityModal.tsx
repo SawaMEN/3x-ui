@@ -41,7 +41,7 @@ const EMPTY: DomainActivityState = {
   accessLogEnabled: false,
   core: '',
   mode: 'recent',
-  windowSeconds: 120,
+  windowSeconds: 300,
   entries: [],
   nodeId: 0,
 };
@@ -93,8 +93,8 @@ export default function DomainActivityModal({
     [nodeId],
   );
 
-  // The backend returns only a short rolling window; polling stops when closed
-  // or when the document is hidden. No client-side activity history is retained.
+  // The server samples domain activity in the background while monitoring
+  // is enabled. UI requests stop when closed; server history is not browser state.
   const { data, loading, refresh } = useRefreshRequest(open, load, EMPTY, 3000);
   // A source change must never display an old node's activity as a live result.
   const viewData = data.nodeId === nodeId ? data : EMPTY;
@@ -106,6 +106,21 @@ export default function DomainActivityModal({
       const msg = await HttpUtil.post(
         '/panel/api/server/domainActivity/config',
         { enabled },
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+      if (msg?.success) refresh();
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const setRetention = async (retentionSeconds: number) => {
+    if (nodeId !== 0) return;
+    setUpdating(true);
+    try {
+      const msg = await HttpUtil.post(
+        '/panel/api/server/domainActivity/config',
+        { retentionSeconds },
         { headers: { 'Content-Type': 'application/json' } },
       );
       if (msg?.success) refresh();
@@ -141,11 +156,7 @@ export default function DomainActivityModal({
       ellipsis: true,
     },
     {
-      title: t(
-        viewData.mode === 'active'
-          ? 'pages.index.domainActivityCheckedAt'
-          : 'pages.index.domainActivityLastSeen',
-      ),
+      title: t('pages.index.domainActivityLastSeen'),
       dataIndex: 'lastSeen',
       key: 'lastSeen',
       width: 125,
@@ -155,11 +166,7 @@ export default function DomainActivityModal({
       },
     },
     {
-      title: t(
-        viewData.mode === 'active'
-          ? 'pages.index.domainActivityActiveConnections'
-          : 'pages.index.domainActivityConnections',
-      ),
+      title: t('pages.index.domainActivityConnections'),
       dataIndex: 'count',
       key: 'count',
       width: 110,
@@ -218,6 +225,28 @@ export default function DomainActivityModal({
         {viewData.mode === 'recent' && viewData.supported && !viewData.accessLogEnabled && (
           <Alert type="warning" showIcon title={t('pages.index.domainActivityEnableLog')} />
         )}
+        {nodeId === 0 && (
+          <Space align="center" wrap>
+            <Typography.Text>{t('pages.index.domainActivityRetention')}</Typography.Text>
+            <Select<number>
+              aria-label={t('pages.index.domainActivityRetention')}
+              value={viewData.windowSeconds || 300}
+              disabled={updating}
+              style={{ minWidth: 185 }}
+              options={[
+                { value: 10, label: t('pages.index.domainActivity10Seconds') },
+                { value: 30, label: t('pages.index.domainActivity30Seconds') },
+                { value: 60, label: t('pages.index.domainActivity1Minute') },
+                { value: 300, label: t('pages.index.domainActivity5Minutes') },
+                { value: 900, label: t('pages.index.domainActivity15Minutes') },
+                { value: 3600, label: t('pages.index.domainActivity1Hour') },
+                { value: 21600, label: t('pages.index.domainActivity6Hours') },
+                { value: 86400, label: t('pages.index.domainActivity24Hours') },
+              ]}
+              onChange={(value) => void setRetention(value)}
+            />
+          </Space>
+        )}
         <Space align="center" wrap>
           <Typography.Text>{t('pages.index.domainActivityToggle')}</Typography.Text>
           <Switch
@@ -266,13 +295,7 @@ export default function DomainActivityModal({
               pagination={false}
               scroll={{ x: 680, y: 420 }}
               locale={{
-                emptyText: t(
-                  viewData.temporarilyUnavailable
-                    ? 'pages.index.domainActivityTemporarilyUnavailable'
-                    : viewData.mode === 'active'
-                      ? 'pages.index.domainActivityNoActiveData'
-                    : 'pages.index.domainActivityNoData',
-                ),
+                emptyText: t('pages.index.domainActivityNoData'),
               }}
               loading={loading && entries.length === 0}
             />
