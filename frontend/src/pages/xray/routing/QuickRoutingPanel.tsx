@@ -173,7 +173,15 @@ export default function QuickRoutingPanel({
   );
   const hasWarnings = warnings.length > 0;
   useEffect(() => {
-    if (hasWarnings) setHealthOpen(true);
+    if (!hasWarnings) return;
+    // Defer the state update until after the effect to avoid cascading renders.
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) setHealthOpen(true);
+    });
+    return () => {
+      active = false;
+    };
   }, [hasWarnings]);
 
   const targetOptions = [
