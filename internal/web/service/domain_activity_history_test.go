@@ -59,3 +59,29 @@ func TestDomainActivityHistoryWindowBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestDomainActivityLateSnapshotCannotRestoreHistory(t *testing.T) {
+	ClearDomainActivityHistory()
+	t.Cleanup(ClearDomainActivityHistory)
+	now := time.Now()
+	generation := DomainActivityHistoryGeneration()
+
+	// The API call started in the old epoch. Turning monitoring off must
+	// make its eventual result ineligible for storage.
+	ClearDomainActivityHistory()
+	entry := DomainActivityEntry{
+		Email: "client@example.test", Domain: "example.org", LastSeen: now, Count: 1,
+	}
+	if RecordDomainActivityIfGeneration(CoreTypeSingBox, []DomainActivityEntry{entry}, now, 300, generation) {
+		t.Fatal("stale snapshot was accepted after monitoring disabled")
+	}
+	if items := DomainActivityHistoryEntries(CoreTypeSingBox, now, 300); len(items) != 0 {
+		t.Fatalf("disabled history was restored: %+v", items)
+	}
+
+	// A newly enabled monitoring epoch may record fresh observations.
+	newGeneration := DomainActivityHistoryGeneration()
+	if !RecordDomainActivityIfGeneration(CoreTypeSingBox, []DomainActivityEntry{entry}, now, 300, newGeneration) {
+		t.Fatal("current snapshot was rejected")
+	}
+}
