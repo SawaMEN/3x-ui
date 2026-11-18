@@ -585,8 +585,7 @@ export default function QuickRoutingPanel({
             </Button>
           </div>
           <Typography.Text type="secondary" className="quick-routing-help">
-            <SafetyOutlined aria-hidden="true" /> Изменения вступят в силу после общего сохранения
-            настроек.
+            Изменения применяются после сохранения настроек панели.
           </Typography.Text>
         </Card>
 
