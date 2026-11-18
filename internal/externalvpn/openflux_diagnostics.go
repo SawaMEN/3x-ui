@@ -155,6 +155,11 @@ func DiagnoseOpenFluxChannel(parent context.Context, inst Instance, typ, maxClie
 		add("payload", "skipped", "No local echo target", 0)
 		return result
 	}
+	var challenge [48]byte
+	if _, err := rand.Read(challenge[:]); err != nil {
+		add("payload", "failed", "Cannot generate random test payload", 0)
+		return result
+	}
 	listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
 	if err != nil {
 		add("session", "failed", "Cannot open a temporary local echo target: "+err.Error(), time.Since(begin))
@@ -162,7 +167,7 @@ func DiagnoseOpenFluxChannel(parent context.Context, inst Instance, typ, maxClie
 		return result
 	}
 	defer listener.Close()
-	go openFluxDiagnosticEcho(ctx, listener)
+	go openFluxDiagnosticEcho(ctx, listener, challenge)
 
 	bridgeSettings, ok := bridge["settings"].(map[string]any)
 	if !ok {
@@ -209,11 +214,6 @@ func DiagnoseOpenFluxChannel(parent context.Context, inst Instance, typ, maxClie
 	defer conn.Close()
 	add("session", "passed", "SOCKS CONNECT completed through the selected OpenFlux transport alone", time.Since(begin))
 
-	var challenge [48]byte
-	if _, err := rand.Read(challenge[:]); err != nil {
-		add("payload", "failed", "Cannot generate random test payload", 0)
-		return result
-	}
 	_ = conn.SetDeadline(time.Now().Add(12 * time.Second))
 	startPayload := time.Now()
 	if _, err := conn.Write(challenge[:]); err != nil {
@@ -260,7 +260,7 @@ func openFluxDiagnosticIPv4() (string, error) {
 	return "", fmt.Errorf("no non-loopback local IPv4 for a reliable OpenFlux L4 echo test")
 }
 
-func openFluxDiagnosticEcho(ctx context.Context, listener net.Listener) {
+func openFluxDiagnosticEcho(ctx context.Context, listener net.Listener, expected [48]byte) {
 	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
 	defer stop()
 	for {
@@ -272,7 +272,7 @@ func openFluxDiagnosticEcho(ctx context.Context, listener net.Listener) {
 			defer c.Close()
 			_ = c.SetDeadline(time.Now().Add(12 * time.Second))
 			var data [48]byte
-			if _, err := io.ReadFull(c, data[:]); err == nil {
+			if _, err := io.ReadFull(c, data[:]); err == nil && bytes.Equal(data[:], expected[:]) {
 				_, _ = c.Write(data[:])
 			}
 		}(conn)
