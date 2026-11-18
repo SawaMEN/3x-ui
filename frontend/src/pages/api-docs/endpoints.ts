@@ -1062,9 +1062,9 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/server/fail2banStatus',
         summary:
-          'Reports whether per-client IP limits can be enforced on this host. The panel uses it to gate the "IP Limit" field, since enforcement depends on Fail2ban being installed.',
+          'Reports whether per-client IP limits can be enforced by the selected core. Modified sing-box and upstream sing-box use native session disconnection; legacy cores require Fail2ban.',
         response:
-          '{\n  "success": true,\n  "obj": {\n    "enabled": true,\n    "installed": true,\n    "usable": true,\n    "windows": false\n  }\n}',
+          '{\n  "success": true,\n  "obj": {\n    "enabled": true,\n    "installed": true,\n    "usable": true,\n    "windows": false,\n    "method": "native"\n  }\n}',
       },
       {
         method: 'GET',
