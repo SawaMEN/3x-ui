@@ -200,7 +200,7 @@ export default function DomainActivityModal({
           showIcon
           description={
             viewData.mode === 'active'
-              ? t('pages.index.domainActivityActiveDescription')
+              ? t('pages.index.domainActivityActiveDescription', { seconds: viewData.windowSeconds })
               : t('pages.index.domainActivityDescription', { seconds: viewData.windowSeconds })
           }
         />
