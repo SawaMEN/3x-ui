@@ -1064,7 +1064,7 @@ export const sections: readonly Section[] = [
         summary:
           'Reports whether per-client IP limits can be enforced by the selected core. Modified sing-box and upstream sing-box use native session disconnection; legacy cores require Fail2ban.',
         response:
-          '{\n  "success": true,\n  "obj": {\n    "enabled": true,\n    "installed": true,\n    "usable": true,\n    "windows": false,\n    "method": "native"\n  }\n}',
+          '{\n  "success": true,\n  "obj": {\n    "enabled": true,\n    "installed": false,\n    "usable": true,\n    "windows": false,\n    "method": "native"\n  }\n}',
       },
       {
         method: 'GET',
