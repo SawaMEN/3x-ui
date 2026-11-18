@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func TestProcessObservedAppliesIPLimitOnFirstScan(t *testing.T) {
@@ -29,5 +28,4 @@ func TestProcessObservedAppliesIPLimitOnFirstScan(t *testing.T) {
 	if len(job.disAllowedIps) != 1 || job.disAllowedIps[0] != "198.51.100.1" {
 		t.Fatalf("oldest IP must be selected for disconnection: %v", job.disAllowedIps)
 	}
-	_ = model.InboundClientIps{} // type is persisted by readClientIps
 }
