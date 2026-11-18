@@ -7,11 +7,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
@@ -113,6 +116,44 @@ func TestOpenFluxEndToEndRequiresSavedInboundAndExplicitConfirmation(t *testing.
 		engine.ServeHTTP(w, req)
 		if !strings.Contains(w.Body.String(), `"success":false`) || !strings.Contains(w.Body.String(), tc.want) {
 			t.Fatalf("unsafe diagnostic was accepted: %s", w.Body.String())
+		}
+	}
+}
+
+func TestOpenFluxDiagnosticResultRestrictedToJobOwner(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const runID = "test-diagnostic-private-job"
+	openFluxDiagnosticJobs.Lock()
+	openFluxDiagnosticJobs.entries[runID] = &openFluxDiagnosticJob{
+		RunID: runID, State: "success", OwnerID: 15, Until: time.Now().Add(time.Minute),
+	}
+	openFluxDiagnosticJobs.Unlock()
+	t.Cleanup(func() {
+		openFluxDiagnosticJobs.Lock()
+		delete(openFluxDiagnosticJobs.entries, runID)
+		openFluxDiagnosticJobs.Unlock()
+	})
+	for _, tc := range []struct{ owner int; permitted bool }{
+		{15, true}, {16, false},
+	} {
+		engine := gin.New()
+		engine.Use(func(c *gin.Context) {
+			session.SetAPIAuthUser(c, &model.User{Id: tc.owner})
+			c.Next()
+		})
+		controller := &ServerController{}
+		controller.initExternalVPNRouter(engine.Group("/server"))
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/server/openflux/diagnose-status?runId="+runID, nil))
+		body := w.Body.String()
+		if !strings.Contains(body, `"success":`+map[bool]string{true:"true", false:"false"}[tc.permitted]) {
+			t.Fatalf("owner=%d response=%s", tc.owner, body)
+		}
+		if tc.permitted && !strings.Contains(body, runID) {
+			t.Fatalf("owner unable to read job: %s", body)
+		}
+		if !tc.permitted && strings.Contains(body, runID) {
+			t.Fatalf("job ID leaked to another user: %s", body)
 		}
 	}
 }
