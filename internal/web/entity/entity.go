@@ -47,7 +47,6 @@ type AllSetting struct {
 	SubCDNEnable             bool   `json:"subCDNEnable" form:"subCDNEnable"`
 	WebBasePath              string `json:"webBasePath" form:"webBasePath"`
 	SessionMaxAge            int    `json:"sessionMaxAge" form:"sessionMaxAge" validate:"gte=1,lte=525600"`
-	LogRetentionDays         int    `json:"logRetentionDays" form:"logRetentionDays" validate:"gte=1,lte=90"`
 	TrustedProxyCIDRs        string `json:"trustedProxyCIDRs" form:"trustedProxyCIDRs"`
 	RealityScanCandidates    string `json:"realityScanCandidates" form:"realityScanCandidates"`
 	IpLimitAllowlist         string `json:"ipLimitAllowlist" form:"ipLimitAllowlist"`
