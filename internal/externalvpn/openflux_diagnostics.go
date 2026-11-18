@@ -129,11 +129,11 @@ func DiagnoseOpenFluxChannel(parent context.Context, inst Instance, typ, maxClie
 	// Use only one transport. Never install client cookies into the running
 	// inbound, and never put secrets on a process command line.
 	raw := map[string]any{
-		"tag": "openflux-diagnostic",
+		"tag":      "openflux-diagnostic",
 		"protocol": "openflux",
 		"settings": map[string]any{
-			"secret": secret,
-			"context": inst.Settings.Context,
+			"secret":     secret,
+			"context":    inst.Settings.Context,
 			"transports": []OpenFluxTransport{carrier},
 		},
 	}
