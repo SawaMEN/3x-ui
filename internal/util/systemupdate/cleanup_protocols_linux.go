@@ -63,10 +63,19 @@ func isProtocolConfigStagingFile(name string) bool {
 	if strings.HasPrefix(name, ".telemt-") && strings.HasSuffix(name, ".toml") {
 		return isGoTempSuffix(strings.TrimSuffix(strings.TrimPrefix(name, ".telemt-"), ".toml"))
 	}
+	// The Telemt web-front helper uses mktemp for a temporary private-key bundle.
+	if strings.HasPrefix(name, "tls.pem.") {
+		return isGoTempSuffix(strings.TrimPrefix(name, "tls.pem."))
+	}
 	return false
 }
 
 func isProtocolTempFile(name string) bool {
+	for _, prefix := range []string{"x-ui-script.", "x-ui-install."} {
+		if strings.HasPrefix(name, prefix) {
+			return isGoTempSuffix(strings.TrimPrefix(name, prefix))
+		}
+	}
 	for _, suffix := range []string{".sh", ".log", ""} {
 		for _, prefix := range []string{"olcrtc-installer-", "olcrtc-install-log-", "olcrtc-built-revisions-"} {
 			if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, suffix) {
@@ -321,12 +330,16 @@ func cleanupProtocolInstallArtifacts(ctx context.Context, result *CleanupResult)
 		"/etc/x-ui/oxidns", "/etc/x-ui/oxidns/bin",
 		"/etc/x-ui/dnstt", "/etc/x-ui/dnstt/bin",
 		"/etc/x-ui", filepath.Join(binDir, "mtproto"),
+		"/etc/x-ui/telemt-web-front",
 	} {
 		clean(dir, tempArtifactMaxAge, isProtocolConfigStagingFile)
 	}
 	for _, dir := range []string{"/tmp", "/var/tmp"} {
 		clean(dir, tempArtifactMaxAge, isProtocolTempFile)
 	}
+	clean("/usr/bin", tempArtifactMaxAge, func(name string) bool {
+		return strings.HasPrefix(name, "x-ui-menu.") && isGoTempSuffix(strings.TrimPrefix(name, "x-ui-menu."))
+	})
 	// These fixed names are used for interrupted atomic Telemt/OlcRTC writes.
 	clean("/usr/local/x-ui/bin", tempArtifactMaxAge, func(name string) bool {
 		return name == "telemt.new"
