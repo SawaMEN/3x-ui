@@ -38,7 +38,7 @@ func isProtocolStagingFile(name string) bool {
 }
 
 func isGoTempSuffix(suffix string) bool {
-	if len(suffix) != 8 {
+	if len(suffix) < 6 || len(suffix) > 12 {
 		return false
 	}
 	for _, char := range suffix {
