@@ -43,7 +43,8 @@ func isGoTempSuffix(suffix string) bool {
 		return false
 	}
 	for _, char := range suffix {
-		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9') {
+		valid := char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9'
+		if !valid {
 			return false
 		}
 	}
