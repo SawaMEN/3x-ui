@@ -277,6 +277,7 @@
       "domainActivityCheckedAt": "Checked at",
       "domainActivityActiveConnections": "Active connections",
       "domainActivityNoActiveData": "No active connections with identifiable domains",
+      "domainActivityTemporarilyUnavailable": "The core or its connections API is temporarily unavailable. The panel will retry automatically.",
       "domainActivityReadError": "Unable to read active connection snapshots",
       "domainActivityDescription": "Domains detected in the Xray access log in the last {{seconds}} seconds. This shows destinations, not exact open browser tabs.",
       "domainActivityUnavailable": "The selected core does not support domain activity.",
