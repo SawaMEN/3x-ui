@@ -61,17 +61,17 @@ func TestProtocolCleanupTempDirectories(t *testing.T) {
 }
 
 func TestProtocolCleanupConfigAndTempMatch(t *testing.T) {
-	for _, name := range []string{".oxidns-1234", ".dnstt-1234", ".telemt-1234.toml", ".telemt-meko-1234.env"} {
+	for _, name := range []string{".oxidns-1234567890", ".dnstt-1234567890", ".telemt-1234567890.toml", ".telemt-meko-1234567890.env"} {
 		if !isProtocolConfigStagingFile(name) {
 			t.Errorf("unrecognized config-stage %q", name)
 		}
 	}
-	for _, name := range []string{"settings.json", "server.key", "telemt.toml", ".openflux-install.json", "telemt.version"} {
+	for _, name := range []string{"settings.json", "server.key", "telemt.toml", ".openflux-install.json", "telemt.version", ".oxidns-backup", ".dnstt-recovery", ".telemt-previous.toml"} {
 		if isProtocolConfigStagingFile(name) {
 			t.Errorf("must preserve configuration/metadata %q", name)
 		}
 	}
-	for _, name := range []string{"olcrtc-installer-1234.sh", "olcrtc-built-revisions-1234", "olcrtc-install-log-1234.log"} {
+	for _, name := range []string{"olcrtc-installer-1234567890.sh", "olcrtc-built-revisions-1234567890", "olcrtc-install-log-1234567890.log"} {
 		if !isProtocolTempFile(name) {
 			t.Errorf("unrecognized OlcRTC scratch file %q", name)
 		}
@@ -236,5 +236,31 @@ func TestActiveNamedProcessIgnoresNonPIDDirectories(t *testing.T) {
 	active, err = activeNamedProcess(root, "tar")
 	if err != nil || active {
 		t.Fatalf("false positive process: %v %v", active, err)
+	}
+}
+
+func TestAbandonedInstallerWithFreshContentsIsPreserved(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "3x-ui-externalvpn-1234567890")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "release.tar.gz")
+	if err := os.WriteFile(file, []byte("active download"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-72 * time.Hour)
+	if err := os.Chtimes(dir, old, old); err != nil {
+		t.Fatal(err)
+	}
+	result := &CleanupResult{}
+	if err := removeOldKnownDirectories(context.Background(), root, 24*time.Hour, isAbandonedInstallerDir, result); err != nil {
+		t.Fatal(err)
+	}
+	if result.RemovedFiles != 0 {
+		t.Fatalf("removed a recently written download: %d", result.RemovedFiles)
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("download file should still exist: %v", err)
 	}
 }
