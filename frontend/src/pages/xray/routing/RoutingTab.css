@@ -287,3 +287,9 @@
     white-space: normal;
   }
 }
+
+.routing-advanced-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
