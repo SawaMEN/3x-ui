@@ -134,6 +134,11 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapVlessField": {
         "type": "string"
       },
+      "logRetentionDays": {
+        "maximum": 90,
+        "minimum": 1,
+        "type": "integer"
+      },
       "nodeDownThreshold": {
         "maximum": 100,
         "minimum": 1,
@@ -169,11 +174,6 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "sessionMaxAge": {
         "maximum": 525600,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "logRetentionDays": {
-        "maximum": 90,
         "minimum": 1,
         "type": "integer"
       },
@@ -588,6 +588,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapUserAttr",
       "ldapUserFilter",
       "ldapVlessField",
+      "logRetentionDays",
       "nodeDownThreshold",
       "outboundDownThreshold",
       "pageSize",
@@ -598,7 +599,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "rootRedirectEnable",
       "rootRedirectURL",
       "sessionMaxAge",
-    "logRetentionDays",
       "smtpCpu",
       "smtpEnable",
       "smtpEnabledEvents",
@@ -835,6 +835,11 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapVlessField": {
         "type": "string"
       },
+      "logRetentionDays": {
+        "maximum": 90,
+        "minimum": 1,
+        "type": "integer"
+      },
       "nodeDownThreshold": {
         "maximum": 100,
         "minimum": 1,
@@ -870,11 +875,6 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "sessionMaxAge": {
         "maximum": 525600,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "logRetentionDays": {
-        "maximum": 90,
         "minimum": 1,
         "type": "integer"
       },
@@ -1296,6 +1296,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapUserAttr",
       "ldapUserFilter",
       "ldapVlessField",
+      "logRetentionDays",
       "nodeDownThreshold",
       "outboundDownThreshold",
       "pageSize",
@@ -1306,7 +1307,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "rootRedirectEnable",
       "rootRedirectURL",
       "sessionMaxAge",
-    "logRetentionDays",
       "smtpCpu",
       "smtpEnable",
       "smtpEnabledEvents",
@@ -5225,7 +5225,7 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "integer"
       },
       "certChainBytes": {
-        "description": "CertChainBytes is the sum of DER lengths of the presented peer chain.\nxray-core ML-DSA-65 REALITY needs \u003e= 3500 bytes (constant lives in xray-core).",
+        "description": "CertChainBytes is the sum of DER lengths of the presented peer chain.\nxray-core ML-DSA-65 REALITY needs >= 3500 bytes (constant lives in xray-core).",
         "example": 3427,
         "type": "integer"
       },
@@ -5612,7 +5612,7 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "string"
       },
       "headerProtectionKey": {
-        "description": "HeaderProtectionKey and ContentPaddingAddition are AmneziaWG 3.0\nfields, flat and top-level for the same tools/openapigen reason as\nthe block above; Obfuscation() below folds them back into\nObfuscation31's own identically named fields.\nHeaderProtectionKey is a base64 32-byte key; empty (the default)\ndisables AWG 3.0 header protection. A non-empty value requires\nevery one of S1-S4 above to be \u003e= 12 -- ValidateObfuscation\nenforces this at save time, not just at IpcSet time.\nContentPaddingAddition is a \"low-high\" range or bare integer, the\nsame grammar and uint32 cap as H1-H4.",
+        "description": "HeaderProtectionKey and ContentPaddingAddition are AmneziaWG 3.0\nfields, flat and top-level for the same tools/openapigen reason as\nthe block above; Obfuscation() below folds them back into\nObfuscation31's own identically named fields.\nHeaderProtectionKey is a base64 32-byte key; empty (the default)\ndisables AWG 3.0 header protection. A non-empty value requires\nevery one of S1-S4 above to be >= 12 -- ValidateObfuscation\nenforces this at save time, not just at IpcSet time.\nContentPaddingAddition is a \"low-high\" range or bare integer, the\nsame grammar and uint32 cap as H1-H4.",
         "type": "string"
       },
       "i1": {
@@ -5640,7 +5640,7 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "string"
       },
       "jc": {
-        "description": "Obfuscation31's fields, repeated flat (not embedded) rather than\nnested under their own key: encoding/json would happily inline an\nembedded Obfuscation31 the same way, but the frontend's Go-\u003eZod/TS\ngenerator (tools/openapigen) does not — it emits a genuinely nested\n`obfuscation31` object, which would silently diverge from the real\nwire JSON. See Obfuscation() below for the manager-facing conversion.",
+        "description": "Obfuscation31's fields, repeated flat (not embedded) rather than\nnested under their own key: encoding/json would happily inline an\nembedded Obfuscation31 the same way, but the frontend's Go->Zod/TS\ngenerator (tools/openapigen) does not — it emits a genuinely nested\n`obfuscation31` object, which would silently diverge from the real\nwire JSON. See Obfuscation() below for the manager-facing conversion.",
         "type": "integer"
       },
       "jmax": {
@@ -5669,7 +5669,7 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "string"
       },
       "randomTrailers": {
-        "description": "RandomTrailers/DisableCookies mirror Instance's identically named\nAmneziaWG 3.1 fields -- see that type's own doc comment for the real\nprotocol/interop details. Both real bool fields (not omitempty):\nbuildUAPIConfig always emits both lines explicitly so the\nreconfigure-in-place diff correctly notices a true-\u003efalse edit, not\njust false-\u003etrue.",
+        "description": "RandomTrailers/DisableCookies mirror Instance's identically named\nAmneziaWG 3.1 fields -- see that type's own doc comment for the real\nprotocol/interop details. Both real bool fields (not omitempty):\nbuildUAPIConfig always emits both lines explicitly so the\nreconfigure-in-place diff correctly notices a true->false edit, not\njust false->true.",
         "type": "boolean"
       },
       "rejectAfterTime": {
@@ -5815,7 +5815,7 @@ export const SCHEMAS: Record<string, unknown> = {
         "additionalProperties": {
           "type": "number"
         },
-        "description": "inboundId -\u003e leastLoad weight; absent entries mean 1.0. Only meaningful\nwith Strategy \"leastLoad\" — xray ignores costs on every other strategy.",
+        "description": "inboundId -> leastLoad weight; absent entries mean 1.0. Only meaningful\nwith Strategy \"leastLoad\" — xray ignores costs on every other strategy.",
         "type": "object"
       },
       "remark": {
