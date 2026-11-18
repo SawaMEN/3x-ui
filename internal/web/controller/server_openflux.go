@@ -74,9 +74,9 @@ func (a *ServerController) checkOpenFluxTransport(c *gin.Context) {
 		return
 	}
 	var input struct {
-		Type string `json:"type"`
+		Type string `json:"type" form:"type"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
+	if err := c.ShouldBind(&input); err != nil {
 		jsonObj(c, nil, err)
 		return
 	}
@@ -90,16 +90,17 @@ var openFluxDiagnosticSlot = make(chan struct{}, 1)
 
 // diagnoseOpenFluxTransport uses only a persisted inbound owned by the
 // authenticated user. It never accepts arbitrary URLs, IPs, passwords or
-// executable paths in the request.
+// executable paths in the request. Accept JSON and legacy form encoding so
+// cached older frontends still work after a backend update.
 func (a *ServerController) diagnoseOpenFluxTransport(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	var input struct {
-		InboundID           int    `json:"inboundId"`
-		Type                string `json:"type"`
-		ClientToken         string `json:"clientToken"`
-		ConfirmInterruption bool   `json:"confirmInterruption"`
+		InboundID           int    `json:"inboundId" form:"inboundId"`
+		Type                string `json:"type" form:"type"`
+		ClientToken         string `json:"clientToken" form:"clientToken"`
+		ConfirmInterruption bool   `json:"confirmInterruption" form:"confirmInterruption"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
+	if err := c.ShouldBind(&input); err != nil {
 		jsonObj(c, nil, err)
 		return
 	}
