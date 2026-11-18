@@ -317,7 +317,10 @@ export default function OpenFluxChannels({
               continue;
             }
             try {
-              const response = await HttpUtil.post<DiagnosticResult>(
+              const response = await HttpUtil.post<{
+                runId: string;
+                state: 'running' | 'success' | 'failed';
+              }>(
                 '/panel/api/server/openflux/diagnose-transport',
                 {
                   inboundId,
@@ -325,24 +328,34 @@ export default function OpenFluxChannels({
                   confirmInterruption: true,
                   ...(type === 'oneme' ? { clientToken: diagnosticMaxClientToken } : {}),
                 },
-                { timeout: 70000, silent: true },
+                { timeout: 10000, silent: true },
               );
-              const data =
-                response.success && response.obj
-                  ? response.obj
-                  : {
-                      type,
-                      scope: 'local-openflux-e2e',
-                      passed: false,
-                      steps: [
-                        {
-                          stage: 'configuration',
-                          status: 'failed' as const,
-                          detail: response.msg || t('pages.inbounds.form.openfluxDiagFailed'),
-                        },
-                      ],
-                    };
-              setDiagnostics((previous) => ({ ...previous, [type]: data }));
+              if (!response.success || !response.obj?.runId) {
+                throw new Error(response.msg || t('pages.inbounds.form.openfluxDiagFailed'));
+              }
+              let completed: DiagnosticResult | undefined;
+              for (let attempt = 0; attempt < 48; attempt++) {
+                const status = await HttpUtil.get<{
+                  state: 'running' | 'success' | 'failed';
+                  result?: DiagnosticResult;
+                }>(
+                  '/panel/api/server/openflux/diagnose-status',
+                  { runId: response.obj.runId },
+                  { timeout: 6000, silent: true },
+                );
+                if (!status.success || !status.obj) {
+                  throw new Error(status.msg || t('pages.inbounds.form.openfluxDiagFailed'));
+                }
+                if (status.obj.state !== 'running') {
+                  completed = status.obj.result;
+                  break;
+                }
+                await new Promise<void>((resolve) => setTimeout(resolve, 1250));
+              }
+              if (!completed) {
+                throw new Error(t('pages.inbounds.form.openfluxDiagTimeout'));
+              }
+              setDiagnostics((previous) => ({ ...previous, [type]: completed }));
             } catch (error) {
               setDiagnostics((previous) => ({
                 ...previous,
