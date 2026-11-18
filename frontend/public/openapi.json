@@ -7939,6 +7939,123 @@
         }
       }
     },
+    "/panel/api/server/openflux/diagnose-transport": {
+      "post": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Start an asynchronous end-to-end OpenFlux transport diagnostic on a saved local inbound.",
+        "operationId": "post_panel_api_server_openflux_diagnose_transport",
+        "description": "Requires a saved, enabled local OpenFlux inbound owned by the authenticated user. The diagnostic may temporarily interrupt its active client; confirmInterruption must be true. Returns a runId for polling diagnose-status. Concurrent diagnostics are rejected.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "inboundId": {
+                    "type": "integer",
+                    "description": "ID of the saved, enabled, local OpenFlux inbound to diagnose."
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "Supported OpenFlux transport type."
+                  },
+                  "confirmInterruption": {
+                    "type": "boolean",
+                    "description": "Explicit consent to temporarily interrupt the current OpenFlux client."
+                  },
+                  "clientToken": {
+                    "type": "string",
+                    "description": "Optional transport client token; treat this value as a secret."
+                  }
+                },
+                "required": [
+                  "inboundId",
+                  "type",
+                  "confirmInterruption"
+                ]
+              },
+              "example": {
+                "inboundId": 17,
+                "type": "direct",
+                "confirmInterruption": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/openflux/diagnose-status": {
+      "get": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Read the state and result of a previously started OpenFlux transport diagnostic.",
+        "operationId": "get_panel_api_server_openflux_diagnose_status",
+        "description": "Diagnostic results are accessible only to the authenticated user who started the job and expire after six minutes. Possible states are running, success, and failed.",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "query",
+            "required": true,
+            "description": "Run ID returned by POST /panel/api/server/openflux/diagnose-transport.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/xdrive/yandex/probe": {
       "post": {
         "tags": [
