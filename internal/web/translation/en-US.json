@@ -1294,6 +1294,7 @@
         "openfluxDiagMaxTokenHint": "For a real MAX call you must provide the Web MAX session token of a DIFFERENT client account. The token is sent only over this authenticated request and is not saved; do not enter your server token or bot token.",
         "openfluxDiagMaxRequired": "Skipped: enter a valid Web MAX token for a separate client account, then retry. The server account token cannot be reused.",
         "openfluxDiagFailed": "End-to-end connection diagnostic failed.",
+        "openfluxDiagTimeout": "The OpenFlux end-to-end diagnostic exceeded the time limit. Check the provider or exit and retry.",
         "openfluxDiagSuccess": "Verified: encrypted OpenFlux payload received",
         "openfluxDiagUnverified": "Connection NOT verified: inspect individual steps",
         "openfluxDiagStages": {"configuration":"Saved configuration","provider":"Provider TLS","session":"Real OpenFlux/ SOCKS connection","payload":"Encrypted data exchange"},
