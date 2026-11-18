@@ -277,6 +277,7 @@
       "domainActivityCheckedAt": "Проверено",
       "domainActivityActiveConnections": "Активных соединений",
       "domainActivityNoActiveData": "Нет активных соединений с распознанными доменами",
+      "domainActivityTemporarilyUnavailable": "Ядро или API соединений временно недоступны. Повторная проверка выполняется автоматически.",
       "domainActivityReadError": "Не удалось получить список активных соединений",
       "domainActivityDescription": "Обнаруженные в Xray access-логе домены за последние {{seconds}} секунд. Это обращения к доменам, а не точный список открытых вкладок.",
       "domainActivityUnavailable": "Выбранное ядро не поддерживает получение активности доменов.",
