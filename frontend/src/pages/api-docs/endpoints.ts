@@ -490,6 +490,58 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/server/openflux/diagnose-transport',
+        summary: 'Start an asynchronous end-to-end OpenFlux transport diagnostic on a saved local inbound.',
+        description:
+          'Requires a saved, enabled local OpenFlux inbound owned by the authenticated user. The diagnostic may temporarily interrupt its active client; confirmInterruption must be true. Returns a runId for polling diagnose-status. Concurrent diagnostics are rejected.',
+        params: [
+          {
+            name: 'inboundId',
+            in: 'body (json)',
+            type: 'integer',
+            desc: 'ID of the saved, enabled, local OpenFlux inbound to diagnose.',
+          },
+          {
+            name: 'type',
+            in: 'body (json)',
+            type: 'string',
+            desc: 'Supported OpenFlux transport type.',
+          },
+          {
+            name: 'confirmInterruption',
+            in: 'body (json)',
+            type: 'boolean',
+            desc: 'Explicit consent to temporarily interrupt the current OpenFlux client.',
+          },
+          {
+            name: 'clientToken',
+            in: 'body (json)',
+            type: 'string',
+            optional: true,
+            desc: 'Optional transport client token; treat this value as a secret.',
+          },
+        ],
+        body: '{"inboundId":17,"type":"direct","confirmInterruption":true}',
+        responseObjectSchema: { type: 'object', additionalProperties: true },
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/openflux/diagnose-status',
+        summary: 'Read the state and result of a previously started OpenFlux transport diagnostic.',
+        description:
+          'Diagnostic results are accessible only to the authenticated user who started the job and expire after six minutes. Possible states are running, success, and failed.',
+        params: [
+          {
+            name: 'runId',
+            in: 'query',
+            type: 'string',
+            desc: 'Run ID returned by POST /panel/api/server/openflux/diagnose-transport.',
+          },
+        ],
+        responseObjectSchema: { type: 'object', additionalProperties: true },
+      },
+      {
+        method: 'POST',
         path: '/panel/api/xdrive/yandex/probe',
         summary:
           'Verify Yandex Disk WebDAV application credentials and folder permissions using a temporary test file.',
