@@ -160,6 +160,11 @@
           "ldapVlessField": {
             "type": "string"
           },
+          "logRetentionDays": {
+            "maximum": 90,
+            "minimum": 1,
+            "type": "integer"
+          },
           "nodeDownThreshold": {
             "maximum": 100,
             "minimum": 1,
@@ -609,6 +614,7 @@
           "ldapUserAttr",
           "ldapUserFilter",
           "ldapVlessField",
+          "logRetentionDays",
           "nodeDownThreshold",
           "outboundDownThreshold",
           "pageSize",
@@ -854,6 +860,11 @@
           },
           "ldapVlessField": {
             "type": "string"
+          },
+          "logRetentionDays": {
+            "maximum": 90,
+            "minimum": 1,
+            "type": "integer"
           },
           "nodeDownThreshold": {
             "maximum": 100,
@@ -1311,6 +1322,7 @@
           "ldapUserAttr",
           "ldapUserFilter",
           "ldapVlessField",
+          "logRetentionDays",
           "nodeDownThreshold",
           "outboundDownThreshold",
           "pageSize",
@@ -23671,6 +23683,36 @@
         ],
         "summary": "Apply the selected system package updates.",
         "operationId": "post_panel_api_setting_system_update_apply",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/system/update/cleanup": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Remove stale package caches and discarded VPN installer downloads while preserving installed cores and recovery files.",
+        "operationId": "post_panel_api_setting_system_update_cleanup",
         "responses": {
           "200": {
             "description": "Successful response",

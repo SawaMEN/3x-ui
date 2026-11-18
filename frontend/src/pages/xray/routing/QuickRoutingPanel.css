@@ -38,24 +38,6 @@
   line-height: 1.6;
 }
 
-.quick-routing-stats {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  flex: 0 0 auto;
-}
-
-.quick-routing-stats .ant-statistic-title {
-  font-size: 11px;
-  max-width: 90px;
-  line-height: 1.4;
-}
-
-.quick-routing-stats .ant-statistic-content {
-  font-size: 22px;
-  font-weight: 650;
-}
-
 .quick-routing-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(275px, 1fr);
@@ -120,31 +102,6 @@
 .quick-routing-select {
   width: 100%;
   min-height: 34px;
-}
-
-.quick-routing-flow-preview {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 12px;
-  margin-top: 2px;
-  border: 1px dashed var(--quick-border);
-  border-radius: 9px;
-  background: var(--ant-color-fill-quaternary);
-}
-
-.quick-routing-flow-preview .ant-tag {
-  display: block;
-  max-width: min(250px, 100%);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-inline-end: 0;
-}
-
-.quick-routing-flow-preview > .anticon {
-  color: var(--ant-color-text-tertiary);
 }
 
 .quick-routing-actions {
@@ -240,10 +197,6 @@
     gap: 15px;
     padding: 14px;
   }
-  .quick-routing-stats {
-    width: 100%;
-    justify-content: space-between;
-  }
   .quick-routing-modes .ant-radio-button-wrapper {
     flex: 1 1 44%;
     text-align: center;
@@ -251,4 +204,151 @@
   .quick-routing-composer .ant-card-body {
     padding: 13px;
   }
+}
+
+/* Routing workspace: one primary action, with secondary tools behind disclosure. */
+.quick-routing-header {
+  align-items: center;
+  padding: 22px 24px;
+  background:
+    radial-gradient(circle at 100% 0%, var(--ant-color-primary-bg), transparent 52%),
+    var(--quick-surface);
+}
+
+.quick-routing-header .quick-routing-title {
+  margin: 7px 0 4px;
+  font-weight: 700;
+}
+
+.quick-routing-status {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 9px;
+  padding: 8px 12px;
+  border: 1px solid var(--quick-border);
+  border-radius: 999px;
+  background: var(--quick-surface);
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.quick-routing-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--ant-color-success);
+}
+
+.quick-routing-composer,
+.quick-routing-managed {
+  min-width: 0;
+}
+
+.quick-routing .quick-routing-composer .ant-card-head,
+.quick-routing .quick-routing-managed .ant-card-head {
+  min-height: 50px;
+  font-size: 14px;
+}
+
+.quick-routing-composer .ant-card-body {
+  gap: 12px;
+}
+
+.quick-routing-modes .ant-radio-button-wrapper {
+  padding: 0 12px;
+}
+
+.quick-routing-search {
+  margin-bottom: 12px;
+}
+
+.quick-routing-managed-item {
+  padding: 13px 0;
+}
+
+.quick-routing-managed-title > span:first-child {
+  min-width: 27px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ant-color-text-tertiary);
+}
+
+.quick-routing-details {
+  overflow: hidden;
+  border: 1px solid var(--quick-border);
+  border-radius: 12px;
+  background: var(--quick-surface);
+}
+
+.quick-routing-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 11px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  list-style: none;
+}
+
+.quick-routing-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.quick-routing-details > summary::after {
+  content: '+';
+  margin-left: auto;
+  color: var(--ant-color-text-tertiary);
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.quick-routing-details[open] > summary::after {
+  content: '−';
+}
+
+.quick-routing-details > summary:hover,
+.quick-routing-details > summary:focus-visible {
+  background: var(--ant-color-fill-quaternary);
+}
+
+.quick-routing-details-content {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--quick-border);
+}
+
+.quick-routing-warning-count {
+  margin-left: auto;
+  color: var(--ant-color-warning-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+@media (max-width: 630px) {
+  .quick-routing-header {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 17px;
+  }
+
+  .quick-routing-composer .ant-card-body {
+    gap: 12px;
+  }
+
+  .quick-routing-status {
+    align-self: flex-start;
+  }
+
+  .quick-routing-managed-title .ant-select {
+    min-width: 90px !important;
+  }
+}
+
+.quick-routing-status-dot.is-idle {
+  background: var(--ant-color-text-quaternary);
 }

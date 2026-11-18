@@ -45,6 +45,7 @@ export interface AllSetting {
   ldapUserAttr: string;
   ldapUserFilter: string;
   ldapVlessField: string;
+  logRetentionDays: number;
   nodeDownThreshold: number;
   outboundDownThreshold: number;
   pageSize: number;
@@ -213,6 +214,7 @@ export interface AllSettingView {
   ldapUserAttr: string;
   ldapUserFilter: string;
   ldapVlessField: string;
+  logRetentionDays: number;
   nodeDownThreshold: number;
   outboundDownThreshold: number;
   pageSize: number;

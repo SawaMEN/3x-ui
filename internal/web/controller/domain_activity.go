@@ -5,21 +5,22 @@ import (
 	"errors"
 	"time"
 
-	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 
 	"github.com/gin-gonic/gin"
 )
 
 type domainActivityResponse struct {
-	Enabled          bool                          `json:"enabled"`
-	Supported        bool                          `json:"supported"`
-	AccessLogEnabled bool                          `json:"accessLogEnabled"`
-	Core             string                        `json:"core"`
-	Mode             string                        `json:"mode"`
-	WindowSeconds    int                           `json:"windowSeconds"`
-	Entries          []service.DomainActivityEntry `json:"entries"`
+	Enabled                bool                          `json:"enabled"`
+	Supported              bool                          `json:"supported"`
+	AccessLogEnabled       bool                          `json:"accessLogEnabled"`
+	Core                   string                        `json:"core"`
+	Mode                   string                        `json:"mode"`
+	WindowSeconds          int                           `json:"windowSeconds"`
+	Entries                []service.DomainActivityEntry `json:"entries"`
+	TemporarilyUnavailable bool                          `json:"temporarilyUnavailable"`
 }
 
 // domainActivityCoreMode identifies the source without probing another core.
@@ -108,8 +109,20 @@ func (a *ServerController) getDomainActivity(c *gin.Context) {
 	}
 	if state.Enabled && state.Supported {
 		if state.Mode == "active" {
+			// A stopped/restarting core has no live API to query. This is an
+			// unavailable snapshot, not an empty set of active connections.
+			if !service.SelectedNativeCore().IsRunning() {
+				state.TemporarilyUnavailable = true
+				jsonObj(c, state, nil)
+				return
+			}
 			state.Entries, err = a.serverService.GetNativeDomainActivity(c.Request.Context(), time.Now())
 			if err != nil {
+				if singbox.IsTemporaryClashAPIError(err) {
+					state.TemporarilyUnavailable = true
+					jsonObj(c, state, nil)
+					return
+				}
 				jsonMsgObj(c, "Unable to read sing-box active connections", state, err)
 				return
 			}
@@ -126,7 +139,7 @@ func (a *ServerController) getDomainActivity(c *gin.Context) {
 
 func (a *ServerController) setDomainActivity(c *gin.Context) {
 	var form struct {
-		Enabled *bool `json:"enabled"`
+		Enabled                  *bool                        `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&form); err != nil {
 		jsonMsg(c, "Invalid domain activity setting", err)

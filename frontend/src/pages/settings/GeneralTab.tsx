@@ -386,6 +386,28 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
 
                 <SettingListItem
                   paddings="small"
+                  title={t('pages.settings.logRetentionDays')}
+                  badge={
+                    <DefaultSettingTag
+                      settingKey="logRetentionDays"
+                      value={allSetting.logRetentionDays}
+                    />
+                  }
+                  description={t('pages.settings.logRetentionDaysDesc')}
+                >
+                  <InputNumber
+                    value={allSetting.logRetentionDays}
+                    min={1}
+                    max={90}
+                    precision={0}
+                    style={{ width: '100%' }}
+                    onChange={onNumber((v) => updateSetting({ logRetentionDays: v }))}
+                    addonAfter={t('pages.settings.logRetentionUnit')}
+                  />
+                </SettingListItem>
+
+                <SettingListItem
+                  paddings="small"
                   title={t('pages.settings.trustedProxyCidrs')}
                   description={t('pages.settings.trustedProxyCidrsDesc')}
                 >

@@ -271,3 +271,25 @@
   opacity: 0.5;
   filter: grayscale(1);
 }
+
+.routing-advanced-toggle-label {
+  font-size: 12px;
+  color: var(--ant-color-text-secondary);
+  white-space: nowrap;
+}
+
+.routing-table .ant-table-tbody > tr:hover > td {
+  background: var(--ant-color-fill-quaternary);
+}
+
+@media (max-width: 630px) {
+  .routing-advanced-toggle-label {
+    white-space: normal;
+  }
+}
+
+.routing-advanced-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}

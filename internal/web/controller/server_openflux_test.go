@@ -171,6 +171,8 @@ func TestOpenFluxTransportDiagnosticsAcceptLegacyFormAndJSON(t *testing.T) {
 		{"TLS check JSON", "/server/openflux/check-transport", "application/json", `{"type":"tyandex"}`, "has no provider-side connectivity check"},
 		{"E2E check form", "/server/openflux/diagnose-transport", "application/x-www-form-urlencoded", "inboundId=0&type=yandex&confirmInterruption=true", "saved OpenFlux inbound"},
 		{"E2E check JSON", "/server/openflux/diagnose-transport", "application/json", `{"inboundId":0,"type":"yandex","confirmInterruption":true}`, "saved OpenFlux inbound"},
+		{"link import form", "/server/externalvpn/parse-link", "application/x-www-form-urlencoded", "link=invalid", "false"},
+		{"link import JSON", "/server/externalvpn/parse-link", "application/json", `{"link":"invalid"}`, "false"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))

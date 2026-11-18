@@ -56,6 +56,7 @@ export const AllSettingSchema = z
     subCDNEnable: z.boolean().optional(),
     webBasePath: absolutePath.optional(),
     sessionMaxAge: z.number().int().min(1).max(525600).optional(),
+    logRetentionDays: z.number().int().min(1).max(90).optional(),
     trustedProxyCIDRs: z.string().optional(),
     realityScanCandidates: z.string().optional(),
     ipLimitAllowlist: z.string().optional(),

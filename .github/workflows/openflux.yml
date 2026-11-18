@@ -6,6 +6,7 @@ on:
     paths:
       - "internal/externalvpn/**"
       - "internal/web/controller/server_openflux*"
+      - "internal/web/controller/server_externalvpn.go"
       - "internal/web/runtime/openflux*"
       - "frontend/src/**openflux*"
       - "frontend/src/**/OpenFlux*"
@@ -22,6 +23,7 @@ on:
     paths:
       - "internal/externalvpn/**"
       - "internal/web/controller/server_openflux*"
+      - "internal/web/controller/server_externalvpn.go"
       - "internal/web/runtime/openflux*"
       - "frontend/src/**openflux*"
       - "frontend/src/**/OpenFlux*"

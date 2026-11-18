@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
@@ -103,7 +104,10 @@ func (j *ClearLogsJob) Run() {
 		}
 	}
 
-	wipeXrayLogs()
+	// Rotate the panel writer and archive core logs before retention pruning.
+	// IP-limit logs above keep their daily snapshot semantics.
+	logger.RotateFile()
+	archiveManagedCoreLogs(time.Now())
 }
 
 func (j *PruneXrayLogsJob) Run() {
@@ -114,6 +118,7 @@ func (j *PruneXrayLogsJob) Run() {
 		truncateLogFile(path, maxXrayLogBytes)
 	}
 	truncateProtocolServerLogs(maxXrayLogBytes)
+	pruneLogArchives(time.Now(), configuredLogRetentionDays())
 }
 
 func wipeXrayLogs() {

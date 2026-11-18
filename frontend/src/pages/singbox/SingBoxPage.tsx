@@ -53,6 +53,7 @@ import './SingBoxPage.css';
 import DnsWorkspace from './DnsWorkspace';
 import NativeRoutingBasic from './NativeRoutingBasic';
 import QuickRoutingPanel from '@/pages/xray/routing/QuickRoutingPanel';
+import { isQuickRule } from '@/pages/xray/routing/quick-routing';
 import ManagedNodeRouteOutbounds from '@/pages/xray/outbounds/ManagedNodeRouteOutbounds';
 import { basicRuleTitle } from './native-routing-basic';
 import { putConnection, removeConnection } from './config-references';
@@ -757,6 +758,7 @@ export default function SingBoxPage() {
   const [routeRuleModalOpen, setRouteRuleModalOpen] = useState(false);
   const [editingRouteRule, setEditingRouteRule] = useState<number | null>(null);
   const [routeSearch, setRouteSearch] = useState('');
+  const [showQuickInAdvanced, setShowQuickInAdvanced] = useState(false);
   const [outboundSearch, setOutboundSearch] = useState('');
 
   const sectionValue = useCallback((key: SectionKey, source: ConfigMap) => {
@@ -1591,6 +1593,8 @@ export default function SingBoxPage() {
   const renderRoute = () => {
     const value = asObject(sectionValue('route', config));
     const rules = Array.isArray(value.rules) ? value.rules.map(asObject) : [];
+    const quickRuleCount = rules.filter((rule) => isQuickRule(rule, 'sing-box')).length;
+    const reorderDisabled = quickRuleCount > 0 && !showQuickInAdvanced;
     const outTags = [...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
       .map((item) => asString(item.tag))
       .filter(Boolean)
@@ -1599,14 +1603,20 @@ export default function SingBoxPage() {
     return (
       <>
         <Card>
-          <div className="singbox-section-header">
-            <div>
-              <div className="singbox-section-title">Маршрутизация</div>
-              <div className="singbox-section-description">
-                Правила проверяются сверху вниз. Первое совпавшее правило определяет назначение;
-                если совпадений нет, используется выход по умолчанию.
-              </div>
-            </div>
+          <div className="singbox-route-toolbar">
+            {quickRuleCount > 0 && (
+              <Space size={6}>
+                <Switch
+                  size="small"
+                  aria-label="Показывать автоматические маршруты"
+                  checked={showQuickInAdvanced}
+                  onChange={setShowQuickInAdvanced}
+                />
+                <span className="singbox-route-toggle-label">
+                  Показывать автоматические ({quickRuleCount})
+                </span>
+              </Space>
+            )}
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -1672,6 +1682,11 @@ export default function SingBoxPage() {
             </Row>
           )}
 
+          {reorderDisabled && (
+            <div className="singbox-route-order-hint">
+              Для изменения порядка включите показ автоматических маршрутов.
+            </div>
+          )}
           <Divider />
           <Input.Search
             placeholder="Поиск по условиям, назначению или комментарию"
@@ -1692,7 +1707,8 @@ export default function SingBoxPage() {
                 (rule) =>
                   !['panel-basic:', 'panel-inbound:'].some((prefix) =>
                     asString(rule.comment).startsWith(prefix),
-                  ),
+                  ) &&
+                  (showQuickInAdvanced || !isQuickRule(rule, 'sing-box')),
               )
               .filter((rule) =>
                 [routeRuleSummary(rule), rule.outbound, rule.action, rule.comment]
@@ -1780,7 +1796,7 @@ export default function SingBoxPage() {
                         size="small"
                         title="Выше"
                         icon={<ArrowUpOutlined />}
-                        disabled={index === 0}
+                        disabled={reorderDisabled || index === 0}
                         onClick={() => {
                           const next = [...rules];
                           [next[index - 1], next[index]] = [next[index], next[index - 1]];
@@ -1791,7 +1807,7 @@ export default function SingBoxPage() {
                         size="small"
                         title="Ниже"
                         icon={<ArrowDownOutlined />}
-                        disabled={index === rules.length - 1}
+                        disabled={reorderDisabled || index === rules.length - 1}
                         onClick={() => {
                           const next = [...rules];
                           [next[index], next[index + 1]] = [next[index + 1], next[index]];
@@ -1838,11 +1854,7 @@ export default function SingBoxPage() {
 
         {showAdvanced && (
           <Card>
-            <div className="singbox-card-title">Rule-set и расширенные правила</div>
-            <div className="singbox-section-description">
-              Сложные наборы остаются редактируемыми вручную, но основная маршрутизация больше не
-              требует ручной сборки JSON.
-            </div>
+            <div className="singbox-card-title">JSON и наборы правил</div>
             <div className="singbox-inline-actions">
               <JsonModal
                 title="Route rules"

@@ -20,6 +20,7 @@ interface DomainActivityState {
   enabled: boolean;
   supported: boolean;
   accessLogEnabled: boolean;
+  temporarilyUnavailable?: boolean;
   core: string;
   mode: 'active' | 'recent';
   error?: string;
@@ -199,6 +200,13 @@ export default function DomainActivityModal({
         {!viewData.supported && (
           <Alert type="warning" showIcon title={t('pages.index.domainActivityUnavailable')} />
         )}
+        {viewData.temporarilyUnavailable && (
+          <Alert
+            type="warning"
+            showIcon
+            title={t('pages.index.domainActivityTemporarilyUnavailable')}
+          />
+        )}
         {!!viewData.error && (
           <Alert
             type="error"
@@ -259,8 +267,10 @@ export default function DomainActivityModal({
               scroll={{ x: 680, y: 420 }}
               locale={{
                 emptyText: t(
-                  viewData.mode === 'active'
-                    ? 'pages.index.domainActivityNoActiveData'
+                  viewData.temporarilyUnavailable
+                    ? 'pages.index.domainActivityTemporarilyUnavailable'
+                    : viewData.mode === 'active'
+                      ? 'pages.index.domainActivityNoActiveData'
                     : 'pages.index.domainActivityNoData',
                 ),
               }}

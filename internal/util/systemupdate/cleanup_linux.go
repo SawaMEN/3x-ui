@@ -125,6 +125,8 @@ func Cleanup(ctx context.Context) (CleanupResult, error) {
 	}
 	result.Actions = append(result.Actions, "Abandoned VPN-core staging files")
 
+	cleanupProtocolInstallArtifacts(cleanupCtx, &result)
+
 	// Only files with panel-specific prefixes are considered for direct removal.
 	// Other system temp content follows the OS tmpfiles retention policy instead
 	// of indiscriminately deleting potentially active sockets or workspaces.
@@ -295,45 +297,8 @@ func availableBytes(path string) (int64, bool) {
 	return int64(stat.Bavail) * stat.Bsize, true
 }
 
-// removeOldPanelTempDirs deletes only known installer scratch directories
-// abandoned for at least a day. Never remove an arbitrary /tmp directory.
+// removeOldPanelTempDirs is shared by all standalone protocol installers.
+// The common remover also checks nested file activity and recovery snapshots.
 func removeOldPanelTempDirs(ctx context.Context, dir string, minAge time.Duration, result *CleanupResult) error {
-	info, err := os.Lstat(dir)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("refusing unsafe cleanup directory: %s", dir)
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "3x-ui-sudoku-") {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
-		stat, err := os.Lstat(path)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if !stat.IsDir() || stat.Mode()&os.ModeSymlink != 0 || time.Since(stat.ModTime()) < minAge {
-			continue
-		}
-		if err := os.RemoveAll(path); err != nil {
-			return fmt.Errorf("remove abandoned installer temp %s: %w", path, err)
-		}
-		result.RemovedFiles++
-	}
-	return nil
+	return removeOldKnownDirectories(ctx, dir, minAge, isAbandonedInstallerDir, result)
 }

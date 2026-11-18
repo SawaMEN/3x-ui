@@ -95,6 +95,7 @@ var defaultValueMap = map[string]string{
 	"nodeMtlsClientCAPem":         "",
 	"webBasePath":                 normalizeBasePath(getEnv("XUI_INIT_WEB_BASE_PATH", "/")),
 	"sessionMaxAge":               "360",
+	"logRetentionDays":            "7",
 	"trustedProxyCIDRs":           DefaultTrustedProxyCIDRs,
 	"realityScanCandidates":       DefaultRealityScanCandidatesCSV,
 	"ipLimitAllowlist":            "",
@@ -741,6 +742,11 @@ func (s *SettingService) GetTrafficDiff() (int, error) {
 
 func (s *SettingService) GetSessionMaxAge() (int, error) {
 	return s.getInt("sessionMaxAge")
+}
+
+// GetLogRetentionDays controls the age of managed diagnostic log archives.
+func (s *SettingService) GetLogRetentionDays() (int, error) {
+	return s.getInt("logRetentionDays")
 }
 
 // GetIpLimitAllowlist returns the operator's trusted addresses and networks,
