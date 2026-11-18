@@ -23694,6 +23694,36 @@
         }
       }
     },
+    "/panel/api/setting/system/update/cleanup": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Remove stale package caches and discarded VPN installer downloads while preserving installed cores and recovery files.",
+        "operationId": "post_panel_api_setting_system_update_cleanup",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/setting/system/update/reboot": {
       "post": {
         "tags": [
