@@ -36,6 +36,26 @@ func TestBuildPageData_SplitsMultiHostLinks(t *testing.T) {
 	}
 }
 
+// The subscription page must show the same unique connections as the
+// downloadable raw subscription, with email kept in sync after filtering.
+func TestBuildPageData_DeduplicatesAmneziaWGAliases(t *testing.T) {
+	first := testAWGShareLink("Primary", "vpn.example.com:51820")
+	alias := testAWGShareLink("Alias", "vpn.example.com:51820")
+	other := testAWGShareLink("Secondary", "vpn2.example.com:51820")
+	page := (&SubService{}).BuildPageData(
+		"sub", "", coremodel.ClientTraffic{}, 0,
+		[]string{first + "\n" + alias, other, first},
+		[]string{"alice@example.com", "bob@example.com", "alice@example.com"},
+		"", "", "", "/", "", "",
+	)
+	if want := []string{first, other}; !reflect.DeepEqual(page.Result, want) {
+		t.Fatalf("page links = %v, want %v", page.Result, want)
+	}
+	if want := []string{"alice@example.com", "bob@example.com"}; !reflect.DeepEqual(page.Emails, want) {
+		t.Fatalf("page emails = %v, want %v", page.Emails, want)
+	}
+}
+
 func TestSubIsOnline(t *testing.T) {
 	tests := []struct {
 		name   string
