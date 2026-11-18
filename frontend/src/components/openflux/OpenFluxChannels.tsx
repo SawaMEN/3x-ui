@@ -271,7 +271,9 @@ export default function OpenFluxChannels({
     if (diagnosing || types.length === 0) return;
     if (!inboundId || nodeId > 0) {
       const reason = t(
-        nodeId > 0 ? 'pages.inbounds.form.openfluxDiagRemote' : 'pages.inbounds.form.openfluxDiagSave',
+        nodeId > 0
+          ? 'pages.inbounds.form.openfluxDiagRemote'
+          : 'pages.inbounds.form.openfluxDiagSave',
       );
       setDiagnostics((previous) => ({
         ...previous,
