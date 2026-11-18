@@ -13,14 +13,14 @@ import (
 )
 
 type domainActivityResponse struct {
-	Enabled                  bool                         `json:"enabled"`
-	Supported                bool                         `json:"supported"`
-	AccessLogEnabled         bool                         `json:"accessLogEnabled"`
-	Core                     string                       `json:"core"`
-	Mode                     string                       `json:"mode"`
-	WindowSeconds            int                          `json:"windowSeconds"`
-	Entries                  []service.DomainActivityEntry`json:"entries"`
-	TemporarilyUnavailable bool `json:"temporarilyUnavailable"`
+	Enabled                bool                          `json:"enabled"`
+	Supported              bool                          `json:"supported"`
+	AccessLogEnabled       bool                          `json:"accessLogEnabled"`
+	Core                   string                        `json:"core"`
+	Mode                   string                        `json:"mode"`
+	WindowSeconds          int                           `json:"windowSeconds"`
+	Entries                []service.DomainActivityEntry `json:"entries"`
+	TemporarilyUnavailable bool                          `json:"temporarilyUnavailable"`
 }
 
 // domainActivityCoreMode identifies the source without probing another core.
