@@ -1014,7 +1014,9 @@ export default function InboundFormModal({
       {protocol === Protocols.NAIVE && <NaiveFields />}
       {protocol === Protocols.SNELL && <SnellFields />}
       {protocol === Protocols.FPTN && <FptnFields />}
-      {protocol === Protocols.OPENFLUX && <OpenFluxFields inboundId={mode === 'edit' ? dbInbound?.id : 0} />}
+      {protocol === Protocols.OPENFLUX && (
+        <OpenFluxFields inboundId={mode === 'edit' ? dbInbound?.id : 0} />
+      )}
       {protocol === Protocols.ANYTLS && <AnyTlsFields />}
       {protocol === Protocols.MIERU && <MieruFields />}
       {protocol === Protocols.SUDOKU && <SudokuFields />}
