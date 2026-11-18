@@ -10,6 +10,8 @@ on:
       - "frontend/src/**openflux*"
       - "frontend/src/**/OpenFlux*"
       - "frontend/src/components/openflux/**"
+      - "frontend/src/api/http-init.ts"
+      - "frontend/src/test/http-init.test.tsx"
       - "frontend/src/pages/inbounds/form/protocols/additional-vpn.tsx"
       - "frontend/src/schemas/protocols/inbound/additional-vpn.ts"
       - "internal/web/translation/en-US.json"
@@ -24,6 +26,8 @@ on:
       - "frontend/src/**openflux*"
       - "frontend/src/**/OpenFlux*"
       - "frontend/src/components/openflux/**"
+      - "frontend/src/api/http-init.ts"
+      - "frontend/src/test/http-init.test.tsx"
       - "frontend/src/pages/settings/SystemUpdatePanel*"
       - "frontend/src/pages/inbounds/form/protocols/additional-vpn.tsx"
       - "frontend/src/schemas/protocols/inbound/additional-vpn.ts"
@@ -120,6 +124,7 @@ jobs:
           npm run lint
           npm run typecheck
           npx vitest run --project unit src/test/openflux-settings.test.ts src/test/openflux-install.test.ts
+          npx vitest run --project components src/test/http-init.test.tsx
           npx vitest run --project components src/test/openflux-fields.test.tsx src/test/system-update-components.test.tsx src/test/openflux-availability.test.tsx src/test/openflux-qr.test.tsx src/test/singbox-outbound-modal.test.tsx src/test/native-protocol-option-fields.test.tsx
           npx vitest run --project components src/test/inbound-form-modal.test.tsx -t 'shows optional tunnel protocols'
           npx vitest run --project components src/test/outbound-form-modal.test.tsx -t 'offers OpenFlux'
