@@ -386,7 +386,7 @@ export default function QuickRoutingPanel({
     { value: 'port', label: 'По порту', caption: 'Направление по порту назначения' },
   ];
   const activeMode = modes.find((mode) => mode.value === draft.match) ?? modes[0];
-  const activeRoutes = rules.filter((rule) => rule.enabled !== false).length;
+  const activeRoutes = managed.filter(({ rule }) => rule.enabled !== false).length;
 
   async function create() {
     if (creating) return;
@@ -431,8 +431,8 @@ export default function QuickRoutingPanel({
           </Typography.Paragraph>
         </div>
         <div className="quick-routing-status" role="status">
-          <span className="quick-routing-status-dot" aria-hidden="true" />
-          Активно {activeRoutes} из {rules.length}
+          <span className={`quick-routing-status-dot ${activeRoutes ? '': 'is-idle'}`} aria-hidden="true" />
+          Активно {activeRoutes} из {managed.length}
         </div>
       </div>
 
@@ -720,7 +720,7 @@ export default function QuickRoutingPanel({
             </div>
           </details>
           <details className="quick-routing-details">
-            <summary>Подключения нод ({nodeTargets.filter((target) => target.provisioned).length})</summary>
+            <summary>Подключения нод</summary>
             <div className="quick-routing-details-content">
             {nodeTargets.filter((target) => target.provisioned).length === 0 ? (
               <Empty
