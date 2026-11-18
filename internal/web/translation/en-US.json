@@ -2547,7 +2547,7 @@
         "cleanupConfirm": "Clean system caches and temporary files?",
         "cleanupDescription": "Clears package-manager caches, interrupted system and panel downloads, and old staging files from all standalone VPN component installers (NaiveProxy, Hysteria2, Pingtunnel, TrustTunnel, OpenFlux, VetroffProxy, FPTN, Sudoku, Xray, sing-box, OxiDNS, DNSTT, Telemt, OlcRTC and others). OlcRTC build caches are removed only after full uninstallation. Installed engines, keys, configurations, and recovery backups remain intact.",
         "cleanupHint": "Covers all standalone installer stages, not just Sudoku, including Hiddify and 3x-ui updates. Only recognized old files are removed; ongoing downloads and recovery snapshots are preserved. Pacman sync cache is also reset; refresh the package list before checking updates again.",
-        "cleanupDone": "Cleanup finished. Approximately {{size}} freed; temporary files removed: {{files}}.",
+        "cleanupDone": "Cleanup finished. Approximately {size} freed; temporary files removed: {files}.",
         "cleanupFinished": "Running VPN cores, installed components, configurations, and package databases were preserved.",
         "cleanupFailed": "System cache cleanup failed.",
         "noPackages": "No package updates are currently available.",
