@@ -588,7 +588,7 @@ export default function QuickRoutingPanel({
               onClick={() => {
                 setDraft(blankDraft());
                 setError('');
-                          }}
+              }}
             >
               Сбросить
             </Button>
@@ -600,7 +600,7 @@ export default function QuickRoutingPanel({
 
         <div className="quick-routing-aside">
           <Card title="Созданные маршруты" size="small" className="quick-routing-managed">
-            {managed.length > 5 && (
+            {(managed.length > 5 || routeSearch.length > 0) && (
               <Input.Search
                 allowClear
                 aria-label="Найти маршрут"
@@ -705,11 +705,6 @@ export default function QuickRoutingPanel({
               </div>
             ) : (
               <>
-                <Alert
-                  type="warning"
-                  showIcon
-                  title={`Потенциальных проблем: ${warnings.length}`}
-                />
                 <div className="quick-routing-issue-list">
                   {warnings.slice(0, 8).map((warning, index) => (
                     <div key={warning.code + index}>
@@ -725,7 +720,7 @@ export default function QuickRoutingPanel({
             </div>
           </details>
           <details className="quick-routing-details">
-            <summary>Подключения нод · {nodeTargets.filter((target) => target.provisioned).length}</summary>
+            <summary>Подключения нод ({nodeTargets.filter((target) => target.provisioned).length})</summary>
             <div className="quick-routing-details-content">
             {nodeTargets.filter((target) => target.provisioned).length === 0 ? (
               <Empty
