@@ -85,7 +85,7 @@ export default function RoutingTab({
     [templateSettings?.routing?.rules],
   );
   const quickRuleCount = useMemo(
-    () => rules.filter((rule) => isQuickRule(rule, 'xray')).length,
+    () => rules.filter((rule) => isQuickRule(rule as Record<string, unknown>, 'xray')).length,
     [rules],
   );
   const rulesRef = useRef(rules);
@@ -122,7 +122,7 @@ export default function RoutingTab({
           const inboundTags = (rules[r.key]?.inboundTag || []) as string[];
           return !inboundTags.some(isBalancerLoopbackTag);
         })
-        .filter((r) => showQuickInAdvanced || !isQuickRule(rules[r.key], 'xray')),
+        .filter((r) => showQuickInAdvanced || !isQuickRule(rules[r.key] as Record<string, unknown>, 'xray')),
     [rules, t, showQuickInAdvanced],
   );
 
