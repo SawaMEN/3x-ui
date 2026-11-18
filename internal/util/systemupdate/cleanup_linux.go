@@ -73,45 +73,24 @@ func Cleanup(ctx context.Context) (CleanupResult, error) {
 
 	// Package managers leave fragments after interrupted *downloads*. Do not
 	// remove locks, package databases, installed kernels or complete archives.
-	partialLocations := []struct {
-		dir   string
-		match func(string) bool
-	}{}
+	partialLocations := []cleanupLocation{}
 	switch info.manager {
 	case "apt-get":
 		// All regular files left in apt's partial directories are unfinished.
-		partialLocations = append(partialLocations,
-			struct {
-				dir   string
-				match func(string) bool
-			}{"/var/cache/apt/archives/partial", isAnyFile},
-			struct {
-				dir   string
-				match func(string) bool
-			}{"/var/lib/apt/lists/partial", isAnyFile},
-		)
+		partialLocations = []cleanupLocation{
+			{"/var/cache/apt/archives/partial", isAnyFile},
+			{"/var/lib/apt/lists/partial", isAnyFile},
+		}
 	case "pacman":
-		partialLocations = append(partialLocations,
-			struct {
-				dir   string
-				match func(string) bool
-			}{"/var/cache/pacman/pkg", isPartialDownload},
-			struct {
-				dir   string
-				match func(string) bool
-			}{"/var/lib/pacman/sync", isPartialDownload},
-		)
+		partialLocations = []cleanupLocation{
+			{"/var/cache/pacman/pkg", isPartialDownload},
+			{"/var/lib/pacman/sync", isPartialDownload},
+		}
 	case "dnf", "yum":
-		partialLocations = append(partialLocations,
-			struct {
-				dir   string
-				match func(string) bool
-			}{"/var/cache/dnf", isPartialDownload},
-			struct {
-				dir   string
-				match func(string) bool
-			}{"/var/cache/yum", isPartialDownload},
-		)
+		partialLocations = []cleanupLocation{
+			{"/var/cache/dnf", isPartialDownload},
+			{"/var/cache/yum", isPartialDownload},
+		}
 	}
 	for _, location := range partialLocations {
 		if err := removeStaleFiles(cleanupCtx, location.dir, 0, location.match, &result); err != nil {
@@ -170,6 +149,11 @@ func Cleanup(ctx context.Context) (CleanupResult, error) {
 		result.FreedBytes = after - before
 	}
 	return result, nil
+}
+
+type cleanupLocation struct {
+	dir   string
+	match func(string) bool
 }
 
 func cleanupCommands(manager string) [][]string {
@@ -311,8 +295,8 @@ func availableBytes(path string) (int64, bool) {
 	return int64(stat.Bavail) * int64(stat.Bsize), true
 }
 
- // removeOldPanelTempDirs deletes only known installer scratch directories
- // abandoned for at least a day. Never remove an arbitrary /tmp directory.
+// removeOldPanelTempDirs deletes only known installer scratch directories
+// abandoned for at least a day. Never remove an arbitrary /tmp directory.
 func removeOldPanelTempDirs(ctx context.Context, dir string, minAge time.Duration, result *CleanupResult) error {
 	info, err := os.Lstat(dir)
 	if errors.Is(err, os.ErrNotExist) {
