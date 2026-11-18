@@ -39,8 +39,8 @@ func TestOpenFluxDiagnosticRealDirectEncryptedRoundTrip(t *testing.T) {
 		ID: 482, Tag: "openflux-diagnostic-direct", Protocol: model.OpenFlux,
 		Listen: "127.0.0.1", Port: stage8Port(t),
 		Settings: Settings{
-			Context: "diagnostic-contract",
-			Clients: []Client{{Email: "one", Password: strings.Repeat("h", 32), Enable: true}},
+			Context:    "diagnostic-contract",
+			Clients:    []Client{{Email: "one", Password: strings.Repeat("h", 32), Enable: true}},
 			Transports: []OpenFluxTransport{{Type: "direct", Priority: 100}},
 		},
 	}
