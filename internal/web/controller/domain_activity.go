@@ -3,25 +3,23 @@ package controller
 import (
 	"encoding/json"
 	"errors"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"time"
 
-	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 
 	"github.com/gin-gonic/gin"
 )
 
 type domainActivityResponse struct {
-	Enabled          bool                          `json:"enabled"`
-	Supported        bool                          `json:"supported"`
-	AccessLogEnabled bool                          `json:"accessLogEnabled"`
-	Core             string                        `json:"core"`
-	Mode             string                        `json:"mode"`
-	WindowSeconds    int                           `json:"windowSeconds"`
-	Entries          []service.DomainActivityEntry `json:"entries"`
+	Enabled                  bool                         `json:"enabled"`
+	Supported                bool                         `json:"supported"`
+	AccessLogEnabled         bool                         `json:"accessLogEnabled"`
+	Core                     string                       `json:"core"`
+	Mode                     string                       `json:"mode"`
+	WindowSeconds            int                          `json:"windowSeconds"`
+	Entries                  []service.DomainActivityEntry`json:"entries"`
 	TemporarilyUnavailable bool `json:"temporarilyUnavailable"`
 }
 
@@ -141,7 +139,7 @@ func (a *ServerController) getDomainActivity(c *gin.Context) {
 
 func (a *ServerController) setDomainActivity(c *gin.Context) {
 	var form struct {
-		Enabled *bool `json:"enabled"`
+		Enabled                  *bool                        `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&form); err != nil {
 		jsonMsg(c, "Invalid domain activity setting", err)
