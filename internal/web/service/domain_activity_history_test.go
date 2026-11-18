@@ -49,9 +49,13 @@ func TestDomainActivityHistoryCoreIsolationAndDisabledClear(t *testing.T) {
 
 func TestDomainActivityHistoryWindowBounds(t *testing.T) {
 	for _, v := range []int{10, 30, 60, 300, 86400} {
-		if !ValidDomainActivityRetentionSeconds(v) { t.Fatalf("valid interval %d rejected", v) }
+		if !ValidDomainActivityRetentionSeconds(v) {
+			t.Fatalf("valid interval %d rejected", v)
+		}
 	}
 	for _, v := range []int{-1, 0, 9, 86401} {
-		if ValidDomainActivityRetentionSeconds(v) { t.Fatalf("invalid interval %d accepted", v) }
+		if ValidDomainActivityRetentionSeconds(v) {
+			t.Fatalf("invalid interval %d accepted", v)
+		}
 	}
 }
