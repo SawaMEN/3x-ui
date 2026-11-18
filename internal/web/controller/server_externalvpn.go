@@ -73,9 +73,9 @@ func (a *ServerController) updateExternalVPNBinary(c *gin.Context) {
 
 func (a *ServerController) parseExternalVPNLink(c *gin.Context) {
 	var input struct {
-		Link string `json:"link"`
+		Link string `json:"link" form:"link"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
+	if err := c.ShouldBind(&input); err != nil {
 		jsonObj(c, nil, err)
 		return
 	}
