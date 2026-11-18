@@ -491,7 +491,8 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/server/openflux/diagnose-transport',
-        summary: 'Start an asynchronous end-to-end OpenFlux transport diagnostic on a saved local inbound.',
+        summary:
+          'Start an asynchronous end-to-end OpenFlux transport diagnostic on a saved local inbound.',
         description:
           'Requires a saved, enabled local OpenFlux inbound owned by the authenticated user. The diagnostic may temporarily interrupt its active client; confirmInterruption must be true. Returns a runId for polling diagnose-status. Concurrent diagnostics are rejected.',
         params: [
@@ -3910,7 +3911,8 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/setting/system/update/cleanup',
-        summary: 'Remove stale package caches and discarded VPN installer downloads while preserving installed cores and recovery files.',
+        summary:
+          'Remove stale package caches and discarded VPN installer downloads while preserving installed cores and recovery files.',
       },
       {
         method: 'POST',

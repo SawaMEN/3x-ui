@@ -123,7 +123,10 @@ export default function RoutingTab({
           const inboundTags = (rules[r.key]?.inboundTag || []) as string[];
           return !inboundTags.some(isBalancerLoopbackTag);
         })
-        .filter((r) => showQuickInAdvanced || !isQuickRule(rules[r.key] as Record<string, unknown>, 'xray')),
+        .filter(
+          (r) =>
+            showQuickInAdvanced || !isQuickRule(rules[r.key] as Record<string, unknown>, 'xray'),
+        ),
     [rules, t, showQuickInAdvanced],
   );
 

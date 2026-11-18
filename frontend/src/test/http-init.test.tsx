@@ -127,19 +127,22 @@ describe('http-init fetch wrapper', () => {
       },
     },
     { url: '/panel/api/server/externalvpn/parse-link', payload: { link: 'openflux://v1/test' } },
-  ])('sends $url OpenFlux JSON correctly instead of type= form encoding', async ({ url, payload }) => {
-    window.X_UI_BASE_PATH = '/private-panel';
-    document.head.innerHTML = '<meta name="csrf-token" content="tok">';
-    http.setupHttp();
-    fetchMock.mockResolvedValue(okEnvelope());
+  ])(
+    'sends $url OpenFlux JSON correctly instead of type= form encoding',
+    async ({ url, payload }) => {
+      window.X_UI_BASE_PATH = '/private-panel';
+      document.head.innerHTML = '<meta name="csrf-token" content="tok">';
+      http.setupHttp();
+      fetchMock.mockResolvedValue(okEnvelope());
 
-    await http.httpRequest('POST', url, payload);
+      await http.httpRequest('POST', url, payload);
 
-    expect(urlOf()).toBe('/private-panel' + url);
-    expect(headersOf().get('content-type')).toBe('application/json; charset=UTF-8');
-    expect(headersOf().get('X-CSRF-Token')).toBe('tok');
-    expect(JSON.parse(initOf().body as string)).toEqual(payload);
-  });
+      expect(urlOf()).toBe('/private-panel' + url);
+      expect(headersOf().get('content-type')).toBe('application/json; charset=UTF-8');
+      expect(headersOf().get('X-CSRF-Token')).toBe('tok');
+      expect(JSON.parse(initOf().body as string)).toEqual(payload);
+    },
+  );
 
   it('JSON-encodes node-route provisioning without changing legacy Xray form posts', async () => {
     document.head.innerHTML = '<meta name="csrf-token" content="tok">';

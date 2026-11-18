@@ -164,7 +164,10 @@ export default function QuickRoutingPanel({
     if (!search) return managed;
     return managed.filter(({ rule }) =>
       [criteriaSummary(rule, engine), rule.outboundTag, rule.outbound, rule.comment, rule.ruleTag]
-        .filter(Boolean).join(' ').toLowerCase().includes(search),
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(search),
     );
   }, [managed, routeSearch, engine]);
   const warnings = useMemo(
@@ -444,7 +447,10 @@ export default function QuickRoutingPanel({
           </Typography.Paragraph>
         </div>
         <div className="quick-routing-status" role="status">
-          <span className={`quick-routing-status-dot ${activeRoutes ? '' : 'is-idle'}`} aria-hidden="true" />
+          <span
+            className={`quick-routing-status-dot ${activeRoutes ? '' : 'is-idle'}`}
+            aria-hidden="true"
+          />
           Активно {activeRoutes} из {managed.length}
         </div>
       </div>
@@ -462,7 +468,7 @@ export default function QuickRoutingPanel({
                 values: '',
               }));
               setError('');
-              }}
+            }}
             optionType="button"
             buttonStyle="solid"
           >
@@ -713,65 +719,72 @@ export default function QuickRoutingPanel({
             open={healthOpen}
             onToggle={(event) => setHealthOpen(event.currentTarget.open)}
           >
-            <summary>Проверка правил {warnings.length > 0 && <span className="quick-routing-warning-count">{warnings.length} проблем</span>}</summary>
+            <summary>
+              Проверка правил{' '}
+              {warnings.length > 0 && (
+                <span className="quick-routing-warning-count">{warnings.length} проблем</span>
+              )}
+            </summary>
             <div className="quick-routing-details-content quick-routing-health">
-            {warnings.length === 0 ? (
-              <div className="quick-routing-healthy">
-                <CheckCircleOutlined aria-hidden="true" />
-                <span>Очевидных конфликтов не найдено.</span>
-              </div>
-            ) : (
-              <>
-                <div className="quick-routing-issue-list">
-                  {warnings.slice(0, 8).map((warning, index) => (
-                    <div key={warning.code + index}>
-                      <WarningOutlined aria-hidden="true" /> {warning.detail}
-                    </div>
-                  ))}
-                  {warnings.length > 8 && (
-                    <Typography.Text type="secondary">И ещё {warnings.length - 8}…</Typography.Text>
-                  )}
+              {warnings.length === 0 ? (
+                <div className="quick-routing-healthy">
+                  <CheckCircleOutlined aria-hidden="true" />
+                  <span>Очевидных конфликтов не найдено.</span>
                 </div>
-              </>
-            )}
+              ) : (
+                <>
+                  <div className="quick-routing-issue-list">
+                    {warnings.slice(0, 8).map((warning, index) => (
+                      <div key={warning.code + index}>
+                        <WarningOutlined aria-hidden="true" /> {warning.detail}
+                      </div>
+                    ))}
+                    {warnings.length > 8 && (
+                      <Typography.Text type="secondary">
+                        И ещё {warnings.length - 8}…
+                      </Typography.Text>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </details>
           <details className="quick-routing-details">
             <summary>Подключения нод</summary>
             <div className="quick-routing-details-content">
-            {nodeTargets.filter((target) => target.provisioned).length === 0 ? (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="Нет подготовленных подключений нод"
-              />
-            ) : (
-              <Space orientation="vertical" style={{ width: '100%' }}>
-                {nodeTargets
-                  .filter((target) => target.provisioned)
-                  .map((target) => (
-                    <div key={target.tag} className="quick-routing-managed-title">
-                      <Typography.Text>
-                        {target.nodeName} · {target.remark || target.protocol}
-                      </Typography.Text>
-                      <Popconfirm
-                        title="Удалить подключение ноды?"
-                        description="Нода и её входящее подключение останутся на месте."
-                        okText="Удалить"
-                        cancelText="Отмена"
-                        onConfirm={() => void deleteNodeConnection(target)}
-                      >
-                        <Button
-                          size="small"
-                          danger
-                          disabled={creating}
-                          aria-label={'Удалить подключение ноды ' + target.tag}
-                          icon={<DeleteOutlined aria-hidden />}
-                        />
-                      </Popconfirm>
-                    </div>
-                  ))}
-              </Space>
-            )}
+              {nodeTargets.filter((target) => target.provisioned).length === 0 ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="Нет подготовленных подключений нод"
+                />
+              ) : (
+                <Space orientation="vertical" style={{ width: '100%' }}>
+                  {nodeTargets
+                    .filter((target) => target.provisioned)
+                    .map((target) => (
+                      <div key={target.tag} className="quick-routing-managed-title">
+                        <Typography.Text>
+                          {target.nodeName} · {target.remark || target.protocol}
+                        </Typography.Text>
+                        <Popconfirm
+                          title="Удалить подключение ноды?"
+                          description="Нода и её входящее подключение останутся на месте."
+                          okText="Удалить"
+                          cancelText="Отмена"
+                          onConfirm={() => void deleteNodeConnection(target)}
+                        >
+                          <Button
+                            size="small"
+                            danger
+                            disabled={creating}
+                            aria-label={'Удалить подключение ноды ' + target.tag}
+                            icon={<DeleteOutlined aria-hidden />}
+                          />
+                        </Popconfirm>
+                      </div>
+                    ))}
+                </Space>
+              )}
             </div>
           </details>
         </div>

@@ -190,9 +190,10 @@ export default function OpenFluxChannels({
   const [checks, setChecks] = useState<Record<string, { ok: boolean; detail: string }>>({});
   const [diagnostics, setDiagnostics] = useState<Record<string, DiagnosticResult>>({});
   const [diagnosing, setDiagnosing] = useState<OpenFluxTransportType | 'all' | null>(null);
-  const [diagnosticProgress, setDiagnosticProgress] = useState<{ done: number; total: number } | null>(
-    null,
-  );
+  const [diagnosticProgress, setDiagnosticProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   // Used only for an explicit live MAX test; never saved to the inbound.
   const [diagnosticMaxClientToken, setDiagnosticMaxClientToken] = useState('');
   const used = new Set(value.map((entry) => entry.type));
