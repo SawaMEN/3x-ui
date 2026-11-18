@@ -292,7 +292,7 @@ func availableBytes(path string) (int64, bool) {
 	if err := syscall.Statfs(path, &stat); err != nil {
 		return 0, false
 	}
-	return int64(stat.Bavail) * int64(stat.Bsize), true
+	return int64(stat.Bavail) * stat.Bsize, true
 }
 
 // removeOldPanelTempDirs deletes only known installer scratch directories
