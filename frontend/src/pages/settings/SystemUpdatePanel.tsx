@@ -131,7 +131,26 @@ type SystemUpdateResult = {
   error: string;
 };
 
+type SystemCleanupResult = {
+  freedBytes: number;
+  removedFiles: number;
+  actions: string[];
+  warnings: string[];
+};
+
 type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
+
+function formatCacheSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 Б';
+  const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+  let value = bytes;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index++;
+  }
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
 
 const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.source === 'standalone' ||
@@ -235,6 +254,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
   const [systemUpdateBusy, setSystemUpdateBusy] = useState(false);
   const [systemUpdate, setSystemUpdate] = useState<SystemUpdateStatus | null>(null);
   const [systemUpdateResult, setSystemUpdateResult] = useState<SystemUpdateResult | null>(null);
+  const [cleanupResult, setCleanupResult] = useState<SystemCleanupResult | null>(null);
   const [includeAllPackages, setIncludeAllPackages] = useState(false);
   const [packagePage, setPackagePage] = useState(1);
   const [bundledDependencies, setBundledDependencies] = useState<DependencyStatus[]>([]);
@@ -624,6 +644,37 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
     }
   };
 
+  const cleanupSystemCaches = async () => {
+    setSystemUpdateBusy(true);
+    setCleanupResult(null);
+    try {
+      const response = (await HttpUtil.post(
+        '/panel/api/setting/system/update/cleanup',
+        undefined,
+        { timeout: 200000 },
+      )) as ApiMsg<SystemCleanupResult>;
+      if (!response?.success || !response.obj) {
+        throw new Error(response?.msg || t('pages.settings.swap.cleanupFailed'));
+      }
+      const result = response.obj;
+      setCleanupResult(result);
+      // Pacman also purges sync metadata; old update listings may now be stale.
+      // Do not immediately re-fetch caches that the user just cleared.
+      setSystemUpdate(null);
+      setSystemUpdateResult(null);
+      messageApi.success(
+        t('pages.settings.swap.cleanupDone', {
+          size: formatCacheSize(result.freedBytes),
+          files: result.removedFiles,
+        }),
+      );
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSystemUpdateBusy(false);
+    }
+  };
+
   const rebootSystem = async () => {
     setSystemUpdateBusy(true);
     try {
@@ -700,6 +751,25 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
           >
             {t('pages.settings.swap.checkUpdates')}
           </Button>
+          <Tooltip title={t('pages.settings.swap.cleanupHint')}>
+            <Popconfirm
+              title={t('pages.settings.swap.cleanupConfirm')}
+              description={t('pages.settings.swap.cleanupDescription')}
+              okText={t('pages.settings.swap.cleanupCache')}
+              cancelText={t('cancel')}
+              onConfirm={() => void cleanupSystemCaches()}
+              disabled={systemUpdateBusy || dependencyBusy !== null || systemUpdate?.runningAsRoot === false}
+            >
+              <Button
+                block={isMobile}
+                icon={<DeleteOutlined />}
+                loading={systemUpdateBusy}
+                disabled={systemUpdateBusy || dependencyBusy !== null || systemUpdate?.runningAsRoot === false}
+              >
+                {t('pages.settings.swap.cleanupCache')}
+              </Button>
+            </Popconfirm>
+          </Tooltip>
           {rebootRequired && (
             <Button
               danger
@@ -747,6 +817,21 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
             </Button>
           </Popconfirm>
         </div>
+      )}
+      {!componentsOnly && cleanupResult && (
+        <Alert
+          showIcon
+          type={cleanupResult.warnings?.length ? 'warning' : 'success'}
+          title={t('pages.settings.swap.cleanupDone', {
+            size: formatCacheSize(cleanupResult.freedBytes),
+            files: cleanupResult.removedFiles,
+          })}
+          description={
+            cleanupResult.warnings?.length
+              ? cleanupResult.warnings.join('; ')
+              : t('pages.settings.swap.cleanupFinished')
+          }
+        />
       )}
       {componentsOnly ? (
         <div className="system-component-grid">
