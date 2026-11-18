@@ -125,6 +125,8 @@ func Cleanup(ctx context.Context) (CleanupResult, error) {
 	}
 	result.Actions = append(result.Actions, "Abandoned VPN-core staging files")
 
+	cleanupProtocolInstallArtifacts(cleanupCtx, &result)
+
 	// Only files with panel-specific prefixes are considered for direct removal.
 	// Other system temp content follows the OS tmpfiles retention policy instead
 	// of indiscriminately deleting potentially active sockets or workspaces.
@@ -316,7 +318,7 @@ func removeOldPanelTempDirs(ctx context.Context, dir string, minAge time.Duratio
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "3x-ui-sudoku-") {
+		if !entry.IsDir() || !isAbandonedInstallerDir(entry.Name()) || mustPreserveRecoveryDir(dir, entry.Name()) {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
