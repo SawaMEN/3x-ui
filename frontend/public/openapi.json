@@ -160,11 +160,6 @@
           "ldapVlessField": {
             "type": "string"
           },
-          "logRetentionDays": {
-            "maximum": 90,
-            "minimum": 1,
-            "type": "integer"
-          },
           "nodeDownThreshold": {
             "maximum": 100,
             "minimum": 1,
@@ -614,7 +609,6 @@
           "ldapUserAttr",
           "ldapUserFilter",
           "ldapVlessField",
-          "logRetentionDays",
           "nodeDownThreshold",
           "outboundDownThreshold",
           "pageSize",
@@ -860,11 +854,6 @@
           },
           "ldapVlessField": {
             "type": "string"
-          },
-          "logRetentionDays": {
-            "maximum": 90,
-            "minimum": 1,
-            "type": "integer"
           },
           "nodeDownThreshold": {
             "maximum": 100,
@@ -1322,7 +1311,6 @@
           "ldapUserAttr",
           "ldapUserFilter",
           "ldapVlessField",
-          "logRetentionDays",
           "nodeDownThreshold",
           "outboundDownThreshold",
           "pageSize",
