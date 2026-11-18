@@ -45,6 +45,7 @@ export interface AllSetting {
   ldapUserAttr: string;
   ldapUserFilter: string;
   ldapVlessField: string;
+  logRetentionDays: number;
   nodeDownThreshold: number;
   outboundDownThreshold: number;
   pageSize: number;
@@ -55,7 +56,6 @@ export interface AllSetting {
   rootRedirectEnable: boolean;
   rootRedirectURL: string;
   sessionMaxAge: number;
-  logRetentionDays: number;
   smtpCpu: number;
   smtpEnable: boolean;
   smtpEnabledEvents: string;
@@ -214,6 +214,7 @@ export interface AllSettingView {
   ldapUserAttr: string;
   ldapUserFilter: string;
   ldapVlessField: string;
+  logRetentionDays: number;
   nodeDownThreshold: number;
   outboundDownThreshold: number;
   pageSize: number;
@@ -224,7 +225,6 @@ export interface AllSettingView {
   rootRedirectEnable: boolean;
   rootRedirectURL: string;
   sessionMaxAge: number;
-  logRetentionDays: number;
   smtpCpu: number;
   smtpEnable: boolean;
   smtpEnabledEvents: string;
