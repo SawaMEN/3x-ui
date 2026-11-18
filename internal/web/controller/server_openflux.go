@@ -6,7 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
@@ -80,3 +83,65 @@ func (a *ServerController) checkOpenFluxTransport(c *gin.Context) {
 	result, err := externalvpn.ProbeOpenFluxProvider(c.Request.Context(), input.Type)
 	jsonObj(c, result, err)
 }
+
+ // Run only one active probe at a time. OpenFlux exits support one client
+ // session, so concurrent tests would invalidate each other's observations.
+ var openFluxDiagnosticSlot = make(chan struct{}, 1)
+
+ // diagnoseOpenFluxTransport uses only a persisted inbound owned by the
+ // authenticated user. It never accepts arbitrary URLs, IPs, passwords or
+ // executable paths in the request.
+ func (a *ServerController) diagnoseOpenFluxTransport(c *gin.Context) {
+ 	c.Header("Cache-Control", "no-store")
+ 	var input struct {
+ 		InboundID int `json:"inboundId"`
+ 		Type string `json:"type"`
+ 		ClientToken string `json:"clientToken"`
+ 		ConfirmInterruption bool `json:"confirmInterruption"`
+ 	}
+ 	if err := c.ShouldBindJSON(&input); err != nil {
+ 		jsonObj(c, nil, err)
+ 		return
+ 	}
+ 	if input.InboundID <= 0 || !externalvpn.OpenFluxDiagnosticTypeSupported(input.Type) {
+ 		jsonObj(c, nil, fmt.Errorf("select a saved OpenFlux inbound and a known transport"))
+ 		return
+ 	}
+ 	if !input.ConfirmInterruption {
+ 		jsonObj(c, nil, fmt.Errorf("confirm that an end-to-end probe can temporarily interrupt an active OpenFlux client"))
+ 		return
+ 	}
+ 	user := session.GetLoginUser(c)
+ 	if user == nil {
+ 		jsonObj(c, nil, fmt.Errorf("authentication required"))
+ 		return
+ 	}
+ 	if nodeID, err := singBoxSessionNodeIDFromQuery(c); err != nil || nodeID != nil {
+ 		jsonObj(c, nil, fmt.Errorf("OpenFlux end-to-end probes are local-only; run the test on the inbound's node"))
+ 		return
+ 	}
+ 	var inboundService service.InboundService
+ 	ib, err := inboundService.GetInbound(input.InboundID)
+ 	if err != nil || ib == nil || ib.UserId != user.Id || ib.Protocol != model.OpenFlux {
+ 		jsonObj(c, nil, fmt.Errorf("saved OpenFlux inbound not found for this user"))
+ 		return
+ 	}
+ 	if ib.NodeID != nil || !ib.Enable {
+ 		jsonObj(c, nil, fmt.Errorf("the saved OpenFlux inbound must be enabled and running locally"))
+ 		return
+ 	}
+ 	inst, err := externalvpn.FromInbound(ib)
+ 	if err != nil {
+ 		jsonObj(c, nil, err)
+ 		return
+ 	}
+ 	select {
+ 	case openFluxDiagnosticSlot <- struct{}{}:
+ 		defer func() { <-openFluxDiagnosticSlot }()
+ 	default:
+ 		jsonObj(c, nil, fmt.Errorf("another OpenFlux channel diagnostic is running"))
+ 		return
+ 	}
+ 	result := externalvpn.DiagnoseOpenFluxChannel(c.Request.Context(), inst, input.Type, input.ClientToken)
+ 	jsonObj(c, result, nil)
+ }
