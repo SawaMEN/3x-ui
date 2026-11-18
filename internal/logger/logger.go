@@ -27,8 +27,8 @@ const (
 
 	// On-disk rotation limits — single file capped, old segments pruned automatically.
 	maxLogFileMB    = 10 // rotate active log when larger than this
-	maxLogBackups   = 128 // hard cap; configured retention is pruned by the scheduled job
-	maxLogAgeDays   = 90  // upper bound; scheduled job applies the configured 1-90 days
+	maxLogBackups   = 5  // rotated files retained (beyond current segment)
+	maxLogAgeDays   = 7  // remove rotated backups older than this (0 disables time-based pruning)
 	compressRotated = true
 )
 
@@ -142,18 +142,6 @@ func initFileBackend() logging.Backend {
 
 	backend := logging.NewLogBackend(diagnosticFileWriter{target: rotate, fallback: os.Stderr}, "", 0)
 	return logging.NewBackendFormatter(backend, newFormatter(true))
-}
-
-// RotateFile archives the active panel log once per day without restarting
-// the logger or dropping the file backend. Lumberjack serializes writes.
-func RotateFile() {
-	fileRotateMu.Lock()
-	defer fileRotateMu.Unlock()
-	if fileRotate != nil {
-		if err := fileRotate.Rotate(); err != nil {
-			fmt.Fprintf(os.Stderr, "panel log rotation failed: %v\n", err)
-		}
-	}
 }
 
 // newFormatter creates a log formatter with optional timestamp.
