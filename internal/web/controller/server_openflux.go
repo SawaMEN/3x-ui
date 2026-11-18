@@ -135,13 +135,6 @@ func (a *ServerController) checkOpenFluxTransport(c *gin.Context) {
  		jsonObj(c, nil, err)
  		return
  	}
- 	select {
- 	case openFluxDiagnosticSlot <- struct{}{}:
- 		defer func() { <-openFluxDiagnosticSlot }()
- 	default:
- 		jsonObj(c, nil, fmt.Errorf("another OpenFlux channel diagnostic is running"))
- 		return
- 	}
- 	result := externalvpn.DiagnoseOpenFluxChannel(c.Request.Context(), inst, input.Type, input.ClientToken)
- 	jsonObj(c, result, nil)
+	job, err := startOpenFluxDiagnosticJob(user.Id, inst, input.Type, input.ClientToken)
+	jsonObj(c, job, err)
  }
