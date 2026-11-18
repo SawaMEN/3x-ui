@@ -91,7 +91,6 @@ func TestTelemtWebPort443HonorsPanelEnvironmentOverride(t *testing.T) {
 	}
 }
 
-
 func TestTelemtWebPanelPort443ReservesDomainFront(t *testing.T) {
 	setupConflictDB(t)
 	settings := &SettingService{}
