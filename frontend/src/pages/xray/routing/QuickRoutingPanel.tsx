@@ -107,6 +107,7 @@ export default function QuickRoutingPanel({
   const [draft, setDraft] = useState<QuickRouteDraft>(blankDraft);
   const [error, setError] = useState('');
   const [routeSearch, setRouteSearch] = useState('');
+  const [healthOpen, setHealthOpen] = useState(false);
   const [nodeTargets, setNodeTargets] = useState<NodeRouteTarget[]>([]);
   const [nodeTargetsLoading, setNodeTargetsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -170,6 +171,10 @@ export default function QuickRoutingPanel({
     () => diagnoseRouting(rules, engine, tags, inboundOptions ? inTags : undefined),
     [rules, engine, tags, inboundOptions, inTags],
   );
+  const hasWarnings = warnings.length > 0;
+  useEffect(() => {
+    if (hasWarnings) setHealthOpen(true);
+  }, [hasWarnings]);
 
   const targetOptions = [
     {
@@ -431,7 +436,7 @@ export default function QuickRoutingPanel({
           </Typography.Paragraph>
         </div>
         <div className="quick-routing-status" role="status">
-          <span className={`quick-routing-status-dot ${activeRoutes ? '': 'is-idle'}`} aria-hidden="true" />
+          <span className={`quick-routing-status-dot ${activeRoutes ? '' : 'is-idle'}`} aria-hidden="true" />
           Активно {activeRoutes} из {managed.length}
         </div>
       </div>
@@ -695,7 +700,11 @@ export default function QuickRoutingPanel({
               </div>
             )}
           </Card>
-          <details className="quick-routing-details" key={warnings.length ? 'warning' : 'healthy'} defaultOpen={warnings.length > 0}>
+          <details
+            className="quick-routing-details"
+            open={healthOpen}
+            onToggle={(event) => setHealthOpen(event.currentTarget.open)}
+          >
             <summary>Проверка правил {warnings.length > 0 && <span className="quick-routing-warning-count">{warnings.length} проблем</span>}</summary>
             <div className="quick-routing-details-content quick-routing-health">
             {warnings.length === 0 ? (
