@@ -515,7 +515,7 @@ jobs:
         if: failure()
         run: |
           golangci-lint fmt
-          git diff -- internal/web/controller/yandex_xdrive.go internal/web/controller/yandex_disk_api.go internal/web/controller/yandex_s3_probe.go
+          git diff -- internal/web/controller/yandex_xdrive.go internal/web/controller/yandex_xdrive_test.go internal/web/controller/yandex_disk_api.go internal/web/controller/yandex_disk_api_test.go internal/web/controller/yandex_s3_probe.go internal/web/controller/yandex_s3_probe_test.go
 
 
   arch-linux:
