@@ -45,4 +45,5 @@ func (w *runtimeOutput) Write(b []byte) (int, error) {
 	// Always drain child pipes, including when storage is full.
 	return n, nil
 }
+
 func (w *runtimeOutput) Close() error { return w.file.Close() }
