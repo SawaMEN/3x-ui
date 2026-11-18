@@ -90,3 +90,17 @@ func TestTelemtWebPort443HonorsPanelEnvironmentOverride(t *testing.T) {
 		t.Fatalf("effective panel listener was missed: owner=%q err=%v", owner, err)
 	}
 }
+
+
+func TestTelemtWebPanelPort443ReservesDomainFront(t *testing.T) {
+	setupConflictDB(t)
+	settings := &SettingService{}
+	config := `{"enabled":true,"listen":"0.0.0.0","httpPort":80,"httpsPort":443,"publicPort":443,"domains":[{"name":"vpn.example.com","mode":"sni_only","enabled":true}]}`
+	if err := settings.setString("domainFrontConfig", config); err != nil {
+		t.Fatal(err)
+	}
+	owner, err := telemtWebPanelPort443Owner(TelemtWebProxyState{})
+	if err != nil || !strings.Contains(owner, "Domain Front HTTPS") {
+		t.Fatalf("Telemt must detect the saved domain gateway reservation: owner=%q err=%v", owner, err)
+	}
+}
