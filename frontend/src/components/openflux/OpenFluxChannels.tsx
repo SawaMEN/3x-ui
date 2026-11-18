@@ -37,6 +37,19 @@ import {
 } from '@/lib/openflux';
 import './OpenFluxChannels.css';
 
+type DiagnosticStep = {
+  stage: string;
+  status: 'passed' | 'failed' | 'skipped';
+  detail: string;
+  elapsedMs?: number;
+};
+type DiagnosticResult = {
+  type: OpenFluxTransportType;
+  scope: string;
+  passed: boolean;
+  steps: DiagnosticStep[];
+};
+
 function ChannelInputs({
   value,
   change,
@@ -163,19 +176,30 @@ export default function OpenFluxChannels({
   onChange,
   client = false,
   nodeId = 0,
+  inboundId = 0,
 }: {
   value: OpenFluxTransport[];
   onChange: (value: OpenFluxTransport[]) => void;
   client?: boolean;
   nodeId?: number;
+  inboundId?: number;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<OpenFluxTransport | null>(null);
   const [checking, setChecking] = useState<OpenFluxTransportType | null>(null);
   const [checks, setChecks] = useState<Record<string, { ok: boolean; detail: string }>>({});
+  const [diagnostics, setDiagnostics] = useState<Record<string, DiagnosticResult>>({});
+  const [diagnosing, setDiagnosing] = useState<OpenFluxTransportType | 'all' | null>(null);
+  // Used only for an explicit live MAX test; never saved to the inbound.
+  const [diagnosticMaxClientToken, setDiagnosticMaxClientToken] = useState('');
   const used = new Set(value.map((entry) => entry.type));
   const available = OPENFLUX_TRANSPORTS.filter((type) => !used.has(type));
   const patch = (index: number, next: Partial<OpenFluxTransport>) => {
+    setDiagnostics((previous) => {
+      const updated = { ...previous };
+      delete updated[value[index].type];
+      return updated;
+    });
     setChecks((previous) => {
       const updated = { ...previous };
       delete updated[value[index].type];
@@ -243,6 +267,109 @@ export default function OpenFluxChannels({
       setChecking(null);
     }
   };
+  const startFullDiagnostic = (types: OpenFluxTransportType[]) => {
+    if (diagnosing || types.length === 0) return;
+    if (!inboundId || nodeId > 0) {
+      const reason = t(
+        nodeId > 0 ? 'pages.inbounds.form.openfluxDiagRemote' : 'pages.inbounds.form.openfluxDiagSave',
+      );
+      setDiagnostics((previous) => ({
+        ...previous,
+        ...Object.fromEntries(
+          types.map((type) => [
+            type,
+            {
+              type,
+              scope: 'local-openflux-e2e',
+              passed: false,
+              steps: [{ stage: 'configuration', status: 'failed', detail: reason }],
+            } satisfies DiagnosticResult,
+          ]),
+        ),
+      }));
+      return;
+    }
+    Modal.confirm({
+      title: t('pages.inbounds.form.openfluxDiagConfirmTitle'),
+      content: t('pages.inbounds.form.openfluxDiagConfirmText'),
+      okText: t('pages.inbounds.form.openfluxDiagConfirmButton'),
+      cancelText: t('cancel'),
+      onOk: () => {
+        void (async () => {
+          setDiagnosing(types.length > 1 ? 'all' : types[0]);
+          for (const type of types) {
+            if (type === 'oneme' && !validOpenFluxMAXToken(diagnosticMaxClientToken)) {
+              setDiagnostics((previous) => ({
+                ...previous,
+                [type]: {
+                  type,
+                  scope: 'local-openflux-e2e',
+                  passed: false,
+                  steps: [
+                    {
+                      stage: 'configuration',
+                      status: 'skipped',
+                      detail: t('pages.inbounds.form.openfluxDiagMaxRequired'),
+                    },
+                  ],
+                },
+              }));
+              continue;
+            }
+            try {
+              const response = await HttpUtil.post<DiagnosticResult>(
+                '/panel/api/server/openflux/diagnose-transport',
+                {
+                  inboundId,
+                  type,
+                  confirmInterruption: true,
+                  ...(type === 'oneme' ? { clientToken: diagnosticMaxClientToken } : {}),
+                },
+                { timeout: 70000, silent: true },
+              );
+              const data =
+                response.success && response.obj
+                  ? response.obj
+                  : {
+                      type,
+                      scope: 'local-openflux-e2e',
+                      passed: false,
+                      steps: [
+                        {
+                          stage: 'configuration',
+                          status: 'failed' as const,
+                          detail: response.msg || t('pages.inbounds.form.openfluxDiagFailed'),
+                        },
+                      ],
+                    };
+              setDiagnostics((previous) => ({ ...previous, [type]: data }));
+            } catch (error) {
+              setDiagnostics((previous) => ({
+                ...previous,
+                [type]: {
+                  type,
+                  scope: 'local-openflux-e2e',
+                  passed: false,
+                  steps: [
+                    {
+                      stage: 'configuration',
+                      status: 'failed',
+                      detail:
+                        error instanceof Error
+                          ? error.message
+                          : t('pages.inbounds.form.openfluxDiagFailed'),
+                    },
+                  ],
+                },
+              }));
+            }
+          }
+          setDiagnosticMaxClientToken('');
+          setDiagnosing(null);
+        })();
+      },
+    });
+  };
   const begin = () => {
     const type = available.includes('vyandex')
       ? 'vyandex'
@@ -261,6 +388,9 @@ export default function OpenFluxChannels({
           <Typography.Paragraph type="secondary">
             {t('pages.inbounds.form.openfluxProbeScope')}
           </Typography.Paragraph>
+          <Typography.Paragraph type="secondary">
+            {t('pages.inbounds.form.openfluxDiagScope')}
+          </Typography.Paragraph>
         </div>
         <Button
           icon={<PlusOutlined aria-hidden />}
@@ -271,6 +401,13 @@ export default function OpenFluxChannels({
           {t('pages.inbounds.form.openfluxAdd')}
         </Button>
       </div>
+      <Button
+        disabled={!!diagnosing || value.length === 0}
+        loading={diagnosing === 'all'}
+        onClick={() => startFullDiagnostic(value.map((entry) => entry.type))}
+      >
+        {t('pages.inbounds.form.openfluxDiagAll')}
+      </Button>
       {value.map((entry, index) => (
         <Card
           key={entry.type}
@@ -318,6 +455,19 @@ export default function OpenFluxChannels({
             ]}
           />
           <ChannelInputs value={entry} change={(next) => patch(index, next)} client={client} />
+          {entry.type === 'oneme' && (
+            <Form.Item
+              label={t('pages.inbounds.form.openfluxDiagMaxToken')}
+              tooltip={t('pages.inbounds.form.openfluxDiagMaxTokenHint')}
+            >
+              <Input.Password
+                aria-label={t('pages.inbounds.form.openfluxDiagMaxToken')}
+                autoComplete="off"
+                value={diagnosticMaxClientToken}
+                onChange={(event) => setDiagnosticMaxClientToken(event.target.value)}
+              />
+            </Form.Item>
+          )}
           <Space orientation="vertical" style={{ width: '100%' }}>
             <Button
               size="small"
@@ -331,6 +481,47 @@ export default function OpenFluxChannels({
                 type={checks[entry.type].ok ? 'success' : 'warning'}
                 showIcon
                 description={checks[entry.type].detail}
+              />
+            )}
+            <Button
+              size="small"
+              loading={diagnosing === entry.type || diagnosing === 'all'}
+              disabled={!!diagnosing}
+              onClick={() => startFullDiagnostic([entry.type])}
+            >
+              {t('pages.inbounds.form.openfluxDiagButton')}
+            </Button>
+            {diagnostics[entry.type] && (
+              <Alert
+                type={diagnostics[entry.type].passed ? 'success' : 'warning'}
+                showIcon
+                message={t(
+                  diagnostics[entry.type].passed
+                    ? 'pages.inbounds.form.openfluxDiagSuccess'
+                    : 'pages.inbounds.form.openfluxDiagUnverified',
+                )}
+                description={
+                  <Space orientation="vertical" size="small">
+                    {diagnostics[entry.type].steps.map((step, stageIndex) => (
+                      <Typography.Text key={stageIndex}>
+                        {t(`pages.inbounds.form.openfluxDiagStages.${step.stage}`)}:{' '}
+                        <Tag
+                          color={
+                            step.status === 'passed'
+                              ? 'success'
+                              : step.status === 'failed'
+                                ? 'error'
+                                : 'default'
+                          }
+                        >
+                          {t(`pages.inbounds.form.openfluxDiagStatus.${step.status}`)}
+                        </Tag>{' '}
+                        {step.detail}
+                        {step.elapsedMs !== undefined ? ` (${step.elapsedMs} ms)` : ''}
+                      </Typography.Text>
+                    ))}
+                  </Space>
+                }
               />
             )}
           </Space>
