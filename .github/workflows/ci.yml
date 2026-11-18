@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "**.go"
@@ -63,9 +64,12 @@ permissions:
 env:
   GOPROXY: "https://proxy.golang.org|direct"
 
+# Preserve an in-progress validation of main instead of cancelling all
+# expensive tests on every subsequent push. GitHub still coalesces pending runs.
+# Manual runs use a separate group so they can validate a specific commit.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'automatic' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.event_name != 'workflow_dispatch' }}
 
 jobs:
   changes:
