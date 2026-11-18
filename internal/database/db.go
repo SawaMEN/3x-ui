@@ -661,80 +661,20 @@ func backfillEmptyHostGroupIds() error {
 	})
 }
 
+// Historical versions erased IP limits when Fail2ban was missing. Native
+// sing-box enforces those limits without Fail2ban; a core switch must also
+// never irreversibly delete an administrator's settings. Mark this legacy
+// migration as completed without modifying any stored IP limits.
 func resetIpLimitsWithoutFail2ban() error {
-	var history []string
-	if err := db.Model(&model.HistoryOfSeeders{}).Pluck("seeder_name", &history).Error; err != nil {
+	const name = "ResetIpLimitNoFail2ban"
+	var count int64
+	if err := db.Model(&model.HistoryOfSeeders{}).Where("seeder_name = ?", name).Count(&count).Error; err != nil {
 		return err
 	}
-	if slices.Contains(history, "ResetIpLimitNoFail2ban") {
+	if count > 0 {
 		return nil
 	}
-
-	state, probeErr := fail2banEnforcementState()
-	if state == fail2banEnforcing {
-		return db.Create(&model.HistoryOfSeeders{SeederName: "ResetIpLimitNoFail2ban"}).Error
-	}
-	if state == fail2banUnknown {
-		log.Printf("ResetIpLimitNoFail2ban: fail2ban-client present but not runnable (%v); keeping configured IP limits, will retry next start", probeErr)
-		return nil
-	}
-
-	var inbounds []model.Inbound
-	if err := db.Find(&inbounds).Error; err != nil {
-		return err
-	}
-
-	return db.Transaction(func(tx *gorm.DB) error {
-		for _, inbound := range inbounds {
-			if strings.TrimSpace(inbound.Settings) == "" {
-				continue
-			}
-			var settings map[string]any
-			if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
-				log.Printf("ResetIpLimitNoFail2ban: skip inbound %d (invalid settings json): %v", inbound.Id, err)
-				continue
-			}
-			clients, ok := settings["clients"].([]any)
-			if !ok {
-				continue
-			}
-			mutated := false
-			for i, raw := range clients {
-				obj, ok := raw.(map[string]any)
-				if !ok {
-					continue
-				}
-				v, present := obj["limitIp"]
-				if !present {
-					continue
-				}
-				if n, isNum := v.(float64); isNum && n == 0 {
-					continue
-				}
-				obj["limitIp"] = 0
-				clients[i] = obj
-				mutated = true
-			}
-			if !mutated {
-				continue
-			}
-			settings["clients"] = clients
-			newSettings, err := json.MarshalIndent(settings, "", "  ")
-			if err != nil {
-				log.Printf("ResetIpLimitNoFail2ban: skip inbound %d (marshal failed): %v", inbound.Id, err)
-				continue
-			}
-			if err := tx.Model(&model.Inbound{}).Where("id = ?", inbound.Id).
-				Update("settings", string(newSettings)).Error; err != nil {
-				return err
-			}
-		}
-		if err := tx.Model(&model.ClientRecord{}).Where("limit_ip <> ?", 0).
-			Update("limit_ip", 0).Error; err != nil {
-			return err
-		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "ResetIpLimitNoFail2ban"}).Error
-	})
+	return db.Create(&model.HistoryOfSeeders{SeederName: name}).Error
 }
 
 type fail2banState int

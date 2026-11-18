@@ -245,31 +245,42 @@ func (s *ServerService) CurrentStatus() *Status {
 	return s.RefreshStatus()
 }
 
-// Fail2banStatus tells the frontend whether the per-client IP limit can
-// actually be enforced. Enforcement depends on fail2ban, so a limit set
-// without it would silently do nothing.
+// Fail2banStatus describes the IP-limit enforcement available for the selected
+// core. Native sing-box disconnects over-limit sessions without Fail2ban;
+// other cores retain the legacy Fail2ban availability check.
 type Fail2banStatus struct {
-	Enabled   bool `json:"enabled"`
-	Installed bool `json:"installed"`
-	Usable    bool `json:"usable"`
-	Windows   bool `json:"windows"`
+	Enabled   bool   `json:"enabled"`
+	Installed bool   `json:"installed"`
+	Usable    bool   `json:"usable"`
+	Windows   bool   `json:"windows"`
+	Method    string `json:"method"`
 }
 
 const fail2banInstalledCacheTTL = 30 * time.Second
 
 func (s *ServerService) GetFail2banStatus() Fail2banStatus {
 	enabled := isFail2banEnabled()
+	coreType, coreErr := (&SettingService{}).GetCoreType()
+	native := coreErr == nil && IsNativeCore(coreType)
 
+	// A native sing-box listener can close sessions by user and source IP.
+	// Fail2ban is not a prerequisite for that operation.
 	installed := false
-	if enabled {
+	if enabled && !native {
 		installed = s.isFail2banInstalled()
 	}
-
+	method := "unavailable"
+	if native {
+		method = "native"
+	} else if enabled && installed && runtime.GOOS != "windows" {
+		method = "fail2ban"
+	}
 	return Fail2banStatus{
 		Enabled:   enabled,
 		Installed: installed,
-		Usable:    enabled && installed,
+		Usable:    method != "unavailable",
 		Windows:   runtime.GOOS == "windows",
+		Method:    method,
 	}
 }
 

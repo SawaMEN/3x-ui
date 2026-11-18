@@ -53,7 +53,7 @@ func TestFail2banEnforcementStateSeparatesAbsentFromUnrunnable(t *testing.T) {
 	})
 }
 
-func TestResetIpLimitsKeepsConfiguredLimitsWhenProbeFails(t *testing.T) {
+func TestResetIpLimitsPreservesLimitsWhenProbeFails(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fail2ban shell fixtures are Unix-only")
 	}
@@ -103,7 +103,47 @@ func TestResetIpLimitsKeepsConfiguredLimitsWhenProbeFails(t *testing.T) {
 	if err := db.Model(&model.HistoryOfSeeders{}).Where("seeder_name = ?", "ResetIpLimitNoFail2ban").Count(&count).Error; err != nil {
 		t.Fatalf("count seeder history: %v", err)
 	}
-	if count != 0 {
-		t.Fatalf("seeder history rows = %d, want 0", count)
+	if count != 1 {
+		t.Fatalf("seeder history rows = %d, want 1", count)
+	}
+}
+
+func TestResetIpLimitsNeverErasesSettingsWhenFail2banAbsent(t *testing.T) {
+	t.Setenv("XUI_DB_FOLDER", t.TempDir())
+	if err := InitDB(config.GetDBPath()); err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+	t.Cleanup(func() { _ = CloseDB() })
+	if err := db.Where("seeder_name = ?", "ResetIpLimitNoFail2ban").
+		Delete(&model.HistoryOfSeeders{}).Error; err != nil {
+		t.Fatalf("clear history: %v", err)
+	}
+	settings := `{"clients":[{"email":"native@example.test","limitIp":3}]}`
+	inbound := model.Inbound{Remark: "native", Settings: settings}
+	if err := db.Create(&inbound).Error; err != nil {
+		t.Fatalf("create inbound: %v", err)
+	}
+	client := model.ClientRecord{Email: "native@example.test", LimitIP: 3}
+	if err := db.Create(&client).Error; err != nil {
+		t.Fatalf("create client: %v", err)
+	}
+	t.Setenv("XUI_ENABLE_FAIL2BAN", "false")
+	t.Setenv("PATH", t.TempDir())
+	if err := resetIpLimitsWithoutFail2ban(); err != nil {
+		t.Fatalf("migration: %v", err)
+	}
+	var stored model.ClientRecord
+	if err := db.First(&stored, client.Id).Error; err != nil {
+		t.Fatalf("read client: %v", err)
+	}
+	if stored.LimitIP != 3 {
+		t.Fatalf("client IP limit erased: %d", stored.LimitIP)
+	}
+	var storedInbound model.Inbound
+	if err := db.First(&storedInbound, inbound.Id).Error; err != nil {
+		t.Fatalf("read inbound: %v", err)
+	}
+	if storedInbound.Settings != settings {
+		t.Fatalf("inbound settings changed: %s", storedInbound.Settings)
 	}
 }

@@ -56,18 +56,18 @@ func (j *CheckClientIpJob) Run() {
 	}
 	j.pruneBannedSeen(observed)
 
-	singBox := true
-	if !singBox && !isFail2BanEnabled() {
+	native := service.IsNativeCore(service.SelectedNativeCore().CoreType())
+	if !native && !isFail2BanEnabled() {
 		return
 	}
 
 	hasLimit := j.hasLimitIp()
 	f2bInstalled := false
-	if hasLimit && !singBox {
+	if hasLimit && !native {
 		f2bInstalled = j.checkFail2BanInstalled()
 	}
 	enforce := hasLimit
-	if !singBox {
+	if !native {
 		enforce = j.resolveEnforce(hasLimit, f2bInstalled)
 	}
 	if enforce {
@@ -77,7 +77,7 @@ func (j *CheckClientIpJob) Run() {
 }
 
 func (j *CheckClientIpJob) resolveEnforce(hasLimit, f2bInstalled bool) bool {
-	if hasLimit && runtime.GOOS != "windows" && !f2bInstalled {
+	if hasLimit && (runtime.GOOS == "windows" || !f2bInstalled) {
 		return false
 	}
 	return hasLimit
@@ -290,6 +290,7 @@ func (j *CheckClientIpJob) processObserved(observed map[string]map[string]int64,
 	type pendingDisconnect struct {
 		inbound *model.Inbound
 		email   string
+		ips     []string
 	}
 	var disconnects []pendingDisconnect
 
@@ -350,21 +351,20 @@ func (j *CheckClientIpJob) processObserved(observed map[string]map[string]int64,
 
 		clientIpsRecord, ok := ipRowByEmail[email]
 		if !ok {
-			jsonIps, err := json.Marshal(ipsWithTime)
-			if err != nil {
+			// Enforce on the first observation, not just on later scans.
+			clientIpsRecord = &model.InboundClientIps{ClientEmail: email, Ips: "[]"}
+			if err := tx.Create(clientIpsRecord).Error; err != nil {
 				j.checkError(err)
 				continue
 			}
-			if err := tx.Save(&model.InboundClientIps{ClientEmail: email, Ips: string(jsonIps)}).Error; err != nil {
-				j.checkError(err)
-			}
-			continue
 		}
 
 		cleaned, banned := j.updateInboundClientIps(tx, clientIpsRecord, inbound, email, limitByEmail[email], ipsWithTime, enforce, observedAreLive)
 		shouldCleanLog = cleaned || shouldCleanLog
 		if banned {
-			disconnects = append(disconnects, pendingDisconnect{inbound: inbound, email: email})
+			disconnects = append(disconnects, pendingDisconnect{
+				inbound: inbound, email: email, ips: append([]string(nil), j.disAllowedIps...),
+			})
 		}
 	}
 
@@ -383,7 +383,7 @@ func (j *CheckClientIpJob) processObserved(observed map[string]map[string]int64,
 			clients, _ = service.ParseInboundSettingsClients(d.inbound.Settings)
 			clientsCache[d.inbound.Id] = clients
 		}
-		j.disconnectClientTemporarily(d.inbound, d.email, clients)
+		j.disconnectClientTemporarily(d.inbound, d.email, clients, d.ips)
 	}
 
 	j.recordLocalAttribution(attribution)
@@ -547,21 +547,20 @@ func (j *CheckClientIpJob) updateInboundClientIps(tx *gorm.DB, inboundClientIps 
 		shouldCleanLog = true
 		banned = true
 
-		logIpFile, err := os.OpenFile(xray.GetIPLimitLogPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-		if err != nil {
-			logger.Errorf("failed to open IP limit log file: %s", err)
-			return false, false
-		}
-		defer logIpFile.Close()
-		ipLogger := log.New(logIpFile, "", log.LstdFlags)
-
-		// log format is load-bearing: x-ui.sh create_iplimit_jails builds
-		// filter.d/3x-ipl.conf with
-		//   failregex = \[LIMIT_IP\]\s*Email\s*=\s*<F-USER>.+</F-USER>\s*\|\|\s*Disconnecting OLD IP\s*=\s*<ADDR>\s*\|\|\s*Timestamp\s*=\s*\d+
-		// don't change the wording.
+		// The optional Fail2ban log must not gate native API disconnection.
 		for _, ipTime := range actionable {
 			j.disAllowedIps = append(j.disAllowedIps, ipTime.IP)
-			ipLogger.Printf("[LIMIT_IP] Email = %s || Disconnecting OLD IP = %s || Timestamp = %d", clientEmail, ipTime.IP, ipTime.Timestamp)
+		}
+		logIpFile, err := os.OpenFile(xray.GetIPLimitLogPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			logger.Warningf("[LIMIT_IP] optional Fail2ban log unavailable: %v", err)
+		} else {
+			defer logIpFile.Close()
+			ipLogger := log.New(logIpFile, "", log.LstdFlags)
+			// Format is required by filter.d/3x-ipl.conf.
+			for _, ipTime := range actionable {
+				ipLogger.Printf("[LIMIT_IP] Email = %s || Disconnecting OLD IP = %s || Timestamp = %d", clientEmail, ipTime.IP, ipTime.Timestamp)
+			}
 		}
 	}
 
@@ -625,10 +624,14 @@ func (j *CheckClientIpJob) filterAdvancedSinceLastBan(email string, banned []IPW
 }
 
 // disconnectClientTemporarily closes disallowed native sessions without changing credentials.
-func (j *CheckClientIpJob) disconnectClientTemporarily(inbound *model.Inbound, clientEmail string, clients []model.Client) {
+func (j *CheckClientIpJob) disconnectClientTemporarily(inbound *model.Inbound, clientEmail string, clients []model.Client, ipSnapshot ...[]string) {
+	ips := j.disAllowedIps
+	if len(ipSnapshot) > 0 {
+		ips = ipSnapshot[0]
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := service.SelectedNativeCore().DisconnectClientIPs(ctx, clientEmail, j.disAllowedIps); err != nil {
+	if err := service.SelectedNativeCore().DisconnectClientIPs(ctx, clientEmail, ips); err != nil {
 		logger.Warningf("[LIMIT_IP] Failed to disconnect sing-box client %s: %v", clientEmail, err)
 	}
 }
