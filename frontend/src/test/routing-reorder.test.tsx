@@ -45,11 +45,10 @@ function ruleOrder() {
 
 function openRouting(mobile: boolean) {
   const view = renderWithProviders(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={['/?routingTab=rules']}>
       <Harness mobile={mobile} />
     </MemoryRouter>,
   );
-  fireEvent.click(screen.getByRole('tab', { name: /Routing Rules/ }));
   return {
     ...view,
     rows: () =>
