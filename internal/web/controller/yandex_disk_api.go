@@ -49,7 +49,7 @@ func yandexDiskAPIRequest(ctx context.Context, client *http.Client, token, metho
 		return 0, nil, fmt.Errorf("Yandex Disk API request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 2 << 20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
 		return 0, nil, fmt.Errorf("cannot read Yandex Disk API response: %w", err)
 	}

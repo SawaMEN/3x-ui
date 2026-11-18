@@ -83,7 +83,7 @@ func yandexS3ProbeRequest(ctx context.Context, client *http.Client, accessID, se
 		return 0, nil, fmt.Errorf("cannot reach Yandex Object Storage: %w", err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1 << 20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return 0, nil, fmt.Errorf("cannot read Object Storage response: %w", err)
 	}

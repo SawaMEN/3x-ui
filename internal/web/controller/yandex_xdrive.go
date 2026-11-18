@@ -44,7 +44,7 @@ func yandexXDriveRequest(ctx context.Context, client *http.Client, login, passwo
 		return 0, nil, fmt.Errorf("cannot contact Yandex WebDAV: %w", err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1 << 20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return 0, nil, fmt.Errorf("cannot read WebDAV response: %w", err)
 	}
