@@ -26,6 +26,7 @@ import type { RuleRow } from './types';
 interface RoutingColumnsParams {
   isMobile: boolean;
   rowsLength: number;
+  reorderDisabled?: boolean;
   showSource: boolean;
   showBalancer: boolean;
   onHandlePointerDown: (idx: number, ev: React.PointerEvent) => void;
@@ -39,6 +40,7 @@ interface RoutingColumnsParams {
 export function useRoutingColumns({
   isMobile,
   rowsLength,
+  reorderDisabled = false,
   showSource,
   showBalancer,
   onHandlePointerDown,
@@ -60,12 +62,14 @@ export function useRoutingColumns({
         key: 'index',
         render: (_v, _r, index) => (
           <div className="action-cell" style={{ justifyContent: 'center' }}>
-            <HolderOutlined
-              className="drag-handle"
-              title={t('pages.xray.routing.dragToReorder')}
-              aria-hidden="true"
-              onPointerDown={(ev: React.PointerEvent) => onHandlePointerDown(index, ev)}
-            />
+            {!reorderDisabled && (
+              <HolderOutlined
+                className="drag-handle"
+                title={t('pages.xray.routing.dragToReorder')}
+                aria-hidden="true"
+                onPointerDown={(ev: React.PointerEvent) => onHandlePointerDown(index, ev)}
+              />
+            )}
             <span className="row-index">{index + 1}</span>
           </div>
         ),
@@ -113,7 +117,7 @@ export function useRoutingColumns({
                         <ArrowUpOutlined aria-hidden /> {t('pages.inbounds.form.moveUp')}
                       </>
                     ),
-                    disabled: index === 0,
+                    disabled: reorderDisabled || index === 0,
                     onClick: () => moveUp(index),
                   },
                   {
@@ -123,7 +127,7 @@ export function useRoutingColumns({
                         <ArrowDownOutlined aria-hidden /> {t('pages.inbounds.form.moveDown')}
                       </>
                     ),
-                    disabled: index === rowsLength - 1,
+                    disabled: reorderDisabled || index === rowsLength - 1,
                     onClick: () => moveDown(index),
                   },
                   {
@@ -335,6 +339,7 @@ export function useRoutingColumns({
       t,
       isMobile,
       rowsLength,
+      reorderDisabled,
       showSource,
       showBalancer,
       remarkByTag,
