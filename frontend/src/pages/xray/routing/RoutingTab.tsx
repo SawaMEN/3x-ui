@@ -88,6 +88,7 @@ export default function RoutingTab({
     () => rules.filter((rule) => isQuickRule(rule as Record<string, unknown>, 'xray')).length,
     [rules],
   );
+  const reorderDisabled = quickRuleCount > 0 && !showQuickInAdvanced;
   const rulesRef = useRef(rules);
   const rowsRef = useRef<RuleRow[]>([]);
 
@@ -369,7 +370,7 @@ export default function RoutingTab({
   }
 
   function moveUp(idx: number) {
-    if (idx <= 0) return;
+    if (reorderDisabled || idx <= 0) return;
     const target = originalRuleIndex(rowsRef.current, idx);
     const prev = originalRuleIndex(rowsRef.current, idx - 1);
     mutate((tt) => {
@@ -379,7 +380,7 @@ export default function RoutingTab({
     });
   }
   function moveDown(idx: number) {
-    if (idx >= rowsRef.current.length - 1) return;
+    if (reorderDisabled || idx >= rowsRef.current.length - 1) return;
     const target = originalRuleIndex(rowsRef.current, idx);
     const next = originalRuleIndex(rowsRef.current, idx + 1);
     mutate((tt) => {
@@ -406,6 +407,7 @@ export default function RoutingTab({
       return Number.isInteger(index) && index >= 0 && index < rows.length ? index : null;
     },
     onDrop: ({ from, to }) => {
+      if (reorderDisabled) return;
       const fromOrig = originalRuleIndex(rowsRef.current, from);
       const toOrig = originalRuleIndex(rowsRef.current, to);
       mutate((tt) => {
@@ -425,6 +427,7 @@ export default function RoutingTab({
   const desktopColumns = useRoutingColumns({
     isMobile,
     rowsLength: rows.length,
+    reorderDisabled,
     showSource: hasSource,
     showBalancer: hasBalancer,
     onHandlePointerDown,
@@ -567,11 +570,17 @@ export default function RoutingTab({
                     </Space>
                   )}
                 </Space>
+                {reorderDisabled && (
+                  <span className="routing-advanced-hint">
+                    Для изменения общего порядка правил включите показ автоматических маршрутов.
+                  </span>
+                )}
 
                 <div ref={rulesContainerRef}>
                   {isMobile ? (
                     <RuleCardList
                       rows={rows}
+                      reorderDisabled={reorderDisabled}
                       draggedIndex={draggedIndex}
                       dropTargetIndex={dropTargetIndex}
                       onHandlePointerDown={onHandlePointerDown}
