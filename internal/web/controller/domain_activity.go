@@ -110,6 +110,7 @@ func (a *ServerController) getDomainActivity(c *gin.Context) {
 		return
 	}
 	if state.Enabled && state.Supported {
+		generation := service.DomainActivityHistoryGeneration()
 		if state.Mode == "active" {
 			// A stopped/restarting core has no live API to query. This is an
 			// unavailable snapshot, not an empty set of active connections.
@@ -131,7 +132,7 @@ func (a *ServerController) getDomainActivity(c *gin.Context) {
 				jsonMsgObj(c, "Unable to read sing-box active connections", state, err)
 				return
 			}
-			service.RecordDomainActivity(state.Core, state.Entries, now, state.WindowSeconds)
+			service.RecordDomainActivityIfGeneration(state.Core, state.Entries, now, state.WindowSeconds, generation)
 		} else if state.AccessLogEnabled {
 			now := time.Now()
 			state.Entries, err = a.serverService.GetRecentDomainActivity(now)
@@ -139,7 +140,7 @@ func (a *ServerController) getDomainActivity(c *gin.Context) {
 				jsonMsgObj(c, "Unable to read Xray domain activity", state, err)
 				return
 			}
-			service.RecordDomainActivity(state.Core, state.Entries, now, state.WindowSeconds)
+			service.RecordDomainActivityIfGeneration(state.Core, state.Entries, now, state.WindowSeconds, generation)
 		}
 		state.Entries = service.DomainActivityHistoryEntries(state.Core, time.Now(), state.WindowSeconds)
 	}
