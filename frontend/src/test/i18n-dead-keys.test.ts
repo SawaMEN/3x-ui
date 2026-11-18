@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 
+import { createInstance } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
 /*
@@ -72,6 +73,24 @@ describe('i18n keys', () => {
   for (const match of blob.matchAll(/[`']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+\.?)\$\{/g)) {
     prefixes.push(match[1]);
   }
+
+  it.each([
+    ['en-US', 'Cleanup finished. Approximately 1.5 МБ freed; temporary files removed: 4.'],
+    ['ru-RU', 'Очистка завершена. Освобождено примерно 1.5 МБ, удалено временных файлов: 4.'],
+  ])('interpolates system cleanup statistics in %s', async (locale, expected) => {
+    const translation = JSON.parse(readFileSync(join(translationDir, `${locale}.json`), 'utf8'));
+    const instance = createInstance();
+    await instance.init({
+      lng: locale,
+      fallbackLng: false,
+      resources: { [locale]: { translation } },
+      interpolation: { escapeValue: false, prefix: '{', suffix: '}' },
+    });
+
+    expect(instance.t('pages.settings.swap.cleanupDone', { size: '1.5 МБ', files: 4 })).toBe(
+      expected,
+    );
+  });
 
   it('every en-US key is referenced by the frontend or Go sources', () => {
     const dead = enKeys.filter(
