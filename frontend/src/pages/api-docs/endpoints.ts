@@ -3857,6 +3857,11 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/setting/system/update/cleanup',
+        summary: 'Remove stale package caches and discarded VPN installer downloads while preserving installed cores and recovery files.',
+      },
+      {
+        method: 'POST',
         path: '/panel/api/setting/system/update/reboot',
         summary: 'Reboot the panel host after system updates.',
       },
