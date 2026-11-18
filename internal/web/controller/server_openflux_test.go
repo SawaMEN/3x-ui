@@ -92,3 +92,24 @@ func TestOpenFluxProviderProbeRejectsRemoteNodeAndUnknownTarget(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenFluxEndToEndRequiresSavedInboundAndExplicitConfirmation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	controller := &ServerController{}
+	controller.initExternalVPNRouter(engine.Group("/server"))
+	for _, tc := range []struct{ body, want string }{
+		{`{"inboundId":0,"type":"direct","confirmInterruption":true}`, "saved OpenFlux"},
+		{`{"inboundId":17,"type":"http://127.0.0.1","confirmInterruption":true}`, "known transport"},
+		{`{"inboundId":17,"type":"yandex","confirmInterruption":false}`, "temporarily interrupt"},
+		{`{"inboundId":17,"type":"yandex","confirmInterruption":true}`, "authentication required"},
+	} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/server/openflux/diagnose-transport", strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		engine.ServeHTTP(w, req)
+		if !strings.Contains(w.Body.String(), `"success":false`) || !strings.Contains(w.Body.String(), tc.want) {
+			t.Fatalf("unsafe diagnostic was accepted: %s", w.Body.String())
+		}
+	}
+}
