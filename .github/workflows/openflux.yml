@@ -71,7 +71,7 @@ jobs:
             "internal/externalvpn/openflux_diagnostics.go", "internal/externalvpn/openflux_diagnostics_test.go", "internal/externalvpn/update.go",
             "internal/externalvpn/outbound.go", "internal/web/controller/api.go",
             "internal/web/controller/api_auth_test.go", "internal/web/controller/server_externalvpn.go",
-            "internal/web/controller/server_openflux.go", "internal/web/controller/server_openflux_test.go",
+            "internal/web/controller/server_openflux.go", "internal/web/controller/server_openflux_test.go", "internal/web/controller/server_openflux_diagnostic_jobs.go",
             "internal/web/runtime/openflux_install.go", "internal/web/service/component_remove.go",
           ]
           for path in files:
