@@ -1295,6 +1295,7 @@
         "openfluxDiagMaxRequired": "Skipped: enter a valid Web MAX token for a separate client account, then retry. The server account token cannot be reused.",
         "openfluxDiagFailed": "End-to-end connection diagnostic failed.",
         "openfluxDiagTimeout": "The OpenFlux end-to-end diagnostic exceeded the time limit. Check the provider or exit and retry.",
+        "openfluxDiagProgress": "OpenFlux diagnostics: {{done}} of {{total}} done, {{remaining}} remaining.",
         "openfluxDiagSuccess": "Verified: encrypted OpenFlux payload received",
         "openfluxDiagUnverified": "Connection NOT verified: inspect individual steps",
         "openfluxDiagStages": {"configuration":"Saved configuration","provider":"Provider TLS","session":"Real OpenFlux/ SOCKS connection","payload":"Encrypted data exchange"},
