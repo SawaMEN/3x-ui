@@ -18,7 +18,7 @@ type runtimeOutput struct {
 }
 
 func newRuntimeOutput(path string) *runtimeOutput {
-	return &runtimeOutput{file: &lumberjack.Logger{Filename: path, MaxSize: 10, MaxBackups: 2, MaxAge: 7}}
+	return &runtimeOutput{file: &lumberjack.Logger{Filename: path, MaxSize: 10, MaxBackups: 128, MaxAge: 90}}
 }
 
 // lumberjack.Close closes the file, but not its rotation worker. Reusing this
