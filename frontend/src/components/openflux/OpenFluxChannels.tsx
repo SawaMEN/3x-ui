@@ -190,6 +190,9 @@ export default function OpenFluxChannels({
   const [checks, setChecks] = useState<Record<string, { ok: boolean; detail: string }>>({});
   const [diagnostics, setDiagnostics] = useState<Record<string, DiagnosticResult>>({});
   const [diagnosing, setDiagnosing] = useState<OpenFluxTransportType | 'all' | null>(null);
+  const [diagnosticProgress, setDiagnosticProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
   // Used only for an explicit live MAX test; never saved to the inbound.
   const [diagnosticMaxClientToken, setDiagnosticMaxClientToken] = useState('');
   const used = new Set(value.map((entry) => entry.type));
@@ -299,6 +302,13 @@ export default function OpenFluxChannels({
       onOk: () => {
         void (async () => {
           setDiagnosing(types.length > 1 ? 'all' : types[0]);
+          setDiagnosticProgress({ done: 0, total: types.length });
+          setDiagnostics((previous) => {
+            const updated = { ...previous };
+            for (const type of types) delete updated[type];
+            return updated;
+          });
+          let completedCount = 0;
           for (const type of types) {
             if (type === 'oneme' && !validOpenFluxMAXToken(diagnosticMaxClientToken)) {
               setDiagnostics((previous) => ({
@@ -316,6 +326,7 @@ export default function OpenFluxChannels({
                   ],
                 },
               }));
+              setDiagnosticProgress({ done: ++completedCount, total: types.length });
               continue;
             }
             try {
@@ -378,9 +389,11 @@ export default function OpenFluxChannels({
                 },
               }));
             }
+            setDiagnosticProgress({ done: ++completedCount, total: types.length });
           }
           setDiagnosticMaxClientToken('');
           setDiagnosing(null);
+          setDiagnosticProgress(null);
         })();
       },
     });
@@ -423,6 +436,11 @@ export default function OpenFluxChannels({
       >
         {t('pages.inbounds.form.openfluxDiagAll')}
       </Button>
+      {diagnosticProgress && (
+        <Typography.Text role="status">
+          {t('pages.inbounds.form.openfluxDiagProgress', diagnosticProgress)}
+        </Typography.Text>
+      )}
       {value.map((entry, index) => (
         <Card
           key={entry.type}
