@@ -73,17 +73,48 @@ func Cleanup(ctx context.Context) (CleanupResult, error) {
 
 	// Package managers leave fragments after interrupted *downloads*. Do not
 	// remove locks, package databases, installed kernels or complete archives.
-	partialLocations := []string{}
+	partialLocations := []struct {
+		dir   string
+		match func(string) bool
+	}{}
 	switch info.manager {
 	case "apt-get":
-		partialLocations = []string{"/var/cache/apt/archives/partial", "/var/lib/apt/lists/partial"}
+		// All regular files left in apt's partial directories are unfinished.
+		partialLocations = append(partialLocations,
+			struct {
+				dir   string
+				match func(string) bool
+			}{"/var/cache/apt/archives/partial", isAnyFile},
+			struct {
+				dir   string
+				match func(string) bool
+			}{"/var/lib/apt/lists/partial", isAnyFile},
+		)
 	case "pacman":
-		partialLocations = []string{"/var/cache/pacman/pkg", "/var/lib/pacman/sync"}
+		partialLocations = append(partialLocations,
+			struct {
+				dir   string
+				match func(string) bool
+			}{"/var/cache/pacman/pkg", isPartialDownload},
+			struct {
+				dir   string
+				match func(string) bool
+			}{"/var/lib/pacman/sync", isPartialDownload},
+		)
 	case "dnf", "yum":
-		partialLocations = []string{"/var/cache/dnf", "/var/cache/yum"}
+		partialLocations = append(partialLocations,
+			struct {
+				dir   string
+				match func(string) bool
+			}{"/var/cache/dnf", isPartialDownload},
+			struct {
+				dir   string
+				match func(string) bool
+			}{"/var/cache/yum", isPartialDownload},
+		)
 	}
-	for _, dir := range partialLocations {
-		if err := removeStaleFiles(cleanupCtx, dir, 0, isPartialDownload, &result); err != nil {
+	for _, location := range partialLocations {
+		if err := removeStaleFiles(cleanupCtx, location.dir, 0, location.match, &result); err != nil {
 			result.Warnings = append(result.Warnings, err.Error())
 		}
 	}
@@ -94,6 +125,10 @@ func Cleanup(ctx context.Context) (CleanupResult, error) {
 	// Standalone VPN engines use these exact, internal staging prefixes. A
 	// missing installed binary is NOT a reason to delete any unrelated file.
 	binFolders := map[string]bool{}
+	binDir := config.GetBinFolderPath()
+	if binDir != "/" && binDir != "." {
+		binFolders[binDir] = true
+	}
 	for _, engine := range []string{"xray", "sing-box-upstream"} {
 		target := config.StandaloneCoreBinaryPath(engine)
 		if target == "" {
@@ -116,6 +151,9 @@ func Cleanup(ctx context.Context) (CleanupResult, error) {
 	// of indiscriminately deleting potentially active sockets or workspaces.
 	for _, dir := range []string{"/tmp", "/var/tmp"} {
 		if err := removeStaleFiles(cleanupCtx, dir, tempArtifactMaxAge, isPanelTempArtifact, &result); err != nil {
+			result.Warnings = append(result.Warnings, err.Error())
+		}
+		if err := removeOldPanelTempDirs(cleanupCtx, dir, tempArtifactMaxAge, &result); err != nil {
 			result.Warnings = append(result.Warnings, err.Error())
 		}
 	}
@@ -191,6 +229,8 @@ func isPackageManagerProcess(name string) bool {
 	}
 }
 
+func isAnyFile(string) bool { return true }
+
 func isPartialDownload(name string) bool {
 	return strings.HasSuffix(name, ".part") ||
 		strings.HasSuffix(name, ".partial") ||
@@ -202,7 +242,7 @@ func isStaleCoreArtifact(name string) bool {
 	for _, prefix := range []string{
 		".core-xray-install-", ".core-xray-update-",
 		".core-sing-box-upstream-install-", ".core-sing-box-upstream-update-",
-		".core-install-", ".core-update-", ".core-geodata-",
+		".core-install-", ".core-update-", ".core-geodata-", ".sudoku-tunnel-",
 	} {
 		if strings.HasPrefix(name, prefix) {
 			return true
@@ -269,4 +309,47 @@ func availableBytes(path string) (int64, bool) {
 		return 0, false
 	}
 	return int64(stat.Bavail) * int64(stat.Bsize), true
+}
+
+ // removeOldPanelTempDirs deletes only known installer scratch directories
+ // abandoned for at least a day. Never remove an arbitrary /tmp directory.
+func removeOldPanelTempDirs(ctx context.Context, dir string, minAge time.Duration, result *CleanupResult) error {
+	info, err := os.Lstat(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing unsafe cleanup directory: %s", dir)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "3x-ui-sudoku-") {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		stat, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !stat.IsDir() || stat.Mode()&os.ModeSymlink != 0 || time.Since(stat.ModTime()) < minAge {
+			continue
+		}
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("remove abandoned installer temp %s: %w", path, err)
+		}
+		result.RemovedFiles++
+	}
+	return nil
 }
