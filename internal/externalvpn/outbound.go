@@ -640,7 +640,13 @@ func startOutboundContext(parent context.Context, tag string, proc *managedOutbo
 		proc.cmd = exec.CommandContext(ctx, "docker", "run", "--rm", "--name", proc.container, "--cap-add", "NET_ADMIN", "--device", "/dev/net/tun:/dev/net/tun", "--publish", fmt.Sprintf("127.0.0.1:%d:1080/tcp", proc.port), "--mount", "type=bind,src="+folder+",dst=/run/panel,readonly", "--mount", "type=bind,src="+sb+",dst=/usr/bin/panel-core,readonly", "3x-ui-fptn-client:0.4.6", "/bin/sh", "/run/panel/run.sh", strconv.Itoa(s.MTU), s.SNI, s.Bypass)
 	}
 	prepareVetroffCommand(proc.cmd)
-	proc.cmd.Stdout, proc.cmd.Stderr = os.Stdout, os.Stderr
+	// Diagnostic children may print provider URLs or account IDs; never mirror
+	// their output into global panel logs. Production sidecars retain logging.
+	if proc.probe && strings.EqualFold(p, "openflux") {
+		proc.cmd.Stdout, proc.cmd.Stderr = io.Discard, io.Discard
+	} else {
+		proc.cmd.Stdout, proc.cmd.Stderr = os.Stdout, os.Stderr
+	}
 	if parent.Err() != nil {
 		cancel()
 		return parent.Err()
