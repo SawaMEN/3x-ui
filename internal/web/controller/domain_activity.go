@@ -132,12 +132,28 @@ func (a *ServerController) getDomainActivity(c *gin.Context) {
 				jsonMsgObj(c, "Unable to read sing-box active connections", state, err)
 				return
 			}
+			// A core switch during the snapshot may invalidate its user/domain mapping.
+			currentCore, coreErr := a.settingService.GetCoreType()
+			if coreErr != nil || currentCore != state.Core {
+				state.TemporarilyUnavailable = true
+				state.Entries = make([]service.DomainActivityEntry, 0)
+				jsonObj(c, state, nil)
+				return
+			}
 			service.RecordDomainActivityIfGeneration(state.Core, state.Entries, now, state.WindowSeconds, generation)
 		} else if state.AccessLogEnabled {
 			now := time.Now()
 			state.Entries, err = a.serverService.GetRecentDomainActivity(now)
 			if err != nil {
 				jsonMsgObj(c, "Unable to read Xray domain activity", state, err)
+				return
+			}
+			// A core switch during the snapshot may invalidate its user/domain mapping.
+			currentCore, coreErr := a.settingService.GetCoreType()
+			if coreErr != nil || currentCore != state.Core {
+				state.TemporarilyUnavailable = true
+				state.Entries = make([]service.DomainActivityEntry, 0)
+				jsonObj(c, state, nil)
 				return
 			}
 			service.RecordDomainActivityIfGeneration(state.Core, state.Entries, now, state.WindowSeconds, generation)
