@@ -20,8 +20,9 @@ const (
 // into the database or an access log. Disabling monitoring clears it.
 var domainActivityHistory = struct {
 	sync.Mutex
-	core    string
-	entries map[string]DomainActivityEntry
+	core       string
+	generation uint64
+	entries    map[string]DomainActivityEntry
 }{entries: make(map[string]DomainActivityEntry)}
 
 func ValidDomainActivityRetentionSeconds(seconds int) bool {
@@ -35,12 +36,36 @@ func domainActivityCutoff(now time.Time, retentionSeconds int) time.Time {
 	return now.Add(-time.Duration(retentionSeconds) * time.Second)
 }
 
+// DomainActivityHistoryGeneration identifies the current monitoring epoch.
+// Clearing history invalidates all in-flight snapshots from an earlier epoch.
+func DomainActivityHistoryGeneration() uint64 {
+	domainActivityHistory.Lock()
+	defer domainActivityHistory.Unlock()
+	return domainActivityHistory.generation
+}
+
 // RecordDomainActivity keeps the most recent known observation for each
 // (client, domain). Polling the same snapshot repeatedly never inflates its
 // count. Old Xray access-log rows retain their original timestamps.
 func RecordDomainActivity(core string, observed []DomainActivityEntry, now time.Time, retentionSeconds int) {
 	domainActivityHistory.Lock()
 	defer domainActivityHistory.Unlock()
+	recordDomainActivityLocked(core, observed, now, retentionSeconds)
+}
+
+// RecordDomainActivityIfGeneration discards an in-flight API response if the
+// administrator disabled monitoring or cleared history during the request.
+func RecordDomainActivityIfGeneration(core string, observed []DomainActivityEntry, now time.Time, retentionSeconds int, generation uint64) bool {
+	domainActivityHistory.Lock()
+	defer domainActivityHistory.Unlock()
+	if domainActivityHistory.generation != generation {
+		return false
+	}
+	recordDomainActivityLocked(core, observed, now, retentionSeconds)
+	return true
+}
+
+func recordDomainActivityLocked(core string, observed []DomainActivityEntry, now time.Time, retentionSeconds int) {
 	if domainActivityHistory.core != core {
 		domainActivityHistory.core = core
 		clear(domainActivityHistory.entries)
@@ -136,6 +161,7 @@ func DomainActivityHistoryEntries(core string, now time.Time, retentionSeconds i
 func ClearDomainActivityHistory() {
 	domainActivityHistory.Lock()
 	defer domainActivityHistory.Unlock()
+	domainActivityHistory.generation++
 	clear(domainActivityHistory.entries)
 	domainActivityHistory.core = ""
 }
