@@ -111,27 +111,23 @@ describe('http-init fetch wrapper', () => {
   });
 
   it.each([
-    [
-      '/panel/api/server/openflux/check-transport',
-      { type: 'yandex' },
-    ],
-    [
-      '/panel/api/server/openflux/check-transport',
-      { type: 'vyandex' },
-    ],
-    [
-      '/panel/api/server/openflux/diagnose-transport',
-      { inboundId: 7, type: 'vyandex', confirmInterruption: true },
-    ],
-    [
-      '/panel/api/server/openflux/diagnose-transport',
-      { inboundId: 7, type: 'oneme', clientToken: 'test-client-web-token', confirmInterruption: true },
-    ],
-    [
-      '/panel/api/server/externalvpn/parse-link',
-      { link: 'openflux://v1/test' },
-    ],
-  ])('sends %s OpenFlux JSON correctly instead of type= form encoding', async (url, payload) => {
+    { url: '/panel/api/server/openflux/check-transport', payload: { type: 'yandex' } },
+    { url: '/panel/api/server/openflux/check-transport', payload: { type: 'vyandex' } },
+    {
+      url: '/panel/api/server/openflux/diagnose-transport',
+      payload: { inboundId: 7, type: 'vyandex', confirmInterruption: true },
+    },
+    {
+      url: '/panel/api/server/openflux/diagnose-transport',
+      payload: {
+        inboundId: 7,
+        type: 'oneme',
+        clientToken: 'test-client-web-token',
+        confirmInterruption: true,
+      },
+    },
+    { url: '/panel/api/server/externalvpn/parse-link', payload: { link: 'openflux://v1/test' } },
+  ])('sends $url OpenFlux JSON correctly instead of type= form encoding', async ({ url, payload }) => {
     window.X_UI_BASE_PATH = '/private-panel';
     document.head.innerHTML = '<meta name="csrf-token" content="tok">';
     http.setupHttp();
