@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 
 	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
@@ -96,6 +98,7 @@ func TestOpenFluxProviderProbeRejectsRemoteNodeAndUnknownTarget(t *testing.T) {
 func TestOpenFluxEndToEndRequiresSavedInboundAndExplicitConfirmation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
+	engine.Use(sessions.Sessions("test", cookie.NewStore([]byte("openflux-test-session-secret"))))
 	controller := &ServerController{}
 	controller.initExternalVPNRouter(engine.Group("/server"))
 	for _, tc := range []struct{ body, want string }{
