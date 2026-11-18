@@ -1594,6 +1594,7 @@ export default function SingBoxPage() {
     const value = asObject(sectionValue('route', config));
     const rules = Array.isArray(value.rules) ? value.rules.map(asObject) : [];
     const quickRuleCount = rules.filter((rule) => isQuickRule(rule, 'sing-box')).length;
+    const reorderDisabled = quickRuleCount > 0 && !showQuickInAdvanced;
     const outTags = [...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
       .map((item) => asString(item.tag))
       .filter(Boolean)
@@ -1681,6 +1682,11 @@ export default function SingBoxPage() {
             </Row>
           )}
 
+          {reorderDisabled && (
+            <div className="singbox-route-order-hint">
+              Для изменения порядка включите показ автоматических маршрутов.
+            </div>
+          )}
           <Divider />
           <Input.Search
             placeholder="Поиск по условиям, назначению или комментарию"
@@ -1790,7 +1796,7 @@ export default function SingBoxPage() {
                         size="small"
                         title="Выше"
                         icon={<ArrowUpOutlined />}
-                        disabled={index === 0}
+                        disabled={reorderDisabled || index === 0}
                         onClick={() => {
                           const next = [...rules];
                           [next[index - 1], next[index]] = [next[index], next[index - 1]];
@@ -1801,7 +1807,7 @@ export default function SingBoxPage() {
                         size="small"
                         title="Ниже"
                         icon={<ArrowDownOutlined />}
-                        disabled={index === rules.length - 1}
+                        disabled={reorderDisabled || index === rules.length - 1}
                         onClick={() => {
                           const next = [...rules];
                           [next[index], next[index + 1]] = [next[index + 1], next[index]];
