@@ -3,6 +3,7 @@ package singbox
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -299,14 +301,44 @@ func (c *ClashStatsClient) requestClient(timeout time.Duration) *http.Client {
 	return &client
 }
 
+// IsTemporaryClashAPIError matches transport failures caused by an API listener
+// disappearing briefly during a core restart. HTTP authentication/configuration
+// failures are deliberately not retried or hidden.
+func IsTemporaryClashAPIError(err error) bool {
+	return errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, io.EOF)
+}
+
 func (c *ClashStatsClient) Connections(ctx context.Context) ([]ClashConnection, error) {
-	req, err := c.newRequest(ctx, http.MethodGet, "/connections")
-	if err != nil {
-		return nil, err
-	}
-	resp, err := c.requestClient(2 * time.Second).Do(req)
-	if err != nil {
-		return nil, err
+	var resp *http.Response
+	var err error
+	// Core restarts can temporarily close the local listener. Retry only
+	// connection-level failures, with an upper bound and context cancellation.
+	for attempt := 0; attempt < 5; attempt++ {
+		var req *http.Request
+		req, err = c.newRequest(ctx, http.MethodGet, "/connections")
+		if err != nil {
+			return nil, err
+		}
+		resp, err = c.requestClient(2 * time.Second).Do(req)
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if !IsTemporaryClashAPIError(err) || attempt == 4 {
+			return nil, err
+		}
+		pause := time.NewTimer(time.Duration(100<<attempt) * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			pause.Stop()
+			return nil, ctx.Err()
+		case <-pause.C:
+		}
 	}
 	defer resp.Body.Close()
 
