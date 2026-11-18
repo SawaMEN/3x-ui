@@ -3,7 +3,6 @@ package job
 import (
 	"testing"
 	"time"
-
 )
 
 func TestProcessObservedAppliesIPLimitOnFirstScan(t *testing.T) {
