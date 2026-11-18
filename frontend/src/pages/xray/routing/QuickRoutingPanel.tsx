@@ -9,18 +9,14 @@ import {
   Radio,
   Select,
   Space,
-  Statistic,
   Switch,
-  Tag,
   Typography,
   message,
 } from 'antd';
 import {
-  ArrowRightOutlined,
   CheckCircleOutlined,
   DeleteOutlined,
   PlusOutlined,
-  SafetyOutlined,
   ThunderboltOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
@@ -110,7 +106,6 @@ export default function QuickRoutingPanel({
 }: Props) {
   const [draft, setDraft] = useState<QuickRouteDraft>(blankDraft);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const [nodeTargets, setNodeTargets] = useState<NodeRouteTarget[]>([]);
   const [nodeTargetsLoading, setNodeTargetsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -388,7 +383,6 @@ export default function QuickRoutingPanel({
     if (creating) return;
     setCreating(true);
     setError('');
-    setNotice('');
     try {
       // Validate the route before provisioning a remote service credential.
       // Invalid form input must never mutate the node.
@@ -399,10 +393,6 @@ export default function QuickRoutingPanel({
       if (nodeTargets.some((node) => node.tag === draft.target)) {
         void probeNodeTarget(draft.target);
       }
-      const text = result.replaced
-        ? 'Маршрут с такими условиями обновлён без дублирования.'
-        : 'Маршрут добавлен. Сохраните конфигурацию панели, чтобы применить его.';
-      setNotice(text);
       messageApi.success(result.replaced ? 'Маршрут обновлён' : 'Маршрут добавлен');
       if (!result.replaced) setDraft((current) => ({ ...current, values: '' }));
     } catch (err) {
@@ -422,19 +412,18 @@ export default function QuickRoutingPanel({
       <div className="quick-routing-header">
         <div>
           <Typography.Text type="secondary" className="quick-routing-eyebrow">
-            <ThunderboltOutlined aria-hidden="true" /> УМНАЯ МАРШРУТИЗАЦИЯ
+            <ThunderboltOutlined aria-hidden="true" /> НАСТРОЙКА ТРАФИКА
           </Typography.Text>
           <Typography.Title level={4} className="quick-routing-title">
-            Направляйте трафик без JSON
+            Маршрутизация без JSON
           </Typography.Title>
           <Typography.Paragraph type="secondary" className="quick-routing-subtitle">
-            Выберите источник, условие и исходящее подключение. Правила сохраняются в общей
-            конфигурации и не затрагивают сложные настройки.
+            Выберите условие и выход. Подключение ноды панель подготовит автоматически.
           </Typography.Paragraph>
         </div>
-        <div className="quick-routing-stats">
-          <Statistic title="Активных правил" value={activeRoutes} />
-          <Statistic title="Быстрых маршрутов" value={managed.length} />
+        <div className="quick-routing-status" role="status">
+          <span className="quick-routing-status-dot" aria-hidden="true" />
+          Активно {activeRoutes} из {rules.length}
         </div>
       </div>
 
@@ -567,23 +556,7 @@ export default function QuickRoutingPanel({
               {probeAlert(draft.target)}
             </Space>
           )}
-          <div className="quick-routing-flow-preview">
-            <Tag variant="filled">
-              {draft.match === 'inbound'
-                ? draft.inboundTags.length
-                  ? draft.inboundTags.join(', ')
-                  : 'Входящий'
-                : draft.values.trim() || 'Условие'}
-            </Tag>
-            <ArrowRightOutlined aria-hidden="true" />
-            <Tag color={draft.target === '@reject' || draft.target === 'blocked' ? 'red' : 'blue'}>
-              {nodeTargets.find((node) => node.tag === draft.target)?.remark ||
-                draft.target ||
-                'Исходящий'}
-            </Tag>
-          </div>
           {error && <Alert type="error" showIcon title={error} />}
-          {notice && <Alert type="success" showIcon title={notice} />}
           <div className="quick-routing-actions">
             <Button
               type="primary"
@@ -606,8 +579,7 @@ export default function QuickRoutingPanel({
               onClick={() => {
                 setDraft(blankDraft());
                 setError('');
-                setNotice('');
-              }}
+                          }}
             >
               Сбросить
             </Button>
