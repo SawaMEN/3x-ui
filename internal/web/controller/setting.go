@@ -124,6 +124,7 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.GET("/system/update/status", a.systemUpdateStatus)
 	g.POST("/system/update/check", a.systemUpdateCheck)
 	g.POST("/system/update/apply", a.systemUpdateApply)
+	g.POST("/system/update/cleanup", a.systemUpdateCleanup)
 	g.POST("/system/update/reboot", a.systemUpdateReboot)
 	g.GET("/sudoku/status", a.sudokuStatus)
 	g.POST("/sudoku/update", a.sudokuUpdate)
@@ -604,6 +605,11 @@ func (a *SettingController) sudokuUpdate(c *gin.Context) {
 		return
 	}
 	jsonObj(c, status, nil)
+}
+
+func (a *SettingController) systemUpdateCleanup(c *gin.Context) {
+	result, err := systemupdate.Cleanup(c.Request.Context())
+	jsonObj(c, result, err)
 }
 
 func (a *SettingController) systemUpdateReboot(c *gin.Context) {
