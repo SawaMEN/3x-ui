@@ -51,18 +51,28 @@ func isGoTempSuffix(suffix string) bool {
 }
 
 func isProtocolConfigStagingFile(name string) bool {
-	return strings.HasPrefix(name, ".oxidns-") ||
-		strings.HasPrefix(name, ".dnstt-") ||
-		(strings.HasPrefix(name, ".telemt-") &&
-			(strings.HasSuffix(name, ".toml") || strings.HasSuffix(name, ".env")))
+	for _, prefix := range []string{".oxidns-", ".dnstt-"} {
+		if strings.HasPrefix(name, prefix) {
+			return isGoTempSuffix(strings.TrimPrefix(name, prefix))
+		}
+	}
+	if strings.HasPrefix(name, ".telemt-meko-") && strings.HasSuffix(name, ".env") {
+		return isGoTempSuffix(strings.TrimSuffix(strings.TrimPrefix(name, ".telemt-meko-"), ".env"))
+	}
+	if strings.HasPrefix(name, ".telemt-") && strings.HasSuffix(name, ".toml") {
+		return isGoTempSuffix(strings.TrimSuffix(strings.TrimPrefix(name, ".telemt-"), ".toml"))
+	}
+	return false
 }
 
 func isProtocolTempFile(name string) bool {
-	for _, prefix := range []string{
-		"olcrtc-installer-", "olcrtc-built-revisions-", "olcrtc-install-log-",
-	} {
-		if strings.HasPrefix(name, prefix) {
-			return true
+	for _, suffix := range []string{".sh", ".log", ""} {
+		for _, prefix := range []string{"olcrtc-installer-", "olcrtc-install-log-", "olcrtc-built-revisions-"} {
+			if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, suffix) {
+				if isGoTempSuffix(strings.TrimSuffix(strings.TrimPrefix(name, prefix), suffix)) {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -75,22 +85,27 @@ func isAbandonedInstallerDir(name string) bool {
 		"olcrtc-patches-", "3x-ui-olcrtc.", "telemt-update.",
 	} {
 		if strings.HasPrefix(name, prefix) {
-			return true
+			return isGoTempSuffix(strings.TrimPrefix(name, prefix))
 		}
 	}
 	return false
 }
 
 func isAbandonedPanelStageDir(name string) bool {
-	return strings.HasPrefix(name, ".core-stage.") ||
-		strings.HasPrefix(name, ".x-ui-release.")
+	for _, prefix := range []string{".core-stage.", ".x-ui-release."} {
+		if strings.HasPrefix(name, prefix) {
+			return isGoTempSuffix(strings.TrimPrefix(name, prefix))
+		}
+	}
+	return false
 }
 
 func isOldPanelDownload(name string) bool {
 	if strings.HasPrefix(name, ".x-ui-download.") {
 		for _, suffix := range []string{".tar.gz", ".tar.gz.part", ".tar.gz.sha256", ".tar.gz.sha256.part"} {
 			if strings.HasSuffix(name, suffix) {
-				return true
+				token := strings.TrimSuffix(strings.TrimPrefix(name, ".x-ui-download."), suffix)
+				return isGoTempSuffix(token)
 			}
 		}
 	}
@@ -284,7 +299,7 @@ func cleanupPanelUpdateArtifacts(ctx context.Context, binDir string, result *Cle
 		return err
 	}
 	if err := removeOldKnownDirectories(ctx, parent, tempArtifactMaxAge, func(name string) bool {
-		return strings.HasPrefix(name, ".x-ui-release.")
+		return strings.HasPrefix(name, ".x-ui-release.") && isGoTempSuffix(strings.TrimPrefix(name, ".x-ui-release."))
 	}, result); err != nil {
 		return err
 	}
@@ -323,7 +338,7 @@ func cleanupProtocolInstallArtifacts(ctx context.Context, result *CleanupResult)
 	})
 
 	if err := removeOldKnownDirectories(ctx, binDir, tempArtifactMaxAge, func(name string) bool {
-		return strings.HasPrefix(name, ".vetroff-stage-")
+		return strings.HasPrefix(name, ".vetroff-stage-") && isGoTempSuffix(strings.TrimPrefix(name, ".vetroff-stage-"))
 	}, result); err != nil {
 		result.Warnings = append(result.Warnings, err.Error())
 	}
