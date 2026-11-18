@@ -38,8 +38,23 @@ func isProtocolStagingFile(name string) bool {
 	return false
 }
 
+// Go os.CreateTemp/MkdirTemp random suffixes contain decimal digits.
+// Reject human-readable backups and recovery labels that share prefixes.
 func isGoTempSuffix(suffix string) bool {
-	if len(suffix) < 6 || len(suffix) > 12 {
+	if len(suffix) < 8 || len(suffix) > 12 {
+		return false
+	}
+	for _, char := range suffix {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// Shell mktemp XXXXXX/XXXXXXXX patterns contain six or eight alphanumeric characters.
+func isShellTempSuffix(suffix string) bool {
+	if len(suffix) != 6 && len(suffix) != 8 {
 		return false
 	}
 	for _, char := range suffix {
@@ -65,7 +80,7 @@ func isProtocolConfigStagingFile(name string) bool {
 	}
 	// The Telemt web-front helper uses mktemp for a temporary private-key bundle.
 	if strings.HasPrefix(name, "tls.pem.") {
-		return isGoTempSuffix(strings.TrimPrefix(name, "tls.pem."))
+		return isShellTempSuffix(strings.TrimPrefix(name, "tls.pem."))
 	}
 	return false
 }
@@ -73,7 +88,7 @@ func isProtocolConfigStagingFile(name string) bool {
 func isProtocolTempFile(name string) bool {
 	for _, prefix := range []string{"x-ui-script.", "x-ui-install."} {
 		if strings.HasPrefix(name, prefix) {
-			return isGoTempSuffix(strings.TrimPrefix(name, prefix))
+			return isShellTempSuffix(strings.TrimPrefix(name, prefix))
 		}
 	}
 	for _, suffix := range []string{".sh", ".log", ""} {
@@ -92,10 +107,15 @@ func isAbandonedInstallerDir(name string) bool {
 	for _, prefix := range []string{
 		"3x-ui-sudoku-", "3x-ui-externalvpn-", "3x-ui-fptn-client-",
 		"3x-ui-caddy-naive-", "3x-ui-naive-check-",
-		"olcrtc-patches-", "3x-ui-olcrtc.", "telemt-update.",
+		"olcrtc-patches-",
 	} {
 		if strings.HasPrefix(name, prefix) {
 			return isGoTempSuffix(strings.TrimPrefix(name, prefix))
+		}
+	}
+	for _, prefix := range []string{"3x-ui-olcrtc.", "telemt-update."} {
+		if strings.HasPrefix(name, prefix) {
+			return isShellTempSuffix(strings.TrimPrefix(name, prefix))
 		}
 	}
 	return false
@@ -104,7 +124,7 @@ func isAbandonedInstallerDir(name string) bool {
 func isAbandonedPanelStageDir(name string) bool {
 	for _, prefix := range []string{".core-stage.", ".x-ui-release."} {
 		if strings.HasPrefix(name, prefix) {
-			return isGoTempSuffix(strings.TrimPrefix(name, prefix))
+			return isShellTempSuffix(strings.TrimPrefix(name, prefix))
 		}
 	}
 	return false
@@ -115,7 +135,7 @@ func isOldPanelDownload(name string) bool {
 		for _, suffix := range []string{".tar.gz", ".tar.gz.part", ".tar.gz.sha256", ".tar.gz.sha256.part"} {
 			if strings.HasSuffix(name, suffix) {
 				token := strings.TrimSuffix(strings.TrimPrefix(name, ".x-ui-download."), suffix)
-				return isGoTempSuffix(token)
+				return isShellTempSuffix(token)
 			}
 		}
 	}
@@ -309,7 +329,7 @@ func cleanupPanelUpdateArtifacts(ctx context.Context, binDir string, result *Cle
 		return err
 	}
 	if err := removeOldKnownDirectories(ctx, parent, tempArtifactMaxAge, func(name string) bool {
-		return strings.HasPrefix(name, ".x-ui-release.") && isGoTempSuffix(strings.TrimPrefix(name, ".x-ui-release."))
+		return strings.HasPrefix(name, ".x-ui-release.") && isShellTempSuffix(strings.TrimPrefix(name, ".x-ui-release."))
 	}, result); err != nil {
 		return err
 	}
@@ -338,7 +358,7 @@ func cleanupProtocolInstallArtifacts(ctx context.Context, result *CleanupResult)
 		clean(dir, tempArtifactMaxAge, isProtocolTempFile)
 	}
 	clean("/usr/bin", tempArtifactMaxAge, func(name string) bool {
-		return strings.HasPrefix(name, "x-ui-menu.") && isGoTempSuffix(strings.TrimPrefix(name, "x-ui-menu."))
+		return strings.HasPrefix(name, "x-ui-menu.") && isShellTempSuffix(strings.TrimPrefix(name, "x-ui-menu."))
 	})
 	// These fixed names are used for interrupted atomic Telemt/OlcRTC writes.
 	clean("/usr/local/x-ui/bin", tempArtifactMaxAge, func(name string) bool {
