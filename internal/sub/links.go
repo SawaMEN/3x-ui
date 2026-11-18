@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -77,14 +78,41 @@ func normalizeGeneratedLinks(raw []string) []string {
 	seen := make(map[string]struct{}, len(raw))
 	for _, entry := range raw {
 		for _, link := range splitLinkLines(entry) {
-			if _, duplicate := seen[link]; duplicate {
+			key := generatedLinkIdentity(link)
+			if _, duplicate := seen[key]; duplicate {
 				continue
 			}
-			seen[link] = struct{}{}
+			seen[key] = struct{}{}
 			out = append(out, link)
 		}
 	}
 	return out
+}
+
+// generatedLinkIdentity ignores only the display remark in a generated
+// AmneziaWG .conf. Different hosts can publish the same tunnel with different
+// names; those must not become duplicate VPN profiles. Every connection field
+// (keys, address, obfuscation and endpoint) remains part of the identity.
+// Other share-link schemes retain their exact-link semantics.
+func generatedLinkIdentity(link string) string {
+	if !strings.HasPrefix(link, "vpn://") {
+		return link
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(link, "vpn://"))
+	if err != nil {
+		return link
+	}
+	config := string(decoded)
+	peerStart := strings.Index(config, "\n[Peer]\n")
+	if peerStart < 0 {
+		return link
+	}
+	prefix := config[:peerStart]
+	commentStart := strings.LastIndex(prefix, "\n# ")
+	if commentStart < 0 || strings.Contains(prefix[commentStart+1:], "\n") {
+		return link
+	}
+	return "vpn-config:" + prefix[:commentStart] + config[peerStart:]
 }
 
 type mieruLinkSettings struct {
@@ -181,10 +209,11 @@ func splitLinkLines(raw string) []string {
 				continue
 			}
 		}
-		if _, duplicate := seen[p]; duplicate {
+		key := generatedLinkIdentity(p)
+		if _, duplicate := seen[key]; duplicate {
 			continue
 		}
-		seen[p] = struct{}{}
+		seen[key] = struct{}{}
 		out = append(out, p)
 	}
 	return out
