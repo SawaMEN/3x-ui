@@ -178,6 +178,9 @@ func TestPanelUpdateLockPreventsDeletingIncompleteDownload(t *testing.T) {
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(install, "x-ui"), []byte("panel"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	file := filepath.Join(root, ".x-ui-download.123456.tar.gz.part")
 	if err := os.WriteFile(file, []byte("incomplete"), 0o600); err != nil {
 		t.Fatal(err)
