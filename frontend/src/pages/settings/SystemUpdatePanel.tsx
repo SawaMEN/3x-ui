@@ -648,11 +648,9 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
     setSystemUpdateBusy(true);
     setCleanupResult(null);
     try {
-      const response = (await HttpUtil.post(
-        '/panel/api/setting/system/update/cleanup',
-        undefined,
-        { timeout: 200000 },
-      )) as ApiMsg<SystemCleanupResult>;
+      const response = (await HttpUtil.post('/panel/api/setting/system/update/cleanup', undefined, {
+        timeout: 200000,
+      })) as ApiMsg<SystemCleanupResult>;
       if (!response?.success || !response.obj) {
         throw new Error(response?.msg || t('pages.settings.swap.cleanupFailed'));
       }
@@ -758,13 +756,19 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
               okText={t('pages.settings.swap.cleanupCache')}
               cancelText={t('cancel')}
               onConfirm={() => void cleanupSystemCaches()}
-              disabled={systemUpdateBusy || dependencyBusy !== null || systemUpdate?.runningAsRoot === false}
+              disabled={
+                systemUpdateBusy || dependencyBusy !== null || systemUpdate?.runningAsRoot === false
+              }
             >
               <Button
                 block={isMobile}
                 icon={<DeleteOutlined />}
                 loading={systemUpdateBusy}
-                disabled={systemUpdateBusy || dependencyBusy !== null || systemUpdate?.runningAsRoot === false}
+                disabled={
+                  systemUpdateBusy ||
+                  dependencyBusy !== null ||
+                  systemUpdate?.runningAsRoot === false
+                }
               >
                 {t('pages.settings.swap.cleanupCache')}
               </Button>
