@@ -157,3 +157,29 @@ func TestOpenFluxDiagnosticResultRestrictedToJobOwner(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenFluxTransportDiagnosticsAcceptLegacyFormAndJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(sessions.Sessions("test", cookie.NewStore([]byte("openflux-format-test-secret"))))
+	controller := &ServerController{}
+	controller.initExternalVPNRouter(engine.Group("/server"))
+	for _, tc := range []struct {
+		name, path, contentType, body, want string
+	}{
+		{"TLS check form", "/server/openflux/check-transport", "application/x-www-form-urlencoded", "type=tyandex", "has no provider-side connectivity check"},
+		{"TLS check JSON", "/server/openflux/check-transport", "application/json", `{"type":"tyandex"}`, "has no provider-side connectivity check"},
+		{"E2E check form", "/server/openflux/diagnose-transport", "application/x-www-form-urlencoded", "inboundId=0&type=yandex&confirmInterruption=true", "saved OpenFlux inbound"},
+		{"E2E check JSON", "/server/openflux/diagnose-transport", "application/json", `{"inboundId":0,"type":"yandex","confirmInterruption":true}`, "saved OpenFlux inbound"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", tc.contentType)
+			w := httptest.NewRecorder()
+			engine.ServeHTTP(w, req)
+			if !strings.Contains(w.Body.String(), tc.want) || strings.Contains(w.Body.String(), "invalid character") {
+				t.Fatalf("unexpected JSON decoder failure: %s", w.Body.String())
+			}
+		})
+	}
+}
