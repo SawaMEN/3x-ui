@@ -134,11 +134,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapVlessField": {
         "type": "string"
       },
-      "logRetentionDays": {
-        "maximum": 90,
-        "minimum": 1,
-        "type": "integer"
-      },
       "nodeDownThreshold": {
         "maximum": 100,
         "minimum": 1,
@@ -588,7 +583,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapUserAttr",
       "ldapUserFilter",
       "ldapVlessField",
-      "logRetentionDays",
       "nodeDownThreshold",
       "outboundDownThreshold",
       "pageSize",
@@ -834,11 +828,6 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "ldapVlessField": {
         "type": "string"
-      },
-      "logRetentionDays": {
-        "maximum": 90,
-        "minimum": 1,
-        "type": "integer"
       },
       "nodeDownThreshold": {
         "maximum": 100,
@@ -1296,7 +1285,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapUserAttr",
       "ldapUserFilter",
       "ldapVlessField",
-      "logRetentionDays",
       "nodeDownThreshold",
       "outboundDownThreshold",
       "pageSize",
