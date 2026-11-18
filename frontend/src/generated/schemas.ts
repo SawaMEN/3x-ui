@@ -172,6 +172,11 @@ export const SCHEMAS: Record<string, unknown> = {
         "minimum": 1,
         "type": "integer"
       },
+      "logRetentionDays": {
+        "maximum": 90,
+        "minimum": 1,
+        "type": "integer"
+      },
       "smtpCpu": {
         "maximum": 100,
         "minimum": 0,
@@ -593,6 +598,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "rootRedirectEnable",
       "rootRedirectURL",
       "sessionMaxAge",
+    "logRetentionDays",
       "smtpCpu",
       "smtpEnable",
       "smtpEnabledEvents",
@@ -864,6 +870,11 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "sessionMaxAge": {
         "maximum": 525600,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "logRetentionDays": {
+        "maximum": 90,
         "minimum": 1,
         "type": "integer"
       },
@@ -1295,6 +1306,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "rootRedirectEnable",
       "rootRedirectURL",
       "sessionMaxAge",
+    "logRetentionDays",
       "smtpCpu",
       "smtpEnable",
       "smtpEnabledEvents",
