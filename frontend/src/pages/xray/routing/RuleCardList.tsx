@@ -25,6 +25,7 @@ import type { RuleRow } from './types';
 
 interface RuleCardListProps {
   rows: RuleRow[];
+  reorderDisabled?: boolean;
   draggedIndex: number | null;
   dropTargetIndex: number | null;
   onHandlePointerDown: (idx: number, ev: React.PointerEvent) => void;
@@ -37,6 +38,7 @@ interface RuleCardListProps {
 
 export default function RuleCardList({
   rows,
+  reorderDisabled = false,
   draggedIndex,
   dropTargetIndex,
   onHandlePointerDown,
@@ -67,11 +69,13 @@ export default function RuleCardList({
             data-row-key={index}
           >
             <div className="rule-card-head">
-              <HolderOutlined
-                className="drag-handle"
-                aria-hidden="true"
-                onPointerDown={(ev) => onHandlePointerDown(index, ev)}
-              />
+              {!reorderDisabled && (
+                <HolderOutlined
+                  className="drag-handle"
+                  aria-hidden="true"
+                  onPointerDown={(ev) => onHandlePointerDown(index, ev)}
+                />
+              )}
               <span className="rule-number">#{index + 1}</span>
               <Dropdown
                 trigger={['click']}
@@ -93,7 +97,7 @@ export default function RuleCardList({
                           <ArrowUpOutlined aria-hidden /> {t('pages.inbounds.form.moveUp')}
                         </>
                       ),
-                      disabled: index === 0,
+                      disabled: reorderDisabled || index === 0,
                       onClick: () => moveUp(index),
                     },
                     {
@@ -103,7 +107,7 @@ export default function RuleCardList({
                           <ArrowDownOutlined aria-hidden /> {t('pages.inbounds.form.moveDown')}
                         </>
                       ),
-                      disabled: index === rows.length - 1,
+                      disabled: reorderDisabled || index === rows.length - 1,
                       onClick: () => moveDown(index),
                     },
                     {
