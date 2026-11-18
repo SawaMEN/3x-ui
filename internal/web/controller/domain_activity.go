@@ -3,6 +3,8 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"time"
 
 	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
@@ -20,6 +22,7 @@ type domainActivityResponse struct {
 	Mode             string                        `json:"mode"`
 	WindowSeconds    int                           `json:"windowSeconds"`
 	Entries          []service.DomainActivityEntry `json:"entries"`
+	TemporarilyUnavailable bool `json:"temporarilyUnavailable"`
 }
 
 // domainActivityCoreMode identifies the source without probing another core.
@@ -108,8 +111,20 @@ func (a *ServerController) getDomainActivity(c *gin.Context) {
 	}
 	if state.Enabled && state.Supported {
 		if state.Mode == "active" {
+			// A stopped/restarting core has no live API to query. This is an
+			// unavailable snapshot, not an empty set of active connections.
+			if !service.SelectedNativeCore().IsRunning() {
+				state.TemporarilyUnavailable = true
+				jsonObj(c, state, nil)
+				return
+			}
 			state.Entries, err = a.serverService.GetNativeDomainActivity(c.Request.Context(), time.Now())
 			if err != nil {
+				if singbox.IsTemporaryClashAPIError(err) {
+					state.TemporarilyUnavailable = true
+					jsonObj(c, state, nil)
+					return
+				}
 				jsonMsgObj(c, "Unable to read sing-box active connections", state, err)
 				return
 			}
