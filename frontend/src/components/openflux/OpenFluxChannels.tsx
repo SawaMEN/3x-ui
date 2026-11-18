@@ -438,7 +438,10 @@ export default function OpenFluxChannels({
       </Button>
       {diagnosticProgress && (
         <Typography.Text role="status">
-          {t('pages.inbounds.form.openfluxDiagProgress', diagnosticProgress)}
+          {t('pages.inbounds.form.openfluxDiagProgress', {
+            ...diagnosticProgress,
+            remaining: diagnosticProgress.total - diagnosticProgress.done,
+          })}
         </Typography.Text>
       )}
       {value.map((entry, index) => (
