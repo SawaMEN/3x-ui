@@ -531,7 +531,7 @@ export default function OpenFluxChannels({
               <Alert
                 type={diagnostics[entry.type].passed ? 'success' : 'warning'}
                 showIcon
-                title={t(
+                message={t(
                   diagnostics[entry.type].passed
                     ? 'pages.inbounds.form.openfluxDiagSuccess'
                     : 'pages.inbounds.form.openfluxDiagUnverified',

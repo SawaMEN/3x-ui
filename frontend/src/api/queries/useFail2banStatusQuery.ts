@@ -8,7 +8,6 @@ export interface Fail2banStatus {
   installed: boolean;
   usable: boolean;
   windows: boolean;
-  method?: 'native' | 'fail2ban' | 'unavailable';
 }
 
 const FAIL_OPEN_STATUS: Fail2banStatus = {

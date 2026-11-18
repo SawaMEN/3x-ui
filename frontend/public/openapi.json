@@ -10439,7 +10439,7 @@
         "tags": [
           "Server"
         ],
-        "summary": "Reports whether per-client IP limits can be enforced by the selected core. Modified sing-box and upstream sing-box use native session disconnection; legacy cores require Fail2ban.",
+        "summary": "Reports whether per-client IP limits can be enforced on this host. The panel uses it to gate the \"IP Limit\" field, since enforcement depends on Fail2ban being installed.",
         "operationId": "get_panel_api_server_fail2banStatus",
         "responses": {
           "200": {
@@ -10462,10 +10462,9 @@
                   "success": true,
                   "obj": {
                     "enabled": true,
-                    "installed": false,
+                    "installed": true,
                     "usable": true,
-                    "windows": false,
-                    "method": "native"
+                    "windows": false
                   }
                 }
               }
