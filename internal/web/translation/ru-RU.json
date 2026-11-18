@@ -1295,6 +1295,7 @@
         "openfluxDiagMaxRequired": "Пропуск: укажите корректный токен Web MAX отдельного клиентского аккаунта и повторите. Серверный токен использовать нельзя.",
         "openfluxDiagFailed": "Не удалось выполнить полную диагностику подключения.",
         "openfluxDiagTimeout": "Превышено время ожидания полной проверки OpenFlux. Проверьте состояние сервиса и повторите запуск.",
+        "openfluxDiagProgress": "Диагностика OpenFlux: выполнено {{done}} из {{total}}, осталось {{remaining}}.",
         "openfluxDiagSuccess": "Подтверждён обмен зашифрованными данными OpenFlux",
         "openfluxDiagUnverified": "Соединение НЕ подтверждено: проверьте этапы диагностики",
         "openfluxDiagStages": {"configuration":"Сохранённые настройки","provider":"TLS сервиса","session":"Реальное соединение OpenFlux/SOCKS","payload":"Обмен зашифрованными данными"},
