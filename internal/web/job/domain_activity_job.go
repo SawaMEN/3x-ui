@@ -63,7 +63,14 @@ func (j *DomainActivityJob) Run() {
 		service.ClearDomainActivityHistory()
 		return
 	}
-	if err == nil {
-		service.RecordDomainActivityIfGeneration(core, entries, now, retention, generation)
+	if err != nil {
+		return
 	}
+	// A core switch may complete while a slow API call is still in progress.
+	// Never attribute a response from the previous core to the new history.
+	currentCore, currentErr := j.settings.GetCoreType()
+	if currentErr != nil || currentCore != core {
+		return
+	}
+	service.RecordDomainActivityIfGeneration(core, entries, now, retention, generation)
 }
