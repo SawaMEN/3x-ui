@@ -104,10 +104,10 @@ func handleYandexS3Probe(c *gin.Context) {
 		jsonObj(c, nil, fmt.Errorf("enter the service account static access key ID and secret key"))
 		return
 	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 35 * time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 35*time.Second)
 	defer cancel()
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout:       10 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	result := yandexXDriveProbeResult{Folder: folder}
@@ -161,7 +161,7 @@ func handleYandexS3Probe(c *gin.Context) {
 	}
 	result.Written = true
 	defer func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5 * time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 		_, _, _ = yandexS3ProbeRequest(cleanupCtx, client, accessID, secret, http.MethodDelete, target, nil, nil)
 	}()
@@ -192,7 +192,9 @@ func handleYandexS3Probe(c *gin.Context) {
 		return
 	}
 	var list struct {
-		Contents []struct{ Key string `xml:"Key"` } `xml:"Contents"`
+		Contents []struct {
+			Key string `xml:"Key"`
+		} `xml:"Contents"`
 	}
 	if err := xml.Unmarshal(data, &list); err != nil {
 		jsonObj(c, nil, fmt.Errorf("S3 object list was not valid XML"))

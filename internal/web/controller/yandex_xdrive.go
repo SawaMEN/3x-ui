@@ -67,7 +67,7 @@ func handleYandexXDriveProbe(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 30 * time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
 	client := &http.Client{
 		Timeout: 10 * time.Second,
@@ -134,7 +134,7 @@ func handleYandexXDriveProbe(c *gin.Context) {
 	result.Written = true
 	// Always attempt cleanup, even when a later read/list operation fails.
 	defer func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5 * time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 		_, _, _ = yandexXDriveRequest(cleanupCtx, client, login, password, http.MethodDelete, target, nil, "")
 	}()
