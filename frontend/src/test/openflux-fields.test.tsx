@@ -8,7 +8,7 @@ import OpenFluxOutboundEditor from '@/pages/xray/outbounds/OpenFluxOutboundEdito
 import { FileManager, HttpUtil, Msg } from '@/utils';
 import { renderWithProviders } from './test-utils';
 
-function Inbound({ max = false }) {
+function Inbound({ max = false, inboundId = 0 }: { max?: boolean; inboundId?: number }) {
   const form = useForm({
     defaultValues: {
       settings: {
@@ -31,7 +31,7 @@ function Inbound({ max = false }) {
   const values = useWatch({ control: form.control });
   return (
     <FormProvider {...form}>
-      <OpenFluxFields />
+      <OpenFluxFields inboundId={inboundId} />
       <output data-testid="values">{JSON.stringify(values)}</output>
     </FormProvider>
   );
@@ -169,6 +169,44 @@ describe('OpenFlux channel setup', () => {
     const request = vi.mocked(HttpUtil.post).mock.calls.at(-1);
     expect(request?.[1]).toEqual({ type: 'oneme' });
     expect(JSON.stringify(request)).not.toContain('server-private-token');
+  });
+  it('runs a real transport-specific diagnostic with saved inbound identity only', async () => {
+    vi.mocked(HttpUtil.post).mockClear();
+    vi.mocked(HttpUtil.post).mockResolvedValueOnce(
+      new Msg(true, '', {
+        type: 'direct',
+        scope: 'local-openflux-e2e',
+        passed: true,
+        steps: [
+          { stage: 'configuration', status: 'passed', detail: 'Saved inbound is valid' },
+          { stage: 'provider', status: 'skipped', detail: 'Local direct test' },
+          { stage: 'session', status: 'passed', detail: 'SOCKS CONNECT completed' },
+          { stage: 'payload', status: 'passed', detail: '48 bytes round-trip', elapsedMs: 42 },
+        ],
+      }),
+    );
+    renderWithProviders(<Inbound inboundId={17} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Full connection diagnostic' }));
+    const confirm = await screen.findByRole('dialog');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Run real test' }));
+    await waitFor(() =>
+      expect(vi.mocked(HttpUtil.post)).toHaveBeenCalledWith(
+        '/panel/api/server/openflux/diagnose-transport',
+        { inboundId: 17, type: 'direct', confirmInterruption: true },
+        expect.any(Object),
+      ),
+    );
+    expect(await screen.findByText('48 bytes round-trip')).toBeTruthy();
+    expect(screen.getByText(/Verified: encrypted OpenFlux payload received/)).toBeTruthy();
+  });
+  it('skips a live MAX test without a separate client account token', async () => {
+    vi.mocked(HttpUtil.post).mockClear();
+    renderWithProviders(<Inbound max inboundId={28} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Full connection diagnostic' }));
+    const confirm = await screen.findByRole('dialog');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Run real test' }));
+    expect(await screen.findByText(/Skipped: enter a valid Web MAX token/)).toBeTruthy();
+    expect(vi.mocked(HttpUtil.post)).not.toHaveBeenCalled();
   });
   it('imports client settings while preserving the generated channel values', async () => {
     vi.mocked(HttpUtil.post).mockResolvedValueOnce(
