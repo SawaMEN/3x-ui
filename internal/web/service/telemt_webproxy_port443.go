@@ -87,6 +87,19 @@ func telemtWebPanelPort443Owner(state TelemtWebProxyState) (string, error) {
 		return "внутренний Xray API панели (127.0.0.1:443)", nil
 	}
 
+	gateway, err := settings.GetDomainFrontConfig()
+	if err != nil {
+		return "", err
+	}
+	if gateway.HasPublicSites() {
+		if gateway.HTTPSPort == 443 {
+			return "Domain Front HTTPS (Настройки → Домены, TCP 443)", nil
+		}
+		if gateway.HTTPPort == 443 {
+			return "Domain Front HTTP (Настройки → Домены, TCP 443)", nil
+		}
+	}
+
 	return telemtWebInboundPort443Owner(state)
 }
 
