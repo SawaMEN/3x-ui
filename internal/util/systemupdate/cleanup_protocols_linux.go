@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -167,12 +168,52 @@ func removeOldKnownDirectories(
 		if !stat.IsDir() || stat.Mode()&os.ModeSymlink != 0 || time.Since(stat.ModTime()) < minAge {
 			continue
 		}
+		recent, err := containsRecentStageContent(ctx, path, minAge)
+		if err != nil {
+			return err
+		}
+		if recent {
+			continue
+		}
 		if err := os.RemoveAll(path); err != nil {
 			return fmt.Errorf("remove abandoned installer directory %s: %w", path, err)
 		}
 		result.RemovedFiles++
 	}
 	return nil
+}
+
+var errRecentlyModified = errors.New("installer directory contains recent data")
+
+// Inspect contents as well as the directory: a downloader can keep writing
+// a file without changing its parent directory modification time.
+func containsRecentStageContent(ctx context.Context, root string, minAge time.Duration) (bool, error) {
+	if minAge == 0 {
+		return false, nil
+	}
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if path == root {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if time.Since(info.ModTime()) < minAge {
+			return errRecentlyModified
+		}
+		return nil
+	})
+	if errors.Is(err, errRecentlyModified) {
+		return true, nil
+	}
+	return false, err
 }
 
 // tryUpdateFileLock holds an existing updater's advisory lock during panel
@@ -212,6 +253,17 @@ func cleanupPanelUpdateArtifacts(ctx context.Context, binDir string, result *Cle
 	}
 	installation := filepath.Dir(binDir)
 	if installation == "/" || installation == "." {
+		return nil
+	}
+	// Only touch an actual 3x-ui installation, not an unrelated bin folder.
+	panelBinary, err := os.Lstat(filepath.Join(installation, "x-ui"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !panelBinary.Mode().IsRegular() {
 		return nil
 	}
 	parent := filepath.Dir(installation)
@@ -306,6 +358,12 @@ func cleanupUnusedOlcRTCCache(ctx context.Context, result *CleanupResult) error 
 			return nil
 		}
 	}
+	for _, parent := range []string{"/opt/3x-ui", "/opt/3x-ui/olcrtc"} {
+		info, err := os.Lstat(parent)
+		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+	}
 	for _, root := range []string{"/opt/3x-ui/olcrtc/cache", "/opt/3x-ui/olcrtc/toolchains"} {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -318,6 +376,13 @@ func cleanupUnusedOlcRTCCache(ctx context.Context, result *CleanupResult) error 
 			return err
 		}
 		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || time.Since(info.ModTime()) < 48*time.Hour {
+			continue
+		}
+		recent, err := containsRecentStageContent(ctx, root, 48*time.Hour)
+		if err != nil {
+			return err
+		}
+		if recent {
 			continue
 		}
 		if err := os.RemoveAll(root); err != nil {
