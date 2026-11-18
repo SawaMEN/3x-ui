@@ -42,6 +42,7 @@ func (j *DomainActivityJob) Run() {
 		return
 	}
 
+	generation := service.DomainActivityHistoryGeneration()
 	now := time.Now()
 	var entries []service.DomainActivityEntry
 	switch core {
@@ -63,6 +64,6 @@ func (j *DomainActivityJob) Run() {
 		return
 	}
 	if err == nil {
-		service.RecordDomainActivity(core, entries, now, retention)
+		service.RecordDomainActivityIfGeneration(core, entries, now, retention, generation)
 	}
 }
