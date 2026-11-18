@@ -509,6 +509,14 @@ jobs:
           fi
       - name: Run golangci-lint once
         run: golangci-lint run --timeout=5m
+      # When lint flags formatting, print the exact gofumpt edits for review.
+      # This changes only the ephemeral runner checkout, never the repository.
+      - name: Display Go formatter diff after lint failure
+        if: failure()
+        run: |
+          golangci-lint fmt
+          git diff -- internal/web/controller/yandex_xdrive.go internal/web/controller/yandex_disk_api.go internal/web/controller/yandex_s3_probe.go
+
 
   arch-linux:
     needs: [changes]
