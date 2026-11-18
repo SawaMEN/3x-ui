@@ -173,16 +173,23 @@ describe('OpenFlux channel setup', () => {
   it('runs a real transport-specific diagnostic with saved inbound identity only', async () => {
     vi.mocked(HttpUtil.post).mockClear();
     vi.mocked(HttpUtil.post).mockResolvedValueOnce(
+      new Msg(true, '', { runId: 'diagnostic-17', state: 'running' }),
+    );
+    vi.mocked(HttpUtil.get).mockResolvedValueOnce(
       new Msg(true, '', {
-        type: 'direct',
-        scope: 'local-openflux-e2e',
-        passed: true,
-        steps: [
-          { stage: 'configuration', status: 'passed', detail: 'Saved inbound is valid' },
-          { stage: 'provider', status: 'skipped', detail: 'Local direct test' },
-          { stage: 'session', status: 'passed', detail: 'SOCKS CONNECT completed' },
-          { stage: 'payload', status: 'passed', detail: '48 bytes round-trip', elapsedMs: 42 },
-        ],
+        runId: 'diagnostic-17',
+        state: 'success',
+        result: {
+          type: 'direct',
+          scope: 'local-openflux-e2e',
+          passed: true,
+          steps: [
+            { stage: 'configuration', status: 'passed', detail: 'Saved inbound is valid' },
+            { stage: 'provider', status: 'skipped', detail: 'Local direct test' },
+            { stage: 'session', status: 'passed', detail: 'SOCKS CONNECT completed' },
+            { stage: 'payload', status: 'passed', detail: '48 bytes round-trip', elapsedMs: 42 },
+          ],
+        },
       }),
     );
     renderWithProviders(<Inbound inboundId={17} />);
@@ -195,6 +202,11 @@ describe('OpenFlux channel setup', () => {
         { inboundId: 17, type: 'direct', confirmInterruption: true },
         expect.any(Object),
       ),
+    );
+    expect(vi.mocked(HttpUtil.get)).toHaveBeenCalledWith(
+      '/panel/api/server/openflux/diagnose-status',
+      { runId: 'diagnostic-17' },
+      expect.any(Object),
     );
     expect(await screen.findByText(/48 bytes round-trip/)).toBeTruthy();
     expect(screen.getByText(/Verified: encrypted OpenFlux payload received/)).toBeTruthy();
