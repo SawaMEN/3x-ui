@@ -19,6 +19,7 @@ type Options struct {
  UDP bool `json:"udp"`
  // Target domains for automatic strategy diagnostics; not hostlist filters.
  TestDomains []string `json:"testDomains,omitempty"`
+ Calibration *Calibration `json:"calibration,omitempty"`
 }
 
 type Plan struct {
@@ -41,6 +42,7 @@ func Parse(tag string, raw any) (Plan,error) {
  default: return Plan{},fmt.Errorf("zapret2 %q: unsupported strategy %q",tag,opts.Profile)
  }
  if len(opts.TestDomains)>32 {return Plan{},fmt.Errorf("zapret2 %q: too many diagnostic hosts",tag)}
+ if err:=ValidateCalibration(opts.Calibration);err!=nil{return Plan{},fmt.Errorf("zapret2 %q: invalid calibrated strategy: %w",tag,err)}
  for _,domain:=range opts.TestDomains {
   if len(domain)>253||strings.ContainsAny(domain," /\\\r\n\t;&|")||strings.HasPrefix(domain,"-") {
    return Plan{},fmt.Errorf("zapret2 %q: invalid test hostname",tag)
