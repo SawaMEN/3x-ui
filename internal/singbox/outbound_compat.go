@@ -265,7 +265,7 @@ func translateOutboundTLSCompatibility(out map[string]any, stream map[string]any
 	case "unsafe":
 		// Xray's special unsafe value means native Go TLS, not a uTLS fingerprint.
 		delete(tlsOut, "utls")
-	case "chrome", "hellochrome_155", "hellochrome_133", "firefox", "hellofirefox_148", "edge", "safari", "hellosafari_26_3", "360", "qq", "ios", "android", "random", "randomized":
+	case "chrome", "firefox", "edge", "safari", "360", "qq", "ios", "android", "random", "randomized", "randomizednoalpn":
 		tlsOut["utls"] = map[string]any{"enabled": true, "fingerprint": fingerprint}
 	default:
 		return fmt.Errorf("outbound %q uses Xray TLS fingerprint %q which sing-box uTLS cannot represent", tag, rawString(tlsIn, "fingerprint"))
