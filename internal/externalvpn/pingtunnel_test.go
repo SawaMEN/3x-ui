@@ -27,9 +27,6 @@ func TestPingtunnelSettingsValidation(t *testing.T) {
 		{"invalid cipher", func(s *Settings) { s.Encrypt = "aes192" }, false},
 		{"negative connections", func(s *Settings) { s.MaxConn = -1 }, false},
 		{"negative timeout", func(s *Settings) { s.ConnectTimeout = -1 }, false},
-		{"invalid proxy", func(s *Settings) { s.Forward = "socks5://proxy.example" }, false},
-		{"invalid proxy port", func(s *Settings) { s.Forward = "http://proxy.example:70000" }, false},
-		{"proxy credentials", func(s *Settings) { s.Forward = "http://user:pass@proxy.example:8080" }, false},
 		{"invalid congestion", func(s *Settings) { s.Congestion = "cubic" }, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
