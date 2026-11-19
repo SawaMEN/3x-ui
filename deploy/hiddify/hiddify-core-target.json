@@ -3,16 +3,16 @@
   "stage": 4,
   "target": {
     "repository": "https://github.com/SawaMEN/hiddify-core",
-    "commit": "d483a0a24c8a31b72e8671584ed1a2246f55fefc",
+    "commit": "1b04ce7fc6f06bbb3bd11001cd8e50f035316cd9",
     "submodules": {
-      "hiddify-sing-box": "bf18fdf26dab3259b99e83f4468cb10f98f2d3f9",
+      "hiddify-sing-box": "b36f79f68852194614e81cc09aef8b3e81c6f46e",
       "ray2sing": "c6368fc6adea94f7aa9ec57065aae3ad53343ac4"
     },
     "submodule_repositories": {
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/SawaMEN/ray2sing"
     },
-    "version": "sawamen-d483a0a24c8a-bf18fdf26dab-mask1-ciphers1-net62-sec1-stream1"
+    "version": "sawamen-1b04ce7fc6f0-b36f79f68852-mask1-ciphers1-net62-sec1-stream1"
   },
   "runtime_contract": {
     "raw_config_command": [
@@ -111,7 +111,11 @@
     },
     {
       "path": "hiddify-sing-box/common/tls/xui_browser_fingerprint_profiles_test.go",
-      "contains": "func TestXUIPanelBrowserFingerprintProfiles"
+      "contains": "func TestXUIPanelBrowserFingerprintCanonicalClientHello"
+    },
+    {
+      "path": "hiddify-sing-box/replace/utls-native/u_chrome155_test.go",
+      "contains": "func TestChrome155CapturedClientHello"
     }
   ],
   "panel_build": {
@@ -131,7 +135,7 @@
       "with_kcp",
       "http2legacy"
     ],
-    "sing_box_version": "sawamen-bf18fdf26dab",
+    "sing_box_version": "sawamen-b36f79f68852",
     "runtime_dependencies": [
       "matching libcronet for Naive outbound"
     ],
@@ -144,9 +148,9 @@
       "musl": "with_musl, CGO_ENABLED=1, statically linked Cronet; release and Docker"
     },
     "protection_dependency_versions": {
-      "github.com/metacubex/utls": "native:bf18fdf26dab3259b99e83f4468cb10f98f2d3f9",
-      "github.com/starifly/sing-vmess": "native:bf18fdf26dab3259b99e83f4468cb10f98f2d3f9",
-      "github.com/xtls/xray-core": "native:bf18fdf26dab3259b99e83f4468cb10f98f2d3f9"
+      "github.com/metacubex/utls": "native:b36f79f68852194614e81cc09aef8b3e81c6f46e",
+      "github.com/starifly/sing-vmess": "native:b36f79f68852194614e81cc09aef8b3e81c6f46e",
+      "github.com/xtls/xray-core": "native:b36f79f68852194614e81cc09aef8b3e81c6f46e"
     },
     "security_dependencies": {
       "golang.org/x/net": "v0.62.0",
@@ -183,7 +187,9 @@
       "hiddify-sing-box/route/rule/xui_panel_sniff_test.go",
       "hiddify-sing-box/experimental/clashapi/trafficontrol/xui_panel_test.go",
       "hiddify-sing-box/option/xui_panel_http1_test.go",
-      "hiddify-sing-box/common/tls/xui_browser_fingerprint_profiles_test.go"
+      "hiddify-sing-box/common/tls/xui_browser_fingerprint_profiles_test.go",
+      "hiddify-sing-box/replace/utls-native/u_chrome155_test.go",
+      "hiddify-sing-box/replace/utls-native/testdata/chrome155_clienthello.hex"
     ]
   },
   "verification": {
