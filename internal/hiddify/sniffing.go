@@ -33,7 +33,14 @@ func translateSniffingRule(raw map[string]any, ignoreInactiveFakeDNS bool) (map[
 				translatedOverrides = append(translatedOverrides, protocol)
 			}
 		}
-		sniff["destOverride"] = translatedOverrides
+		// The shared sing-box decoder consumes JSON-shaped []any, not []string.
+		// Keeping the original slice type here made every HTTP/TLS/QUIC
+		// sniffer disappear after removing FakeDNS.
+		jsonOverrides := make([]any, 0, len(translatedOverrides))
+		for _, protocol := range translatedOverrides {
+			jsonOverrides = append(jsonOverrides, protocol)
+		}
+		sniff["destOverride"] = jsonOverrides
 	}
 	sniff["routeOnly"] = true
 	rule, err := singbox.TranslateXraySniffingRule(copy)
