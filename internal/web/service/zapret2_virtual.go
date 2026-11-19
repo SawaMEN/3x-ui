@@ -111,7 +111,7 @@ func injectSingBoxZapret2(cfg *singbox.Config) error {
    "type":"direct","tag":outTag,"routing_mark":p.Mark,
   })
   if cfg.Route==nil{cfg.Route=map[string]any{}}
-  rawRules,_:=cfg.Route["rules"].([]any)
+  rawRules:=singBoxRouteRules(cfg.Route)
   cfg.Route["rules"]=append([]any{map[string]any{
    "inbound":[]string{inTag},"outbound":outTag,
   }},rawRules...)
