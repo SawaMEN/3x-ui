@@ -3,7 +3,9 @@ package zapret2
 import (
  "net"
  "sync"
+ "syscall"
  "context"
+ "errors"
  "fmt"
  "os"
  "os/exec"
@@ -36,7 +38,7 @@ func ValidateDiagnosticsDomains(domains []string) error {
 
 var diagnosticsMu sync.Mutex
 
-func RunBlockcheck(ctx context.Context,domains []string) (DiagnosticResult,error) {
+func RunBlockcheck(ctx context.Context,domains []string) (result DiagnosticResult,resultErr error) {
  if !diagnosticsMu.TryLock() {return DiagnosticResult{},fmt.Errorf("a zapret2 diagnostic is already running")}
  defer diagnosticsMu.Unlock()
  if !Installed(){return DiagnosticResult{},fmt.Errorf("install the official zapret2 component first")}
@@ -50,7 +52,24 @@ func RunBlockcheck(ctx context.Context,domains []string) (DiagnosticResult,error
  if _,err:=os.Stat(script);err!=nil{return DiagnosticResult{},err}
  ctx,cancel:=context.WithTimeout(ctx,8*time.Minute)
  defer cancel()
+ // Official blockcheck2 needs anti-DPI handlers disabled during tests.
+ // Preserve active VPN traffic by removing only the marked zapret2 rules:
+ // normal outbounds and other firewall tables are unchanged.
+ resume,err:=SuspendForDiagnostics(ctx)
+ if err!=nil{return DiagnosticResult{},err}
+ defer func(){
+  recoverCtx,recoverCancel:=context.WithTimeout(context.Background(),20*time.Second)
+  defer recoverCancel()
+  resultErr=errors.Join(resultErr,resume(recoverCtx))
+ }()
  cmd:=exec.CommandContext(ctx,"/bin/sh",script)
+ // Send SIGTERM rather than the default SIGKILL on cancellation so that
+ // upstream trap handlers can remove temporary test nftables rules.
+ cmd.Cancel=func()error{
+  if cmd.Process==nil{return os.ErrProcessDone}
+  return cmd.Process.Signal(syscall.SIGTERM)
+ }
+ cmd.WaitDelay=5*time.Second
  cmd.Dir=Directory()
  cmd.Env=append(os.Environ(),
   "BATCH=1",
@@ -70,7 +89,7 @@ func RunBlockcheck(ctx context.Context,domains []string) (DiagnosticResult,error
  summary:=full
  if pos:=strings.LastIndex(full,"* SUMMARY");pos>=0{summary=full[pos:]}
  if len(summary)>14000{summary=summary[len(summary)-14000:]}
- result:=DiagnosticResult{Summary:summary,Domains:domains,DurationSeconds:time.Since(start).Seconds()}
+ result=DiagnosticResult{Summary:summary,Domains:domains,DurationSeconds:time.Since(start).Seconds()}
  // Use only success summaries. Do not infer a 'winner' from unsuccessful
  // intermediate attempts. A summary without recognized patterns is unranked.
  if strings.Contains(full,"* SUMMARY") {

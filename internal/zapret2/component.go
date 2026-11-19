@@ -106,6 +106,8 @@ func GetStatus(ctx context.Context) (Status,error) {
 }
 
 func Update(ctx context.Context) (Status,error) {
+ if !diagnosticsMu.TryLock(){return Status{},fmt.Errorf("cannot update zapret2 during strategy diagnostics")}
+ defer diagnosticsMu.Unlock()
  if Running() {return Status{},fmt.Errorf("stop the VPN core using zapret2 before updating the component")}
  installMu.Lock()
  defer installMu.Unlock()
@@ -176,6 +178,8 @@ func Update(ctx context.Context) (Status,error) {
 }
 
 func Remove() error {
+ if !diagnosticsMu.TryLock(){return fmt.Errorf("cannot remove zapret2 during strategy diagnostics")}
+ defer diagnosticsMu.Unlock()
  if Running(){return fmt.Errorf("cannot remove zapret2 while its NFQUEUE process is running")}
  installMu.Lock()
  defer installMu.Unlock()

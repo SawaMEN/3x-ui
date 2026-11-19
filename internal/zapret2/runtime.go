@@ -28,6 +28,7 @@ var runtimeState struct {
  sync.Mutex
  instances []*instance
  plans []Plan
+ epoch uint64
 }
 
 func ActiveOutbounds() int {
@@ -227,6 +228,8 @@ func Apply(ctx context.Context,plans []Plan) (func(bool) error,error) {
  previous:=append([]Plan(nil),runtimeState.plans...)
  changed:=!reflect.DeepEqual(previous,normalized)
  err=replace(ctx,normalized)
+ if err==nil{runtimeState.epoch++}
+ committedEpoch:=runtimeState.epoch
  runtimeState.Unlock()
  if err!=nil{return nil,err}
  return func(commit bool)error {
@@ -235,7 +238,42 @@ func Apply(ctx context.Context,plans []Plan) (func(bool) error,error) {
   defer cancel()
   runtimeState.Lock()
   defer runtimeState.Unlock()
-  return replace(recovery,previous)
+  if runtimeState.epoch!=committedEpoch {
+   return fmt.Errorf("zapret2 changed during restart; refusing to restore stale NFQUEUE plan")
+  }
+  err:=replace(recovery,previous)
+  if err==nil{runtimeState.epoch++}
+  return err
+ },nil
+}
+
+// SuspendForDiagnostics briefly disables only panel-managed NFQUEUE rules.
+// Blockcheck2 explicitly requires the bypass mechanism to be disabled while
+// it measures routes. The returned callback skips restoration if the active
+// core was restarted or changed in the meantime.
+func SuspendForDiagnostics(ctx context.Context) (func(context.Context) error,error) {
+ runtimeState.Lock()
+ previous:=append([]Plan(nil),runtimeState.plans...)
+ if len(previous)==0 {
+  runtimeState.Unlock()
+  return func(context.Context)error{return nil},nil
+ }
+ if err:=replace(ctx,nil);err!=nil {
+  runtimeState.Unlock()
+  return nil,err
+ }
+ runtimeState.epoch++
+ suspendedEpoch:=runtimeState.epoch
+ runtimeState.Unlock()
+ return func(ctx context.Context)error{
+  runtimeState.Lock()
+  defer runtimeState.Unlock()
+  if runtimeState.epoch!=suspendedEpoch {
+   return fmt.Errorf("zapret2 configuration changed during diagnostics; previous NFQUEUE plan was not restored")
+  }
+  err:=replace(ctx,previous)
+  if err==nil{runtimeState.epoch++}
+  return err
  },nil
 }
 
