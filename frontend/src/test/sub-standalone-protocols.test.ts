@@ -3,7 +3,15 @@ import { isStandaloneLink, pingtunnelClientJSON } from '@/pages/sub/standalonePr
 
 describe('standalone subscription protocols', () => {
   it('classifies external clients without mixing native core links', () => {
-    for (const protocol of ['pingtunnel://', 'fptn:', 'openflux://', 'vetroff://', 'tt://', 'sudoku://', 'tg://']) {
+    for (const protocol of [
+      'pingtunnel://',
+      'fptn:',
+      'openflux://',
+      'vetroff://',
+      'tt://',
+      'sudoku://',
+      'tg://',
+    ]) {
       expect(isStandaloneLink(protocol)).toBe(true);
     }
     for (const protocol of ['vless://', 'vmess://', 'ss://', 'hysteria2://', 'tuic://', 'wg://']) {
@@ -21,7 +29,10 @@ describe('standalone subscription protocols', () => {
       encrypt: 'chacha20',
       congestion: 'bb',
     };
-    const encoded = btoa(JSON.stringify(cfg)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const encoded = btoa(JSON.stringify(cfg))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
     expect(JSON.parse(pingtunnelClientJSON(`pingtunnel://${encoded}#Tunnel`))).toEqual(cfg);
     expect(pingtunnelClientJSON('vless://something')).toBe('');
     expect(pingtunnelClientJSON('pingtunnel://bad!!!')).toBe('');
