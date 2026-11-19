@@ -49,7 +49,8 @@ type Settings struct {
 	Context         string              `json:"context"`
 	Transports      []OpenFluxTransport `json:"transports"`
 
-	Key            int      `json:"key"`
+	Password       string   `json:"password"`
+	Key            int      `json:"key"` // Legacy v2, migrated on save
 	Encrypt        string   `json:"encrypt"`
 	EncryptKey     string   `json:"encryptKey"`
 	MaxConn        int      `json:"maxConn"`
@@ -102,14 +103,11 @@ func (inst Instance) Validate() error {
 		if inst.Port != 0 {
 			return fmt.Errorf("Pingtunnel uses ICMP and requires port 0")
 		}
-		if s.Key < 1 || s.Key > 2147483647 {
-			return fmt.Errorf("Pingtunnel key must be 1..2147483647")
+		if len(inst.PingtunnelPassword()) < 8 {
+			return fmt.Errorf("Pingtunnel 3.x requires a shared password of at least 8 characters; save the inbound to generate one")
 		}
 		if s.Encrypt != "" && s.Encrypt != "chacha20" && s.Encrypt != "aes256" && s.Encrypt != "aes128" {
-			return fmt.Errorf("Pingtunnel encryption must be empty, chacha20, aes256 or aes128")
-		}
-		if s.Encrypt != "" && s.EncryptKey == "" {
-			return fmt.Errorf("Pingtunnel encryption key is required when encryption is enabled")
+			return fmt.Errorf("Pingtunnel 3.x encryption must be chacha20, aes256 or aes128")
 		}
 		if s.MaxConn < 0 || s.ConnectTimeout < 0 {
 			return fmt.Errorf("Pingtunnel connection limit and timeout must be nonnegative")
@@ -159,6 +157,16 @@ func (inst Instance) Validate() error {
 		seen[c.Email] = true
 	}
 	return nil
+}
+
+// PingtunnelPassword keeps existing v2 inbounds functional when their
+// encryption key meets the v3 shared-secret requirement.
+// prepareExternalVPN removes legacy fields on the next save.
+func (inst Instance) PingtunnelPassword() string {
+	if inst.Settings.Password != "" {
+		return inst.Settings.Password
+	}
+	return inst.Settings.EncryptKey
 }
 
 func (inst Instance) Bind() string {
