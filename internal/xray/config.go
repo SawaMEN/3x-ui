@@ -4,13 +4,13 @@ import (
 	"bytes"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
- "github.com/SawaMEN/3x-ui/v3/internal/zapret2"
+	"github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 )
 
 // Config represents the complete Xray configuration structure.
 // It contains all sections of an Xray config file including inbounds, outbounds, routing, etc.
 type Config struct {
- Zapret2Plans []zapret2.Plan `json:"-"`
+	Zapret2Plans     []zapret2.Plan       `json:"-"`
 	LogConfig        json_util.RawMessage `json:"log"`
 	RouterConfig     json_util.RawMessage `json:"routing"`
 	DNSConfig        json_util.RawMessage `json:"dns,omitempty"`

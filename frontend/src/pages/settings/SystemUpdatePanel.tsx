@@ -934,18 +934,20 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
                     style={{ marginBottom: 10 }}
                   />
                 )}
-                {dependency.key === 'zapret2' && dependency.installed && dependency.ready === false && (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    title="Zapret2 установлен, но пока не готов к маршрутизации"
-                    description={
-                      dependency.readinessReason ||
-                      'Не удалось подтвердить необходимые права и nftables.'
-                    }
-                    style={{ marginBottom: 10 }}
-                  />
-                )}
+                {dependency.key === 'zapret2' &&
+                  dependency.installed &&
+                  dependency.ready === false && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      title="Zapret2 установлен, но пока не готов к маршрутизации"
+                      description={
+                        dependency.readinessReason ||
+                        'Не удалось подтвердить необходимые права и nftables.'
+                      }
+                      style={{ marginBottom: 10 }}
+                    />
+                  )}
                 <Typography.Paragraph type="secondary" className="system-component-description">
                   {t(`pages.settings.swap.componentDescriptions.${dependency.key}`)}
                 </Typography.Paragraph>

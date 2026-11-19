@@ -19,7 +19,7 @@ import (
 )
 
 type Config struct {
-	Zapret2Plans             []zapret2.Plan        `json:"-"`
+	Zapret2Plans            []zapret2.Plan        `json:"-"`
 	SpeedLimitPlan          clientlimit.Plan      `json:"-"`
 	SidecarTrafficTags      map[string]bool       `json:"-"`
 	ProtocolServerFallbacks map[string]string     `json:"-"`

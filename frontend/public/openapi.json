@@ -23363,6 +23363,126 @@
         }
       }
     },
+    "/panel/api/setting/zapret2/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return official zapret2 installation state, version and upgrade availability.",
+        "operationId": "get_panel_api_setting_zapret2_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/zapret2/update": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Install or update verified zapret2 release files from bol-van/zapret2.",
+        "operationId": "post_panel_api_setting_zapret2_update",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/zapret2/remove": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Remove unused zapret2 component after removing virtual routes.",
+        "operationId": "post_panel_api_setting_zapret2_remove",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/zapret2/diagnose": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Run a limited official blockcheck2 strategy diagnostic against supplied public domains.",
+        "operationId": "post_panel_api_setting_zapret2_diagnose",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/setting/singbox/config": {
       "get": {
         "tags": [

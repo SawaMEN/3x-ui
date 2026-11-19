@@ -247,6 +247,7 @@ func findExecutable(root,name string) (string,error) {
  return found,nil
 }
 func copyBinary(from,to string) error {
+ if err:=os.MkdirAll(filepath.Dir(to),0755);err!=nil{return err}
  src,err:=os.Open(from);if err!=nil{return err};defer src.Close()
  out,err:=os.OpenFile(to,os.O_CREATE|os.O_TRUNC|os.O_WRONLY,0755);if err!=nil{return err}
  _,copyErr:=io.Copy(out,src)
