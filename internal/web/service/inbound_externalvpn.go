@@ -47,7 +47,10 @@ func prepareExternalVPN(ib *model.Inbound, previous string) error {
 		// where possible, otherwise provision a cryptographic random secret.
 		password, _ := raw["password"].(string)
 		if password == "" {
-			for _, candidate := range []string{old.Password, old.EncryptKey} {
+			// On first creation, older clients may still submit encryptKey.
+			// Migrating that supplied value avoids unnecessary password rotation.
+			currentLegacy, _ := raw["encryptKey"].(string)
+			for _, candidate := range []string{old.Password, old.EncryptKey, currentLegacy} {
 				if len(candidate) >= 8 {
 					password = candidate
 					break
