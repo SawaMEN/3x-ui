@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -114,16 +113,6 @@ func (inst Instance) Validate() error {
 		}
 		if s.Congestion != "" && s.Congestion != "bb" && s.Congestion != "none" {
 			return fmt.Errorf("Pingtunnel congestion must be bb or none")
-		}
-		if s.Forward != "" {
-			u, err := url.Parse(s.Forward)
-			if err != nil || (u.Scheme != "socks5" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" {
-				return fmt.Errorf("Pingtunnel forward must be a socks5://host:port or http://host:port URL")
-			}
-			port, err := strconv.Atoi(u.Port())
-			if err != nil || port < 1 || port > 65535 {
-				return fmt.Errorf("Pingtunnel forward must have a valid port")
-			}
 		}
 		if inst.Listen != "" && net.ParseIP(inst.Listen) == nil {
 			return fmt.Errorf("Pingtunnel listen must be an IP address")
