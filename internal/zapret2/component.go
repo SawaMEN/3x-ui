@@ -78,7 +78,9 @@ func GetStatus(ctx context.Context) (Status,error) {
  status := Status{Installed: Installed(),Supported:supported(),Binary:BinaryPath(),Source:"bol-van/zapret2"}
  if !status.Supported { status.UnsupportedReason = "zapret2 NFQUEUE requires Linux amd64/arm64" }
  if data,err := os.ReadFile(filepath.Join(Directory(),"version")); err==nil { status.Version=strings.TrimSpace(string(data)) }
- rel,err := fetchRelease(ctx)
+ lookupCtx,cancel:=context.WithTimeout(ctx,7*time.Second)
+ defer cancel()
+ rel,err := fetchRelease(lookupCtx)
  if err == nil {
   status.LatestVersion = rel.Tag
   status.UpdateAvailable = status.Installed && status.Version!="" && status.Version != rel.Tag
@@ -101,6 +103,7 @@ func Update(ctx context.Context) (Status,error) {
  }
  if assetURL=="" || !strings.HasPrefix(digest,"sha256:") { return Status{},fmt.Errorf("official release missing archive or SHA-256 digest") }
  if !strings.HasPrefix(assetURL,"https://github.com/bol-van/zapret2/releases/download/") { return Status{},fmt.Errorf("unexpected upstream archive URL") }
+ if err:=os.MkdirAll(filepath.Dir(Directory()),0755);err!=nil{return Status{},err}
  stage,err := os.MkdirTemp(filepath.Dir(Directory()),".zapret2-stage-*")
  if err != nil { return Status{},err }
  defer os.RemoveAll(stage)
@@ -157,6 +160,7 @@ func Update(ctx context.Context) (Status,error) {
 }
 
 func Remove() error {
+ if Running(){return fmt.Errorf("cannot remove zapret2 while its NFQUEUE process is running")}
  installMu.Lock()
  defer installMu.Unlock()
  return os.RemoveAll(Directory())
