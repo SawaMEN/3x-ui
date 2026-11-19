@@ -14,7 +14,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
- "github.com/SawaMEN/3x-ui/v3/internal/zapret2"
+	"github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
 )
 
