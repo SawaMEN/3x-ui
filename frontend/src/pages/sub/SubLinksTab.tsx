@@ -37,7 +37,7 @@ export default function SubLinksTab({
     {
       kind: 'STANDALONE',
       color: 'orange',
-      url: subFormatMode === 'both' ? appendNativeFormat(subUrl, 'standalone') : '',
+      url: appendNativeFormat(subUrl, 'standalone'),
       title: t('subscription.standaloneProtocols'),
       downloadable: true,
     },
