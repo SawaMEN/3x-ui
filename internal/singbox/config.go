@@ -15,9 +15,11 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/snell"
+ "github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 )
 
 type Config struct {
+ Zapret2Plans []zapret2.Plan `json:"-"`
 	SpeedLimitPlan          clientlimit.Plan      `json:"-"`
 	SidecarTrafficTags      map[string]bool       `json:"-"`
 	ProtocolServerFallbacks map[string]string     `json:"-"`
