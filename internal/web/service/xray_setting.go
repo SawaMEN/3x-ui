@@ -120,20 +120,19 @@ func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
 			if err := json.Unmarshal(outbound, &managed); err != nil {
 				return err
 			}
-			normalized, err := singbox.NormalizeOutboundInput(managed)
-			if err != nil {
-				return err
-			}
-			tag := normalized["tag"].(string)
-			if tags[tag] {
-				return fmt.Errorf("duplicate outbound tag %q", tag)
-			}
-			tags[tag] = true
-			if strings.EqualFold(fmt.Sprint(managed["protocol"]),"zapret2") {
+			if strings.EqualFold(fmt.Sprint(managed["protocol"]), "zapret2") {
+                tag,_:=managed["tag"].(string)
+                if tags[tag] {return fmt.Errorf("duplicate outbound tag %q",tag)}
+                tags[tag]=true
                 if !zapret2.Installed() {return fmt.Errorf("zapret2 is not installed; install the official component first")}
                 if _,err:=zapret2.Parse(tag,managed["settings"]);err!=nil{return err}
                 continue
             }
+            normalized, err := singbox.NormalizeOutboundInput(managed)
+            if err != nil {return err}
+            tag := normalized["tag"].(string)
+            if tags[tag] {return fmt.Errorf("duplicate outbound tag %q",tag)}
+            tags[tag]=true
 			if kind, _ := s.GetCoreType(); kind != CoreTypeXray {
 				if err := validateNativeTemplateOutbound(outbound, normalized, kind); err != nil {
 					return err
