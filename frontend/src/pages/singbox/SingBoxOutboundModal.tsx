@@ -97,35 +97,42 @@ const options = (values: string[]) => values.map((value) => ({ value, label: val
 
 // Migrate historical names as soon as an outbound enters the editor.
 // Only canonical names are saved or offered in the selector.
+const LEGACY_NATIVE_FINGERPRINTS: Record<string, string> = {
+  chrome_155: 'chrome',
+  hellochrome_155: 'chrome',
+  chrome_133: 'chrome',
+  hellochrome_133: 'chrome',
+  chrome_psk: 'chrome',
+  chrome_psk_shuffle: 'chrome',
+  chrome_padding_psk_shuffle: 'chrome',
+  chrome_pq: 'chrome',
+  chrome_pq_psk: 'chrome',
+  firefox_148: 'firefox',
+  hellofirefox_148: 'firefox',
+  safari_26_3: 'safari',
+  hellosafari_26_3: 'safari',
+};
+
+// Convert existing outbound settings to the canonical, currently supported
+// names; no historical entries are added back to the selector.
 function normalizeNativeFingerprint(value: ConfigObject): ConfigObject {
   const tls = object(value.tls);
   const utls = object(tls.utls);
-  const fingerprint = text(utls.fingerprint).trim().toLowerCase();
+  const original = text(utls.fingerprint);
+  const fingerprint = original.trim().toLowerCase();
   if (!fingerprint) return value;
 
-  const chromeAliases = new Set([
-    'chrome_155', 'hellochrome_155', 'chrome_133', 'hellochrome_133',
-    'chrome_psk', 'chrome_psk_shuffle', 'chrome_padding_psk_shuffle',
-    'chrome_pq', 'chrome_pq_psk',
-  ]);
-  const firefoxAliases = new Set(['firefox_148', 'hellofirefox_148']);
-  const safariAliases = new Set(['safari_26_3', 'hellosafari_26_3']);
-
-  const canonical = chromeAliases.has(fingerprint)
-    ? 'chrome'
-    : firefoxAliases.has(fingerprint)
-      ? 'firefox'
-      : safariAliases.has(fingerprint)
-        ? 'safari'
-        : fingerprint;
-
+  const canonical = LEGACY_NATIVE_FINGERPRINTS[fingerprint] ?? fingerprint;
   if (canonical === 'unsafe') {
     const nextTls = { ...tls };
-    if (object(tls.reality).enabled) nextTls.utls = { enabled: true, fingerprint: 'chrome' };
-    else delete nextTls.utls;
+    if (object(tls.reality).enabled) {
+      nextTls.utls = { enabled: true, fingerprint: 'chrome' };
+    } else {
+      delete nextTls.utls;
+    }
     return { ...value, tls: nextTls };
   }
-  if (canonical === text(utls.fingerprint)) return value;
+  if (canonical === original) return value;
   return { ...value, tls: { ...tls, utls: { ...utls, fingerprint: canonical } } };
 }
 
