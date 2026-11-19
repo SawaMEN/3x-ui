@@ -30,6 +30,12 @@ var runtimeState struct {
  plans []Plan
 }
 
+func ActiveOutbounds() int {
+ runtimeState.Lock()
+ defer runtimeState.Unlock()
+ return len(runtimeState.plans)
+}
+
 func Running() bool {
  runtimeState.Lock()
  defer runtimeState.Unlock()
