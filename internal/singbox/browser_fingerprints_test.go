@@ -34,3 +34,32 @@ func TestTranslateOutboundTLSVersionedFingerprints(t *testing.T) {
 		})
 	}
 }
+
+func TestTranslateOutboundTLSMigratesObsoleteFingerprints(t *testing.T) {
+	for _, tc := range []struct{ old, current string }{
+		{"hellochrome_133", "chrome"},
+		{"hellochrome_155", "chrome"},
+		{"chrome_psk", "chrome"},
+		{"chrome_pq_psk", "chrome"},
+		{"hellofirefox_148", "firefox"},
+		{"hellosafari_26_3", "safari"},
+	} {
+		t.Run(tc.old, func(t *testing.T) {
+			out := map[string]any{"tag": "legacy-tls"}
+			in := map[string]any{
+				"security": "tls",
+				"tlsSettings": map[string]any{
+					"fingerprint": tc.old,
+					"serverName": "example.com",
+				},
+			}
+			if err := translateOutboundTLSCompatibility(out, in, "legacy-tls"); err != nil {
+				t.Fatal(err)
+			}
+			utlsOut := out["tls"].(map[string]any)["utls"].(map[string]any)
+			if got := utlsOut["fingerprint"]; got != tc.current {
+				t.Fatalf("legacy fingerprint %q migrated to %q, want %q", tc.old, got, tc.current)
+			}
+		})
+	}
+}
