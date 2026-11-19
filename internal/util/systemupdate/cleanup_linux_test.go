@@ -291,9 +291,9 @@ func TestActivePackageManagerZombieIgnored(t *testing.T) {
 
 func TestProcProcessState(t *testing.T) {
 	for _, tc := range []struct {
-		value    string
-		state    byte
-		wantErr  bool
+		value   string
+		state   byte
+		wantErr bool
 	}{
 		{value: "42 (unattended-upgr) Z 1 2 3", state: 'Z'},
 		{value: "42 (name with ) bracket) S 1 2 3", state: 'S'},
