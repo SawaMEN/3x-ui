@@ -48,6 +48,9 @@ func ExportPingtunnelLink(inst Instance, server, remark string) (string, error) 
 	if congestion == "" {
 		congestion = "bb"
 	}
+	// Upstream enables BB only when congestion == "bb". The nonempty
+	// "none" sentinel survives the JSON loader, which ignores empty values.
+	// It therefore disables BB for native JSON clients.
 	cfg := PingtunnelClientConfig{
 		Type: "client", Listen: "127.0.0.1:1080", Server: server,
 		Socks5: true, Password: inst.PingtunnelPassword(),
