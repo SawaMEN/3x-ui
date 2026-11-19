@@ -69,6 +69,9 @@ type DependencyStatus = {
   busy?: boolean;
   operation?: string;
   running?: boolean;
+  ready?: boolean;
+  readinessReason?: string;
+  activeOutbounds?: number;
 };
 
 type ExternalVPNBinaryStatus = {
@@ -81,6 +84,10 @@ type ExternalVPNBinaryStatus = {
   error?: string;
   supported?: boolean;
   unsupportedReason?: string;
+  running?: boolean;
+  ready?: boolean;
+  readinessReason?: string;
+  activeOutbounds?: number;
 };
 
 type ExternalVPNStatus = {
@@ -376,6 +383,10 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
       updateAvailable: zapret2.obj?.updateAvailable === true,
       supported: zapret2.obj?.supported,
       unsupportedReason: zapret2.obj?.unsupportedReason,
+      ready: zapret2.obj?.ready === true,
+      readinessReason: zapret2.obj?.readinessReason,
+      running: zapret2.obj?.running === true,
+      activeOutbounds: zapret2.obj?.activeOutbounds ?? 0,
       error: zapret2.success ? undefined : zapret2.msg,
     });
     rows.push({
@@ -923,9 +934,28 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
                     style={{ marginBottom: 10 }}
                   />
                 )}
+                {dependency.key === 'zapret2' && dependency.installed && dependency.ready === false && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title="Zapret2 установлен, но пока не готов к маршрутизации"
+                    description={
+                      dependency.readinessReason ||
+                      'Не удалось подтвердить необходимые права и nftables.'
+                    }
+                    style={{ marginBottom: 10 }}
+                  />
+                )}
                 <Typography.Paragraph type="secondary" className="system-component-description">
                   {t(`pages.settings.swap.componentDescriptions.${dependency.key}`)}
                 </Typography.Paragraph>
+                {dependency.key === 'zapret2' && dependency.installed && (
+                  <Typography.Text type="secondary" className="system-component-source">
+                    {dependency.running
+                      ? `Обработка активна · маршрутов: ${dependency.activeOutbounds ?? 0}`
+                      : 'Обработка остановлена'}
+                  </Typography.Text>
+                )}
                 {(dependency.key === 'naiveproxy' || dependency.key === 'hysteria2') && (
                   <Typography.Text type="secondary" className="system-component-source">
                     {t(
