@@ -32,76 +32,8 @@ type Calibration struct {
 }
 
 var coverageLine = regexp.MustCompile(`^(\d+)/(\d+)\s*:\s*(curl_test_(?:http|https_tls12|https_tls13|http3))\s+ipv([46])\s*:\s*nfqws2\s+(.+)$`)
-var reportLine = regexp.MustCompile(`^(curl_test_(?:http|https_tls12|https_tls13|http3))\s+ipv([46])\s+(\S+)\s*:\s*nfqws2\s+(.+)package zapret2
-
-import (
-	"errors"
-	"fmt"
-	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
-)
-
-// SelectedStrategy is an exact nfqws2 strategy recorded by upstream blockcheck2.
-// The command is stored as a tokenized argument list, never a shell command.
-type SelectedStrategy struct {
-	Kind     string   `json:"kind"`
-	IP       string   `json:"ip"`
-	Test     string   `json:"test"`
-	Args     []string `json:"args"`
-	Passed   int      `json:"passed"`
-	Total    int      `json:"total"`
-}
-
-// Calibration travels in the individual outbound's settings. Nothing is
-// globally activated; changes only take effect on core restart/apply.
-type Calibration struct {
-	Source   string             `json:"source"`
-	TestedAt string             `json:"testedAt"`
-	Domains  []string           `json:"domains"`
-	Level    string             `json:"level"`
-	Selected []SelectedStrategy `json:"selected"`
-}
-
-var coverageLine = regexp.MustCompile(`^(\d+)/(\d+)\s*:\s*(curl_test_(?:http|https_tls12|https_tls13|http3))\s+ipv([46])\s*:\s*nfqws2\s+(.+)$`)
-)
-var baselineLine = regexp.MustCompile(`^(curl_test_(?:http|https_tls12|https_tls13|http3))\s+ipv([46])\s+(\S+)\s*:\s*working without bypasspackage zapret2
-
-import (
-	"errors"
-	"fmt"
-	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
-)
-
-// SelectedStrategy is an exact nfqws2 strategy recorded by upstream blockcheck2.
-// The command is stored as a tokenized argument list, never a shell command.
-type SelectedStrategy struct {
-	Kind     string   `json:"kind"`
-	IP       string   `json:"ip"`
-	Test     string   `json:"test"`
-	Args     []string `json:"args"`
-	Passed   int      `json:"passed"`
-	Total    int      `json:"total"`
-}
-
-// Calibration travels in the individual outbound's settings. Nothing is
-// globally activated; changes only take effect on core restart/apply.
-type Calibration struct {
-	Source   string             `json:"source"`
-	TestedAt string             `json:"testedAt"`
-	Domains  []string           `json:"domains"`
-	Level    string             `json:"level"`
-	Selected []SelectedStrategy `json:"selected"`
-}
-
-var coverageLine = regexp.MustCompile(`^(\d+)/(\d+)\s*:\s*(curl_test_(?:http|https_tls12|https_tls13|http3))\s+ipv([46])\s*:\s*nfqws2\s+(.+)$`)
-)
+var reportLine = regexp.MustCompile(`^(curl_test_(?:http|https_tls12|https_tls13|http3))\s+ipv([46])\s+(\S+)\s*:\s*nfqws2\s+(.+)$`)
+var baselineLine = regexp.MustCompile(`^(curl_test_(?:http|https_tls12|https_tls13|http3))\s+ipv([46])\s+(\S+)\s*:\s*working without bypass$`)
 var strategyValue = regexp.MustCompile(`^[A-Za-z0-9_+<>=:.,%-]{1,512}$`)
 
 func kindForTest(test string) string {
@@ -160,7 +92,7 @@ func ValidateCalibration(c *Calibration) error {
 		key:=s.Kind+"_"+s.IP
 		if seen[key]{return fmt.Errorf("duplicate calibrated strategy for %s",key)}
 		seen[key]=true
-		if s.Total<1 || s.Total>len(c.Domains) || s.Passed<1 || s.Passed>s.Total || s.Passed*3<s.Total*2 {return fmt.Errorf("insufficient or invalid calibration coverage for %s",key)}
+		if (s.Total<1 || s.Total>len(c.Domains)) || s.Passed<1 || s.Passed>s.Total || s.Passed*3<s.Total*2 {return fmt.Errorf("insufficient or invalid calibration coverage for %s",key)}
 		if err:=validateStrategyArgs(s.Args);err!=nil{return err}
 	}
 	return nil
