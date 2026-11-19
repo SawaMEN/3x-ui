@@ -25,6 +25,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+ "github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
 )
@@ -687,6 +688,9 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 	}
 	var finishSidecars func(bool) error
 	applied := false
+    finishZapret,err:=zapret2.Apply(ctx,candidate.zapret2Plans)
+    if err!=nil{return err}
+    defer func(){result=errors.Join(result,finishZapret(applied))}()
 	{
 		finishSidecars, err = externalvpn.ApplyOutbounds(candidate.managedOutbounds)
 		if err != nil {
@@ -788,6 +792,9 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 		return err
 	}
 	applied := false
+    finishZapret,err:=zapret2.Apply(ctx,candidate.zapret2Plans)
+    if err!=nil{return err}
+    defer func(){result=errors.Join(result,finishZapret(applied))}()
 	{
 		finish, err := externalvpn.ApplyOutbounds(candidate.managedOutbounds)
 		if err != nil {
@@ -846,7 +853,7 @@ func (s *SingBoxService) Stop(ctx context.Context) error {
 		if err == nil {
 			s.stoppedFlag().Store(true)
 		}
-		return err
+		return errors.Join(err,zapret2.StopAll(ctx))
 	}
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
@@ -874,7 +881,7 @@ func (s *SingBoxService) stopLocked(ctx context.Context) (result error) {
 		return err
 	}
 	s.stoppedFlag().Store(true)
-	return protocolserver.StopAll()
+	return errors.Join(protocolserver.StopAll(),zapret2.StopAll(recovery))
 }
 
 func (s *SingBoxService) IsRunning() bool {
