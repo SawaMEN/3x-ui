@@ -2,6 +2,7 @@ package xray
 
 import (
 	"bytes"
+	"reflect"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/zapret2"
@@ -31,6 +32,9 @@ type Config struct {
 
 // Equals compares two Config instances for deep equality.
 func (c *Config) Equals(other *Config) bool {
+	if !reflect.DeepEqual(c.Zapret2Plans, other.Zapret2Plans) {
+		return false
+	}
 	if len(c.InboundConfigs) != len(other.InboundConfigs) {
 		return false
 	}

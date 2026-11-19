@@ -135,13 +135,19 @@ func (s *SingBoxService) restartStandaloneXray(ctx context.Context) error {
 }
 
 func (s *SingBoxService) restartStandaloneXrayLocked(ctx context.Context) (result error) {
-    cfg,err:=(&CoreService{}).GetXrayConfig()
-    if err!=nil{return err}
-    if err:=zapret2.Preflight(ctx,cfg.Zapret2Plans);err!=nil{return err}
-    finishZapret,err:=zapret2.Apply(ctx,cfg.Zapret2Plans)
-    if err!=nil{return err}
-    zapretCommitted:=false
-    defer func(){result=errors.Join(result,finishZapret(zapretCommitted))}()
+	cfg, err := (&CoreService{}).GetXrayConfig()
+	if err != nil {
+		return err
+	}
+	if err := zapret2.Preflight(ctx, cfg.Zapret2Plans); err != nil {
+		return err
+	}
+	finishZapret, err := zapret2.Apply(ctx, cfg.Zapret2Plans)
+	if err != nil {
+		return err
+	}
+	zapretCommitted := false
+	defer func() { result = errors.Join(result, finishZapret(zapretCommitted)) }()
 	wasRunning := s.IsRunning()
 	var applied []byte
 	if wasRunning {
@@ -169,7 +175,7 @@ func (s *SingBoxService) restartStandaloneXrayLocked(ctx context.Context) (resul
 	}
 
 	s.stoppedFlag().Store(false)
-    zapretCommitted=true
+	zapretCommitted = true
 	return nil
 }
 
