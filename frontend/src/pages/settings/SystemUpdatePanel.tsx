@@ -40,6 +40,7 @@ type SystemUpdatePackage = {
 
 type DependencyKey =
   | 'naiveproxy'
+  | 'zapret2'
   | 'hysteria2'
   | 'sudoku'
   | 'pingtunnel'
@@ -154,6 +155,7 @@ function formatCacheSize(bytes: number): string {
 
 const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.source === 'standalone' ||
+  dependency.key === 'zapret2' ||
   dependency.key === 'sudoku' ||
   dependency.key === 'oxidns' ||
   dependency.key === 'dnstt' ||
@@ -166,7 +168,7 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
 
 const dependencyNeedsAction = (dependency: DependencyStatus) => {
   // Installation remains possible when the version endpoint is unreachable.
-  if (dependency.key === 'vetroff' || dependency.key === 'telemt' || dependency.key === 'olcrtc') {
+  if (dependency.key === 'vetroff' || dependency.key === 'telemt' || dependency.key === 'olcrtc' || dependency.key === 'zapret2') {
     return !dependency.installed || dependency.updateAvailable;
   }
   if (!dependency.availableVersion) return false;
@@ -273,7 +275,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
 
   const loadDependencyUpdates = useCallback(async () => {
-    const [core, sudoku, external, naive, oxidns, dnstt, olcrtc, telemt] = await Promise.all([
+    const [core, sudoku, external, naive, oxidns, dnstt, olcrtc, telemt, zapret2] = await Promise.all([
       HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
         ApiMsg<{ installed?: boolean; version?: string }>
       >,
@@ -294,6 +296,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
       HttpUtil.get('/panel/api/olcrtc/status', undefined, { silent: true }) as Promise<
         ApiMsg<OlcRTCStatus>
       >,
+      HttpUtil.get('/panel/api/setting/zapret2/status', undefined, { silent: true }) as Promise<ApiMsg<ExternalVPNBinaryStatus>>,
       HttpUtil.get('/panel/api/telemt/status', undefined, { silent: true }) as Promise<
         ApiMsg<{
           installed?: boolean;
@@ -353,6 +356,18 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
               : undefined),
       });
     }
+    rows.push({
+      key: 'zapret2',
+      label: 'Zapret2',
+      source: 'standalone',
+      installed: zapret2.success === true && zapret2.obj?.installed === true,
+      installedVersion: zapret2.obj?.version || '',
+      availableVersion: zapret2.obj?.latestVersion || '',
+      updateAvailable: zapret2.obj?.updateAvailable === true,
+      supported: zapret2.obj?.supported,
+      unsupportedReason: zapret2.obj?.unsupportedReason,
+      error: zapret2.success ? undefined : zapret2.msg,
+    });
     rows.push({
       key: 'oxidns',
       label: 'OxiDNS',
@@ -450,6 +465,8 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
 
   const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
     switch (dependency.key) {
+      case 'zapret2':
+        return (await HttpUtil.post('/panel/api/setting/zapret2/update', undefined, { timeout: 180000 })) as ApiMsg<unknown>;
       case 'openflux':
         return await installOpenFlux();
       case 'telemt':
@@ -521,6 +538,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
       if (dependency.key === 'dnstt') window.dispatchEvent(new Event('dnstt:changed'));
       if (dependency.key === 'telemt') window.dispatchEvent(new Event('telemt:changed'));
+      if (dependency.key === 'zapret2') window.dispatchEvent(new Event('zapret2:changed'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -532,8 +550,10 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
     setDependencyBusy(dependency.key);
     try {
       const response = (await HttpUtil.post(
-        dependency.key === 'telemt'
-          ? '/panel/api/telemt/remove'
+        dependency.key === 'zapret2'
+          ? '/panel/api/setting/zapret2/remove'
+          : dependency.key === 'telemt'
+            ? '/panel/api/telemt/remove'
           : dependency.key === 'olcrtc'
             ? '/panel/api/olcrtc/remove'
             : dependency.key === 'oxidns'
@@ -559,6 +579,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
       if (dependency.key === 'dnstt') window.dispatchEvent(new Event('dnstt:changed'));
       if (dependency.key === 'telemt') window.dispatchEvent(new Event('telemt:changed'));
+      if (dependency.key === 'zapret2') window.dispatchEvent(new Event('zapret2:changed'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -948,7 +969,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
                             !(isDependencyInstallable(action) && !action.installed)) ||
                           (!action.availableVersion &&
                             !(
-                              (action.key === 'telemt' || action.key === 'olcrtc') &&
+                              (action.key === 'telemt' || action.key === 'olcrtc' || action.key === 'zapret2') &&
                               (!action.installed || action.updateAvailable)
                             )) ||
                           dependencyBusy !== null ||
