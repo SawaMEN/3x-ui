@@ -126,16 +126,23 @@ export default function OutboundFormModal({
     if (!open) return;
     let disposed = false;
     const refresh = () => {
-      void HttpUtil.get('/panel/api/setting/zapret2/status', undefined, { silent: true }).then((response: unknown) => {
-        if (!disposed) {
-          const status = response as { success?: boolean; obj?: { installed?: boolean } };
-          setZapret2Installed(status.success === true && status.obj?.installed === true);
-        }
-      }).catch(() => { if (!disposed) setZapret2Installed(false); });
+      void HttpUtil.get('/panel/api/setting/zapret2/status', undefined, { silent: true })
+        .then((response: unknown) => {
+          if (!disposed) {
+            const status = response as { success?: boolean; obj?: { installed?: boolean } };
+            setZapret2Installed(status.success === true && status.obj?.installed === true);
+          }
+        })
+        .catch(() => {
+          if (!disposed) setZapret2Installed(false);
+        });
     };
     refresh();
     window.addEventListener('zapret2:changed', refresh);
-    return () => { disposed = true; window.removeEventListener('zapret2:changed', refresh); };
+    return () => {
+      disposed = true;
+      window.removeEventListener('zapret2:changed', refresh);
+    };
   }, [open]);
   const [activeKey, setActiveKey] = useState('1');
   const [jsonText, setJsonText] = useState('');
@@ -452,12 +459,20 @@ export default function OutboundFormModal({
         { domains },
         { timeout: 510000, headers: { 'Content-Type': 'application/json' } },
       )) as { success?: boolean; msg?: string; obj?: { bestProfile?: string; summary?: string } };
-      if (!response.success) throw new Error(response.msg || 'Проверка zapret2 завершилась ошибкой');
+      if (!response.success)
+        throw new Error(response.msg || 'Проверка zapret2 завершилась ошибкой');
       if (response.obj?.bestProfile) {
-        methods.setValue('settings.profile', response.obj.bestProfile as 'auto' | 'safe' | 'balanced' | 'aggressive');
+        methods.setValue(
+          'settings.profile',
+          response.obj.bestProfile as 'auto' | 'safe' | 'balanced' | 'aggressive',
+        );
         messageApi.success('Подобрана стратегия: ' + response.obj.bestProfile);
       } else {
-        Modal.info({ title: 'Диагностика zapret2', content: 'Подходящий профиль не определён автоматически. Проверьте результаты в журнале проверки и выберите стратегию вручную.' });
+        Modal.info({
+          title: 'Диагностика zapret2',
+          content:
+            'Подходящий профиль не определён автоматически. Проверьте результаты в журнале проверки и выберите стратегию вручную.',
+        });
       }
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
@@ -591,8 +606,12 @@ export default function OutboundFormModal({
                           id="protocol"
                           options={PROTOCOL_OPTIONS.filter(
                             (option) =>
-                              (option.value !== 'openflux' || openFluxInstalled || outboundProp?.protocol === 'openflux') &&
-                              (option.value !== 'zapret2' || zapret2Installed || outboundProp?.protocol === 'zapret2'),
+                              (option.value !== 'openflux' ||
+                                openFluxInstalled ||
+                                outboundProp?.protocol === 'openflux') &&
+                              (option.value !== 'zapret2' ||
+                                zapret2Installed ||
+                                outboundProp?.protocol === 'zapret2'),
                           )}
                         />
                       </FormField>
@@ -676,31 +695,52 @@ export default function OutboundFormModal({
                             <InputNumber min={1025} max={65535} />
                           </FormField>
                           <FormField name="settings.profile" label="Стратегия Anti-DPI">
-                            <Select options={[
-                              { value: 'auto', label: 'Автоматическая' },
-                              { value: 'safe', label: 'Бережная' },
-                              { value: 'balanced', label: 'Сбалансированная' },
-                              { value: 'aggressive', label: 'Усиленная' },
-                            ]} />
+                            <Select
+                              options={[
+                                { value: 'auto', label: 'Автоматическая' },
+                                { value: 'safe', label: 'Бережная' },
+                                { value: 'balanced', label: 'Сбалансированная' },
+                                { value: 'aggressive', label: 'Усиленная' },
+                              ]}
+                            />
                           </FormField>
                           <FormField name="settings.tcp" label="Обработка TCP" valueProp="checked">
                             <Switch />
                           </FormField>
-                          <FormField name="settings.udp" label="Обработка UDP/QUIC" valueProp="checked">
+                          <FormField
+                            name="settings.udp"
+                            label="Обработка UDP/QUIC"
+                            valueProp="checked"
+                          >
                             <Switch />
                           </FormField>
-                          <Button loading={zapret2Diagnosing} disabled={!zapret2Installed}
-                            onClick={() => void diagnoseZapret2()} style={{ marginBottom: 16 }}>
+                          <Button
+                            loading={zapret2Diagnosing}
+                            disabled={!zapret2Installed}
+                            onClick={() => void diagnoseZapret2()}
+                            style={{ marginBottom: 16 }}
+                          >
                             Автоматически проверить и подобрать стратегию
                           </Button>
                           <Controller
                             control={methods.control}
                             name="settings.testDomains"
                             render={({ field }) => (
-                              <Form.Item label="Сайты для проверки стратегий" extra="По одному домену на строку. Используются для диагностики, не для ограничения маршрутизации.">
-                                <Input.TextArea rows={3}
+                              <Form.Item
+                                label="Сайты для проверки стратегий"
+                                extra="По одному домену на строку. Используются для диагностики, не для ограничения маршрутизации."
+                              >
+                                <Input.TextArea
+                                  rows={3}
                                   value={(field.value ?? []).join('\n')}
-                                  onChange={(event) => field.onChange(event.target.value.split(/[\n,]+/).map((v) => v.trim()).filter(Boolean))}
+                                  onChange={(event) =>
+                                    field.onChange(
+                                      event.target.value
+                                        .split(/[\n,]+/)
+                                        .map((v) => v.trim())
+                                        .filter(Boolean),
+                                    )
+                                  }
                                 />
                               </Form.Item>
                             )}
