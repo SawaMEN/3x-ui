@@ -228,7 +228,7 @@ func files(inst Instance, metricsAddr string) ([]string, error) {
 			"encrypt": encrypt, "icmp_listen": defaultListen(inst.Listen),
 			"maxconn": inst.Settings.MaxConn, "conntt": timeout,
 			"forward": "socks5://" + sidecaregress.Address(inst.ID),
-			"nolog": true,
+			"nolog":   true,
 		})
 		if err != nil {
 			return nil, err

@@ -487,7 +487,8 @@ export default function OutboundFormModal({
           durationSeconds?: number;
         };
       };
-      if (!response.success) throw new Error(response.msg || 'Проверка zapret2 завершилась ошибкой');
+      if (!response.success)
+        throw new Error(response.msg || 'Проверка zapret2 завершилась ошибкой');
       const result = response.obj;
       const calibration = result?.calibration;
       if (calibration) {

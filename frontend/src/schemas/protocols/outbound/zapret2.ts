@@ -3,7 +3,12 @@ import { z } from 'zod';
 export const Zapret2SelectedStrategySchema = z.object({
   kind: z.enum(['http', 'https', 'quic']),
   ip: z.enum(['4', '6']),
-  test: z.enum(['curl_test_http', 'curl_test_https_tls12', 'curl_test_https_tls13', 'curl_test_http3']),
+  test: z.enum([
+    'curl_test_http',
+    'curl_test_https_tls12',
+    'curl_test_https_tls13',
+    'curl_test_http3',
+  ]),
   args: z.array(z.string().min(1).max(512)).min(1).max(24),
   passed: z.number().int().min(1),
   total: z.number().int().min(1),
