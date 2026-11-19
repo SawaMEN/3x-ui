@@ -120,6 +120,7 @@ export default function OutboundFormModal({
   const methods = useForm<OutboundFormValues>({ defaultValues: buildAddModeValues() });
   const openFluxInstalled = useOpenFluxInstalled(open);
   const [zapret2Installed, setZapret2Installed] = useState(false);
+  const [zapret2Diagnosing, setZapret2Diagnosing] = useState(false);
   useEffect(() => {
     if (!open) return;
     let disposed = false;
@@ -436,6 +437,34 @@ export default function OutboundFormModal({
     return true;
   }
 
+  async function diagnoseZapret2(): Promise<void> {
+    const raw = methods.getValues('settings') as { testDomains?: string[] };
+    const domains = (raw.testDomains ?? []).map((s) => s.trim()).filter(Boolean);
+    if (domains.length === 0) {
+      messageApi.warning('Укажите хотя бы один сайт для автоматической проверки');
+      return;
+    }
+    setZapret2Diagnosing(true);
+    try {
+      const response = (await HttpUtil.post(
+        '/panel/api/setting/zapret2/diagnose',
+        { domains },
+        { timeout: 510000, headers: { 'Content-Type': 'application/json' } },
+      )) as { success?: boolean; msg?: string; obj?: { bestProfile?: string; summary?: string } };
+      if (!response.success) throw new Error(response.msg || 'Проверка zapret2 завершилась ошибкой');
+      if (response.obj?.bestProfile) {
+        methods.setValue('settings.profile', response.obj.bestProfile as 'auto' | 'safe' | 'balanced' | 'aggressive');
+        messageApi.success('Подобрана стратегия: ' + response.obj.bestProfile);
+      } else {
+        Modal.info({ title: 'Диагностика zapret2', content: 'Подходящий профиль не определён автоматически. Проверьте результаты в журнале проверки и выберите стратегию вручную.' });
+      }
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setZapret2Diagnosing(false);
+    }
+  }
+
   function switchTab(key: string) {
     if (typeof document !== 'undefined') {
       (document.activeElement as HTMLElement | null)?.blur?.();
@@ -659,6 +688,10 @@ export default function OutboundFormModal({
                           <FormField name="settings.udp" label="Обработка UDP/QUIC" valueProp="checked">
                             <Switch />
                           </FormField>
+                          <Button loading={zapret2Diagnosing} disabled={!zapret2Installed}
+                            onClick={() => void diagnoseZapret2()} style={{ marginBottom: 16 }}>
+                            Автоматически проверить и подобрать стратегию
+                          </Button>
                           <Controller
                             control={methods.control}
                             name="settings.testDomains"
