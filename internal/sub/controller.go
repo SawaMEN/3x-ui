@@ -587,7 +587,7 @@ func (a *SUBController) subs(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
-	if format != "links" && format != "all" {
+	if format != "links" && format != "all" && format != "standalone" {
 		if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasHiddifyNativeSubscription(c.Param("subid")) &&
 			a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
 			a.recordSubscriptionFetch(c)
@@ -621,7 +621,7 @@ func (a *SUBController) subs(c *gin.Context) {
 func (a *SUBController) serveRawSubscription(c *gin.Context) {
 	userAgent := c.GetHeader("User-Agent")
 	subId := c.Param("subid")
-	if a.hasEnabledMASQUESubscription(subId) {
+	if subscriptionFormat(c) != "standalone" && a.hasEnabledMASQUESubscription(subId) {
 		writeMASQUEFormatError(c)
 		return
 	}
@@ -632,6 +632,9 @@ func (a *SUBController) serveRawSubscription(c *gin.Context) {
 	if err != nil || subs == nil {
 		writeSubError(c, err)
 	} else {
+		if subscriptionFormat(c) == "standalone" {
+			subs = standaloneSubscriptionLinks(subs)
+		}
 		result := buildRawSubscriptionBody(subs)
 
 		// Add headers
@@ -640,7 +643,7 @@ func (a *SUBController) serveRawSubscription(c *gin.Context) {
 		a.ApplyCommonHeaders(c, header, a.updateInterval, metadata.Title, metadata.SupportURL, metadata.ProfileURL, metadata.Announce, a.subEnableRouting, a.subRoutingRules, a.subHideSettings)
 
 		// Incy's profile rides the raw body; other clients must not see that line (#6062).
-		if IsIncyClient(userAgent) && a.subIncyEnableRouting && a.subIncyRoutingRules != "" {
+		if subscriptionFormat(c) != "standalone" && IsIncyClient(userAgent) && a.subIncyEnableRouting && a.subIncyRoutingRules != "" {
 			incyRules, _, err := resolveIncyRoutingSource(a.subIncyRoutingRules)
 			if err == nil && strings.TrimSpace(incyRules) != "" {
 				result += incyRules + "\n"
