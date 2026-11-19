@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+ "strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+ "github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 )
 
 // XraySettingService provides business logic for Xray configuration management.
@@ -127,6 +129,11 @@ func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
 				return fmt.Errorf("duplicate outbound tag %q", tag)
 			}
 			tags[tag] = true
+			if strings.EqualFold(fmt.Sprint(managed["protocol"]),"zapret2") {
+                if !zapret2.Installed() {return fmt.Errorf("zapret2 is not installed; install the official component first")}
+                if _,err:=zapret2.Parse(tag,managed["settings"]);err!=nil{return err}
+                continue
+            }
 			if kind, _ := s.GetCoreType(); kind != CoreTypeXray {
 				if err := validateNativeTemplateOutbound(outbound, normalized, kind); err != nil {
 					return err
