@@ -560,7 +560,6 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
         encrypt: 'chacha20',
         maxConn: 0,
         connectTimeout: 3000,
-        forward: '',
         congestion: 'bb',
         clients: [],
       };
