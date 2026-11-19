@@ -253,6 +253,18 @@ func translateOutboundTLSCompatibility(out map[string]any, stream map[string]any
 	}
 
 	fingerprint := strings.ToLower(strings.TrimSpace(rawString(tlsIn, "fingerprint")))
+	// Historical saved values map to current canonical profiles; the old
+	// templates and misleading PSK/PQ options are no longer selectable.
+	switch fingerprint {
+	case "hellochrome_133", "chrome_133", "hellochrome_155", "chrome_155",
+		"chrome_psk", "chrome_psk_shuffle", "chrome_padding_psk_shuffle",
+		"chrome_pq", "chrome_pq_psk":
+		fingerprint = "chrome"
+	case "hellofirefox_148", "firefox_148":
+		fingerprint = "firefox"
+	case "hellosafari_26_3", "safari_26_3":
+		fingerprint = "safari"
+	}
 	// Xray TCP fingerprints do not apply to QUIC; uTLS cannot provide its TLS config.
 	quic := rawString(out, "type") == "hysteria2" || rawString(out, "type") == "tuic" || rawString(out, "type") == "hysteria"
 	if quic {
