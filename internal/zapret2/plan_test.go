@@ -23,6 +23,9 @@ func TestZapret2QueueIsIsolatedAndDeterministic(t *testing.T) {
  if one[0].Tag!="a"||two[0].Queue!=one[0].Queue||one[1].Mark==one[0].Mark {
   t.Fatalf("queue/mark identity not stable: %+v %+v",one,two)
  }
+ if one[0].Mark&0x40000000!=0 {
+  t.Fatalf("source mark overlaps default nfqws2 packet mark: %#x",one[0].Mark)
+ }
  if _,err:=AssignQueues([]Plan{a,a});err==nil{t.Fatal("duplicate tag accepted")}
  if _,err:=AssignQueues([]Plan{a,{Tag:"c",Options:a.Options}});err==nil{t.Fatal("duplicate port accepted")}
 }
@@ -31,7 +34,7 @@ func TestZapret2RulesOnlyMatchMarkedEgress(t *testing.T) {
  p,_:=Parse("z2",map[string]any{"port":18080,"profile":"safe","tcp":true,"udp":false})
  plans,_:=AssignQueues([]Plan{p})
  rule:=firewallRules(plans)
- if !strings.Contains(rule,"meta mark 0x72000001")||!strings.Contains(rule,"queue num 2400 bypass")||strings.Contains(rule,"udp dport") {
+ if !strings.Contains(rule,"meta mark 0x22000001")||!strings.Contains(rule,"queue num 2400 bypass")||strings.Contains(rule,"udp dport") {
   t.Fatalf("unexpected nftables rules: %s",rule)
  }
  args,err:=strategyArgs(plans[0])

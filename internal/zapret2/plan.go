@@ -61,7 +61,9 @@ func AssignQueues(plans []Plan) ([]Plan,error) {
   ports[out[i].Options.Port]=true
   tags[out[i].Tag]=true
   out[i].Queue=uint16(2400+i)
-  out[i].Mark=0x72000000|uint32(i+1)
+  // nfqws2 adds its default 0x40000000 mark to its own synthesized
+  // packets. Keep that bit CLEAR in source route marks to prevent loops.
+  out[i].Mark=0x22000000|uint32(i+1)
  }
  return out,nil
 }
