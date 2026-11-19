@@ -11,9 +11,9 @@ const (
 	DefaultDomainActivityRetentionSeconds = 300
 	MinDomainActivityRetentionSeconds     = 10
 	MaxDomainActivityRetentionSeconds     = 86400
-	maxTrackedDomainActivity             = 3000
-	maxVisibleDomainActivity             = 300
-	maxVisibleDomainActivityPerClient    = 30
+	maxTrackedDomainActivity              = 3000
+	maxVisibleDomainActivity              = 300
+	maxVisibleDomainActivityPerClient     = 30
 )
 
 // History is bounded and private to the panel process: it is not written

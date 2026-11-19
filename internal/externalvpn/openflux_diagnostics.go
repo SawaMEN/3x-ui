@@ -10,8 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"golang.org/x/net/proxy"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 // OpenFluxDiagnosticStep is a bounded observation, not a prediction about

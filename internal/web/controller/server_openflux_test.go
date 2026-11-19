@@ -133,7 +133,10 @@ func TestOpenFluxDiagnosticResultRestrictedToJobOwner(t *testing.T) {
 		delete(openFluxDiagnosticJobs.entries, runID)
 		openFluxDiagnosticJobs.Unlock()
 	})
-	for _, tc := range []struct{ owner int; permitted bool }{
+	for _, tc := range []struct {
+		owner     int
+		permitted bool
+	}{
 		{15, true}, {16, false},
 	} {
 		engine := gin.New()
@@ -146,7 +149,7 @@ func TestOpenFluxDiagnosticResultRestrictedToJobOwner(t *testing.T) {
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/server/openflux/diagnose-status?runId="+runID, nil))
 		body := w.Body.String()
-		if !strings.Contains(body, `"success":`+map[bool]string{true:"true", false:"false"}[tc.permitted]) {
+		if !strings.Contains(body, `"success":`+map[bool]string{true: "true", false: "false"}[tc.permitted]) {
 			t.Fatalf("owner=%d response=%s", tc.owner, body)
 		}
 		if tc.permitted && !strings.Contains(body, runID) {
