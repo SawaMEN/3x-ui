@@ -330,7 +330,7 @@ it('updates OpenFlux to the available release from the component card', async ()
 it('shows a short useful description in every component card, including on mobile', async () => {
   await openComponents();
   const cards = document.querySelectorAll('.system-component-card');
-  expect(cards.length).toBe(11);
+  expect(cards.length).toBe(12); // Includes the optional official Zapret2 component.
   for (const card of cards) {
     const copy = card.querySelector('.system-component-description');
     expect(copy?.textContent?.length).toBeGreaterThan(25);
