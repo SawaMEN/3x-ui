@@ -66,7 +66,7 @@ export function PingtunnelFields() {
                 socks5: true,
                 password,
                 encrypt: encrypt || 'chacha20',
-                congestion: congestion === 'none' ? '' : 'bb',
+                congestion: congestion === 'none' ? 'none' : 'bb',
               },
               null,
               2,
