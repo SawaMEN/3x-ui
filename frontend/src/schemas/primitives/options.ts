@@ -1,7 +1,10 @@
 export const UTLS_FINGERPRINT = Object.freeze({
   UTLS_CHROME: 'chrome',
+  UTLS_CHROME_155: 'hellochrome_155',
   UTLS_FIREFOX: 'firefox',
+  UTLS_FIREFOX_148: 'hellofirefox_148',
   UTLS_SAFARI: 'safari',
+  UTLS_SAFARI_26_3: 'hellosafari_26_3',
   UTLS_IOS: 'ios',
   UTLS_android: 'android',
   UTLS_EDGE: 'edge',
