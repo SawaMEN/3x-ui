@@ -22,6 +22,7 @@ const nftTable = "xui_zapret2"
 type instance struct {
  cmd *exec.Cmd
  done chan struct{}
+ cancel context.CancelFunc
 }
 var runtimeState struct {
  sync.Mutex
@@ -119,6 +120,7 @@ func installRules(ctx context.Context,plans []Plan) error {
 
 func stopInstance(p *instance) {
  if p==nil || p.cmd==nil || p.cmd.Process==nil{return}
+ defer p.cancel()
  _=p.cmd.Process.Signal(syscall.SIGTERM)
  select{
  case <-p.done:
@@ -141,17 +143,18 @@ func launch(ctx context.Context,plans []Plan) ([]*instance,error) {
   check:=exec.CommandContext(ctx,BinaryPath(),append([]string{"--dry-run"},args...)...)
   check.Dir=Directory()
   if data,err:=check.CombinedOutput();err!=nil {stopAll(out);return nil,fmt.Errorf("invalid zapret2 strategy %q: %w: %s",p.Tag,err,strings.TrimSpace(string(data)))}
-  proc:=exec.Command(BinaryPath(),args...)
+  runCtx,cancel:=context.WithCancel(context.Background())
+  proc:=exec.CommandContext(runCtx,BinaryPath(),args...)
   proc.Dir=Directory()
   logDir:=filepath.Join(Directory(),"logs")
-  if err:=os.MkdirAll(logDir,0700);err!=nil {stopAll(out);return nil,err}
+  if err:=os.MkdirAll(logDir,0700);err!=nil {cancel();stopAll(out);return nil,err}
   log,err:=os.OpenFile(filepath.Join(logDir,fmt.Sprintf("queue-%d.log",p.Queue)),os.O_CREATE|os.O_WRONLY|os.O_APPEND,0600)
-  if err!=nil {stopAll(out);return nil,err}
+  if err!=nil {cancel();stopAll(out);return nil,err}
   proc.Stdout=log;proc.Stderr=log
-  if err:=proc.Start();err!=nil {_=log.Close();stopAll(out);return nil,err}
+  if err:=proc.Start();err!=nil {cancel();_=log.Close();stopAll(out);return nil,err}
   _=log.Close()
-  instance:=&instance{cmd:proc,done:make(chan struct{})}
-  go func(){_ = proc.Wait();close(instance.done)}()
+  instance:=&instance{cmd:proc,done:make(chan struct{}),cancel:cancel}
+  go func(){_ = proc.Wait();cancel();close(instance.done)}()
   out=append(out,instance)
   // Fail on immediate exits; no rule should be applied to a dead queue.
   select{
