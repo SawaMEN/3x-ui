@@ -91,7 +91,7 @@ func ValidateCalibration(c *Calibration) error {
 		key:=s.Kind+"_"+s.IP
 		if seen[key]{return fmt.Errorf("duplicate calibrated strategy for %s",key)}
 		seen[key]=true
-		if s.Total!=len(c.Domains) || s.Passed<1 || s.Passed>s.Total {return fmt.Errorf("invalid calibration coverage for %s",key)}
+		if s.Total!=len(c.Domains) || s.Passed<1 || s.Passed>s.Total || s.Passed*3<s.Total*2 {return fmt.Errorf("insufficient or invalid calibration coverage for %s",key)}
 		if err:=validateStrategyArgs(s.Args);err!=nil{return err}
 	}
 	return nil
