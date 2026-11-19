@@ -1,7 +1,8 @@
 package zapret2
 
 import (
- "bytes"
+ "net"
+ "sync"
  "context"
  "fmt"
  "os"
@@ -24,7 +25,7 @@ func ValidateDiagnosticsDomains(domains []string) error {
  if len(domains)==0 || len(domains)>12 {return fmt.Errorf("provide 1..12 public hostnames for strategy diagnostics")}
  for _,domain:=range domains{
   domain=strings.TrimSpace(domain)
-  if !diagnosticsHost.MatchString(domain)||!strings.Contains(domain,".")||
+  if !diagnosticsHost.MatchString(domain)||!strings.Contains(domain,".")||net.ParseIP(domain)!=nil||
    strings.EqualFold(domain,"localhost")||strings.HasSuffix(strings.ToLower(domain),".local")||
    strings.HasSuffix(strings.ToLower(domain),".internal") {
     return fmt.Errorf("invalid public test domain %q",domain)
@@ -33,7 +34,11 @@ func ValidateDiagnosticsDomains(domains []string) error {
  return nil
 }
 
+var diagnosticsMu sync.Mutex
+
 func RunBlockcheck(ctx context.Context,domains []string) (DiagnosticResult,error) {
+ if !diagnosticsMu.TryLock() {return DiagnosticResult{},fmt.Errorf("a zapret2 diagnostic is already running")}
+ defer diagnosticsMu.Unlock()
  if !Installed(){return DiagnosticResult{},fmt.Errorf("install the official zapret2 component first")}
  if os.Geteuid()!=0{return DiagnosticResult{},fmt.Errorf("blockcheck2 requires root")}
  if err:=ValidateDiagnosticsDomains(domains);err!=nil{return DiagnosticResult{},err}
@@ -102,14 +107,31 @@ func RunBlockcheck(ctx context.Context,domains []string) (DiagnosticResult,error
  return result,nil
 }
 
-type cappedLog struct{bytes.Buffer}
-func (w *cappedLog) Write(p []byte)(int,error){
+// blockcheck emits its useful SUMMARY at the END of a potentially verbose
+// scan. Retain the bounded tail, not the beginning. Stdout and stderr can be
+// copied concurrently by os/exec, so writes must be serialized.
+type cappedLog struct {
+ mu sync.Mutex
+ data []byte
+}
+func (w *cappedLog) Write(p []byte)(int,error) {
+ w.mu.Lock()
+ defer w.mu.Unlock()
  const capBytes=1<<20
- n:=len(p)
- if w.Len()<capBytes {
-  remain:=capBytes-w.Len()
-  if remain>len(p){remain=len(p)}
-  _,_=w.Buffer.Write(p[:remain])
+ original:=len(p)
+ if original>=capBytes {
+  w.data=append(w.data[:0],p[original-capBytes:]...)
+  return original,nil
  }
- return n,nil
+ if over:=len(w.data)+original-capBytes;over>0 {
+  copy(w.data,w.data[over:])
+  w.data=w.data[:len(w.data)-over]
+ }
+ w.data=append(w.data,p...)
+ return original,nil
+}
+func (w *cappedLog) String()string{
+ w.mu.Lock()
+ defer w.mu.Unlock()
+ return string(w.data)
 }
