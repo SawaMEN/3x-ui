@@ -34,7 +34,7 @@ func ExportPingtunnelLink(inst Instance, server, remark string) (string, error) 
 		return "", err
 	}
 	server = strings.TrimSpace(strings.Trim(server, "[]"))
-	if server == "" || strings.ContainsAny(server, "/:@?# \\t\\r\\n") {
+	if server == "" || strings.ContainsAny(server, "/:@?# \t\r\n") {
 		return "", fmt.Errorf("Pingtunnel public server must be a hostname or IP without a port")
 	}
 	if ip := net.ParseIP(server); ip != nil && ip.IsUnspecified() {
