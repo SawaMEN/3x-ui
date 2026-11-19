@@ -1,1 +1,0 @@
-Apply the canonical golangci-lint fmt formatter to Go files in main once. 2026-11-19
