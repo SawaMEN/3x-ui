@@ -287,7 +287,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
 
   const loadDependencyUpdates = useCallback(async () => {
-    const [core, sudoku, external, naive, oxidns, dnstt, olcrtc, telemt, zapret2] =
+    const [core, sudoku, external, naive, oxidns, dnstt, olcrtc, zapret2, telemt] =
       await Promise.all([
         HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
           ApiMsg<{ installed?: boolean; version?: string }>
