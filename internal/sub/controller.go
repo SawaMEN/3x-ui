@@ -583,7 +583,7 @@ func (a *SUBController) subs(c *gin.Context) {
 		a.recordSubscriptionFetch(c)
 		return
 	}
-	if !a.formatAllowed(c, "links") {
+	if format != "standalone" && !a.formatAllowed(c, "links") {
 		c.Status(http.StatusNotFound)
 		return
 	}
