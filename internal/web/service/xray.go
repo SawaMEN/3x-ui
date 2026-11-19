@@ -433,6 +433,9 @@ func (s *CoreService) getXrayConfigWithTemplate(templateConfig string) (*xray.Co
 	if err := transformAdditionalOutbounds(xrayConfig); err != nil {
 		return nil, err
 	}
+	if err := injectXrayZapret2(xrayConfig); err != nil {
+		return nil, err
+	}
 	return xrayConfig, nil
 }
 
