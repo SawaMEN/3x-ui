@@ -10,8 +10,11 @@ export type TlsVersion = z.infer<typeof TlsVersionSchema>;
 // security/reality.ts via re-import.
 export const UtlsFingerprintSchema = z.enum([
   'chrome',
+  'hellochrome_155',
   'firefox',
+  'hellofirefox_148',
   'safari',
+  'hellosafari_26_3',
   'ios',
   'android',
   'edge',
