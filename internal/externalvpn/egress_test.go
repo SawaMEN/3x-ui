@@ -15,7 +15,7 @@ import (
 
 func TestPingtunnelAndTrustTunnelUseCoreEgress(t *testing.T) {
 	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
-	ping := Instance{ID: 4, Protocol: model.Pingtunnel, Settings: Settings{Key: 123, Forward: "http://old.example:80"}}
+	ping := Instance{ID: 4, Protocol: model.Pingtunnel, Settings: Settings{Password: "strong-secret", Encrypt: "chacha20", Forward: "http://old.example:80"}}
 	args, err := files(ping, "")
 	if err != nil {
 		t.Fatal(err)
@@ -30,6 +30,18 @@ func TestPingtunnelAndTrustTunnelUseCoreEgress(t *testing.T) {
 	}
 	if config["forward"] != "socks5://"+sidecaregress.Address(4) {
 		t.Fatal("pingtunnel bypasses core")
+	}
+	if config["password"] != "strong-secret" || config["encrypt"] != "chacha20" || config["nolog"] != true {
+		t.Fatalf("not a Pingtunnel 3.x server config: %#v", config)
+	}
+	if _, legacy := config["key"]; legacy {
+		t.Fatal("Pingtunnel 3.x rejects legacy key field")
+	}
+	if _, legacy := config["encrypt_key"]; legacy {
+		t.Fatal("Pingtunnel 3.x rejects legacy encrypt_key field")
+	}
+	if config["conntt"] != float64(3000) {
+		t.Fatal("default Pingtunnel connect timeout must be 3000 ms")
 	}
 	trust := Instance{ID: 5, Protocol: model.TrustTunnel, Port: 2443, Settings: Settings{Hostname: "example.test", Clients: []Client{{Email: "alice", Password: "p", Enable: true}}}}
 	args, err = files(trust, "127.0.0.1:19000")
