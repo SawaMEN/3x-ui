@@ -378,8 +378,8 @@ const (
 	cadenceCheckHash      = "@every 2m"
 	// cpu.Percent samples over a full minute (blocking), so a finer cadence just
 	// stacks overlapping samplers; subscribers rate-limit alerts to 1/min anyway.
-	cadenceCPUAlarm       = "@every 1m"
-	cadenceMemoryAlarm    = "@every 1m"
+	cadenceCPUAlarm    = "@every 1m"
+	cadenceMemoryAlarm = "@every 1m"
 )
 
 // startTask schedules background jobs (Xray checks, traffic jobs, cron
