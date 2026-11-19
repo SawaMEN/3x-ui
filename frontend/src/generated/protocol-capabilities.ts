@@ -100,7 +100,7 @@ export const protocolCapabilities = {
     "component": "openflux"
   },
   "pingtunnel": {
-    "clientAttachable": false,
+    "clientAttachable": true,
     "nodeEligible": true,
     "xray": true,
     "upstream": true,
