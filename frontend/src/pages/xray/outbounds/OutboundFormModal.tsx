@@ -461,19 +461,37 @@ export default function OutboundFormModal({
       )) as { success?: boolean; msg?: string; obj?: { bestProfile?: string; summary?: string } };
       if (!response.success)
         throw new Error(response.msg || 'Проверка zapret2 завершилась ошибкой');
-      if (response.obj?.bestProfile) {
+      const selected = response.obj?.bestProfile;
+      if (selected) {
         methods.setValue(
           'settings.profile',
-          response.obj.bestProfile as 'auto' | 'safe' | 'balanced' | 'aggressive',
+          selected as 'auto' | 'safe' | 'balanced' | 'aggressive',
         );
-        messageApi.success('Подобрана стратегия: ' + response.obj.bestProfile);
-      } else {
-        Modal.info({
-          title: 'Диагностика zapret2',
-          content:
-            'Подходящий профиль не определён автоматически. Проверьте результаты в журнале проверки и выберите стратегию вручную.',
-        });
       }
+      Modal.info({
+        title: selected ? 'Проверка zapret2: найден рабочий профиль' : 'Диагностика zapret2',
+        width: 740,
+        content: (
+          <>
+            <Typography.Paragraph>
+              {selected
+                ? `Профиль «${selected}» выбран в настройках подключения. Сохраните изменения, чтобы применить его.`
+                : 'Подтверждённый профиль не найден. Вы можете выбрать стратегию вручную или изменить список проверяемых сайтов.'}
+            </Typography.Paragraph>
+            <pre
+              style={{
+                maxHeight: 360,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
+                fontSize: 12,
+              }}
+            >
+              {response.obj?.summary || 'Проверка не вернула подробного отчёта.'}
+            </pre>
+          </>
+        ),
+      });
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
