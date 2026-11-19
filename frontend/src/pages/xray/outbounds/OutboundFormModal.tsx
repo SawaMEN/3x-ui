@@ -26,6 +26,7 @@ import { formValuesToWirePayload, rawOutboundToFormValues } from '@/lib/xray/out
 import { parseOutboundLink } from '@/lib/xray/outbound-link-parser';
 import { parseNativeOutboundLink } from '@/lib/xray/native-outbound-link-parser';
 import { outboundBasicConversionLoss } from '@/lib/xray/outbound-loss-check';
+import type { Zapret2Calibration } from '@/schemas/protocols/outbound/zapret2';
 import { XMUX_FRESH_DEFAULTS } from '@/schemas/protocols/stream/xhttp';
 import {
   OutboundFormBaseSchema,
@@ -122,6 +123,11 @@ export default function OutboundFormModal({
   const openFluxInstalled = useOpenFluxInstalled(open);
   const [zapret2Installed, setZapret2Installed] = useState(false);
   const [zapret2Diagnosing, setZapret2Diagnosing] = useState(false);
+  const [zapret2ScanLevel, setZapret2ScanLevel] = useState<'quick' | 'standard' | 'force'>(
+    'standard',
+  );
+  const [zapret2Repeats, setZapret2Repeats] = useState(2);
+  const [zapret2IPv6, setZapret2IPv6] = useState(false);
   useEffect(() => {
     if (!open) return;
     let disposed = false;
@@ -446,48 +452,93 @@ export default function OutboundFormModal({
   }
 
   async function diagnoseZapret2(): Promise<void> {
-    const raw = methods.getValues('settings') as { testDomains?: string[] };
+    const raw = methods.getValues('settings') as {
+      testDomains?: string[];
+      udp?: boolean;
+    };
     const domains = (raw.testDomains ?? []).map((s) => s.trim()).filter(Boolean);
     if (domains.length === 0) {
       messageApi.warning('Укажите хотя бы один сайт для автоматической проверки');
+      return;
+    }
+    if (domains.length > 12) {
+      messageApi.warning('Для проверки можно указать не более 12 сайтов');
       return;
     }
     setZapret2Diagnosing(true);
     try {
       const response = (await HttpUtil.post(
         '/panel/api/setting/zapret2/diagnose',
-        { domains },
-        { timeout: 510000, headers: { 'Content-Type': 'application/json' } },
-      )) as { success?: boolean; msg?: string; obj?: { bestProfile?: string; summary?: string } };
-      if (!response.success)
-        throw new Error(response.msg || 'Проверка zapret2 завершилась ошибкой');
-      const selected = response.obj?.bestProfile;
-      if (selected) {
-        methods.setValue(
-          'settings.profile',
-          selected as 'auto' | 'safe' | 'balanced' | 'aggressive',
-        );
+        {
+          domains,
+          scanLevel: zapret2ScanLevel,
+          repeats: zapret2Repeats,
+          checkQuic: raw.udp === true,
+          checkIpv6: zapret2IPv6,
+        },
+        { timeout: 1860000, headers: { 'Content-Type': 'application/json' } },
+      )) as {
+        success?: boolean;
+        msg?: string;
+        obj?: {
+          summary?: string;
+          warnings?: string[];
+          calibration?: Zapret2Calibration;
+          durationSeconds?: number;
+        };
+      };
+      if (!response.success) throw new Error(response.msg || 'Проверка zapret2 завершилась ошибкой');
+      const result = response.obj;
+      const calibration = result?.calibration;
+      if (calibration) {
+        methods.setValue('settings.profile', 'auto', { shouldDirty: true });
+        methods.setValue('settings.calibration', calibration, { shouldDirty: true });
       }
+      const coverage = calibration?.selected
+        .map(
+          (entry) =>
+            `${entry.kind.toUpperCase()} / IPv${entry.ip}: ${entry.passed}/${entry.total} сайтов — ${entry.args.join(' ')}`,
+        )
+        .join('\n');
       Modal.info({
-        title: selected ? 'Проверка zapret2: найден рабочий профиль' : 'Диагностика zapret2',
-        width: 740,
+        title: calibration ? 'Zapret2: стратегии подобраны' : 'Zapret2: проверка завершена',
+        width: 780,
         content: (
           <>
             <Typography.Paragraph>
-              {selected
-                ? `Профиль «${selected}» выбран в настройках подключения. Сохраните изменения, чтобы применить его.`
-                : 'Подтверждённый профиль не найден. Вы можете выбрать стратегию вручную или изменить список проверяемых сайтов.'}
+              {calibration
+                ? 'Точные проверенные параметры сохранены в форме этого outbound. Нажмите «Сохранить», чтобы применить их только к выбранному маршруту.'
+                : 'Надёжная стратегия не найдена. Текущие настройки не изменены; проверьте отчёт и при необходимости повторите сканирование.'}
             </Typography.Paragraph>
+            {coverage && (
+              <pre
+                style={{
+                  maxHeight: 190,
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  overflowWrap: 'anywhere',
+                  fontSize: 12,
+                }}
+              >
+                {coverage}
+              </pre>
+            )}
+            {(result?.warnings ?? []).map((warning) => (
+              <Typography.Paragraph key={warning} type="warning">
+                {warning}
+              </Typography.Paragraph>
+            ))}
+            <Typography.Text strong>Отчёт blockcheck2</Typography.Text>
             <pre
               style={{
-                maxHeight: 360,
+                maxHeight: 320,
                 overflow: 'auto',
                 whiteSpace: 'pre-wrap',
                 overflowWrap: 'anywhere',
                 fontSize: 12,
               }}
             >
-              {response.obj?.summary || 'Проверка не вернула подробного отчёта.'}
+              {result?.summary || 'Отчёт отсутствует'}
             </pre>
           </>
         ),
@@ -732,6 +783,57 @@ export default function OutboundFormModal({
                           >
                             <Switch />
                           </FormField>
+                          <Space wrap style={{ marginBottom: 12 }}>
+                            <span>Глубина проверки</span>
+                            <Select
+                              value={zapret2ScanLevel}
+                              onChange={setZapret2ScanLevel}
+                              style={{ width: 160 }}
+                              options={[
+                                { value: 'quick', label: 'Быстрая' },
+                                { value: 'standard', label: 'Полная' },
+                                { value: 'force', label: 'Максимальная' },
+                              ]}
+                            />
+                            <span>Повторов на тест</span>
+                            <InputNumber
+                              min={1}
+                              max={3}
+                              value={zapret2Repeats}
+                              onChange={(value) => setZapret2Repeats(value ?? 2)}
+                            />
+                            <span>Проверять IPv6</span>
+                            <Switch checked={zapret2IPv6} onChange={setZapret2IPv6} />
+                          </Space>
+                          <Controller
+                            control={methods.control}
+                            name="settings.calibration"
+                            render={({ field }) =>
+                              field.value ? (
+                                <Alert
+                                  type="success"
+                                  showIcon
+                                  title={`Подбор от ${new Date(field.value.testedAt).toLocaleString()}`}
+                                  description={`Проверенные сочетания HTTP / HTTPS / QUIC: ${field.value.selected.length}. Доступно для этого outbound после сохранения.`}
+                                  closable
+                                  onClose={() =>
+                                    methods.setValue('settings.calibration', undefined, {
+                                      shouldDirty: true,
+                                    })
+                                  }
+                                  style={{ marginBottom: 12 }}
+                                />
+                              ) : (
+                                <Alert
+                                  type="warning"
+                                  showIcon
+                                  title="Автоматический подбор ещё не выполнялся"
+                                  description="До проверки используется исходный сбалансированный профиль. Проверка анализирует сеть сервера и временно приостанавливает управляемые zapret2-очереди."
+                                  style={{ marginBottom: 12 }}
+                                />
+                              )
+                            }
+                          />
                           <Button
                             loading={zapret2Diagnosing}
                             disabled={!zapret2Installed}
