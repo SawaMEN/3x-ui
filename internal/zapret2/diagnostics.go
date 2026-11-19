@@ -69,14 +69,30 @@ func RunBlockcheck(ctx context.Context,domains []string) (DiagnosticResult,error
  // Use only success summaries. Do not infer a 'winner' from unsuccessful
  // intermediate attempts. A summary without recognized patterns is unranked.
  if strings.Contains(full,"* SUMMARY") {
-  lowered:=strings.ToLower(summary)
-  switch {
-  case strings.Contains(lowered,"tls_mod=rnd")||strings.Contains(lowered,"rndsni"):
-   result.BestProfile="aggressive"
-  case strings.Contains(lowered,"multidisorder")||strings.Contains(lowered,"tcp_md5"):
-   result.BestProfile="balanced"
-  case strings.Contains(lowered,"multisplit"):
-   result.BestProfile="safe"
+  // Upstream reports successful strategies in SUMMARY (unsuccessful attempts
+  // occur earlier in the log). Match an entire known preset signature rather
+  // than guessing from one word that happens to occur in a different recipe.
+  // If no exact equivalent exists, return the report without a false winner.
+  summaryPart:=summary
+  if i:=strings.Index(summaryPart,"* COVERAGE");i>=0 {
+   summaryPart=summaryPart[i:]
+  } else if i:=strings.Index(summaryPart,"* COMMON");i>=0 {
+   summaryPart=summaryPart[i:]
+  }
+  for _,line:=range strings.Split(summaryPart,"\n"){
+   if strings.Contains(line,"not working")||!strings.Contains(line,"--lua-desync="){continue}
+   switch {
+   case strings.Contains(line,"--lua-desync=fake:blob=fake_default_tls:tcp_md5:tls_mod=rnd,rndsni,dupsid") &&
+      strings.Contains(line,"--lua-desync=multidisorder:pos=1,midsld"):
+      result.BestProfile="aggressive"
+   case strings.Contains(line,"--lua-desync=fake:blob=fake_default_tls:tcp_md5:tcp_seq=-10000") &&
+      strings.Contains(line,"--lua-desync=multidisorder:pos=1,midsld"):
+      result.BestProfile="balanced"
+   case strings.Contains(line,"--lua-desync=multisplit:pos=1") &&
+      !strings.Contains(line,"--lua-desync=fake"):
+      result.BestProfile="safe"
+   }
+   if result.BestProfile!=""{break}
   }
  }
  if err!=nil{
