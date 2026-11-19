@@ -1,14 +1,14 @@
 package controller
 
 import (
- "encoding/json"
- "fmt"
- "context"
- "time"
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
 
- "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 
- "github.com/SawaMEN/3x-ui/v3/internal/zapret2"
+	"github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 )
 
 func (a *SettingController) zapret2Status(c *gin.Context) {
