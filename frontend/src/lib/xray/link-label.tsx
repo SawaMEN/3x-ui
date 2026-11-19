@@ -36,6 +36,9 @@ const PROTOCOL_LABELS: Record<string, string> = {
   mierus: 'Mieru',
   sudoku: 'Sudoku',
   vetroff: 'VetroffProxy',
+  pingtunnel: 'Pingtunnel',
+  openflux: 'OpenFlux',
+  fptn: 'FPTN',
 };
 
 const PROTOCOL_COLORS: Record<string, string> = {
@@ -54,6 +57,9 @@ const PROTOCOL_COLORS: Record<string, string> = {
   Mieru: 'purple',
   Sudoku: 'gold',
   VetroffProxy: 'cyan',
+  Pingtunnel: 'orange',
+  OpenFlux: 'blue',
+  FPTN: 'green',
 };
 
 const SECURITY_COLORS: Record<string, string> = {
@@ -223,6 +229,10 @@ export function parseLinkParts(link: string): LinkParts | null {
       /* not URL-shaped, fall back to protocol only */
     }
     if (scheme === 'tg') security = 'FakeTLS';
+    if (scheme === 'pingtunnel') {
+      network = 'ICMP';
+      security = 'AEAD';
+    }
     if (scheme === 'tuic') {
       network = 'quic';
       security = 'TLS';

@@ -42,31 +42,39 @@ func prepareExternalVPN(ib *model.Inbound, previous string) error {
 		ib.Port = 0
 		var old externalvpn.Settings
 		_ = json.Unmarshal([]byte(previous), &old)
-		key, _ := raw["key"].(float64)
-		if key == 0 {
-			if old.Key == 0 {
-				generated, err := externalvpn.GeneratePingtunnelKey()
-				if err != nil {
-					return err
+		// Pingtunnel 3.x removed numeric key/encrypt_key and always uses
+		// password-based AEAD. Preserve a sufficiently long legacy secret
+		// where possible, otherwise provision a cryptographic random secret.
+		password, _ := raw["password"].(string)
+		if password == "" {
+			// On first creation, older clients may still submit encryptKey.
+			// Migrating that supplied value avoids unnecessary password rotation.
+			currentLegacy, _ := raw["encryptKey"].(string)
+			for _, candidate := range []string{old.Password, old.EncryptKey, currentLegacy} {
+				if len(candidate) >= 8 {
+					password = candidate
+					break
 				}
-				old.Key = generated
 			}
-			raw["key"] = old.Key
-		}
-		if raw["encrypt"] == nil {
-			raw["encrypt"] = "chacha20"
-		}
-		secret, _ := raw["encryptKey"].(string)
-		if secret == "" && raw["encrypt"] != "" {
-			secret = old.EncryptKey
-			if secret == "" {
+			if password == "" {
 				generated, err := externalvpn.GenerateSecret()
 				if err != nil {
 					return err
 				}
-				secret = generated
+				password = generated
 			}
-			raw["encryptKey"] = secret
+			raw["password"] = password
+		}
+		delete(raw, "key")
+		delete(raw, "encryptKey")
+		if raw["encrypt"] == nil || raw["encrypt"] == "" {
+			raw["encrypt"] = "chacha20"
+		}
+		if raw["congestion"] == nil {
+			raw["congestion"] = "bb"
+		}
+		if raw["connectTimeout"] == nil || raw["connectTimeout"] == float64(0) {
+			raw["connectTimeout"] = 3000
 		}
 	} else {
 		if raw["hostname"] == nil || raw["hostname"] == "" {

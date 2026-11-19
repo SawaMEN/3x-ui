@@ -213,7 +213,23 @@ func files(inst Instance, metricsAddr string) ([]string, error) {
 	}
 	if inst.Protocol == model.Pingtunnel {
 		path := filepath.Join(folder, "server.json")
-		data, err := json.Marshal(map[string]any{"type": "server", "key": inst.Settings.Key, "encrypt": inst.Settings.Encrypt, "encrypt_key": inst.Settings.EncryptKey, "icmp_listen": defaultListen(inst.Listen), "maxconn": inst.Settings.MaxConn, "conntt": inst.Settings.ConnectTimeout, "forward": "socks5://" + sidecaregress.Address(inst.ID), "nolog": 1})
+		encrypt := inst.Settings.Encrypt
+		if encrypt == "" {
+			encrypt = "chacha20"
+		}
+		timeout := inst.Settings.ConnectTimeout
+		if timeout == 0 {
+			timeout = 3000
+		}
+		// Pingtunnel v3 rejects legacy key/encrypt_key fields. Its managed
+		// egress must always go through the panel's sidecar SOCKS5 proxy.
+		data, err := json.Marshal(map[string]any{
+			"type": "server", "password": inst.PingtunnelPassword(),
+			"encrypt": encrypt, "icmp_listen": defaultListen(inst.Listen),
+			"maxconn": inst.Settings.MaxConn, "conntt": timeout,
+			"forward": "socks5://" + sidecaregress.Address(inst.ID),
+			"nolog": true,
+		})
 		if err != nil {
 			return nil, err
 		}

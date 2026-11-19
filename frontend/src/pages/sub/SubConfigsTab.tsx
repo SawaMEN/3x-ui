@@ -11,6 +11,7 @@ import {
 } from '@/lib/xray/inbound-link';
 import { LinkTags, parseLinkParts } from '@/lib/xray/link-label';
 import SubQrButton from './SubQrButton';
+import { isStandaloneLink, pingtunnelClientJSON } from './standaloneProtocols';
 
 interface SubConfigsTabProps {
   links: string[];
@@ -19,6 +20,14 @@ interface SubConfigsTabProps {
 
 export default function SubConfigsTab({ links, onCopy }: SubConfigsTabProps) {
   const { t } = useTranslation();
+  const items = links.map((link, idx) => ({ link, idx }));
+  const regular = items.filter(({ link }) => !isStandaloneLink(link));
+  const standalone = items.filter(({ link }) => isStandaloneLink(link));
+
+  const groups = [
+    { title: t('subscription.coreProtocols'), items: regular },
+    { title: t('subscription.standaloneProtocols'), items: standalone },
+  ].filter((group) => group.items.length > 0);
 
   return (
     <div className="sub-rows">
@@ -30,52 +39,71 @@ export default function SubConfigsTab({ links, onCopy }: SubConfigsTabProps) {
           {t('subscription.copyAllConfigs')}
         </Button>
       </div>
-      {links.map((link, idx) => {
-        const parts = parseLinkParts(link);
-        const rowTitle = parts?.remark || `Link ${idx + 1}`;
-        const isWireguardLink = link.startsWith('wireguard://') || link.startsWith('wg://');
-        const wireguardConfig = isWireguardLink ? wireguardConfigFromLink(link, rowTitle) : '';
-        const amneziawgConfig = link.startsWith('vpn://') ? amneziawgConfigFromLink(link) : '';
-        return (
-          <Fragment key={link}>
-            <div className="sub-row">
-              {parts ? <LinkTags parts={parts} /> : <Tag className="sub-row-tag">LINK</Tag>}
-              <span className="sub-row-title" dir="auto" title={rowTitle}>
-                {rowTitle}
-              </span>
-              <div className="sub-row-actions">
-                <Button
-                  icon={<CopyOutlined aria-hidden />}
-                  onClick={() => onCopy(link)}
-                  aria-label={t('copy')}
-                  title={t('copy')}
-                />
-                {!isPostQuantumLink(link) && (
-                  <SubQrButton value={link} label={rowTitle} onCopy={onCopy} />
+      {groups.map((group) => (
+        <Fragment key={group.title}>
+          <div className="sub-configs-bar">
+            <strong>
+              {group.title} ({group.items.length})
+            </strong>
+          </div>
+          {group.items.map(({ link, idx }) => {
+            const parts = parseLinkParts(link);
+            const rowTitle = parts?.remark || `Link ${idx + 1}`;
+            const isWireguardLink = link.startsWith('wireguard://') || link.startsWith('wg://');
+            const wireguardConfig = isWireguardLink ? wireguardConfigFromLink(link, rowTitle) : '';
+            const amneziawgConfig = link.startsWith('vpn://') ? amneziawgConfigFromLink(link) : '';
+            const pingtunnelConfig = pingtunnelClientJSON(link);
+            return (
+              <Fragment key={link}>
+                <div className="sub-row">
+                  {parts ? <LinkTags parts={parts} /> : <Tag className="sub-row-tag">LINK</Tag>}
+                  <span className="sub-row-title" dir="auto" title={rowTitle}>
+                    {rowTitle}
+                  </span>
+                  <div className="sub-row-actions">
+                    <Button
+                      icon={<CopyOutlined aria-hidden />}
+                      onClick={() => onCopy(link)}
+                      aria-label={t('copy')}
+                      title={t('copy')}
+                    />
+                    {!isPostQuantumLink(link) && (
+                      <SubQrButton value={link} label={rowTitle} onCopy={onCopy} />
+                    )}
+                  </div>
+                </div>
+                {wireguardConfig && (
+                  <ConfigBlock
+                    label={t('pages.clients.wireguardConfig')}
+                    text={wireguardConfig}
+                    fileName={`${rowTitle || 'peer'}.conf`}
+                    qrRemark={rowTitle}
+                    tagColor="cyan"
+                  />
                 )}
-              </div>
-            </div>
-            {wireguardConfig && (
-              <ConfigBlock
-                label={t('pages.clients.wireguardConfig')}
-                text={wireguardConfig}
-                fileName={`${rowTitle || 'peer'}.conf`}
-                qrRemark={rowTitle}
-                tagColor="cyan"
-              />
-            )}
-            {amneziawgConfig && (
-              <ConfigBlock
-                label={t('pages.clients.amneziaWgConfig')}
-                text={amneziawgConfig}
-                fileName={`${rowTitle || 'peer'}.conf`}
-                qrRemark={rowTitle}
-                tagColor="purple"
-              />
-            )}
-          </Fragment>
-        );
-      })}
+                {amneziawgConfig && (
+                  <ConfigBlock
+                    label={t('pages.clients.amneziaWgConfig')}
+                    text={amneziawgConfig}
+                    fileName={`${rowTitle || 'peer'}.conf`}
+                    qrRemark={rowTitle}
+                    tagColor="purple"
+                  />
+                )}
+                {pingtunnelConfig && (
+                  <ConfigBlock
+                    label={t('subscription.pingtunnelClientJSON')}
+                    text={pingtunnelConfig}
+                    fileName="pingtunnel-client.json"
+                    qrRemark={rowTitle}
+                    tagColor="orange"
+                  />
+                )}
+              </Fragment>
+            );
+          })}
+        </Fragment>
+      ))}
     </div>
   );
 }
