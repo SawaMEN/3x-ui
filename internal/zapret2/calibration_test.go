@@ -106,3 +106,33 @@ func TestCalibrationRejectsTamperedCoverage(t *testing.T) {
 	}
 	if err:=ValidateCalibration(c);err==nil{t.Fatal("accepted impossible coverage")}
 }
+
+
+func TestCalibrationExcludesAlreadyUnblockedTargets(t *testing.T) {
+	report := `* SUMMARY
+curl_test_https_tls12 ipv4 example.com : working without bypass
+curl_test_https_tls12 ipv4 example.com : nfqws2 --payload=tls_client_hello --lua-desync=multisplit:pos=1
+curl_test_https_tls12 ipv4 example.org : nfqws2 --payload=tls_client_hello --lua-desync=multisplit:pos=1
+curl_test_https_tls12 ipv4 example.org : nfqws2 --payload=tls_client_hello --lua-desync=multisplit:pos=2
+curl_test_https_tls12 ipv4 example.net : nfqws2 --payload=tls_client_hello --lua-desync=multisplit:pos=2
+* COVERAGE
+2/3 : curl_test_https_tls12 ipv4 : nfqws2 --payload=tls_client_hello --lua-desync=multisplit:pos=1
+2/3 : curl_test_https_tls12 ipv4 : nfqws2 --payload=tls_client_hello --lua-desync=multisplit:pos=2
+`
+	c,err:=ParseCalibrationSummary(report,[]string{"example.com","example.org","example.net"},"force")
+	if err!=nil{t.Fatal(err)}
+	s:=c.Selected[0]
+	if s.Passed!=2||s.Total!=2||strings.Join(s.Args," ")!="--payload=tls_client_hello --lua-desync=multisplit:pos=2" {
+		t.Fatalf("did not choose recipe covering both blocked targets: %+v",s)
+	}
+}
+
+func TestCalibrationDoesNotPretendToBypassAlreadyAccessibleSites(t *testing.T) {
+	report:=`* SUMMARY
+curl_test_https_tls12 ipv4 example.com : working without bypass
+curl_test_https_tls12 ipv4 example.com : nfqws2 --payload=tls_client_hello --lua-desync=multisplit:pos=1
+`
+	if _,err:=ParseCalibrationSummary(report,[]string{"example.com"},"force");err==nil{
+		t.Fatal("reported a bypass strategy for an unblocked site")
+	}
+}
