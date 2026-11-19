@@ -180,7 +180,7 @@ func unpackArchive(path,destination string) error {
   switch hdr.Typeflag {
   case tar.TypeDir:
    if err:=os.MkdirAll(full,0755);err!=nil{return err}
-  case tar.TypeReg,tar.TypeRegA:
+  case tar.TypeReg:
    if hdr.Size<0 || hdr.Size>maxArchiveBytes {return fmt.Errorf("invalid zapret2 member size")}
    if err:=os.MkdirAll(filepath.Dir(full),0755);err!=nil{return err}
    mode:=os.FileMode(hdr.Mode)&0755
