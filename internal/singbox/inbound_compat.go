@@ -76,7 +76,7 @@ func translateInboundCompatibility(out, raw map[string]any) error {
 	if err := translateOutboundSockopt(out, listenStream, tag); err != nil {
 		return err
 	}
-	if err := translateGRPCTransportCompatibility(out, stream, tag); err != nil {
+	if err := translateGRPCTransportCompatibility(out, stream, tag, "inbound"); err != nil {
 		return err
 	}
 	return nil

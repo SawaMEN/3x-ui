@@ -579,6 +579,17 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 
 		translated, err := s.translateInbound(raw)
 		if err != nil {
+			if len(editorOnly) > 0 && editorOnly[0] {
+				// An Xray-only transport (such as gRPC multiMode) must not
+				// prevent opening the native routing editor. Exclude this
+				// incompatible listener from the preview and report why,
+				// while retaining strict validation for runtime publication.
+				if snapshot != nil {
+					snapshot.connectionWarnings = append(snapshot.connectionWarnings,
+						fmt.Sprintf("inbound %q is excluded from the routing preview: %v", inbound.Tag, err))
+				}
+				continue
+			}
 			unsupported = append(unsupported, fmt.Sprintf("%s: %v", inbound.Tag, err))
 			continue
 		}

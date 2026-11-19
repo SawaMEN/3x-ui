@@ -597,3 +597,70 @@ func TestSingBoxUnconfiguredTUICAllowsEditorAndPanelTLSFallback(t *testing.T) {
 		t.Fatal("TUIC listener missing after resolving panel TLS")
 	}
 }
+
+func TestSingBoxGRPCMultiModeDoesNotBlockRoutingEditor(t *testing.T) {
+	setupBulkDB(t)
+	ib := seedHiddifyConfigInbound(t, model.VLESS,
+		`{"decryption":"none"}`,
+		`{"network":"grpc","grpcSettings":{"serviceName":"service","multiMode":true}}`)
+
+	snapshot, err := loadNativeConfigSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	core := NativeCore(CoreTypeSingBox)
+	if _, err := core.generateNativeConfig(snapshot); err == nil ||
+		!strings.Contains(err.Error(), "multiMode") ||
+		!strings.Contains(err.Error(), "inbound") ||
+		!strings.Contains(err.Error(), ib.Tag) {
+		t.Fatalf("runtime must reject Xray-only gRPC multiMode on the inbound: %v", err)
+	}
+	before := ib.StreamSettings
+	preview, err := core.generateNativeConfig(snapshot, true)
+	if err != nil {
+		t.Fatalf("incompatible gRPC inbound prevented opening the routing editor: %v", err)
+	}
+	for _, inbound := range preview.Inbounds {
+		if inbound["tag"] == ib.Tag {
+			t.Fatalf("incompatible gRPC inbound leaked into preview: %v", inbound)
+		}
+	}
+	warnings := strings.Join(snapshot.connectionWarnings, "; ")
+	if !strings.Contains(warnings, ib.Tag) || !strings.Contains(warnings, "multiMode") {
+		t.Fatalf("missing actionable warning about incompatible inbound: %s", warnings)
+	}
+	var saved model.Inbound
+	if err := database.GetDB().First(&saved, ib.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if saved.StreamSettings != before {
+		t.Fatalf("routing editor silently changed the stored gRPC transport: %s", saved.StreamSettings)
+	}
+
+	// After the operator disables multiMode on both ends, sing-box can
+	// translate the same inbound without changing its service name.
+	for _, inbound := range snapshot.inbounds {
+		if inbound.Tag != ib.Tag {
+			continue
+		}
+		inbound.StreamSettings = `{"network":"grpc","grpcSettings":{"serviceName":"service","multiMode":false}}`
+	}
+	repaired, err := core.generateNativeConfig(snapshot)
+	if err != nil {
+		t.Fatalf("gRPC inbound with multiMode disabled should translate: %v", err)
+	}
+	found := false
+	for _, inbound := range repaired.Inbounds {
+		if inbound["tag"] != ib.Tag {
+			continue
+		}
+		found = true
+		transport, _ := inbound["transport"].(map[string]any)
+		if transport["type"] != "grpc" || transport["service_name"] != "service" {
+			t.Fatalf("native gRPC service name was changed: %v", transport)
+		}
+	}
+	if !found {
+		t.Fatal("corrected gRPC inbound is missing")
+	}
+}

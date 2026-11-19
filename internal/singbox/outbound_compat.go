@@ -112,7 +112,7 @@ func translateTUICOutboundOptions(out map[string]any, settings map[string]any) {
 	}
 }
 
-func translateGRPCTransportCompatibility(out map[string]any, stream map[string]any, tag string) error {
+func translateGRPCTransportCompatibility(out map[string]any, stream map[string]any, tag, direction string) error {
 	transport, ok := out["transport"].(map[string]any)
 	if !ok || !strings.EqualFold(strings.TrimSpace(rawString(transport, "type")), "grpc") {
 		return nil
@@ -122,16 +122,16 @@ func translateGRPCTransportCompatibility(out map[string]any, stream map[string]a
 		return nil
 	}
 	if authority := strings.TrimSpace(rawString(grpc, "authority")); authority != "" {
-		return fmt.Errorf("outbound %q uses Xray gRPC authority %q which sing-box V2Ray gRPC transport cannot represent", tag, authority)
+		return fmt.Errorf("%s %q uses Xray gRPC authority %q which sing-box V2Ray gRPC transport cannot represent", direction, tag, authority)
 	}
 	if userAgent := strings.TrimSpace(rawString(grpc, "user_agent")); userAgent != "" {
-		return fmt.Errorf("outbound %q uses Xray gRPC user_agent which sing-box V2Ray gRPC transport cannot represent", tag)
+		return fmt.Errorf("%s %q uses Xray gRPC user_agent which sing-box V2Ray gRPC transport cannot represent", direction, tag)
 	}
 	if xrayBool(grpc, "multiMode") {
-		return fmt.Errorf("outbound %q enables Xray gRPC multiMode which is not wire-compatible with sing-box gRPC transport", tag)
+		return fmt.Errorf("%s %q enables Xray gRPC multiMode, which is not wire-compatible with sing-box gRPC transport; disable multiMode on both ends or use Xray", direction, tag)
 	}
 	if window := rawInt(grpc, "initial_windows_size"); window > 0 {
-		return fmt.Errorf("outbound %q uses Xray gRPC initial_windows_size=%d which sing-box V2Ray gRPC transport cannot represent", tag, window)
+		return fmt.Errorf("%s %q uses Xray gRPC initial_windows_size=%d which sing-box V2Ray gRPC transport cannot represent", direction, tag, window)
 	}
 	if idle := rawInt(grpc, "idle_timeout"); idle > 0 {
 		if idle < 10 {
@@ -611,7 +611,7 @@ func applyXrayOutboundCompatibility(out map[string]any, raw map[string]any, stre
 	if err := translateOutboundTLSCompatibility(out, stream, tag); err != nil {
 		return err
 	}
-	if err := translateGRPCTransportCompatibility(out, stream, tag); err != nil {
+	if err := translateGRPCTransportCompatibility(out, stream, tag, "outbound"); err != nil {
 		return err
 	}
 	if err := translateSendThrough(out, raw, tag); err != nil {
