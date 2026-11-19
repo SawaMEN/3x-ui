@@ -712,16 +712,7 @@ export default function SingBoxOutboundModal({
                   allowClear
                   placeholder="Стандартный TLS"
                   value={object(tls.utls).enabled ? text(object(tls.utls).fingerprint) : undefined}
-                  options={options([
-                    'chrome',
-                    'firefox',
-                    'safari',
-                    'ios',
-                    'android',
-                    'edge',
-                    'random',
-                    'randomized',
-                  ])}
+                  options={options(nativeFields.definitions.OutboundUTLSOptions.fingerprint.enum)}
                   onChange={(v) => {
                     const next = { ...tls };
                     if (v) next.utls = { enabled: true, fingerprint: v };
