@@ -32,18 +32,28 @@ func parseZapret2Outbounds(rows []map[string]any) ([]map[string]any,[]zapret2.Pl
  if err!=nil{return nil,nil,err}
  index:=make(map[string]zapret2.Plan,len(plans))
  for _,p:=range plans {index[p.Tag]=p}
- translated:=make([]map[string]any,0,len(rows))
+ // The first outbound is Xray's implicit default. Keep every virtual
+ // Anti-DPI outbound after the existing non-zapret2 outbounds, regardless of
+ // the order chosen in the editor.
+ translated:=make([]map[string]any,0,len(rows)+1)
+ virtual:=make([]map[string]any,0,len(plans))
  for _,row:=range rows {
   if !strings.EqualFold(fmt.Sprint(row["protocol"]),"zapret2") {
    translated=append(translated,row)
    continue
   }
   p:=index[fmt.Sprint(row["tag"])]
-  translated=append(translated,map[string]any{
+  virtual=append(virtual,map[string]any{
    "protocol":"socks","tag":p.Tag,
    "settings":map[string]any{"servers":[]any{map[string]any{"address":"127.0.0.1","port":p.Options.Port}}},
   })
  }
+ if len(virtual)>0 && len(translated)==0 {
+  translated=append(translated,map[string]any{
+   "protocol":"freedom","tag":"direct","settings":map[string]any{},
+  })
+ }
+ translated=append(translated,virtual...)
  return translated,plans,nil
 }
 
@@ -115,6 +125,31 @@ func injectSingBoxZapret2(cfg *singbox.Config) error {
   cfg.Route["rules"]=append([]any{map[string]any{
    "inbound":[]string{inTag},"outbound":outTag,
   }},rawRules...)
+ }
+ // sing-box also defaults to the first panel outbound. Never let a
+ // virtual zapret2 route become the implicit fallback for unmatched traffic.
+ if cfg.Route!=nil {
+  for _,p:=range plans {
+   if cfg.Route["final"]==p.Tag {
+    replacement:=""
+    for _,out:=range cfg.Outbounds {
+     tag,_:=out["tag"].(string)
+     if tag=="direct" {replacement="direct";break}
+    }
+    if replacement=="" {
+     for _,out:=range cfg.Outbounds {
+      tag,_:=out["tag"].(string)
+      if tag!=p.Tag && !strings.HasPrefix(tag,zapret2TagPrefix) {
+       replacement=tag
+       break
+      }
+     }
+    }
+    if replacement=="" {return fmt.Errorf("zapret2 %q cannot be the only default outbound",p.Tag)}
+    cfg.Route["final"]=replacement
+    break
+   }
+  }
  }
  cfg.Zapret2Plans=plans
  return nil
