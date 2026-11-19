@@ -63,6 +63,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 	dnsOutboundTags := make(map[string]struct{})
 	var template string
 	var templateErr error
+	fakeDNSConfigured := false
 	if snapshot != nil {
 		template = snapshot.setting("xrayTemplateConfig")
 	} else {
@@ -92,6 +93,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		if xrayCfg == nil {
 			return nil, fmt.Errorf("panel template must be a JSON object")
 		}
+		fakeDNSConfigured = xrayTemplateUsesFakeDNS(xrayCfg)
 		{
 			if err := validatePanelConfigSections(xrayCfg); err != nil {
 				return nil, err
@@ -478,11 +480,25 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		settings["clients"] = clients
 		var sniffRule map[string]any
 		var sniffErr error
-		{
+		if fakeDNSConfigured {
+			// Real FakeDNS IP restoration cannot be represented by sing-box.
+			// Keep it fail-closed instead of silently changing routing.
 			sniffRule, sniffErr = hiddify.TranslateSniffingRule(raw)
+		} else {
+			// The default Xray sniffing list includes FakeDNS even without
+			// a configured FakeDNS backend. Preserve the usable sniffers.
+			sniffRule, sniffErr = hiddify.TranslateSniffingRuleWithoutFakeDNS(raw)
 		}
-
 		if sniffErr != nil {
+			if len(editorOnly) > 0 && editorOnly[0] {
+				// An incompatible inbound must not prevent opening the
+				// configuration editor to repair it. Runtime stays strict.
+				if snapshot != nil {
+					snapshot.connectionWarnings = append(snapshot.connectionWarnings,
+						fmt.Sprintf("inbound %q excluded from routing preview: %v", inbound.Tag, sniffErr))
+				}
+				continue
+			}
 			unsupported = append(unsupported, sniffErr.Error())
 			continue
 		}
@@ -759,6 +775,41 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 	}
 
 	return cfg, nil
+}
+
+// xrayTemplateUsesFakeDNS checks whether Xray has an actual FakeDNS backend.
+// The old inbound-form default adds the FakeDNS sniff token even when no
+// fake-address pool exists. In that case it can be omitted from native sniffers.
+// Explicit FakeDNS pools or DNS server selections must remain fail-closed.
+func xrayTemplateUsesFakeDNS(template map[string]any) bool {
+	switch value := template["fakedns"].(type) {
+	case []any:
+		if len(value) > 0 {
+			return true
+		}
+	case map[string]any:
+		if len(value) > 0 {
+			return true
+		}
+	case nil:
+	default:
+		return true
+	}
+	dns, _ := template["dns"].(map[string]any)
+	servers, _ := dns["servers"].([]any)
+	for _, item := range servers {
+		switch server := item.(type) {
+		case string:
+			if strings.EqualFold(strings.TrimSpace(server), "fakedns") {
+				return true
+			}
+		case map[string]any:
+			if strings.EqualFold(strings.TrimSpace(fmt.Sprint(server["address"])), "fakedns") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Reject malformed sections rather than turning them into empty generated data.
