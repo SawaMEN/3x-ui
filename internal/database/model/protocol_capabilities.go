@@ -38,7 +38,7 @@ var InboundProtocolCapabilities = map[Protocol]InboundProtocolCapability{
 	Mixed:        {ClientAttachable: false, NodeEligible: true, Xray: true, Upstream: true, Native: true, SpeedLimit: true, Component: ""},
 	Tunnel:       {ClientAttachable: false, NodeEligible: true, Xray: true, Upstream: false, Native: false, SpeedLimit: false, Component: ""},
 	Tun:          {ClientAttachable: false, NodeEligible: true, Xray: true, Upstream: true, Native: true, SpeedLimit: false, Component: ""},
-	Pingtunnel:   {ClientAttachable: false, NodeEligible: true, Xray: true, Upstream: true, Native: true, SpeedLimit: false, Component: "pingtunnel"},
+	Pingtunnel:   {ClientAttachable: true, NodeEligible: true, Xray: true, Upstream: true, Native: true, SpeedLimit: false, Component: "pingtunnel"},
 }
 
 func (c InboundProtocolCapability) SupportsCore(kind core.Type) bool {
