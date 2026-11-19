@@ -3851,7 +3851,8 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/setting/zapret2/diagnose',
-        summary: 'Run a limited official blockcheck2 strategy diagnostic against supplied public domains.',
+        summary:
+          'Run a limited official blockcheck2 strategy diagnostic against supplied public domains.',
       },
       {
         method: 'GET',
