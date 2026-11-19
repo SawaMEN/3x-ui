@@ -21,13 +21,14 @@ describe('client inbound picker capabilities', () => {
       'mieru',
       'vk-turn-proxy',
       'sudoku',
+      'pingtunnel', // Subscription-only attachment; the ICMP password is shared.
     ]) {
       expect(isClientAttachableProtocol(protocol), protocol).toBe(true);
     }
   });
 
-  it('excludes listeners without individual client accounts', () => {
-    for (const protocol of ['pingtunnel', 'http', 'mixed', 'tun', 'tunnel']) {
+  it('excludes listeners without subscriber attachments', () => {
+    for (const protocol of ['http', 'mixed', 'tun', 'tunnel']) {
       expect(isClientAttachableProtocol(protocol), protocol).toBe(false);
     }
   });
