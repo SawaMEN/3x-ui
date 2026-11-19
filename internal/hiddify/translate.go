@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	TargetVersion    = "sawamen-b41ccfaf9095-276a8ce87404-mask1-ciphers1-net62-sec1-stream1"
-	TargetRevision   = "b41ccfaf90950a7f8d8074d52e5beda65f817de9"
+	TargetVersion    = "sawamen-b7e32173aeab-d4f283979ce1-mask1-ciphers1-net62-sec1-stream1"
+	TargetRevision   = "b7e32173aeab7f176601a77f88fc2f4787de6da6"
 	StatsQueryMethod = "/v2ray.core.app.stats.command.StatsService/QueryStats"
 )
 
