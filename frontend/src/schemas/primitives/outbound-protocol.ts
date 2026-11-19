@@ -9,6 +9,7 @@ export function isOutboundProtocol(
 }
 
 export const OutboundProtocols = Object.freeze({
+  Zapret2: 'zapret2',
   Freedom: 'freedom',
   Blackhole: 'blackhole',
   DNS: 'dns',
