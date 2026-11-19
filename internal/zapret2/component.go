@@ -167,6 +167,10 @@ func Remove() error {
 }
 
 func unpackArchive(path,destination string) error {
+ const maxExtractedBytes int64 = 256 << 20
+ const maxEntries = 12000
+ var extractedBytes int64
+ var entryCount int
  file,err:=os.Open(path);if err!=nil{return err};defer file.Close()
  gz,err:=gzip.NewReader(file);if err!=nil{return err};defer gz.Close()
  tr:=tar.NewReader(gz)
@@ -174,6 +178,8 @@ func unpackArchive(path,destination string) error {
   hdr,err:=tr.Next()
   if errors.Is(err,io.EOF){break}
   if err!=nil{return err}
+  entryCount++
+  if entryCount>maxEntries {return fmt.Errorf("zapret2 archive contains too many entries")}
   clean:=filepath.Clean(hdr.Name)
   if filepath.IsAbs(clean)||clean==".."||strings.HasPrefix(clean,".."+string(os.PathSeparator)){return fmt.Errorf("unsafe archive path %q",hdr.Name)}
   full:=filepath.Join(destination,clean)
@@ -181,7 +187,8 @@ func unpackArchive(path,destination string) error {
   case tar.TypeDir:
    if err:=os.MkdirAll(full,0755);err!=nil{return err}
   case tar.TypeReg:
-   if hdr.Size<0 || hdr.Size>maxArchiveBytes {return fmt.Errorf("invalid zapret2 member size")}
+   if hdr.Size<0 || hdr.Size>maxArchiveBytes || hdr.Size>maxExtractedBytes-extractedBytes {return fmt.Errorf("zapret2 archive expanded size limit exceeded")}
+   extractedBytes+=hdr.Size
    if err:=os.MkdirAll(filepath.Dir(full),0755);err!=nil{return err}
    mode:=os.FileMode(hdr.Mode)&0755
    if mode==0 {mode=0644}
