@@ -168,7 +168,12 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
 
 const dependencyNeedsAction = (dependency: DependencyStatus) => {
   // Installation remains possible when the version endpoint is unreachable.
-  if (dependency.key === 'vetroff' || dependency.key === 'telemt' || dependency.key === 'olcrtc' || dependency.key === 'zapret2') {
+  if (
+    dependency.key === 'vetroff' ||
+    dependency.key === 'telemt' ||
+    dependency.key === 'olcrtc' ||
+    dependency.key === 'zapret2'
+  ) {
     return !dependency.installed || dependency.updateAvailable;
   }
   if (!dependency.availableVersion) return false;
@@ -275,39 +280,44 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
 
   const loadDependencyUpdates = useCallback(async () => {
-    const [core, sudoku, external, naive, oxidns, dnstt, olcrtc, telemt, zapret2] = await Promise.all([
-      HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
-        ApiMsg<{ installed?: boolean; version?: string }>
-      >,
-      HttpUtil.get('/panel/api/setting/sudoku/status') as Promise<ApiMsg<ExternalVPNBinaryStatus>>,
-      HttpUtil.get('/panel/api/server/externalvpn/status') as Promise<ApiMsg<ExternalVPNStatus>>,
-      HttpUtil.get('/panel/api/naiveproxy/status', undefined, { silent: true }) as Promise<
-        ApiMsg<ExternalVPNBinaryStatus>
-      >,
-      HttpUtil.get('/panel/api/oxidns/status?check=true', undefined, {
-        silent: true,
-        timeout: 26000,
-      }) as Promise<
-        ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
-      >,
-      HttpUtil.get('/panel/api/dnstt/status', undefined, { silent: true }) as Promise<
-        ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
-      >,
-      HttpUtil.get('/panel/api/olcrtc/status', undefined, { silent: true }) as Promise<
-        ApiMsg<OlcRTCStatus>
-      >,
-      HttpUtil.get('/panel/api/setting/zapret2/status', undefined, { silent: true }) as Promise<ApiMsg<ExternalVPNBinaryStatus>>,
-      HttpUtil.get('/panel/api/telemt/status', undefined, { silent: true }) as Promise<
-        ApiMsg<{
-          installed?: boolean;
-          version?: string;
-          latestVersion?: string;
-          updateAvailable?: boolean;
-          supported?: boolean;
-          unsupportedReason?: string;
-        }>
-      >,
-    ]);
+    const [core, sudoku, external, naive, oxidns, dnstt, olcrtc, telemt, zapret2] =
+      await Promise.all([
+        HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
+          ApiMsg<{ installed?: boolean; version?: string }>
+        >,
+        HttpUtil.get('/panel/api/setting/sudoku/status') as Promise<
+          ApiMsg<ExternalVPNBinaryStatus>
+        >,
+        HttpUtil.get('/panel/api/server/externalvpn/status') as Promise<ApiMsg<ExternalVPNStatus>>,
+        HttpUtil.get('/panel/api/naiveproxy/status', undefined, { silent: true }) as Promise<
+          ApiMsg<ExternalVPNBinaryStatus>
+        >,
+        HttpUtil.get('/panel/api/oxidns/status?check=true', undefined, {
+          silent: true,
+          timeout: 26000,
+        }) as Promise<
+          ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
+        >,
+        HttpUtil.get('/panel/api/dnstt/status', undefined, { silent: true }) as Promise<
+          ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
+        >,
+        HttpUtil.get('/panel/api/olcrtc/status', undefined, { silent: true }) as Promise<
+          ApiMsg<OlcRTCStatus>
+        >,
+        HttpUtil.get('/panel/api/setting/zapret2/status', undefined, { silent: true }) as Promise<
+          ApiMsg<ExternalVPNBinaryStatus>
+        >,
+        HttpUtil.get('/panel/api/telemt/status', undefined, { silent: true }) as Promise<
+          ApiMsg<{
+            installed?: boolean;
+            version?: string;
+            latestVersion?: string;
+            updateAvailable?: boolean;
+            supported?: boolean;
+            unsupportedReason?: string;
+          }>
+        >,
+      ]);
     const bundled = ['naiveproxy', 'hysteria2'].map((key) => ({
       key: key as DependencyKey,
       label: key === 'naiveproxy' ? 'NaiveProxy' : 'Hysteria2',
@@ -466,7 +476,9 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
   const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
     switch (dependency.key) {
       case 'zapret2':
-        return (await HttpUtil.post('/panel/api/setting/zapret2/update', undefined, { timeout: 180000 })) as ApiMsg<unknown>;
+        return (await HttpUtil.post('/panel/api/setting/zapret2/update', undefined, {
+          timeout: 180000,
+        })) as ApiMsg<unknown>;
       case 'openflux':
         return await installOpenFlux();
       case 'telemt':
@@ -554,13 +566,13 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
           ? '/panel/api/setting/zapret2/remove'
           : dependency.key === 'telemt'
             ? '/panel/api/telemt/remove'
-          : dependency.key === 'olcrtc'
-            ? '/panel/api/olcrtc/remove'
-            : dependency.key === 'oxidns'
-              ? '/panel/api/oxidns/remove'
-              : dependency.key === 'dnstt'
-                ? '/panel/api/dnstt/remove'
-                : `/panel/api/server/components/remove/${dependency.key}`,
+            : dependency.key === 'olcrtc'
+              ? '/panel/api/olcrtc/remove'
+              : dependency.key === 'oxidns'
+                ? '/panel/api/oxidns/remove'
+                : dependency.key === 'dnstt'
+                  ? '/panel/api/dnstt/remove'
+                  : `/panel/api/server/components/remove/${dependency.key}`,
       )) as ApiMsg<unknown>;
       if (!response?.success)
         throw new Error(response?.msg || `Не удалось удалить ${dependency.label}`);
@@ -969,7 +981,9 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
                             !(isDependencyInstallable(action) && !action.installed)) ||
                           (!action.availableVersion &&
                             !(
-                              (action.key === 'telemt' || action.key === 'olcrtc' || action.key === 'zapret2') &&
+                              (action.key === 'telemt' ||
+                                action.key === 'olcrtc' ||
+                                action.key === 'zapret2') &&
                               (!action.installed || action.updateAvailable)
                             )) ||
                           dependencyBusy !== null ||
