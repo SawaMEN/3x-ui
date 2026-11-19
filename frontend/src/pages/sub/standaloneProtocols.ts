@@ -2,8 +2,16 @@
 // Xray or sing-box connection profiles. Keep this set aligned with
 // internal/sub/standalone_links.go.
 const standaloneSchemes = new Set([
-  'pingtunnel', 'fptn', 'openflux', 'vetroff', 'tt', 'sudoku', 'tg',
-  'naive', 'naive+https', 'naive+quic',
+  'pingtunnel',
+  'fptn',
+  'openflux',
+  'vetroff',
+  'tt',
+  'sudoku',
+  'tg',
+  'naive',
+  'naive+https',
+  'naive+quic',
 ]);
 
 export function isStandaloneLink(link: string): boolean {
@@ -32,7 +40,8 @@ export function pingtunnelClientJSON(link: string): string {
       !('password' in config) ||
       typeof config.password !== 'string' ||
       config.password.length < 8
-    ) return '';
+    )
+      return '';
     return JSON.stringify(config, null, 2);
   } catch {
     return '';
