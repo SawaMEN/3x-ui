@@ -27,13 +27,13 @@ require (
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/quic-go/quic-go v0.65.0
-	github.com/refraction-networking/utls v1.8.3-0.20260301010127-aa6edf4b11af
+	github.com/refraction-networking/utls v1.8.3-0.20261108164504-a13c59ffe98b
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/shirou/gopsutil/v4 v4.26.9
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/valyala/fasthttp v1.78.0
 	github.com/xlzd/gotp v0.1.0
-	github.com/xtls/xray-core v1.260327.1-0.20261021115930-1b1647cd9ddf
+	github.com/xtls/xray-core v1.260327.1-0.20261109052709-676eaf66f8f0
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.62.0
@@ -108,7 +108,7 @@ require (
 	github.com/vishvananda/netlink v1.3.1 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	github.com/xtls/reality v0.0.0-20261014101318-83f621788ca8 // indirect
+	github.com/xtls/reality v0.0.0-20261108101329-4bb46b2afd8b // indirect
 	github.com/yuin/gopher-lua v1.1.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect
