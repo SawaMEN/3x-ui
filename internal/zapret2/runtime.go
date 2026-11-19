@@ -53,6 +53,11 @@ func strategyArgs(p Plan) ([]string,error) {
   "--lua-init=@"+filepath.Join(Directory(),"lua","zapret-lib.lua"),
   "--lua-init=@"+filepath.Join(Directory(),"lua","zapret-antidpi.lua"),
  }
+ if opts.Profile=="auto" && opts.Calibration!=nil {
+  extra,err:=calibratedProfiles(opts)
+  if err!=nil{return nil,err}
+  return append(args,extra...),nil
+ }
  if opts.TCP {
   switch opts.Profile {
   case "safe":
@@ -85,6 +90,47 @@ func strategyArgs(p Plan) ([]string,error) {
    "--lua-desync=fake:blob=fake_default_quic:repeats=6")
  }
  return args,nil
+}
+
+// calibratedProfiles builds separate protocol and IP-family nfqws2 groups.
+// A calibration for HTTPS must never be applied to unrelated HTTP or QUIC.
+// Missing groups retain the pre-existing default preset as a safe fallback.
+func calibratedProfiles(opts Options) ([]string,error) {
+ if err:=ValidateCalibration(opts.Calibration);err!=nil{return nil,err}
+ var result []string
+ type proto struct {kind,transport,port,l7 string; enabled bool}
+ protocols:=[]proto{
+  {kind:"https",transport:"tcp",port:"443",l7:"tls",enabled:opts.TCP},
+  {kind:"http",transport:"tcp",port:"80",l7:"http",enabled:opts.TCP},
+  {kind:"quic",transport:"udp",port:"443",l7:"quic",enabled:opts.UDP},
+ }
+ for _,protocol:=range protocols {
+  if !protocol.enabled{continue}
+  for _,ip:=range []string{"4","6"}{
+   selected:=CalibratedArgs(opts.Calibration,protocol.kind,ip)
+   if len(selected)==0 {
+    switch protocol.kind {
+    case "https":
+     selected=[]string{
+      "--payload=tls_client_hello",
+      "--lua-desync=fake:blob=fake_default_tls:tcp_md5:tcp_seq=-10000",
+      "--lua-desync=multidisorder:pos=1,midsld",
+     }
+    case "http":
+     selected=[]string{"--payload=http_req","--lua-desync=fake:blob=fake_default_http:tcp_md5"}
+    case "quic":
+     selected=[]string{"--payload=quic_initial","--lua-desync=fake:blob=fake_default_quic:repeats=6"}
+    }
+   }
+   if err:=validateStrategyArgs(selected);err!=nil{return nil,fmt.Errorf("%s ipv%s: %w",protocol.kind,ip,err)}
+   if len(result)>0{result=append(result,"--new")}
+   family:="ipv4"
+   if ip=="6"{family="ipv6"}
+   result=append(result,"--filter-l3="+family,"--filter-"+protocol.transport+"="+protocol.port,"--filter-l7="+protocol.l7)
+   result=append(result,selected...)
+  }
+ }
+ return result,nil
 }
 
 func firewallRules(plans []Plan) string {
