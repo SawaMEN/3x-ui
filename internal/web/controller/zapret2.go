@@ -22,16 +22,14 @@ func (a *SettingController) zapret2Update(c *gin.Context) {
 }
 
 func (a *SettingController) zapret2Diagnose(c *gin.Context) {
-	var payload struct {
-		Domains []string `json:"domains"`
-	}
+	var payload zapret2.DiagnosticOptions
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		jsonObj(c, nil, err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 8*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 31*time.Minute)
 	defer cancel()
-	result, err := zapret2.RunBlockcheck(ctx, payload.Domains)
+	result, err := zapret2.RunBlockcheck(ctx, payload)
 	jsonObj(c, result, err)
 }
 
