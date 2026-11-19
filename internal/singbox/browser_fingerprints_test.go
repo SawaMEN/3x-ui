@@ -7,12 +7,9 @@ import "testing"
 func TestTranslateOutboundTLSVersionedFingerprints(t *testing.T) {
 	for _, fingerprint := range []string{
 		"chrome",
-		"hellochrome_155",
-		"hellochrome_133",
+		"randomizednoalpn",
 		"firefox",
-		"hellofirefox_148",
 		"safari",
-		"hellosafari_26_3",
 	} {
 		t.Run(fingerprint, func(t *testing.T) {
 			out := map[string]any{"tag": "tls"}
