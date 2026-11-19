@@ -19,7 +19,8 @@ export function pingtunnelClientJSON(link: string): string {
     const raw = link.slice('pingtunnel://'.length).split('#')[0];
     const b64 = raw.replace(/-/g, '+').replace(/_/g, '/');
     const binary = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
-    const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     const config: unknown = JSON.parse(new TextDecoder().decode(bytes));
     if (
       !config ||
