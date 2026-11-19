@@ -263,15 +263,22 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 						}
 					}
 					if strings.EqualFold(fmt.Sprint(ob["protocol"]), "zapret2") {
-                        if !zapret2.Installed() {return nil,fmt.Errorf("zapret2 is not installed: install it in Settings → Components")}
-                        plan,err:=zapret2.Parse(fmt.Sprint(ob["tag"]),ob["settings"])
-                        if err!=nil{return nil,err}
-                        cfg.Zapret2Plans=append(cfg.Zapret2Plans,plan)
-                        cfg.Outbounds=append(cfg.Outbounds,map[string]any{
-                         "type":"socks","tag":plan.Tag,"server":"127.0.0.1","server_port":plan.Options.Port,
-                        })
-                        continue
-                    }
+						if !zapret2.Installed() {
+							return nil, fmt.Errorf("zapret2 is not installed: install it in Settings → Components")
+						}
+						plan, err := zapret2.Parse(fmt.Sprint(ob["tag"]), ob["settings"])
+						if err != nil {
+							return nil, err
+						}
+						cfg.Zapret2Plans = append(cfg.Zapret2Plans, plan)
+						cfg.Outbounds = append(cfg.Outbounds, map[string]any{
+							"type":        "socks",
+							"tag":         plan.Tag,
+							"server":      "127.0.0.1",
+							"server_port": plan.Options.Port,
+						})
+						continue
+					}
 					if externalvpn.IsAdditionalOutbound(ob) {
 						tag, _ := ob["tag"].(string)
 						managedOutboundTags[tag] = true
@@ -796,7 +803,9 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		}
 	}
 
-	if err:=injectSingBoxZapret2(cfg);err!=nil{return nil,err}
+	if err := injectSingBoxZapret2(cfg); err != nil {
+		return nil, err
+	}
 	return cfg, nil
 }
 
