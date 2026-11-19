@@ -8,7 +8,6 @@ export const PingtunnelInboundSettingsSchema = z.object({
   encrypt: z.enum(['chacha20', 'aes256', 'aes128']).catch('chacha20'),
   maxConn: z.number().int().min(0).default(0),
   connectTimeout: z.number().int().min(0).default(3000),
-  forward: z.string().default(''),
   congestion: z.enum(['bb', 'none']).default('bb'),
   // These are subscription attachments only; Pingtunnel still authenticates all
   // clients with a single shared ICMP password, not per-client credentials.
