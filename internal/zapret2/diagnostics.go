@@ -15,11 +15,21 @@ import (
  "time"
 )
 
+type DiagnosticOptions struct {
+ Domains []string `json:"domains"`
+ ScanLevel string `json:"scanLevel"`
+ Repeats int `json:"repeats"`
+ CheckQUIC bool `json:"checkQuic"`
+ CheckIPv6 bool `json:"checkIpv6"`
+}
+
 type DiagnosticResult struct {
- BestProfile string `json:"bestProfile"`
+ BestProfile string `json:"bestProfile,omitempty"`
  Summary string `json:"summary"`
  Domains []string `json:"domains"`
  DurationSeconds float64 `json:"durationSeconds"`
+ Calibration *Calibration `json:"calibration,omitempty"`
+ Warnings []string `json:"warnings,omitempty"`
 }
 var diagnosticsHost = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]{0,251}[a-zA-Z0-9])?$`)
 
@@ -38,7 +48,14 @@ func ValidateDiagnosticsDomains(domains []string) error {
 
 var diagnosticsMu sync.Mutex
 
-func RunBlockcheck(ctx context.Context,domains []string) (result DiagnosticResult,resultErr error) {
+func RunBlockcheck(ctx context.Context,options DiagnosticOptions) (result DiagnosticResult,resultErr error) {
+ domains:=append([]string(nil),options.Domains...)
+ level:=options.ScanLevel
+ if level==""{level="standard"}
+ if level!="quick" && level!="standard" && level!="force"{return DiagnosticResult{},fmt.Errorf("invalid blockcheck scan level %q",level)}
+ repeats:=options.Repeats
+ if repeats==0{repeats=2}
+ if repeats<1||repeats>3{return DiagnosticResult{},fmt.Errorf("repeats must be between 1 and 3")}
  if !diagnosticsMu.TryLock() {return DiagnosticResult{},fmt.Errorf("a zapret2 diagnostic is already running")}
  defer diagnosticsMu.Unlock()
  if !Installed(){return DiagnosticResult{},fmt.Errorf("install the official zapret2 component first")}
@@ -50,7 +67,9 @@ func RunBlockcheck(ctx context.Context,domains []string) (result DiagnosticResul
  defer os.RemoveAll(scratch)
  script:=filepath.Join(Directory(),"blockcheck2.sh")
  if _,err:=os.Stat(script);err!=nil{return DiagnosticResult{},err}
- ctx,cancel:=context.WithTimeout(ctx,8*time.Minute)
+ deadline:=15*time.Minute
+ if level=="force"{deadline=30*time.Minute}
+ ctx,cancel:=context.WithTimeout(ctx,deadline)
  defer cancel()
  // Official blockcheck2 needs anti-DPI handlers disabled during tests.
  // Preserve active VPN traffic by removing only the marked zapret2 rules:
@@ -75,7 +94,11 @@ func RunBlockcheck(ctx context.Context,domains []string) (result DiagnosticResul
   "BATCH=1",
   "TEST=standard",
   "DOMAINS="+strings.Join(domains," "),
-  "IPVS=4",
+  "SCANLEVEL="+level,
+  fmt.Sprintf("REPEATS=%d",repeats),
+  fmt.Sprintf("ENABLE_HTTP3=%d",boolAsInt(options.CheckQUIC)),
+  "IPVS="+diagnosticIPVersions(options.CheckIPv6),
+  "PARALLEL=0",
   "ZAPRET_BASE="+Directory(),
   "ZAPRET_RW="+scratch,
   "NFQWS2="+BinaryPath(),
@@ -90,33 +113,28 @@ func RunBlockcheck(ctx context.Context,domains []string) (result DiagnosticResul
  if pos:=strings.LastIndex(full,"* SUMMARY");pos>=0{summary=full[pos:]}
  if len(summary)>14000{summary=summary[len(summary)-14000:]}
  result=DiagnosticResult{Summary:summary,Domains:domains,DurationSeconds:time.Since(start).Seconds()}
- // Use only success summaries. Do not infer a 'winner' from unsuccessful
- // intermediate attempts. A summary without recognized patterns is unranked.
- if strings.Contains(full,"* SUMMARY") {
-  // Upstream reports successful strategies in SUMMARY (unsuccessful attempts
-  // occur earlier in the log). Match an entire known preset signature rather
-  // than guessing from one word that happens to occur in a different recipe.
-  // If no exact equivalent exists, return the report without a false winner.
-  summaryPart:=summary
-  if i:=strings.Index(summaryPart,"* COVERAGE");i>=0 {
-   summaryPart=summaryPart[i:]
-  } else if i:=strings.Index(summaryPart,"* COMMON");i>=0 {
-   summaryPart=summaryPart[i:]
-  }
-  for _,line:=range strings.Split(summaryPart,"\n"){
-   if strings.Contains(line,"not working")||!strings.Contains(line,"--lua-desync="){continue}
-   switch {
-   case strings.Contains(line,"--lua-desync=fake:blob=fake_default_tls:tcp_md5:tls_mod=rnd,rndsni,dupsid") &&
-      strings.Contains(line,"--lua-desync=multidisorder:pos=1,midsld"):
-      result.BestProfile="aggressive"
-   case strings.Contains(line,"--lua-desync=fake:blob=fake_default_tls:tcp_md5:tcp_seq=-10000") &&
-      strings.Contains(line,"--lua-desync=multidisorder:pos=1,midsld"):
-      result.BestProfile="balanced"
-   case strings.Contains(line,"--lua-desync=multisplit:pos=1") &&
-      !strings.Contains(line,"--lua-desync=fake"):
-      result.BestProfile="safe"
+ // The upstream SUMMARY and COVERAGE sections contain successful exact
+ // options. Do not infer a result from intermediate "working" log lines.
+ calibrated,parseErr:=ParseCalibrationSummary(summary,domains,level)
+ if parseErr!=nil {
+  result.Warnings=append(result.Warnings,parseErr.Error())
+ } else {
+  // Validate all selected arguments against this exact installed binary.
+  // The dry-run checks the complete multi-profile command and avoids
+  // applying an invalid recommendation to the running core.
+  opts:=Options{TCP:true,UDP:options.CheckQUIC,Profile:"auto",Calibration:calibrated}
+  p:=Plan{Tag:"diagnostic",Options:opts,Queue:2400}
+  args,argErr:=strategyArgs(p)
+  if argErr==nil{
+   check:=exec.CommandContext(ctx,BinaryPath(),append([]string{"--dry-run"},args...)...)
+   check.Dir=Directory()
+   if message,checkErr:=check.CombinedOutput();checkErr!=nil{
+    argErr=fmt.Errorf("official nfqws2 rejected calibrated settings: %w: %s",checkErr,strings.TrimSpace(string(message)))
    }
-   if result.BestProfile!=""{break}
+  }
+  if argErr!=nil {result.Warnings=append(result.Warnings,argErr.Error())} else {
+   result.Calibration=calibrated
+   result.BestProfile="auto"
   }
  }
  if err!=nil{
@@ -125,6 +143,12 @@ func RunBlockcheck(ctx context.Context,domains []string) (result DiagnosticResul
  }
  return result,nil
 }
+
+func diagnosticIPVersions(dual bool)string{
+ if dual{return "46"}
+ return "4"
+}
+func boolAsInt(v bool)int{if v{return 1};return 0}
 
 // blockcheck emits its useful SUMMARY at the END of a potentially verbose
 // scan. Retain the bounded tail, not the beginning. Stdout and stderr can be
