@@ -19,7 +19,10 @@ export function PingtunnelFields() {
       <Alert type="info" showIcon description={t('pages.inbounds.form.pingtunnelHint')} />
       <CascadeHint protocol="pingtunnel" />
       <FormField name={['settings', 'password']} label={t('pages.inbounds.form.pingtunnelSecret')}>
-        <Input.Password autoComplete="new-password" placeholder={t('pages.inbounds.form.pingtunnelSecret')} />
+        <Input.Password
+          autoComplete="new-password"
+          placeholder={t('pages.inbounds.form.pingtunnelSecret')}
+        />
       </FormField>
       <FormField name={['settings', 'encrypt']} label={t('pages.inbounds.form.pingtunnelEncrypt')}>
         <Select
