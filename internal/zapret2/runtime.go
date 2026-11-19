@@ -171,7 +171,7 @@ func launch(ctx context.Context,plans []Plan) ([]*instance,error) {
 func replace(ctx context.Context,plans []Plan) error {
  oldPlans:=runtimeState.plans
  oldInstances:=runtimeState.instances
- if reflect.DeepEqual(oldPlans,plans)&&len(oldInstances)==len(plans) {
+ if len(plans)>0 && reflect.DeepEqual(oldPlans,plans)&&len(oldInstances)==len(plans) {
   alive:=true
   for _,p:=range oldInstances{select{case <-p.done:alive=false;default:}}
   if alive{return nil}
@@ -189,13 +189,13 @@ func replace(ctx context.Context,plans []Plan) error {
  fresh,err:=launch(ctx,plans)
  if err!=nil {
   // Restore the previous valid strategy rather than leaving an obsolete queue.
-  _=restore(ctx,oldPlans)
-  return err
+  restoreErr:=restore(ctx,oldPlans)
+  return errors.Join(err,restoreErr)
  }
  if err:=installRules(ctx,plans);err!=nil {
   stopAll(fresh)
-  _=restore(ctx,oldPlans)
-  return err
+  restoreErr:=restore(ctx,oldPlans)
+  return errors.Join(err,restoreErr)
  }
  runtimeState.instances=fresh
  runtimeState.plans=plans
