@@ -14,6 +14,7 @@ import (
  "io"
  "net/http"
  "os"
+ "os/exec"
  "path/filepath"
  "runtime"
  "strings"
@@ -38,6 +39,10 @@ type Status struct {
  UpdateAvailable bool `json:"updateAvailable"`
  Binary string `json:"binary"`
  Source string `json:"source"`
+ Running bool `json:"running"`
+ ActiveOutbounds int `json:"activeOutbounds"`
+ Ready bool `json:"ready"`
+ ReadinessReason string `json:"readinessReason,omitempty"`
 }
 
 type release struct {
@@ -76,6 +81,17 @@ func fetchRelease(ctx context.Context) (release,error) {
 
 func GetStatus(ctx context.Context) (Status,error) {
  status := Status{Installed: Installed(),Supported:supported(),Binary:BinaryPath(),Source:"bol-van/zapret2"}
+ status.Running=Running()
+ status.ActiveOutbounds=ActiveOutbounds()
+ if status.Installed {
+  switch {
+  case os.Geteuid()!=0: status.ReadinessReason="The panel must run as root to configure zapret2 NFQUEUE"
+  default:
+   if _,err:=exec.LookPath("nft");err!=nil {
+    status.ReadinessReason="nftables is not installed; install nft to enable marked NFQUEUE routing"
+   } else {status.Ready=true}
+  }
+ }
  if !status.Supported { status.UnsupportedReason = "zapret2 NFQUEUE requires Linux amd64/arm64" }
  if data,err := os.ReadFile(filepath.Join(Directory(),"version")); err==nil { status.Version=strings.TrimSpace(string(data)) }
  lookupCtx,cancel:=context.WithTimeout(ctx,7*time.Second)
