@@ -38,22 +38,20 @@ func Cleanup(ctx context.Context) (CleanupResult, error) {
 	}
 	defer updateMu.Unlock()
 
-	active, err := cleanupBlockingPackageManager(ctx, "/proc", hasActivePackageKitTransactions)
-	if err != nil {
-		return result, fmt.Errorf("cannot safely check running package managers: %w", err)
-	}
-	if active != "" {
-		return result, fmt.Errorf("package manager %s is running; finish or cancel that update before cleaning its cache", active)
-	}
+	active, checkErr := cleanupBlockingPackageManager(ctx, "/proc", hasActivePackageKitTransactions)
+	// External package updates must not block cleanup of unrelated 3x-ui
+	// caches. Skip only package-manager caches and in-flight downloads.
+	packageCacheSafe := packageCacheCleanupAllowed(active, checkErr, &result)
 
 	cleanupCtx, cancel := context.WithTimeout(ctx, cleanupTimeout)
 	defer cancel()
 	before, beforeOK := availableBytes("/")
 	info := detectDistribution()
 	commands := cleanupCommands(info.manager)
-	if len(commands) == 0 {
-		result.Warnings = append(result.Warnings, "Unsupported package manager; its cache was not cleared.")
-	} else {
+	if packageCacheSafe {
+		if len(commands) == 0 {
+			result.Warnings = append(result.Warnings, "Unsupported package manager; its cache was not cleared.")
+		}
 		for _, args := range commands {
 			if err := cleanupCtx.Err(); err != nil {
 				return result, err
@@ -74,22 +72,24 @@ func Cleanup(ctx context.Context) (CleanupResult, error) {
 	// Package managers leave fragments after interrupted *downloads*. Do not
 	// remove locks, package databases, installed kernels or complete archives.
 	partialLocations := []cleanupLocation{}
-	switch info.manager {
-	case "apt-get":
-		// All regular files left in apt's partial directories are unfinished.
-		partialLocations = []cleanupLocation{
-			{"/var/cache/apt/archives/partial", isAnyFile},
-			{"/var/lib/apt/lists/partial", isAnyFile},
-		}
-	case "pacman":
-		partialLocations = []cleanupLocation{
-			{"/var/cache/pacman/pkg", isPartialDownload},
-			{"/var/lib/pacman/sync", isPartialDownload},
-		}
-	case "dnf", "yum":
-		partialLocations = []cleanupLocation{
-			{"/var/cache/dnf", isPartialDownload},
-			{"/var/cache/yum", isPartialDownload},
+	if packageCacheSafe {
+		switch info.manager {
+		case "apt-get":
+			// All regular files left in apt's partial directories are unfinished.
+			partialLocations = []cleanupLocation{
+				{"/var/cache/apt/archives/partial", isAnyFile},
+				{"/var/lib/apt/lists/partial", isAnyFile},
+			}
+		case "pacman":
+			partialLocations = []cleanupLocation{
+				{"/var/cache/pacman/pkg", isPartialDownload},
+				{"/var/lib/pacman/sync", isPartialDownload},
+			}
+		case "dnf", "yum":
+			partialLocations = []cleanupLocation{
+				{"/var/cache/dnf", isPartialDownload},
+				{"/var/cache/yum", isPartialDownload},
+			}
 		}
 	}
 	for _, location := range partialLocations {
@@ -177,6 +177,22 @@ func cleanupCommands(manager string) [][]string {
 	}
 }
 
+// packageCacheCleanupAllowed is false for any active or unverified package
+// transaction. Independent VPN and system-temp cleanup may still proceed.
+func packageCacheCleanupAllowed(active string, checkErr error, result *CleanupResult) bool {
+	if checkErr != nil {
+		result.Warnings = append(result.Warnings,
+			"Пропущена очистка пакетного кэша и незавершённых загрузок: не удалось проверить фоновые обновления ("+checkErr.Error()+").")
+		return false
+	}
+	if active != "" {
+		result.Warnings = append(result.Warnings,
+			"Пропущена очистка пакетного кэша и незавершённых загрузок: запущен "+active+". Повторите после завершения обновления.")
+		return false
+	}
+	return true
+}
+
 func activePackageManager(procDir string) (string, error) {
 	entries, err := os.ReadDir(procDir)
 	if err != nil {
@@ -199,6 +215,23 @@ func activePackageManager(procDir string) (string, error) {
 			return "", err // fail closed if another process cannot be inspected
 		}
 		name := strings.TrimSpace(string(comm))
+		if !isPackageManagerProcess(name) {
+			continue
+		}
+		// A defunct process retains its comm in /proc but cannot hold any
+		// package-manager locks or continue downloading packages.
+		stat, statErr := os.ReadFile(filepath.Join(procDir, entry.Name(), "stat"))
+		if statErr == nil {
+			state, stateErr := procProcessState(string(stat))
+			if stateErr != nil {
+				return "", fmt.Errorf("inspect package manager %s (PID %d): %w", name, pid, stateErr)
+			}
+			if state == 'Z' || state == 'X' || state == 'x' {
+				continue
+			}
+		} else if !errors.Is(statErr, os.ErrNotExist) {
+			return "", fmt.Errorf("inspect package manager %s (PID %d): %w", name, pid, statErr)
+		}
 		if name == "packagekitd" {
 			// A long-lived PackageKit daemon can be idle. Prefer any actual
 			// package-manager process, regardless of /proc iteration order.
@@ -213,6 +246,16 @@ func activePackageManager(procDir string) (string, error) {
 		return "packagekitd", nil
 	}
 	return "", nil
+}
+
+// procProcessState reads the state after the final ')' of /proc/PID/stat
+// because process names can contain spaces and parentheses.
+func procProcessState(stat string) (byte, error) {
+	closeParen := strings.LastIndexByte(stat, ')')
+	if closeParen < 0 || len(stat) <= closeParen+2 || stat[closeParen+1] != ' ' {
+		return 0, fmt.Errorf("malformed /proc PID stat")
+	}
+	return stat[closeParen+2], nil
 }
 
 // cleanupBlockingPackageManager distinguishes an idle PackageKit service from

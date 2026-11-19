@@ -234,3 +234,75 @@ func TestParsePackageKitTransactionList(t *testing.T) {
 		})
 	}
 }
+
+func TestPackageCacheCleanupAllowed(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		active  string
+		err     error
+		allowed bool
+	}{
+		{name: "idle", allowed: true},
+		{name: "unattended upgrade active", active: "unattended-upgr"},
+		{name: "other package manager active", active: "pacman"},
+		{name: "PackageKit status unknown", err: os.ErrPermission},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := &CleanupResult{}
+			got := packageCacheCleanupAllowed(tc.active, tc.err, result)
+			if got != tc.allowed {
+				t.Fatalf("allowed=%v, want %v", got, tc.allowed)
+			}
+			if (len(result.Warnings) > 0) == tc.allowed {
+				t.Fatalf("wrong warning state: %v", result.Warnings)
+			}
+			if tc.active != "" && !strings.Contains(result.Warnings[0], tc.active) {
+				t.Fatalf("warning does not name the blocking process: %v", result.Warnings)
+			}
+		})
+	}
+}
+
+func TestActivePackageManagerZombieIgnored(t *testing.T) {
+	proc := t.TempDir()
+	pid := filepath.Join(proc, "12345678")
+	if err := os.Mkdir(pid, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pid, "comm"), []byte("unattended-upgr\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stat := filepath.Join(pid, "stat")
+	if err := os.WriteFile(stat, []byte("12345678 (unattended-upgr) Z 1 1 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	active, err := activePackageManager(proc)
+	if err != nil || active != "" {
+		t.Fatalf("zombie package manager should not block cleanup: %q, %v", active, err)
+	}
+	if err := os.WriteFile(stat, []byte("12345678 (unattended-upgr) S 1 1 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	active, err = activePackageManager(proc)
+	if err != nil || active != "unattended-upgr" {
+		t.Fatalf("live package manager must be protected: %q, %v", active, err)
+	}
+}
+
+func TestProcProcessState(t *testing.T) {
+	for _, tc := range []struct {
+		value    string
+		state    byte
+		wantErr  bool
+	}{
+		{value: "42 (unattended-upgr) Z 1 2 3", state: 'Z'},
+		{value: "42 (name with ) bracket) S 1 2 3", state: 'S'},
+		{value: "malformed", wantErr: true},
+		{value: "42 (abc)", wantErr: true},
+	} {
+		state, err := procProcessState(tc.value)
+		if (err != nil) != tc.wantErr || state != tc.state {
+			t.Fatalf("stat %q: state=%q err=%v", tc.value, state, err)
+		}
+	}
+}

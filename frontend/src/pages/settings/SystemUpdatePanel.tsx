@@ -660,12 +660,15 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
       // Do not immediately re-fetch caches that the user just cleared.
       setSystemUpdate(null);
       setSystemUpdateResult(null);
-      messageApi.success(
-        t('pages.settings.swap.cleanupDone', {
-          size: formatCacheSize(result.freedBytes),
-          files: result.removedFiles,
-        }),
-      );
+      const summary = t('pages.settings.swap.cleanupDone', {
+        size: formatCacheSize(result.freedBytes),
+        files: result.removedFiles,
+      });
+      if (result.warnings?.length) {
+        messageApi.warning('Очистка выполнена частично. Подробности показаны ниже.');
+      } else {
+        messageApi.success(summary);
+      }
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
