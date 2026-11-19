@@ -134,3 +134,103 @@ func TestDetectRunningPackageManager(t *testing.T) {
 		t.Fatalf("expected no package manager, got %q, %v", got, err)
 	}
 }
+
+func TestActivePackageManagerPrefersRealManagerOverPackageKit(t *testing.T) {
+	proc := t.TempDir()
+	for pid, name := range map[string]string{
+		"12345678": "packagekitd",
+		"12345679": "pacman",
+	} {
+		path := filepath.Join(proc, pid)
+		if err := os.Mkdir(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "comm"), []byte(name+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	active, err := activePackageManager(proc)
+	if err != nil || active != "pacman" {
+		t.Fatalf("active=%q, err=%v; must not ignore real pacman updates", active, err)
+	}
+}
+
+func TestCleanupBlockingPackageManagerPackageKit(t *testing.T) {
+	proc := t.TempDir()
+	path := filepath.Join(proc, "12345678")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "comm"), []byte("packagekitd\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name       string
+		busy       bool
+		checkError error
+		want       string
+		wantError  bool
+	}{
+		{name: "idle daemon does not block cleanup"},
+		{name: "active transaction blocks cleanup", busy: true, want: "packagekitd"},
+		{name: "D-Bus error fails closed", checkError: os.ErrPermission, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checked := false
+			active, err := cleanupBlockingPackageManager(context.Background(), proc, func(context.Context) (bool, error) {
+				checked = true
+				return tc.busy, tc.checkError
+			})
+			if !checked {
+				t.Fatal("PackageKit transaction list was not queried")
+			}
+			if (err != nil) != tc.wantError || active != tc.want {
+				t.Fatalf("active=%q, err=%v; want active=%q, error=%v", active, err, tc.want, tc.wantError)
+			}
+		})
+	}
+}
+
+func TestCleanupBlockingPackageManagerNeverChecksPackageKitWhenPacmanRuns(t *testing.T) {
+	proc := t.TempDir()
+	path := filepath.Join(proc, "12345679")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "comm"), []byte("pacman\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	active, err := cleanupBlockingPackageManager(context.Background(), proc, func(context.Context) (bool, error) {
+		t.Fatal("should not query PackageKit for a running pacman transaction")
+		return false, nil
+	})
+	if err != nil || active != "pacman" {
+		t.Fatalf("active=%q, err=%v", active, err)
+	}
+}
+
+func TestParsePackageKitTransactionList(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		output  string
+		busy    bool
+		wantErr bool
+	}{
+		{name: "idle", output: "ao 0\n"},
+		{name: "one transaction", output: "ao 1 /org/freedesktop/PackageKit/transactions/1\n", busy: true},
+		{name: "queued transactions", output: "ao 2 /org/freedesktop/PackageKit/transactions/1 /org/freedesktop/PackageKit/transactions/2\n", busy: true},
+		{name: "empty response", output: "", wantErr: true},
+		{name: "malformed count", output: "ao invalid", wantErr: true},
+		{name: "count mismatch", output: "ao 1", wantErr: true},
+		{name: "unexpected type", output: "as 0", wantErr: true},
+		{name: "unexpected path", output: "ao 1 incorrect", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			busy, err := parsePackageKitTransactionList(tc.output)
+			if busy != tc.busy || (err != nil) != tc.wantErr {
+				t.Fatalf("output=%q: busy=%v, err=%v", tc.output, busy, err)
+			}
+		})
+	}
+}

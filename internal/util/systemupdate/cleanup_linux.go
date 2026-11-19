@@ -38,7 +38,7 @@ func Cleanup(ctx context.Context) (CleanupResult, error) {
 	}
 	defer updateMu.Unlock()
 
-	active, err := activePackageManager("/proc")
+	active, err := cleanupBlockingPackageManager(ctx, "/proc", hasActivePackageKitTransactions)
 	if err != nil {
 		return result, fmt.Errorf("cannot safely check running package managers: %w", err)
 	}
@@ -182,6 +182,7 @@ func activePackageManager(procDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	packageKitRunning := false
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -198,11 +199,79 @@ func activePackageManager(procDir string) (string, error) {
 			return "", err // fail closed if another process cannot be inspected
 		}
 		name := strings.TrimSpace(string(comm))
+		if name == "packagekitd" {
+			// A long-lived PackageKit daemon can be idle. Prefer any actual
+			// package-manager process, regardless of /proc iteration order.
+			packageKitRunning = true
+			continue
+		}
 		if isPackageManagerProcess(name) {
 			return name, nil
 		}
 	}
+	if packageKitRunning {
+		return "packagekitd", nil
+	}
 	return "", nil
+}
+
+// cleanupBlockingPackageManager distinguishes an idle PackageKit service from
+// a PackageKit transaction without ever interrupting the daemon or its jobs.
+// If D-Bus cannot be queried, refuse cleanup rather than risk removing an
+// active update's download fragments.
+func cleanupBlockingPackageManager(
+	ctx context.Context,
+	procDir string,
+	checkPackageKit func(context.Context) (bool, error),
+) (string, error) {
+	active, err := activePackageManager(procDir)
+	if err != nil || active != "packagekitd" {
+		return active, err
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	busy, err := checkPackageKit(queryCtx)
+	if err != nil {
+		return "", fmt.Errorf("cannot check PackageKit transactions: %w", err)
+	}
+	if busy {
+		return "packagekitd", nil
+	}
+	return "", nil
+}
+
+func hasActivePackageKitTransactions(ctx context.Context) (bool, error) {
+	if !commandExists("busctl") {
+		return false, fmt.Errorf("busctl is unavailable; cannot verify whether PackageKit is idle")
+	}
+	// GetTransactionList reports in-progress transactions, not whether the
+	// persistent packagekitd process merely exists on the system bus.
+	output, err := runCommand(ctx, "busctl",
+		"--system", "--timeout=5s", "call",
+		"org.freedesktop.PackageKit", "/org/freedesktop/PackageKit",
+		"org.freedesktop.PackageKit", "GetTransactionList",
+	)
+	if err != nil {
+		return false, fmt.Errorf("PackageKit GetTransactionList: %w (%s)", err, truncateOutput(output, 300))
+	}
+	return parsePackageKitTransactionList(output)
+}
+
+func parsePackageKitTransactionList(output string) (bool, error) {
+	fields := strings.Fields(output)
+	if len(fields) < 2 || fields[0] != "ao" {
+		return false, fmt.Errorf("unexpected PackageKit transaction response: %q", truncateOutput(output, 120))
+	}
+	count, err := strconv.Atoi(fields[1])
+	if err != nil || count < 0 || count != len(fields)-2 {
+		return false, fmt.Errorf("invalid PackageKit transaction count: %q", truncateOutput(output, 120))
+	}
+	for _, path := range fields[2:] {
+		if !strings.HasPrefix(path, "/") {
+			return false, fmt.Errorf("invalid PackageKit transaction path: %q", path)
+		}
+	}
+	return count > 0, nil
 }
 
 func isPackageManagerProcess(name string) bool {
