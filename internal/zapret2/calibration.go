@@ -132,6 +132,10 @@ func ParseCalibrationSummary(summary string,domains []string,level string) (*Cal
 			test,ip,argText=match[1],match[2],match[4]
 		} else {continue}
 		if total!=len(domains)||passed<1||passed>total{continue}
+		// Require at least two thirds of the tested targets to work before
+		// promoting a recipe to active routing. Partial success below this
+		// threshold stays visible in the raw blockcheck2 report.
+		if passed*3<total*2 {continue}
 		// Only accept the token list after the daemon name. Blockcheck may
 		// include external/untrusted file paths: validation rejects those.
 		args:=strings.Fields(argText)
