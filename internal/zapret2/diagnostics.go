@@ -109,13 +109,17 @@ func RunBlockcheck(ctx context.Context,options DiagnosticOptions) (result Diagno
  start:=time.Now()
  err=cmd.Run()
  full:=out.String()
- summary:=full
- if pos:=strings.LastIndex(full,"* SUMMARY");pos>=0{summary=full[pos:]}
- if len(summary)>14000{summary=summary[len(summary)-14000:]}
- result=DiagnosticResult{Summary:summary,Domains:domains,DurationSeconds:time.Since(start).Seconds()}
+ // Preserve the full captured SUMMARY for ranking. The response can be
+ // truncated for the UI, but truncation before parsing could remove the
+ // header or highest-coverage strategies from a large scan.
+ fullSummary:=full
+ if pos:=strings.LastIndex(full,"* SUMMARY");pos>=0{fullSummary=full[pos:]}
+ visibleSummary:=fullSummary
+ if len(visibleSummary)>14000{visibleSummary=visibleSummary[len(visibleSummary)-14000:]}
+ result=DiagnosticResult{Summary:visibleSummary,Domains:domains,DurationSeconds:time.Since(start).Seconds()}
  // The upstream SUMMARY and COVERAGE sections contain successful exact
  // options. Do not infer a result from intermediate "working" log lines.
- calibrated,parseErr:=ParseCalibrationSummary(summary,domains,level)
+ calibrated,parseErr:=ParseCalibrationSummary(fullSummary,domains,level)
  if parseErr!=nil {
   result.Warnings=append(result.Warnings,parseErr.Error())
  } else {
