@@ -160,7 +160,8 @@ func DiagnoseOpenFluxChannel(parent context.Context, inst Instance, typ, maxClie
 		add("payload", "failed", "Cannot generate random test payload", 0)
 		return result
 	}
-	listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(ctx, "tcp", net.JoinHostPort(host, "0"))
 	if err != nil {
 		add("session", "failed", "Cannot open a temporary local echo target: "+err.Error(), time.Since(begin))
 		add("payload", "skipped", "No local echo target", 0)

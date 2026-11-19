@@ -220,6 +220,14 @@ describe('OpenFlux channel setup', () => {
     expect(await screen.findByText(/Skipped: enter a valid Web MAX token/)).toBeTruthy();
     expect(vi.mocked(HttpUtil.post)).not.toHaveBeenCalled();
   });
+  it('dismisses a pending diagnostic confirmation when its editor unmounts', async () => {
+    const { unmount } = renderWithProviders(<Inbound inboundId={17} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Full connection diagnostic' }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+
+    unmount();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
   it('imports client settings while preserving the generated channel values', async () => {
     vi.mocked(HttpUtil.post).mockResolvedValueOnce(
       new Msg(true, '', {

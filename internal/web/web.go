@@ -358,28 +358,28 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 // node/xray state is unchanged, and export per-job duration/skipped/error
 // counters.
 const (
-	cadenceXrayRunning   = "@every 3s"
-	cadenceXrayRestart   = "@every 30s"
-	cadenceNativeApply   = "@every 1s"
-	cadenceXrayTraffic   = "@every 5s"
-	cadenceMtproto       = "@every 10s"
-	cadenceAmneziaWG     = "@every 10s"
-	cadenceTuic          = "@every 10s"
-	cadenceMieru         = "@every 10s"
-	cadenceSudoku        = "@every 10s"
-	cadenceClientIPScan  = "@every 10s"
-	cadenceNodeHeartbeat = "@every 5s"
-	cadenceNodeTraffic   = "@every 5s"
-	cadenceOutboundSub   = "@every 5m"
-	cadenceReapOrphans   = "@every 5m"
-	cadenceRemoteRouting = "@every 5m"
-	cadenceXrayLogPrune  = "@every 1m"
+	cadenceXrayRunning    = "@every 3s"
+	cadenceXrayRestart    = "@every 30s"
+	cadenceNativeApply    = "@every 1s"
+	cadenceXrayTraffic    = "@every 5s"
+	cadenceMtproto        = "@every 10s"
+	cadenceAmneziaWG      = "@every 10s"
+	cadenceTuic           = "@every 10s"
+	cadenceMieru          = "@every 10s"
+	cadenceSudoku         = "@every 10s"
+	cadenceClientIPScan   = "@every 10s"
+	cadenceNodeHeartbeat  = "@every 5s"
+	cadenceNodeTraffic    = "@every 5s"
+	cadenceOutboundSub    = "@every 5m"
+	cadenceReapOrphans    = "@every 5m"
+	cadenceRemoteRouting  = "@every 5m"
+	cadenceXrayLogPrune   = "@every 1m"
 	cadenceDomainActivity = "@every 3s"
-	cadenceCheckHash     = "@every 2m"
+	cadenceCheckHash      = "@every 2m"
 	// cpu.Percent samples over a full minute (blocking), so a finer cadence just
 	// stacks overlapping samplers; subscribers rate-limit alerts to 1/min anyway.
-	cadenceCPUAlarm    = "@every 1m"
-	cadenceMemoryAlarm = "@every 1m"
+	cadenceCPUAlarm       = "@every 1m"
+	cadenceMemoryAlarm    = "@every 1m"
 )
 
 // startTask schedules background jobs (Xray checks, traffic jobs, cron

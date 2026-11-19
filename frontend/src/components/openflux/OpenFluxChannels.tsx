@@ -185,6 +185,8 @@ export default function OpenFluxChannels({
   inboundId?: number;
 }) {
   const { t } = useTranslation();
+  // Bind confirmation dialogs to this editor so none survive its unmount.
+  const [dialog, dialogContextHolder] = Modal.useModal();
   const [draft, setDraft] = useState<OpenFluxTransport | null>(null);
   const [checking, setChecking] = useState<OpenFluxTransportType | null>(null);
   const [checks, setChecks] = useState<Record<string, { ok: boolean; detail: string }>>({});
@@ -295,7 +297,7 @@ export default function OpenFluxChannels({
       }));
       return;
     }
-    Modal.confirm({
+    dialog.confirm({
       title: t('pages.inbounds.form.openfluxDiagConfirmTitle'),
       content: t('pages.inbounds.form.openfluxDiagConfirmText'),
       okText: t('pages.inbounds.form.openfluxDiagConfirmButton'),
@@ -408,6 +410,7 @@ export default function OpenFluxChannels({
   };
   return (
     <section className="openflux-channels">
+      {dialogContextHolder}
       <div className="openflux-section-heading">
         <div>
           <Typography.Text strong>{t('pages.inbounds.form.openfluxChannelsTitle')}</Typography.Text>

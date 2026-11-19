@@ -5,11 +5,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
-	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 type domainActivityResponse struct {

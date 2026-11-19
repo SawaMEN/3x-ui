@@ -28,7 +28,7 @@ func TestConnectionsRetryTemporaryRefusal(t *testing.T) {
 			}
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Header: make(http.Header),
+				Header:     http.Header{},
 				Body: io.NopCloser(strings.NewReader(`{"connections":[{"id":"session-1"}]}`)),
 			}, nil
 		})},
@@ -52,7 +52,7 @@ func TestConnectionsDoesNotRetryAuthenticationFailure(t *testing.T) {
 			calls.Add(1)
 			return &http.Response{
 				StatusCode: http.StatusUnauthorized,
-				Header: make(http.Header),
+				Header:     http.Header{},
 				Body: io.NopCloser(strings.NewReader(`{"message":"unauthorized"}`)),
 			}, nil
 		})},
