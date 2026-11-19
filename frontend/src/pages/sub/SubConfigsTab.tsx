@@ -42,7 +42,9 @@ export default function SubConfigsTab({ links, onCopy }: SubConfigsTabProps) {
       {groups.map((group) => (
         <Fragment key={group.title}>
           <div className="sub-configs-bar">
-            <strong>{group.title} ({group.items.length})</strong>
+            <strong>
+              {group.title} ({group.items.length})
+            </strong>
           </div>
           {group.items.map(({ link, idx }) => {
             const parts = parseLinkParts(link);
