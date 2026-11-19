@@ -32,8 +32,8 @@ func TestVirtualZapret2XrayRoutingIsScopedToLocalSOCKSInbound(t *testing.T) {
 			{Tag: "phone-zapret", Port: 8443, Protocol: "vless"},
 		},
 		OutboundConfigs: []byte(`[
-			{"tag":"direct", "protocol":"freedom", "settings":{}},
-			{"tag":"zapret-rf", "protocol":"zapret2", "settings":{"port":15900,"profile":"safe","tcp":true}}
+			{"tag":"zapret-rf", "protocol":"zapret2", "settings":{"port":15900,"profile":"safe","tcp":true}},
+			{"tag":"direct", "protocol":"freedom", "settings":{}}
 		]`),
 		RouterConfig: []byte(`{"rules":[{"type":"field","inboundTag":["phone-zapret"],"outboundTag":"zapret-rf"}]}`),
 	}
@@ -83,8 +83,12 @@ func TestVirtualZapret2SingBoxRoutingPreservesExistingRules(t *testing.T) {
 	cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type":"socks", "tag":"z2", "server":"127.0.0.1", "server_port":15911})
 	cfg.Route["rules"] = []map[string]any{{"inbound": []string{"phone-direct"}, "outbound": "direct"}}
 	cfg.Zapret2Plans = []zapret2.Plan{p}
+	cfg.Route["final"] = "z2"
 	if err := injectSingBoxZapret2(cfg); err != nil {
 		t.Fatal(err)
+	}
+	if cfg.Route["final"] != "direct" {
+		t.Fatalf("zapret2 unexpectedly became default outbound: %v", cfg.Route["final"])
 	}
 	rules := singBoxRouteRules(cfg.Route)
 	if len(rules) != 2 {
