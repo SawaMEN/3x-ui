@@ -10,7 +10,9 @@ export const PingtunnelInboundSettingsSchema = z.object({
   connectTimeout: z.number().int().min(0).default(3000),
   forward: z.string().default(''),
   congestion: z.enum(['bb', 'none']).default('bb'),
-  clients: z.array(z.never()).default([]),
+  // These are subscription attachments only; Pingtunnel still authenticates all
+  // clients with a single shared ICMP password, not per-client credentials.
+  clients: z.array(NaiveClientSchema).default([]),
 });
 export type PingtunnelInboundSettings = z.infer<typeof PingtunnelInboundSettingsSchema>;
 
