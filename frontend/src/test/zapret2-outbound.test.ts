@@ -8,7 +8,13 @@ describe('zapret2 virtual outbound', () => {
     const raw = {
       protocol: 'zapret2',
       tag: 'zapret2-rf',
-      settings: { port: 15900, profile: 'balanced', tcp: true, udp: false, testDomains: ['rutracker.org'] },
+      settings: {
+        port: 15900,
+        profile: 'balanced',
+        tcp: true,
+        udp: false,
+        testDomains: ['rutracker.org'],
+      },
     };
     const form = rawOutboundToFormValues(raw);
     expect(form.protocol).toBe('zapret2');
@@ -18,7 +24,10 @@ describe('zapret2 virtual outbound', () => {
   });
 
   it('refuses privileged SOCKS ports and unsupported modes', () => {
-    const form = rawOutboundToFormValues({ protocol: 'zapret2', settings: { port: 80, profile: 'safe' } });
+    const form = rawOutboundToFormValues({
+      protocol: 'zapret2',
+      settings: { port: 80, profile: 'safe' },
+    });
     expect(OutboundFormSchema.safeParse(form).success).toBe(false);
   });
 });
