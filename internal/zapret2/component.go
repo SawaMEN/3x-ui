@@ -88,6 +88,7 @@ func GetStatus(ctx context.Context) (Status,error) {
 }
 
 func Update(ctx context.Context) (Status,error) {
+ if Running() {return Status{},fmt.Errorf("stop the VPN core using zapret2 before updating the component")}
  installMu.Lock()
  defer installMu.Unlock()
  if !supported() { return Status{},fmt.Errorf("zapret2 requires Linux amd64 or arm64") }
@@ -129,6 +130,17 @@ func Update(ctx context.Context) (Status,error) {
  target:=filepath.Join(root,"bin","nfqws2")
  if err:=os.MkdirAll(filepath.Dir(target),0755);err!=nil{return Status{},err}
  if err:=copyBinary(binary,target);err!=nil{return Status{},err}
+ // The official blockcheck scripts use traditional relative binary paths.
+ // Recreate the links that upstream install_bin.sh normally installs, without
+ // running the upstream installer or altering the host firewall.
+ for _,spec:=range []struct{name,dir string}{
+  {"nfqws2","nfq2"},{"mdig","mdig"},{"ip2net","ip2net"},
+ } {
+  source,err:=findExecutable(root,spec.name)
+  if err!=nil {return Status{},err}
+  dest:=filepath.Join(root,spec.dir,spec.name)
+  if err:=copyBinary(source,dest);err!=nil{return Status{},err}
+ }
  if err:=os.WriteFile(filepath.Join(root,"version"),[]byte(rel.Tag+"\n"),0644);err!=nil{return Status{},err}
  destination:=Directory()
  backup:=filepath.Join(stage,"previous")
@@ -167,7 +179,9 @@ func unpackArchive(path,destination string) error {
   case tar.TypeReg,tar.TypeRegA:
    if hdr.Size<0 || hdr.Size>maxArchiveBytes {return fmt.Errorf("invalid zapret2 member size")}
    if err:=os.MkdirAll(filepath.Dir(full),0755);err!=nil{return err}
-   f,err:=os.OpenFile(full,os.O_CREATE|os.O_EXCL|os.O_WRONLY,0644)
+   mode:=os.FileMode(hdr.Mode)&0755
+   if mode==0 {mode=0644}
+   f,err:=os.OpenFile(full,os.O_CREATE|os.O_EXCL|os.O_WRONLY,mode)
    if err!=nil{return err}
    _,copyErr:=io.CopyN(f,tr,hdr.Size)
    if err:=errors.Join(copyErr,f.Close());err!=nil{return err}
@@ -191,16 +205,18 @@ func findDistributionRoot(root string) (string,error) {
  return found,nil
 }
 
-func findBinary(root string) (string,error) {
+func findBinary(root string) (string,error) { return findExecutable(root,"nfqws2") }
+
+func findExecutable(root,name string) (string,error) {
  arch:="x86_64"
- if runtime.GOARCH=="arm64" {arch="aarch64"}
+ if runtime.GOARCH=="arm64" {arch="arm64"}
  var found string
  _=filepath.WalkDir(root,func(path string,d os.DirEntry,err error) error {
   if err!=nil{return err}
-  if !d.IsDir() && d.Name()=="nfqws2" && strings.Contains(path,arch) && strings.Contains(path,"linux") {found=path}
+  if !d.IsDir() && d.Name()==name && strings.Contains(path,"binaries") && strings.Contains(path,"linux-"+arch) {found=path}
   return nil
  })
- if found=="" {return "",fmt.Errorf("official zapret2 release lacks Linux %s nfqws2 binary",arch)}
+ if found=="" {return "",fmt.Errorf("official zapret2 release lacks Linux %s %s binary",arch,name)}
  return found,nil
 }
 func copyBinary(from,to string) error {
