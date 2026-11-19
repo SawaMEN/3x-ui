@@ -131,6 +131,7 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.GET("/zapret2/status", a.zapret2Status)
 	g.POST("/zapret2/update", a.zapret2Update)
 	g.POST("/zapret2/remove", a.zapret2Remove)
+	g.POST("/zapret2/diagnose", a.zapret2Diagnose)
 	g.GET("/getDefaultJsonConfig", a.getDefaultXrayConfig)
 	g.GET("/apiTokens", a.listApiTokens)
 	g.POST("/apiTokens/create", a.createApiToken)
