@@ -10,6 +10,7 @@ import {
   Modal,
   Radio,
   Select,
+  Switch,
   Space,
   Tabs,
   Typography,
@@ -118,6 +119,22 @@ export default function OutboundFormModal({
   const [messageApi, messageContextHolder] = message.useMessage();
   const methods = useForm<OutboundFormValues>({ defaultValues: buildAddModeValues() });
   const openFluxInstalled = useOpenFluxInstalled(open);
+  const [zapret2Installed, setZapret2Installed] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let disposed = false;
+    const refresh = () => {
+      void HttpUtil.get('/panel/api/setting/zapret2/status', undefined, { silent: true }).then((response: unknown) => {
+        if (!disposed) {
+          const status = response as { success?: boolean; obj?: { installed?: boolean } };
+          setZapret2Installed(status.success === true && status.obj?.installed === true);
+        }
+      }).catch(() => { if (!disposed) setZapret2Installed(false); });
+    };
+    refresh();
+    window.addEventListener('zapret2:changed', refresh);
+    return () => { disposed = true; window.removeEventListener('zapret2:changed', refresh); };
+  }, [open]);
   const [activeKey, setActiveKey] = useState('1');
   const [jsonText, setJsonText] = useState('');
   const [jsonDirty, setJsonDirty] = useState(false);
@@ -544,9 +561,8 @@ export default function OutboundFormModal({
                           id="protocol"
                           options={PROTOCOL_OPTIONS.filter(
                             (option) =>
-                              option.value !== 'openflux' ||
-                              openFluxInstalled ||
-                              outboundProp?.protocol === 'openflux',
+                              (option.value !== 'openflux' || openFluxInstalled || outboundProp?.protocol === 'openflux') &&
+                              (option.value !== 'zapret2' || zapret2Installed || outboundProp?.protocol === 'zapret2'),
                           )}
                         />
                       </FormField>
@@ -617,6 +633,46 @@ export default function OutboundFormModal({
                       {protocol === 'dns' && <DnsFields />}
 
                       {protocol === 'freedom' && <FreedomFields />}
+                      {protocol === 'zapret2' && (
+                        <>
+                          <Alert
+                            type="info"
+                            showIcon
+                            title="Виртуальный zapret2 outbound"
+                            description="Доступен только после установки Zapret2 в «Установка и обновление компонентов». Локальный SOCKS-порт используется исключительно маршрутизатором 3x-ui."
+                            style={{ marginBottom: 16 }}
+                          />
+                          <FormField name="settings.port" label="Локальный SOCKS-порт">
+                            <InputNumber min={1025} max={65535} />
+                          </FormField>
+                          <FormField name="settings.profile" label="Стратегия Anti-DPI">
+                            <Select options={[
+                              { value: 'auto', label: 'Автоматическая' },
+                              { value: 'safe', label: 'Бережная' },
+                              { value: 'balanced', label: 'Сбалансированная' },
+                              { value: 'aggressive', label: 'Усиленная' },
+                            ]} />
+                          </FormField>
+                          <FormField name="settings.tcp" label="Обработка TCP" valueProp="checked">
+                            <Switch />
+                          </FormField>
+                          <FormField name="settings.udp" label="Обработка UDP/QUIC" valueProp="checked">
+                            <Switch />
+                          </FormField>
+                          <Controller
+                            control={methods.control}
+                            name="settings.testDomains"
+                            render={({ field }) => (
+                              <Form.Item label="Сайты для проверки стратегий" extra="По одному домену на строку. Используются для диагностики, не для ограничения маршрутизации.">
+                                <Input.TextArea rows={3}
+                                  value={(field.value ?? []).join('\n')}
+                                  onChange={(event) => field.onChange(event.target.value.split(/[\n,]+/).map((v) => v.trim()).filter(Boolean))}
+                                />
+                              </Form.Item>
+                            )}
+                          />
+                        </>
+                      )}
 
                       {protocol === 'vless' && reverseTag && (
                         <Controller
