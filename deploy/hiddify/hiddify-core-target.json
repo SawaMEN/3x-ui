@@ -3,16 +3,16 @@
   "stage": 4,
   "target": {
     "repository": "https://github.com/SawaMEN/hiddify-core",
-    "commit": "1b04ce7fc6f06bbb3bd11001cd8e50f035316cd9",
+    "commit": "b41ccfaf90950a7f8d8074d52e5beda65f817de9",
     "submodules": {
-      "hiddify-sing-box": "b36f79f68852194614e81cc09aef8b3e81c6f46e",
+      "hiddify-sing-box": "276a8ce874047be8dd6452275496a62eff8020c6",
       "ray2sing": "c6368fc6adea94f7aa9ec57065aae3ad53343ac4"
     },
     "submodule_repositories": {
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/SawaMEN/ray2sing"
     },
-    "version": "sawamen-1b04ce7fc6f0-b36f79f68852-mask1-ciphers1-net62-sec1-stream1"
+    "version": "sawamen-b41ccfaf9095-276a8ce87404-mask1-ciphers1-net62-sec1-stream1"
   },
   "runtime_contract": {
     "raw_config_command": [
@@ -116,6 +116,18 @@
     {
       "path": "hiddify-sing-box/replace/utls-native/u_chrome155_test.go",
       "contains": "func TestChrome155CapturedClientHello"
+    },
+    {
+      "path": "hiddify-sing-box/replace/utls-native/u_clone.go",
+      "contains": "func (chs *ClientHelloSpec) clone()"
+    },
+    {
+      "path": "hiddify-sing-box/replace/utls-native/u_parrots.go",
+      "contains": "p = p.clone()"
+    },
+    {
+      "path": "hiddify-sing-box/common/tls/xui_reality_mldsa_handshake_test.go",
+      "contains": "[]string{\"chrome\", \"firefox\", \"safari\"}"
     }
   ],
   "panel_build": {
@@ -135,7 +147,7 @@
       "with_kcp",
       "http2legacy"
     ],
-    "sing_box_version": "sawamen-b36f79f68852",
+    "sing_box_version": "sawamen-276a8ce87404",
     "runtime_dependencies": [
       "matching libcronet for Naive outbound"
     ],
@@ -148,9 +160,9 @@
       "musl": "with_musl, CGO_ENABLED=1, statically linked Cronet; release and Docker"
     },
     "protection_dependency_versions": {
-      "github.com/metacubex/utls": "native:b36f79f68852194614e81cc09aef8b3e81c6f46e",
-      "github.com/starifly/sing-vmess": "native:b36f79f68852194614e81cc09aef8b3e81c6f46e",
-      "github.com/xtls/xray-core": "native:b36f79f68852194614e81cc09aef8b3e81c6f46e"
+      "github.com/metacubex/utls": "native:276a8ce874047be8dd6452275496a62eff8020c6",
+      "github.com/starifly/sing-vmess": "native:276a8ce874047be8dd6452275496a62eff8020c6",
+      "github.com/xtls/xray-core": "native:276a8ce874047be8dd6452275496a62eff8020c6"
     },
     "security_dependencies": {
       "golang.org/x/net": "v0.62.0",
@@ -189,7 +201,9 @@
       "hiddify-sing-box/option/xui_panel_http1_test.go",
       "hiddify-sing-box/common/tls/xui_browser_fingerprint_profiles_test.go",
       "hiddify-sing-box/replace/utls-native/u_chrome155_test.go",
-      "hiddify-sing-box/replace/utls-native/testdata/chrome155_clienthello.hex"
+      "hiddify-sing-box/replace/utls-native/testdata/chrome155_clienthello.hex",
+      "hiddify-sing-box/replace/utls-native/u_clone.go",
+      "hiddify-sing-box/replace/utls-native/u_parrots.go"
     ]
   },
   "verification": {
