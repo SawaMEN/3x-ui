@@ -599,13 +599,20 @@ export function rawOutboundToFormValues(raw: RawOutboundRow): OutboundFormValues
       typed = { protocol: 'loopback', settings: loopbackFromWire(settings) };
       break;
     case 'zapret2':
-      typed = { protocol: 'zapret2', settings: {
-        port: asNumber(settings.port, 15900),
-        profile: (['auto','safe','balanced','aggressive'].includes(asString(settings.profile)) ? asString(settings.profile) : 'auto') as 'auto' | 'safe' | 'balanced' | 'aggressive',
-        tcp: settings.tcp !== false,
-        udp: settings.udp === true,
-        testDomains: Array.isArray(settings.testDomains) ? settings.testDomains.filter((x): x is string => typeof x === 'string') : [],
-      }};
+      typed = {
+        protocol: 'zapret2',
+        settings: {
+          port: asNumber(settings.port, 15900),
+          profile: (['auto', 'safe', 'balanced', 'aggressive'].includes(asString(settings.profile))
+            ? asString(settings.profile)
+            : 'auto') as 'auto' | 'safe' | 'balanced' | 'aggressive',
+          tcp: settings.tcp !== false,
+          udp: settings.udp === true,
+          testDomains: Array.isArray(settings.testDomains)
+            ? settings.testDomains.filter((x): x is string => typeof x === 'string')
+            : [],
+        },
+      };
       break;
     default:
       typed = { protocol: 'vless', settings: vlessFromWire(settings) };
