@@ -3835,6 +3835,26 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/setting/zapret2/status',
+        summary: 'Return official zapret2 installation state, version and upgrade availability.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/zapret2/update',
+        summary: 'Install or update verified zapret2 release files from bol-van/zapret2.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/zapret2/remove',
+        summary: 'Remove unused zapret2 component after removing virtual routes.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/zapret2/diagnose',
+        summary: 'Run a limited official blockcheck2 strategy diagnostic against supplied public domains.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/setting/singbox/config',
         summary: 'Return the editable sing-box configuration.',
       },
