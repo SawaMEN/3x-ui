@@ -36,10 +36,19 @@ describe('standalone subscription protocols', () => {
     expect(JSON.parse(pingtunnelClientJSON(`pingtunnel://${encoded}#Tunnel`))).toEqual(cfg);
     expect(pingtunnelClientJSON('vless://something')).toBe('');
     expect(pingtunnelClientJSON('pingtunnel://bad!!!')).toBe('');
+    const valid = { ...cfg, server: '127.example.org', password: 'тест' };
+    const utf8 = new TextEncoder().encode(JSON.stringify(valid));
+    const unicodeLink = btoa(String.fromCharCode(...utf8))
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/=+$/, '');
+    expect(JSON.parse(pingtunnelClientJSON(`pingtunnel://${unicodeLink}`))).toEqual(valid);
     for (const broken of [
       { ...cfg, server: '::1' },
       { ...cfg, server: 'vpn..example.org' },
       { ...cfg, encrypt: 'aes192' },
+      { ...cfg, encrypt: ['chacha20'] },
+      { ...cfg, congestion: ['bb'] },
       { ...cfg, congestion: 'unknown' },
       { ...cfg, listen: 'not-a-port' },
       { ...cfg, listen: '127.0.0.1:0' },

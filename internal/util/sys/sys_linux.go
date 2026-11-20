@@ -77,7 +77,7 @@ func GetUDPCount() (int, error) {
 
 var (
 	cpuMu       sync.Mutex
-	lastTotal   uint64
+	lastBusy    uint64
 	lastIdleAll uint64
 	hasLast     bool
 )
@@ -86,6 +86,9 @@ var (
 // /proc/stat. First call initializes and returns 0; subsequent calls return
 // busy/total * 100. Uses HostProc so HOST_PROC overrides (containers) apply.
 func CPUPercentRaw() (float64, error) {
+	cpuMu.Lock()
+	defer cpuMu.Unlock()
+
 	f, err := os.Open(HostProc("stat"))
 	if err != nil {
 		return 0, err
@@ -103,50 +106,30 @@ func CPUPercentRaw() (float64, error) {
 		return 0, fmt.Errorf("unexpected /proc/stat format")
 	}
 
-	nums := make([]uint64, 0, len(fields)-1)
-	for i := 1; i < len(fields); i++ {
-		v, err := strconv.ParseUint(fields[i], 10, 64)
+	// Guest time is already accounted for in user/nice.
+	var counters [8]uint64
+	for i, field := range fields[1:min(len(fields), 9)] {
+		value, err := strconv.ParseUint(field, 10, 64)
 		if err != nil {
-			break
+			return 0, fmt.Errorf("invalid /proc/stat CPU counter: %w", err)
 		}
-		nums = append(nums, v)
-	}
-	if len(nums) < 4 {
-		return 0, fmt.Errorf("insufficient cpu fields")
-	}
-	for len(nums) < 8 {
-		nums = append(nums, 0)
+		counters[i] = value
 	}
 
-	user, nice, system, idle := nums[0], nums[1], nums[2], nums[3]
-	iowait, irq, softirq, steal := nums[4], nums[5], nums[6], nums[7]
-
-	idleAll := idle + iowait
-	nonIdle := user + nice + system + irq + softirq + steal
-	total := idleAll + nonIdle
-
-	cpuMu.Lock()
-	defer cpuMu.Unlock()
-
-	if !hasLast {
-		lastTotal = total
-		lastIdleAll = idleAll
+	idleAll := counters[3] + counters[4]
+	busy := counters[0] + counters[1] + counters[2] + counters[5] + counters[6] + counters[7]
+	previousBusy, previousIdle := lastBusy, lastIdleAll
+	lastBusy, lastIdleAll = busy, idleAll
+	if !hasLast || busy < previousBusy {
 		hasLast = true
 		return 0, nil
 	}
 
-	totald := total - lastTotal
-	idled := idleAll - lastIdleAll
-	lastTotal = total
-	lastIdleAll = idleAll
-
-	if totald == 0 {
+	busyDelta := busy - previousBusy
+	// Linux can revise iowait downwards. Treat a negative idle delta as zero.
+	idleDelta := idleAll - min(idleAll, previousIdle)
+	if busyDelta == 0 {
 		return 0, nil
 	}
-	busy := totald - idled
-	pct := float64(busy) / float64(totald) * 100.0
-	if pct > 100 {
-		pct = 100
-	}
-	return pct, nil
+	return float64(busyDelta) / (float64(busyDelta) + float64(idleDelta)) * 100, nil
 }

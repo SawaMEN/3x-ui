@@ -5,6 +5,7 @@ package sub
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"io/fs"
 	"net"
 	"net/http"
@@ -719,6 +720,11 @@ func (s *Server) Stop() error {
 	}
 	if s.listener != nil {
 		err2 = s.listener.Close()
+		// Shutdown closes listeners already registered by Serve. Also close
+		// here in case Stop ran before the serving goroutine registered it.
+		if errors.Is(err2, net.ErrClosed) {
+			err2 = nil
+		}
 	}
 	return common.Combine(err1, err2)
 }

@@ -12,7 +12,7 @@ import (
 )
 
 func TestReadTailLinesAcrossChunkBoundaries(t *testing.T) {
-	content := "first\r\n" + strings.Repeat("a", int(TailChunkSize)*2+7) + "\r\n" +
+	content := "\r\nfirst\r\n" + strings.Repeat("a", int(TailChunkSize)*2+7) + "\r\n" +
 		strings.Repeat("b", int(TailChunkSize)+3) + "\n\nlast"
 	path := filepath.Join(t.TempDir(), "boundaries.log")
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
@@ -122,6 +122,12 @@ func TestReadTailLinesDiscardsTruncatedOldestLine(t *testing.T) {
 			content: "abcdefghij",
 			budget:  4,
 			want:    []string{},
+		},
+		{
+			name:    "CR-only record is empty",
+			content: "\r\nlast\n",
+			budget:  32,
+			want:    []string{"last"},
 		},
 		{
 			name:    "unlimited budget retains unterminated first line",

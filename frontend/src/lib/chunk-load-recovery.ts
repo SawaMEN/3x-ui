@@ -3,11 +3,13 @@ const CHUNK_RELOAD_PARAM = '_3xui_chunk_reload';
 const CHUNK_RELOAD_COOLDOWN = 10_000;
 const CHUNK_NAVIGATION_TIMEOUT_MS = 8_000;
 
-let chunkReloadScheduled = false;
+let scheduledAt: number | undefined;
 
 function parseReloadTimestamp(value: string | null): number {
   const timestamp = Number(value ?? 0);
-  return Number.isFinite(timestamp) ? timestamp : 0;
+  return Number.isSafeInteger(timestamp) && timestamp > 0 && timestamp <= Date.now()
+    ? timestamp
+    : 0;
 }
 
 function getStoredReloadTimestamp(): number {
@@ -44,18 +46,31 @@ export function isChunkLoadError(reason: unknown): boolean {
 export function reloadAfterChunkLoadError(): boolean {
   // Vite can emit vite:preloadError and then reject the same dynamic import.
   // Treat the second event as handled while the forced navigation is pending.
-  if (chunkReloadScheduled) return true;
-
   const now = Date.now();
+  const pendingAge = scheduledAt === undefined ? Infinity : now - scheduledAt;
+  if (pendingAge >= 0 && pendingAge < CHUNK_NAVIGATION_TIMEOUT_MS) return true;
   const url = new URL(window.location.href);
   const urlReloadTimestamp = parseReloadTimestamp(url.searchParams.get(CHUNK_RELOAD_PARAM));
   const lastReload = Math.max(urlReloadTimestamp, getStoredReloadTimestamp());
 
   // If the freshly loaded page still cannot load its chunk, do not create an
   // automatic reload loop. Let the original error surface instead.
-  if (now - lastReload < CHUNK_RELOAD_COOLDOWN) return false;
+  if (
+    (lastReload > 0 && now - lastReload < CHUNK_RELOAD_COOLDOWN) ||
+    (pendingAge >= 0 && pendingAge < CHUNK_RELOAD_COOLDOWN)
+  )
+    return false;
 
-  chunkReloadScheduled = true;
+  // A unique query value forces a new document request while preserving the
+  // current SPA route, existing query parameters, and hash.
+  url.searchParams.set(CHUNK_RELOAD_PARAM, String(now));
+  try {
+    window.location.replace(url.toString());
+  } catch {
+    // A blocked navigation must leave the original import error visible.
+    return false;
+  }
+  scheduledAt = now;
 
   try {
     sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
@@ -63,11 +78,6 @@ export function reloadAfterChunkLoadError(): boolean {
     // sessionStorage may be blocked; the URL parameter below is sufficient.
   }
 
-  // A plain location.reload() can reuse stale HTML from an intermediary cache.
-  // A unique query value forces a new document request while preserving the
-  // current SPA route, existing query parameters, and hash.
-  url.searchParams.set(CHUNK_RELOAD_PARAM, String(now));
-  window.location.replace(url.toString());
   return true;
 }
 

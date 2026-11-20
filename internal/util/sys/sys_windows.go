@@ -59,6 +59,9 @@ func ftToUint64(ft windows.Filetime) uint64 {
 // logical processors via Windows GetSystemTimes. The first call returns 0
 // while it initializes the baseline; subsequent calls compute deltas.
 func CPUPercentRaw() (float64, error) {
+	cpuMu.Lock()
+	defer cpuMu.Unlock()
+
 	var idleFT, kernelFT, userFT windows.Filetime
 	r1, _, e1 := procGetSystemTimes.Call(
 		uintptr(unsafe.Pointer(&idleFT)),
@@ -76,9 +79,6 @@ func CPUPercentRaw() (float64, error) {
 	idle := ftToUint64(idleFT)
 	kernel := ftToUint64(kernelFT)
 	user := ftToUint64(userFT)
-
-	cpuMu.Lock()
-	defer cpuMu.Unlock()
 
 	if !hasLast {
 		lastIdle = idle
