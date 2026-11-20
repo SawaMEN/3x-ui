@@ -42,13 +42,10 @@ export function pingtunnelClientJSON(link: string): string {
       config.password.length < 8 ||
       !('server' in config) ||
       typeof config.server !== 'string' ||
-      !/^(?=.{1,253}$)[a-z0-9][a-z0-9.-]*[a-z0-9]$/i.test(config.server) ||
-      config.server.includes('..') ||
-      config.server === '0.0.0.0' ||
-      config.server === '127.0.0.1' ||
+      !validPingtunnelServer(config.server) ||
       !('listen' in config) ||
       typeof config.listen !== 'string' ||
-      !/^.+:\\d+$/.test(config.listen) ||
+      !validPingtunnelListen(config.listen) ||
       !('encrypt' in config) ||
       !['chacha20', 'aes256', 'aes128'].includes(String(config.encrypt)) ||
       !('congestion' in config) ||
@@ -59,4 +56,35 @@ export function pingtunnelClientJSON(link: string): string {
   } catch {
     return '';
   }
+}
+
+function validPingtunnelServer(server: string): boolean {
+  if (
+    server.length === 0 ||
+    server.length > 253 ||
+    /[/:@?#\[\]\\\s]/.test(server)
+  )
+    return false;
+  const hostname = server.toLowerCase().replace(/[.]$/, '');
+  if (
+    hostname === '' ||
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '0.0.0.0' ||
+    /^127[.]/.test(hostname)
+  )
+    return false;
+  return hostname.split('.').every(
+    (label) =>
+      label.length > 0 &&
+      label.length <= 63 &&
+      /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
+  );
+}
+
+function validPingtunnelListen(listen: string): boolean {
+  const match = /^(?:\[[^\]]+\]|[^:]+):([0-9]+)$/.exec(listen);
+  if (!match) return false;
+  const port = Number(match[1]);
+  return Number.isInteger(port) && port >= 1 && port <= 65535;
 }
