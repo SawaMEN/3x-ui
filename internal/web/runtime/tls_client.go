@@ -150,6 +150,10 @@ func newNodeTransport(tlsCfg *tls.Config) *http.Transport {
 		IdleConnTimeout:     60 * time.Second,
 		DialContext:         netsafe.SSRFGuardedDialContext,
 		TLSClientConfig:     tlsCfg,
+		// A custom dialer disables Go's automatic HTTP/2 opt-in. Some HTTPS
+		// node endpoints only accept h2 after TLS ALPN negotiation.
+		ForceAttemptHTTP2:   true,
+		TLSHandshakeTimeout: 10 * time.Second,
 	}
 }
 
