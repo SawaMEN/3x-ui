@@ -39,11 +39,52 @@ export function pingtunnelClientJSON(link: string): string {
       config.socks5 !== true ||
       !('password' in config) ||
       typeof config.password !== 'string' ||
-      config.password.length < 8
+      config.password.length < 8 ||
+      !('server' in config) ||
+      typeof config.server !== 'string' ||
+      !validPingtunnelServer(config.server) ||
+      !('listen' in config) ||
+      typeof config.listen !== 'string' ||
+      !validPingtunnelListen(config.listen) ||
+      !('encrypt' in config) ||
+      !['chacha20', 'aes256', 'aes128'].includes(String(config.encrypt)) ||
+      !('congestion' in config) ||
+      !['bb', 'none'].includes(String(config.congestion))
     )
       return '';
     return JSON.stringify(config, null, 2);
   } catch {
     return '';
   }
+}
+
+function validPingtunnelServer(server: string): boolean {
+  if (
+    server.length === 0 ||
+    server.length > 253 ||
+    /[/:@?#\[\]\\\s]/.test(server)
+  )
+    return false;
+  const hostname = server.toLowerCase().replace(/[.]$/, '');
+  if (
+    hostname === '' ||
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '0.0.0.0' ||
+    /^127[.]/.test(hostname)
+  )
+    return false;
+  return hostname.split('.').every(
+    (label) =>
+      label.length > 0 &&
+      label.length <= 63 &&
+      /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
+  );
+}
+
+function validPingtunnelListen(listen: string): boolean {
+  const match = /^(?:\[[^\]]+\]|[^:]+):([0-9]+)$/.exec(listen);
+  if (!match) return false;
+  const port = Number(match[1]);
+  return Number.isInteger(port) && port >= 1 && port <= 65535;
 }

@@ -315,8 +315,7 @@ func requirePingtunnelForwardVersion(path string) error {
 	if err != nil {
 		return fmt.Errorf("Pingtunnel 3.0+ is required for TCP/UDP egress: %w", err)
 	}
-	major, err := strconv.Atoi(strings.Split(version, ".")[0])
-	if err != nil || major < 3 {
+	if !pingtunnelVersionSupported(version) {
 		return fmt.Errorf("Pingtunnel 3.0+ is required for TCP/UDP egress; installed: %s", version)
 	}
 	return nil
