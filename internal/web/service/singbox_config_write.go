@@ -8,14 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
-	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
- "github.com/SawaMEN/3x-ui/v3/internal/zapret2"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
+	"github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 )
 
 // Check a candidate before replacing the file used by the running core. A

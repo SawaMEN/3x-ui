@@ -25,9 +25,9 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
- "github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
+	"github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 )
 
 var (
