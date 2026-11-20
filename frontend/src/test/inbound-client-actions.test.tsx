@@ -20,6 +20,7 @@ describe('inbound client actions', () => {
     'amneziawg',
     'fptn',
     'openflux',
+    'pingtunnel',
     'trusttunnel',
     'vk-turn-proxy',
   ])('exposes bulk client actions for %s', (protocol) => {
@@ -52,7 +53,7 @@ describe('inbound client actions', () => {
       true,
     );
   });
-  it.each(['http', 'mixed', 'tun', 'tunnel', 'pingtunnel'])(
+  it.each(['http', 'mixed', 'tun', 'tunnel'])(
     'keeps listener/account protocols out of shared client actions: %s',
     (protocol) => {
       expect(isInboundMultiUser({ protocol, settings: {} })).toBe(false);

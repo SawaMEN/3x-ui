@@ -241,6 +241,62 @@ is_port_in_use 2054 && exit 1
 exit 0
 ''')
 
+    def test_management_ports_use_decimal_and_reject_overflow(self):
+        script = function("x-ui.sh", "normalize_port")
+        self.run_script(script + r"""
+[[ "$(normalize_port 0080)" == 80 ]] || exit 1
+[[ "$(normalize_port 65535)" == 65535 ]] || exit 1
+normalize_port 65536 && exit 1
+normalize_port 18446744073709551617 && exit 1
+normalize_port 000 && exit 1
+exit 0
+""")
+
+    def test_firewall_validates_all_ports_before_making_changes(self):
+        names = ("normalize_port", "parse_firewall_ports", "open_ports", "delete_ports")
+        script = "".join(function("x-ui.sh", name) for name in names)
+        self.run_script(script + r"""
+LOGE() { :; }; LOGI() { :; }
+ufw() {
+    [[ "$1" == status ]] || printf '%s\n' "$*"
+}
+[[ -z "$(open_ports <<< '80,65536')" ]] || exit 1
+open_ports <<< '80,65536' && exit 1
+[[ -z "$(delete_ports <<< $'2\n80,600-500' | sed -n '/^--force/p')" ]] || exit 1
+delete_ports <<< $'2\n80,600-500' && exit 1
+[[ "$(open_ports <<< '00080,0080-0081')" == $'allow 80\nallow 80:81/tcp\nallow 80:81/udp' ]]
+""")
+
+    def test_firewall_deduplicates_rule_numbers_before_deleting(self):
+        script = function("x-ui.sh", "delete_ports")
+        self.run_script(script + r"""
+LOGE() { :; }; LOGI() { :; }
+ufw() {
+    [[ "$1" == status ]] || printf '%s\n' "$*"
+}
+[[ "$(delete_ports <<< $'1\n2,4,2,4' | sed -n '/^--force/p')" == $'--force delete 4\n--force delete 2' ]]
+""")
+
+    def test_firewall_does_not_enable_after_failed_ssh_rule(self):
+        script = function("x-ui.sh", "install_firewall")
+        self.run_script(script + r"""
+LOGE() { :; }; LOGI() { :; }
+grep() { printf 'Port 2222\n'; }
+ufw() {
+    printf '%s\n' "$*"
+    if [[ "$*" == 'allow 2222/tcp' ]]; then return 11; fi
+}
+output=$(install_firewall)
+[[ $? == 1 && "$output" == 'allow 2222/tcp' ]]
+""")
+
+    def test_firewall_menu_returns_on_end_of_input(self):
+        script = function("x-ui.sh", "firewall_menu")
+        self.run_script(script + r"""
+LOGE() { exit 1; }
+firewall_menu </dev/null >/dev/null
+""")
+
     def test_update_exit_status_includes_rollback_failure(self):
         for initial, rollback, expected in ((0, 0, 0), (0, 1, 1), (42, 0, 42), (42, 1, 42)):
             script = function("update.sh", "_report_update_exit") + f'''

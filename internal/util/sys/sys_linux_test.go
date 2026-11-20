@@ -12,9 +12,11 @@ import (
 func TestCPUPercentRawCounterChanges(t *testing.T) {
 	proc := t.TempDir()
 	t.Setenv("HOST_PROC", proc)
-	previousBusy, previousIdle, previousHasLast := lastBusy, lastIdleAll, hasLast
-	t.Cleanup(func() { lastBusy, lastIdleAll, hasLast = previousBusy, previousIdle, previousHasLast })
-	lastBusy, lastIdleAll, hasLast = 0, 0, false
+	previousBusy, previousIdle, previousIOWait, previousHasLast := lastBusy, lastIdle, lastIOWait, hasLast
+	t.Cleanup(func() {
+		lastBusy, lastIdle, lastIOWait, hasLast = previousBusy, previousIdle, previousIOWait, previousHasLast
+	})
+	lastBusy, lastIdle, lastIOWait, hasLast = 0, 0, 0, false
 	for _, step := range []struct {
 		counters string
 		want     float64
@@ -22,7 +24,7 @@ func TestCPUPercentRawCounterChanges(t *testing.T) {
 	}{
 		{"cpu 100 0 0 100 100\n", 0, false},
 		{"cpu 110 0 0 105 invalid\n", 0, true},
-		{"cpu 110 0 0 105 90\n", 100, false},
+		{"cpu 110 0 0 105 90\n", 100 * 10.0 / 15.0, false},
 		{"cpu 5 0 0 5 0\n", 0, false},
 		{"cpu 15 0 0 15 0\n", 50, false},
 	} {

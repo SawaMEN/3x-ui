@@ -76,10 +76,11 @@ func GetUDPCount() (int, error) {
 // --- CPU Utilization (Linux native) ---
 
 var (
-	cpuMu       sync.Mutex
-	lastBusy    uint64
-	lastIdleAll uint64
-	hasLast     bool
+	cpuMu      sync.Mutex
+	lastBusy   uint64
+	lastIdle   uint64
+	lastIOWait uint64
+	hasLast    bool
 )
 
 // CPUPercentRaw returns instantaneous total CPU utilization by reading
@@ -116,18 +117,18 @@ func CPUPercentRaw() (float64, error) {
 		counters[i] = value
 	}
 
-	idleAll := counters[3] + counters[4]
+	idle, iowait := counters[3], counters[4]
 	busy := counters[0] + counters[1] + counters[2] + counters[5] + counters[6] + counters[7]
-	previousBusy, previousIdle := lastBusy, lastIdleAll
-	lastBusy, lastIdleAll = busy, idleAll
-	if !hasLast || busy < previousBusy {
+	previousBusy, previousIdle, previousIOWait := lastBusy, lastIdle, lastIOWait
+	lastBusy, lastIdle, lastIOWait = busy, idle, iowait
+	if !hasLast || busy < previousBusy || idle < previousIdle {
 		hasLast = true
 		return 0, nil
 	}
 
 	busyDelta := busy - previousBusy
-	// Linux can revise iowait downwards. Treat a negative idle delta as zero.
-	idleDelta := idleAll - min(idleAll, previousIdle)
+	// Linux can revise iowait downwards independently of the idle counter.
+	idleDelta := idle - previousIdle + iowait - min(iowait, previousIOWait)
 	if busyDelta == 0 {
 		return 0, nil
 	}
