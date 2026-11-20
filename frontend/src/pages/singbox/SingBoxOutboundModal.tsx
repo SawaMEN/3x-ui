@@ -297,21 +297,25 @@ export default function SingBoxOutboundModal({
         showIcon
         style={{ marginBottom: 16 }}
         title={
-          type === 'masque'
-            ? 'Cloudflare WARP через MASQUE'
+          type === 'pingtunnel'
+            ? 'PingTunnel: несовместимость с сервером 3.x'
+            : type === 'masque'
+              ? 'Cloudflare WARP через MASQUE'
             : type === 'snell'
               ? 'Snell: данные берутся с сервера'
               : 'Автоматическая настройка подключения'
         }
         description={
-          type === 'masque'
-            ? 'Устройство WARP регистрируется ядром sing-box при первом запуске. Выберите HTTP/3 или HTTP/2, сохраните подключение и примените настройки ядра. Кэш регистрации включается автоматически — свой MASQUE-сервер и отдельные ключи не нужны.'
+          type === 'pingtunnel'
+            ? 'Встроенный PingTunnel-outbound модифицированного sing-box использует старый протокол с key/encryption_key и НЕ подключится к PingTunnel 3.x из этой панели. Для подключения используйте клиентский JSON, экспортированный в подписке, и отдельный PingTunnel 3.x. Настройка здесь предназначена только для старых совместимых серверов.'
+            : type === 'masque'
+              ? 'Устройство WARP регистрируется ядром sing-box при первом запуске. Выберите HTTP/3 или HTTP/2, сохраните подключение и примените настройки ядра. Кэш регистрации включается автоматически — свой MASQUE-сервер и отдельные ключи не нужны.'
             : type === 'snell'
               ? 'Импортируйте подписку или укажите PSK с сервера. User key нужен только для многопользовательского сервера. Версия v6 и необязательные настройки выбраны автоматически. Случайные клиентские ключи Snell не создаются.'
               : 'Импортируйте ссылку — адрес, ключи и настройки заполнятся сами. Необязательные параметры выбирает ядро. Недостающие учётные данные создаются автоматически; существующие сохраняются. Новые данные нужно указать и на удалённом сервере.'
         }
         action={
-          type === 'masque' || type === 'snell' ? undefined : (
+          type === 'masque' || type === 'snell' || type === 'pingtunnel' ? undefined : (
             <Button
               disabled={!!jsonError || invalidOptions.length > 0}
               onClick={() =>
@@ -328,7 +332,7 @@ export default function SingBoxOutboundModal({
           )
         }
       />
-      {type !== 'masque' && type !== 'snell' && (
+      {type !== 'masque' && type !== 'snell' && type !== 'pingtunnel' && (
         <Space wrap style={{ marginBottom: 16 }}>
           <Button
             disabled={!!jsonError || invalidOptions.length > 0}
