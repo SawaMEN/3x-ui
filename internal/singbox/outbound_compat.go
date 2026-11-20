@@ -128,7 +128,9 @@ func translateGRPCTransportCompatibility(out map[string]any, stream map[string]a
 		return fmt.Errorf("%s %q uses Xray gRPC user_agent which sing-box V2Ray gRPC transport cannot represent", direction, tag)
 	}
 	if xrayBool(grpc, "multiMode") {
-		return fmt.Errorf("%s %q enables Xray gRPC multiMode, which is not wire-compatible with sing-box gRPC transport; disable multiMode on both ends or use Xray", direction, tag)
+		// The SawaMEN native core implements Xray TunMulti (MultiHunk).
+		// Keep the wire mode explicit rather than silently downgrading it.
+		transport["multi_mode"] = true
 	}
 	if window := rawInt(grpc, "initial_windows_size"); window > 0 {
 		return fmt.Errorf("%s %q uses Xray gRPC initial_windows_size=%d which sing-box V2Ray gRPC transport cannot represent", direction, tag, window)

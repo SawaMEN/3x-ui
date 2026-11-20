@@ -32,7 +32,7 @@ def release(*, prerelease=False, draft=False, complete=True):
         "published_at": "2026-10-13T00:00:00Z",
         "draft": draft,
         "prerelease": prerelease,
-        "assets": [{"name": name} for name in names],
+        "assets": [{"name": name, "state": "uploaded", "size": 100} for name in names],
     }
 
 
@@ -45,21 +45,61 @@ class StableReleaseTests(unittest.TestCase):
         self.assertFalse(selector.complete(release(draft=True)))
         self.assertFalse(selector.complete(release(complete=False)))
 
-    def test_queries_official_latest_endpoint(self):
-        with mock.patch.object(selector, "json_api", return_value=release()) as query:
-            self.assertEqual(selector.resolve()["tag_name"], "sawamen-abcdef123456-panel8")
-        query.assert_called_once_with("/releases/latest")
+    def test_rejects_unfinished_or_empty_asset_uploads(self):
+        for update in ({"state": "starter"}, {"size": 0}, {"size": None}):
+            with self.subTest(update=update):
+                candidate = release()
+                candidate["assets"][0].update(update)
+                self.assertFalse(selector.complete(candidate))
+                with mock.patch.object(selector, "json_api", return_value=[candidate]):
+                    with self.assertRaisesRegex(ValueError, "No complete stable kernel release"):
+                        selector.resolve()
 
-    def test_no_fallback_to_prerelease(self):
-        with mock.patch.object(selector, "json_api", return_value=release(prerelease=True)) as query:
-            with self.assertRaisesRegex(ValueError, "Latest stable kernel"):
+    def test_uses_latest_published_ready_release(self):
+        candidate = release()
+        with mock.patch.object(selector, "json_api", return_value=[candidate]) as query:
+            self.assertEqual(selector.resolve()["tag_name"], candidate["tag_name"])
+        query.assert_called_once_with("/releases?per_page=100")
+
+    def test_skips_incomplete_and_prerelease_builds(self):
+        newest = release(complete=False)
+        newest["tag_name"] = "incomplete-newest"
+        newest["published_at"] = "2026-11-22T00:00:00Z"
+        prerelease = release(prerelease=True)
+        prerelease["tag_name"] = "prerelease-newer"
+        prerelease["published_at"] = "2026-11-23T00:00:00Z"
+        ready = release()
+        ready["tag_name"] = "fully-built"
+        ready["published_at"] = "2026-11-21T00:00:00Z"
+        with mock.patch.object(selector, "json_api", return_value=[newest, prerelease, ready]):
+            self.assertEqual(selector.resolve()["tag_name"], "fully-built")
+
+    def test_selects_most_recent_published_ready_build_not_listing_order(self):
+        old = release()
+        old["tag_name"] = "older-build"
+        old["published_at"] = "2026-11-19T00:00:00Z"
+        new = release()
+        new["tag_name"] = "newer-build"
+        new["published_at"] = "2026-11-21T00:00:00Z"
+        with mock.patch.object(selector, "json_api", return_value=[old, new]):
+            self.assertEqual(selector.resolve()["tag_name"], "newer-build")
+
+    def test_no_ready_release_fails_instead_of_building_from_sources(self):
+        with mock.patch.object(selector, "json_api", return_value=[release(prerelease=True), release(complete=False)]) as query:
+            with self.assertRaisesRegex(ValueError, "No complete stable kernel release"):
                 selector.resolve()
-        query.assert_called_once_with("/releases/latest")
+        query.assert_called_once_with("/releases?per_page=100")
+
+    def test_invalid_release_response_fails_closed(self):
+        with mock.patch.object(selector, "json_api", return_value={"message": "rate limit"}):
+            with self.assertRaisesRegex(ValueError, "Invalid kernel releases response"):
+                selector.resolve()
 
     def test_tagged_build_rejects_prerelease(self):
-        with mock.patch.object(selector, "json_api", return_value=release(prerelease=True)):
-            with self.assertRaisesRegex(ValueError, "Latest stable kernel"):
+        with mock.patch.object(selector, "json_api", return_value=release(prerelease=True)) as query:
+            with self.assertRaisesRegex(ValueError, "Requested kernel release"):
                 selector.resolve("sawamen-abcdef123456-panel8")
+        query.assert_called_once_with("/releases/tags/sawamen-abcdef123456-panel8")
 
 
 

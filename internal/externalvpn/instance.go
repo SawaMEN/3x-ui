@@ -114,8 +114,11 @@ func (inst Instance) Validate() error {
 		if s.Congestion != "" && s.Congestion != "bb" && s.Congestion != "none" {
 			return fmt.Errorf("Pingtunnel congestion must be bb or none")
 		}
-		if inst.Listen != "" && net.ParseIP(inst.Listen) == nil {
-			return fmt.Errorf("Pingtunnel listen must be an IP address")
+		if inst.Listen != "" {
+			ip := net.ParseIP(inst.Listen)
+			if ip == nil || ip.To4() == nil {
+				return fmt.Errorf("Pingtunnel uses IPv4 ICMP and requires an IPv4 listen address")
+			}
 		}
 		return nil
 	}

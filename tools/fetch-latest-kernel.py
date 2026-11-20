@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Download the latest stable SawaMEN/hiddify-core release.
+"""Download the newest *ready* stable SawaMEN/hiddify-core release.
 
-Only full GitHub releases are eligible (no drafts or prereleases).
-Resolve a single tag for the build matrix so amd64 and arm64 match.
+Only published GitHub releases with complete AMD64/ARM64 assets and
+checksums are eligible. No source build or GitHub Actions artifacts are used.
+Resolve a single immutable tag for both architectures.
 """
 import argparse
 import hashlib
@@ -57,9 +58,20 @@ def complete(release):
         f"sing-box-linux-{arch}.tar.gz{suffix}"
         for arch in ("amd64", "arm64") for suffix in ("", ".sha256")
     }
-    return (not release.get("draft") and not release.get("prerelease")
-            and bool(release.get("published_at"))
-            and required <= {asset["name"] for asset in release.get("assets", [])})
+    if release.get("draft") or release.get("prerelease") or not release.get("published_at"):
+        return False
+    assets = {
+        asset["name"]: asset for asset in release.get("assets", [])
+        if isinstance(asset, dict) and isinstance(asset.get("name"), str)
+    }
+    # An asset name appearing during an upload is not proof that its binary
+    # exists. Wait for GitHub to mark every binary and checksum as uploaded.
+    return required <= assets.keys() and all(
+        assets[name].get("state") == "uploaded"
+        and isinstance(assets[name].get("size"), int)
+        and assets[name]["size"] > 0
+        for name in required
+    )
 
 
 def resolve(tag=None):
@@ -67,13 +79,21 @@ def resolve(tag=None):
         if not re.fullmatch(r"[A-Za-z0-9._-]+", tag):
             raise ValueError("Invalid release tag")
         release = json_api("/releases/tags/" + quote(tag, safe=""))
-    else:
-        # GitHub's official latest endpoint ignores prereleases and drafts.
-        # Fail closed rather than silently downgrading to an incomplete build.
-        release = json_api("/releases/latest")
-    if not complete(release):
-        raise ValueError("Latest stable kernel release lacks AMD64/ARM64 binaries or SHA-256")
-    return release
+        if not isinstance(release, dict) or not complete(release):
+            raise ValueError("Requested kernel release is not a complete stable build")
+        return release
+
+    # /releases/latest may point at a stable release whose upload is still
+    # incomplete (or deliberately selected as "latest" despite newer builds).
+    # Instead choose the most recently PUBLISHED fully assembled release.
+    # Source compilation and expiring workflow artifacts are never fallbacks.
+    releases = json_api("/releases?per_page=100")
+    if not isinstance(releases, list):
+        raise ValueError("Invalid kernel releases response")
+    ready = [item for item in releases if isinstance(item, dict) and complete(item)]
+    if not ready:
+        raise ValueError("No complete stable kernel release with AMD64/ARM64 binaries and SHA-256")
+    return max(ready, key=lambda item: item["published_at"])
 
 
 def checksum(file, checksum_file):
