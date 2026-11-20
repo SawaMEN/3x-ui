@@ -32,7 +32,7 @@ def release(*, prerelease=False, draft=False, complete=True):
         "published_at": "2026-10-13T00:00:00Z",
         "draft": draft,
         "prerelease": prerelease,
-        "assets": [{"name": name} for name in names],
+        "assets": [{"name": name, "state": "uploaded", "size": 100} for name in names],
     }
 
 
@@ -44,6 +44,16 @@ class StableReleaseTests(unittest.TestCase):
         self.assertFalse(selector.complete(release(prerelease=True)))
         self.assertFalse(selector.complete(release(draft=True)))
         self.assertFalse(selector.complete(release(complete=False)))
+
+    def test_rejects_unfinished_or_empty_asset_uploads(self):
+        for update in ({"state": "starter"}, {"size": 0}, {"size": None}):
+            with self.subTest(update=update):
+                candidate = release()
+                candidate["assets"][0].update(update)
+                self.assertFalse(selector.complete(candidate))
+                with mock.patch.object(selector, "json_api", return_value=[candidate]):
+                    with self.assertRaisesRegex(ValueError, "No complete stable kernel release"):
+                        selector.resolve()
 
     def test_uses_latest_published_ready_release(self):
         candidate = release()
