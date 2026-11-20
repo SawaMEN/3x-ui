@@ -17,7 +17,7 @@ func TestTranslateOutboundTLSVersionedFingerprints(t *testing.T) {
 				"security": "tls",
 				"tlsSettings": map[string]any{
 					"fingerprint": fingerprint,
-					"serverName": "example.com",
+					"serverName":  "example.com",
 				},
 			}
 			if err := translateOutboundTLSCompatibility(out, stream, "tls"); err != nil {
@@ -50,7 +50,7 @@ func TestTranslateOutboundTLSMigratesObsoleteFingerprints(t *testing.T) {
 				"security": "tls",
 				"tlsSettings": map[string]any{
 					"fingerprint": tc.old,
-					"serverName": "example.com",
+					"serverName":  "example.com",
 				},
 			}
 			if err := translateOutboundTLSCompatibility(out, in, "legacy-tls"); err != nil {
