@@ -34,11 +34,8 @@ func ExportPingtunnelLink(inst Instance, server, remark string) (string, error) 
 		return "", err
 	}
 	server = strings.TrimSpace(strings.Trim(server, "[]"))
-	if server == "" || strings.ContainsAny(server, "/:@?# \t\r\n") {
-		return "", fmt.Errorf("Pingtunnel public server must be a hostname or IP without a port")
-	}
-	if ip := net.ParseIP(server); ip != nil && ip.IsUnspecified() {
-		return "", fmt.Errorf("cannot publish an unspecified Pingtunnel address")
+	if !validPingtunnelServer(server) {
+		return "", fmt.Errorf("Pingtunnel public server must be a valid IPv4 address or hostname without a port")
 	}
 	encrypt := inst.Settings.Encrypt
 	if encrypt == "" {
@@ -78,11 +75,46 @@ func DecodePingtunnelLink(link string) (PingtunnelClientConfig, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return cfg, fmt.Errorf("Pingtunnel link JSON: %w", err)
 	}
-	if cfg.Type != "client" || !cfg.Socks5 || cfg.Listen == "" || cfg.Server == "" || len(cfg.Password) < 8 {
-		return cfg, fmt.Errorf("Pingtunnel link missing native client credentials")
+	if cfg.Type != "client" || !cfg.Socks5 || cfg.Listen == "" || len(cfg.Password) < 8 ||
+		!validPingtunnelServer(cfg.Server) {
+		return cfg, fmt.Errorf("Pingtunnel link missing or invalid native client credentials")
+	}
+	if _, _, err := net.SplitHostPort(cfg.Listen); err != nil {
+		return cfg, fmt.Errorf("Pingtunnel link has invalid local SOCKS5 listen address: %w", err)
 	}
 	if cfg.Encrypt != "chacha20" && cfg.Encrypt != "aes128" && cfg.Encrypt != "aes256" {
 		return cfg, fmt.Errorf("Pingtunnel link has unsupported cipher")
 	}
+	if cfg.Congestion != "bb" && cfg.Congestion != "none" {
+		return cfg, fmt.Errorf("Pingtunnel link has unsupported congestion control")
+	}
 	return cfg, nil
+}
+
+// Pingtunnel's ICMP socket uses ip4:icmp. Do not publish IPv6 literals or
+// non-host strings that its native client cannot use as a server address.
+func validPingtunnelServer(server string) bool {
+	if server == "" || len(server) > 253 || strings.ContainsAny(server, "/:@?#[]\\ \t\r\n") {
+		return false
+	}
+	if ip := net.ParseIP(server); ip != nil {
+		return ip.To4() != nil && !ip.IsUnspecified() && !ip.IsLoopback()
+	}
+	hostname := strings.TrimSuffix(server, ".")
+	if hostname == "" || strings.EqualFold(hostname, "localhost") ||
+		strings.HasSuffix(strings.ToLower(hostname), ".localhost") {
+		return false
+	}
+	for _, label := range strings.Split(hostname, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, char := range label {
+			if !(char >= 'a' && char <= 'z') && !(char >= 'A' && char <= 'Z') &&
+				!(char >= '0' && char <= '9') && char != '-' {
+				return false
+			}
+		}
+	}
+	return true
 }

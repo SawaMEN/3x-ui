@@ -39,7 +39,20 @@ export function pingtunnelClientJSON(link: string): string {
       config.socks5 !== true ||
       !('password' in config) ||
       typeof config.password !== 'string' ||
-      config.password.length < 8
+      config.password.length < 8 ||
+      !('server' in config) ||
+      typeof config.server !== 'string' ||
+      !/^(?=.{1,253}$)[a-z0-9][a-z0-9.-]*[a-z0-9]$/i.test(config.server) ||
+      config.server.includes('..') ||
+      config.server === '0.0.0.0' ||
+      config.server === '127.0.0.1' ||
+      !('listen' in config) ||
+      typeof config.listen !== 'string' ||
+      !/^.+:\\d+$/.test(config.listen) ||
+      !('encrypt' in config) ||
+      !['chacha20', 'aes256', 'aes128'].includes(String(config.encrypt)) ||
+      !('congestion' in config) ||
+      !['bb', 'none'].includes(String(config.congestion))
     )
       return '';
     return JSON.stringify(config, null, 2);

@@ -1,6 +1,8 @@
 package externalvpn
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -63,6 +65,50 @@ func TestPingtunnelClientLinkRoundTrip(t *testing.T) {
 	for _, invalid := range []string{"", "0.0.0.0", "[::]", "bad.example:443", "bad/path"} {
 		if _, err := ExportPingtunnelLink(inst, invalid, "bad"); err == nil {
 			t.Errorf("accepted invalid Pingtunnel endpoint %q", invalid)
+		}
+	}
+}
+
+func TestPingtunnelRejectsNonIPv4Listen(t *testing.T) {
+	settings := Settings{Password: "correct-password", Encrypt: "chacha20"}
+	for _, listen := range []string{"", "0.0.0.0", "127.0.0.1", "203.0.113.20"} {
+		if err := (Instance{Protocol: model.Pingtunnel, Listen: listen, Settings: settings}).Validate(); err != nil {
+			t.Errorf("IPv4 listen %q rejected: %v", listen, err)
+		}
+	}
+	for _, listen := range []string{"::", "::1", "2001:db8::1", "[::1]", "vpn.example.org"} {
+		if err := (Instance{Protocol: model.Pingtunnel, Listen: listen, Settings: settings}).Validate(); err == nil {
+			t.Errorf("unsupported ICMP listen %q accepted", listen)
+		}
+	}
+}
+
+func TestPingtunnelLinkRejectsInvalidEndpointAndPayload(t *testing.T) {
+	inst := Instance{Protocol: model.Pingtunnel, Settings: Settings{Password: "correct-password", Encrypt: "aes256", Congestion: "none"}}
+	for _, address := range []string{"::1", "2001:db8::1", "127.0.0.1", "localhost", "test.localhost", "vpn..example.org", "bad_server.example.org", "bad/path", "vpn.example.org:443"} {
+		if _, err := ExportPingtunnelLink(inst, address, "bad"); err == nil {
+			t.Errorf("invalid public server %q accepted", address)
+		}
+	}
+	link, err := ExportPingtunnelLink(inst, "vpn.example.org", "no congestion")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := DecodePingtunnelLink(link)
+	if err != nil || cfg.Congestion != "none" {
+		t.Fatalf("disabled congestion was not preserved: %+v, %v", cfg, err)
+	}
+	invalid := []PingtunnelClientConfig{cfg, cfg, cfg}
+	invalid[0].Server = "::1"
+	invalid[1].Congestion = "invalid"
+	invalid[2].Listen = "not-a-host-port"
+	for _, broken := range invalid {
+		data, err := json.Marshal(broken)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := DecodePingtunnelLink("pingtunnel://" + base64.RawURLEncoding.EncodeToString(data)); err == nil {
+			t.Errorf("invalid native config was accepted: %+v", broken)
 		}
 	}
 }

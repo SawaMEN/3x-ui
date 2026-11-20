@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -146,6 +147,9 @@ func binaryStatus(ctx context.Context, protocol model.Protocol, localOnly ...boo
 	if status.Installed {
 		if version, versionErr := binaryVersion(ctx, path, spec.versionArgs); versionErr == nil {
 			status.Version = version
+			if protocol == model.Pingtunnel && !pingtunnelVersionSupported(version) {
+				status.Error = fmt.Sprintf("installed Pingtunnel %s is incompatible with the panel; update to 3.0 or newer", version)
+			}
 		}
 	}
 	release, err := fetchLatestRelease(ctx, spec)
@@ -193,6 +197,13 @@ func normalizeReleaseVersion(value string) string {
 	value = strings.TrimPrefix(value, "v")
 	value = strings.TrimPrefix(value, "V")
 	return value
+}
+
+// Only Pingtunnel v3+ supports password-based AEAD and full TCP/UDP
+// forwarding through the panel's routed SOCKS5 sidecar.
+func pingtunnelVersionSupported(version string) bool {
+	major, err := strconv.Atoi(strings.SplitN(normalizeReleaseVersion(version), ".", 2)[0])
+	return err == nil && major >= 3
 }
 
 func fetchLatestRelease(ctx context.Context, spec releaseSpec) (githubRelease, error) {
@@ -319,6 +330,9 @@ func Update(ctx context.Context, protocol model.Protocol) error {
 	expectedVersion := normalizeReleaseVersion(release.TagName)
 	if expectedVersion != "" && normalizeReleaseVersion(stagedVersion) != expectedVersion {
 		return fmt.Errorf("validate %s binary: expected version %s, got %s", protocol, expectedVersion, stagedVersion)
+	}
+	if protocol == model.Pingtunnel && !pingtunnelVersionSupported(stagedVersion) {
+		return fmt.Errorf("validate Pingtunnel binary: version %s is incompatible; require 3.0 or newer", stagedVersion)
 	}
 
 	target := filepath.Join(binDir, spec.binaryName)
