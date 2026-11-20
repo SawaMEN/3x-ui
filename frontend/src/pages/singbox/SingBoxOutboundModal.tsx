@@ -175,12 +175,14 @@ export default function SingBoxOutboundModal({
   useEffect(() => {
     session.current++;
     if (!open) return;
-    const initial = normalizeNativeFingerprint(value
-      ? structuredClone(value)
-      : outboundDefaults(
-          initialType,
-          uniqueTag(initialType === 'selector' ? 'group' : 'proxy', tagsRef.current),
-        ));
+    const initial = normalizeNativeFingerprint(
+      value
+        ? structuredClone(value)
+        : outboundDefaults(
+            initialType,
+            uniqueTag(initialType === 'selector' ? 'group' : 'proxy', tagsRef.current),
+          ),
+    );
     autoTagRef.current = value ? '' : text(initial.tag);
     setDraft(initial);
     setJson(JSON.stringify(initial, null, 2));
