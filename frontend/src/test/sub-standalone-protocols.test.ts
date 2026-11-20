@@ -42,10 +42,12 @@ describe('standalone subscription protocols', () => {
       { ...cfg, encrypt: 'aes192' },
       { ...cfg, congestion: 'unknown' },
       { ...cfg, listen: 'not-a-port' },
+      { ...cfg, listen: '127.0.0.1:0' },
+      { ...cfg, listen: '127.0.0.1:wrong' },
     ]) {
       const raw = btoa(JSON.stringify(broken))
-        .replace(/\\+/g, '-')
-        .replace(/\\//g, '_')
+        .replaceAll('+', '-')
+        .replaceAll('/', '_')
         .replace(/=+$/, '');
       expect(pingtunnelClientJSON(`pingtunnel://${raw}`)).toBe('');
     }
