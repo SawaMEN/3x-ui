@@ -1175,11 +1175,6 @@
       },
       "fingerprint": {
         "enum": [
-          "chrome_psk",
-          "chrome_psk_shuffle",
-          "chrome_padding_psk_shuffle",
-          "chrome_pq",
-          "chrome_pq_psk",
           "chrome",
           "firefox",
           "edge",
@@ -1190,7 +1185,7 @@
           "android",
           "random",
           "randomized",
-          "unsafe"
+          "randomizednoalpn"
         ],
         "kind": "string"
       }

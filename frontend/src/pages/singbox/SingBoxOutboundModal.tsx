@@ -94,6 +94,48 @@ function Field({
   );
 }
 const options = (values: string[]) => values.map((value) => ({ value, label: value }));
+
+// Migrate historical names as soon as an outbound enters the editor.
+// Only canonical names are saved or offered in the selector.
+const LEGACY_NATIVE_FINGERPRINTS: Record<string, string> = {
+  chrome_155: 'chrome',
+  hellochrome_155: 'chrome',
+  chrome_133: 'chrome',
+  hellochrome_133: 'chrome',
+  chrome_psk: 'chrome',
+  chrome_psk_shuffle: 'chrome',
+  chrome_padding_psk_shuffle: 'chrome',
+  chrome_pq: 'chrome',
+  chrome_pq_psk: 'chrome',
+  firefox_148: 'firefox',
+  hellofirefox_148: 'firefox',
+  safari_26_3: 'safari',
+  hellosafari_26_3: 'safari',
+};
+
+// Convert existing outbound settings to the canonical, currently supported
+// names; no historical entries are added back to the selector.
+function normalizeNativeFingerprint(value: ConfigObject): ConfigObject {
+  const tls = object(value.tls);
+  const utls = object(tls.utls);
+  const original = text(utls.fingerprint);
+  const fingerprint = original.trim().toLowerCase();
+  if (!fingerprint) return value;
+
+  const canonical = LEGACY_NATIVE_FINGERPRINTS[fingerprint] ?? fingerprint;
+  if (canonical === 'unsafe') {
+    const nextTls = { ...tls };
+    if (object(tls.reality).enabled) {
+      nextTls.utls = { enabled: true, fingerprint: 'chrome' };
+    } else {
+      delete nextTls.utls;
+    }
+    return { ...value, tls: nextTls };
+  }
+  if (canonical === original) return value;
+  return { ...value, tls: { ...tls, utls: { ...utls, fingerprint: canonical } } };
+}
+
 export default function SingBoxOutboundModal({
   open,
   value,
@@ -133,12 +175,12 @@ export default function SingBoxOutboundModal({
   useEffect(() => {
     session.current++;
     if (!open) return;
-    const initial = value
+    const initial = normalizeNativeFingerprint(value
       ? structuredClone(value)
       : outboundDefaults(
           initialType,
           uniqueTag(initialType === 'selector' ? 'group' : 'proxy', tagsRef.current),
-        );
+        ));
     autoTagRef.current = value ? '' : text(initial.tag);
     setDraft(initial);
     setJson(JSON.stringify(initial, null, 2));
@@ -161,8 +203,9 @@ export default function SingBoxOutboundModal({
     remote = !group && !['direct', 'block'].includes(type);
   const availableTags = existingTags.filter((t) => t !== text(value?.tag));
   const update = (next: ConfigObject) => {
-    setDraft(next);
-    setJson(JSON.stringify(next, null, 2));
+    const normalized = normalizeNativeFingerprint(next);
+    setDraft(normalized);
+    setJson(JSON.stringify(normalized, null, 2));
     setJsonError('');
     setError('');
   };
@@ -236,7 +279,7 @@ export default function SingBoxOutboundModal({
       update(renamed[0]);
       setInvalidOptions([]);
       setOptionsRevision((revision) => revision + 1);
-      setAdditional(renamed.slice(1));
+      setAdditional(renamed.slice(1).map(normalizeNativeFingerprint));
       setExportedLink('');
       savedProtocols.current = {};
       setImported(true);
@@ -712,16 +755,7 @@ export default function SingBoxOutboundModal({
                   allowClear
                   placeholder="Стандартный TLS"
                   value={object(tls.utls).enabled ? text(object(tls.utls).fingerprint) : undefined}
-                  options={options([
-                    'chrome',
-                    'firefox',
-                    'safari',
-                    'ios',
-                    'android',
-                    'edge',
-                    'random',
-                    'randomized',
-                  ])}
+                  options={options(nativeFields.definitions.OutboundUTLSOptions.fingerprint.enum)}
                   onChange={(v) => {
                     const next = { ...tls };
                     if (v) next.utls = { enabled: true, fingerprint: v };

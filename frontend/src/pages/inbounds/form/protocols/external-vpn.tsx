@@ -10,16 +10,19 @@ import SniSearchInput from '../security/SniSearchInput';
 export function PingtunnelFields() {
   const { t } = useTranslation();
   const { control } = useFormContext();
-  const key = useWatch({ control, name: 'settings.key' }) as number | undefined;
-  const secret = useWatch({ control, name: 'settings.encryptKey' }) as string | undefined;
+  const password = useWatch({ control, name: 'settings.password' }) as string | undefined;
+  const congestion = useWatch({ control, name: 'settings.congestion' }) as string | undefined;
   const encrypt = useWatch({ control, name: 'settings.encrypt' }) as string | undefined;
   const address = useWatch({ control, name: 'shareAddr' }) as string | undefined;
   return (
     <>
       <Alert type="info" showIcon description={t('pages.inbounds.form.pingtunnelHint')} />
       <CascadeHint protocol="pingtunnel" />
-      <FormField name={['settings', 'key']} label={t('pages.inbounds.form.pingtunnelKey')}>
-        <InputNumber min={0} max={2147483647} />
+      <FormField name={['settings', 'password']} label={t('pages.inbounds.form.pingtunnelSecret')}>
+        <Input.Password
+          autoComplete="new-password"
+          placeholder={t('pages.inbounds.form.pingtunnelSecret')}
+        />
       </FormField>
       <FormField name={['settings', 'encrypt']} label={t('pages.inbounds.form.pingtunnelEncrypt')}>
         <Select
@@ -27,18 +30,9 @@ export function PingtunnelFields() {
             { value: 'chacha20', label: 'ChaCha20-Poly1305' },
             { value: 'aes256', label: 'AES-256-GCM' },
             { value: 'aes128', label: 'AES-128-GCM' },
-            { value: '', label: t('pages.inbounds.form.pingtunnelNoEncryption') },
           ]}
         />
       </FormField>
-      {encrypt !== '' && (
-        <FormField
-          name={['settings', 'encryptKey']}
-          label={t('pages.inbounds.form.pingtunnelSecret')}
-        >
-          <Input.Password autoComplete="new-password" />
-        </FormField>
-      )}
       <FormField name={['settings', 'maxConn']} label={t('pages.inbounds.form.pingtunnelMaxConn')}>
         <InputNumber min={0} />
       </FormField>
@@ -47,9 +41,6 @@ export function PingtunnelFields() {
         label={t('pages.inbounds.form.pingtunnelConnectTimeout')}
       >
         <InputNumber min={0} suffix="ms" />
-      </FormField>
-      <FormField name={['settings', 'forward']} label="SOCKS5 / HTTP forward">
-        <Input placeholder="socks5://127.0.0.1:1080" />
       </FormField>
       <FormField
         name={['settings', 'congestion']}
@@ -62,7 +53,7 @@ export function PingtunnelFields() {
           ]}
         />
       </FormField>
-      {(key ?? 0) > 0 && (encrypt === '' || !!secret) && (
+      {password && password.length >= 8 && (
         <Form.Item label={t('pages.inbounds.form.pingtunnelClientConfig')}>
           <Input.TextArea
             readOnly
@@ -72,9 +63,10 @@ export function PingtunnelFields() {
                 type: 'client',
                 listen: '127.0.0.1:1080',
                 server: address || 'PUBLIC_SERVER_IP',
-                sock5: 1,
-                key,
-                ...(encrypt ? { encrypt, encrypt_key: secret } : {}),
+                socks5: true,
+                password,
+                encrypt: encrypt || 'chacha20',
+                congestion: congestion === 'none' ? 'none' : 'bb',
               },
               null,
               2,

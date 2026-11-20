@@ -556,12 +556,10 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
       return createDefaultTuicInboundSettings();
     case 'pingtunnel':
       return {
-        key: 0,
+        password: '',
         encrypt: 'chacha20',
-        encryptKey: '',
         maxConn: 0,
-        connectTimeout: 1000,
-        forward: '',
+        connectTimeout: 3000,
         congestion: 'bb',
         clients: [],
       };

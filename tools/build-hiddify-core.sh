@@ -105,7 +105,8 @@ if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOST
     CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/protocol/snell -run '^TestSnellV[56]' -count=1 -timeout=60s
     CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/option -run '^TestXUIPanelHTTP1RoundTrip$' -count=1
     CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/route/rule -run '^TestXUIPanelSniffOverrideAction$' -count=1
-    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/common/tls github.com/sagernet/sing-box/protocol/vless github.com/sagernet/sing-vmess/vless -run '^TestXUIPanel(Reality|Preconnect|Vision|Reverse|Encryption|ExplicitCipher)' -count=1 -timeout=60s
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/common/tls github.com/sagernet/sing-box/protocol/vless github.com/sagernet/sing-vmess/vless -run '^TestXUIPanel(Reality|Preconnect|Vision|Reverse|Encryption|ExplicitCipher|BrowserFingerprint)' -count=1 -timeout=60s
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/metacubex/utls -run '^TestChrome155(CapturedClientHello|DefaultFingerprintRoundTrip|PresetOwnership)$' -count=1 -timeout=90s
     CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_test_link_flags" -tags "$task_test_tags" github.com/sagernet/sing-box/transport/v2raykcp github.com/sagernet/sing-box/transport/v2rayxhttp github.com/sagernet/sing-box/protocol/group -run '^TestXUIPanel' -count=1 -timeout=90s
   )
 fi

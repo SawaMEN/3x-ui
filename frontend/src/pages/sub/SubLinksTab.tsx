@@ -35,6 +35,13 @@ export default function SubLinksTab({
       downloadable: false,
     },
     {
+      kind: 'STANDALONE',
+      color: 'orange',
+      url: appendNativeFormat(subUrl, 'standalone'),
+      title: t('subscription.standaloneProtocols'),
+      downloadable: true,
+    },
+    {
       kind: 'XRAY',
       color: 'purple',
       url: subJsonUrl,

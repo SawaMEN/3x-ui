@@ -62,7 +62,7 @@ export function createManagerPreset(kind: string): ManagerConfig {
       serverNames: [],
       privateKey: '',
       shortIds: [],
-      settings: { publicKey: '', fingerprint: 'firefox', serverName: '', spiderX: '/' },
+      settings: { publicKey: '', fingerprint: 'chrome', serverName: '', spiderX: '/' },
     };
   if (kind === 'vless-ws') stream.wsSettings = { path: '/ws', host: '' };
   if (kind === 'vless-xhttp-get')

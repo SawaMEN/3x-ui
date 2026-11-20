@@ -3,13 +3,13 @@ export const UTLS_FINGERPRINT = Object.freeze({
   UTLS_FIREFOX: 'firefox',
   UTLS_SAFARI: 'safari',
   UTLS_IOS: 'ios',
-  UTLS_android: 'android',
+  UTLS_ANDROID: 'android',
   UTLS_EDGE: 'edge',
   UTLS_360: '360',
   UTLS_QQ: 'qq',
   UTLS_RANDOM: 'random',
   UTLS_RANDOMIZED: 'randomized',
-  UTLS_RONDOMIZEDNOALPN: 'randomizednoalpn',
+  UTLS_RANDOMIZED_NO_ALPN: 'randomizednoalpn',
   UTLS_UNSAFE: 'unsafe',
 });
 

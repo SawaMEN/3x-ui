@@ -4,14 +4,17 @@ import { VetroffOptionsSchema } from './vetroff';
 import { NaiveClientSchema } from './naive';
 
 export const PingtunnelInboundSettingsSchema = z.object({
-  key: z.number().int().min(0).max(2147483647).default(0),
-  encrypt: z.enum(['', 'chacha20', 'aes256', 'aes128']).default('chacha20'),
-  encryptKey: z.string().default(''),
+  password: z
+    .string()
+    .refine((v) => !v || v.length >= 8, 'Password must be at least 8 characters')
+    .default(''),
+  encrypt: z.enum(['chacha20', 'aes256', 'aes128']).catch('chacha20'),
   maxConn: z.number().int().min(0).default(0),
-  connectTimeout: z.number().int().min(0).default(1000),
-  forward: z.string().default(''),
+  connectTimeout: z.number().int().min(0).default(3000),
   congestion: z.enum(['bb', 'none']).default('bb'),
-  clients: z.array(z.never()).default([]),
+  // These are subscription attachments only; Pingtunnel still authenticates all
+  // clients with a single shared ICMP password, not per-client credentials.
+  clients: z.array(NaiveClientSchema).default([]),
 });
 export type PingtunnelInboundSettings = z.infer<typeof PingtunnelInboundSettingsSchema>;
 
