@@ -3,16 +3,16 @@
   "stage": 4,
   "target": {
     "repository": "https://github.com/SawaMEN/hiddify-core",
-    "commit": "b7e32173aeab7f176601a77f88fc2f4787de6da6",
+    "commit": "850b9a7934760f6730dd3795149890f55fd0cce8",
     "submodules": {
-      "hiddify-sing-box": "d4f283979ce11e8cc46c43422bc3f962d99d8c7e",
+      "hiddify-sing-box": "b25d821065d27ff4c738b6eb92a55afebf896727",
       "ray2sing": "c6368fc6adea94f7aa9ec57065aae3ad53343ac4"
     },
     "submodule_repositories": {
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/SawaMEN/ray2sing"
     },
-    "version": "sawamen-b7e32173aeab-d4f283979ce1-mask1-ciphers1-net62-sec1-stream1"
+    "version": "sawamen-850b9a793476-b25d821065d2-mask1-ciphers1-net62-sec1-stream1"
   },
   "runtime_contract": {
     "raw_config_command": [
@@ -147,7 +147,7 @@
       "with_kcp",
       "http2legacy"
     ],
-    "sing_box_version": "sawamen-d4f283979ce1",
+    "sing_box_version": "sawamen-b25d821065d2",
     "runtime_dependencies": [
       "matching libcronet for Naive outbound"
     ],
@@ -160,9 +160,9 @@
       "musl": "with_musl, CGO_ENABLED=1, statically linked Cronet; release and Docker"
     },
     "protection_dependency_versions": {
-      "github.com/metacubex/utls": "native:d4f283979ce11e8cc46c43422bc3f962d99d8c7e",
-      "github.com/starifly/sing-vmess": "native:d4f283979ce11e8cc46c43422bc3f962d99d8c7e",
-      "github.com/xtls/xray-core": "native:d4f283979ce11e8cc46c43422bc3f962d99d8c7e"
+      "github.com/metacubex/utls": "native:b25d821065d27ff4c738b6eb92a55afebf896727",
+      "github.com/starifly/sing-vmess": "native:b25d821065d27ff4c738b6eb92a55afebf896727",
+      "github.com/xtls/xray-core": "native:b25d821065d27ff4c738b6eb92a55afebf896727"
     },
     "security_dependencies": {
       "golang.org/x/net": "v0.62.0",
