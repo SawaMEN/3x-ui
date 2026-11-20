@@ -5,74 +5,73 @@ package network
 import (
 	"bufio"
 	"bytes"
-	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
 )
 
-// AutoHttpsConn wraps a net.Conn to provide automatic HTTP to HTTPS redirection.
-// It intercepts the first read to detect HTTP requests and responds with a 307 redirect
-// to the HTTPS equivalent URL. Subsequent reads work normally for HTTPS connections.
+const maxRedirectRequestBytes = 2048
+
+// AutoHttpsConn intercepts an initial HTTP request and redirects it to HTTPS.
+// TLS traffic is passed through to the server.
 type AutoHttpsConn struct {
 	net.Conn
 
-	firstBuf []byte
-	bufStart int
-
-	readRequestOnce sync.Once
+	readMu sync.Mutex
+	reader io.Reader
 }
 
-// NewAutoHttpsConn creates a new AutoHttpsConn that wraps the given connection.
-// It enables automatic redirection of HTTP requests to HTTPS.
 func NewAutoHttpsConn(conn net.Conn) net.Conn {
-	return &AutoHttpsConn{
-		Conn: conn,
-	}
+	return &AutoHttpsConn{Conn: conn}
 }
 
-func (c *AutoHttpsConn) readRequest() bool {
-	c.firstBuf = make([]byte, 2048)
-	n, err := c.Conn.Read(c.firstBuf)
-	c.firstBuf = c.firstBuf[:n]
-	if err != nil {
-		return false
+func (c *AutoHttpsConn) initialReader() io.Reader {
+	reader := bufio.NewReaderSize(c.Conn, maxRedirectRequestBytes)
+	first, err := reader.Peek(1)
+	if err != nil || first[0] < '!' || first[0] >= 0x7f {
+		// TLS record types start with a control byte.
+		return reader
 	}
-	reader := bytes.NewReader(c.firstBuf)
-	bufReader := bufio.NewReader(reader)
-	request, err := http.ReadRequest(bufReader)
-	if err != nil {
-		return false
-	}
-	resp := http.Response{
-		Header: http.Header{},
 
-		StatusCode: http.StatusTemporaryRedirect,
+	// A plaintext request can span multiple reads. Bound the amount inspected
+	// and replay what was read if it turns out not to be a redirectable request.
+	var captured bytes.Buffer
+	request, err := http.ReadRequest(bufio.NewReader(io.TeeReader(io.LimitReader(reader, maxRedirectRequestBytes), &captured)))
+	if err != nil || request.Host == "" || request.URL.Path == "*" {
+		return io.MultiReader(&captured, reader)
 	}
-	location := fmt.Sprintf("https://%v%v", request.Host, request.RequestURI)
-	resp.Header.Set("Location", location)
-	_ = resp.Write(c.Conn)
-	c.Close()
-	c.firstBuf = nil
-	return true
+	location := url.URL{
+		Scheme:     "https",
+		Host:       request.Host,
+		Path:       request.URL.Path,
+		RawPath:    request.URL.RawPath,
+		RawQuery:   request.URL.RawQuery,
+		ForceQuery: request.URL.ForceQuery,
+	}
+	response := http.Response{
+		StatusCode:    http.StatusTemporaryRedirect,
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        http.Header{"Location": {location.String()}},
+		ContentLength: 0,
+		Close:         true,
+	}
+	_ = response.Write(c.Conn)
+	_ = c.Close()
+	return bytes.NewReader(nil)
 }
 
-// Read implements the net.Conn Read method with automatic HTTPS redirection.
-// On the first read, it checks if the request is HTTP and redirects to HTTPS if so.
-// Subsequent reads work normally.
+// Read redirects a plaintext HTTP request or reads from the TLS connection.
 func (c *AutoHttpsConn) Read(buf []byte) (int, error) {
-	c.readRequestOnce.Do(func() {
-		c.readRequest()
-	})
-
-	if c.firstBuf != nil {
-		n := copy(buf, c.firstBuf[c.bufStart:])
-		c.bufStart += n
-		if c.bufStart >= len(c.firstBuf) {
-			c.firstBuf = nil
-		}
-		return n, nil
+	if len(buf) == 0 {
+		return 0, nil
 	}
-
-	return c.Conn.Read(buf)
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+	if c.reader == nil {
+		c.reader = c.initialReader()
+	}
+	return c.reader.Read(buf)
 }
