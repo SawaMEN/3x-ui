@@ -816,12 +816,17 @@ export default function OutboundFormModal({
                                   showIcon
                                   title={`Подбор от ${new Date(field.value.testedAt).toLocaleString()}`}
                                   description={`Проверенные сочетания HTTP / HTTPS / QUIC: ${field.value.selected.length}. Доступно для этого outbound после сохранения.`}
-                                  closable
-                                  onClose={() =>
-                                    methods.setValue('settings.calibration', undefined, {
-                                      shouldDirty: true,
-                                    })
-                                  }
+                                  closable={{
+
+                                    onClose: () =>
+
+                                      methods.setValue('settings.calibration', undefined, {
+
+                                        shouldDirty: true,
+
+                                      }),
+
+                                  }}
                                   style={{ marginBottom: 12 }}
                                 />
                               ) : (
