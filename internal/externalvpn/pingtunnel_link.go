@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -79,8 +80,13 @@ func DecodePingtunnelLink(link string) (PingtunnelClientConfig, error) {
 		!validPingtunnelServer(cfg.Server) {
 		return cfg, fmt.Errorf("Pingtunnel link missing or invalid native client credentials")
 	}
-	if _, _, err := net.SplitHostPort(cfg.Listen); err != nil {
+	_, port, err := net.SplitHostPort(cfg.Listen)
+	if err != nil {
 		return cfg, fmt.Errorf("Pingtunnel link has invalid local SOCKS5 listen address: %w", err)
+	}
+	listenPort, err := strconv.Atoi(port)
+	if err != nil || listenPort < 1 || listenPort > 65535 {
+		return cfg, fmt.Errorf("Pingtunnel link has invalid local SOCKS5 listen port")
 	}
 	if cfg.Encrypt != "chacha20" && cfg.Encrypt != "aes128" && cfg.Encrypt != "aes256" {
 		return cfg, fmt.Errorf("Pingtunnel link has unsupported cipher")
