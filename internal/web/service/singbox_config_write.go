@@ -24,7 +24,7 @@ type nativeConfigCandidate struct {
 	path, target     string
 	managedOutbounds []map[string]any
 	protocolServers  []protocolserver.Plan
- zapret2Plans []zapret2.Plan
+	zapret2Plans    []zapret2.Plan
 	nativeAWGTags    []string
 	published        bool
 }
@@ -145,7 +145,9 @@ func (s *SingBoxService) prepareGeneratedConfigCandidate(ctx context.Context, cf
 	if err := protocolserver.Check(ctx, cfg.ProtocolServers); err != nil {
 		return nil, err
 	}
- if err := zapret2.Preflight(ctx,cfg.Zapret2Plans);err!=nil{return nil,err}
+	if err := zapret2.Preflight(ctx, cfg.Zapret2Plans); err != nil {
+		return nil, err
+	}
 	data, err := cfg.Marshal()
 	if err != nil {
 		return nil, err
