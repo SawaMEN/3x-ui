@@ -1406,8 +1406,11 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 		} `json:"obj"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxProbeBodyBytes)).Decode(&envelope); err != nil {
-		patch.LastError = "decode response: " + err.Error()
-		return patch, err
+		// Preserve the decoding phase in the returned error as well as in
+		// LastError. Add/update uses the returned error, not the patch.
+		decodeErr := fmt.Errorf("decode response: %w", err)
+		patch.LastError = decodeErr.Error()
+		return patch, decodeErr
 	}
 	if !envelope.Success {
 		patch.LastError = "remote returned success=false: " + envelope.Msg
@@ -1558,6 +1561,15 @@ func (p HeartbeatPatch) ToUI(ok bool) ProbeResultUI {
 func FriendlyProbeError(msg string) string {
 	if strings.Contains(msg, "server gave HTTP response to HTTPS client") {
 		return "the server speaks HTTP, not HTTPS; set the node scheme to http"
+	}
+	if strings.Contains(msg, "decode response: EOF") {
+		return msg + " (the panel returned an empty HTTP 200 response instead of JSON; check its API and reverse proxy)"
+	}
+	// Go reports a plain EOF when the peer closes a TLS handshake or drops
+	// the connection before sending response headers. It is not an API-token
+	// rejection, and there is no safe reason to retry it over plaintext HTTP.
+	if strings.TrimSpace(msg) == "EOF" || strings.HasSuffix(msg, ": EOF") {
+		return msg + " (remote closed the connection before an HTTP response; check HTTPS on the configured port, TLS/SNI and proxy/firewall rules)"
 	}
 	return msg
 }
