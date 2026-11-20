@@ -58,9 +58,20 @@ def complete(release):
         f"sing-box-linux-{arch}.tar.gz{suffix}"
         for arch in ("amd64", "arm64") for suffix in ("", ".sha256")
     }
-    return (not release.get("draft") and not release.get("prerelease")
-            and bool(release.get("published_at"))
-            and required <= {asset["name"] for asset in release.get("assets", [])})
+    if release.get("draft") or release.get("prerelease") or not release.get("published_at"):
+        return False
+    assets = {
+        asset["name"]: asset for asset in release.get("assets", [])
+        if isinstance(asset, dict) and isinstance(asset.get("name"), str)
+    }
+    # An asset name appearing during an upload is not proof that its binary
+    # exists. Wait for GitHub to mark every binary and checksum as uploaded.
+    return required <= assets.keys() and all(
+        assets[name].get("state") == "uploaded"
+        and isinstance(assets[name].get("size"), int)
+        and assets[name]["size"] > 0
+        for name in required
+    )
 
 
 def resolve(tag=None):
