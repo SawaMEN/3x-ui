@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           git fetch origin main --depth=50
           mapfile -t source_files < <(git diff --name-only "$(git merge-base origin/main HEAD)" HEAD -- '*.go')
-          source_files+=("internal/externalvpn/manager.go")
+          source_files+=("internal/externalvpn/manager.go" "internal/singbox/browser_fingerprints_test.go")
           if (( ${#source_files[@]} > 0 )); then
             "$(go env GOPATH)/bin/goimports" -w "${source_files[@]}"
             "$(go env GOPATH)/bin/gofumpt" -w "${source_files[@]}"
