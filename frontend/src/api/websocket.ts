@@ -59,6 +59,8 @@ export class WebSocketClient {
     window.addEventListener('online', this.#resumeDisconnected);
     document.addEventListener('visibilitychange', this.#onVisible);
     this.#cancelReconnect();
+    this.ws = null;
+    this.isConnected = false;
     this.#openSocket();
   }
 
@@ -101,6 +103,7 @@ export class WebSocketClient {
   }
 
   #openSocket(): void {
+    if (this.ws) return;
     const url = this.#buildUrl();
     let socket: WebSocket;
     try {
@@ -153,12 +156,14 @@ export class WebSocketClient {
       // UTF-8 uses at most three bytes per UTF-16 code unit. Most status
       // messages fit below this bound and need no Blob allocation.
       if (
-        data.length > WebSocketClient.#MAX_PAYLOAD_BYTES / 3 &&
-        new Blob([data]).size > WebSocketClient.#MAX_PAYLOAD_BYTES
+        data.length > WebSocketClient.#MAX_PAYLOAD_BYTES ||
+        (data.length > WebSocketClient.#MAX_PAYLOAD_BYTES / 3 &&
+          new Blob([data]).size > WebSocketClient.#MAX_PAYLOAD_BYTES)
       ) {
         console.error('WebSocket: payload too large, closing');
         try {
-          this.ws?.close(1009, 'message too big');
+          // Browser clients require an application code for this reason.
+          this.ws?.close(4009, 'message too big');
         } catch {}
         return;
       }
@@ -196,7 +201,7 @@ export class WebSocketClient {
   }
 
   #scheduleReconnect(): void {
-    if (!this.shouldReconnect) return;
+    if (!this.shouldReconnect || this.ws) return;
     this.#cancelReconnect();
 
     let base: number;

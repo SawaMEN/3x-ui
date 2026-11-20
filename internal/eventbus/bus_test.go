@@ -67,6 +67,58 @@ func TestBusConcurrentStopAndPublishAfterStop(t *testing.T) {
 	}
 }
 
+func TestBusStopDropsBufferedSubscriberEvents(t *testing.T) {
+	b := New(16)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	doneQueuing := make(chan struct{}, 1)
+	delivered := make(chan Event, subscriberQueueSize)
+	b.Subscribe("blocked", func(event Event) {
+		if event.Source == "active" {
+			close(started)
+			<-release
+		}
+		delivered <- event
+	})
+	b.Subscribe("observer", func(event Event) {
+		if event.Source == "queued" {
+			doneQueuing <- struct{}{}
+		}
+	})
+
+	b.Publish(Event{Source: "active"})
+	b.Publish(Event{Source: "queued"})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		close(release)
+		b.Stop()
+		t.Fatal("active handler did not start")
+	}
+	select {
+	case <-doneQueuing:
+	case <-time.After(time.Second):
+		close(release)
+		b.Stop()
+		t.Fatal("second event was not queued")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		b.Stop()
+	}()
+	<-b.done
+	close(release)
+	<-stopped
+	if len(delivered) != 1 {
+		t.Errorf("delivered %d events, want only the active event", len(delivered))
+	}
+	if len(b.ch) != 0 || len(b.subs) != 0 {
+		t.Error("stopped bus retained events or subscribers")
+	}
+}
+
 func TestBusMultipleSubscribers(t *testing.T) {
 	b := New(16)
 	defer b.Stop()

@@ -32,6 +32,18 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(self.classify("internal/web/service/api.go", "frontend/package-lock.json"), {
             "backend": "true", "frontend": "true"})
 
+    def test_ci_workflow_changes_check_both_suites(self):
+        self.assertEqual(self.classify(".github/workflows/ci.yml"), {
+            "backend": "true", "frontend": "true"})
+
+    def test_kernel_fetcher_and_regression_tests_trigger_ci(self):
+        workflow = (SCRIPT.parents[2] / ".github/workflows/ci.yml").read_text()
+        event_paths = workflow.split("\npermissions:", 1)[0]
+        for path in ("tools/fetch-latest-kernel.py", "tools/test_fetch_latest_kernel.py"):
+            with self.subTest(path=path):
+                self.assertEqual(event_paths.count(f'      - "{path}"'), 2)
+                self.assertEqual(self.classify(path), {"backend": "true", "frontend": "false"})
+
     def test_unknown_changes_fail_open(self):
         self.assertEqual(self.classify("LICENSE"), {
             "backend": "true", "frontend": "true"})
