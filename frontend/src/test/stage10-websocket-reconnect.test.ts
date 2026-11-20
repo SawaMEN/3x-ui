@@ -8,21 +8,24 @@ class FakeSocket {
   static readonly CLOSED = 3;
 
   readyState = FakeSocket.CONNECTING;
-  readonly handlers = new Map<string, Set<() => void>>();
+  readonly handlers = new Map<string, Set<(event?: { data: string }) => void>>();
   constructor(public readonly url: string) {
     sockets.push(this);
   }
-  addEventListener(name: string, handler: () => void) {
+  addEventListener(name: string, handler: (event?: { data: string }) => void) {
     if (!this.handlers.has(name)) this.handlers.set(name, new Set());
     this.handlers.get(name)!.add(handler);
   }
-  emit(name: string) {
+  emit(name: string, event?: { data: string }) {
     if (name === 'open') this.readyState = FakeSocket.OPEN;
     if (name === 'close') this.readyState = FakeSocket.CLOSED;
-    for (const handler of this.handlers.get(name) ?? []) handler();
+    for (const handler of this.handlers.get(name) ?? []) handler(event);
   }
   send() {}
-  close() {
+  close(code = 1000) {
+    if (code !== 1000 && (code < 3000 || code > 4999)) {
+      throw new DOMException('Invalid WebSocket close code', 'InvalidAccessError');
+    }
     this.readyState = FakeSocket.CLOSED;
     this.emit('close');
   }
@@ -89,6 +92,39 @@ describe('stage 10: reconnect after mobile foreground and offline', () => {
     document.dispatchEvent(new Event('visibilitychange'));
     expect(sockets).toHaveLength(2);
     client.disconnect();
+  });
+
+  it('avoids a second socket when a disconnect handler reconnects immediately', () => {
+    const client = new WebSocketClient('/');
+    client.on('disconnected', () => client.connect());
+    client.connect();
+    sockets[0].emit('close');
+    vi.advanceTimersByTime(60_000);
+    expect(sockets).toHaveLength(2);
+  });
+
+  it('reports disconnected while a closing connection is replaced', () => {
+    const client = new WebSocketClient('/');
+    client.connect();
+    sockets[0].emit('open');
+    sockets[0].readyState = FakeSocket.CLOSING;
+    client.connect();
+    expect(sockets).toHaveLength(2);
+    expect(client.isConnected).toBe(false);
+  });
+
+  it('closes an oversized message with a code that browsers permit', () => {
+    const client = new WebSocketClient('/');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      client.connect();
+      sockets[0].emit('open');
+      sockets[0].emit('message', { data: 'a'.repeat(10 * 1024 * 1024 + 1) });
+      expect(sockets[0].readyState).toBe(FakeSocket.CLOSED);
+      expect(client.isConnected).toBe(false);
+    } finally {
+      error.mockRestore();
+    }
   });
 
   it('keeps one listener per event across repeated connect and after disconnect', () => {

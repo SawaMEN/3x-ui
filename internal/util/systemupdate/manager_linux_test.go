@@ -4,6 +4,7 @@ package systemupdate
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -150,23 +151,45 @@ func TestIsKernelPackage(t *testing.T) {
 	}
 }
 
-func TestStartAsyncCommandIgnoresCancelledContext(t *testing.T) {
+func TestInstalledPackageQueriesRespectCancelledContext(t *testing.T) {
+	dir := t.TempDir()
+	pkgQuery := filepath.Join(dir, "dpkg-query")
+	if err := os.WriteFile(pkgQuery, []byte("#!/bin/sh\nprintf 'install ok installed\t1.0\n'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := installedPackageVersions(ctx, "apt-get"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("query all packages: got %v, want cancellation", err)
+	}
+	if _, ok := installedPackageVersion(ctx, "apt-get", "curl"); ok {
+		t.Fatal("cancelled per-package query reported an installed package")
+	}
+	if _, err := runCommand(ctx, "dpkg-query"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("command reported %v, want cancellation", err)
+	}
+}
+
+func TestStartAsyncCommandIgnoresCancelledContextAndReapsChild(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	marker := filepath.Join(t.TempDir(), "started")
-	err := startAsyncCommand(ctx, "sh", "-c", "printf started > \"$1\"", "sh", marker)
+	err := startAsyncCommand(ctx, "sh", "-c", `printf '%s' "$$" > "$1"`, "sh", marker)
 	if err != nil {
 		t.Fatalf("startAsyncCommand() error = %v", err)
 	}
 
 	for i := 0; i < 50; i++ {
-		if data, err := os.ReadFile(marker); err == nil && string(data) == "started" {
-			return
+		if pid, err := os.ReadFile(marker); err == nil && len(pid) > 0 {
+			if _, err := os.Stat(filepath.Join("/proc", string(pid))); errors.Is(err, os.ErrNotExist) {
+				return
+			}
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("async command did not run after context cancellation")
+	t.Fatalf("async command did not run and exit cleanly after context cancellation")
 }
 
 func TestUpdateContextIgnoresCallerCancellation(t *testing.T) {

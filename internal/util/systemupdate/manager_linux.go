@@ -73,7 +73,7 @@ func GetStatus(ctx context.Context, allPackages bool) (Status, error) {
 		return status, err
 	}
 
-	installedVersions, _ := installedPackageVersions(info.manager)
+	installedVersions, _ := installedPackageVersions(ctx, info.manager)
 	packages, kernelPackages, missingPackages := collectPackageStatuses(
 		info.distributionForPackages(),
 		upgrades,
@@ -81,15 +81,21 @@ func GetStatus(ctx context.Context, allPackages bool) (Status, error) {
 			if version, ok := installedVersions[name]; ok {
 				return version, true
 			}
-			return installedPackageVersion(info.manager, name)
+			return installedPackageVersion(ctx, info.manager, name)
 		},
 		allPackages,
 	)
 	status.Packages = packages
 	status.MissingPackages = missingPackages
 
-	kernel := KernelStatus{RunningVersion: runtimeKernelVersion()}
-	kernel.RebootRequired = rebootRequired(info.manager)
+	if err := ctx.Err(); err != nil {
+		return status, err
+	}
+	kernel := KernelStatus{RunningVersion: runtimeKernelVersion(ctx)}
+	kernel.RebootRequired = rebootRequired(ctx, info.manager)
+	if err := ctx.Err(); err != nil {
+		return status, err
+	}
 
 	for _, item := range kernelPackages {
 		if !item.UpdateAvailable {
@@ -226,7 +232,7 @@ func Apply(ctx context.Context, allPackages bool) (UpdateResult, error) {
 		return result, fmt.Errorf("system update failed: %s", result.Error)
 	}
 
-	result.RebootRequired = result.RebootRequired || rebootRequired(info.manager)
+	result.RebootRequired = result.RebootRequired || rebootRequired(updateCtx, info.manager)
 	return result, nil
 }
 
@@ -567,20 +573,20 @@ func listAvailableUpdates(ctx context.Context, manager string) (map[string]strin
 
 var installedApkPackagePattern = regexp.MustCompile("^(.+)-([0-9][^[:space:]]*)$")
 
-func installedPackageVersions(manager string) (map[string]string, error) {
+func installedPackageVersions(ctx context.Context, manager string) (map[string]string, error) {
 	result := map[string]string{}
 	var output []byte
 	var err error
 
 	switch manager {
 	case "apt-get":
-		output, err = exec.CommandContext(context.Background(), "dpkg-query", "-W", "-f=${Package}\t${Version}\t${Status}\n").Output()
+		output, err = exec.CommandContext(ctx, "dpkg-query", "-W", "-f=${Package}\t${Version}\t${Status}\n").Output()
 	case "dnf", "yum", "zypper":
-		output, err = exec.CommandContext(context.Background(), "rpm", "-qa", "--qf", "%{NAME}\t%{VERSION}-%{RELEASE}\n").Output()
+		output, err = exec.CommandContext(ctx, "rpm", "-qa", "--qf", "%{NAME}\t%{VERSION}-%{RELEASE}\n").Output()
 	case "pacman":
-		output, err = exec.CommandContext(context.Background(), "pacman", "-Q").Output()
+		output, err = exec.CommandContext(ctx, "pacman", "-Q").Output()
 	case "apk":
-		output, err = exec.CommandContext(context.Background(), "apk", "info", "-v").Output()
+		output, err = exec.CommandContext(ctx, "apk", "info", "-v").Output()
 	default:
 		return result, fmt.Errorf("unsupported package manager: %s", manager)
 	}
@@ -615,10 +621,10 @@ func installedPackageVersions(manager string) (map[string]string, error) {
 	return result, scanner.Err()
 }
 
-func installedPackageVersion(manager, name string) (string, bool) {
+func installedPackageVersion(ctx context.Context, manager, name string) (string, bool) {
 	switch manager {
 	case "apt-get":
-		output, err := exec.CommandContext(context.Background(), "dpkg-query", "-W", "-f=${Status}\t${Version}\n", name).Output()
+		output, err := exec.CommandContext(ctx, "dpkg-query", "-W", "-f=${Status}\t${Version}\n", name).Output()
 		if err != nil {
 			return "", false
 		}
@@ -628,14 +634,14 @@ func installedPackageVersion(manager, name string) (string, bool) {
 		}
 		return fields[1], true
 	case "dnf", "yum", "zypper":
-		output, err := exec.CommandContext(context.Background(), "rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", name).Output()
+		output, err := exec.CommandContext(ctx, "rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", name).Output()
 		if err != nil {
 			return "", false
 		}
 		version := strings.TrimSpace(string(output))
 		return version, version != ""
 	case "pacman":
-		output, err := exec.CommandContext(context.Background(), "pacman", "-Q", name).Output()
+		output, err := exec.CommandContext(ctx, "pacman", "-Q", name).Output()
 		if err != nil {
 			return "", false
 		}
@@ -645,7 +651,7 @@ func installedPackageVersion(manager, name string) (string, bool) {
 		}
 		return fields[1], true
 	case "apk":
-		output, err := exec.CommandContext(context.Background(), "apk", "info", "-e", name).Output()
+		output, err := exec.CommandContext(ctx, "apk", "info", "-e", name).Output()
 		if err != nil {
 			return "", false
 		}
@@ -783,8 +789,8 @@ func isKernelPackage(name string) bool {
 	return false
 }
 
-func runtimeKernelVersion() string {
-	output, err := exec.CommandContext(context.Background(), "uname", "-r").Output()
+func runtimeKernelVersion(ctx context.Context) string {
+	output, err := exec.CommandContext(ctx, "uname", "-r").Output()
 	if err != nil {
 		return ""
 	}
@@ -792,7 +798,12 @@ func runtimeKernelVersion() string {
 }
 
 var startAsyncCommand = func(_ context.Context, command string, args ...string) error {
-	return exec.Command(command, args...).Start()
+	cmd := exec.Command(command, args...)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }()
+	return nil
 }
 
 // Reboot schedules a system reboot without waiting for the shutdown to finish.
@@ -820,7 +831,7 @@ func Reboot(ctx context.Context) error {
 	return fmt.Errorf("failed to start system reboot command")
 }
 
-func rebootRequired(manager string) bool {
+func rebootRequired(ctx context.Context, manager string) bool {
 	for _, path := range []string{"/var/run/reboot-required", "/run/reboot-required"} {
 		if _, err := os.Stat(path); err == nil {
 			return true
@@ -828,7 +839,7 @@ func rebootRequired(manager string) bool {
 	}
 	if manager == "dnf" || manager == "yum" {
 		if commandExists("needs-restarting") {
-			return exec.CommandContext(context.Background(), "needs-restarting", "-r").Run() != nil
+			return exec.CommandContext(ctx, "needs-restarting", "-r").Run() != nil
 		}
 	}
 	return false
@@ -843,6 +854,9 @@ func runCommand(ctx context.Context, command string, args ...string) (string, er
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C", "LANGUAGE=C")
 	output, err := cmd.CombinedOutput()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return "", ctxErr
+	}
 	return string(output), err
 }
 

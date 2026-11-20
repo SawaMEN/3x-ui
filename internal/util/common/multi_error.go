@@ -18,6 +18,9 @@ func (e multiError) Error() string {
 	return r.String()
 }
 
+// Unwrap preserves each cause for errors.Is and errors.As.
+func (e multiError) Unwrap() []error { return []error(e) }
+
 // Combine combines multiple errors into a single error, filtering out nil errors.
 func Combine(maybeError ...error) error {
 	var errs multiError

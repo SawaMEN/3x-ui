@@ -10,6 +10,9 @@ frontend=false
 while IFS= read -r path || [[ -n "$path" ]]; do
   [[ -n "$path" ]] || continue
   case "$path" in
+    .github/workflows/ci.yml)
+      backend=true
+      frontend=true ;;
     frontend/*|.nvmrc)
       frontend=true ;;
     *.go|go.mod|go.sum|Makefile|deploy/*|internal/*|scripts/*|tools/*|install.sh|update.sh|.github/workflows/*)

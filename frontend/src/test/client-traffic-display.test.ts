@@ -15,6 +15,16 @@ describe('computeTrafficDisplay', () => {
     expect(d.remaining).toBe(0.5 * gb);
   });
 
+  it('ignores negative legacy counters when checking depletion', () => {
+    const d = computeTrafficDisplay(
+      { up: -gb, down: gb, total: gb, enabled: true, trafficDiff: 0 },
+      false,
+    );
+    expect(d.used).toBe(gb);
+    expect(d.remaining).toBe(0);
+    expect(d.isDepleted).toBe(true);
+  });
+
   it('returns 100% bar for unlimited clients', () => {
     const d = computeTrafficDisplay(
       { up: 5 * gb, down: 2 * gb, total: 0, enabled: true, trafficDiff: 0 },

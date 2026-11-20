@@ -26,8 +26,8 @@ const DISABLED_STROKE = {
 const UNLIMITED_STROKE = '#722ed1';
 
 export function computeTrafficDisplay(input: TrafficDisplayInput, isDark: boolean): TrafficDisplay {
-  const up = input.up || 0;
-  const down = input.down || 0;
+  const up = Number.isFinite(input.up) ? Math.max(0, input.up) : 0;
+  const down = Number.isFinite(input.down) ? Math.max(0, input.down) : 0;
   const used = up + down;
   const total = input.total || 0;
   const isUnlimited = total <= 0;

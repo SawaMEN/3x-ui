@@ -146,9 +146,14 @@ function requestSignal(options: HttpRequestOptions): AbortSignal | undefined {
   if (!options.signal) return timeout;
   if (typeof AbortSignal.any === 'function') return AbortSignal.any([options.signal, timeout]);
   if (options.signal.aborted) return options.signal;
+  const caller = options.signal;
   const controller = new AbortController();
-  const abort = () => controller.abort();
-  options.signal.addEventListener('abort', abort, { once: true });
+  const abort = (event: Event) => {
+    caller.removeEventListener('abort', abort);
+    timeout.removeEventListener('abort', abort);
+    controller.abort(event.target === caller ? caller.reason : timeout.reason);
+  };
+  caller.addEventListener('abort', abort, { once: true });
   timeout.addEventListener('abort', abort, { once: true });
   return controller.signal;
 }
@@ -165,7 +170,7 @@ async function performFetch(
   headers.set('X-Requested-With', 'XMLHttpRequest');
 
   let body: BodyInit | undefined;
-  if (data instanceof FormData) {
+  if (data instanceof FormData && upper !== 'GET' && upper !== 'HEAD') {
     body = data;
     headers.delete('Content-Type');
   } else if (!SAFE_METHODS.has(upper)) {
@@ -185,6 +190,7 @@ async function performFetch(
   }
 
   if (!SAFE_METHODS.has(upper)) {
+    options.signal?.throwIfAborted();
     const token = csrfOverride ?? (await waitForToken(ensureCsrfToken(), options.signal));
     if (token) headers.set('X-CSRF-Token', token);
   }
@@ -225,6 +231,7 @@ export async function httpRequest(
   let res = await performFetch(method, url, data, options);
 
   if (res.status === 403 && !SAFE_METHODS.has(method.toUpperCase())) {
+    options.signal?.throwIfAborted();
     csrfToken = null;
     const fresh = await waitForToken(fetchCsrfToken(), options.signal);
     if (fresh) {

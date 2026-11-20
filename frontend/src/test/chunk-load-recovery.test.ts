@@ -44,6 +44,41 @@ describe('chunk loading recovery', () => {
     expect(replace).toHaveBeenCalledTimes(1);
   });
 
+  it('ignores future timestamps after a clock change', async () => {
+    vi.resetModules();
+    const replace = vi.fn();
+    const future = Date.now() + 60_000;
+    vi.stubGlobal('sessionStorage', { getItem: () => String(future), setItem: vi.fn() });
+    vi.stubGlobal('window', {
+      location: { href: `https://panel.example/?_3xui_chunk_reload=${future}`, replace },
+    });
+    const recovery = await import('@/lib/chunk-load-recovery');
+    expect(recovery.reloadAfterChunkLoadError()).toBe(true);
+    expect(replace).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces the original import failure if navigation throws', async () => {
+    vi.resetModules();
+    const setItem = vi.fn();
+    vi.stubGlobal('sessionStorage', { getItem: () => null, setItem });
+    vi.stubGlobal('window', {
+      location: {
+        href: 'https://panel.example/',
+        replace: () => {
+          throw new Error('navigation blocked');
+        },
+      },
+    });
+    const recovery = await import('@/lib/chunk-load-recovery');
+    const error = new Error('Failed to fetch dynamically imported module');
+    await expect(
+      recovery.importWithChunkRecovery(async () => {
+        throw error;
+      }),
+    ).rejects.toBe(error);
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
   it('reloads on an undefined lazy import even without a preloadError event', async () => {
     vi.useFakeTimers();
     vi.resetModules();
@@ -87,5 +122,8 @@ describe('chunk loading recovery', () => {
     await assertion;
     await completed;
     expect(settled).toBe(true);
+    expect(recovery.reloadAfterChunkLoadError()).toBe(false);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(recovery.reloadAfterChunkLoadError()).toBe(true);
   });
 });

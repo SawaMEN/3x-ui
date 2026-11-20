@@ -1,6 +1,7 @@
 package eventbus
 
 import (
+	"slices"
 	"sync"
 	"time"
 
@@ -64,7 +65,7 @@ func (b *Bus) Subscribe(id string, handler func(Event)) {
 	for i, s := range b.subs {
 		if s.id == id {
 			close(s.quit)
-			b.subs = append(b.subs[:i], b.subs[i+1:]...)
+			b.subs = slices.Delete(b.subs, i, i+1)
 			break
 		}
 	}
@@ -86,7 +87,7 @@ func (b *Bus) Unsubscribe(id string) {
 	for i, s := range b.subs {
 		if s.id == id {
 			close(s.quit)
-			b.subs = append(b.subs[:i], b.subs[i+1:]...)
+			b.subs = slices.Delete(b.subs, i, i+1)
 			return
 		}
 	}
@@ -126,6 +127,10 @@ func (b *Bus) dispatch() {
 				return
 			}
 			b.mu.RLock()
+			if b.stopped {
+				b.mu.RUnlock()
+				return
+			}
 			for _, s := range b.subs {
 				select {
 				case s.queue <- e:
@@ -147,7 +152,16 @@ func (b *Bus) runWorker(s *subscriber) {
 	for {
 		select {
 		case e := <-s.queue:
-			safeCall(s.handler, e)
+			// A buffered event and a shutdown signal can both be ready.
+			// Check the signals again before starting another handler.
+			select {
+			case <-s.quit:
+				return
+			case <-b.done:
+				return
+			default:
+				safeCall(s.handler, e)
+			}
 		case <-s.quit:
 			return
 		case <-b.done:
@@ -172,8 +186,19 @@ func (b *Bus) Stop() {
 	b.mu.Lock()
 	if !b.stopped {
 		b.stopped = true
+		b.subs = nil
 		close(b.done)
 	}
 	b.mu.Unlock()
 	b.wg.Wait()
+
+	// Publish cannot enqueue after stopped was set. Drop any references
+	// that were still buffered when the dispatch goroutine exited.
+	for {
+		select {
+		case <-b.ch:
+		default:
+			return
+		}
+	}
 }

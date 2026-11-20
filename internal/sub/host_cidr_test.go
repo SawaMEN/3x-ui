@@ -2,6 +2,7 @@ package sub
 
 import (
 	"net"
+	"net/netip"
 	"strings"
 	"testing"
 )
@@ -23,6 +24,10 @@ func TestIsCIDR(t *testing.T) {
 		{input: "2001:db8::1", want: false},
 		{input: "", want: false},
 		{input: "invalid/33", want: false},
+		{input: "[2001:db8::/64", want: false},
+		{input: "2001:db8::]/64", want: false},
+		{input: "::ffff:192.0.2.14/127", want: true},
+		{input: "192.0.2.1/032", want: true},
 		{input: "999.999.999.999/24", want: false},
 	}
 
@@ -171,5 +176,27 @@ func TestRandomIPsFromCIDR_IPv6(t *testing.T) {
 func TestRandomIPsFromCIDR_Invalid(t *testing.T) {
 	if _, err := RandomIPsFromCIDR("example.com", 1); err == nil {
 		t.Fatalf("RandomIPsFromCIDR(domain) expected error, got nil")
+	}
+}
+
+func TestRandomIPsFromCIDR_MappedIPv6(t *testing.T) {
+	for _, network := range []string{"::ffff:192.0.2.14/128", "::ffff:192.0.2.14/127", "::ffff:192.0.2.14/120", "::ffff:192.0.2.14/95"} {
+		t.Run(network, func(t *testing.T) {
+			prefix := netip.MustParsePrefix(network).Masked()
+			ips, err := RandomIPsFromCIDR(network, 2)
+			wantCount := 2
+			if prefix.Bits() == 128 {
+				wantCount = 1
+			}
+			if err != nil || len(ips) != wantCount {
+				t.Fatalf("got %v, %v; want %d addresses", ips, err, wantCount)
+			}
+			for _, ip := range ips {
+				addr, err := netip.ParseAddr(ip)
+				if err != nil || !prefix.Contains(addr) {
+					t.Errorf("%q is outside %s", ip, prefix)
+				}
+			}
+		})
 	}
 }

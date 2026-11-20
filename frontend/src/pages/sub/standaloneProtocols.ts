@@ -1,3 +1,5 @@
+import { parseIPv4 } from '@/lib/hosts/host-cidr';
+
 // These protocols ship native clients/sidecars rather than standard
 // Xray or sing-box connection profiles. Keep this set aligned with
 // internal/sub/standalone_links.go.
@@ -39,7 +41,7 @@ export function pingtunnelClientJSON(link: string): string {
       config.socks5 !== true ||
       !('password' in config) ||
       typeof config.password !== 'string' ||
-      config.password.length < 8 ||
+      new TextEncoder().encode(config.password).length < 8 ||
       !('server' in config) ||
       typeof config.server !== 'string' ||
       !validPingtunnelServer(config.server) ||
@@ -47,9 +49,11 @@ export function pingtunnelClientJSON(link: string): string {
       typeof config.listen !== 'string' ||
       !validPingtunnelListen(config.listen) ||
       !('encrypt' in config) ||
-      !['chacha20', 'aes256', 'aes128'].includes(String(config.encrypt)) ||
+      typeof config.encrypt !== 'string' ||
+      !['chacha20', 'aes256', 'aes128'].includes(config.encrypt) ||
       !('congestion' in config) ||
-      !['bb', 'none'].includes(String(config.congestion))
+      typeof config.congestion !== 'string' ||
+      !['bb', 'none'].includes(config.congestion)
     )
       return '';
     return JSON.stringify(config, null, 2);
@@ -59,27 +63,19 @@ export function pingtunnelClientJSON(link: string): string {
 }
 
 function validPingtunnelServer(server: string): boolean {
-  if (
-    server.length === 0 ||
-    server.length > 253 ||
-    /[/:@?#\[\]\\\s]/.test(server)
-  )
-    return false;
+  if (server.length === 0 || server.length > 253 || /[/:@?#[\]\\\s]/.test(server)) return false;
   const hostname = server.toLowerCase().replace(/[.]$/, '');
-  if (
-    hostname === '' ||
-    hostname === 'localhost' ||
-    hostname.endsWith('.localhost') ||
-    hostname === '0.0.0.0' ||
-    /^127[.]/.test(hostname)
-  )
+  if (hostname === '' || hostname === 'localhost' || hostname.endsWith('.localhost')) {
     return false;
-  return hostname.split('.').every(
-    (label) =>
-      label.length > 0 &&
-      label.length <= 63 &&
-      /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
-  );
+  }
+  const ip = parseIPv4(hostname);
+  if (ip !== null && (ip === 0 || ip >>> 24 === 127)) return false;
+  return hostname
+    .split('.')
+    .every(
+      (label) =>
+        label.length > 0 && label.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
+    );
 }
 
 function validPingtunnelListen(listen: string): boolean {

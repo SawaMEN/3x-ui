@@ -259,19 +259,28 @@ reset_config() {
     restart
 }
 
+normalize_port() {
+    local port=$1
+    [[ "$port" =~ ^0*([1-9][0-9]{0,4})$ ]] || return 1
+    port=${BASH_REMATCH[1]}
+    ((port <= 65535)) || return 1
+    printf '%s\n' "$port"
+}
+
 set_port() {
-    local port existing_port
+    local port existing_port normalized
     read -rp "Enter port number [1-65535]: " port
     if [[ -z "$port" ]]; then
         LOGD "Cancelled"
         before_show_menu
         return 0
     fi
-    if [[ ! "$port" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
+    if ! normalized=$(normalize_port "$port"); then
         LOGE "Invalid port: $port. Enter a number from 1 to 65535."
         before_show_menu
         return 1
     fi
+    port=$normalized
     existing_port=$("${xui_folder}/x-ui" setting -show true 2>/dev/null | grep -Eo 'port: .+' | awk '{print $2}' | head -1)
     if [[ "$port" != "$existing_port" ]] && is_port_in_use "$port"; then
         LOGE "Port $port is already in use by another process."
@@ -519,16 +528,18 @@ install_firewall() {
     ssh_ports=$(grep -E '^[[:space:]]*Port[[:space:]]+[0-9]+' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}' | sort -nu)
     [[ -n "$ssh_ports" ]] || ssh_ports="22"
     while read -r port; do
-        [[ -n "$port" ]] && ufw allow "${port}/tcp"
+        if [[ -n "$port" ]]; then
+            ufw allow "${port}/tcp" || return 1
+        fi
     done <<< "$ssh_ports"
-    ufw allow 80/tcp
-    ufw allow 443/tcp
+    ufw allow 80/tcp || return 1
+    ufw allow 443/tcp || return 1
 
     if [[ -x "${xui_folder}/x-ui" ]]; then
-        panel_info=$("${xui_folder}/x-ui" setting -show true 2>/dev/null)
+        panel_info=$("${xui_folder}/x-ui" setting -show true 2>/dev/null) || return 1
         while read -r port; do
-            if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1 && port <= 65535)); then
-                ufw allow "${port}/tcp"
+            if port=$(normalize_port "$port"); then
+                ufw allow "${port}/tcp" || return 1
             fi
         done < <(printf '%s\n' "$panel_info" | awk -F': ' '/^(port|subPort): / {print $2}' | sort -nu)
     fi
@@ -540,39 +551,47 @@ install_firewall() {
     LOGI "Firewall is installed and enabled."
 }
 
-open_ports() {
-    local ports port start_port end_port
-    read -rp "Enter the ports you want to open (e.g. 80,443,2053 or range 400-500): " ports
+parse_firewall_ports() {
+    local ports=$1 port start_port end_port
+    local -a entries
     if ! [[ $ports =~ ^([0-9]+|[0-9]+-[0-9]+)(,([0-9]+|[0-9]+-[0-9]+))*$ ]]; then
-        LOGE "Invalid input. Use comma-separated ports or ranges."
+        LOGE "Invalid input. Use comma-separated ports or ranges." >&2
         return 1
     fi
-    IFS=',' read -ra PORT_LIST <<< "$ports"
-    for port in "${PORT_LIST[@]}"; do
+    IFS=',' read -ra entries <<< "$ports"
+    for port in "${entries[@]}"; do
         if [[ $port == *-* ]]; then
-            start_port=${port%-*}
-            end_port=${port#*-}
-            if ((start_port < 1 || start_port > 65535 || end_port < 1 || end_port > 65535 || start_port > end_port)); then
-                LOGE "Invalid port range: $port"
+            if ! start_port=$(normalize_port "${port%-*}") ||
+                ! end_port=$(normalize_port "${port#*-}") ||
+                ((start_port > end_port)); then
+                LOGE "Invalid port range: $port" >&2
                 return 1
             fi
-            ufw allow "${start_port}:${end_port}/tcp" || return 1
-            ufw allow "${start_port}:${end_port}/udp" || return 1
+            printf '%s:%s/tcp\n%s:%s/udp\n' "$start_port" "$end_port" "$start_port" "$end_port"
         else
-            if ((port < 1 || port > 65535)); then
-                LOGE "Invalid port: $port"
+            if ! normalize_port "$port"; then
+                LOGE "Invalid port: $port" >&2
                 return 1
             fi
-            ufw allow "$port" || return 1
         fi
     done
+}
+
+open_ports() {
+    local ports rules rule
+    read -rp "Enter the ports you want to open (e.g. 80,443,2053 or range 400-500): " ports
+    rules=$(parse_firewall_ports "$ports") || return 1
+    while IFS= read -r rule; do
+        ufw allow "$rule" || return 1
+    done <<< "$rules"
     LOGI "Requested ports were added to UFW."
 }
 
 delete_ports() {
-    local choice rule_numbers ports port start_port end_port rule_number
+    local choice rule_numbers ports rules rule rule_number
+    local -a rule_list
     echo "Current UFW rules:"
-    ufw status numbered
+    ufw status numbered || return 1
     echo "Do you want to delete rules by:"
     echo "1) Rule numbers"
     echo "2) Ports"
@@ -584,9 +603,15 @@ delete_ports() {
             LOGE "Invalid rule-number list."
             return 1
         fi
-        IFS=',' read -ra RULE_NUMBERS <<< "$rule_numbers"
-        mapfile -t RULE_NUMBERS < <(printf '%s\n' "${RULE_NUMBERS[@]}" | sort -rn)
-        for rule_number in "${RULE_NUMBERS[@]}"; do
+        IFS=',' read -ra rule_list <<< "$rule_numbers"
+        mapfile -t rule_list < <(printf '%s\n' "${rule_list[@]}" | sort -rnu)
+        for rule_number in "${rule_list[@]}"; do
+            if [[ ! $rule_number =~ ^0*([1-9][0-9]*)$ ]]; then
+                LOGE "Invalid rule number: $rule_number"
+                return 1
+            fi
+        done
+        for rule_number in "${rule_list[@]}"; do
             ufw --force delete "$rule_number" || return 1
         done
         LOGI "Selected rules have been deleted."
@@ -595,29 +620,10 @@ delete_ports() {
 
     if [[ $choice == "2" ]]; then
         read -rp "Enter the ports you want to delete (e.g. 80,443,2053 or range 400-500): " ports
-        if ! [[ $ports =~ ^([0-9]+|[0-9]+-[0-9]+)(,([0-9]+|[0-9]+-[0-9]+))*$ ]]; then
-            LOGE "Invalid port list."
-            return 1
-        fi
-        IFS=',' read -ra PORT_LIST <<< "$ports"
-        for port in "${PORT_LIST[@]}"; do
-            if [[ $port == *-* ]]; then
-                start_port=${port%-*}
-                end_port=${port#*-}
-                if ((start_port < 1 || start_port > 65535 || end_port < 1 || end_port > 65535 || start_port > end_port)); then
-                    LOGE "Invalid port range: $port"
-                    return 1
-                fi
-                ufw --force delete allow "${start_port}:${end_port}/tcp" || true
-                ufw --force delete allow "${start_port}:${end_port}/udp" || true
-            else
-                if ((port < 1 || port > 65535)); then
-                    LOGE "Invalid port: $port"
-                    return 1
-                fi
-                ufw --force delete allow "$port" || true
-            fi
-        done
+        rules=$(parse_firewall_ports "$ports") || return 1
+        while IFS= read -r rule; do
+            ufw --force delete allow "$rule" || true
+        done <<< "$rules"
         LOGI "Requested port rules have been removed where present."
         return 0
     fi
@@ -636,7 +642,7 @@ firewall_menu() {
         echo -e "${green}\t6.${plain} ${red}Disable${plain} Firewall"
         echo -e "${green}\t7.${plain} Firewall Status"
         echo -e "${green}\t0.${plain} Back to Main Menu"
-        read -rp "Choose an option: " choice
+        read -rp "Choose an option: " choice || return 0
         case "$choice" in
             0) return 0 ;;
             1) install_firewall ;;

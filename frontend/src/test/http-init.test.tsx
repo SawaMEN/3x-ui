@@ -180,6 +180,12 @@ describe('http-init fetch wrapper', () => {
     expect(headersOf().has('content-type')).toBe(false);
   });
 
+  it.each(['GET', 'HEAD'])('omits FormData bodies for %s', async (method) => {
+    fetchMock.mockResolvedValue(okEnvelope());
+    await http.httpRequest(method, '/panel/api/list', new FormData());
+    expect(initOf().body).toBeUndefined();
+  });
+
   it('attaches the CSRF token on POST and omits it on GET', async () => {
     document.head.innerHTML = '<meta name="csrf-token" content="tok">';
     http.setupHttp();
@@ -277,6 +283,16 @@ describe('http-init fetch wrapper', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('skips the CSRF fetch when a mutation was already cancelled', async () => {
+    const controller = new AbortController();
+    const reason = new Error('request replaced');
+    controller.abort(reason);
+    await expect(
+      http.httpRequest('POST', '/panel/api/save', {}, { signal: controller.signal }),
+    ).rejects.toBe(reason);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('preserves an already aborted signal without AbortSignal.any', async () => {
     const controller = new AbortController();
     controller.abort();
@@ -344,9 +360,10 @@ describe('http-init fetch wrapper', () => {
     const controller = new AbortController();
 
     await http.httpRequest('GET', '/x', undefined, { timeout: 1_000, signal: controller.signal });
-    controller.abort();
+    const reason = new Error('request replaced');
+    controller.abort(reason);
 
-    expect(initOf().signal?.aborted).toBe(true);
+    expect(initOf().signal?.reason).toBe(reason);
   });
 
   it('times out when AbortSignal.any is unavailable', async () => {
@@ -364,7 +381,7 @@ describe('http-init fetch wrapper', () => {
       signal.addEventListener('abort', () => resolve(), { once: true }),
     );
 
-    expect(signal.aborted).toBe(true);
+    expect(signal.reason).toMatchObject({ name: 'TimeoutError' });
   });
 
   it('aborts on the timeout when a caller signal is present', async () => {

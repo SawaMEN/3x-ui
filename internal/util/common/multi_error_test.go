@@ -23,6 +23,9 @@ func TestCombine_SkipsNilErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-nil combined error")
 	}
+	if !errors.Is(err, e1) || !errors.Is(err, e2) {
+		t.Fatalf("combined error lost its causes: %v", err)
+	}
 	msg := err.Error()
 	if !strings.Contains(msg, "boom one") || !strings.Contains(msg, "boom two") {
 		t.Fatalf("combined error %q does not contain both underlying messages", msg)

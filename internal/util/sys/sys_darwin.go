@@ -42,6 +42,9 @@ var (
 )
 
 func CPUPercentRaw() (float64, error) {
+	cpuMu.Lock()
+	defer cpuMu.Unlock()
+
 	raw, err := unix.SysctlRaw("kern.cp_time")
 	if err != nil {
 		return 0, err
@@ -60,9 +63,6 @@ func CPUPercentRaw() (float64, error) {
 	default:
 		return 0, fmt.Errorf("unexpected kern.cp_time size: %d", len(raw))
 	}
-
-	cpuMu.Lock()
-	defer cpuMu.Unlock()
 
 	if !hasLastCPUT {
 		lastTotals = out

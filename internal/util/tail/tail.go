@@ -110,7 +110,9 @@ func ReadTailLines(path string, maxLines int, maxBytes int64) ([]string, error) 
 	// A line without a trailing newline is still valid when we reached the
 	// beginning of the file.
 	if end == 0 && carryBytes > 0 && (maxLines <= 0 || len(lines) < maxLines) {
-		lines = append(lines, lineText(nil))
+		if line := lineText(nil); line != "" {
+			lines = append(lines, line)
+		}
 	}
 
 	return lines, nil

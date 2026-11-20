@@ -1,15 +1,9 @@
 export const MAX_RANDOM_CIDR_COUNT = 100;
 
 export function cleanCIDR(s: string): string {
-  let clean = s.trim();
-  if (clean.startsWith('[') && clean.endsWith(']')) {
-    clean = clean.slice(1, -1);
-  }
-  if (clean.startsWith('[')) {
-    clean = clean.slice(1);
-  }
-  clean = clean.replace(/\]\//, '/');
-  return clean;
+  const clean = s.trim();
+  const bracketed = /^\[([^\]]+)\]((?:\/\d+)?)$/.exec(clean);
+  return bracketed ? bracketed[1] + bracketed[2] : clean;
 }
 
 export function parseIPv4(ipStr: string): number | null {
@@ -17,7 +11,7 @@ export function parseIPv4(ipStr: string): number | null {
   if (parts.length !== 4) return null;
   let u32 = 0;
   for (const part of parts) {
-    if (!/^\d{1,3}$/.test(part)) return null;
+    if (!/^(0|[1-9]\d{0,2})$/.test(part)) return null;
     const n = Number(part);
     if (n < 0 || n > 255) return null;
     u32 = ((u32 << 8) | n) >>> 0;
@@ -33,6 +27,15 @@ export function parseIPv6(ipStr: string): bigint | null {
   let s = ipStr.trim().toLowerCase();
   if (s.startsWith('[') && s.endsWith(']')) {
     s = s.slice(1, -1);
+  }
+  if (s.includes('.')) {
+    const lastColon = s.lastIndexOf(':');
+    if (lastColon < 0) return null;
+    const tail = s.slice(lastColon + 1);
+    if (tail !== tail.trim()) return null;
+    const ipv4 = parseIPv4(tail);
+    if (ipv4 === null) return null;
+    s = `${s.slice(0, lastColon + 1)}${(ipv4 >>> 16).toString(16)}:${(ipv4 & 0xffff).toString(16)}`;
   }
   const doubleColonCount = (s.match(/::/g) ?? []).length;
   if (doubleColonCount > 1) return null;
@@ -67,6 +70,9 @@ export function parseIPv6(ipStr: string): bigint | null {
 }
 
 export function formatIPv6(val: bigint): string {
+  if (val >> 32n === 0xffffn) {
+    return `::ffff:${formatIPv4(Number(val & 0xffffffffn))}`;
+  }
   const parts: number[] = [];
   for (let i = 7; i >= 0; i--) {
     parts.push(Number((val >> BigInt(i * 16)) & 0xffffn));
@@ -114,136 +120,63 @@ export function formatIPv6(val: bigint): string {
   return parts.map((p) => p.toString(16)).join(':');
 }
 
-export function isCIDR(s: string): boolean {
-  const clean = cleanCIDR(s);
-  const slashIdx = clean.indexOf('/');
-  if (slashIdx === -1) return false;
-  const ipPart = clean.slice(0, slashIdx);
-  const prefixStr = clean.slice(slashIdx + 1);
-  if (!/^\d+$/.test(prefixStr)) return false;
-  const prefix = Number(prefixStr);
+function parseCIDR(input: string): { ip: bigint; prefix: number; bits: number } | null {
+  const clean = cleanCIDR(input);
+  // Only normalized, bracket-free IP literals are valid at this point.
+  if (clean.includes('[') || clean.includes(']')) return null;
+  const slash = clean.indexOf('/');
+  if (slash < 0) return null;
+  const address = clean.slice(0, slash);
+  const prefixText = clean.slice(slash + 1);
+  if (!/^\d+$/.test(prefixText) || address !== address.trim()) return null;
+  const prefix = Number(prefixText);
+  const ipv4 = parseIPv4(address);
+  if (ipv4 !== null) {
+    return prefix <= 32 ? { ip: BigInt(ipv4), prefix, bits: 32 } : null;
+  }
+  const ipv6 = parseIPv6(address);
+  return ipv6 !== null && prefix <= 128 ? { ip: ipv6, prefix, bits: 128 } : null;
+}
 
-  const v4 = parseIPv4(ipPart);
-  if (v4 !== null) {
-    return prefix >= 0 && prefix <= 32;
-  }
-  const v6 = parseIPv6(ipPart);
-  if (v6 !== null) {
-    return prefix >= 0 && prefix <= 128;
-  }
-  return false;
+export function isCIDR(s: string): boolean {
+  return parseCIDR(s) !== null;
 }
 
 export function randomIPsFromCIDR(cidrStr: string, count: number): string[] {
-  if (count <= 0) count = 1;
-  if (count > MAX_RANDOM_CIDR_COUNT) count = MAX_RANDOM_CIDR_COUNT;
+  const network = parseCIDR(cidrStr);
+  if (!network) return [];
+  count = Math.min(Math.max(Math.trunc(count) || 1, 1), MAX_RANDOM_CIDR_COUNT);
 
-  const clean = cleanCIDR(cidrStr);
-  const slashIdx = clean.indexOf('/');
-  if (slashIdx === -1) return [];
-  const ipPart = clean.slice(0, slashIdx);
-  const prefixStr = clean.slice(slashIdx + 1);
-  if (!/^\d+$/.test(prefixStr)) return [];
-  const prefix = Number(prefixStr);
+  const hostBits = BigInt(network.bits - network.prefix);
+  const base = (network.ip >> hostBits) << hostBits;
+  const isIPv4 = network.bits === 32;
+  const format = isIPv4 ? (ip: bigint) => formatIPv4(Number(ip)) : formatIPv6;
+  if (hostBits === 0n || (hostBits === 1n && count === 1)) return [format(base)];
+  if (hostBits === 1n) return [format(base), format(base + 1n)];
 
-  const v4 = parseIPv4(ipPart);
-  if (v4 !== null && prefix >= 0 && prefix <= 32) {
-    return randomIPv4FromCIDR(v4, prefix, count);
-  }
-  const v6 = parseIPv6(ipPart);
-  if (v6 !== null && prefix >= 0 && prefix <= 128) {
-    return randomIPv6FromCIDR(v6, prefix, count);
-  }
-  return [];
-}
+  const usableCount = (1n << hostBits) - (isIPv4 ? 2n : 1n);
+  if (usableCount < BigInt(count)) count = Number(usableCount);
 
-function randomIPv4FromCIDR(ip4: number, prefix: number, count: number): string[] {
-  const hostBits = 32 - prefix;
-  const mask = prefix === 0 ? 0 : (~0 << hostBits) >>> 0;
-  const baseU32 = (ip4 & mask) >>> 0;
-
-  if (hostBits === 0) {
-    return [formatIPv4(baseU32)];
-  }
-  if (hostBits === 1) {
-    const out = [formatIPv4(baseU32)];
-    if (count > 1) {
-      out.push(formatIPv4((baseU32 + 1) >>> 0));
-    }
-    return out;
-  }
-
-  const total = 2 ** hostBits;
-  const usableCount = total - 2;
-  if (usableCount <= 0) {
-    return [formatIPv4(baseU32)];
-  }
-  if (count > usableCount) {
-    count = usableCount;
-  }
-
-  const seen = new Set<string>();
-  const result: string[] = [];
-  let maxAttempts = count * 100;
-
-  while (result.length < count && maxAttempts > 0) {
-    maxAttempts--;
-    const offset = Math.floor(Math.random() * usableCount) + 1;
-    const targetU32 = (baseU32 + offset) >>> 0;
-    const ipStr = formatIPv4(targetU32);
-    if (!seen.has(ipStr)) {
-      seen.add(ipStr);
-      result.push(ipStr);
-    }
-  }
-  return result;
-}
-
-function randomIPv6FromCIDR(ip6: bigint, prefix: number, count: number): string[] {
-  const hostBits = 128 - prefix;
-  const mask = prefix === 0 ? 0n : ((1n << 128n) - 1n) ^ ((1n << BigInt(hostBits)) - 1n);
-  const baseInt = ip6 & mask;
-
-  if (hostBits === 0) {
-    return [formatIPv6(baseInt)];
-  }
-  if (hostBits === 1) {
-    const out = [formatIPv6(baseInt)];
-    if (count > 1) {
-      out.push(formatIPv6(baseInt + 1n));
-    }
-    return out;
-  }
-
-  const maxHost = 1n << BigInt(hostBits);
-  // Exclude the Subnet-Router Anycast address (all host bits 0, RFC 4291 §2.6.1)
-  const usableCount = maxHost - 1n;
-  if (usableCount < BigInt(count)) {
-    count = Number(usableCount);
-  }
-
-  const seen = new Set<string>();
-  const result: string[] = [];
-  let maxAttempts = count * 100;
-
-  while (result.length < count && maxAttempts > 0) {
-    maxAttempts--;
-    const offset = randomBigIntInRange(1n, usableCount);
-    const targetInt = baseInt + offset;
-    const ipStr = formatIPv6(targetInt);
-    if (!seen.has(ipStr)) {
-      seen.add(ipStr);
-      result.push(ipStr);
-    }
+  // Store only the offsets moved by the partial Fisher-Yates shuffle.
+  const replacements = new Map<bigint, bigint>();
+  const result = [];
+  for (let remaining = usableCount; result.length < count; remaining--) {
+    const index = randomBigIntInRange(1n, remaining);
+    const offset = replacements.get(index) ?? index;
+    replacements.set(index, replacements.get(remaining) ?? remaining);
+    replacements.delete(remaining);
+    result.push(format(base + offset));
   }
   return result;
 }
 
 function randomBigIntInRange(min: bigint, max: bigint): bigint {
   const range = max - min + 1n;
-  const bits = range.toString(2).length;
+  if (range === 1n) return min;
+  const bits = (range - 1n).toString(2).length;
   const bytes = Math.ceil(bits / 8);
   const buf = new Uint8Array(bytes);
+  const mask = (1n << BigInt(bits)) - 1n;
 
   while (true) {
     if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
@@ -257,8 +190,7 @@ function randomBigIntInRange(min: bigint, max: bigint): bigint {
     for (let i = 0; i < bytes; i++) {
       val = (val << 8n) | BigInt(buf[i]);
     }
-    const mask = (1n << BigInt(bits)) - 1n;
-    val = val & mask;
+    val &= mask;
     if (val < range) {
       return min + val;
     }
