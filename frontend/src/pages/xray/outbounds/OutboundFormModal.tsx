@@ -4,12 +4,14 @@ import { useId, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
+  Button,
   Form,
   Input,
   InputNumber,
   Modal,
   Radio,
   Select,
+  Switch,
   Space,
   Tabs,
   Typography,
@@ -24,6 +26,7 @@ import { formValuesToWirePayload, rawOutboundToFormValues } from '@/lib/xray/out
 import { parseOutboundLink } from '@/lib/xray/outbound-link-parser';
 import { parseNativeOutboundLink } from '@/lib/xray/native-outbound-link-parser';
 import { outboundBasicConversionLoss } from '@/lib/xray/outbound-loss-check';
+import type { Zapret2Calibration } from '@/schemas/protocols/outbound/zapret2';
 import { XMUX_FRESH_DEFAULTS } from '@/schemas/protocols/stream/xhttp';
 import {
   OutboundFormBaseSchema,
@@ -118,6 +121,35 @@ export default function OutboundFormModal({
   const [messageApi, messageContextHolder] = message.useMessage();
   const methods = useForm<OutboundFormValues>({ defaultValues: buildAddModeValues() });
   const openFluxInstalled = useOpenFluxInstalled(open);
+  const [zapret2Installed, setZapret2Installed] = useState(false);
+  const [zapret2Diagnosing, setZapret2Diagnosing] = useState(false);
+  const [zapret2ScanLevel, setZapret2ScanLevel] = useState<'quick' | 'standard' | 'force'>(
+    'standard',
+  );
+  const [zapret2Repeats, setZapret2Repeats] = useState(2);
+  const [zapret2IPv6, setZapret2IPv6] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let disposed = false;
+    const refresh = () => {
+      void HttpUtil.get('/panel/api/setting/zapret2/status', undefined, { silent: true })
+        .then((response: unknown) => {
+          if (!disposed) {
+            const status = response as { success?: boolean; obj?: { installed?: boolean } };
+            setZapret2Installed(status.success === true && status.obj?.installed === true);
+          }
+        })
+        .catch(() => {
+          if (!disposed) setZapret2Installed(false);
+        });
+    };
+    refresh();
+    window.addEventListener('zapret2:changed', refresh);
+    return () => {
+      disposed = true;
+      window.removeEventListener('zapret2:changed', refresh);
+    };
+  }, [open]);
   const [activeKey, setActiveKey] = useState('1');
   const [jsonText, setJsonText] = useState('');
   const [jsonDirty, setJsonDirty] = useState(false);
@@ -419,6 +451,106 @@ export default function OutboundFormModal({
     return true;
   }
 
+  async function diagnoseZapret2(): Promise<void> {
+    const raw = methods.getValues('settings') as {
+      testDomains?: string[];
+      udp?: boolean;
+    };
+    const domains = (raw.testDomains ?? []).map((s) => s.trim()).filter(Boolean);
+    if (domains.length === 0) {
+      messageApi.warning('Укажите хотя бы один сайт для автоматической проверки');
+      return;
+    }
+    if (domains.length > 12) {
+      messageApi.warning('Для проверки можно указать не более 12 сайтов');
+      return;
+    }
+    setZapret2Diagnosing(true);
+    try {
+      const response = (await HttpUtil.post(
+        '/panel/api/setting/zapret2/diagnose',
+        {
+          domains,
+          scanLevel: zapret2ScanLevel,
+          repeats: zapret2Repeats,
+          checkQuic: raw.udp === true,
+          checkIpv6: zapret2IPv6,
+        },
+        { timeout: 1860000, headers: { 'Content-Type': 'application/json' } },
+      )) as {
+        success?: boolean;
+        msg?: string;
+        obj?: {
+          summary?: string;
+          warnings?: string[];
+          calibration?: Zapret2Calibration;
+          durationSeconds?: number;
+        };
+      };
+      if (!response.success)
+        throw new Error(response.msg || 'Проверка zapret2 завершилась ошибкой');
+      const result = response.obj;
+      const calibration = result?.calibration;
+      if (calibration) {
+        methods.setValue('settings.profile', 'auto', { shouldDirty: true });
+        methods.setValue('settings.calibration', calibration, { shouldDirty: true });
+      }
+      const coverage = calibration?.selected
+        .map(
+          (entry) =>
+            `${entry.kind.toUpperCase()} / IPv${entry.ip}: ${entry.passed}/${entry.total} сайтов — ${entry.args.join(' ')}`,
+        )
+        .join('\n');
+      Modal.info({
+        title: calibration ? 'Zapret2: стратегии подобраны' : 'Zapret2: проверка завершена',
+        width: 780,
+        content: (
+          <>
+            <Typography.Paragraph>
+              {calibration
+                ? 'Точные проверенные параметры сохранены в форме этого outbound. Нажмите «Сохранить», чтобы применить их только к выбранному маршруту.'
+                : 'Надёжная стратегия не найдена. Текущие настройки не изменены; проверьте отчёт и при необходимости повторите сканирование.'}
+            </Typography.Paragraph>
+            {coverage && (
+              <pre
+                style={{
+                  maxHeight: 190,
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  overflowWrap: 'anywhere',
+                  fontSize: 12,
+                }}
+              >
+                {coverage}
+              </pre>
+            )}
+            {(result?.warnings ?? []).map((warning) => (
+              <Typography.Paragraph key={warning} type="warning">
+                {warning}
+              </Typography.Paragraph>
+            ))}
+            <Typography.Text strong>Отчёт blockcheck2</Typography.Text>
+            <pre
+              style={{
+                maxHeight: 320,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
+                fontSize: 12,
+              }}
+            >
+              {result?.summary || 'Отчёт отсутствует'}
+            </pre>
+          </>
+        ),
+      });
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setZapret2Diagnosing(false);
+    }
+  }
+
   function switchTab(key: string) {
     if (typeof document !== 'undefined') {
       (document.activeElement as HTMLElement | null)?.blur?.();
@@ -544,9 +676,12 @@ export default function OutboundFormModal({
                           id="protocol"
                           options={PROTOCOL_OPTIONS.filter(
                             (option) =>
-                              option.value !== 'openflux' ||
-                              openFluxInstalled ||
-                              outboundProp?.protocol === 'openflux',
+                              (option.value !== 'openflux' ||
+                                openFluxInstalled ||
+                                outboundProp?.protocol === 'openflux') &&
+                              (option.value !== 'zapret2' ||
+                                zapret2Installed ||
+                                outboundProp?.protocol === 'zapret2'),
                           )}
                         />
                       </FormField>
@@ -617,6 +752,122 @@ export default function OutboundFormModal({
                       {protocol === 'dns' && <DnsFields />}
 
                       {protocol === 'freedom' && <FreedomFields />}
+                      {protocol === 'zapret2' && (
+                        <>
+                          <Alert
+                            type="info"
+                            showIcon
+                            title="Виртуальный zapret2 outbound"
+                            description="Доступен только после установки Zapret2 в «Установка и обновление компонентов». Локальный SOCKS-порт используется исключительно маршрутизатором 3x-ui."
+                            style={{ marginBottom: 16 }}
+                          />
+                          <FormField name="settings.port" label="Локальный SOCKS-порт">
+                            <InputNumber min={1025} max={65535} />
+                          </FormField>
+                          <FormField name="settings.profile" label="Стратегия Anti-DPI">
+                            <Select
+                              options={[
+                                { value: 'auto', label: 'Автоматическая' },
+                                { value: 'safe', label: 'Бережная' },
+                                { value: 'balanced', label: 'Сбалансированная' },
+                                { value: 'aggressive', label: 'Усиленная' },
+                              ]}
+                            />
+                          </FormField>
+                          <FormField name="settings.tcp" label="Обработка TCP" valueProp="checked">
+                            <Switch />
+                          </FormField>
+                          <FormField
+                            name="settings.udp"
+                            label="Обработка UDP/QUIC"
+                            valueProp="checked"
+                          >
+                            <Switch />
+                          </FormField>
+                          <Space wrap style={{ marginBottom: 12 }}>
+                            <span>Глубина проверки</span>
+                            <Select
+                              value={zapret2ScanLevel}
+                              onChange={setZapret2ScanLevel}
+                              style={{ width: 160 }}
+                              options={[
+                                { value: 'quick', label: 'Быстрая' },
+                                { value: 'standard', label: 'Полная' },
+                                { value: 'force', label: 'Максимальная' },
+                              ]}
+                            />
+                            <span>Повторов на тест</span>
+                            <InputNumber
+                              min={1}
+                              max={3}
+                              value={zapret2Repeats}
+                              onChange={(value) => setZapret2Repeats(value ?? 2)}
+                            />
+                            <span>Проверять IPv6</span>
+                            <Switch checked={zapret2IPv6} onChange={setZapret2IPv6} />
+                          </Space>
+                          <Controller
+                            control={methods.control}
+                            name="settings.calibration"
+                            render={({ field }) =>
+                              field.value ? (
+                                <Alert
+                                  type="success"
+                                  showIcon
+                                  title={`Подбор от ${new Date(field.value.testedAt).toLocaleString()}`}
+                                  description={`Проверенные сочетания HTTP / HTTPS / QUIC: ${field.value.selected.length}. Доступно для этого outbound после сохранения.`}
+                                  closable={{
+                                    onClose: () =>
+                                      methods.setValue('settings.calibration', undefined, {
+                                        shouldDirty: true,
+                                      }),
+                                  }}
+                                  style={{ marginBottom: 12 }}
+                                />
+                              ) : (
+                                <Alert
+                                  type="warning"
+                                  showIcon
+                                  title="Автоматический подбор ещё не выполнялся"
+                                  description="До проверки используется исходный сбалансированный профиль. Проверка анализирует сеть сервера и временно приостанавливает управляемые zapret2-очереди."
+                                  style={{ marginBottom: 12 }}
+                                />
+                              )
+                            }
+                          />
+                          <Button
+                            loading={zapret2Diagnosing}
+                            disabled={!zapret2Installed}
+                            onClick={() => void diagnoseZapret2()}
+                            style={{ marginBottom: 16 }}
+                          >
+                            Автоматически проверить и подобрать стратегию
+                          </Button>
+                          <Controller
+                            control={methods.control}
+                            name="settings.testDomains"
+                            render={({ field }) => (
+                              <Form.Item
+                                label="Сайты для проверки стратегий"
+                                extra="По одному домену на строку. Используются для диагностики, не для ограничения маршрутизации."
+                              >
+                                <Input.TextArea
+                                  rows={3}
+                                  value={(field.value ?? []).join('\n')}
+                                  onChange={(event) =>
+                                    field.onChange(
+                                      event.target.value
+                                        .split(/[\n,]+/)
+                                        .map((v) => v.trim())
+                                        .filter(Boolean),
+                                    )
+                                  }
+                                />
+                              </Form.Item>
+                            )}
+                          />
+                        </>
+                      )}
 
                       {protocol === 'vless' && reverseTag && (
                         <Controller

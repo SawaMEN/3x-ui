@@ -2518,6 +2518,7 @@
         "runningAsRoot": "Panel has root privileges",
         "notRoot": "Panel is not running as root",
         "componentDescriptions": {
+          "zapret2": "Anti-DPI for selected outbound routes. Install the official nfqws2 component, then create a virtual Zapret2 outbound and route traffic to it.",
           "naiveproxy": "NaïveProxy HTTPS tunnel. A separate core for compatible inbounds.",
           "hysteria2": "VPN over QUIC/UDP. A separate Hysteria 2 core for compatible inbounds.",
           "sudoku": "Sudoku server and client. Configure in Inbounds and Routing.",

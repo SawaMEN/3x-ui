@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
+	"github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 )
 
 func makeConfig() *Config {
@@ -87,5 +88,15 @@ func TestConfigEquals_RawSectionsCompared(t *testing.T) {
 				t.Fatalf("mutating %s should break Equals", f.name)
 			}
 		})
+	}
+}
+
+func TestConfigEquals_DifferentZapret2Profile(t *testing.T) {
+	a := makeConfig()
+	b := makeConfig()
+	a.Zapret2Plans = []zapret2.Plan{{Tag: "z2", Options: zapret2.Options{Port: 15900, Profile: "safe"}}}
+	b.Zapret2Plans = []zapret2.Plan{{Tag: "z2", Options: zapret2.Options{Port: 15900, Profile: "balanced"}}}
+	if a.Equals(b) {
+		t.Fatal("zapret2 strategy changes must trigger the core configuration update")
 	}
 }
