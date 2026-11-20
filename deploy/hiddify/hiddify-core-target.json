@@ -3,16 +3,16 @@
   "stage": 4,
   "target": {
     "repository": "https://github.com/SawaMEN/hiddify-core",
-    "commit": "850b9a7934760f6730dd3795149890f55fd0cce8",
+    "commit": "b6188917cea35891880b23cc3536379b948f776d",
     "submodules": {
-      "hiddify-sing-box": "b25d821065d27ff4c738b6eb92a55afebf896727",
+      "hiddify-sing-box": "4817023d0c82f7e9ee98cc9df2d02c20a38db78a",
       "ray2sing": "c6368fc6adea94f7aa9ec57065aae3ad53343ac4"
     },
     "submodule_repositories": {
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/SawaMEN/ray2sing"
     },
-    "version": "sawamen-850b9a793476-b25d821065d2-mask1-ciphers1-net62-sec1-stream1"
+    "version": "sawamen-b6188917cea3-4817023d0c82-mask1-ciphers1-net62-sec1-stream1"
   },
   "runtime_contract": {
     "raw_config_command": [
@@ -128,6 +128,18 @@
     {
       "path": "hiddify-sing-box/common/tls/xui_reality_mldsa_handshake_test.go",
       "contains": "[]string{\"chrome\", \"firefox\", \"safari\"}"
+    },
+    {
+      "path": "hiddify-sing-box/option/v2ray_transport.go",
+      "contains": "MultiMode           bool               `json:\"multi_mode,omitempty\"`"
+    },
+    {
+      "path": "hiddify-sing-box/transport/v2raygrpclite/conn.go",
+      "contains": "func (c *GunConn) readMulti("
+    },
+    {
+      "path": "hiddify-sing-box/transport/v2raygrpclite/server.go",
+      "contains": "grpcname.UnescapedMultiPath(options.ServiceName)"
     }
   ],
   "panel_build": {
@@ -147,7 +159,7 @@
       "with_kcp",
       "http2legacy"
     ],
-    "sing_box_version": "sawamen-b25d821065d2",
+    "sing_box_version": "sawamen-4817023d0c82",
     "runtime_dependencies": [
       "matching libcronet for Naive outbound"
     ],
@@ -160,9 +172,9 @@
       "musl": "with_musl, CGO_ENABLED=1, statically linked Cronet; release and Docker"
     },
     "protection_dependency_versions": {
-      "github.com/metacubex/utls": "native:b25d821065d27ff4c738b6eb92a55afebf896727",
-      "github.com/starifly/sing-vmess": "native:b25d821065d27ff4c738b6eb92a55afebf896727",
-      "github.com/xtls/xray-core": "native:b25d821065d27ff4c738b6eb92a55afebf896727"
+      "github.com/metacubex/utls": "native:4817023d0c82f7e9ee98cc9df2d02c20a38db78a",
+      "github.com/starifly/sing-vmess": "native:4817023d0c82f7e9ee98cc9df2d02c20a38db78a",
+      "github.com/xtls/xray-core": "native:4817023d0c82f7e9ee98cc9df2d02c20a38db78a"
     },
     "security_dependencies": {
       "golang.org/x/net": "v0.62.0",
@@ -203,7 +215,10 @@
       "hiddify-sing-box/replace/utls-native/u_chrome155_test.go",
       "hiddify-sing-box/replace/utls-native/testdata/chrome155_clienthello.hex",
       "hiddify-sing-box/replace/utls-native/u_clone.go",
-      "hiddify-sing-box/replace/utls-native/u_parrots.go"
+      "hiddify-sing-box/replace/utls-native/u_parrots.go",
+      "hiddify-sing-box/transport/v2raygrpclite/h_multi_test.go",
+      "hiddify-sing-box/transport/v2ray/h_transport_test.go",
+      "hiddify-sing-box/option/v2ray_transport.go"
     ]
   },
   "verification": {
