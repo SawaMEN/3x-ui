@@ -1296,7 +1296,7 @@ export function amneziawgConfigFromLink(link: string): string {
   if (!trimmed.startsWith('vpn://')) return '';
   try {
     const conf = fromBase64Url(trimmed.slice('vpn://'.length));
-    return hasWgQuickHook(conf) ? '' : conf;
+    return /^\[Interface\]\s*$/im.test(conf) && !hasWgQuickHook(conf) ? conf : '';
   } catch {
     return '';
   }

@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Collapse, Popover, Tag, Tooltip, message } from 'antd';
 import { CopyOutlined, DownloadOutlined, QrcodeOutlined } from '@ant-design/icons';
@@ -9,20 +9,24 @@ import './ConfigBlock.css';
 
 interface ConfigBlockProps {
   label: string;
+  name?: string;
   text: string;
   fileName: string;
   qrRemark?: string;
   showQr?: boolean;
+  qrAction?: ReactNode;
   tagColor?: string;
   defaultOpen?: boolean;
 }
 
 export default function ConfigBlock({
   label,
+  name,
   text,
   fileName,
   qrRemark = '',
   showQr = true,
+  qrAction,
   tagColor = 'gold',
   defaultOpen = false,
 }: ConfigBlockProps) {
@@ -53,22 +57,23 @@ export default function ConfigBlock({
           onClick={() => FileManager.downloadTextFile(text, fileName)}
         />
       </Tooltip>
-      {showQr && (
-        <Popover
-          trigger="click"
-          placement="left"
-          destroyOnHidden
-          content={<QrPanel value={text} remark={qrRemark || label} size={220} />}
-        >
-          <Tooltip title={t('pages.clients.qrCode')}>
-            <Button
-              size="small"
-              icon={<QrcodeOutlined aria-hidden />}
-              aria-label={t('pages.clients.qrCode')}
-            />
-          </Tooltip>
-        </Popover>
-      )}
+      {qrAction ??
+        (showQr && (
+          <Popover
+            trigger="click"
+            placement="left"
+            destroyOnHidden
+            content={<QrPanel value={text} remark={qrRemark || label} size={220} />}
+          >
+            <Tooltip title={t('pages.clients.qrCode')}>
+              <Button
+                size="small"
+                icon={<QrcodeOutlined aria-hidden />}
+                aria-label={t('pages.clients.qrCode')}
+              />
+            </Tooltip>
+          </Popover>
+        ))}
     </div>
   );
 
@@ -83,9 +88,19 @@ export default function ConfigBlock({
           {
             key: 'cfg',
             label: (
-              <Tag color={tagColor} style={{ margin: 0, fontWeight: 600, letterSpacing: '0.3px' }}>
-                {label}
-              </Tag>
+              <span className="config-block-label">
+                <Tag
+                  color={tagColor}
+                  style={{ margin: 0, fontWeight: 600, letterSpacing: '0.3px' }}
+                >
+                  {label}
+                </Tag>
+                {name && (
+                  <span className="config-block-name" dir="auto" title={name}>
+                    {name}
+                  </span>
+                )}
+              </span>
             ),
             extra: actions,
             children: <code className="config-block-text">{text}</code>,

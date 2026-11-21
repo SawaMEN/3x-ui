@@ -8,12 +8,14 @@ import {
   ClockCircleOutlined,
   CustomerServiceOutlined,
   LinkOutlined,
+  SafetyOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
 
 import { ClipboardManager, LanguageManager } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
 import { useTheme } from '@/hooks/useTheme';
+import { amneziawgConfigFromLink } from '@/lib/xray/inbound-link';
 import SubHeader from './SubHeader';
 import SubHero from './SubHero';
 import SubLinksTab from './SubLinksTab';
@@ -30,6 +32,7 @@ import './SubUnderground.css';
 
 // Keep the first (links) tab eager; load larger, less-used tabs on demand.
 const SubAppsTab = lazy(() => import('./SubAppsTab'));
+const SubAmneziaWGTab = lazy(() => import('./SubAmneziaWGTab'));
 const SubConfigsTab = lazy(() => import('./SubConfigsTab'));
 const SubTelegramTab = lazy(() => import('./SubTelegramTab'));
 
@@ -48,6 +51,13 @@ const subSupportUrl = subData.subSupportUrl || '';
 const updateHours = Number(subData.subUpdates || 0);
 const announce = subData.announce || '';
 const links: string[] = Array.isArray(subData.links) ? subData.links : [];
+const amneziaWGConfigs = new Map<string, string>();
+const configLinks = links.filter((link) => {
+  const config = amneziawgConfigFromLink(link);
+  if (!config) return true;
+  amneziaWGConfigs.set(link, config);
+  return false;
+});
 const telegramRemarks = subData.telegramRemarks;
 const linkEmails: string[] = Array.isArray(subData.emails) ? subData.emails : [];
 const totalByte = Number(subData.totalByte || 0);
@@ -84,6 +94,7 @@ export default function SubPage() {
     setMessageInstance(messageApi);
   }, [messageApi]);
   const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage('subscription'));
+  const [activeTab, setActiveTab] = useState<string>();
   const telemtEndpoint = buildTelemtEndpoint(window.location.href, sId);
   const [telemtData, setTelemtData] = useState<Partial<TelegramSubscription>>({});
   const [telemtLoading, setTelemtLoading] = useState(() => Boolean(telemtEndpoint));
@@ -152,6 +163,8 @@ export default function SubPage() {
     if (url) window.open(url, '_blank');
   }, []);
 
+  const openAmneziaWG = useCallback(() => setActiveTab('amneziawg'), []);
+
   const tabs = useMemo(() => {
     const items: NonNullable<TabsProps['items']> = [];
     if (subUrl || subJsonUrl || subClashUrl) {
@@ -170,6 +183,18 @@ export default function SubPage() {
         ),
       });
     }
+    if (amneziaWGConfigs.size > 0) {
+      items.push({
+        key: 'amneziawg',
+        icon: <SafetyOutlined aria-hidden />,
+        label: 'AmneziaWG',
+        children: (
+          <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
+            <SubAmneziaWGTab configs={amneziaWGConfigs} onCopy={copy} />
+          </Suspense>
+        ),
+      });
+    }
     if (subUrl) {
       items.push({
         key: 'apps',
@@ -181,12 +206,13 @@ export default function SubPage() {
               subUrl={subUrl}
               profileName={subTitle || sId}
               initialPlatform={initialPlatform}
+              onOpenAmneziaWG={amneziaWGConfigs.size > 0 ? openAmneziaWG : undefined}
             />
           </Suspense>
         ),
       });
     }
-    const profiles = telegramProfiles(telemtData, links, telegramRemarks);
+    const profiles = telegramProfiles(telemtData, configLinks, telegramRemarks);
     if (profiles.length > 0 || telemtLoading || telemtError) {
       items.push({
         key: 'telemt',
@@ -205,25 +231,25 @@ export default function SubPage() {
         ),
       });
     }
-    if (links.length > 0) {
+    if (configLinks.length > 0) {
       items.push({
         key: 'configs',
         icon: <UnorderedListOutlined aria-hidden />,
         label: (
           <>
             {t('subscription.tabConfigs')}
-            <span className="sub-tab-count">{links.length}</span>
+            <span className="sub-tab-count">{configLinks.length}</span>
           </>
         ),
         children: (
           <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
-            <SubConfigsTab links={links} telegramRemarks={telegramRemarks} onCopy={copy} />
+            <SubConfigsTab links={configLinks} telegramRemarks={telegramRemarks} onCopy={copy} />
           </Suspense>
         ),
       });
     }
     return items;
-  }, [t, copy, open, telemtData, telemtLoading, telemtError]);
+  }, [t, copy, open, openAmneziaWG, telemtData, telemtLoading, telemtError]);
 
   const direction = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
   const pageClass = [
@@ -287,7 +313,15 @@ export default function SubPage() {
             )}
             {announce && <Alert type="info" showIcon title={announce} className="sub-announce" />}
             <SubHero {...heroData} lang={lang} />
-            {tabs.length > 0 && <Tabs className="sub-tabs" tabBarGutter={24} items={tabs} />}
+            {tabs.length > 0 && (
+              <Tabs
+                className="sub-tabs"
+                tabBarGutter={24}
+                items={tabs}
+                activeKey={tabs.some(({ key }) => key === activeTab) ? activeTab : tabs[0].key}
+                onChange={setActiveTab}
+              />
+            )}
             {(updateHours > 0 || subSupportUrl) && (
               <footer className="sub-footer">
                 {updateHours > 0 && (

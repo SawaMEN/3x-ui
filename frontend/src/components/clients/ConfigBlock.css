@@ -12,6 +12,19 @@
   min-width: 0;
 }
 
+.config-block-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-block-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 body.light .config-block .ant-tag.ant-tag-filled.ant-tag-gold {
   color: #874d00;
 }

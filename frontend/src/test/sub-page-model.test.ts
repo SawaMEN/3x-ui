@@ -108,23 +108,38 @@ describe('buildSubApps', () => {
   const subUrl = 'https://sub.example.com/sub/abc?token=1';
 
   it.each([
-    ['android', 'app.hiddify.com', 'com.happproxy'],
-    ['ios', 'id6596777532', 'id6504287215'],
-    ['windows', 'apps.microsoft.com/detail/9ndgwm32bnxk', 'happ-desktop/releases/latest'],
-    ['macos', 'id6596777532?platform=mac', 'id6504287215?platform=mac'],
-    ['linux', 'hiddify-app/releases/latest', 'happ-desktop/releases/latest'],
-  ] as const)('offers the ordered clients and download links for %s', (platform, hiddify, happ) => {
-    const apps = buildSubApps(platform, subUrl, 'Nova Net');
-    expect(apps.map((app) => app.name)).toEqual(['Hiddify', 'Hiddify Beta', 'Happ']);
-    expect(apps.map((app) => app.url)).toEqual([
-      `hiddify://import/${subUrl}#Nova%20Net`,
-      `hiddify://import/${subUrl}#Nova%20Net`,
-      `happ://add/${subUrl}`,
-    ]);
-    expect(apps[0].downloads[0].href).toContain(hiddify);
-    expect(apps[1].downloads).toEqual([
-      { label: 'GitHub', href: 'https://github.com/hiddify/hiddify-app/releases' },
-    ]);
-    expect(apps[2].downloads[0].href).toContain(happ);
-  });
+    ['android', 'app.hiddify.com', 'com.happproxy', 'org.amnezia.awg'],
+    ['ios', 'id6596777532', 'id6504287215', 'id6478942365?platform=iphone'],
+    [
+      'windows',
+      'apps.microsoft.com/detail/9ndgwm32bnxk',
+      'happ-desktop/releases/latest',
+      'amneziawg-windows-client/releases/latest',
+    ],
+    [
+      'macos',
+      'id6596777532?platform=mac',
+      'id6504287215?platform=mac',
+      'id6478942365?platform=mac',
+    ],
+    ['linux', 'hiddify-app/releases/latest', 'happ-desktop/releases/latest', 'amneziawg-tools'],
+  ] as const)(
+    'offers the ordered clients and download links for %s',
+    (platform, hiddify, happ, awg) => {
+      const apps = buildSubApps(platform, subUrl, 'Nova Net');
+      expect(apps.map((app) => app.name)).toEqual(['Hiddify', 'Hiddify Beta', 'Happ', 'AmneziaWG']);
+      expect(apps.map((app) => app.url)).toEqual([
+        `hiddify://import/${subUrl}#Nova%20Net`,
+        `hiddify://import/${subUrl}#Nova%20Net`,
+        `happ://add/${subUrl}`,
+        undefined,
+      ]);
+      expect(apps[0].downloads[0].href).toContain(hiddify);
+      expect(apps[1].downloads).toEqual([
+        { label: 'GitHub', href: 'https://github.com/hiddify/hiddify-app/releases' },
+      ]);
+      expect(apps[2].downloads[0].href).toContain(happ);
+      expect(apps[3].downloads[0].href).toContain(awg);
+    },
+  );
 });

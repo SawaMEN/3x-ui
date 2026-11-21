@@ -7,9 +7,15 @@ interface SubQrButtonProps {
   value: string;
   label: string;
   onCopy: (value: string) => void;
+  nativeConfig?: boolean;
 }
 
-export default function SubQrButton({ value, label, onCopy }: SubQrButtonProps) {
+export default function SubQrButton({
+  value,
+  label,
+  onCopy,
+  nativeConfig = false,
+}: SubQrButtonProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const qrRef = useRef<HTMLDivElement>(null);
@@ -26,6 +32,7 @@ export default function SubQrButton({ value, label, onCopy }: SubQrButtonProps) 
   return (
     <>
       <Button
+        size={nativeConfig ? 'small' : undefined}
         icon={<QrcodeOutlined aria-hidden />}
         aria-label="QR"
         title="QR"
@@ -45,16 +52,20 @@ export default function SubQrButton({ value, label, onCopy }: SubQrButtonProps) 
         <div ref={qrRef} className="sub-qr-modal-code">
           <QRCode
             value={value}
-            size={240}
+            size={nativeConfig ? 360 : 240}
             type="canvas"
-            marginSize={2}
+            errorLevel={nativeConfig ? 'L' : undefined}
+            marginSize={nativeConfig ? 4 : 2}
             bordered={false}
             color="#000000"
             bgColor="#ffffff"
+            style={
+              nativeConfig ? { width: 'min(360px, calc(100vw - 80px))', height: 'auto' } : undefined
+            }
           />
         </div>
         <Input.TextArea
-          aria-label={t('subscription.tabLinks')}
+          aria-label={t(nativeConfig ? 'subscription.tabConfigs' : 'subscription.tabLinks')}
           className="sub-qr-modal-link"
           value={value}
           readOnly

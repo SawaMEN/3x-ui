@@ -11,6 +11,7 @@ interface SubAppsTabProps {
   subUrl: string;
   profileName: string;
   initialPlatform: AppPlatform;
+  onOpenAmneziaWG?: () => void;
 }
 
 const PLATFORM_OPTIONS = (Object.keys(APP_PLATFORMS) as AppPlatform[]).map((value) => ({
@@ -18,7 +19,12 @@ const PLATFORM_OPTIONS = (Object.keys(APP_PLATFORMS) as AppPlatform[]).map((valu
   label: APP_PLATFORMS[value],
 }));
 
-export default function SubAppsTab({ subUrl, profileName, initialPlatform }: SubAppsTabProps) {
+export default function SubAppsTab({
+  subUrl,
+  profileName,
+  initialPlatform,
+  onOpenAmneziaWG,
+}: SubAppsTabProps) {
   const { t } = useTranslation();
   const [platform, setPlatform] = useState(initialPlatform);
 
@@ -40,7 +46,7 @@ export default function SubAppsTab({ subUrl, profileName, initialPlatform }: Sub
                 {name === 'Happ' ? (
                   <span className="sub-app-glyph" style={{ maskImage: `url("${happIcon}")` }} />
                 ) : (
-                  'H'
+                  name[0]
                 )}
               </span>
               <span className="sub-app-name">{name}</span>
@@ -60,14 +66,26 @@ export default function SubAppsTab({ subUrl, profileName, initialPlatform }: Sub
                   </Button>
                 ))}
               </div>
-              <Button
-                type="primary"
-                href={url}
-                icon={<PlusOutlined aria-hidden />}
-                aria-label={`${t('add')} · ${name}`}
-              >
-                {t('add')}
-              </Button>
+              {url ? (
+                <Button
+                  type="primary"
+                  href={url}
+                  icon={<PlusOutlined aria-hidden />}
+                  aria-label={`${t('add')} · ${name}`}
+                >
+                  {t('add')}
+                </Button>
+              ) : (
+                onOpenAmneziaWG && (
+                  <Button
+                    type="primary"
+                    onClick={onOpenAmneziaWG}
+                    aria-label={`${t('subscription.tabConfigs')} · ${name}`}
+                  >
+                    {t('subscription.tabConfigs')}
+                  </Button>
+                )
+              )}
             </div>
           </li>
         ))}

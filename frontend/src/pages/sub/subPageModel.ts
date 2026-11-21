@@ -66,6 +66,7 @@ const HIDDIFY_LATEST = `${HIDDIFY_RELEASES}/latest`;
 const HAPP_DESKTOP = 'https://github.com/Happ-proxy/happ-desktop/releases/latest';
 const HIDDIFY_APP_STORE = 'https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532';
 const HAPP_APP_STORE = 'https://apps.apple.com/app/happ-proxy-utility/id6504287215';
+const AMNEZIAWG_APP_STORE = 'https://apps.apple.com/app/amneziawg/id6478942365';
 
 interface AppDownload {
   label: string;
@@ -101,6 +102,21 @@ const HAPP_DOWNLOADS: Record<AppPlatform, AppDownload[]> = {
   linux: [{ label: 'GitHub', href: HAPP_DESKTOP }],
 };
 
+const AMNEZIAWG_DOWNLOADS: Record<AppPlatform, AppDownload[]> = {
+  android: [
+    { label: 'Google Play', href: 'https://play.google.com/store/apps/details?id=org.amnezia.awg' },
+  ],
+  ios: [{ label: 'App Store', href: `${AMNEZIAWG_APP_STORE}?platform=iphone` }],
+  windows: [
+    {
+      label: 'GitHub',
+      href: 'https://github.com/amnezia-vpn/amneziawg-windows-client/releases/latest',
+    },
+  ],
+  macos: [{ label: 'App Store', href: `${AMNEZIAWG_APP_STORE}?platform=mac` }],
+  linux: [{ label: 'GitHub', href: 'https://github.com/amnezia-vpn/amneziawg-tools' }],
+};
+
 export function buildSubApps(platform: AppPlatform, subUrl: string, profileName: string) {
   const hiddifyImport = `hiddify://import/${subUrl}#${encodeURIComponent(profileName)}`;
 
@@ -112,5 +128,6 @@ export function buildSubApps(platform: AppPlatform, subUrl: string, profileName:
       downloads: [{ label: 'GitHub', href: HIDDIFY_RELEASES }],
     },
     { name: 'Happ', url: `happ://add/${subUrl}`, downloads: HAPP_DOWNLOADS[platform] },
+    { name: 'AmneziaWG', url: undefined, downloads: AMNEZIAWG_DOWNLOADS[platform] },
   ];
 }
