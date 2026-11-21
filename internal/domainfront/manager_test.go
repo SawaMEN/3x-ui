@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -620,5 +621,37 @@ func TestSharedSNIOnlyConfigurationOpensNoGatewayPorts(t *testing.T) {
 			t.Fatalf("foreign SNI opened local port %d: %v", port, err)
 		}
 		_ = listener.Close()
+	}
+}
+
+func TestCertificatePreparationFailureIsReported(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	const name = "sub.example.org"
+	cfg.Domains = []DomainFrontDomain{{Name: name, Enabled: true, TLS: "certmagic"}}
+	preparationErr := errors.New("cannot prepare validation port")
+	manager := NewManager(t.TempDir())
+	manager.runtime = &frontRuntime{
+		errors: make(map[string]string),
+		backend: Backend{CertificateEvent: func(_ context.Context, event string, _ map[string]any) error {
+			if event == "cert_obtaining" {
+				return preparationErr
+			}
+			return nil
+		}},
+	}
+	data := map[string]any{"identifier": name}
+	if err := manager.runtime.event(context.Background(), "cert_obtaining", data); !errors.Is(err, preparationErr) {
+		t.Fatalf("unexpected event error: %v", err)
+	}
+	cert := manager.Status(cfg).Certificates[0]
+	if cert.State != "error" || !strings.Contains(cert.Error, preparationErr.Error()) {
+		t.Fatalf("missing certificate preparation error: %+v", cert)
+	}
+	if err := manager.runtime.event(context.Background(), "cert_obtained", data); err != nil {
+		t.Fatal(err)
+	}
+	if cert := manager.Status(cfg).Certificates[0]; cert.Error != "" {
+		t.Fatalf("stale certificate preparation error: %+v", cert)
 	}
 }
