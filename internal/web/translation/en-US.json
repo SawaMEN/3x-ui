@@ -3094,7 +3094,8 @@
       "subTelegramRemoteEnable": "Remote-node Telegram proxies on subscription page",
       "subTelegramRemoteEnableDesc": "Show subscriber-specific remote proxies permitted for publication. When disabled, this page does not query remote nodes.",
       "subTelegramWebEnable": "WEB proxies on subscription page",
-      "subTelegramWebEnableDesc": "Show Telegram WEB proxies from the local panel and permitted remote nodes."
+      "subTelegramWebEnableDesc": "Show Telegram WEB proxies from the local panel and permitted remote nodes.",
+      "subTelegramWebName": "WEB proxy name on subscription page"
     },
     "xray": {
       "restartSuccess": "Xray has been successfully relaunched.",

@@ -36,6 +36,7 @@ type AllSetting struct {
 	SubTelegramLocalEnable   bool   `json:"subTelegramLocalEnable" form:"subTelegramLocalEnable"`
 	SubTelegramRemoteEnable  bool   `json:"subTelegramRemoteEnable" form:"subTelegramRemoteEnable"`
 	SubTelegramWebEnable     bool   `json:"subTelegramWebEnable" form:"subTelegramWebEnable"`
+	SubTelegramWebName       string `json:"subTelegramWebName" form:"subTelegramWebName"`
 	SubAppearanceTheme       string `json:"subAppearanceTheme" form:"subAppearanceTheme"`
 	SubAppearanceEnable      bool   `json:"subAppearanceEnable" form:"subAppearanceEnable"`
 	SubAppearanceTitle       string `json:"subAppearanceTitle" form:"subAppearanceTitle"`

@@ -344,6 +344,14 @@ export default function SubscriptionGeneralTab({
           </SettingListItem>
         ),
       )}
+      <SettingListItem paddings="small" title={t('pages.settings.subTelegramWebName')}>
+        <Input
+          aria-label={t('pages.settings.subTelegramWebName')}
+          placeholder="Web Proxy"
+          value={allSetting.subTelegramWebName}
+          onChange={(event) => updateSetting({ subTelegramWebName: event.target.value })}
+        />
+      </SettingListItem>
       <SettingListItem paddings="small" title={t('pages.settings.subAppearanceTheme')}>
         <Select
           id="sub-appearance-theme"

@@ -90,10 +90,22 @@ func serveTelemtSubscription(c *gin.Context) {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
+	var customWebName string
+	if visibility.Web {
+		customWebName, err = settings.GetTelegramWebProxyName()
+		if err != nil {
+			logger.Warning("sub: failed to read Telegram WEB Proxy name:", err)
+		}
+		customWebName = strings.TrimSpace(customWebName)
+	}
+	webName := customWebName
+	if webName == "" {
+		webName = "Web Proxy"
+	}
 	remoteProfiles := make(chan []telemtSubscriptionPayload, 1)
 	go func() {
 		if visibility.Remote {
-			remoteProfiles <- remoteTelegramSubscriptions(ctx, subID)
+			remoteProfiles <- remoteTelegramSubscriptions(ctx, subID, webName)
 		} else {
 			remoteProfiles <- nil
 		}
@@ -114,15 +126,21 @@ func serveTelemtSubscription(c *gin.Context) {
 			logger.Debug("sub: Telemt personal profile unavailable:", err)
 		}
 
-		if link, err := telemt.SubscriptionWebProxyLink(); err == nil && link != "" {
-			payload.WebProxyEnabled = true
-			payload.WebProxy = link
+		if visibility.Web {
+			if link, err := telemt.SubscriptionWebProxyLink(); err == nil && link != "" {
+				payload.WebProxyEnabled = true
+				payload.WebProxy = link
+			}
 		}
 	}
 	seen := make(map[string]bool)
 	add := func(link, name string) {
 		profile, ok := telegramProfileFromLink(link, name)
-		if ok && (visibility.Web || !strings.HasPrefix(profile.Link, "tg://webproxy")) && !seen[profile.Link] {
+		isWeb := strings.HasPrefix(profile.Link, "tg://webproxy")
+		if ok && (visibility.Web || !isWeb) && !seen[profile.Link] {
+			if isWeb && profile.Name == "" {
+				profile.Name = customWebName
+			}
 			seen[profile.Link] = true
 			payload.Proxies = append(payload.Proxies, profile)
 		}
@@ -130,7 +148,7 @@ func serveTelemtSubscription(c *gin.Context) {
 	if payload.Personal != nil {
 		add(payload.Personal.Link, "")
 	}
-	add(payload.WebProxy, "Web Proxy")
+	add(payload.WebProxy, webName)
 	for _, group := range subs {
 		for _, link := range splitLinkLines(group) {
 			add(link, "")
@@ -152,7 +170,7 @@ func telegramProfileFromLink(link, name string) (telemtSubscriptionProfile, bool
 
 // Node requests share one deadline and a small worker pool; an offline node
 // cannot prevent available proxies from appearing or delay the main page.
-func remoteTelegramSubscriptions(parent context.Context, subID string) []telemtSubscriptionPayload {
+func remoteTelegramSubscriptions(parent context.Context, subID, webName string) []telemtSubscriptionPayload {
 	var nodes []*model.Node
 	if err := database.GetDB().Where("enable = ?", true).Order("sort_order ASC, id ASC").Find(&nodes).Error; err != nil {
 		logger.Warning("sub: failed to load Telegram proxy nodes")
@@ -183,7 +201,7 @@ func remoteTelegramSubscriptions(parent context.Context, subID string) []telemtS
 					results[index].Proxies = append(results[index].Proxies, telemtSubscriptionProfile{Name: node.Name, Link: profile.Personal.Link})
 				}
 				if profile.WebProxyEnabled && profile.WebProxy != "" {
-					results[index].Proxies = append(results[index].Proxies, telemtSubscriptionProfile{Name: node.Name + " · Web Proxy", Link: profile.WebProxy})
+					results[index].Proxies = append(results[index].Proxies, telemtSubscriptionProfile{Name: node.Name + " · " + webName, Link: profile.WebProxy})
 				}
 			}
 		})

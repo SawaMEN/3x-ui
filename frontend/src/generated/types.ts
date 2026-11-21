@@ -147,6 +147,7 @@ export interface AllSetting {
   subTelegramLocalEnable: boolean;
   subTelegramRemoteEnable: boolean;
   subTelegramWebEnable: boolean;
+  subTelegramWebName: string;
   subThemeDir: string;
   subTitle: string;
   subTrafficDepletedTemplate: string;
@@ -315,6 +316,7 @@ export interface AllSettingView {
   subTelegramLocalEnable: boolean;
   subTelegramRemoteEnable: boolean;
   subTelegramWebEnable: boolean;
+  subTelegramWebName: string;
   subThemeDir: string;
   subTitle: string;
   subTrafficDepletedTemplate: string;

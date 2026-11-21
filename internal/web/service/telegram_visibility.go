@@ -1,5 +1,9 @@
 package service
 
+func (s *SettingService) GetTelegramWebProxyName() (string, error) {
+	return s.getString("subTelegramWebName")
+}
+
 type TelegramPageVisibility struct{ Local, Remote, Web bool }
 
 func (s *SettingService) GetTelegramPageVisibility() (TelegramPageVisibility, error) {

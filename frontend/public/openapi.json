@@ -484,6 +484,9 @@
           "subTelegramWebEnable": {
             "type": "boolean"
           },
+          "subTelegramWebName": {
+            "type": "string"
+          },
           "subThemeDir": {
             "type": "string"
           },
@@ -711,6 +714,7 @@
           "subTelegramLocalEnable",
           "subTelegramRemoteEnable",
           "subTelegramWebEnable",
+          "subTelegramWebName",
           "subThemeDir",
           "subTitle",
           "subTrafficDepletedTemplate",
@@ -1179,6 +1183,9 @@
           "subTelegramWebEnable": {
             "type": "boolean"
           },
+          "subTelegramWebName": {
+            "type": "string"
+          },
           "subThemeDir": {
             "type": "string"
           },
@@ -1413,6 +1420,7 @@
           "subTelegramLocalEnable",
           "subTelegramRemoteEnable",
           "subTelegramWebEnable",
+          "subTelegramWebName",
           "subThemeDir",
           "subTitle",
           "subTrafficDepletedTemplate",

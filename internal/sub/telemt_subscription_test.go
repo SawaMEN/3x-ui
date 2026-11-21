@@ -83,7 +83,7 @@ func TestTelegramSubscriptionIncludesRemoteProfilesWithoutLocalTelemt(t *testing
 	if payload.Proxies[0].Host != "mt.node.example" || payload.Proxies[0].Port != 8443 {
 		t.Fatalf("remote inbound endpoint = %+v", payload.Proxies[0])
 	}
-	if payload.Proxies[1].Link != personal || payload.Proxies[1].Name != node.Name || payload.Proxies[2].Link != web {
+	if payload.Proxies[1].Link != personal || payload.Proxies[1].Name != node.Name || payload.Proxies[2].Link != web || payload.Proxies[2].Name != node.Name+" · Web Proxy" {
 		t.Fatalf("remote profiles = %+v", payload.Proxies)
 	}
 	if response.Header().Get("Cache-Control") != "private, no-store" {
@@ -98,12 +98,23 @@ func TestTelegramSubscriptionIncludesRemoteProfilesWithoutLocalTelemt(t *testing
 	if unknown.Code != http.StatusNotFound || calls.Load() != 1 {
 		t.Fatalf("unknown subscription reached nodes: status=%d calls=%d", unknown.Code, calls.Load())
 	}
+	if err := db.Create(&model.Setting{Key: "subTelegramWebName", Value: "  VetrOFF  "}).Error; err != nil {
+		t.Fatal(err)
+	}
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "http://sub.example/sub/telemt/"+subID, nil))
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusOK || len(payload.Proxies) != 3 || payload.Proxies[2].Name != node.Name+" · VetrOFF" || payload.Proxies[2].Link != web {
+		t.Fatalf("WEB Proxy was not renamed: status=%d body=%s", response.Code, response.Body.String())
+	}
 	if err := db.Where("key = ?", "subTelegramRemoteEnable").Assign(model.Setting{Value: "false"}).FirstOrCreate(&model.Setting{Key: "subTelegramRemoteEnable"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	response = httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "http://sub.example/sub/telemt/"+subID, nil))
-	if calls.Load() != 1 {
+	if calls.Load() != 2 {
 		t.Fatal("remote page toggle still queried nodes")
 	}
 	payload.Proxies = nil
@@ -118,7 +129,7 @@ func TestTelegramSubscriptionIncludesRemoteProfilesWithoutLocalTelemt(t *testing
 	}
 	response = httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "http://sub.example/sub/telemt/"+subID, nil))
-	if calls.Load() != 1 {
+	if calls.Load() != 2 {
 		t.Fatal("disabled node was queried")
 	}
 }
@@ -137,7 +148,7 @@ func TestTelegramSubscriptionNodeDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	profiles := remoteTelegramSubscriptions(ctx, "slow-sub")
+	profiles := remoteTelegramSubscriptions(ctx, "slow-sub", "Web Proxy")
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("node request ignored cancellation: %s", elapsed)
 	}
