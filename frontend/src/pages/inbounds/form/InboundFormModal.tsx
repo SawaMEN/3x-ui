@@ -1030,7 +1030,9 @@ export default function InboundFormModal({
         <MixedFields mixedUdpOn={mixedUdpOn} tcpOnly={shadowTlsEnabled} />
       )}
 
-      {protocol === Protocols.MTPROTO && <MtprotoFields />}
+      {protocol === Protocols.MTPROTO && (
+        <MtprotoFields inboundId={mode === 'edit' ? dbInbound?.id : undefined} />
+      )}
 
       {protocol === Protocols.VK_TURN_PROXY && <VkTurnProxyFields />}
 

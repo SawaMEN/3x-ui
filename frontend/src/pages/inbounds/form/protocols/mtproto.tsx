@@ -11,7 +11,7 @@ import MtprotoMekoStatus from './MtprotoMekoStatus';
 import TelemtWebSiteFields from '@/pages/telemt/TelemtWebSiteFields';
 import TelemtWebGuide, { telemtWebFieldHelp } from '@/pages/telemt/TelemtWebGuide';
 
-export default function MtprotoFields() {
+export default function MtprotoFields({ inboundId }: { inboundId?: number }) {
   const { t, i18n } = useTranslation();
   const { control } = useFormContext();
   const ru = i18n.resolvedLanguage?.startsWith('ru') ?? false;
@@ -79,7 +79,7 @@ export default function MtprotoFields() {
                 : 'Use the panel domain or a separate domain with A/AAAA pointing to this server. HTTPS frontend, certificate and loopback backend are configured automatically. Move the panel or another service off port 443 first if necessary; the same domain can serve the panel on another port. HTTP certificate issuance and renewal need public TCP 80; proxy traffic needs TCP 443. Allow these ports in host and provider firewalls. One local WEB inbound is supported.'
             }
           />
-          <MtprotoWebStatus />
+          <MtprotoWebStatus key={inboundId} inboundId={inboundId} />
           <TelemtWebGuide domain={webDomain} />
           <TelemtWebSiteFields prefix="settings.webProxy.site" />
           <FormField

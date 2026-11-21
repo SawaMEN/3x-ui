@@ -348,7 +348,12 @@ func removeTelemtWebUser(base string) string {
 	return strings.Join(out, "\n")
 }
 
-func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (TelemtWebProxyStatus, error) {
+func (s TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (TelemtWebProxyStatus, error) {
+	return s.WebProxyStatusForInbound(defaultDomain, panelCert, panelKey, 0)
+}
+
+// WebProxyStatusForInbound checks a proposed WEB configuration against other TCP 443 owners.
+func (TelemtService) WebProxyStatusForInbound(defaultDomain, panelCert, panelKey string, inboundID int) (TelemtWebProxyStatus, error) {
 	state, err := readTelemtWebState()
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
@@ -358,7 +363,7 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 	frontend := telemtWebFrontend(state)
 	nginxOwns443 := telemtWebNginxOwnsPort443()
 	frontendActive := state.Enabled && telemtWebFrontendActive(state) && (frontend != "nginx" || nginxOwns443)
-	port443, inspectionErr := inspectTelemtWebPort443(state, frontend)
+	port443, inspectionErr := inspectTelemtWebPort443(state, frontend, inboundID)
 	status := TelemtWebProxyStatus{Aliases: state.Aliases, Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, RetryJitter: state.RetryJitter, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, BasePath: state.BasePath, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: port443.Free, Port443Available: port443.Available, Port443Owner: port443.Owner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
 	if state.Enabled && state.ManagedInboundID == 0 && state.Domain != "" && state.Secret != "" {
 		for _, host := range telemtWebHosts(state) {
@@ -407,7 +412,7 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	port443, err := inspectTelemtWebPort443(state, options.Frontend)
+	port443, err := inspectTelemtWebPort443(state, options.Frontend, 0)
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,18 +80,18 @@ func (a *TelemtController) remove(c *gin.Context) {
 
 func (a *TelemtController) status(c *gin.Context) {
 	status := a.service.Status()
-	status.WebProxy = a.getWebProxyStatus(c)
+	status.WebProxy = a.getWebProxyStatus(c, 0)
 	jsonObj(c, status, nil)
 }
 
-func (a *TelemtController) getWebProxyStatus(c *gin.Context) service.TelemtWebProxyStatus {
+func (a *TelemtController) getWebProxyStatus(c *gin.Context, inboundID int) service.TelemtWebProxyStatus {
 	defaultDomain, _ := a.settingService.GetWebDomain()
 	if strings.TrimSpace(defaultDomain) == "" {
 		defaultDomain = publicHostFromRequest(c)
 	}
 	certFile, _ := a.settingService.GetCertFile()
 	keyFile, _ := a.settingService.GetKeyFile()
-	webStatus, err := a.service.WebProxyStatus(defaultDomain, certFile, keyFile)
+	webStatus, err := a.service.WebProxyStatusForInbound(defaultDomain, certFile, keyFile, inboundID)
 	if err != nil {
 		webStatus.Error = err.Error()
 	}
@@ -114,7 +115,15 @@ func (a *TelemtController) getWebProxyStatus(c *gin.Context) service.TelemtWebPr
 }
 
 func (a *TelemtController) webProxyStatus(c *gin.Context) {
-	jsonObj(c, a.getWebProxyStatus(c), nil)
+	jsonObj(c, a.getWebProxyStatus(c, telemtWebEditingInboundID(c)), nil)
+}
+
+func telemtWebEditingInboundID(c *gin.Context) int {
+	id, err := strconv.Atoi(c.Query("inboundId"))
+	if err != nil || id < 1 {
+		return 0
+	}
+	return id
 }
 
 func (a *TelemtController) webProxyAvailability(c *gin.Context) {
@@ -138,7 +147,7 @@ func (a *TelemtController) webProxyPreflight(c *gin.Context) {
 	}
 	certFile, _ := a.settingService.GetCertFile()
 	keyFile, _ := a.settingService.GetKeyFile()
-	result, err := a.service.PreflightWebProxy(c.Request.Context(), req.Domain, req.TelemtWebProxyOptions, certFile, keyFile)
+	result, err := a.service.PreflightWebProxyForInbound(c.Request.Context(), req.Domain, req.TelemtWebProxyOptions, certFile, keyFile, telemtWebEditingInboundID(c))
 	jsonObj(c, result, err)
 }
 
@@ -152,7 +161,7 @@ func (a *TelemtController) enableWebProxy(c *gin.Context) {
 		return
 	}
 	if strings.TrimSpace(req.Domain) == "" {
-		req.Domain = a.getWebProxyStatus(c).DefaultDomain
+		req.Domain = a.getWebProxyStatus(c, 0).DefaultDomain
 	}
 	certFile, _ := a.settingService.GetCertFile()
 	keyFile, _ := a.settingService.GetKeyFile()
@@ -161,7 +170,7 @@ func (a *TelemtController) enableWebProxy(c *gin.Context) {
 		jsonMsg(c, "WEB Proxy setup failed", err)
 		return
 	}
-	status := a.getWebProxyStatus(c)
+	status := a.getWebProxyStatus(c, 0)
 	status.DefaultDomain = req.Domain
 	jsonObj(c, status, nil)
 }
@@ -171,7 +180,7 @@ func (a *TelemtController) disableWebProxy(c *gin.Context) {
 		jsonMsg(c, "failed to disable WEB Proxy", err)
 		return
 	}
-	jsonObj(c, a.getWebProxyStatus(c), nil)
+	jsonObj(c, a.getWebProxyStatus(c, 0), nil)
 }
 
 func (a *TelemtController) config(c *gin.Context) {

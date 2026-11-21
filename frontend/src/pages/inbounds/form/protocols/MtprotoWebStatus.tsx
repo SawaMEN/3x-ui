@@ -29,10 +29,11 @@ type WebPreflight = {
   warnings: string[];
 };
 
-export default function MtprotoWebStatus() {
+export default function MtprotoWebStatus({ inboundId }: { inboundId?: number }) {
   const { control, getValues, setValue } = useFormContext();
   const { i18n } = useTranslation();
   const ru = i18n.resolvedLanguage?.startsWith('ru') ?? false;
+  const inboundQuery = inboundId && inboundId > 0 ? `?inboundId=${inboundId}` : '';
   const [status, setStatus] = useState<WebStatus>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -79,7 +80,7 @@ export default function MtprotoWebStatus() {
     const timer = window.setTimeout(async () => {
       try {
         const response = await HttpUtil.post<WebPreflight>(
-          '/panel/api/telemt/webproxy/preflight',
+          `/panel/api/telemt/webproxy/preflight${inboundQuery}`,
           JSON.parse(requestKey),
           { silent: true, signal: controller.signal },
         );
@@ -114,11 +115,13 @@ export default function MtprotoWebStatus() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [requestKey, attempt, ru]);
+  }, [requestKey, attempt, ru, inboundQuery]);
 
   useEffect(() => {
     let cancelled = false;
-    void HttpUtil.get<WebStatus>('/panel/api/telemt/webproxy/status', undefined, { silent: true })
+    void HttpUtil.get<WebStatus>(`/panel/api/telemt/webproxy/status${inboundQuery}`, undefined, {
+      silent: true,
+    })
       .then((response) => {
         if (cancelled) return;
         if (!response.success || !response.obj) {
@@ -144,7 +147,7 @@ export default function MtprotoWebStatus() {
     return () => {
       cancelled = true;
     };
-  }, [attempt, getValues, setValue]);
+  }, [attempt, getValues, setValue, inboundQuery]);
 
   const problem =
     error ||

@@ -31,6 +31,11 @@ type TelemtWebPreflightCheck struct {
 }
 
 func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, options TelemtWebProxyOptions, panelCert, panelKey string) (TelemtWebPreflight, error) {
+	return s.PreflightWebProxyForInbound(ctx, domain, options, panelCert, panelKey, 0)
+}
+
+// PreflightWebProxyForInbound previews a WEB edit without changing the current frontend owner.
+func (s TelemtService) PreflightWebProxyForInbound(ctx context.Context, domain string, options TelemtWebProxyOptions, panelCert, panelKey string, inboundID int) (TelemtWebPreflight, error) {
 	state, err := readTelemtWebState()
 	if err != nil {
 		return TelemtWebPreflight{}, err
@@ -131,7 +136,7 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 
 	// One authoritative check reports both system processes and saved panel
 	// listeners, including the admin UI and enabled inbound configurations.
-	port443, inspectionErr := inspectTelemtWebPort443(state, options.Frontend)
+	port443, inspectionErr := inspectTelemtWebPort443(state, options.Frontend, inboundID)
 	if inspectionErr != nil {
 		check("https-port", false, "Не удалось проверить TCP 443: "+inspectionErr.Error())
 	} else if port443.Available {
