@@ -38,21 +38,23 @@ jobs:
         run: go test -race -p 4 ./internal/singbox -run 'Hysteria' -count=1 -timeout=10m
 
   hysteria-native:
-    name: Verify maintained Hysteria1/2 sources, no patch
+    name: Verify Hysteria1/2 in the pinned VetrOFF source
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
-          repository: SawaMEN/hiddify-sing-box
-          ref: main
-          path: native-sing-box
-          submodules: recursive
+          repository: SawaMEN/VetrOFF-Core
+          ref: 04a17a6cdfaaa39eebd6b610a9d9d3abc1a4e8a4 # v0.0.1
+          path: vetroff-core
+          persist-credentials: false
+      - name: Prepare original sources and apply VetrOFF patches
+        run: bash vetroff-core/scripts/prepare.sh
       - uses: actions/setup-go@v7
         with:
-          go-version-file: native-sing-box/go.mod
-          cache-dependency-path: native-sing-box/go.sum
+          go-version-file: vetroff-core/.build/hiddify-core/hiddify-sing-box/go.mod
+          cache-dependency-path: vetroff-core/.build/hiddify-core/hiddify-sing-box/go.sum
           cache: true
       - name: Compile and run native Hysteria protocol tests
-        working-directory: native-sing-box
+        working-directory: vetroff-core/.build/hiddify-core/hiddify-sing-box
         run: |
           go test -tags with_quic -count=1 ./protocol/hysteria ./protocol/hysteria2
