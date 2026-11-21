@@ -370,6 +370,9 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	if err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
+	if panel.SubRestrictDomains && strings.TrimSpace(panel.SubPublicURL) == "" && (!cfg.Enabled || cfg.SubscriptionDomain == "") {
+		return domainfront.DomainFrontStatus{}, fmt.Errorf("restricted subscriptions require a public subscription URL or an enabled gateway subscription domain")
+	}
 	if err := validatePanelCertificateSource(old, cfg, panel.WebDomain, panel.WebCertFile, panel.WebKeyFile); err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
@@ -458,8 +461,9 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 	if err != nil {
 		return domainfront.Backend{}, err
 	}
+	subTLS := settings.SubCertFile != "" && settings.SubKeyFile != ""
 	backend := domainfront.Backend{
-		SubscriptionTarget: localDomainTarget(settings.SubListen, settings.SubPort, settings.SubCertFile != "" && settings.SubKeyFile != ""),
+		SubscriptionTarget: localDomainTarget(settings.SubListen, settings.SubPort, subTLS),
 		PanelPath:          settings.WebBasePath,
 		SubscriptionPaths:  []string{settings.SubPath, settings.SubJsonPath, settings.SubClashPath, "/assets/"},
 		Routes:             map[string][]domainfront.Route{},
@@ -471,10 +475,8 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 	}
 	backend.SharedHTTP, backend.SharedHTTPS = domainSharesListener(cfg, settings.WebListen, panelPort, settings.WebCertFile != "" && settings.WebKeyFile != "")
 	if settings.SubEnable {
-		sharedHTTP, sharedHTTPS := domainSharesListener(cfg, settings.SubListen, settings.SubPort, settings.SubCertFile != "" && settings.SubKeyFile != "")
-		if sharedHTTP || sharedHTTPS {
-			backend.SubscriptionHandler = registeredDomainHandler(settings.SubListen, settings.SubPort, settings.SubCertFile != "" && settings.SubKeyFile != "")
-		}
+		sharedHTTP, sharedHTTPS := domainSharesListener(cfg, settings.SubListen, settings.SubPort, subTLS)
+		backend.SubscriptionHandler = registeredDomainSubscriptionHandler(settings.SubListen, settings.SubPort, subTLS)
 		backend.SharedHTTP = backend.SharedHTTP || sharedHTTP
 		backend.SharedHTTPS = backend.SharedHTTPS || sharedHTTPS
 	}
@@ -490,7 +492,7 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		}
 	}
 	backend.GetRedirect = s.GetRootRedirectURL
-	if settings.SubCertFile != "" && settings.SubKeyFile != "" {
+	if subTLS {
 		backend.SubscriptionHost = certificateHost(settings.SubCertFile, settings.SubDomain)
 	}
 	for _, d := range cfg.Domains {

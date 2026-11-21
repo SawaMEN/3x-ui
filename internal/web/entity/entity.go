@@ -13,6 +13,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/cronspec"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/uripath"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
 )
 
 type Msg struct {
@@ -290,7 +291,7 @@ func (s *AllSetting) CheckValid() error {
 	}
 
 	if s.SubCertFile != "" || s.SubKeyFile != "" {
-		_, err := tls.LoadX509KeyPair(s.SubCertFile, s.SubKeyFile)
+		_, err := network.NewNamedFileCertificate(s.SubCertFile, s.SubKeyFile, s.SubDomain)
 		if err != nil {
 			return common.NewErrorf("cert file <%v> or key file <%v> invalid: %v", s.SubCertFile, s.SubKeyFile, err)
 		}

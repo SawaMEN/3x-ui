@@ -61,7 +61,7 @@ func TestSubscriptionDomainValidation(t *testing.T) {
 		{"cdn without TLS", entity.AllSetting{SubCDNEnable: true, SubPublicURL: "http://sub.example.com"}, "CDN subscription public URL must use HTTPS"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateSubscriptionDomains(&tc.settings)
+			err := validateSubscriptionDomains(&tc.settings, false)
 			if err == nil || err.Error() != tc.want {
 				t.Fatalf("error = %v, want %q", err, tc.want)
 			}
@@ -151,7 +151,7 @@ func TestRestrictedSubscriptionHostsExcludeImplicitDomains(t *testing.T) {
 	if err != nil || len(hosts) != 1 || !hosts["selected.example.com"] {
 		t.Fatalf("single domain = %#v, %v", hosts, err)
 	}
-	if err := validateSubscriptionDomains(&entity.AllSetting{SubRestrictDomains: true}); err == nil {
+	if err := validateSubscriptionDomains(&entity.AllSetting{SubRestrictDomains: true}, false); err == nil {
 		t.Fatal("restricted access accepted without a public origin")
 	}
 	if err := s.saveSetting("subRestrictDomains", "false"); err != nil {
@@ -160,5 +160,44 @@ func TestRestrictedSubscriptionHostsExcludeImplicitDomains(t *testing.T) {
 	hosts, err = s.GetSubscriptionAllowedHosts("origin.example.com")
 	if err != nil || !hosts["managed.example.com"] || !hosts["panel.example.com"] || !hosts["origin.example.com"] {
 		t.Fatalf("legacy hosts = %#v, %v", hosts, err)
+	}
+}
+
+func TestRestrictedSubscriptionUsesManagedDomainAfterSettingsSave(t *testing.T) {
+	setupConflictDB(t)
+	s := &SettingService{}
+	cfg := domainfront.DefaultConfig()
+	cfg.Enabled = true
+	cfg.SubscriptionDomain = "subscription.example.com"
+	cfg.PublicPort = 8443
+	cfg.Domains = []domainfront.DomainFrontDomain{{Name: cfg.SubscriptionDomain, Enabled: true, Mode: "cdn", TLS: "auto"}}
+	saveGateway := func() {
+		t.Helper()
+		raw, err := json.Marshal(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.setString("domainFrontConfig", string(raw)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	saveGateway()
+	settings, err := s.GetAllSetting()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.SubRestrictDomains = true
+	settings.SubAllowedDomains = "alias.example.com"
+	if err := s.UpdateAllSetting(settings, SecretClears{}); err != nil {
+		t.Fatal(err)
+	}
+	cfg.SubscriptionDomain, cfg.Domains[0].Name, cfg.PublicPort = "new.example.com", "new.example.com", 9443
+	saveGateway()
+	if got := s.BuildSubURIBase("panel.example.com"); got != "https://new.example.com:9443" {
+		t.Fatalf("public origin = %q", got)
+	}
+	hosts, err := s.GetSubscriptionAllowedHosts("origin.example.com")
+	if err != nil || len(hosts) != 2 || !hosts["new.example.com"] || !hosts["alias.example.com"] {
+		t.Fatalf("restricted hosts = %#v, %v", hosts, err)
 	}
 }

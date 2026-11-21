@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
@@ -28,9 +29,10 @@ import (
 
 // Server represents the subscription server that serves subscription links and JSON configurations.
 type Server struct {
-	httpServer *http.Server
-	routerMu   sync.RWMutex
-	listener   net.Listener
+	httpServer              *http.Server
+	routerMu                sync.RWMutex
+	listener                net.Listener
+	unregisterDomainHandler func()
 
 	sub            *SUBController
 	settingService service.SettingService
@@ -654,35 +656,42 @@ func (s *Server) Start() (err error) {
 		return err
 	}
 
+	var cert *network.FileCertificate
+	if certFile != "" || keyFile != "" {
+		domain, err := s.settingService.GetSubDomain()
+		if err != nil {
+			return err
+		}
+		cert, err = network.NewNamedFileCertificate(certFile, keyFile, normalizeRequestHost(domain))
+		if err != nil {
+			return fmt.Errorf("subscription TLS certificate: %w", err)
+		}
+	}
+
 	listenAddr := net.JoinHostPort(listen, strconv.Itoa(port))
 	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", listenAddr)
 	if err != nil {
 		return err
 	}
 
-	if certFile != "" || keyFile != "" {
-		cert, err := network.NewFileCertificate(certFile, keyFile)
-		if err == nil {
-			c := &tls.Config{
-				GetCertificate: service.DomainFrontTLS(cert.GetCertificate, listen, port),
-				NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
-			}
-			listener = network.NewAutoHttpsListener(listener)
-			listener = tls.NewListener(listener, c)
-			logger.Info("Sub server running HTTPS on", listener.Addr())
-		} else {
-			logger.Error("Error loading certificates:", err)
-			logger.Info("Sub server running HTTP on", listener.Addr())
+	if cert != nil {
+		c := &tls.Config{
+			GetCertificate: service.DomainFrontTLS(cert.GetCertificate, listen, port),
+			NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
 		}
+		listener = network.NewAutoHttpsListener(listener)
+		listener = tls.NewListener(listener, c)
+		logger.Info("Sub server running HTTPS on", listener.Addr())
 	} else {
 		logger.Info("Sub server running HTTP on", listener.Addr())
 	}
 	s.listener = listener
+	s.unregisterDomainHandler = service.RegisterDomainSubscriptionHandler(listen, port, cert != nil, engine)
 
 	s.routerMu.Lock()
 	s.httpServer = &http.Server{
 		ErrorLog: logger.StandardLogger(),
-		Handler:  service.DomainFrontHandler(engine, listen, port, certFile != "" && keyFile != ""),
+		Handler:  service.DomainFrontHandler(engine, listen, port, cert != nil),
 		// The subscription server is the most exposed (public) listener; without
 		// these a few slow-header connections exhaust it (Slowloris). Mirrors the
 		// panel server timeouts in internal/web/web.go.
@@ -707,6 +716,9 @@ func (s *Server) Start() (err error) {
 // Stop gracefully shuts down the subscription server and closes the listener.
 func (s *Server) Stop() error {
 	s.cancel()
+	if s.unregisterDomainHandler != nil {
+		s.unregisterDomainHandler()
+	}
 	if s.sub != nil {
 		s.sub.Close()
 	}

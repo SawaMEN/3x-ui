@@ -1483,7 +1483,15 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears 
 	default:
 		return errors.New("subscription host sort mode must be inbound-first or hosts-first")
 	}
-	if err := validateSubscriptionDomains(allSetting); err != nil {
+	managedSubscriptionOrigin := false
+	if allSetting.SubRestrictDomains && strings.TrimSpace(allSetting.SubPublicURL) == "" {
+		cfg, err := s.GetDomainFrontConfig()
+		if err != nil {
+			return err
+		}
+		managedSubscriptionOrigin = cfg.Enabled && cfg.SubscriptionDomain != ""
+	}
+	if err := validateSubscriptionDomains(allSetting, managedSubscriptionOrigin); err != nil {
 		return err
 	}
 	if err := validatePresentationSettings(allSetting); err != nil {

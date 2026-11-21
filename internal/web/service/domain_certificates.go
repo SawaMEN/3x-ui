@@ -119,6 +119,7 @@ func inheritedDomainCertificates(cfg domainfront.DomainFrontConfig, settings *en
 		candidates = append(candidates, domainfront.CertificateFiles{CertFile: state.values["Le_RealFullChainPath"], KeyFile: state.values["Le_RealKeyPath"], Source: "installer", Renewal: "acme.sh"})
 	}
 	result := map[string]domainfront.CertificateFiles{}
+	now := time.Now()
 	for _, d := range cfg.Domains {
 		if d.TLS != "auto" && d.TLS != "existing" {
 			continue
@@ -135,7 +136,7 @@ func inheritedDomainCertificates(cfg domainfront.DomainFrontConfig, settings *en
 				continue
 			}
 			cert, err := x509.ParseCertificate(pair.Certificate[0])
-			if err != nil || cert.VerifyHostname(d.Name) != nil {
+			if err != nil || cert.VerifyHostname(d.Name) != nil || !now.Before(cert.NotAfter) || now.Before(cert.NotBefore) {
 				continue
 			}
 			for _, state := range states {

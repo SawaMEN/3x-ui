@@ -42,13 +42,22 @@ export default function SubscriptionDomains({
     if (!names.length) return;
     const scheme = origin?.protocol || 'https:';
     const defaultPort = scheme === 'https:' ? 443 : 80;
+    const followsGateway =
+      managed &&
+      names[0] === managed.subscriptionDomain &&
+      nextPort === managed.publicPort &&
+      scheme === 'https:';
     updateSetting({
       subRestrictDomains: true,
-      subPublicURL: `${scheme}//${names[0]}${nextPort === defaultPort ? '' : `:${nextPort}`}`,
+      subPublicURL: followsGateway
+        ? ''
+        : `${scheme}//${names[0]}${nextPort === defaultPort ? '' : `:${nextPort}`}`,
       subAllowedDomains: names.slice(1).join(','),
       subCDNEnable:
-        status?.config.domains.find((item) => item.name === names[0])?.mode === 'cdn' ||
-        (!status?.config.domains.some((item) => item.name === names[0]) && allSetting.subCDNEnable),
+        !followsGateway &&
+        (status?.config.domains.find((item) => item.name === names[0])?.mode === 'cdn' ||
+          (!status?.config.domains.some((item) => item.name === names[0]) &&
+            allSetting.subCDNEnable)),
     });
   }
   return (
@@ -80,7 +89,10 @@ export default function SubscriptionDomains({
           value={selected}
           tokenSeparators={[',', ';', ' ']}
           options={status?.config.domains
-            .filter((item) => item.enabled)
+            .filter(
+              (item) =>
+                item.enabled && ['direct', 'cdn', 'relay', 'sub_link_only'].includes(item.mode),
+            )
             .map((item) => ({
               value: item.name,
               label: item.name,

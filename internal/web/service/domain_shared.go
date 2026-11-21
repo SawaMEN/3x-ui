@@ -2,35 +2,50 @@ package service
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net/http"
 	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 )
 
-var domainListenerHandlers struct {
+type domainSubscriptionListener struct {
+	listen  string
+	port    int
+	secure  bool
+	handler http.Handler
+}
+
+var domainSubscription struct {
 	sync.Mutex
-	entries map[string]http.Handler
+	active *domainSubscriptionListener
 }
 
-func domainListenerKey(listen string, port int, secure bool) string {
-	return fmt.Sprintf("%s:%d:%t", listen, port, secure)
+func registeredDomainSubscriptionHandler(listen string, port int, secure bool) http.Handler {
+	domainSubscription.Lock()
+	defer domainSubscription.Unlock()
+	if active := domainSubscription.active; active != nil && active.listen == listen && active.port == port && active.secure == secure {
+		return active.handler
+	}
+	return nil
 }
 
-func registeredDomainHandler(listen string, port int, secure bool) http.Handler {
-	domainListenerHandlers.Lock()
-	defer domainListenerHandlers.Unlock()
-	return domainListenerHandlers.entries[domainListenerKey(listen, port, secure)]
+// RegisterDomainSubscriptionHandler lets the gateway use the subscription
+// router directly while keeping the panel router out of public routes.
+func RegisterDomainSubscriptionHandler(listen string, port int, secure bool, handler http.Handler) func() {
+	active := &domainSubscriptionListener{listen: listen, port: port, secure: secure, handler: handler}
+	domainSubscription.Lock()
+	domainSubscription.active = active
+	domainSubscription.Unlock()
+	return func() {
+		domainSubscription.Lock()
+		defer domainSubscription.Unlock()
+		if domainSubscription.active == active {
+			domainSubscription.active = nil
+		}
+	}
 }
 
 func DomainFrontHandler(fallback http.Handler, listen string, port int, secure bool) http.Handler {
-	domainListenerHandlers.Lock()
-	if domainListenerHandlers.entries == nil {
-		domainListenerHandlers.entries = map[string]http.Handler{}
-	}
-	domainListenerHandlers.entries[domainListenerKey(listen, port, secure)] = fallback
-	domainListenerHandlers.Unlock()
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		domainFrontState.Lock()
 		manager := domainFrontState.manager

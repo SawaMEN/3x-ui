@@ -88,7 +88,7 @@ func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string
 		if err != nil {
 			return nil, err
 		}
-		hosts[strings.ToLower(u.Hostname())] = true
+		hosts[strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")] = true
 	}
 	aliases, err := s.getString("subAllowedDomains")
 	if err != nil {
@@ -103,9 +103,9 @@ func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string
 	return hosts, nil
 }
 
-func validateSubscriptionDomains(settings *entity.AllSetting) error {
+func validateSubscriptionDomains(settings *entity.AllSetting, managedOrigin bool) error {
 	settings.SubPublicURL = strings.TrimSpace(settings.SubPublicURL)
-	if settings.SubRestrictDomains && settings.SubPublicURL == "" {
+	if settings.SubRestrictDomains && settings.SubPublicURL == "" && !managedOrigin {
 		return fmt.Errorf("restricted subscriptions require a public subscription URL")
 	}
 	if settings.SubPublicURL != "" {

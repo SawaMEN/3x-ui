@@ -217,17 +217,9 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 			continue
 		}
 		if files, ok := backend.Certificates[d.Name]; ok && d.Enabled && (d.TLS == "auto" || d.TLS == "existing") {
-			cert, err := network.NewFileCertificate(files.CertFile, files.KeyFile)
+			cert, err := network.NewNamedFileCertificate(files.CertFile, files.KeyFile, d.Name)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", d.Name, err)
-			}
-			pair, _ := cert.GetCertificate(nil)
-			leaf, err := x509.ParseCertificate(pair.Certificate[0])
-			if err != nil {
-				return nil, err
-			}
-			if err := leaf.VerifyHostname(d.Name); err != nil {
-				return nil, err
 			}
 			r.external[d.Name] = cert
 		}
@@ -752,32 +744,43 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 			}
 		}), nil
 	}
-	subTarget := r.backend.SubscriptionTarget
-	subHost := d.Name
-	if r.backend.SubscriptionHost != "" {
-		subHost = r.backend.SubscriptionHost
-	}
-	if d.Mode == "relay" {
-		subTarget = d.Origin
-		subHost = ""
-	}
-	subscriptionProxy, err := r.ownedProxy(subTarget, subHost, false)
-	if err != nil {
-		return nil, err
-	}
-	subscriptionProxy.ModifyResponse = func(response *http.Response) error {
-		if err := proxyTrailers(response); err != nil {
-			return err
-		}
-		response.Header.Set("Cache-Control", "private, no-store, max-age=0")
-		response.Header.Set("CDN-Cache-Control", "no-store")
-		response.Header.Set("Cloudflare-CDN-Cache-Control", "no-store")
-		return nil
-	}
-	var subscription http.Handler = subscriptionProxy
+	var subscription http.Handler
 	if r.backend.SubscriptionHandler != nil && d.Mode != "relay" {
-		subscription = localHandler(r.backend.SubscriptionHandler, d.Name, true)
+		subscription = localHandler(r.backend.SubscriptionHandler, "", true)
+	} else {
+		subTarget := r.backend.SubscriptionTarget
+		subHost := r.backend.SubscriptionHost
+		if subHost == "" {
+			subHost = d.Name
+		}
+		if d.Mode == "relay" {
+			subTarget, subHost = d.Origin, ""
+		}
+		subscriptionProxy, err := r.ownedProxy(subTarget, subHost, false)
+		if err != nil {
+			return nil, err
+		}
+		if d.Mode != "relay" {
+			// Verify the upstream certificate using its own SNI while the
+			// subscription handler sees the original public Host.
+			rewrite := subscriptionProxy.Rewrite
+			subscriptionProxy.Rewrite = func(p *httputil.ProxyRequest) {
+				rewrite(p)
+				p.Out.Host = p.In.Host
+			}
+		}
+		subscriptionProxy.ModifyResponse = func(response *http.Response) error {
+			if err := proxyTrailers(response); err != nil {
+				return err
+			}
+			response.Header.Set("Cache-Control", "private, no-store, max-age=0")
+			response.Header.Set("CDN-Cache-Control", "no-store")
+			response.Header.Set("Cloudflare-CDN-Cache-Control", "no-store")
+			return nil
+		}
+		subscription = subscriptionProxy
 	}
+
 	type routeHandler struct {
 		path    string
 		handler http.Handler

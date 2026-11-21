@@ -53,10 +53,30 @@ func TestInheritedCertificateRenewsWithoutSecondIssuer(t *testing.T) {
 	if string(partial.Certificate[0]) != string(before.Certificate[0]) {
 		t.Fatal("served mismatched renewed pair")
 	}
-	raw, _ = os.ReadFile(nextKey)
-	if err := os.WriteFile(key, raw, 0o600); err != nil {
-		t.Fatal(err)
+	wrongCert, wrongKey, _ := testCertificate(t, "panel.example.com", 90)
+	for source, destination := range map[string]string{wrongCert: cert, wrongKey: key} {
+		raw, err := os.ReadFile(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(destination, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
+	wrong, err := manager.runtime.tlsConfig.GetCertificate(&tls.ClientHelloInfo{ServerName: "shared.example.com"})
+	if err != nil || string(wrong.Certificate[0]) != string(before.Certificate[0]) {
+		t.Fatalf("renewal replaced the active certificate with another domain's pair: %v", err)
+	}
+	for source, destination := range map[string]string{nextCert: cert, nextKey: key} {
+		raw, err := os.ReadFile(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(destination, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	after, err := manager.runtime.tlsConfig.GetCertificate(&tls.ClientHelloInfo{ServerName: "shared.example.com"})
 	if err != nil {
 		t.Fatal(err)
@@ -188,5 +208,51 @@ func TestExistingACMEChallengeAndLiveRedirect(t *testing.T) {
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://shared.example.com/", nil))
 	if w.Code != 302 || w.Header().Get("Location") != target {
 		t.Fatalf("live redirect = %d %s", w.Code, w.Header().Get("Location"))
+	}
+}
+
+func TestGatewaySubscriptionUsesPublicCertificateAndHost(t *testing.T) {
+	const domain = "sub.example.com"
+	cert, key, roots := testCertificate(t, domain, 45)
+	cfg := DefaultConfig()
+	cfg.Enabled, cfg.Listen, cfg.HTTPPort, cfg.HTTPSPort = true, "127.0.0.1", unusedPort(t), unusedPort(t)
+	cfg.PublicPort = cfg.HTTPSPort
+	cfg.SubscriptionDomain = domain
+	cfg.Domains = []DomainFrontDomain{{Name: domain, Mode: "sub_link_only", Enabled: true, TLS: "manual", CertFile: cert, KeyFile: key}}
+	host := net.JoinHostPort(domain, fmt.Sprint(cfg.PublicPort))
+	backend := Backend{
+		SubscriptionTarget: "https://127.0.0.1:1",
+		SubscriptionHost:   "origin.example.com",
+		SubscriptionPaths:  []string{"/sub/", "/json/", "/clash/"},
+		SubscriptionHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Host != host || r.TLS == nil {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			_, _ = io.WriteString(w, r.URL.Path)
+		}),
+	}
+	manager := NewManager(t.TempDir())
+	t.Cleanup(manager.Stop)
+	if err := manager.Apply(context.Background(), cfg, backend); err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: domain}}}
+	t.Cleanup(client.CloseIdleConnections)
+	for _, path := range []string{"/sub/test", "/json/test", "/clash/test"} {
+		request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d%s", cfg.HTTPSPort, path), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Host = host
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if err != nil || response.StatusCode != http.StatusOK || string(body) != path || response.Header.Get("CDN-Cache-Control") != "no-store" {
+			t.Fatalf("%s: status=%d body=%q headers=%v err=%v", path, response.StatusCode, body, response.Header, err)
+		}
 	}
 }
