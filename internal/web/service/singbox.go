@@ -21,6 +21,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/oxidns"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
@@ -163,7 +164,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 	return cfg, nil
 }
 
-// editorRoutingInbounds lists real native listeners and panel-managed endpoints.
+// editorRoutingInbounds lists native listeners and panel-managed relays and endpoints.
 // WireGuard and VK TURN endpoints must be selectable just like MASQUE inbounds;
 // subscription/manual endpoints stay in the editable outbound list.
 func editorRoutingInbounds(cfg *singbox.Config, inbounds []*model.Inbound) ([]string, []map[string]any) {
@@ -185,6 +186,12 @@ func editorRoutingInbounds(cfg *singbox.Config, inbounds []*model.Inbound) ([]st
 			continue
 		}
 		switch inbound.Protocol {
+		case model.AmneziaWG:
+			appendTag(inbound.Tag)
+		case model.MTProto:
+			if mtprotoRoutesThroughXray(inbound) && parseRouteXrayPort(inbound.Settings) > 0 && !mtproto.WebProxyInbound(inbound) {
+				appendTag(inbound.Tag)
+			}
 		case model.MASQUE, model.WireGuard, model.VKTurnProxy:
 			managedEndpoints[inbound.Tag] = true
 		}

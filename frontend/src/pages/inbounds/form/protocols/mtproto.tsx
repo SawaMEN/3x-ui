@@ -4,7 +4,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 
 import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
-import { useOutboundTags } from '@/api/queries/useOutboundTags';
+import { useTelemtOutboundTags } from '@/api/queries/useOutboundTags';
 import MtprotoWebStatus from './MtprotoWebStatus';
 import { TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
 import MtprotoMekoStatus from './MtprotoMekoStatus';
@@ -32,10 +32,13 @@ export default function MtprotoFields({
     | undefined;
   const proxyProtocolEnabled = useWatch({ control, name: 'settings.proxyProtocolListener' });
   const legacyFronting = useWatch({ control, name: 'settings.domainFronting' });
-  const { data: outboundTags } = useOutboundTags({ excludeBlackhole: true });
+  const { data: outboundTags, isFetching: outboundTagsLoading } = useTelemtOutboundTags(
+    Boolean(routeThroughXray),
+    nodeId,
+  );
   const routeThroughXrayHint = i18n.resolvedLanguage?.startsWith('ru')
-    ? 'Направляет Telegram-трафик этого Telemt inbound через локальный SOCKS-мост выбранного ядра Xray или Sing-box, чтобы применялись выбранное исходящее соединение и правила маршрутизации.'
-    : 'Routes this Telemt inbound Telegram traffic through the local SOCKS bridge of the selected Xray or Sing-box core so the selected outbound and routing rules are applied.';
+    ? 'Направляет трафик MTProto через выбранное ядро. Оставьте поле «Исходящее» пустым и выберите тег этого входящего в правилах маршрутизации, чтобы применить их к Telemt.'
+    : 'Routes MTProto traffic through the selected core. Leave Outbound empty and match this inbound’s tag in Routing to apply rules to Telemt.';
 
   return (
     <>
@@ -327,6 +330,7 @@ export default function MtprotoFields({
                   id="mtprotoOutboundTag"
                   allowClear
                   showSearch
+                  loading={outboundTagsLoading}
                   placeholder={t('pages.inbounds.form.mtgRouteOutboundPlaceholder')}
                   options={(outboundTags ?? []).map((tag) => ({ value: tag, label: tag }))}
                 />

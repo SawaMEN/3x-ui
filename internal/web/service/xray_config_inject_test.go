@@ -993,8 +993,9 @@ func TestInjectAmneziawgV6Egress_NoQualifyingPeerLeavesConfigUntouched(t *testin
 	}
 }
 
-func TestInjectAmneziawgV6Egress_RulesPrependedBeforeExistingRules(t *testing.T) {
-	cfg := egressTestConfig() // already has one rule, targeting "api"
+func TestInjectAmneziawgV6Egress_UsesConfiguredRoutesBeforeIPv6Fallback(t *testing.T) {
+	cfg := egressTestConfig()
+	cfg.RouterConfig = json_util.RawMessage(`{"rules":[{"type":"field","inboundTag":["awg-1"],"domain":["domain:example.com"],"outboundTag":"warp"}]}`)
 	inbound := amneziawgV6Inbound(1, "awg-1", "eth0", []model.Client{
 		{Email: "a@x", Enable: true, PublicKey: "pub-a", AllowedIPs: []string{"fd86:ea04:1115::2/128"}},
 	})
@@ -1007,10 +1008,10 @@ func TestInjectAmneziawgV6Egress_RulesPrependedBeforeExistingRules(t *testing.T)
 	if len(routing.Rules) != 2 {
 		t.Fatalf("expected the new rule plus the pre-existing one, got %+v", routing.Rules)
 	}
-	if routing.Rules[0].OutboundTag != amneziawgV6EgressTag(1, "a@x") {
-		t.Fatalf("the new infra rule must be prepended ahead of the pre-existing rule, got %+v", routing.Rules[0])
+	if routing.Rules[0].OutboundTag != "warp" {
+		t.Fatalf("the configured AWG route must win, got %+v", routing.Rules[0])
 	}
-	if routing.Rules[1].OutboundTag != "api" {
-		t.Fatalf("the pre-existing rule must survive, got %+v", routing.Rules[1])
+	if routing.Rules[1].OutboundTag != amneziawgV6EgressTag(1, "a@x") {
+		t.Fatalf("unmatched traffic must retain the IPv6 fallback, got %+v", routing.Rules[1])
 	}
 }

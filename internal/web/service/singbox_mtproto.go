@@ -46,19 +46,13 @@ func injectSingBoxMtprotoEgress(cfg *singbox.Config, inbound *model.Inbound) err
 			used[tag] = true
 			tags = append(tags, tag)
 		}
-		known := make(map[string]bool, len(cfg.Outbounds))
-		for _, outbound := range cfg.Outbounds {
-			if tag, ok := outbound["tag"].(string); ok && tag != "" {
-				known[tag] = true
-			}
-		}
 		for _, tag := range tags {
-			if !known[tag] {
-				return fmt.Errorf("MTProto inbound %q fallback target %q is not a Sing-box outbound", inbound.Tag, tag)
+			if !singBoxTargetExists(cfg, tag) {
+				return fmt.Errorf("MTProto inbound %q fallback target %q is missing from sing-box", inbound.Tag, tag)
 			}
 		}
 		failoverTag := "__telemt_route_auto_" + fmt.Sprint(inbound.Id)
-		if known[failoverTag] {
+		if singBoxTargetExists(cfg, failoverTag) {
 			return fmt.Errorf("MTProto failover tag %q conflicts with a configured outbound", failoverTag)
 		}
 		// Large tolerance prioritizes the first live entry rather than
@@ -71,15 +65,7 @@ func injectSingBoxMtprotoEgress(cfg *singbox.Config, inbound *model.Inbound) err
 		settings.Outbound = failoverTag
 	}
 	if settings.Outbound != "" {
-		found := false
-		for _, targets := range [][]map[string]any{cfg.Outbounds, cfg.Endpoints} {
-			for _, target := range targets {
-				if target["tag"] == settings.Outbound {
-					found = true
-				}
-			}
-		}
-		if !found {
+		if !singBoxTargetExists(cfg, settings.Outbound) {
 			return fmt.Errorf("MTProto inbound %q selects missing sing-box outbound %q", inbound.Tag, settings.Outbound)
 		}
 		if cfg.Route == nil {

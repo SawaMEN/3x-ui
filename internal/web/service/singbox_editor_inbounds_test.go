@@ -22,6 +22,13 @@ func TestEditorRoutingInboundsIncludesManagedEndpoints(t *testing.T) {
 		},
 	}
 	rows := []*model.Inbound{
+		{Tag: "awg", Protocol: model.AmneziaWG, Enable: true},
+		{Tag: "awg-off", Protocol: model.AmneziaWG},
+		{Tag: "awg-remote", Protocol: model.AmneziaWG, Enable: true, NodeID: &remote},
+		{Tag: "telegram", Protocol: model.MTProto, Enable: true, Settings: `{"routeThroughXray":true,"routeXrayPort":50000}`},
+		{Tag: "telegram-direct", Protocol: model.MTProto, Enable: true, Settings: `{"routeThroughXray":false}`},
+		{Tag: "telegram-web", Protocol: model.MTProto, Enable: true, Settings: `{"routeThroughXray":true,"routeXrayPort":50001,"webProxy":{"enabled":true}}`},
+		{Tag: "telegram-unallocated", Protocol: model.MTProto, Enable: true, Settings: `{"routeThroughXray":true}`},
 		{Tag: "local-wg", Protocol: model.WireGuard, Enable: true},
 		{Tag: "local-masque", Protocol: model.MASQUE, Enable: true},
 		{Tag: "local-vk", Protocol: model.VKTurnProxy, Enable: true},
@@ -29,7 +36,7 @@ func TestEditorRoutingInboundsIncludesManagedEndpoints(t *testing.T) {
 		{Tag: "remote", Protocol: model.WireGuard, Enable: true, NodeID: &remote},
 	}
 	tags, editable := editorRoutingInbounds(cfg, rows)
-	if want := []string{"local-vless", "local-wg", "local-masque", "local-vk"}; !reflect.DeepEqual(tags, want) {
+	if want := []string{"local-vless", "awg", "telegram", "local-wg", "local-masque", "local-vk"}; !reflect.DeepEqual(tags, want) {
 		t.Fatalf("routing tags = %v, want %v", tags, want)
 	}
 	if want := []string{"disabled", "remote", "external"}; len(editable) != len(want) {

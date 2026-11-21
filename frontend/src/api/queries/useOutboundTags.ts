@@ -1,18 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { keys } from '@/api/queryKeys';
+import { useAllSettings } from '@/api/queries/useAllSettings';
 import { fetchXrayConfig } from '@/hooks/useXraySetting';
 import { isOutboundProtocol } from '@/schemas/primitives';
+import { HttpUtil } from '@/utils';
 
 // Available outbound (and balancer-eligible) tags the user can route an mtproto
 // inbound's Telegram traffic to. Shares the cached xray config query so opening
 // the inbound form costs no extra request when the Xray page was already
 // visited; `select` derives just the tag list without disturbing other readers.
-export function useOutboundTags(opts?: { excludeBlackhole?: boolean }) {
+export function useOutboundTags(opts?: { excludeBlackhole?: boolean; enabled?: boolean }) {
   const excludeBlackhole = opts?.excludeBlackhole ?? false;
   return useQuery({
     queryKey: keys.xray.config(),
     queryFn: fetchXrayConfig,
+    enabled: opts?.enabled,
     staleTime: Infinity,
     select: (data): string[] => {
       const tags = new Set<string>();
@@ -36,6 +39,42 @@ export function useOutboundTags(opts?: { excludeBlackhole?: boolean }) {
       return [...tags];
     },
   });
+}
+
+interface NativeRoutingSnapshot {
+  config: {
+    outbounds?: { tag?: string; type?: string }[];
+    endpoints?: { tag?: string }[];
+  };
+  subscriptionTags?: string[];
+}
+
+export function useTelemtOutboundTags(enabled: boolean, nodeId?: number | null) {
+  const { allSetting, fetched } = useAllSettings();
+  const native = nodeId == null && allSetting.coreType !== 'xray';
+  const xray = useOutboundTags({ excludeBlackhole: true, enabled: enabled && fetched && !native });
+  const singBox = useQuery({
+    queryKey: ['sing-box', 'telemt-routing-targets', allSetting.coreType],
+    enabled: enabled && fetched && native,
+    queryFn: async () => {
+      const msg = await HttpUtil.get<NativeRoutingSnapshot>(
+        '/panel/api/setting/singbox/config',
+        undefined,
+        { silent: true },
+      );
+      if (!msg.success || !msg.obj?.config) {
+        throw new Error(msg.msg || 'Failed to load Sing-box routing targets');
+      }
+      const { config, subscriptionTags } = msg.obj;
+      const tags = [
+        ...(config.outbounds ?? []).filter((row) => row.type !== 'block').map((row) => row.tag),
+        ...(config.endpoints ?? []).map((row) => row.tag),
+        ...(subscriptionTags ?? []),
+      ];
+      return [...new Set(tags.filter((tag): tag is string => Boolean(tag)))];
+    },
+  });
+  return native ? singBox : xray;
 }
 
 export interface OutboundTagGroups {

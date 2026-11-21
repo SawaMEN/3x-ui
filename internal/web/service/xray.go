@@ -848,15 +848,9 @@ func amneziawgV6EgressTag(inboundID int, email string) string {
 // peer's traffic, the same building block Finding 3 of the migration plan
 // already established for per-client stats.
 //
-// Modeled on injectNodeEgresses (the established N-per-slice inbound+rule
-// precedent, not injectAmneziawgnetSocks itself, which only ever emits a
-// single inbound and never touches outbounds/routing) and
-// mergeSubscriptionOutbounds's unmarshal-append-remarshal pattern for
-// cfg.OutboundConfigs. Synthetic rules are prepended ahead of whatever's
-// already in the routing rules array, the same pattern injectNodeEgresses/
-// injectMtprotoEgress already use for their own always-must-win infra
-// rules — this never touches the admin's own saved Routing-page rule
-// order.
+// Append the generated rules after the configured rules. A peer's IPv6
+// identity is the fallback for otherwise unmatched traffic; it must not
+// override explicit routes, blocks, or balancers.
 func injectAmneziawgV6Egress(cfg *xray.Config, inbounds []*model.Inbound) {
 	// Protocol is checked alongside Tag, not just Tag alone: a tag collision
 	// with some unrelated (non-socks) inbound must not be mistaken for this
@@ -952,7 +946,7 @@ func injectAmneziawgV6Egress(cfg *xray.Config, inbounds []*model.Inbound) {
 	}
 	cfg.OutboundConfigs = json_util.RawMessage(combined)
 
-	routing["rules"] = append(newRules, rules...)
+	routing["rules"] = append(rules, newRules...)
 	newRouting, err := json.Marshal(routing)
 	if err != nil {
 		logger.Warning("amneziawg v6 egress: failed to rebuild routing section, skipping injection:", err)

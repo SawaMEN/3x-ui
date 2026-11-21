@@ -1,6 +1,7 @@
 package service
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -33,11 +34,12 @@ func TestSingBoxMtprotoEgress(t *testing.T) {
 		t.Fatal("missing target accepted")
 	}
 	ib.Settings = `{"routeThroughXray":true,"routeXrayPort":32123}`
-	cfg := &singbox.Config{}
+	configured := map[string]any{"inbound": []string{ib.Tag}, "action": "route", "outbound": "egress"}
+	cfg := &singbox.Config{Route: map[string]any{"rules": []map[string]any{configured}}}
 	if err := injectSingBoxMtprotoEgress(cfg, ib); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Route != nil || len(cfg.Inbounds) != 1 {
+	if rules := singBoxRouteRules(cfg.Route); len(rules) != 1 || rules[0].(map[string]any)["outbound"] != "egress" || len(cfg.Inbounds) != 1 || cfg.Inbounds[0]["tag"] != ib.Tag {
 		t.Fatal("unselected egress must use normal routing")
 	}
 	ib.Enable = false
@@ -50,7 +52,8 @@ func TestSingBoxMtprotoEgress(t *testing.T) {
 func TestSingBoxMtprotoFallbackOutbounds(t *testing.T) {
 	cfg := &singbox.Config{
 		Route:     map[string]any{"rules": []map[string]any{}},
-		Outbounds: []map[string]any{{"tag": "primary", "type": "socks"}, {"tag": "reserve", "type": "socks"}},
+		Outbounds: []map[string]any{{"tag": "primary", "type": "socks"}},
+		Endpoints: []map[string]any{{"tag": "reserve", "type": "awg"}},
 	}
 	ib := &model.Inbound{
 		Id: 23, Enable: true, Protocol: model.MTProto, Tag: "telegram",
@@ -59,12 +62,15 @@ func TestSingBoxMtprotoFallbackOutbounds(t *testing.T) {
 	if err := injectSingBoxMtprotoEgress(cfg, ib); err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Outbounds) != 3 {
-		t.Fatalf("expected one URLtest balancer, got %d", len(cfg.Outbounds))
+	if len(cfg.Outbounds) != 2 {
+		t.Fatalf("expected the primary outbound plus one URLtest group, got %v", cfg.Outbounds)
 	}
-	group := cfg.Outbounds[2]
+	group := cfg.Outbounds[1]
 	if group["type"] != "urltest" || group["tag"] != "__telemt_route_auto_23" || group["url"] != "https://core.telegram.org/" {
 		t.Fatalf("unexpected health-checked group: %#v", group)
+	}
+	if !slices.Equal(group["outbounds"].([]string), []string{"primary", "reserve"}) {
+		t.Fatalf("URLtest group did not keep the AWG endpoint as its fallback: %#v", group)
 	}
 	rules := cfg.Route["rules"].([]map[string]any)
 	if len(rules) != 1 || rules[0]["outbound"] != group["tag"] {
