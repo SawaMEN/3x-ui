@@ -29,10 +29,20 @@ type WebPreflight = {
   warnings: string[];
 };
 
-export default function MtprotoWebStatus() {
+export default function MtprotoWebStatus({
+  inboundId,
+  nodeId,
+}: {
+  inboundId?: number;
+  nodeId?: number | null;
+}) {
   const { control, getValues, setValue } = useFormContext();
   const { i18n } = useTranslation();
   const ru = i18n.resolvedLanguage?.startsWith('ru') ?? false;
+  const target = new URLSearchParams();
+  if (inboundId && inboundId > 0) target.set('inboundId', String(inboundId));
+  if (nodeId && nodeId > 0) target.set('nodeId', String(nodeId));
+  const targetQuery = target.size ? `?${target}` : '';
   const [status, setStatus] = useState<WebStatus>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -79,7 +89,7 @@ export default function MtprotoWebStatus() {
     const timer = window.setTimeout(async () => {
       try {
         const response = await HttpUtil.post<WebPreflight>(
-          '/panel/api/telemt/webproxy/preflight',
+          `/panel/api/telemt/webproxy/preflight${targetQuery}`,
           JSON.parse(requestKey),
           { silent: true, signal: controller.signal },
         );
@@ -114,11 +124,13 @@ export default function MtprotoWebStatus() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [requestKey, attempt, ru]);
+  }, [requestKey, attempt, ru, targetQuery]);
 
   useEffect(() => {
     let cancelled = false;
-    void HttpUtil.get<WebStatus>('/panel/api/telemt/webproxy/status', undefined, { silent: true })
+    void HttpUtil.get<WebStatus>(`/panel/api/telemt/webproxy/status${targetQuery}`, undefined, {
+      silent: true,
+    })
       .then((response) => {
         if (cancelled) return;
         if (!response.success || !response.obj) {
@@ -144,17 +156,17 @@ export default function MtprotoWebStatus() {
     return () => {
       cancelled = true;
     };
-  }, [attempt, getValues, setValue]);
+  }, [attempt, getValues, setValue, targetQuery]);
 
-  const problem =
-    error ||
-    (!status?.supported && status
-      ? ru
-        ? 'Установите или обновите Telemt в Настройки → Обновления пакетов и ядер Linux.'
-        : 'Install or update Telemt in Settings → Linux package and core updates.'
-      : status?.port443Available
-        ? status.error
-        : undefined);
+  const installHint = nodeId
+    ? ru
+      ? 'Установите или обновите Telemt на выбранной ноде.'
+      : 'Install or update Telemt on the selected node.'
+    : ru
+      ? 'Установите или обновите Telemt в Настройки → Обновления пакетов и ядер Linux.'
+      : 'Install or update Telemt in Settings → Linux package and core updates.';
+  const statusProblem = status?.port443Available ? status.error : undefined;
+  const problem = error || (status && !status.supported ? installHint : statusProblem);
   const defaultDomain = TelemtWebProxyRequestSchema.shape.domain.safeParse(status?.defaultDomain);
   return (
     <Space orientation="vertical" style={{ width: '100%', marginBlock: 12 }}>
@@ -255,7 +267,7 @@ export default function MtprotoWebStatus() {
             : 'Checking proposed WEB Proxy settings…'}
         </Typography.Text>
       )}
-      {status?.frontendActive && (
+      {!nodeId && status?.frontendActive && (
         <>
           <Button size="small" loading={availabilityLoading} onClick={() => void checkRussia()}>
             {ru ? 'Проверить HTTPS из России (Globalping)' : 'Check HTTPS from Russia (Globalping)'}

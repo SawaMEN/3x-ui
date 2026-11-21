@@ -19,14 +19,14 @@ type telemtWebPort443Inspection struct {
 	Owner     string
 }
 
-func inspectTelemtWebPort443(state TelemtWebProxyState, requestedFrontend string) (telemtWebPort443Inspection, error) {
+func inspectTelemtWebPort443(state TelemtWebProxyState, requestedFrontend string, editingInboundID int) (telemtWebPort443Inspection, error) {
 	owner := strings.ToLower(telemtWebPortOwner(443))
 	result := telemtWebPort443Inspection{
 		Free:  telemtWebPortAvailable(443),
 		Owner: owner,
 	}
 
-	panelOwner, err := telemtWebPanelPort443Owner(state)
+	panelOwner, err := telemtWebPanelPort443Owner(state, editingInboundID)
 	if err != nil {
 		return result, fmt.Errorf("проверка порта 443 в настройках панели: %w", err)
 	}
@@ -45,7 +45,7 @@ func inspectTelemtWebPort443(state TelemtWebProxyState, requestedFrontend string
 	return result, nil
 }
 
-func telemtWebPanelPort443Owner(state TelemtWebProxyState) (string, error) {
+func telemtWebPanelPort443Owner(state TelemtWebProxyState, editingInboundID int) (string, error) {
 	settings := &SettingService{}
 	panelPort, err := settings.GetPort()
 	if err != nil {
@@ -100,10 +100,14 @@ func telemtWebPanelPort443Owner(state TelemtWebProxyState) (string, error) {
 		}
 	}
 
-	return telemtWebInboundPort443Owner(state)
+	excludedInboundID := state.ManagedInboundID
+	if editingInboundID > 0 {
+		excludedInboundID = editingInboundID
+	}
+	return telemtWebInboundPort443Owner(excludedInboundID)
 }
 
-func telemtWebInboundPort443Owner(state TelemtWebProxyState) (string, error) {
+func telemtWebInboundPort443Owner(excludedInboundID int) (string, error) {
 	db := database.GetDB()
 	if db == nil {
 		return "", fmt.Errorf("база подключений недоступна")
@@ -113,9 +117,9 @@ func telemtWebInboundPort443Owner(state TelemtWebProxyState) (string, error) {
 		return "", err
 	}
 	for _, inbound := range inbounds {
-		// A managed MTProto WEB inbound describes this very frontend,
-		// not a second socket that would conflict with it.
-		if inbound.Id == state.ManagedInboundID && state.ManagedInboundID != 0 {
+		// The edited local MTProto inbound (or the current managed inbound
+		// outside the editor) may reuse its own reservation.
+		if excludedInboundID > 0 && inbound.Id == excludedInboundID && inbound.Protocol == model.MTProto {
 			continue
 		}
 		if port, _ := spansOverlap(inboundListenerSpans(&inbound), []listenerSpan{{443, 443, transportTCP}}); port == 0 {

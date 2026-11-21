@@ -54,12 +54,22 @@ func mtprotoWebForInbound(ib *model.Inbound) (mtprotoWebSettings, error) {
 }
 
 func mtprotoWebCandidates() ([]*model.Inbound, error) {
+	return mtprotoWebCandidatesForNode(nil)
+}
+
+func mtprotoWebCandidatesForNode(nodeID *int) ([]*model.Inbound, error) {
 	db := database.GetDB()
 	if db == nil {
 		return nil, errors.New("mtproto web: database is unavailable")
 	}
 	var inbounds []*model.Inbound
-	if err := db.Where("protocol = ? AND node_id IS NULL AND enable = ?", model.MTProto, true).Find(&inbounds).Error; err != nil {
+	query := db.Where("protocol = ? AND enable = ?", model.MTProto, true)
+	if nodeID == nil {
+		query = query.Where("node_id IS NULL")
+	} else {
+		query = query.Where("node_id = ?", *nodeID)
+	}
+	if err := query.Find(&inbounds).Error; err != nil {
 		return nil, err
 	}
 	selected := make([]*model.Inbound, 0, 1)
@@ -88,14 +98,11 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if err != nil || !opts.Enabled {
 		return err
 	}
-	if ib.NodeID != nil {
-		return errors.New("MTProto WEB Proxy is currently supported only on the local server")
-	}
 	if !ib.Enable {
 		return nil
 	}
 	domain := normalizeTelemtWebDomain(opts.Domain)
-	if domain == "" {
+	if domain == "" && ib.NodeID == nil {
 		domain, err = (&SettingService{}).GetWebDomain()
 		if err != nil {
 			return err
@@ -144,7 +151,7 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	ib.Settings = string(encoded)
 	ib.Port = 443
 	ib.Listen = ""
-	others, err := mtprotoWebCandidates()
+	others, err := mtprotoWebCandidatesForNode(ib.NodeID)
 	if err != nil {
 		return err
 	}

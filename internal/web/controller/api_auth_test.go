@@ -248,6 +248,8 @@ func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 		"/hosts/list":                                 {http.MethodGet: {}},
 		"/telemt/subscription/:subid":                 {http.MethodGet: {}},
 		"/telemt/published":                           {http.MethodGet: {}},
+		"/telemt/webproxy/status":                     {http.MethodGet: {}},
+		"/telemt/webproxy/preflight":                  {http.MethodPost: {}},
 	}
 	if !reflect.DeepEqual(nodeSyncScopeAllow, expected) {
 		t.Fatalf("node-sync allowlist drift:\n got: %#v\nwant: %#v", nodeSyncScopeAllow, expected)
