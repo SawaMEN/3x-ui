@@ -73,30 +73,47 @@ func validateVetroffOutbound(s OutboundSettings) error {
 		return fmt.Errorf("%s", bad)
 	}
 	var profile struct {
-		Version        int      `json:"v"`
-		Servers        []string `json:"servers"`
-		Username       string   `json:"username"`
-		Password       string   `json:"password"`
-		Transport      string   `json:"transport"`
-		TLSBackend     string   `json:"tls"`
-		SNI            string   `json:"sni"`
-		Pin            string   `json:"pin_sha256"`
-		Encryption     string   `json:"encryption"`
-		Balance        string   `json:"balance"`
-		Bond           bool     `json:"bond"`
-		Discover       bool     `json:"discover"`
-		Pipeline       string   `json:"pipeline"`
-		Padding        bool     `json:"padding"`
-		ConnectTimeout string   `json:"connect_timeout"`
-		AttemptTimeout string   `json:"attempt_timeout"`
-		ProtocolPolicy string   `json:"protocol_policy"`
-		XHTTPPath      string   `json:"xhttp_path"`
-		XHTTPHost      string   `json:"xhttp_host"`
+		Version               int      `json:"v"`
+		Servers               []string `json:"servers"`
+		Username              string   `json:"username"`
+		Password              string   `json:"password"`
+		Transport             string   `json:"transport"`
+		TLSBackend            string   `json:"tls"`
+		SNI                   string   `json:"sni"`
+		Pin                   string   `json:"pin_sha256"`
+		Encryption            string   `json:"encryption"`
+		Balance               string   `json:"balance"`
+		Bond                  bool     `json:"bond"`
+		Discover              bool     `json:"discover"`
+		Pipeline              string   `json:"pipeline"`
+		Padding               bool     `json:"padding"`
+		AdaptivePadding       bool     `json:"adaptive_padding"`
+		AdaptiveFragmentation bool     `json:"adaptive_fragmentation"`
+		TrafficShaping        bool     `json:"traffic_shaping"`
+		TimingJitter          string   `json:"timing_jitter"`
+		ProbeKey              string   `json:"probe_key"`
+		ConnectTimeout        string   `json:"connect_timeout"`
+		AttemptTimeout        string   `json:"attempt_timeout"`
+		ProtocolPolicy        string   `json:"protocol_policy"`
+		XHTTPPath             string   `json:"xhttp_path"`
+		XHTTPHost             string   `json:"xhttp_host"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&profile) != nil || decoder.Decode(&extra) != io.EOF {
 		return fmt.Errorf("%s", bad)
+	}
+	if err := validateVetroffExtensions(profile.Padding, profile.AdaptivePadding, profile.AdaptiveFragmentation, profile.TrafficShaping, profile.TimingJitter, profile.ProbeKey, profile.ProtocolPolicy); err != nil {
+		return err
+	}
+	switch s.BrowserProfile {
+	case "", "none":
+	case "firefox-158":
+		if profile.TLSBackend == "go" || (profile.Transport != "" && profile.Transport != "h2-connect" && profile.Transport != "h2-post") {
+			return fmt.Errorf("VetroffProxy Firefox 158 requires H2 CONNECT/POST and auto or NSS TLS")
+		}
+	default:
+		return fmt.Errorf("invalid VetroffProxy browser profile")
 	}
 	if profile.Version != 1 || len(profile.Servers) == 0 || len(profile.Servers) > 8 || profile.Username == "" || profile.Password == "" {
 		return fmt.Errorf("%s", bad)
@@ -156,7 +173,7 @@ func validateVetroffOutbound(s OutboundSettings) error {
 	if (strings.HasPrefix(profile.Transport, "h3-") && profile.TLSBackend == "nss") ||
 		(profile.ProtocolPolicy == "strict" && (profile.Bond || profile.Discover)) ||
 		(profile.Discover && (!profile.Bond || len(profile.Servers) != 1)) ||
-		(profile.Bond && (!profile.Discover && len(profile.Servers) < 2 || profile.Padding || profile.Balance == "adaptive" || s.EnableUDP)) {
+		(profile.Bond && (!profile.Discover && len(profile.Servers) < 2 || profile.Padding || profile.AdaptivePadding || profile.Balance == "adaptive" || s.EnableUDP)) {
 		return fmt.Errorf("%s", bad)
 	}
 	if profile.Pin != "" {

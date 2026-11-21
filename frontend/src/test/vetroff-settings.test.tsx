@@ -62,4 +62,23 @@ describe('Vetroff automatic settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'HTTP/3' }));
     expect(screen.getByPlaceholderText('/etc/ssl/vetroff/fullchain.pem')).toBeTruthy();
   });
+  it('clears dependent settings when adaptive padding is disabled', () => {
+    renderWithProviders(<VetroffTestForm />);
+    fireEvent.click(screen.getByText('Connection profile'));
+    const adaptive = screen.getByLabelText('Adaptive padding');
+    fireEvent.click(adaptive);
+    fireEvent.click(screen.getByLabelText('Adaptive record fragmentation'));
+    fireEvent.change(screen.getByPlaceholderText('2ms'), { target: { value: '3ms' } });
+    expect(values().vetroff).toMatchObject({
+      adaptivePadding: true,
+      adaptiveFragmentation: true,
+      timingJitter: '3ms',
+    });
+    fireEvent.click(adaptive);
+    expect(values().vetroff).toMatchObject({
+      adaptivePadding: false,
+      adaptiveFragmentation: false,
+      timingJitter: '',
+    });
+  });
 });

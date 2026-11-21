@@ -58,6 +58,12 @@ export function VetroffFields() {
     const current = VetroffOptionsSchema.parse({});
     setValue(prefix, { ...current, transport }, { shouldDirty: true });
   }
+  function clearAdaptivePadding() {
+    set('adaptivePadding', false);
+    set('adaptiveFragmentation', false);
+    set('trafficShaping', false);
+    set('timingJitter', '');
+  }
   const userPolicy = (path: string) => (
     <>
       {['maxRequests', 'maxTunnels', 'requestsPerSecond', 'burst', 'quotaBytes'].map((key) => (
@@ -183,10 +189,66 @@ export function VetroffFields() {
             children: (
               <>
                 {select('tlsBackend', ['auto', 'go', 'nss'])}
-                {select('protocolPolicy', ['builtin', 'strict'])}
+                <FormField
+                  name={`${prefix}.protocolPolicy`}
+                  label={label('protocolPolicy')}
+                  onAfterChange={(value) => {
+                    if (value !== 'strict') set('probeKey', '');
+                  }}
+                >
+                  <Select
+                    options={['builtin', 'strict'].map((value) => ({ value, label: value }))}
+                  />
+                </FormField>
                 {toggle('autoPin')}
                 {text('pin', 'sha256/...')}
-                {toggle('padding')}
+                <FormField
+                  name={`${prefix}.padding`}
+                  label={label('padding')}
+                  valueProp="checked"
+                  onAfterChange={(value) => {
+                    if (value) clearAdaptivePadding();
+                  }}
+                >
+                  <Switch disabled={options?.bond} />
+                </FormField>
+                <FormField
+                  name={`${prefix}.adaptivePadding`}
+                  label={label('adaptivePadding')}
+                  valueProp="checked"
+                  onAfterChange={(value) => {
+                    if (value) set('padding', false);
+                    else clearAdaptivePadding();
+                  }}
+                >
+                  <Switch disabled={options?.bond} />
+                </FormField>
+                {options?.adaptivePadding && (
+                  <>
+                    {toggle('adaptiveFragmentation')}
+                    {toggle('trafficShaping')}
+                    {text('timingJitter', '2ms')}
+                  </>
+                )}
+                {options?.protocolPolicy === 'strict' && (
+                  <>
+                    <FormField name={`${prefix}.probeKey`} label={label('probeKey')}>
+                      <Input.Password autoComplete="new-password" spellCheck={false} />
+                    </FormField>
+                    <Button
+                      onClick={() => {
+                        const bytes = crypto.getRandomValues(new Uint8Array(32));
+                        const key = btoa(String.fromCharCode(...bytes))
+                          .replaceAll('+', '-')
+                          .replaceAll('/', '_')
+                          .replace(/=+$/, '');
+                        set('probeKey', key);
+                      }}
+                    >
+                      {label('generateProbeKey')}
+                    </Button>
+                  </>
+                )}
                 {text('publicServer', 'https://vpn.example.com:8443')}
                 <FormField name={`${prefix}.fallbackServers`} label={label('fallbackServers')}>
                   <Select mode="tags" tokenSeparators={[',', '\n']} />
@@ -213,6 +275,8 @@ export function VetroffFields() {
                       set('discover', true);
                       set('protocolPolicy', 'builtin');
                       set('padding', false);
+                      set('probeKey', '');
+                      clearAdaptivePadding();
                       set('balance', 'failover');
                       set('fallbackServers', []);
                     } else set('discover', false);

@@ -31,43 +31,48 @@ type VetroffUserPolicy struct {
 }
 
 type VetroffSettings struct {
-	AutoTLS           bool                `json:"autoTLS"`
-	AutoPin           bool                `json:"autoPin"`
-	Transport         string              `json:"transport"`
-	TLSBackend        string              `json:"tlsBackend"`
-	HTTP3             bool                `json:"http3"`
-	EnableUDP         bool                `json:"enableUDP"`
-	H3Listen          string              `json:"h3Listen"`
-	XHTTPPath         string              `json:"xhttpPath"`
-	XHTTPHost         string              `json:"xhttpHost"`
-	ProtocolPolicy    string              `json:"protocolPolicy"`
-	Padding           bool                `json:"padding"`
-	MaxTunnels        int                 `json:"maxTunnels"`
-	MaxConnections    int                 `json:"maxConnections"`
-	WebRoot           string              `json:"webRoot"`
-	AllowPrivate      bool                `json:"allowPrivate"`
-	EgressProxy       string              `json:"egressProxy"`
-	EgressDNS         string              `json:"egressDNS"`
-	PublicServer      string              `json:"publicServer"`
-	FallbackServers   []string            `json:"fallbackServers"`
-	Pin               string              `json:"pin"`
-	Balance           string              `json:"balance"`
-	Bond              bool                `json:"bond"`
-	Discover          bool                `json:"discover"`
-	Pipeline          string              `json:"pipeline"`
-	ConnectTimeout    string              `json:"connectTimeout"`
-	AttemptTimeout    string              `json:"attemptTimeout"`
-	BondHub           bool                `json:"bondHub"`
-	BondUpstream      string              `json:"bondUpstream"`
-	BondCA            string              `json:"bondCA"`
-	BondSNI           string              `json:"bondSNI"`
-	BondPin           string              `json:"bondPin"`
-	Nodes             []VetroffNode       `json:"nodes"`
-	AttemptsPerSecond float64             `json:"attemptsPerSecond"`
-	AttemptBurst      int                 `json:"attemptBurst"`
-	AccessMaxRequests int                 `json:"accessMaxRequests"`
-	UserPolicy        VetroffUserPolicy   `json:"userPolicy"`
-	UserPolicies      []VetroffUserPolicy `json:"userPolicies"`
+	AutoTLS               bool                `json:"autoTLS"`
+	AutoPin               bool                `json:"autoPin"`
+	Transport             string              `json:"transport"`
+	TLSBackend            string              `json:"tlsBackend"`
+	HTTP3                 bool                `json:"http3"`
+	EnableUDP             bool                `json:"enableUDP"`
+	H3Listen              string              `json:"h3Listen"`
+	XHTTPPath             string              `json:"xhttpPath"`
+	XHTTPHost             string              `json:"xhttpHost"`
+	ProtocolPolicy        string              `json:"protocolPolicy"`
+	Padding               bool                `json:"padding"`
+	AdaptivePadding       bool                `json:"adaptivePadding,omitempty"`
+	AdaptiveFragmentation bool                `json:"adaptiveFragmentation,omitempty"`
+	TrafficShaping        bool                `json:"trafficShaping,omitempty"`
+	TimingJitter          string              `json:"timingJitter,omitempty"`
+	ProbeKey              string              `json:"probeKey,omitempty"`
+	MaxTunnels            int                 `json:"maxTunnels"`
+	MaxConnections        int                 `json:"maxConnections"`
+	WebRoot               string              `json:"webRoot"`
+	AllowPrivate          bool                `json:"allowPrivate"`
+	EgressProxy           string              `json:"egressProxy"`
+	EgressDNS             string              `json:"egressDNS"`
+	PublicServer          string              `json:"publicServer"`
+	FallbackServers       []string            `json:"fallbackServers"`
+	Pin                   string              `json:"pin"`
+	Balance               string              `json:"balance"`
+	Bond                  bool                `json:"bond"`
+	Discover              bool                `json:"discover"`
+	Pipeline              string              `json:"pipeline"`
+	ConnectTimeout        string              `json:"connectTimeout"`
+	AttemptTimeout        string              `json:"attemptTimeout"`
+	BondHub               bool                `json:"bondHub"`
+	BondUpstream          string              `json:"bondUpstream"`
+	BondCA                string              `json:"bondCA"`
+	BondSNI               string              `json:"bondSNI"`
+	BondPin               string              `json:"bondPin"`
+	Nodes                 []VetroffNode       `json:"nodes"`
+	AttemptsPerSecond     float64             `json:"attemptsPerSecond"`
+	AttemptBurst          int                 `json:"attemptBurst"`
+	AccessMaxRequests     int                 `json:"accessMaxRequests"`
+	UserPolicy            VetroffUserPolicy   `json:"userPolicy"`
+	UserPolicies          []VetroffUserPolicy `json:"userPolicies"`
 }
 
 func DefaultVetroffSettings() VetroffSettings {
@@ -166,6 +171,9 @@ func validateVetroffOptions(inst Instance) error {
 	if v.ProtocolPolicy != "builtin" && v.ProtocolPolicy != "strict" {
 		return fmt.Errorf("invalid VetroffProxy protocol policy")
 	}
+	if err := validateVetroffExtensions(v.Padding, v.AdaptivePadding, v.AdaptiveFragmentation, v.TrafficShaping, v.TimingJitter, v.ProbeKey, v.ProtocolPolicy); err != nil {
+		return err
+	}
 	switch v.Transport {
 	case "h2-connect", "h2-post", "wss", "h3-post", "h3-connect", "xhttp-stream-one", "xhttp-stream-up", "xhttp-packet-up":
 	default:
@@ -245,7 +253,7 @@ func validateVetroffOptions(inst Instance) error {
 	if len(v.FallbackServers) > 7 || len(v.Nodes) > 8 {
 		return fmt.Errorf("VetroffProxy supports up to eight servers")
 	}
-	if v.Discover && (!v.Bond || !v.BondHub || len(v.FallbackServers) > 0) || v.Bond && (v.Padding || v.Balance == "adaptive" || !v.Discover && len(v.FallbackServers) == 0) {
+	if v.Discover && (!v.Bond || !v.BondHub || len(v.FallbackServers) > 0) || v.Bond && (v.Padding || v.AdaptivePadding || v.Balance == "adaptive" || !v.Discover && len(v.FallbackServers) == 0) {
 		return fmt.Errorf("invalid VetroffProxy Bond/discovery combination")
 	}
 	if v.BondHub && v.BondUpstream != "" || v.ProtocolPolicy == "strict" && (v.BondHub || v.BondUpstream != "" || v.Bond || v.Discover) {
@@ -322,6 +330,46 @@ func validateVetroffOptions(inst Instance) error {
 		}
 	}
 	return nil
+}
+
+func validateVetroffExtensions(padding, adaptive, fragmentation, shaping bool, timing, probeKey, policy string) error {
+	if padding && adaptive {
+		return fmt.Errorf("choose either initial or adaptive VetroffProxy padding")
+	}
+	if !adaptive && (fragmentation || shaping || timing != "") {
+		return fmt.Errorf("VetroffProxy fragmentation, shaping and timing jitter require adaptive padding")
+	}
+	if timing != "" {
+		delay, err := time.ParseDuration(timing)
+		if err != nil || delay <= 0 || delay > 5*time.Millisecond {
+			return fmt.Errorf("VetroffProxy timing jitter must be positive and at most 5ms")
+		}
+	}
+	if probeKey != "" {
+		decoded, err := base64.RawURLEncoding.Strict().DecodeString(probeKey)
+		if policy != "strict" || len(probeKey) != 43 || err != nil || len(decoded) != 32 {
+			return fmt.Errorf("VetroffProxy probe key requires strict policy and 32 bytes encoded as unpadded base64url")
+		}
+	}
+	return nil
+}
+
+func addVetroffExtensions(config map[string]any, v VetroffSettings) {
+	if v.AdaptivePadding {
+		config["adaptive_padding"] = true
+	}
+	if v.AdaptiveFragmentation {
+		config["adaptive_fragmentation"] = true
+	}
+	if v.TrafficShaping {
+		config["traffic_shaping"] = true
+	}
+	if v.TimingJitter != "" {
+		config["timing_jitter"] = v.TimingJitter
+	}
+	if v.ProbeKey != "" {
+		config["probe_key"] = v.ProbeKey
+	}
 }
 
 // Discovery must advertise the same listener as the exported client profile.

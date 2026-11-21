@@ -505,6 +505,7 @@ func (m *Manager) prepareInboundCommand(inst Instance, metricsAddr string) (*exe
 	}
 	if inst.Protocol == model.VetroffProxy {
 		cmd.Dir = filepath.Dir(binary(inst.Protocol))
+		cmd.Env = append(os.Environ(), "VETROFF_PROBE_KEY="+vetroffOptions(inst).ProbeKey)
 	}
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	prepareVetroffCommand(cmd)
