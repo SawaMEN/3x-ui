@@ -1,0 +1,77 @@
+name: VetrOFF panel compatibility
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/vetroff-panel-compat.yml'
+      - 'deploy/hiddify/hiddify-core-target.json'
+      - 'internal/hiddify/**'
+
+permissions:
+  contents: read
+
+jobs:
+  vetroff-panel:
+    name: Build and test the VetrOFF panel profile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: SawaMEN/VetrOFF-Core
+          ref: 08d8e6a1d1eb09abba2096cd73e475db19c7dfe7
+          path: vetroff-core
+          persist-credentials: false
+      - name: Prepare pinned and verified VetrOFF source trees
+        run: bash vetroff-core/scripts/prepare.sh
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            vetroff-core/.build/hiddify-core/go.sum
+          cache: true
+      - name: Build with the panel feature and security profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          source vetroff-core/.build/prepared-sources.lock
+          panel_profile="$PWD/deploy/hiddify/hiddify-core-target.json"
+          vetroff_source="$PWD/vetroff-core"
+          bundle="$RUNNER_TEMP/vetroff-panel"
+          mkdir -p "$bundle"
+          tags=$(jq -r '.panel_build.tags | join(",")' "$panel_profile")
+          readarray -t pins < <(jq -r '.panel_build.security_dependencies | to_entries[] | "-require=\(.key)@\(.value)"' "$panel_profile")
+          (("${#pins[@]}" > 0))
+          version="sawamen-${CORE_SHA:0:12}-${SING_SHA:0:12}-mask1-ciphers1-net62-sec1-stream1"
+          cd "$vetroff_source/.build/hiddify-core"
+          # Retain the identity format understood by the currently released panel.
+          git apply --reverse "$vetroff_source/patches/hiddify-core/0002-vetroff-version.patch"
+          go mod edit "${pins[@]}"
+          CGO_ENABLED=0 go build -mod=mod -buildvcs=true -trimpath -tags "$tags" \
+            -ldflags "-s -w -checklinkname=0 -X github.com/hiddify/hiddify-core/v2/hcommon/constants.Version=$version" \
+            -o "$bundle/hiddify-core-linux-amd64" ./cmd/main
+          cronet=$(tr -d '\r\n' < hiddify-sing-box/.github/CRONET_GO_VERSION)
+          [[ "$cronet" =~ ^[0-9a-f]{40}$ ]]
+          curl --fail --silent --show-error --retry 3 --location \
+            "https://raw.githubusercontent.com/sagernet/cronet-go/$cronet/lib/linux_amd64/libcronet.so" \
+            --output "$bundle/libcronet.so"
+          jq -n --arg version "$version" --arg commit "$CORE_SHA" \
+            '{target: {version: $version, commit: $commit}}' > "$bundle/target.json"
+      - name: Verify configuration, statistics and supported transports
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/vetroff-panel/hiddify-core-linux-amd64
+          HIDDIFY_RUNTIME_BINARY: ${{ runner.temp }}/vetroff-panel/hiddify-core-linux-amd64
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
+          go test -json ./internal/hiddify -count=1 -timeout=8m \
+            -run '^TestPinned(BinaryChecksGeneratedConfigurations|BinaryRawRuntimeAndStatistics|ProtocolTransportMatrix)$' \
+            | tee vetroff-panel-tests.jsonl
+          python3 tools/ci/require-go-tests.py vetroff-panel-tests.jsonl \
+            TestPinnedBinaryChecksGeneratedConfigurations TestPinnedBinaryRawRuntimeAndStatistics TestPinnedProtocolTransportMatrix
