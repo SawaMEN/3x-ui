@@ -4,6 +4,7 @@ import { ApiOutlined, CopyOutlined } from '@ant-design/icons';
 
 import type { TelegramProxyProfile } from '@/generated/types';
 import SubQrButton from './SubQrButton';
+import { telegramEndpoint } from './telegramProfiles';
 
 interface SubTelegramTabProps {
   profiles: TelegramProxyProfile[];
@@ -28,8 +29,8 @@ export default function SubTelegramTab({
         <Skeleton active paragraph={{ rows: 2 }} title={false} />
       )}
       {profiles.map((profile) => {
-        const title = profile.name || profile.host;
-        const endpoint = `${profile.host}${profile.port ? `:${profile.port}` : ''}`;
+        const endpoint = telegramEndpoint(profile);
+        const title = profile.name || endpoint;
         return (
           <section className="sub-telegram-profile" key={profile.link}>
             <div className="sub-row-main">

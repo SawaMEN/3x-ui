@@ -458,9 +458,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "subTelegramWebEnable": {
         "type": "boolean"
       },
-      "subTelegramWebName": {
-        "type": "string"
-      },
       "subThemeDir": {
         "type": "string"
       },
@@ -688,7 +685,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "subTelegramLocalEnable",
       "subTelegramRemoteEnable",
       "subTelegramWebEnable",
-      "subTelegramWebName",
       "subThemeDir",
       "subTitle",
       "subTrafficDepletedTemplate",
@@ -1157,9 +1153,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "subTelegramWebEnable": {
         "type": "boolean"
       },
-      "subTelegramWebName": {
-        "type": "string"
-      },
       "subThemeDir": {
         "type": "string"
       },
@@ -1394,7 +1387,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "subTelegramLocalEnable",
       "subTelegramRemoteEnable",
       "subTelegramWebEnable",
-      "subTelegramWebName",
       "subThemeDir",
       "subTitle",
       "subTrafficDepletedTemplate",

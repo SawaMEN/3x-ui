@@ -67,7 +67,6 @@ var defaultValueMap = map[string]string{
 	"subTelegramLocalEnable":   "true",
 	"subTelegramRemoteEnable":  "true",
 	"subTelegramWebEnable":     "true",
-	"subTelegramWebName":       "",
 	"subAppearanceTheme":       "classic",
 	"subAppearanceEnable":      "false",
 	"subAppearanceTitle":       "",

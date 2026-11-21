@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -37,7 +38,7 @@ func TestTelegramSubscriptionIncludesRemoteProfilesWithoutLocalTelemt(t *testing
 	u, _ := url.Parse(server.URL)
 	host, portText, _ := net.SplitHostPort(u.Host)
 	port, _ := strconv.Atoi(portText)
-	node := &model.Node{Name: "Remote Telegram", Scheme: "http", Address: host, Port: port, ApiToken: "test-node-token", Enable: true, AllowPrivateAddress: true}
+	node := &model.Node{Name: "Remote Telegram", Remark: "  Нода Telegram  ", Scheme: "http", Address: host, Port: port, ApiToken: "test-node-token", Enable: true, AllowPrivateAddress: true}
 	db := database.GetDB()
 	if err := db.Create(node).Error; err != nil {
 		t.Fatal(err)
@@ -51,7 +52,7 @@ func TestTelegramSubscriptionIncludesRemoteProfilesWithoutLocalTelemt(t *testing
 		t.Fatal(err)
 	}
 	inbound := &model.Inbound{
-		Tag: "remote-mtproto", Enable: true, NodeID: &node.Id, Protocol: model.MTProto, Port: 8443,
+		Tag: "remote-mtproto", Remark: "  Основной MTProto  ", Enable: true, NodeID: &node.Id, Protocol: model.MTProto, Port: 8443,
 		ShareAddrStrategy: "custom", ShareAddr: "mt.node.example",
 		Settings: `{"clients":[{"email":"telegram@example.com","subId":"` + subID + `","enable":true,"secret":"` + mtprotoTestSecret + `"}]}`,
 	}
@@ -80,10 +81,10 @@ func TestTelegramSubscriptionIncludesRemoteProfilesWithoutLocalTelemt(t *testing
 	if response.Code != http.StatusOK || !payload.Enabled || len(payload.Proxies) != 3 {
 		t.Fatalf("subscription lost remote proxies: status=%d body=%s", response.Code, response.Body.String())
 	}
-	if payload.Proxies[0].Host != "mt.node.example" || payload.Proxies[0].Port != 8443 {
+	if payload.Proxies[0].Host != "mt.node.example" || payload.Proxies[0].Port != 8443 || payload.Proxies[0].Name != "Основной MTProto" {
 		t.Fatalf("remote inbound endpoint = %+v", payload.Proxies[0])
 	}
-	if payload.Proxies[1].Link != personal || payload.Proxies[1].Name != node.Name || payload.Proxies[2].Link != web || payload.Proxies[2].Name != node.Name+" · Web Proxy" {
+	if payload.Proxies[1].Link != personal || payload.Proxies[1].Name != "Нода Telegram" || payload.Proxies[2].Link != web || payload.Proxies[2].Name != "Нода Telegram" {
 		t.Fatalf("remote profiles = %+v", payload.Proxies)
 	}
 	if response.Header().Get("Cache-Control") != "private, no-store" {
@@ -98,16 +99,25 @@ func TestTelegramSubscriptionIncludesRemoteProfilesWithoutLocalTelemt(t *testing
 	if unknown.Code != http.StatusNotFound || calls.Load() != 1 {
 		t.Fatalf("unknown subscription reached nodes: status=%d calls=%d", unknown.Code, calls.Load())
 	}
-	if err := db.Create(&model.Setting{Key: "subTelegramWebName", Value: "  VetrOFF  "}).Error; err != nil {
+	if err := db.Model(node).Update("remark", "").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(inbound).Update("remark", " ").Error; err != nil {
 		t.Fatal(err)
 	}
 	response = httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "http://sub.example/sub/telemt/"+subID, nil))
+	payload.Proxies = nil
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if response.Code != http.StatusOK || len(payload.Proxies) != 3 || payload.Proxies[2].Name != node.Name+" · VetrOFF" || payload.Proxies[2].Link != web {
-		t.Fatalf("WEB Proxy was not renamed: status=%d body=%s", response.Code, response.Body.String())
+	if response.Code != http.StatusOK || len(payload.Proxies) != 3 {
+		t.Fatalf("subscription lost unnamed proxies: status=%d body=%s", response.Code, response.Body.String())
+	}
+	for _, profile := range payload.Proxies {
+		if profile.Name != "" {
+			t.Fatalf("empty remark produced a proxy name: %+v", profile)
+		}
 	}
 	if err := db.Where("key = ?", "subTelegramRemoteEnable").Assign(model.Setting{Value: "false"}).FirstOrCreate(&model.Setting{Key: "subTelegramRemoteEnable"}).Error; err != nil {
 		t.Fatal(err)
@@ -148,7 +158,7 @@ func TestTelegramSubscriptionNodeDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	profiles := remoteTelegramSubscriptions(ctx, "slow-sub", "Web Proxy")
+	profiles := remoteTelegramSubscriptions(ctx, "slow-sub")
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("node request ignored cancellation: %s", elapsed)
 	}
@@ -240,6 +250,21 @@ func TestTelegramPublicationAndPageVisibility(t *testing.T) {
 	}
 	if err := db.Model(inbound).Update("settings", `{"webProxy":{"enabled":true,"domain":"web.example"}}`).Error; err != nil {
 		t.Fatal(err)
+	}
+	if err := db.Model(inbound).Update("remark", "Локальный WEB").Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, hostsFirst := range []bool{false, true} {
+		request := NewSubService("").ForRequest("parent.example")
+		request.hostsFirst = hostsFirst
+		remarks := make(map[string]string)
+		links, _, _, _, err := request.getSubsWithTelegramRemarks(client.SubID, remarks)
+		if err != nil || len(links) != 1 {
+			t.Fatalf("WEB links with hosts-first=%t: %v, %v", hostsFirst, links, err)
+		}
+		if remarks[links[0]] != "Локальный WEB" || strings.Contains(links[0], "#") {
+			t.Fatalf("WEB remark with hosts-first=%t: links=%v, remarks=%v", hostsFirst, links, remarks)
+		}
 	}
 	if err := db.Where("key = ?", "subTelegramWebEnable").Assign(model.Setting{Value: "false"}).FirstOrCreate(&model.Setting{Key: "subTelegramWebEnable"}).Error; err != nil {
 		t.Fatal(err)

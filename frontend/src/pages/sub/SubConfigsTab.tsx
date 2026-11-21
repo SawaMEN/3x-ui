@@ -12,13 +12,15 @@ import {
 import { LinkTags, parseLinkParts } from '@/lib/xray/link-label';
 import SubQrButton from './SubQrButton';
 import { isStandaloneLink, pingtunnelClientJSON } from './standaloneProtocols';
+import { telegramEndpoint, telegramProfiles } from './telegramProfiles';
 
 interface SubConfigsTabProps {
   links: string[];
+  telegramRemarks?: Record<string, string>;
   onCopy: (value: string, toast?: string) => void;
 }
 
-export default function SubConfigsTab({ links, onCopy }: SubConfigsTabProps) {
+export default function SubConfigsTab({ links, telegramRemarks, onCopy }: SubConfigsTabProps) {
   const { t } = useTranslation();
   const items = links.map((link, idx) => ({ link, idx }));
   const regular = items.filter(({ link }) => !isStandaloneLink(link));
@@ -48,7 +50,12 @@ export default function SubConfigsTab({ links, onCopy }: SubConfigsTabProps) {
           </div>
           {group.items.map(({ link, idx }) => {
             const parts = parseLinkParts(link);
-            const rowTitle = parts?.remark || `Link ${idx + 1}`;
+            const [telegram] = link.startsWith('tg://')
+              ? telegramProfiles({}, [link], telegramRemarks)
+              : [];
+            const rowTitle = telegram
+              ? telegram.name || telegramEndpoint(telegram)
+              : parts?.remark || `Link ${idx + 1}`;
             const isWireguardLink = link.startsWith('wireguard://') || link.startsWith('wg://');
             const wireguardConfig = isWireguardLink ? wireguardConfigFromLink(link, rowTitle) : '';
             const amneziawgConfig = link.startsWith('vpn://') ? amneziawgConfigFromLink(link) : '';

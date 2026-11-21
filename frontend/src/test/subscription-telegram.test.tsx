@@ -38,4 +38,36 @@ describe('subscription Telegram profiles', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Copy' })[0]);
     expect(copy).toHaveBeenCalledWith(link);
   });
+
+  it('uses saved remarks and falls back to the endpoint for either Telegram protocol', () => {
+    const webWithPath = 'tg://webproxy?server=web.example%2Fproxy-path&secret=dd1234';
+    const named = telegramProfiles({}, [link, webWithPath], {
+      [link]: 'MTProto VetrOFF',
+      [webWithPath]: 'WEB VetrOFF',
+    });
+    const unnamed = telegramProfiles(
+      {
+        personal: { link, host: 'node.example', port: 443, tls: true },
+        webProxyEnabled: true,
+        webProxy: webWithPath,
+      },
+      [],
+    );
+    const render = (profiles: typeof named) => (
+      <SubTelegramTab
+        profiles={profiles}
+        loading={false}
+        error={false}
+        onCopy={vi.fn()}
+        onOpen={vi.fn()}
+      />
+    );
+    const view = renderWithProviders(render(named));
+    expect(screen.getByText('MTProto VetrOFF', { selector: '.sub-row-title' })).toBeTruthy();
+    expect(screen.getByText('WEB VetrOFF', { selector: '.sub-row-title' })).toBeTruthy();
+
+    view.rerender(render(unnamed));
+    expect(screen.getByText('node.example:443', { selector: '.sub-row-title' })).toBeTruthy();
+    expect(screen.getByText('web.example', { selector: '.sub-row-title' })).toBeTruthy();
+  });
 });

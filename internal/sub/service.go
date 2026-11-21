@@ -613,9 +613,14 @@ func (s *SubService) resolveInfoNodeRemark(subId string, uniqueEmails []string, 
 }
 
 func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel.ClientTraffic, error) {
+	return s.getSubsWithTelegramRemarks(subId, nil)
+}
+
+func (s *SubService) getSubsWithTelegramRemarks(subId string, remarks map[string]string) ([]string, []string, int64, coremodel.ClientTraffic, error) {
 	type renderedLink struct {
-		link  string
-		email string
+		link           string
+		email          string
+		telegramRemark string
 	}
 	var result []string
 	var ordered []orderedSubEntry[func() renderedLink]
@@ -656,6 +661,10 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 		if !s.hostsFirst {
 			hostEps = s.hostEndpoints(inbound, "raw")
 		}
+		var telegramRemark string
+		if remarks != nil && inbound.Protocol == model.MTProto {
+			telegramRemark = strings.TrimSpace(inbound.Remark)
+		}
 		for _, client := range clients {
 			if client.Enable {
 				hasEnabledClient = true
@@ -678,9 +687,9 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 				for _, variant := range variants {
 					render := func() renderedLink {
 						if variant.host != nil {
-							return renderedLink{s.linkFromHosts(inbound, client, variant.endpoint(s, inbound)), client.Email}
+							return renderedLink{s.linkFromHosts(inbound, client, variant.endpoint(s, inbound)), client.Email, telegramRemark}
 						}
-						return renderedLink{s.GetLink(inbound, client.Email), client.Email}
+						return renderedLink{s.GetLink(inbound, client.Email), client.Email, telegramRemark}
 					}
 					ordered = append(ordered, orderedSubEntry[func() renderedLink]{variant.order, render})
 				}
@@ -698,6 +707,7 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 			if !s.hostsFirst {
 				if strings.TrimSpace(link) != "" {
 					result = append(result, link)
+					rememberTelegramRemark(remarks, link, telegramRemark)
 					emails = append(emails, client.Email)
 				} else {
 					unlinkedEmails = append(unlinkedEmails, client.Email)
@@ -711,6 +721,7 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 			entry := render()
 			if strings.TrimSpace(entry.link) != "" {
 				result = append(result, entry.link)
+				rememberTelegramRemark(remarks, entry.link, entry.telegramRemark)
 				emails = append(emails, entry.email)
 			} else {
 				unlinkedEmails = append(unlinkedEmails, entry.email)
@@ -736,6 +747,14 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 						result = []string{}
 					}
 					continue
+				}
+				if remarks != nil && isTelegramShareLink(link) {
+					link, _, _ = strings.Cut(link, "#")
+					name := strings.TrimSpace(ext.Remark)
+					if name == "" {
+						name = linkDisplayName(el.Link)
+					}
+					rememberTelegramRemark(remarks, link, name)
 				}
 				result = append(result, link)
 				emails = append(emails, ext.Email)
@@ -3116,6 +3135,8 @@ type PageData struct {
 	SubAnnounce   string
 	Result        []string
 	Emails        []string
+
+	TelegramRemarks map[string]string
 }
 
 // ResolveRequest extracts scheme and host info from request/headers consistently.

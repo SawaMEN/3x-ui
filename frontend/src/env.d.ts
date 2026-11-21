@@ -27,6 +27,7 @@ interface SubPageData {
   subSupportUrl?: string;
   subUpdates?: number;
   links?: string[];
+  telegramRemarks?: Record<string, string>;
   emails?: string[];
   datepicker?: 'gregorian' | 'jalalian';
   announce?: string;

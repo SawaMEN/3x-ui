@@ -73,10 +73,6 @@ describe('MTProto publication controls', () => {
       fireEvent.click(screen.getByRole('switch', { name: label }));
       expect(update).toHaveBeenCalledWith({ [key]: false });
     }
-    fireEvent.change(screen.getByRole('textbox', { name: 'WEB proxy name on subscription page' }), {
-      target: { value: 'VetrOFF' },
-    });
-    expect(update).toHaveBeenCalledWith({ subTelegramWebName: 'VetrOFF' });
   });
 
   it('shows published remote profiles when the parent has no local Telemt installation', async () => {

@@ -2973,8 +2973,7 @@
       "subTelegramRemoteEnable": "Telegram Proxy удалённых нод на странице подписки",
       "subTelegramRemoteEnableDesc": "Показывать прокси клиентов с удалённых нод, разрешённые для публикации. При выключении ноды для этой страницы не опрашиваются.",
       "subTelegramWebEnable": "WEB Proxy на странице подписки",
-      "subTelegramWebEnableDesc": "Показывать Telegram WEB Proxy локальной панели и разрешённых удалённых нод.",
-      "subTelegramWebName": "Название WEB Proxy на странице подписки"
+      "subTelegramWebEnableDesc": "Показывать Telegram WEB Proxy локальной панели и разрешённых удалённых нод."
     },
     "xray": {
       "importRules": "Импорт правил",

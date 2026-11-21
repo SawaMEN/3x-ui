@@ -28,6 +28,23 @@ func telegramInboundOnPage(inbound *model.Inbound, visibility service.TelegramPa
 	return !settings.WebProxy.Enabled || visibility.Web
 }
 
+func isTelegramShareLink(link string) bool {
+	return strings.HasPrefix(link, "tg://proxy?") || strings.HasPrefix(link, "tg://webproxy?")
+}
+
+// Telegram links carry their names alongside the URL to keep fragments out of
+// the connection settings parsed by Telegram clients.
+func rememberTelegramRemark(remarks map[string]string, links, remark string) {
+	if remarks == nil || remark == "" {
+		return
+	}
+	for link := range strings.SplitSeq(links, "\n") {
+		if remarks[link] == "" {
+			remarks[link] = remark
+		}
+	}
+}
+
 func telegramLinkOnPage(link string, visibility service.TelegramPageVisibility) bool {
 	if strings.HasPrefix(link, "tg://proxy?") {
 		return visibility.Local

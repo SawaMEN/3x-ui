@@ -13,7 +13,6 @@ export class AllSetting {
   subTelegramLocalEnable = true;
   subTelegramRemoteEnable = true;
   subTelegramWebEnable = true;
-  subTelegramWebName = '';
   subAppearanceTheme: SubscriptionTheme = 'classic';
   subAppearanceEnable = false;
   subAppearanceTitle = '';

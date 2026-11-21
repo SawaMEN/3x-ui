@@ -42,7 +42,6 @@ export const AllSettingSchema = z
     subTelegramLocalEnable: z.boolean().optional(),
     subTelegramRemoteEnable: z.boolean().optional(),
     subTelegramWebEnable: z.boolean().optional(),
-    subTelegramWebName: z.string().optional(),
     subAppearanceTheme: z
       .preprocess((value) => (value === 'whitemax' ? 'luna' : value), SubscriptionThemeSchema)
       .optional(),
