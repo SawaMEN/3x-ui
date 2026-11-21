@@ -94,10 +94,60 @@ func TestDomainPreflightDNSUnavailableIsAdvisory(t *testing.T) {
 	cfg := testPreflightConfig()
 	deps := testPreflightDeps()
 	deps.lookup = func(context.Context, string) ([]net.IPAddr, error) {
-		return nil, errors.New("NXDOMAIN")
+		return nil, &net.DNSError{Err: "server misbehaving", IsTemporary: true}
 	}
 	report := runDomainPreflight(context.Background(), cfg, nil, domainfront.DefaultConfig(), false, deps)
-	if !report.Ready || issueCount(report, "dns_lookup_failed", "warning") != 1 || !strings.Contains(report.Checks[len(report.Checks)-1].Message, "NXDOMAIN") {
+	if !report.Ready || issueCount(report, "dns_lookup_failed", "warning") != 1 || !strings.Contains(report.Checks[len(report.Checks)-1].Message, "server misbehaving") {
 		t.Fatalf("DNS unavailable should not be a hard blocker: %+v", report)
+	}
+}
+
+func TestDomainPreflightMissingPublicDNSExplainsChallenge(t *testing.T) {
+	deps := testPreflightDeps()
+	deps.lookup = func(_ context.Context, name string) ([]net.IPAddr, error) {
+		return nil, &net.DNSError{Name: name, Err: "no such host", IsNotFound: true}
+	}
+	for _, tc := range []struct {
+		provider string
+		want     string
+	}{
+		{"", "HTTP-01"},
+		{"digitalocean", "DNS-01 issuance can proceed"},
+	} {
+		cfg := testPreflightConfig()
+		cfg.DNS01Provider = tc.provider
+		if tc.provider != "" {
+			cfg.DNS01Zone = "example.org"
+		}
+		report := runDomainPreflight(context.Background(), cfg, nil, domainfront.DefaultConfig(), false, deps)
+		if !report.Ready || issueCount(report, "dns_missing", "warning") != 1 ||
+			!strings.Contains(report.Checks[len(report.Checks)-1].Message, tc.want) {
+			t.Fatalf("unexpected preflight for provider %q: %+v", tc.provider, report)
+		}
+	}
+}
+
+func TestDomainPreflightOnlyRequiresDNSCredentialsForManagedCertificates(t *testing.T) {
+	cfg := testPreflightConfig()
+	cfg.DNS01Provider = " DigitalOcean "
+	cfg.DNS01Zone = "example.org"
+	cfg.Domains[0].Name = "Sub.Example.Org."
+	deps := testPreflightDeps()
+	deps.dnsCredentialConfigured = func(provider string) bool {
+		if provider != "digitalocean" {
+			t.Fatalf("expected normalized provider, got %q", provider)
+		}
+		return false
+	}
+	inherited := map[string]domainfront.CertificateFiles{
+		"sub.example.org": {CertFile: "fullchain.pem", KeyFile: "privkey.pem"},
+	}
+	report := runDomainPreflight(context.Background(), cfg, inherited, domainfront.DefaultConfig(), false, deps)
+	if !report.Ready {
+		t.Fatalf("inherited certificate should not require DNS credentials: %+v", report)
+	}
+	report = runDomainPreflight(context.Background(), cfg, nil, domainfront.DefaultConfig(), false, deps)
+	if report.Ready || issueCount(report, "dns01_credentials_missing", "error") != 1 {
+		t.Fatalf("managed certificate should require DNS credentials: %+v", report)
 	}
 }

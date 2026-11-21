@@ -474,24 +474,29 @@ func (r *frontRuntime) redirectHTTPS(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *frontRuntime) event(ctx context.Context, event string, data map[string]any) error {
+	var hookErr error
 	if r.backend.CertificateEvent != nil {
-		if err := r.backend.CertificateEvent(ctx, event, data); err != nil {
-			return err
-		}
+		hookErr = r.backend.CertificateEvent(ctx, event, data)
 	}
 	name, _ := data["identifier"].(string)
 	if name == "" {
-		return nil
+		return hookErr
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if event == "cert_failed" {
+	switch event {
+	case "cert_obtaining":
+		// A rejected preparation callback aborts ACME before CertMagic can
+		// emit cert_failed, so report the cause here.
+		if hookErr != nil && ctx.Err() == nil {
+			r.errors[name] = fmt.Sprintf("preparing ACME validation: %v", hookErr)
+		}
+	case "cert_failed":
 		r.errors[name] = fmt.Sprint(data["error"])
-	}
-	if event == "cert_obtained" || event == "cert_renewed" {
+	case "cert_obtained", "cert_renewed":
 		delete(r.errors, name)
 	}
-	return nil
+	return hookErr
 }
 
 func (m *Manager) Status(cfg DomainFrontConfig) DomainFrontStatus {

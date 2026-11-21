@@ -3,11 +3,14 @@ package controller
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"math"
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -434,41 +437,71 @@ func (a *DomainController) check(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 8*time.Second)
 	defer cancel()
 	result := domainfront.DomainFrontCheck{Name: req.Name, Addresses: []string{}, CheckedAt: time.Now().Unix()}
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, req.Name)
+	// Look up the exact name, without appending the server's DNS search suffixes.
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, strings.TrimSuffix(req.Name, ".")+".")
+	var dnsErr *net.DNSError
+	if (err == nil && len(ips) == 0) || (errors.As(err, &dnsErr) && dnsErr.IsNotFound) {
+		key := "pages.settings.domains.dnsAddressMissing"
+		result.Error = I18nWeb(c, key)
+		if result.Error == "" || result.Error == key {
+			result.Error = "This hostname has no public DNS address. Check its spelling and its A, AAAA or CNAME records."
+		}
+		jsonObj(c, result, nil)
+		return
+	}
 	if err != nil {
-		result.Error = err.Error()
+		result.Error = fmt.Sprintf("DNS lookup failed: %v", err)
 		jsonObj(c, result, nil)
 		return
 	}
 	for _, ip := range ips {
 		result.Addresses = append(result.Addresses, ip.IP.String())
 	}
-	// Resolve and dial the *validated public IP*, not the hostname again:
-	// prevent DNS rebinding to private panel endpoints during a TLS check.
-	conn, err := netsafe.SSRFGuardedDialContext(ctx, "tcp", net.JoinHostPort(req.Name, strconv.Itoa(port)))
+	cert, err := probePublicDomainTLS(ctx, req.Name, port, ips)
 	if err != nil {
 		result.Error = err.Error()
-		jsonObj(c, result, nil)
-		return
+	} else {
+		result.ExpiresAt = cert.NotAfter.Unix()
+		result.DaysLeft = int(math.Ceil(time.Until(cert.NotAfter).Hours() / 24))
+		result.Issuer = cert.Issuer.CommonName
 	}
-	secure := tls.Client(conn, &tls.Config{MinVersion: tls.VersionTLS12, ServerName: req.Name})
-	defer secure.Close()
-	if err := secure.HandshakeContext(ctx); err != nil {
-		result.Error = err.Error()
-		jsonObj(c, result, nil)
-		return
-	}
-	certs := secure.ConnectionState().PeerCertificates
-	if len(certs) == 0 {
-		result.Error = "remote site did not present a certificate"
-		jsonObj(c, result, nil)
-		return
-	}
-	cert := certs[0]
-	result.ExpiresAt = cert.NotAfter.Unix()
-	result.DaysLeft = int(math.Ceil(time.Until(cert.NotAfter).Hours() / 24))
-	result.Issuer = cert.Issuer.CommonName
 	jsonObj(c, result, nil)
+}
+
+func probePublicDomainTLS(ctx context.Context, name string, port int, ips []net.IPAddr) (*x509.Certificate, error) {
+	var lastErr error
+	for _, addr := range ips {
+		if netsafe.IsBlockedIP(addr.IP) || addr.Zone != "" {
+			continue
+		}
+		// Dial the numeric address from the same lookup used in the result,
+		// and retain the hostname for both SNI and certificate verification.
+		attemptCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		dialer := net.Dialer{}
+		conn, err := dialer.DialContext(attemptCtx, "tcp", net.JoinHostPort(addr.IP.String(), strconv.Itoa(port)))
+		if err == nil {
+			secure := tls.Client(conn, &tls.Config{MinVersion: tls.VersionTLS12, ServerName: name})
+			err = secure.HandshakeContext(attemptCtx)
+			certs := secure.ConnectionState().PeerCertificates
+			_ = conn.Close()
+			if err == nil && len(certs) > 0 {
+				cancel()
+				return certs[0], nil
+			}
+			if err == nil {
+				err = errors.New("remote site did not present a certificate")
+			}
+		}
+		cancel()
+		lastErr = err
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	if lastErr == nil {
+		return nil, fmt.Errorf("%s has no usable public IP address", name)
+	}
+	return nil, fmt.Errorf("public TLS check for %s:%d: %w", name, port, lastErr)
 }
 
 // recommend searches websites near the panel's public IP with the existing

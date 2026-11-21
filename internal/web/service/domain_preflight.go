@@ -32,9 +32,10 @@ type domainPreflightReport struct {
 }
 
 type preflightDeps struct {
-	lookup      func(context.Context, string) ([]net.IPAddr, error)
-	probePort   func(context.Context, string, int) error
-	telemtCover string
+	lookup                  func(context.Context, string) ([]net.IPAddr, error)
+	probePort               func(context.Context, string, int) error
+	telemtCover             string
+	dnsCredentialConfigured func(string) bool
 }
 
 // PreflightDomainFront checks the supplied unsaved draft without changing it.
@@ -59,20 +60,16 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 		telemtCover = state.Domain
 	}
 	report := runDomainPreflight(ctx, cfg, files, old, status.Running, preflightDeps{
-		lookup:      net.DefaultResolver.LookupIPAddr,
+		lookup: func(ctx context.Context, name string) ([]net.IPAddr, error) {
+			return net.DefaultResolver.LookupIPAddr(ctx, name+".")
+		},
 		probePort:   probeDomainPort,
 		telemtCover: telemtCover,
+		dnsCredentialConfigured: func(provider string) bool {
+			credential, err := DomainDNSCredentialStateFor(provider)
+			return err == nil && credential.Configured
+		},
 	})
-	if cfg.Enabled && cfg.DNS01Provider != "" {
-		credential, tokenErr := DomainDNSCredentialStateFor(cfg.DNS01Provider)
-		if tokenErr != nil || !credential.Configured {
-			report.Ready = false
-			report.Checks = append(report.Checks, domainPreflightCheck{
-				Code: "dns01_credentials_missing", Severity: "error",
-				Message: "Selected DNS-01 provider requires a scoped API token configured on this server.",
-			})
-		}
-	}
 	augmentDomainPreflightWithNodeEvidence(ctx, cfg, &report)
 	return report, nil
 }
@@ -117,6 +114,10 @@ func runDomainPreflight(
 	if !cfg.Enabled {
 		add("gateway_disabled", "info", "", "The gateway is disabled; no listeners or domain probes are required.")
 		return result
+	}
+	if cfg.DNS01Provider != "" && cfg.UsesManagedCertificates(files) &&
+		deps.dnsCredentialConfigured != nil && !deps.dnsCredentialConfigured(cfg.DNS01Provider) {
+		add("dns01_credentials_missing", "error", "", "Selected DNS-01 provider requires a scoped API token configured on this server.")
 	}
 	local := make([]domainfront.DomainFrontDomain, 0, len(cfg.Domains))
 	for _, domain := range cfg.Domains {
@@ -197,8 +198,9 @@ func runDomainPreflight(
 	checkCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
 	type dnsResult struct {
-		ips []net.IPAddr
-		err error
+		ips     []net.IPAddr
+		err     error
+		checked bool
 	}
 	answers := make([]dnsResult, len(local))
 	jobs := make(chan int)
@@ -208,7 +210,8 @@ func runDomainPreflight(
 		go func() {
 			defer workers.Done()
 			for index := range jobs {
-				answers[index].ips, answers[index].err = deps.lookup(checkCtx, local[index].Name)
+				ips, err := deps.lookup(checkCtx, local[index].Name)
+				answers[index] = dnsResult{ips: ips, err: err, checked: true}
 			}
 		}()
 	}
@@ -231,12 +234,24 @@ dispatch:
 			continue
 		}
 		answer := answers[i]
-		if answer.err != nil {
-			add("dns_lookup_failed", "warning", domain.Name, fmt.Sprintf("DNS lookup failed: %s", answer.err))
+		if !answer.checked {
 			continue
 		}
-		if len(answer.ips) == 0 {
-			add("dns_missing", "warning", domain.Name, "No DNS A/AAAA records were found.")
+		var dnsErr *net.DNSError
+		if (answer.err == nil && len(answer.ips) == 0) || (errors.As(answer.err, &dnsErr) && dnsErr.IsNotFound) {
+			message := "Check the hostname and publish an A, AAAA or CNAME record before using it for HTTPS."
+			if domain.TLS == "certmagic" || (domain.TLS == "auto" && files[domain.Name].CertFile == "") {
+				if cfg.DNS01Provider == "" {
+					message = "Publish a public DNS address before requesting a certificate with HTTP-01 or TLS-ALPN-01."
+				} else {
+					message += " DNS-01 issuance can proceed using the challenge TXT record."
+				}
+			}
+			add("dns_missing", "warning", domain.Name, message)
+			continue
+		}
+		if answer.err != nil {
+			add("dns_lookup_failed", "warning", domain.Name, fmt.Sprintf("DNS lookup failed: %s", answer.err))
 			continue
 		}
 		addresses := make([]string, 0, len(answer.ips))

@@ -2705,6 +2705,7 @@
         "removeConfirm": "Remove this domain from the configuration?",
         "dns": "DNS addresses",
         "publicTLS": "Public TLS certificate",
+        "dnsAddressMissing": "This hostname has no public DNS address. Check its spelling and its A, AAAA or CNAME records.",
         "publicTLSDesc": "For CDN, this check shows its edge certificate, while the table shows the certificate on your origin server. Checking does not issue or renew certificates.",
         "checkHint": "Save configuration, then click Check DNS/TLS for this domain.",
         "apply": "Save and apply",

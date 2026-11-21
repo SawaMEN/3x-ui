@@ -256,7 +256,9 @@ export default function DomainHostList({
                     </Typography.Text>
                   )}
                   {result.error && <Typography.Text type="danger">{result.error}</Typography.Text>}
-                  <Typography.Text type="secondary">{l('publicTLSDesc')}</Typography.Text>
+                  {domain.mode === 'cdn' && result.expiresAt > 0 && (
+                    <Typography.Text type="secondary">{l('publicTLSDesc')}</Typography.Text>
+                  )}
                 </div>
               )}
             </article>
