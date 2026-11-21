@@ -19,13 +19,7 @@ import SubHero from './SubHero';
 import SubLinksTab from './SubLinksTab';
 import { telegramProfiles } from './telegramProfiles';
 import type { TelegramSubscription } from '@/generated/types';
-import {
-  buildSubApps,
-  buildTelemtEndpoint,
-  daysUntil,
-  detectPlatform,
-  resolveSubStatus,
-} from './subPageModel';
+import { buildTelemtEndpoint, daysUntil, detectPlatform, resolveSubStatus } from './subPageModel';
 import './SubPage.css';
 import './SubLuna.css';
 import LunaBackdrop from './LunaBackdrop';
@@ -78,15 +72,7 @@ const heroData = {
   datepicker: subData.datepicker || 'gregorian',
 };
 
-const builtApps = buildSubApps({ subUrl, sId, subTitle });
-const apps =
-  subData.subFormatMode === 'xray'
-    ? {
-        android: builtApps.android.filter((app) => app.name !== 'Sing-box'),
-        ios: builtApps.ios.filter((app) => app.name !== 'Sing-box'),
-      }
-    : builtApps;
-const initialPlatform = detectPlatform(navigator.userAgent);
+const initialPlatform = detectPlatform(navigator.userAgent, navigator.maxTouchPoints);
 const RTL_LANGUAGES = new Set(['fa-IR', 'ar-EG']);
 
 export default function SubPage() {
@@ -190,7 +176,11 @@ export default function SubPage() {
         label: t('subscription.tabApps'),
         children: (
           <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
-            <SubAppsTab apps={apps} initialPlatform={initialPlatform} onOpen={open} />
+            <SubAppsTab
+              subUrl={subUrl}
+              profileName={subTitle || sId}
+              initialPlatform={initialPlatform}
+            />
           </Suspense>
         ),
       });

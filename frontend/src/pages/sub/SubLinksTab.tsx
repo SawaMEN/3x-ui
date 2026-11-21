@@ -67,6 +67,29 @@ export default function SubLinksTab({
 
   return (
     <div className="sub-rows">
+      {subUrl && (
+        <section className="sub-qr-card" aria-labelledby="sub-qr-heading">
+          <div className="sub-qr-code" aria-hidden="true">
+            <QRCode
+              value={subUrl}
+              size={128}
+              type="svg"
+              bordered={false}
+              color="#000000"
+              bgColor="#ffffff"
+            />
+          </div>
+          <div className="sub-qr-details">
+            <h2 id="sub-qr-heading" className="sub-qr-title">
+              {t('subscription.scanTitle')}
+            </h2>
+            <p>{t('subscription.scanHint')}</p>
+            <Button icon={<CopyOutlined aria-hidden />} onClick={() => onCopy(subUrl)}>
+              {t('pages.inbounds.copyLink')}
+            </Button>
+          </div>
+        </section>
+      )}
       {rows.map((row) => (
         <div key={row.kind} className="sub-row">
           <Tag color={row.color} className="sub-row-tag">
@@ -101,24 +124,6 @@ export default function SubLinksTab({
           </div>
         </div>
       ))}
-      {subUrl && (
-        <div className="sub-qr-card">
-          <div className="sub-qr-code">
-            <QRCode
-              value={subUrl}
-              size={112}
-              type="svg"
-              bordered={false}
-              color="#000000"
-              bgColor="#ffffff"
-            />
-          </div>
-          <div>
-            <div className="sub-qr-title">{t('subscription.scanTitle')}</div>
-            <div className="sub-muted">{t('subscription.scanHint')}</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
