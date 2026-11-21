@@ -48,7 +48,7 @@ func TestAutoHttpsConnRedirectsRequests(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer res.Body.Close()
-			if res.StatusCode != 307 || res.Header.Get("Location") != "https://example.test:2053/a%2Fb?q=1" {
+			if res.StatusCode != http.StatusTemporaryRedirect || res.Header.Get("Location") != "https://example.test:2053/a%2Fb?q=1" {
 				t.Fatalf("redirect was %d %q", res.StatusCode, res.Header.Get("Location"))
 			}
 			if err := <-finished; !errors.Is(err, io.EOF) {
