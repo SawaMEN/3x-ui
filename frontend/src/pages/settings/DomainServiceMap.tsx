@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import type { AllSetting } from '@/models/setting';
 import type { DomainConfigForm } from '@/schemas/domain-front';
 import { panelListenerAddress } from './panel-url';
+import { automaticSubscriptionOrigin } from './subscription-domains';
 import type { ManagedSniDomain } from '@/api/queries/useManagedSniDomains';
 export default function DomainServiceMap({
   settings,
@@ -30,6 +31,16 @@ export default function DomainServiceMap({
   const { t } = useTranslation();
   const l = (k: string) => t('pages.settings.domains.redesign.' + k);
   const panelAddress = panelListenerAddress(settings, window.location.hostname);
+  const subscriptionOrigin =
+    settings?.subPublicURL.trim() || automaticSubscriptionOrigin(draft, settings);
+  let subscriptionAddress: URL | undefined;
+  if (subscriptionOrigin) {
+    try {
+      subscriptionAddress = new URL(subscriptionOrigin);
+    } catch {
+      // The explicit address may still be incomplete while editing.
+    }
+  }
   const tiles = [
     {
       key: 'panel',
@@ -43,9 +54,9 @@ export default function DomainServiceMap({
       key: 'subscription',
       icon: <LinkOutlined />,
       title: l('subscription'),
-      value: draft.subscriptionDomain || l('notAssigned'),
-      detail: draft.subscriptionDomain
-        ? `${l('gateway')} · HTTPS · ${draft.publicPort}`
+      value: subscriptionAddress?.hostname || draft.subscriptionDomain || l('notAssigned'),
+      detail: subscriptionAddress
+        ? `${subscriptionAddress.protocol === 'http:' ? 'HTTP' : 'HTTPS'} · ${subscriptionAddress.port || (subscriptionAddress.protocol === 'http:' ? 80 : 443)}`
         : l('chooseDomain'),
       onClick: onSubscription,
       disabled: subscriptionDisabled,

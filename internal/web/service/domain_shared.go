@@ -2,6 +2,7 @@ package service
 
 import (
 	"crypto/tls"
+	"errors"
 	"net/http"
 	"sync"
 
@@ -20,11 +21,11 @@ var domainSubscription struct {
 	active *domainSubscriptionListener
 }
 
-func registeredDomainSubscriptionHandler(listen string, port int, secure bool) http.Handler {
+func registeredDomainSubscriptionListener(listen string, port int) *domainSubscriptionListener {
 	domainSubscription.Lock()
 	defer domainSubscription.Unlock()
-	if active := domainSubscription.active; active != nil && active.listen == listen && active.port == port && active.secure == secure {
-		return active.handler
+	if active := domainSubscription.active; active != nil && active.listen == listen && active.port == port {
+		return active
 	}
 	return nil
 }
@@ -77,4 +78,22 @@ func domainSharesListener(cfg domainfront.DomainFrontConfig, listen string, port
 		return false, false
 	}
 	return !tls && cfg.HTTPPort == port, tls && cfg.HTTPSPort == port
+}
+
+func DomainSubscriptionTLS(domain string, fallback func(*tls.ClientHelloInfo) (*tls.Certificate, error)) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		domainFrontState.Lock()
+		manager := domainFrontState.manager
+		domainFrontState.Unlock()
+		if manager != nil {
+			cert, err := manager.SubscriptionCertificate(hello, domain)
+			if cert != nil || (err != nil && fallback == nil) {
+				return cert, err
+			}
+		}
+		if fallback != nil {
+			return fallback(hello)
+		}
+		return nil, errors.New("managed subscription certificate is unavailable for this server name")
+	}
 }

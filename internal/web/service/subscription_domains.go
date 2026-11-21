@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 )
@@ -23,18 +24,71 @@ func (s *SettingService) GetSubPublicURL() (string, error) {
 	if raw = strings.TrimSpace(raw); raw != "" {
 		return strings.TrimRight(raw, "/"), nil
 	}
-	cfg, err := s.GetDomainFrontConfig()
+	cfg, settings, err := s.subscriptionPublishingSettings()
 	if err != nil {
 		return "", err
 	}
-	if cfg.Enabled && cfg.SubscriptionDomain != "" {
-		host := cfg.SubscriptionDomain
-		if cfg.PublicPort != 443 {
-			host = net.JoinHostPort(host, strconv.Itoa(cfg.PublicPort))
-		}
-		return "https://" + host, nil
+	if !cfg.Enabled || cfg.SubscriptionDomain == "" {
+		return "", nil
 	}
-	return "", nil
+	port := cfg.PublicPort
+	if managedSubscriptionListenerDomain(cfg, settings) != "" {
+		port = settings.SubPort
+	}
+	host := cfg.SubscriptionDomain
+	if port != 443 {
+		host = net.JoinHostPort(host, strconv.Itoa(port))
+	}
+	return "https://" + host, nil
+}
+
+func (s *SettingService) subscriptionPublishingSettings() (domainfront.DomainFrontConfig, *entity.AllSetting, error) {
+	settings, err := s.GetAllSetting()
+	if err != nil {
+		return domainfront.DomainFrontConfig{}, nil, err
+	}
+	cfg, err := s.domainFrontConfig(settings)
+	return cfg, settings, err
+}
+
+// ManagedSubscriptionListenerDomain returns the gateway identity for direct
+// HTTPS on the configured subscription listener.
+func (s *SettingService) ManagedSubscriptionListenerDomain() (string, error) {
+	cfg, settings, err := s.subscriptionPublishingSettings()
+	if err != nil {
+		return "", err
+	}
+	return managedSubscriptionListenerDomain(cfg, settings), nil
+}
+
+func managedSubscriptionListenerDomain(cfg domainfront.DomainFrontConfig, settings *entity.AllSetting) string {
+	name := cfg.SubscriptionDomain
+	if !cfg.Enabled || name == "" || !settings.SubEnable || net.ParseIP(settings.SubListen).IsLoopback() {
+		return ""
+	}
+	for _, d := range cfg.Domains {
+		if d.Name != name || !d.Enabled || (d.Mode != "direct" && d.Mode != "sub_link_only") {
+			continue
+		}
+		if raw := strings.TrimSpace(settings.SubPublicURL); raw != "" {
+			u, err := url.Parse(raw)
+			if err != nil || u.Scheme != "https" || !strings.EqualFold(strings.TrimSuffix(u.Hostname(), "."), name) {
+				return ""
+			}
+			port := 443
+			if u.Port() != "" {
+				port, _ = strconv.Atoi(u.Port())
+			}
+			if port == settings.SubPort {
+				return name
+			}
+			return ""
+		}
+		if cfg.PublicPort == cfg.HTTPSPort && strings.EqualFold(strings.TrimSuffix(settings.SubDomain, "."), name) {
+			return name
+		}
+	}
+	return ""
 }
 
 func (s *SettingService) GetSubCDNEnable() (bool, error) {

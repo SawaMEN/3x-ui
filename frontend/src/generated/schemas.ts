@@ -2427,6 +2427,9 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "name": {
         "type": "string"
+      },
+      "pending": {
+        "type": "boolean"
       }
     },
     "required": [

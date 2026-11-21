@@ -201,3 +201,44 @@ func TestRestrictedSubscriptionUsesManagedDomainAfterSettingsSave(t *testing.T) 
 		t.Fatalf("restricted hosts = %#v, %v", hosts, err)
 	}
 }
+
+func TestManagedSubscriptionUsesConfiguredListenerPort(t *testing.T) {
+	setupConflictDB(t)
+	s := &SettingService{}
+	const name = "subscriptions.example.com"
+	cfg := domainfront.DefaultConfig()
+	cfg.Enabled, cfg.SubscriptionDomain = true, name
+	cfg.Domains = []domainfront.DomainFrontDomain{{Name: name, Enabled: true, Mode: "sub_link_only", TLS: "auto"}}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string]string{"domainFrontConfig": string(raw), "subDomain": name, "subPort": "8443"} {
+		if err := s.setString(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		override, listen, wantURL, wantDomain string
+	}{
+		{"", "", "https://" + name + ":8443", name},
+		{"https://" + name + ":8443", "", "https://" + name + ":8443", name},
+		{"https://" + name + ":9443", "", "https://" + name + ":9443", ""},
+		{"", "127.0.0.1", "https://" + name, ""},
+	} {
+		t.Run(tc.override+tc.listen, func(t *testing.T) {
+			if err := s.setString("subPublicURL", tc.override); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.setString("subListen", tc.listen); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := s.GetSubPublicURL(); err != nil || got != tc.wantURL {
+				t.Fatalf("public subscription URL = %q, %v, want %q", got, err, tc.wantURL)
+			}
+			if got, err := s.ManagedSubscriptionListenerDomain(); err != nil || got != tc.wantDomain {
+				t.Fatalf("subscription listener identity = %q, %v, want %q", got, err, tc.wantDomain)
+			}
+		})
+	}
+}

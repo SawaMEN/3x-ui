@@ -21,6 +21,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
@@ -281,24 +282,23 @@ func managedDomainFront() *domainfront.Manager {
 }
 
 func (s *SettingService) GetDomainFrontConfig() (domainfront.DomainFrontConfig, error) {
+	settings, err := s.GetAllSetting()
+	if err != nil {
+		return domainfront.DefaultConfig(), err
+	}
+	return s.domainFrontConfig(settings)
+}
+
+func (s *SettingService) domainFrontConfig(settings *entity.AllSetting) (domainfront.DomainFrontConfig, error) {
 	raw, err := s.getString("domainFrontConfig")
 	cfg := domainfront.DefaultConfig()
 	if err != nil {
 		return cfg, err
 	}
 	if strings.TrimSpace(raw) == "" {
-		settings, err := s.GetAllSetting()
-		if err != nil {
-			return cfg, err
-		}
-		return privateDomainFrontConfig(rootRedirectDomainConfig(seedDomainFront(settings), settings)), nil
-	}
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		cfg = seedDomainFront(settings)
+	} else if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		return cfg, fmt.Errorf("domain configuration: %w", err)
-	}
-	settings, err := s.GetAllSetting()
-	if err != nil {
-		return cfg, err
 	}
 	return privateDomainFrontConfig(rootRedirectDomainConfig(cfg, settings)), nil
 }
@@ -326,6 +326,18 @@ func DomainFrontStatus() (domainfront.DomainFrontStatus, error) {
 	result := managedDomainFront().StatusWithCertificates(cfg, files)
 	result.ExistingCertificates = s.existingDomainCertificates()
 	return result, nil
+}
+
+// DomainFrontLiveCertificateStatus reads the gateway's certificate state
+// without rescanning installer certificates or spawning external commands.
+func DomainFrontLiveCertificateStatus(cfg domainfront.DomainFrontConfig) domainfront.DomainFrontStatus {
+	domainFrontState.Lock()
+	manager := domainFrontState.manager
+	domainFrontState.Unlock()
+	if manager == nil {
+		return domainfront.DomainFrontStatus{}
+	}
+	return manager.Status(cfg)
 }
 
 func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (domainfront.DomainFrontStatus, error) {
@@ -462,6 +474,10 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		return domainfront.Backend{}, err
 	}
 	subTLS := settings.SubCertFile != "" && settings.SubKeyFile != ""
+	subListener := registeredDomainSubscriptionListener(settings.SubListen, settings.SubPort)
+	if subListener != nil {
+		subTLS = subListener.secure
+	}
 	backend := domainfront.Backend{
 		SubscriptionTarget: localDomainTarget(settings.SubListen, settings.SubPort, subTLS),
 		PanelPath:          settings.WebBasePath,
@@ -476,7 +492,9 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 	backend.SharedHTTP, backend.SharedHTTPS = domainSharesListener(cfg, settings.WebListen, panelPort, settings.WebCertFile != "" && settings.WebKeyFile != "")
 	if settings.SubEnable {
 		sharedHTTP, sharedHTTPS := domainSharesListener(cfg, settings.SubListen, settings.SubPort, subTLS)
-		backend.SubscriptionHandler = registeredDomainSubscriptionHandler(settings.SubListen, settings.SubPort, subTLS)
+		if subListener != nil {
+			backend.SubscriptionHandler = subListener.handler
+		}
 		backend.SharedHTTP = backend.SharedHTTP || sharedHTTP
 		backend.SharedHTTPS = backend.SharedHTTPS || sharedHTTPS
 	}

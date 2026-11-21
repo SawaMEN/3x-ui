@@ -96,3 +96,17 @@ func (m *Manager) RefreshRoutes(backend Backend) error {
 	}
 	return nil
 }
+
+// SubscriptionCertificate reuses the running gateway identity for its
+// canonical subscription domain on the separate subscription listener.
+func (m *Manager) SubscriptionCertificate(hello *tls.ClientHelloInfo, domain string) (*tls.Certificate, error) {
+	m.mu.Lock()
+	r := m.runtime
+	if r == nil || r.cfg.SubscriptionDomain != domain || !strings.EqualFold(strings.TrimSuffix(hello.ServerName, "."), domain) {
+		m.mu.Unlock()
+		return nil, nil
+	}
+	get := r.tlsConfig.GetCertificate
+	m.mu.Unlock()
+	return get(hello)
+}

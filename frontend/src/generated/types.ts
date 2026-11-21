@@ -564,6 +564,7 @@ export interface DomainFrontCheck {
   expiresAt: number;
   issuer: string;
   name: string;
+  pending?: boolean;
 }
 
 export interface DomainFrontConfig {

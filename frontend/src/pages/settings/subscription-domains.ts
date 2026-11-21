@@ -1,4 +1,36 @@
+import type { DomainFrontConfig } from '@/generated/zod';
 import type { AllSetting } from '@/models/setting';
+
+export function supportsManagedSubscriptionListener(
+  config: DomainFrontConfig | undefined,
+  settings: AllSetting | undefined,
+): boolean {
+  return Boolean(
+    config?.enabled &&
+    settings?.subEnable &&
+    !/^(?:127\.|::1$)/.test(settings.subListen) &&
+    config.domains.some(
+      (domain) =>
+        domain.enabled &&
+        domain.name === config.subscriptionDomain &&
+        ['direct', 'sub_link_only'].includes(domain.mode),
+    ),
+  );
+}
+
+export function automaticSubscriptionOrigin(
+  config: DomainFrontConfig | undefined,
+  settings?: AllSetting,
+): string {
+  if (!config?.enabled || !config.subscriptionDomain) return '';
+  const port =
+    supportsManagedSubscriptionListener(config, settings) &&
+    config.publicPort === config.httpsPort &&
+    settings?.subDomain.trim().toLowerCase().replace(/\.$/, '') === config.subscriptionDomain
+      ? settings.subPort
+      : config.publicPort;
+  return `https://${config.subscriptionDomain}${port === 443 ? '' : `:${port}`}`;
+}
 
 export function subscriptionCaddyConfig(
   settings: Pick<

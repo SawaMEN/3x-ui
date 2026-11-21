@@ -3,7 +3,11 @@ import { useTranslation } from 'react-i18next';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
 import { useDomainFrontStatus } from '@/api/queries/useDomainFrontStatus';
-import { subscriptionCaddyConfig } from './subscription-domains';
+import {
+  automaticSubscriptionOrigin,
+  subscriptionCaddyConfig,
+  supportsManagedSubscriptionListener,
+} from './subscription-domains';
 
 export default function SubscriptionDomains({
   allSetting,
@@ -17,13 +21,12 @@ export default function SubscriptionDomains({
   const managed =
     status?.config.enabled && status.config.subscriptionDomain ? status.config : undefined;
   const domain = managed?.domains.find((item) => item.name === managed.subscriptionDomain);
-  const automaticURL = managed
-    ? `https://${managed.subscriptionDomain}${managed.publicPort === 443 ? '' : `:${managed.publicPort}`}`
-    : '';
+  const directListener = supportsManagedSubscriptionListener(managed, allSetting);
+  const automaticURL = automaticSubscriptionOrigin(managed, allSetting);
+  const automaticPort = automaticURL ? Number(new URL(automaticURL).port || 443) : undefined;
   const overridden = !!allSetting.subPublicURL.trim();
   const publicURL = allSetting.subPublicURL;
   const usingManaged = !!managed && !overridden;
-  const config = usingManaged ? '' : subscriptionCaddyConfig(allSetting);
   let origin: URL | undefined;
   try {
     origin = new URL(publicURL || automaticURL);
@@ -37,6 +40,13 @@ export default function SubscriptionDomains({
     ]),
   ];
   const port = origin ? Number(origin.port || (origin.protocol === 'http:' ? 80 : 443)) : 443;
+  const usingSubscriptionListener =
+    directListener &&
+    origin?.protocol === 'https:' &&
+    origin.hostname.replace(/\.$/, '') === managed?.subscriptionDomain &&
+    port === allSetting.subPort;
+  const config =
+    usingManaged || usingSubscriptionListener ? '' : subscriptionCaddyConfig(allSetting);
   function selectDomains(domains: string[], nextPort = port) {
     const names = [...new Set(domains.map((name) => name.trim().toLowerCase()).filter(Boolean))];
     if (!names.length) return;
@@ -45,7 +55,7 @@ export default function SubscriptionDomains({
     const followsGateway =
       managed &&
       names[0] === managed.subscriptionDomain &&
-      nextPort === managed.publicPort &&
+      nextPort === automaticPort &&
       scheme === 'https:';
     updateSetting({
       subRestrictDomains: true,
@@ -123,7 +133,8 @@ export default function SubscriptionDomains({
         selected.some((name) =>
           status.config.domains.some((item) => item.enabled && item.name === name),
         ) &&
-        port !== status.config.publicPort && (
+        port !== status.config.publicPort &&
+        !usingSubscriptionListener && (
           <Alert type="warning" showIcon title={t('pages.settings.subGatewayPortMismatch')} />
         )}
       {managed && (

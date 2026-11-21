@@ -317,6 +317,7 @@ export default function DomainFrontTab({
       const saved = DomainConfigFormSchema.parse(next.config);
       setDraft(saved);
       markSaved(saved);
+      setChecks({});
       queryClient.setQueryData(keys.settings.domains(), next);
       void queryClient.invalidateQueries({ queryKey: ['settings', 'managed-sni'] });
       void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
@@ -368,11 +369,19 @@ export default function DomainFrontTab({
   async function check(name: string) {
     setChecking(name);
     try {
-      const msg = await HttpUtil.post('/panel/api/domains/check', { name }, { silent: true });
-      if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
-      const result = DomainFrontCheckSchema.parse(msg.obj);
-      setChecks((prev) => ({ ...prev, [name]: result }));
-      setExpanded((prev) => [...new Set([...prev, name])]);
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const msg = await HttpUtil.post('/panel/api/domains/check', { name }, { silent: true });
+        if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
+        const result = DomainFrontCheckSchema.parse(msg.obj);
+        setChecks((prev) => ({ ...prev, [name]: result }));
+        setExpanded((prev) => [...new Set([...prev, name])]);
+        if (!result.pending) {
+          if (attempt > 0) void statusQuery.refetch();
+          return;
+        }
+        if (attempt < 9) await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+      void statusQuery.refetch();
     } catch (e) {
       messageApi.error(e instanceof Error ? e.message : t('somethingWentWrong'));
     } finally {
@@ -393,6 +402,7 @@ export default function DomainFrontTab({
     let next = 0;
     let completed = 0;
     let failures = 0;
+    let pending = false;
     try {
       await Promise.all(
         Array.from({ length: Math.min(names.length, 3) }, async () => {
@@ -407,6 +417,7 @@ export default function DomainFrontTab({
               if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
               const result = DomainFrontCheckSchema.parse(msg.obj);
               if (result.error) failures++;
+              if (result.pending) pending = true;
               setChecks((prev) => ({ ...prev, [name]: result }));
             } catch (error) {
               failures++;
@@ -433,6 +444,7 @@ export default function DomainFrontTab({
         messageApi.warning(
           t('pages.settings.domains.workspace.auditWarnings', { count: failures }),
         );
+      else if (pending) messageApi.info(label('publicTLSPending'));
       else messageApi.success(t('pages.settings.domains.workspace.auditSuccess'));
     } finally {
       setAuditing(false);

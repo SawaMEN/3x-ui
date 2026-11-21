@@ -616,7 +616,8 @@ export const EXAMPLES: Record<string, unknown> = {
     "error": "",
     "expiresAt": 0,
     "issuer": "",
-    "name": ""
+    "name": "",
+    "pending": false
   },
   "DomainFrontConfig": {
     "acceptTerms": false,

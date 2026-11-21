@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -87,5 +88,41 @@ func TestDomainAPIApplyPersistsConfigurationAndRejectsRoleViolations(t *testing.
 	}
 	if checked.Success {
 		t.Fatal("DNS/TLS probe accepted an unconfigured domain")
+	}
+}
+
+func TestSubscriptionTLSProbeUsesAdvertisedPort(t *testing.T) {
+	const name = "subs.example.com"
+	for _, test := range []struct {
+		origin string
+		want   int
+	}{
+		{"https://subs.example.com:8443", 8443},
+		{"https://subs.example.com", 443},
+		{"https://other.example.com:8443", 9443},
+		{"http://subs.example.com:8080", 9443},
+	} {
+		if got := subscriptionTLSProbePort(name, test.origin, 9443); got != test.want {
+			t.Errorf("port for %s = %d, want %d", test.origin, got, test.want)
+		}
+	}
+}
+
+func TestPublicTLSCheckDistinguishesPendingCertificateFromFailure(t *testing.T) {
+	const name = "subs.example.com"
+	certificate := domainfront.DomainFrontCertificate{Name: name, Source: "gateway", State: "pending"}
+	status := domainfront.DomainFrontStatus{Running: true, Certificates: []domainfront.DomainFrontCertificate{certificate}}
+	handshakeErr := errors.New("remote error: tls: internal error")
+	result := domainfront.DomainFrontCheck{Name: name}
+	setPublicTLSCheckFailure(&result, handshakeErr, status)
+	if !result.Pending || result.Error != "" {
+		t.Fatalf("pending certificate: %+v", result)
+	}
+	status.Certificates[0].State = "error"
+	status.Certificates[0].Error = "ACME challenge failed"
+	result = domainfront.DomainFrontCheck{Name: name}
+	setPublicTLSCheckFailure(&result, handshakeErr, status)
+	if result.Pending || result.Error != "ACME challenge failed" {
+		t.Fatalf("failed issuance: %+v", result)
 	}
 }

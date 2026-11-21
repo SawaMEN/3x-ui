@@ -656,17 +656,26 @@ func (s *Server) Start() (err error) {
 		return err
 	}
 
-	var cert *network.FileCertificate
+	managedDomain, err := s.settingService.ManagedSubscriptionListenerDomain()
+	if err != nil {
+		return err
+	}
+	var getCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 	if certFile != "" || keyFile != "" {
 		domain, err := s.settingService.GetSubDomain()
 		if err != nil {
 			return err
 		}
-		cert, err = network.NewNamedFileCertificate(certFile, keyFile, normalizeRequestHost(domain))
+		cert, err := network.NewNamedFileCertificate(certFile, keyFile, normalizeRequestHost(domain))
 		if err != nil {
 			return fmt.Errorf("subscription TLS certificate: %w", err)
 		}
+		getCertificate = cert.GetCertificate
 	}
+	if managedDomain != "" {
+		getCertificate = service.DomainSubscriptionTLS(managedDomain, getCertificate)
+	}
+	secure := getCertificate != nil
 
 	listenAddr := net.JoinHostPort(listen, strconv.Itoa(port))
 	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", listenAddr)
@@ -674,9 +683,9 @@ func (s *Server) Start() (err error) {
 		return err
 	}
 
-	if cert != nil {
+	if secure {
 		c := &tls.Config{
-			GetCertificate: service.DomainFrontTLS(cert.GetCertificate, listen, port),
+			GetCertificate: service.DomainFrontTLS(getCertificate, listen, port),
 			NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
 		}
 		listener = network.NewAutoHttpsListener(listener)
@@ -686,12 +695,12 @@ func (s *Server) Start() (err error) {
 		logger.Info("Sub server running HTTP on", listener.Addr())
 	}
 	s.listener = listener
-	s.unregisterDomainHandler = service.RegisterDomainSubscriptionHandler(listen, port, cert != nil, engine)
+	s.unregisterDomainHandler = service.RegisterDomainSubscriptionHandler(listen, port, secure, engine)
 
 	s.routerMu.Lock()
 	s.httpServer = &http.Server{
 		ErrorLog: logger.StandardLogger(),
-		Handler:  service.DomainFrontHandler(engine, listen, port, cert != nil),
+		Handler:  service.DomainFrontHandler(engine, listen, port, secure),
 		// The subscription server is the most exposed (public) listener; without
 		// these a few slow-header connections exhaust it (Slowloris). Mirrors the
 		// panel server timeouts in internal/web/web.go.

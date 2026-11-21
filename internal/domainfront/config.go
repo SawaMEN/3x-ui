@@ -322,6 +322,7 @@ type DomainFrontCheck struct {
 	DaysLeft  int      `json:"daysLeft"`
 	Issuer    string   `json:"issuer"`
 	Error     string   `json:"error"`
+	Pending   bool     `json:"pending,omitempty"`
 }
 
 // UsesManagedCertificates reports whether this host must issue certificates.

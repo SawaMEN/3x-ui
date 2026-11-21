@@ -255,6 +255,9 @@ export default function DomainHostList({
                       {l('publicTLS')}: {result.issuer} · {result.daysLeft} {l('days')}
                     </Typography.Text>
                   )}
+                  {result.pending && !cert?.expiresAt && !cert?.error && (
+                    <Typography.Text type="secondary">{l('publicTLSPending')}</Typography.Text>
+                  )}
                   {result.error && <Typography.Text type="danger">{result.error}</Typography.Text>}
                   {domain.mode === 'cdn' && result.expiresAt > 0 && (
                     <Typography.Text type="secondary">{l('publicTLSDesc')}</Typography.Text>

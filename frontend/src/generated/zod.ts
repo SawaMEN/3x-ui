@@ -589,6 +589,7 @@ export const DomainFrontCheckSchema = z.object({
   expiresAt: z.number().int(),
   issuer: z.string(),
   name: z.string(),
+  pending: z.boolean().optional(),
 });
 export type DomainFrontCheck = z.infer<typeof DomainFrontCheckSchema>;
 

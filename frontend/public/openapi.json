@@ -2453,6 +2453,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "pending": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -18566,7 +18569,8 @@
                     "error": "",
                     "expiresAt": 0,
                     "issuer": "",
-                    "name": ""
+                    "name": "",
+                    "pending": false
                   }
                 }
               }

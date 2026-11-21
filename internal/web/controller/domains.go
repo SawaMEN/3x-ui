@@ -9,6 +9,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -415,7 +416,8 @@ func (a *DomainController) check(c *gin.Context) {
 		jsonObj(c, nil, err)
 		return
 	}
-	cfg, err := (&service.SettingService{}).GetDomainFrontConfig()
+	settings := &service.SettingService{}
+	cfg, err := settings.GetDomainFrontConfig()
 	if err != nil {
 		jsonObj(c, nil, err)
 		return
@@ -433,6 +435,14 @@ func (a *DomainController) check(c *gin.Context) {
 	if !found {
 		jsonObj(c, nil, fmt.Errorf("save this domain before checking DNS/TLS"))
 		return
+	}
+	if req.Name == cfg.SubscriptionDomain {
+		origin, err := settings.GetSubPublicURL()
+		if err != nil {
+			jsonObj(c, nil, err)
+			return
+		}
+		port = subscriptionTLSProbePort(req.Name, origin, port)
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 8*time.Second)
 	defer cancel()
@@ -459,13 +469,45 @@ func (a *DomainController) check(c *gin.Context) {
 	}
 	cert, err := probePublicDomainTLS(ctx, req.Name, port, ips)
 	if err != nil {
-		result.Error = err.Error()
+		setPublicTLSCheckFailure(&result, err, service.DomainFrontLiveCertificateStatus(cfg))
 	} else {
 		result.ExpiresAt = cert.NotAfter.Unix()
 		result.DaysLeft = int(math.Ceil(time.Until(cert.NotAfter).Hours() / 24))
 		result.Issuer = cert.Issuer.CommonName
 	}
 	jsonObj(c, result, nil)
+}
+
+func setPublicTLSCheckFailure(result *domainfront.DomainFrontCheck, err error, status domainfront.DomainFrontStatus) {
+	result.Error = err.Error()
+	if !status.Running {
+		return
+	}
+	for _, cert := range status.Certificates {
+		if cert.Name != result.Name || cert.Source != "gateway" {
+			continue
+		}
+		if cert.State == "pending" {
+			result.Pending, result.Error = true, ""
+		} else if cert.Error != "" {
+			result.Error = cert.Error
+		}
+		return
+	}
+}
+
+func subscriptionTLSProbePort(name, origin string, gatewayPort int) int {
+	u, err := url.Parse(origin)
+	if err != nil || u.Scheme != "https" || !strings.EqualFold(strings.TrimSuffix(u.Hostname(), "."), name) {
+		return gatewayPort
+	}
+	if u.Port() == "" {
+		return 443
+	}
+	if port, err := strconv.Atoi(u.Port()); err == nil && port > 0 && port <= 65535 {
+		return port
+	}
+	return gatewayPort
 }
 
 func probePublicDomainTLS(ctx context.Context, name string, port int, ips []net.IPAddr) (*x509.Certificate, error) {
