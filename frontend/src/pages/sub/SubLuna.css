@@ -288,9 +288,6 @@
   .sub-luna .sub-stat {
     padding: 10px;
   }
-  .sub-luna .sub-app-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .sub-luna-connect.ant-btn {
     width: 100%;
   }

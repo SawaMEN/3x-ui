@@ -1,60 +1,70 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Segmented } from 'antd';
-import { AndroidOutlined, AppleOutlined } from '@ant-design/icons';
+import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
 
-import { APP_ICONS } from './appIcons';
-import type { AppPlatform, SubApp } from './subPageModel';
+import happIcon from './app-icons/happ.svg';
+import { APP_PLATFORMS, buildSubApps, type AppPlatform } from './subPageModel';
 
 interface SubAppsTabProps {
-  apps: Record<AppPlatform, SubApp[]>;
+  subUrl: string;
+  profileName: string;
   initialPlatform: AppPlatform;
-  onOpen: (url: string) => void;
 }
 
-const PLATFORM_OPTIONS = [
-  { value: 'android' as const, label: 'Android', icon: <AndroidOutlined aria-hidden /> },
-  { value: 'ios' as const, label: 'iOS', icon: <AppleOutlined aria-hidden /> },
-];
+const PLATFORM_OPTIONS = (Object.keys(APP_PLATFORMS) as AppPlatform[]).map((value) => ({
+  value,
+  label: APP_PLATFORMS[value],
+}));
 
-function AppIcon({ name }: { name: string }) {
-  const icon = APP_ICONS[name];
-  if (!icon) {
-    return (
-      <span className="sub-app-mark" aria-hidden="true">
-        {name.charAt(0)}
-      </span>
-    );
-  }
-  if (icon.tinted) {
-    const mask = `url("${icon.src}")`;
-    return (
-      <span className="sub-app-mark" aria-hidden="true">
-        <span className="sub-app-glyph" style={{ maskImage: mask, WebkitMaskImage: mask }} />
-      </span>
-    );
-  }
-  return <img className="sub-app-logo" src={icon.src} alt="" width={32} height={32} />;
-}
-
-export default function SubAppsTab({ apps, initialPlatform, onOpen }: SubAppsTabProps) {
+export default function SubAppsTab({ subUrl, profileName, initialPlatform }: SubAppsTabProps) {
   const { t } = useTranslation();
-  const [platform, setPlatform] = useState<AppPlatform>(initialPlatform);
+  const [platform, setPlatform] = useState(initialPlatform);
 
   return (
     <div className="sub-apps">
-      <Segmented<AppPlatform> value={platform} onChange={setPlatform} options={PLATFORM_OPTIONS} />
-      <div className="sub-app-grid">
-        {apps[platform].map((app) => (
-          <div key={app.name} className="sub-row">
-            <AppIcon name={app.name} />
-            <span className="sub-app-name">{app.name}</span>
-            <Button type="primary" size="small" onClick={() => onOpen(app.url)}>
-              {t('add')}
-            </Button>
-          </div>
+      <Segmented<AppPlatform>
+        block
+        value={platform}
+        onChange={setPlatform}
+        options={PLATFORM_OPTIONS}
+        aria-label={t('subscription.tabApps')}
+      />
+      <ul className="sub-app-list">
+        {buildSubApps(platform, subUrl, profileName).map(({ name, url, downloadUrl }) => (
+          <li key={name} className="sub-row sub-app-row">
+            <div className="sub-app-identity">
+              <span className="sub-app-mark" aria-hidden="true">
+                {name === 'Happ' ? (
+                  <span className="sub-app-glyph" style={{ maskImage: `url("${happIcon}")` }} />
+                ) : (
+                  'H'
+                )}
+              </span>
+              <span className="sub-app-name">{name}</span>
+            </div>
+            <div className="sub-app-actions">
+              <Button
+                href={downloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                icon={<DownloadOutlined aria-hidden />}
+                aria-label={`${t('download')} · ${name}`}
+              >
+                {t('download')}
+              </Button>
+              <Button
+                type="primary"
+                href={url}
+                icon={<PlusOutlined aria-hidden />}
+                aria-label={`${t('add')} · ${name}`}
+              >
+                {t('add')}
+              </Button>
+            </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }

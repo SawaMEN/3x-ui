@@ -41,71 +41,51 @@ export function usagePercent(usedByte: number, totalByte: number): number {
   return Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0;
 }
 
-export type AppPlatform = 'android' | 'ios';
+export const APP_PLATFORMS = {
+  android: 'Android',
+  ios: 'iOS',
+  windows: 'Windows',
+  macos: 'macOS',
+  linux: 'Linux',
+} as const;
 
-export function detectPlatform(userAgent: string): AppPlatform {
-  // iPadOS sends a Macintosh UA, and App Store clients also run on Apple-silicon Macs.
-  if (/iphone|ipad|ipod|macintosh/i.test(userAgent)) return 'ios';
+export type AppPlatform = keyof typeof APP_PLATFORMS;
+
+export function detectPlatform(userAgent: string, maxTouchPoints = 0): AppPlatform {
+  if (/iphone|ipad|ipod/i.test(userAgent)) return 'ios';
+  if (/android/i.test(userAgent)) return 'android';
+  if (/windows/i.test(userAgent)) return 'windows';
+  // iPadOS Safari uses a Macintosh user agent in desktop mode.
+  if (/macintosh|mac os x/i.test(userAgent)) return maxTouchPoints > 1 ? 'ios' : 'macos';
+  if (/linux/i.test(userAgent)) return 'linux';
   return 'android';
 }
 
-export interface SubApp {
-  name: string;
-  url: string;
-}
+const HIDDIFY_RELEASES = 'https://github.com/hiddify/hiddify-app/releases';
+const HAPP_DESKTOP = 'https://github.com/Happ-proxy/happ-desktop/releases/latest';
 
-export interface SubAppSource {
-  subUrl: string;
-  sId: string;
-  subTitle: string;
-}
+const HIDDIFY_DOWNLOADS: Record<AppPlatform, string> = {
+  android: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
+  ios: 'https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532',
+  windows: `${HIDDIFY_RELEASES}/latest/download/Hiddify-Windows-Setup-x64.exe`,
+  macos: `${HIDDIFY_RELEASES}/latest/download/Hiddify-MacOS.dmg`,
+  linux: `${HIDDIFY_RELEASES}/latest`,
+};
 
-export function buildSubApps({
-  subUrl,
-  sId,
-  subTitle,
-}: SubAppSource): Record<AppPlatform, SubApp[]> {
-  const encSub = encodeURIComponent(subUrl);
-  const profileName = encodeURIComponent(subTitle || sId);
+const HAPP_DOWNLOADS: Record<AppPlatform, string> = {
+  android: 'https://play.google.com/store/apps/details?id=com.happproxy',
+  ios: 'https://apps.apple.com/app/happ-proxy-utility/id6504287215',
+  windows: `${HAPP_DESKTOP}/download/setup-Happ.x64.exe`,
+  macos: `${HAPP_DESKTOP}/download/Happ.macOS.universal.dmg`,
+  linux: HAPP_DESKTOP,
+};
 
-  const v2box = {
-    name: 'V2Box',
-    url: `v2box://install-sub?url=${encSub}&name=${encodeURIComponent(sId)}`,
-  };
-  // sing-box imports a remote sing-box configuration, not the raw link list.
-  // The explicit format selector is handled by the subscription endpoint so the
-  // one-tap importer always receives a native sing-box document.
-  const singBoxSubUrl = `${subUrl}${subUrl.includes('?') ? '&' : '?'}format=sing-box`;
-  const encSingBoxSub = encodeURIComponent(singBoxSubUrl);
-  const singBox = {
-    name: 'Sing-box',
-    url: `sing-box://import-remote-profile?url=${encSingBoxSub}#${profileName}`,
-  };
-  const v2raytun = { name: 'V2RayTun', url: `v2raytun://import/${subUrl}` };
-  const happ = { name: 'Happ', url: `happ://add/${subUrl}` };
-  const incy = { name: 'Incy', url: `incy://add/${subUrl}` };
-  const rocketSource = `${subUrl}${subUrl.includes('?') ? '&' : '?'}flag=shadowrocket`;
-  const rocketRemark = encodeURIComponent(subTitle || sId || 'Subscription');
+export function buildSubApps(platform: AppPlatform, subUrl: string, profileName: string) {
+  const hiddifyImport = `hiddify://import/${subUrl}#${encodeURIComponent(profileName)}`;
 
-  return {
-    android: [
-      v2box,
-      { name: 'V2RayNG', url: `v2rayng://install-config?url=${encSub}` },
-      singBox,
-      v2raytun,
-      happ,
-      incy,
-    ],
-    ios: [
-      {
-        name: 'Shadowrocket',
-        url: `shadowrocket://add/sub://${btoa(rocketSource)}?remark=${rocketRemark}`,
-      },
-      v2box,
-      { name: 'Streisand', url: `streisand://import/${encSub}` },
-      v2raytun,
-      happ,
-      incy,
-    ],
-  };
+  return [
+    { name: 'Hiddify', url: hiddifyImport, downloadUrl: HIDDIFY_DOWNLOADS[platform] },
+    { name: 'Hiddify Beta', url: hiddifyImport, downloadUrl: HIDDIFY_RELEASES },
+    { name: 'Happ', url: `happ://add/${subUrl}`, downloadUrl: HAPP_DOWNLOADS[platform] },
+  ];
 }
