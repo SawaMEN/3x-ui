@@ -4,12 +4,20 @@ import { FormProvider, useForm } from 'react-hook-form';
 import MtprotoWebStatus from '@/pages/inbounds/form/protocols/MtprotoWebStatus';
 import { HttpUtil } from '@/utils';
 
-function Harness({ domain = '', inboundId }: { domain?: string; inboundId?: number }) {
+function Harness({
+  domain = '',
+  inboundId,
+  nodeId,
+}: {
+  domain?: string;
+  inboundId?: number;
+  nodeId?: number;
+}) {
   const methods = useForm({ defaultValues: { settings: { webProxy: { domain } } } });
   return (
     <FormProvider {...methods}>
       <input aria-label="domain" {...methods.register('settings.webProxy.domain')} />
-      <MtprotoWebStatus inboundId={inboundId} />
+      <MtprotoWebStatus inboundId={inboundId} nodeId={nodeId} />
     </FormProvider>
   );
 }
@@ -40,6 +48,30 @@ describe('MTProto WEB automation', () => {
       expect(HttpUtil.post).toHaveBeenCalledWith(
         '/panel/api/telemt/webproxy/preflight?inboundId=2',
         expect.objectContaining({ domain: 'web.example.com' }),
+        expect.any(Object),
+      ),
+    );
+  });
+
+  it('checks WEB Proxy on the assigned node when editing a remote inbound', async () => {
+    vi.mocked(HttpUtil.get).mockResolvedValue({ success: true, msg: '', obj: ready });
+    vi.mocked(HttpUtil.post).mockResolvedValue({
+      success: true,
+      msg: '',
+      obj: { ready: true, checks: [], warnings: [] },
+    });
+
+    render(<Harness domain="node.example.com" inboundId={100} nodeId={5} />);
+    await screen.findByText('TCP 443 is free');
+    expect(HttpUtil.get).toHaveBeenCalledWith(
+      '/panel/api/telemt/webproxy/status?inboundId=100&nodeId=5',
+      undefined,
+      { silent: true },
+    );
+    await waitFor(() =>
+      expect(HttpUtil.post).toHaveBeenCalledWith(
+        '/panel/api/telemt/webproxy/preflight?inboundId=100&nodeId=5',
+        expect.objectContaining({ domain: 'node.example.com' }),
         expect.any(Object),
       ),
     );

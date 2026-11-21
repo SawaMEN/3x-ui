@@ -321,6 +321,10 @@ export default function InboundFormModal({
     };
   }, [open]);
 
+  const nodeTelemtAvailable = availableNodes?.some(
+    (node) =>
+      node.enable && node.status === 'online' && nodeSupportsProtocol(node, Protocols.MTPROTO),
+  );
   const protocolOptions = useMemo(
     () =>
       PROTOCOL_OPTIONS.filter(
@@ -338,9 +342,17 @@ export default function InboundFormModal({
             Protocols.VETROFF,
           ].some((value) => value === option.value) ||
           installedProtocols[option.value] === true ||
+          (option.value === Protocols.MTPROTO && nodeTelemtAvailable) ||
           (mode === 'edit' && protocol === option.value),
       ),
-    [mode, protocol, installedProtocols, openFluxInstalled, dbInbound?.protocol],
+    [
+      mode,
+      protocol,
+      installedProtocols,
+      openFluxInstalled,
+      nodeTelemtAvailable,
+      dbInbound?.protocol,
+    ],
   );
   const isNodeEligible = !!NODE_ELIGIBLE_PROTOCOLS[protocol];
   /*
@@ -1031,7 +1043,10 @@ export default function InboundFormModal({
       )}
 
       {protocol === Protocols.MTPROTO && (
-        <MtprotoFields inboundId={mode === 'edit' ? dbInbound?.id : undefined} />
+        <MtprotoFields
+          inboundId={mode === 'edit' ? dbInbound?.id : undefined}
+          nodeId={mode === 'edit' ? dbInbound?.nodeId : wNodeId}
+        />
       )}
 
       {protocol === Protocols.VK_TURN_PROXY && <VkTurnProxyFields />}

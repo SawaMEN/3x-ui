@@ -202,3 +202,31 @@ func TestManagedTelemtWebRateLimitRendering(t *testing.T) {
 		t.Fatalf("incorrect native WEB speed limit: %+v", rate)
 	}
 }
+
+func TestValidateMtprotoWebInboundOnNodes(t *testing.T) {
+	setupConflictDB(t)
+	nodeID, otherNodeID := 1, 2
+	const web = `{"webProxy":{"enabled":true,"domain":"web.example.com","frontend":"nginx"},"clients":[]}`
+	seedInboundConflict(t, "local-web", "", 443, model.MTProto, "", web)
+	seedInboundConflictNode(t, "other-node-web", "", 443, model.MTProto, "", web, &otherNodeID)
+
+	edited := model.Inbound{Protocol: model.MTProto, NodeID: &nodeID, Enable: true, Port: 8443, Settings: web}
+	if err := ValidateMtprotoWebInbound(&edited); err != nil {
+		t.Fatalf("local and other node reservations must not block this node: %v", err)
+	}
+	if edited.Port != 443 {
+		t.Fatalf("node WEB port = %d, want 443", edited.Port)
+	}
+	seedInboundConflictNode(t, "same-node-web", "", 443, model.MTProto, "", web, &nodeID)
+	if err := ValidateMtprotoWebInbound(&edited); err == nil {
+		t.Fatal("a second WEB inbound on the same node was accepted")
+	}
+
+	var existing model.Inbound
+	if err := database.GetDB().Where("tag = ?", "same-node-web").First(&existing).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateMtprotoWebInbound(&existing); err != nil {
+		t.Fatalf("editing the node's existing WEB inbound failed: %v", err)
+	}
+}

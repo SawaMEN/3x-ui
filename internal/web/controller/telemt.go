@@ -12,6 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
@@ -115,7 +117,61 @@ func (a *TelemtController) getWebProxyStatus(c *gin.Context, inboundID int) serv
 }
 
 func (a *TelemtController) webProxyStatus(c *gin.Context) {
-	jsonObj(c, a.getWebProxyStatus(c, telemtWebEditingInboundID(c)), nil)
+	inboundID := telemtWebEditingInboundID(c)
+	remote, tag, err := telemtWebRemoteTarget(c, inboundID)
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	if remote != nil {
+		status, err := remote.TelemtWebStatus(c.Request.Context(), tag)
+		jsonObj(c, status, err)
+		return
+	}
+	status := a.getWebProxyStatus(c, inboundID)
+	if scope := c.GetString("api_token_scope"); scope == model.ApiScopeNodeSync || scope == model.ApiScopeNodeAdmin {
+		status.Link = ""
+		status.Links = nil
+	}
+	jsonObj(c, status, nil)
+}
+
+func telemtWebRemoteTarget(c *gin.Context, inboundID int) (*webruntime.Remote, string, error) {
+	nodeID, err := singBoxSessionNodeIDFromQuery(c)
+	if err != nil {
+		return nil, "", err
+	}
+	var tag string
+	if inboundID > 0 {
+		inbound, err := (&service.InboundService{}).GetInbound(inboundID)
+		if err != nil {
+			return nil, "", err
+		}
+		if nodeID != nil && (inbound.NodeID == nil || *nodeID != *inbound.NodeID) {
+			return nil, "", errors.New("selected node does not own this inbound")
+		}
+		nodeID, err = normalizeSingBoxSessionNodeTarget(c, inbound.NodeID)
+		if err != nil {
+			return nil, "", err
+		}
+		tag = inbound.Tag
+	}
+	if nodeID == nil {
+		return nil, "", nil
+	}
+	manager := webruntime.GetManager()
+	if manager == nil {
+		return nil, "", errors.New("runtime manager is not initialized")
+	}
+	rt, err := manager.RuntimeFor(nodeID)
+	if err != nil {
+		return nil, "", err
+	}
+	remote, ok := rt.(*webruntime.Remote)
+	if !ok {
+		return nil, "", errors.New("selected runtime does not support WEB Proxy inspection")
+	}
+	return remote, tag, nil
 }
 
 func telemtWebEditingInboundID(c *gin.Context) int {
@@ -145,9 +201,20 @@ func (a *TelemtController) webProxyPreflight(c *gin.Context) {
 		jsonMsg(c, "invalid WEB Proxy preflight request", err)
 		return
 	}
+	inboundID := telemtWebEditingInboundID(c)
+	remote, tag, err := telemtWebRemoteTarget(c, inboundID)
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	if remote != nil {
+		result, err := remote.TelemtWebPreflight(c.Request.Context(), tag, req)
+		jsonObj(c, result, err)
+		return
+	}
 	certFile, _ := a.settingService.GetCertFile()
 	keyFile, _ := a.settingService.GetKeyFile()
-	result, err := a.service.PreflightWebProxyForInbound(c.Request.Context(), req.Domain, req.TelemtWebProxyOptions, certFile, keyFile, telemtWebEditingInboundID(c))
+	result, err := a.service.PreflightWebProxyForInbound(c.Request.Context(), req.Domain, req.TelemtWebProxyOptions, certFile, keyFile, inboundID)
 	jsonObj(c, result, err)
 }
 
