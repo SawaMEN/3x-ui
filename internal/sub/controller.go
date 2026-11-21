@@ -423,6 +423,7 @@ func (a *SUBController) maybeServeSubPage(c *gin.Context) bool {
 	if !found || hwid.Active {
 		page.Result = []string{}
 		page.Emails = []string{}
+		page.TelegramRemarks = nil
 	}
 	a.serveSubPage(c, page.BasePath, page)
 	return true
@@ -448,7 +449,8 @@ func (a *SUBController) buildSubPageData(c *gin.Context) (PageData, bool) {
 	_, host, _, hostHeader := a.subService.ResolveRequest(c)
 	subReq := a.subService.ForRequest(host)
 	subReq.subscriptionBody = false
-	subs, emails, lastOnline, traffic, err := subReq.getSubs(subId)
+	telegramRemarks := make(map[string]string)
+	subs, emails, lastOnline, traffic, err := subReq.getSubsWithTelegramRemarks(subId, telegramRemarks)
 	if err != nil || (subs == nil && !a.hasEnabledMASQUESubscription(subId)) {
 		writeSubError(c, err)
 		return PageData{}, false
@@ -473,6 +475,14 @@ func (a *SUBController) buildSubPageData(c *gin.Context) (PageData, bool) {
 	metadata := a.metadataForSubRequest(func() *SubService { return subReq }, subId, "")
 	page := subReq.BuildPageData(subId, hostHeader, traffic, lastOnline, subs, emails, subURL, subJsonURL, subClashURL, basePathStr, metadata.Title, metadata.SupportURL)
 	page.SubAnnounce = metadata.Announce
+	for _, link := range page.Result {
+		if name := telegramRemarks[link]; name != "" {
+			if page.TelegramRemarks == nil {
+				page.TelegramRemarks = make(map[string]string)
+			}
+			page.TelegramRemarks[link] = name
+		}
+	}
 	page.SubFormatMode = a.formatMode(c)
 	if a.formatAllowed(c, "xray") {
 		jsonURL := subJsonURL
@@ -812,6 +822,9 @@ func (a *SUBController) serveSubPage(c *gin.Context, basePath string, page PageD
 	}
 
 	subData := a.subPageContext(page)
+	if len(page.TelegramRemarks) != 0 {
+		subData["telegramRemarks"] = page.TelegramRemarks
+	}
 	appearance, err := a.settingService.GetSubscriptionAppearance()
 	if err == nil {
 		subData["appearance"] = appearance

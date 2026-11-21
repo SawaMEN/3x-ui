@@ -48,6 +48,7 @@ const subSupportUrl = subData.subSupportUrl || '';
 const updateHours = Number(subData.subUpdates || 0);
 const announce = subData.announce || '';
 const links: string[] = Array.isArray(subData.links) ? subData.links : [];
+const telegramRemarks = subData.telegramRemarks;
 const linkEmails: string[] = Array.isArray(subData.emails) ? subData.emails : [];
 const totalByte = Number(subData.totalByte || 0);
 const usedByte =
@@ -185,7 +186,7 @@ export default function SubPage() {
         ),
       });
     }
-    const profiles = telegramProfiles(telemtData, links);
+    const profiles = telegramProfiles(telemtData, links, telegramRemarks);
     if (profiles.length > 0 || telemtLoading || telemtError) {
       items.push({
         key: 'telemt',
@@ -216,7 +217,7 @@ export default function SubPage() {
         ),
         children: (
           <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
-            <SubConfigsTab links={links} onCopy={copy} />
+            <SubConfigsTab links={links} telegramRemarks={telegramRemarks} onCopy={copy} />
           </Suspense>
         ),
       });

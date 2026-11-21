@@ -70,7 +70,8 @@ func serveTelemtSubscription(c *gin.Context) {
 	// This also rejects deleted or never-existing subIds consistently.
 	subReq := resolver.ForRequest(host)
 	subReq.subscriptionBody = false
-	subs, emails, _, _, err := subReq.getSubs(subID)
+	remarks := make(map[string]string)
+	subs, emails, _, _, err := subReq.getSubsWithTelegramRemarks(subID, remarks)
 	if err != nil || (subs == nil && len(emails) == 0) {
 		writeSubError(c, err)
 		return
@@ -114,9 +115,11 @@ func serveTelemtSubscription(c *gin.Context) {
 			logger.Debug("sub: Telemt personal profile unavailable:", err)
 		}
 
-		if link, err := telemt.SubscriptionWebProxyLink(); err == nil && link != "" {
-			payload.WebProxyEnabled = true
-			payload.WebProxy = link
+		if visibility.Web {
+			if link, err := telemt.SubscriptionWebProxyLink(); err == nil && link != "" {
+				payload.WebProxyEnabled = true
+				payload.WebProxy = link
+			}
 		}
 	}
 	seen := make(map[string]bool)
@@ -130,10 +133,10 @@ func serveTelemtSubscription(c *gin.Context) {
 	if payload.Personal != nil {
 		add(payload.Personal.Link, "")
 	}
-	add(payload.WebProxy, "Web Proxy")
+	add(payload.WebProxy, "")
 	for _, group := range subs {
 		for _, link := range splitLinkLines(group) {
-			add(link, "")
+			add(link, remarks[link])
 		}
 	}
 	for _, remote := range <-remoteProfiles {
@@ -179,11 +182,12 @@ func remoteTelegramSubscriptions(parent context.Context, subID string) []telemtS
 				if err != nil || !profile.Enabled {
 					continue
 				}
+				remark := strings.TrimSpace(node.Remark)
 				if profile.Personal != nil {
-					results[index].Proxies = append(results[index].Proxies, telemtSubscriptionProfile{Name: node.Name, Link: profile.Personal.Link})
+					results[index].Proxies = append(results[index].Proxies, telemtSubscriptionProfile{Name: remark, Link: profile.Personal.Link})
 				}
 				if profile.WebProxyEnabled && profile.WebProxy != "" {
-					results[index].Proxies = append(results[index].Proxies, telemtSubscriptionProfile{Name: node.Name + " · Web Proxy", Link: profile.WebProxy})
+					results[index].Proxies = append(results[index].Proxies, telemtSubscriptionProfile{Name: remark, Link: profile.WebProxy})
 				}
 			}
 		})

@@ -1,14 +1,22 @@
 import type { TelegramProxyProfile, TelegramSubscription } from '@/generated/types';
 
+export function telegramEndpoint({ host, port }: TelegramProxyProfile): string {
+  const [domain] = host.split('/', 1);
+  if (!port) return domain;
+  const address = domain.includes(':') && !domain.startsWith('[') ? `[${domain}]` : domain;
+  return `${address}:${port}`;
+}
+
 export function telegramProfiles(
   data: Partial<TelegramSubscription>,
   links: string[],
+  remarks?: Record<string, string>,
 ): TelegramProxyProfile[] {
   const candidates = [
     ...(data.proxies ?? []),
     ...(data.personal ? [data.personal] : []),
-    ...(data.webProxyEnabled && data.webProxy ? [{ link: data.webProxy, name: 'Web Proxy' }] : []),
-    ...links.map((link) => ({ link })),
+    ...(data.webProxyEnabled && data.webProxy ? [{ link: data.webProxy }] : []),
+    ...links.map((link) => ({ link, name: remarks?.[link] })),
   ];
   const result: TelegramProxyProfile[] = [];
   const seen = new Set<string>();
