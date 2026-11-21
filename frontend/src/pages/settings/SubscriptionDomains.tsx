@@ -6,8 +6,8 @@ import { SettingListItem } from '@/components/ui';
 import { useDomainFrontStatus } from '@/api/queries/useDomainFrontStatus';
 import {
   automaticSubscriptionOrigin,
+  configuredSubscriptionDomain,
   subscriptionCaddyConfig,
-  supportsManagedSubscriptionListener,
 } from './subscription-domains';
 
 function normalizeAlias(value: string): string {
@@ -26,15 +26,15 @@ export default function SubscriptionDomains({
   const { data: status } = useDomainFrontStatus();
   const gateway = status?.config;
   const automaticURL = automaticSubscriptionOrigin(gateway, allSetting);
-  const publicURL = allSetting.subPublicURL;
-  const followsGateway = Boolean(automaticURL && !publicURL.trim());
+  const followsGateway = Boolean(automaticURL);
+  const publicURL = automaticURL || allSetting.subPublicURL;
   const domains = gateway?.domains.filter(
     (domain) => domain.enabled && ['direct', 'cdn', 'relay', 'sub_link_only'].includes(domain.mode),
   );
-  const selectedDomain = domains?.find((domain) => domain.name === gateway?.subscriptionDomain);
+  const selectedDomain = configuredSubscriptionDomain(gateway);
   let origin: URL | undefined;
   try {
-    const parsed = new URL(publicURL.trim() || automaticURL);
+    const parsed = new URL(publicURL.trim());
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') origin = parsed;
   } catch {
     // The address can be incomplete while editing.
@@ -45,14 +45,8 @@ export default function SubscriptionDomains({
   const aliases = [
     ...new Set(allSetting.subAllowedDomains.split(/[,;\s]+/).map(normalizeAlias)),
   ].filter((name) => name && name !== originDomain);
-  const usingSubscriptionListener =
-    supportsManagedSubscriptionListener(gateway, allSetting) &&
-    origin?.protocol === 'https:' &&
-    originDomain === gateway?.subscriptionDomain &&
-    port === allSetting.subPort;
   const managedHost = gateway?.enabled && domains?.some((domain) => domain.name === originDomain);
-  const proxyConfig =
-    followsGateway || usingSubscriptionListener ? '' : subscriptionCaddyConfig(allSetting);
+  const proxyConfig = followsGateway ? '' : subscriptionCaddyConfig(allSetting);
 
   return (
     <>
@@ -61,15 +55,18 @@ export default function SubscriptionDomains({
         title={t('pages.settings.subPublicURL')}
         description={
           <>
-            {l('publicURLHelp')} <Link to="/settings#domains">{l('domainsAndTLS')}</Link>
+            {l(followsGateway ? 'managedURLHelp' : 'publicURLHelp')}{' '}
+            <Link to="/settings#domains">{l('domainsAndTLS')}</Link>
           </>
         }
       >
         <Input
           aria-label={t('pages.settings.subPublicURL')}
-          placeholder={automaticURL || 'https://sub.example.com:8443'}
+          placeholder="https://sub.example.com:8443"
+          readOnly={followsGateway}
           value={publicURL}
           onChange={(event) => {
+            if (followsGateway) return;
             const subPublicURL = event.target.value;
             updateSetting({
               subPublicURL,
@@ -78,7 +75,7 @@ export default function SubscriptionDomains({
           }}
         />
       </SettingListItem>
-      {managedHost && port !== gateway.publicPort && !usingSubscriptionListener && (
+      {managedHost && !followsGateway && port !== gateway.publicPort && (
         <Alert type="warning" showIcon title={t('pages.settings.subGatewayPortMismatch')} />
       )}
       <SettingListItem

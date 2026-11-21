@@ -372,7 +372,9 @@ describe('domain and TLS dashboard', () => {
       <MemoryRouter>
         <DomainFrontTab />
         <SubscriptionDomains
-          allSetting={new AllSetting({ subPublicURL: '', subCDNEnable: false })}
+          allSetting={
+            new AllSetting({ subPublicURL: 'https://old.example.com:9443', subCDNEnable: false })
+          }
           updateSetting={update}
         />
       </MemoryRouter>,
@@ -385,8 +387,8 @@ describe('domain and TLS dashboard', () => {
     const address = (await screen.findByRole('textbox', {
       name: 'Public subscription address',
     })) as HTMLInputElement;
-    await waitFor(() => expect(address.placeholder).toBe('https://sub.example.com'));
-    expect(address.disabled).toBe(false);
+    await waitFor(() => expect(address.value).toBe('https://sub.example.com'));
+    expect(address.readOnly).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'CDN and reverse proxy' }));
     expect(
       screen.getByRole('switch', { name: 'Subscription through CDN' }).getAttribute('aria-checked'),

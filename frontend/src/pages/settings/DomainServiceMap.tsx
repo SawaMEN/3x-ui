@@ -32,7 +32,7 @@ export default function DomainServiceMap({
   const l = (k: string) => t('pages.settings.domains.redesign.' + k);
   const panelAddress = panelListenerAddress(settings, window.location.hostname);
   const subscriptionOrigin =
-    settings?.subPublicURL.trim() || automaticSubscriptionOrigin(draft, settings);
+    automaticSubscriptionOrigin(draft, settings) || settings?.subPublicURL.trim();
   let subscriptionAddress: URL | undefined;
   if (subscriptionOrigin) {
     try {

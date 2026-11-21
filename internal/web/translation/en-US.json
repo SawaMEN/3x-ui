@@ -2026,6 +2026,7 @@
         "jsonEndpoint": "Separate JSON link",
         "jsonEndpointHelp": "Adds a dedicated JSON path. Clients can still request JSON from the main link when that format is enabled.",
         "clashEndpoint": "Enable Clash / Mihomo",
+        "managedURLHelp": "This address follows the subscription domain selected in",
         "publicURLHelp": "Include the port if it differs from the default. Leave empty to use the configured address automatically.",
         "domainsAndTLS": "Domains and TLS",
         "aliasesHelp": "Other hostnames that may serve subscriptions. The public hostname is already allowed.",
@@ -2647,7 +2648,7 @@
       "subReverseProxy": "Caddy reverse proxy configuration",
       "subReverseProxyDesc": "Run Caddy on the same server with ports 80/443 available. It obtains the public certificate automatically. Keep the subscription listener on 127.0.0.1 and direct the subscription domain to this server; the panel stays on its own address.",
       "domains": {
-        "publicOverrideHelp": "An explicit address takes priority for all subscription formats. Leave empty to use the selected domain automatically. Configure DNS and proxying for an external address; this field does not create them.",
+        "publicOverrideHelp": "The subscription domain selected here supplies the public address for all formats. A manual public address applies when no subscription domain is configured here.",
         "portMapping": "Use a different external port (NAT / proxy)",
         "sharedSettingsDesc": "Panel and subscriptions have their own ports and can run without the gateway. Enable it for a shared domain-based HTTPS entry point, automatic certificates and proxying. Both sections edit the same gateway. Save and apply saves service settings first, then applies the gateway. Service port changes require a panel restart.",
         "sharedSettings": "Shared HTTPS gateway (optional)",

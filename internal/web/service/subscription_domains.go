@@ -17,29 +17,43 @@ func (s *SettingService) GetSubRestrictDomains() (bool, error) {
 }
 
 func (s *SettingService) GetSubPublicURL() (string, error) {
-	raw, err := s.getString("subPublicURL")
-	if err != nil {
-		return "", err
-	}
-	if raw = strings.TrimSpace(raw); raw != "" {
-		return strings.TrimRight(raw, "/"), nil
-	}
 	cfg, settings, err := s.subscriptionPublishingSettings()
 	if err != nil {
 		return "", err
 	}
+	return subscriptionPublicURL(cfg, settings), nil
+}
+
+func configuredSubscriptionDomain(cfg domainfront.DomainFrontConfig) (domainfront.DomainFrontDomain, bool) {
 	if !cfg.Enabled || cfg.SubscriptionDomain == "" {
-		return "", nil
+		return domainfront.DomainFrontDomain{}, false
+	}
+	for _, domain := range cfg.Domains {
+		if !domain.Enabled || domain.Name != cfg.SubscriptionDomain {
+			continue
+		}
+		switch domain.Mode {
+		case "direct", "sub_link_only", "cdn", "relay":
+			return domain, true
+		}
+	}
+	return domainfront.DomainFrontDomain{}, false
+}
+
+func subscriptionPublicURL(cfg domainfront.DomainFrontConfig, settings *entity.AllSetting) string {
+	domain, ok := configuredSubscriptionDomain(cfg)
+	if !ok {
+		return strings.TrimRight(strings.TrimSpace(settings.SubPublicURL), "/")
 	}
 	port := cfg.PublicPort
 	if managedSubscriptionListenerDomain(cfg, settings) != "" {
 		port = settings.SubPort
 	}
-	host := cfg.SubscriptionDomain
+	host := domain.Name
 	if port != 443 {
 		host = net.JoinHostPort(host, strconv.Itoa(port))
 	}
-	return "https://" + host, nil
+	return "https://" + host
 }
 
 func (s *SettingService) subscriptionPublishingSettings() (domainfront.DomainFrontConfig, *entity.AllSetting, error) {
@@ -62,67 +76,47 @@ func (s *SettingService) ManagedSubscriptionListenerDomain() (string, error) {
 }
 
 func managedSubscriptionListenerDomain(cfg domainfront.DomainFrontConfig, settings *entity.AllSetting) string {
-	name := cfg.SubscriptionDomain
-	if !cfg.Enabled || name == "" || !settings.SubEnable || net.ParseIP(settings.SubListen).IsLoopback() {
+	domain, ok := configuredSubscriptionDomain(cfg)
+	if !ok || (domain.Mode != "direct" && domain.Mode != "sub_link_only") ||
+		!settings.SubEnable || net.ParseIP(settings.SubListen).IsLoopback() {
 		return ""
 	}
-	for _, d := range cfg.Domains {
-		if d.Name != name || !d.Enabled || (d.Mode != "direct" && d.Mode != "sub_link_only") {
-			continue
+	if cfg.PublicPort == cfg.HTTPSPort && strings.EqualFold(strings.TrimSuffix(settings.SubDomain, "."), domain.Name) {
+		return domain.Name
+	}
+	// An address saved for the same domain and the direct listener port can
+	// still select that listener. The gateway always supplies the hostname.
+	if u, err := url.Parse(strings.TrimSpace(settings.SubPublicURL)); err == nil &&
+		u.Scheme == "https" && strings.EqualFold(strings.TrimSuffix(u.Hostname(), "."), domain.Name) {
+		port := 443
+		if u.Port() != "" {
+			port, _ = strconv.Atoi(u.Port())
 		}
-		if raw := strings.TrimSpace(settings.SubPublicURL); raw != "" {
-			u, err := url.Parse(raw)
-			if err != nil || u.Scheme != "https" || !strings.EqualFold(strings.TrimSuffix(u.Hostname(), "."), name) {
-				return ""
-			}
-			port := 443
-			if u.Port() != "" {
-				port, _ = strconv.Atoi(u.Port())
-			}
-			if port == settings.SubPort {
-				return name
-			}
-			return ""
-		}
-		if cfg.PublicPort == cfg.HTTPSPort && strings.EqualFold(strings.TrimSuffix(settings.SubDomain, "."), name) {
-			return name
+		if port == settings.SubPort {
+			return domain.Name
 		}
 	}
 	return ""
 }
 
 func (s *SettingService) GetSubCDNEnable() (bool, error) {
-	publicURL, err := s.getString("subPublicURL")
+	cfg, settings, err := s.subscriptionPublishingSettings()
 	if err != nil {
 		return false, err
 	}
-	if strings.TrimSpace(publicURL) != "" {
-		return s.getBool("subCDNEnable")
+	if domain, ok := configuredSubscriptionDomain(cfg); ok {
+		return domain.Mode == "cdn", nil
 	}
-	cfg, err := s.GetDomainFrontConfig()
-	if err != nil {
-		return false, err
-	}
-	if cfg.Enabled && cfg.SubscriptionDomain != "" {
-		for _, d := range cfg.Domains {
-			if d.Enabled && d.Name == cfg.SubscriptionDomain {
-				return d.Mode == "cdn", nil
-			}
-		}
-	}
-	return s.getBool("subCDNEnable")
+	return settings.SubCDNEnable, nil
 }
 
 func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string]bool, error) {
 	hosts := map[string]bool{}
-	restricted, err := s.getBool("subRestrictDomains")
+	cfg, settings, err := s.subscriptionPublishingSettings()
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := s.GetDomainFrontConfig()
-	if err != nil {
-		return nil, err
-	}
+	restricted := settings.SubRestrictDomains
 	if cfg.Enabled && !restricted {
 		for _, d := range cfg.Domains {
 			if d.Enabled {
@@ -133,10 +127,7 @@ func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string
 	if primary != "" && !restricted {
 		hosts[strings.TrimSuffix(strings.ToLower(primary), ".")] = true
 	}
-	publicURL, err := s.GetSubPublicURL()
-	if err != nil {
-		return nil, err
-	}
+	publicURL := subscriptionPublicURL(cfg, settings)
 	if publicURL != "" {
 		u, err := url.Parse(publicURL)
 		if err != nil {
@@ -144,11 +135,7 @@ func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string
 		}
 		hosts[strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")] = true
 	}
-	aliases, err := s.getString("subAllowedDomains")
-	if err != nil {
-		return nil, err
-	}
-	for _, host := range strings.FieldsFunc(aliases, func(r rune) bool { return r == ',' || r == '\n' || r == ' ' || r == ';' }) {
+	for _, host := range strings.FieldsFunc(settings.SubAllowedDomains, func(r rune) bool { return r == ',' || r == '\n' || r == ' ' || r == ';' }) {
 		hosts[strings.TrimSuffix(strings.ToLower(host), ".")] = true
 	}
 	if restricted && publicURL == "" {

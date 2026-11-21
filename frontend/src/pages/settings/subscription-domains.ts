@@ -1,20 +1,13 @@
 import type { DomainFrontConfig } from '@/generated/zod';
 import type { AllSetting } from '@/models/setting';
 
-export function supportsManagedSubscriptionListener(
-  config: DomainFrontConfig | undefined,
-  settings: AllSetting | undefined,
-): boolean {
-  return Boolean(
-    config?.enabled &&
-    settings?.subEnable &&
-    !/^(?:127\.|::1$)/.test(settings.subListen) &&
-    config.domains.some(
-      (domain) =>
-        domain.enabled &&
-        domain.name === config.subscriptionDomain &&
-        ['direct', 'sub_link_only'].includes(domain.mode),
-    ),
+export function configuredSubscriptionDomain(config: DomainFrontConfig | undefined) {
+  if (!config?.enabled || !config.subscriptionDomain) return undefined;
+  return config.domains.find(
+    (domain) =>
+      domain.enabled &&
+      domain.name === config.subscriptionDomain &&
+      ['direct', 'sub_link_only', 'cdn', 'relay'].includes(domain.mode),
   );
 }
 
@@ -22,14 +15,35 @@ export function automaticSubscriptionOrigin(
   config: DomainFrontConfig | undefined,
   settings?: AllSetting,
 ): string {
-  if (!config?.enabled || !config.subscriptionDomain) return '';
-  const port =
-    supportsManagedSubscriptionListener(config, settings) &&
-    config.publicPort === config.httpsPort &&
-    settings?.subDomain.trim().toLowerCase().replace(/\.$/, '') === config.subscriptionDomain
-      ? settings.subPort
-      : config.publicPort;
-  return `https://${config.subscriptionDomain}${port === 443 ? '' : `:${port}`}`;
+  const domain = configuredSubscriptionDomain(config);
+  if (!config || !domain) return '';
+  let port = config.publicPort;
+  if (
+    settings?.subEnable &&
+    !/^(?:127\.|::1$)/.test(settings.subListen) &&
+    ['direct', 'sub_link_only'].includes(domain.mode)
+  ) {
+    if (
+      config.publicPort === config.httpsPort &&
+      settings.subDomain.trim().toLowerCase().replace(/\.$/, '') === domain.name
+    ) {
+      port = settings.subPort;
+    } else {
+      try {
+        const saved = new URL(settings.subPublicURL);
+        if (
+          saved.protocol === 'https:' &&
+          saved.hostname.replace(/\.$/, '') === domain.name &&
+          Number(saved.port || 443) === settings.subPort
+        ) {
+          port = settings.subPort;
+        }
+      } catch {
+        // There is no direct listener override.
+      }
+    }
+  }
+  return `https://${domain.name}${port === 443 ? '' : `:${port}`}`;
 }
 
 export function subscriptionCaddyConfig(

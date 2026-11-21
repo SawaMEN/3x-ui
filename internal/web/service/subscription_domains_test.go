@@ -69,7 +69,7 @@ func TestSubscriptionDomainValidation(t *testing.T) {
 	}
 }
 
-func TestExplicitSubscriptionOriginOverridesManagedDomain(t *testing.T) {
+func TestManagedSubscriptionOriginOverridesSavedPublicAddress(t *testing.T) {
 	setupConflictDB(t)
 	s := &SettingService{}
 	cfg := domainfront.DefaultConfig()
@@ -93,25 +93,30 @@ func TestExplicitSubscriptionOriginOverridesManagedDomain(t *testing.T) {
 		get  func() (string, error)
 		want string
 	}{
-		{s.GetSubURI, "https://external.example.com/sub/"},
-		{s.GetSubJsonURI, "https://external.example.com/json/"},
-		{s.GetSubClashURI, "https://external.example.com/clash/"},
+		{s.GetSubURI, "https://managed.example.com:8443/sub/"},
+		{s.GetSubJsonURI, "https://managed.example.com:8443/json/"},
+		{s.GetSubClashURI, "https://managed.example.com:8443/clash/"},
 	} {
 		if got, err := tc.get(); err != nil || got != tc.want {
 			t.Fatalf("origin = %q, %v; want %q", got, err, tc.want)
 		}
 	}
-	if cdn, err := s.GetSubCDNEnable(); err != nil || cdn {
-		t.Fatalf("explicit CDN = %v, %v", cdn, err)
+	if cdn, err := s.GetSubCDNEnable(); err != nil || !cdn {
+		t.Fatalf("managed CDN = %v, %v", cdn, err)
 	}
-	if err := s.setString("subPublicURL", ""); err != nil {
+	cfg.Enabled = false
+	raw, err = json.Marshal(cfg)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := s.GetSubPublicURL(); err != nil || got != "https://managed.example.com:8443" {
-		t.Fatalf("automatic origin = %q, %v", got, err)
+	if err := s.setString("domainFrontConfig", string(raw)); err != nil {
+		t.Fatal(err)
 	}
-	if cdn, err := s.GetSubCDNEnable(); err != nil || !cdn {
-		t.Fatalf("automatic CDN = %v, %v", cdn, err)
+	if got, err := s.GetSubPublicURL(); err != nil || got != "https://external.example.com" {
+		t.Fatalf("fallback origin = %q, %v", got, err)
+	}
+	if cdn, err := s.GetSubCDNEnable(); err != nil || cdn {
+		t.Fatalf("fallback CDN = %v, %v", cdn, err)
 	}
 }
 
@@ -138,17 +143,17 @@ func TestRestrictedSubscriptionHostsExcludeImplicitDomains(t *testing.T) {
 		}
 	}
 	hosts, err := s.GetSubscriptionAllowedHosts("origin.example.com")
-	if err != nil || len(hosts) != 2 || !hosts["selected.example.com"] || !hosts["extra.example.com"] {
+	if err != nil || len(hosts) != 2 || !hosts["managed.example.com"] || !hosts["extra.example.com"] {
 		t.Fatalf("restricted hosts = %#v, %v", hosts, err)
 	}
-	if got, err := s.GetSubPublicURL(); err != nil || got != "https://selected.example.com:8443" {
+	if got, err := s.GetSubPublicURL(); err != nil || got != "https://managed.example.com" {
 		t.Fatalf("public URL = %q, %v", got, err)
 	}
 	if err := s.saveSetting("subAllowedDomains", ""); err != nil {
 		t.Fatal(err)
 	}
 	hosts, err = s.GetSubscriptionAllowedHosts("origin.example.com")
-	if err != nil || len(hosts) != 1 || !hosts["selected.example.com"] {
+	if err != nil || len(hosts) != 1 || !hosts["managed.example.com"] {
 		t.Fatalf("single domain = %#v, %v", hosts, err)
 	}
 	if err := validateSubscriptionDomains(&entity.AllSetting{SubRestrictDomains: true}, false); err == nil {
@@ -191,6 +196,9 @@ func TestRestrictedSubscriptionUsesManagedDomainAfterSettingsSave(t *testing.T) 
 	if err := s.UpdateAllSetting(settings, SecretClears{}); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.setString("subPublicURL", "https://subscription.example.com:8443"); err != nil {
+		t.Fatal(err)
+	}
 	cfg.SubscriptionDomain, cfg.Domains[0].Name, cfg.PublicPort = "new.example.com", "new.example.com", 9443
 	saveGateway()
 	if got := s.BuildSubURIBase("panel.example.com"); got != "https://new.example.com:9443" {
@@ -223,7 +231,8 @@ func TestManagedSubscriptionUsesConfiguredListenerPort(t *testing.T) {
 	}{
 		{"", "", "https://" + name + ":8443", name},
 		{"https://" + name + ":8443", "", "https://" + name + ":8443", name},
-		{"https://" + name + ":9443", "", "https://" + name + ":9443", ""},
+		{"https://" + name + ":9443", "", "https://" + name + ":8443", name},
+		{"https://previous.example.com:443", "", "https://" + name + ":8443", name},
 		{"", "127.0.0.1", "https://" + name, ""},
 	} {
 		t.Run(tc.override+tc.listen, func(t *testing.T) {
