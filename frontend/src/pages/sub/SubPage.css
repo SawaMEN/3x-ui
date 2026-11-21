@@ -701,6 +701,12 @@ a.sub-row-title:hover {
   gap: 8px;
 }
 
+@media (max-width: 480px) {
+  .sub-app-actions .ant-btn {
+    padding-inline: 10px;
+  }
+}
+
 .sub-app-mark {
   width: 36px;
   height: 36px;
