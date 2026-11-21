@@ -16,6 +16,7 @@ describe('subscription public domain settings', () => {
         />
       </MemoryRouter>,
     );
+    fireEvent.click(screen.getByRole('button', { name: 'CDN and reverse proxy' }));
     const config = screen.getByRole('textbox', {
       name: 'Caddy reverse proxy configuration',
     }) as HTMLTextAreaElement;
@@ -32,7 +33,7 @@ describe('subscription public domain settings', () => {
 });
 
 describe('restricted subscription domain selection', () => {
-  it('saves the public port and all selected hosts without changing the internal listener', () => {
+  it('edits the public address and restriction independently of the local listener', () => {
     const update = vi.fn();
     renderWithProviders(
       <MemoryRouter>
@@ -49,20 +50,12 @@ describe('restricted subscription domain selection', () => {
       </MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('switch', { name: 'Use only selected domains' }));
-    expect(update).toHaveBeenLastCalledWith({
-      subRestrictDomains: true,
-      subPublicURL: 'https://first.example.com',
-      subAllowedDomains: 'second.example.com',
-      subCDNEnable: false,
+    expect(update).toHaveBeenLastCalledWith({ subRestrictDomains: true });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Public subscription address' }), {
+      target: { value: 'https://first.example.com:8443' },
     });
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Public subscription port' }), {
-      target: { value: '8443' },
-    });
-    expect(update).toHaveBeenLastCalledWith({
-      subRestrictDomains: true,
-      subPublicURL: 'https://first.example.com:8443',
-      subAllowedDomains: 'second.example.com',
-      subCDNEnable: false,
-    });
+    expect(update).toHaveBeenLastCalledWith({ subPublicURL: 'https://first.example.com:8443' });
+    expect(screen.queryByRole('spinbutton', { name: 'Public subscription port' })).toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Additional subscription domains' })).toBeTruthy();
   });
 });

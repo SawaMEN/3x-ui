@@ -1,4 +1,5 @@
-import { Alert, Input, InputNumber, Select, Switch, Typography } from 'antd';
+import { Alert, Collapse, Input, Select, Switch } from 'antd';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
@@ -9,6 +10,10 @@ import {
   supportsManagedSubscriptionListener,
 } from './subscription-domains';
 
+function normalizeAlias(value: string): string {
+  return value.trim().toLowerCase().replace(/\.$/, '');
+}
+
 export default function SubscriptionDomains({
   allSetting,
   updateSetting,
@@ -17,62 +22,89 @@ export default function SubscriptionDomains({
   updateSetting: (patch: Partial<AllSetting>) => void;
 }) {
   const { t } = useTranslation();
+  const l = (key: string) => t('pages.settings.subscriptionWorkspace.' + key);
   const { data: status } = useDomainFrontStatus();
-  const managed =
-    status?.config.enabled && status.config.subscriptionDomain ? status.config : undefined;
-  const domain = managed?.domains.find((item) => item.name === managed.subscriptionDomain);
-  const directListener = supportsManagedSubscriptionListener(managed, allSetting);
-  const automaticURL = automaticSubscriptionOrigin(managed, allSetting);
-  const automaticPort = automaticURL ? Number(new URL(automaticURL).port || 443) : undefined;
-  const overridden = !!allSetting.subPublicURL.trim();
+  const gateway = status?.config;
+  const automaticURL = automaticSubscriptionOrigin(gateway, allSetting);
   const publicURL = allSetting.subPublicURL;
-  const usingManaged = !!managed && !overridden;
+  const followsGateway = Boolean(automaticURL && !publicURL.trim());
+  const domains = gateway?.domains.filter(
+    (domain) => domain.enabled && ['direct', 'cdn', 'relay', 'sub_link_only'].includes(domain.mode),
+  );
+  const selectedDomain = domains?.find((domain) => domain.name === gateway?.subscriptionDomain);
   let origin: URL | undefined;
   try {
-    origin = new URL(publicURL || automaticURL);
+    const parsed = new URL(publicURL.trim() || automaticURL);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') origin = parsed;
   } catch {
-    /* The manual origin may be incomplete while editing. */
+    // The address can be incomplete while editing.
   }
-  const selected = [
-    ...new Set([
-      ...(origin ? [origin.hostname] : []),
-      ...allSetting.subAllowedDomains.split(/[,;\s]+/).filter(Boolean),
-    ]),
-  ];
-  const port = origin ? Number(origin.port || (origin.protocol === 'http:' ? 80 : 443)) : 443;
+
+  const port = origin ? Number(origin.port || (origin.protocol === 'http:' ? 80 : 443)) : undefined;
+  const originDomain = origin?.hostname.replace(/\.$/, '');
+  const aliases = [
+    ...new Set(allSetting.subAllowedDomains.split(/[,;\s]+/).map(normalizeAlias)),
+  ].filter((name) => name && name !== originDomain);
   const usingSubscriptionListener =
-    directListener &&
+    supportsManagedSubscriptionListener(gateway, allSetting) &&
     origin?.protocol === 'https:' &&
-    origin.hostname.replace(/\.$/, '') === managed?.subscriptionDomain &&
+    originDomain === gateway?.subscriptionDomain &&
     port === allSetting.subPort;
-  const config =
-    usingManaged || usingSubscriptionListener ? '' : subscriptionCaddyConfig(allSetting);
-  function selectDomains(domains: string[], nextPort = port) {
-    const names = [...new Set(domains.map((name) => name.trim().toLowerCase()).filter(Boolean))];
-    if (!names.length) return;
-    const scheme = origin?.protocol || 'https:';
-    const defaultPort = scheme === 'https:' ? 443 : 80;
-    const followsGateway =
-      managed &&
-      names[0] === managed.subscriptionDomain &&
-      nextPort === automaticPort &&
-      scheme === 'https:';
-    updateSetting({
-      subRestrictDomains: true,
-      subPublicURL: followsGateway
-        ? ''
-        : `${scheme}//${names[0]}${nextPort === defaultPort ? '' : `:${nextPort}`}`,
-      subAllowedDomains: names.slice(1).join(','),
-      subCDNEnable:
-        !followsGateway &&
-        (status?.config.domains.find((item) => item.name === names[0])?.mode === 'cdn' ||
-          (!status?.config.domains.some((item) => item.name === names[0]) &&
-            allSetting.subCDNEnable)),
-    });
-  }
+  const managedHost = gateway?.enabled && domains?.some((domain) => domain.name === originDomain);
+  const proxyConfig =
+    followsGateway || usingSubscriptionListener ? '' : subscriptionCaddyConfig(allSetting);
+
   return (
     <>
-      <Typography.Title level={5}>{t('pages.settings.subscriptionAccess')}</Typography.Title>
+      <SettingListItem
+        paddings="small"
+        title={t('pages.settings.subPublicURL')}
+        description={
+          <>
+            {l('publicURLHelp')} <Link to="/settings#domains">{l('domainsAndTLS')}</Link>
+          </>
+        }
+      >
+        <Input
+          aria-label={t('pages.settings.subPublicURL')}
+          placeholder={automaticURL || 'https://sub.example.com:8443'}
+          value={publicURL}
+          onChange={(event) => {
+            const subPublicURL = event.target.value;
+            updateSetting({
+              subPublicURL,
+              ...(!subPublicURL.trim() ? { subCDNEnable: false } : {}),
+            });
+          }}
+        />
+      </SettingListItem>
+      {managedHost && port !== gateway.publicPort && !usingSubscriptionListener && (
+        <Alert type="warning" showIcon title={t('pages.settings.subGatewayPortMismatch')} />
+      )}
+      <SettingListItem
+        paddings="small"
+        title={t('pages.settings.subAllowedDomains')}
+        description={l('aliasesHelp')}
+      >
+        <Select
+          mode="tags"
+          allowClear
+          aria-label={t('pages.settings.subAllowedDomains')}
+          style={{ width: '100%' }}
+          tokenSeparators={[',', ';', ' ']}
+          value={aliases}
+          options={domains
+            ?.filter((domain) => domain.name !== originDomain)
+            .map((domain) => ({ value: domain.name, label: domain.name }))}
+          onChange={(values: string[]) =>
+            updateSetting({
+              subAllowedDomains: [...new Set(values.map(normalizeAlias))]
+                .filter((value) => value && value !== originDomain)
+                .join(','),
+            })
+          }
+        />
+      </SettingListItem>
       <SettingListItem
         paddings="small"
         title={t('pages.settings.subRestrictDomains')}
@@ -81,131 +113,54 @@ export default function SubscriptionDomains({
         <Switch
           aria-label={t('pages.settings.subRestrictDomains')}
           checked={allSetting.subRestrictDomains}
-          disabled={!selected.length}
-          onChange={(enabled) =>
-            enabled ? selectDomains(selected) : updateSetting({ subRestrictDomains: false })
-          }
+          disabled={!origin && !allSetting.subRestrictDomains}
+          onChange={(subRestrictDomains) => updateSetting({ subRestrictDomains })}
         />
       </SettingListItem>
-      <SettingListItem
-        paddings="small"
-        title={t('pages.settings.subSelectedDomains')}
-        description={t('pages.settings.subSelectedDomainsDesc')}
-      >
-        <Select
-          mode="tags"
-          aria-label={t('pages.settings.subSelectedDomains')}
-          style={{ width: '100%' }}
-          value={selected}
-          tokenSeparators={[',', ';', ' ']}
-          options={status?.config.domains
-            .filter(
-              (item) =>
-                item.enabled && ['direct', 'cdn', 'relay', 'sub_link_only'].includes(item.mode),
-            )
-            .map((item) => ({
-              value: item.name,
-              label: item.name,
-            }))}
-          onChange={(names: string[]) => {
-            if (names.length) selectDomains(names);
-          }}
-        />
-      </SettingListItem>
-      <SettingListItem
-        paddings="small"
-        title={t('pages.settings.subPublicPort')}
-        description={t('pages.settings.subPublicPortDesc')}
-      >
-        <InputNumber
-          min={1}
-          max={65535}
-          precision={0}
-          aria-label={t('pages.settings.subPublicPort')}
-          value={port}
-          disabled={!selected.length}
-          onChange={(value) => {
-            if (value != null) selectDomains(selected, value);
-          }}
-        />
-      </SettingListItem>
-      {status?.config.enabled &&
-        selected.some((name) =>
-          status.config.domains.some((item) => item.enabled && item.name === name),
-        ) &&
-        port !== status.config.publicPort &&
-        !usingSubscriptionListener && (
-          <Alert type="warning" showIcon title={t('pages.settings.subGatewayPortMismatch')} />
-        )}
-      {managed && (
-        <Alert
-          type="info"
-          showIcon
-          title={t('pages.settings.domains.managedSubscription')}
-          description={automaticURL}
-        />
-      )}
-      <SettingListItem
-        paddings="small"
-        title={t('pages.settings.subPublicURL')}
-        description={
-          <>
-            {t('pages.settings.subPublicURLDesc')} {t('pages.settings.domains.publicOverrideHelp')}
-          </>
-        }
-      >
-        <Input
-          aria-label={t('pages.settings.subPublicURL')}
-          placeholder={automaticURL || 'https://sub.example.com'}
-          value={publicURL}
-          onChange={(e) =>
-            updateSetting({
-              subPublicURL: e.target.value,
-              ...(managed && !e.target.value.trim() ? { subCDNEnable: false } : {}),
-            })
-          }
-        />
-      </SettingListItem>
-      <SettingListItem
-        paddings="small"
-        title={t('pages.settings.subAllowedDomains')}
-        description={t('pages.settings.subAllowedDomainsDesc')}
-      >
-        <Input.TextArea
-          aria-label={t('pages.settings.subAllowedDomains')}
-          placeholder="sub2.example.com, cdn.example.com"
-          rows={2}
-          value={allSetting.subAllowedDomains}
-          onChange={(e) => updateSetting({ subAllowedDomains: e.target.value })}
-        />
-      </SettingListItem>
-      <SettingListItem
-        paddings="small"
-        title={t('pages.settings.subCDNEnable')}
-        description={t('pages.settings.subCDNDesc')}
-      >
-        <Switch
-          aria-label={t('pages.settings.subCDNEnable')}
-          checked={usingManaged ? domain?.mode === 'cdn' : allSetting.subCDNEnable}
-          disabled={usingManaged}
-          onChange={(value) => updateSetting({ subCDNEnable: value })}
-        />
-      </SettingListItem>
-      {config && (
-        <SettingListItem
-          paddings="small"
-          title={t('pages.settings.subReverseProxy')}
-          description={t('pages.settings.subReverseProxyDesc')}
-        >
-          <Input.TextArea
-            aria-label={t('pages.settings.subReverseProxy')}
-            readOnly
-            rows={12}
-            value={config}
-            style={{ fontFamily: 'monospace' }}
-          />
-        </SettingListItem>
-      )}
+      <Collapse
+        ghost
+        items={[
+          {
+            key: 'proxy',
+            label: l('proxy'),
+            children: (
+              <>
+                <SettingListItem
+                  paddings="small"
+                  title={t('pages.settings.subCDNEnable')}
+                  description={t('pages.settings.subCDNDesc')}
+                >
+                  <Switch
+                    aria-label={t('pages.settings.subCDNEnable')}
+                    checked={
+                      followsGateway ? selectedDomain?.mode === 'cdn' : allSetting.subCDNEnable
+                    }
+                    disabled={
+                      followsGateway || (origin?.protocol !== 'https:' && !allSetting.subCDNEnable)
+                    }
+                    onChange={(subCDNEnable) => updateSetting({ subCDNEnable })}
+                  />
+                </SettingListItem>
+                {proxyConfig && (
+                  <SettingListItem
+                    paddings="small"
+                    title={t('pages.settings.subReverseProxy')}
+                    description={t('pages.settings.subReverseProxyDesc')}
+                  >
+                    <Input.TextArea
+                      aria-label={t('pages.settings.subReverseProxy')}
+                      readOnly
+                      autoSize={{ minRows: 5, maxRows: 12 }}
+                      value={proxyConfig}
+                      className="subscription-proxy-config"
+                    />
+                  </SettingListItem>
+                )}
+              </>
+            ),
+          },
+        ]}
+      />
     </>
   );
 }

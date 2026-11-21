@@ -49,7 +49,7 @@ describe('SubscriptionGeneralTab', () => {
         />
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByRole('tab', { name: /Profile/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }));
     expect(screen.getByText('Luna')).toBeTruthy();
     chooseSelectOption('sub-appearance-theme', 'Light');
     expect(updateSetting).toHaveBeenCalledWith({ subAppearanceTheme: 'light' });
@@ -65,6 +65,7 @@ describe('SubscriptionGeneralTab', () => {
         <SubscriptionGeneralTab allSetting={new AllSetting()} updateSetting={updateSetting} />
       </MemoryRouter>,
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Client information' }));
     expect(screen.getByText('Inbound order (default)')).toBeTruthy();
     chooseSelectOption('sub-host-sort-mode', 'Hosts order');
     expect(updateSetting).toHaveBeenCalledWith({ subHostSortMode: 'hosts-first' });
@@ -77,6 +78,7 @@ describe('SubscriptionGeneralTab', () => {
         />
       </MemoryRouter>,
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Client information' }));
     expect(screen.getByText('Hosts order')).toBeTruthy();
   });
   it('switches profile modes without losing the custom URL and warns only for the built-in page', () => {
@@ -91,7 +93,7 @@ describe('SubscriptionGeneralTab', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: /Profile/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }));
     expect(screen.getByRole('combobox', { name: 'Profile page' })).toBeTruthy();
     expect(screen.getByTestId('profile-settings').textContent).toBe(`none|${storedUrl}`);
     expect(screen.queryByDisplayValue(storedUrl)).toBeNull();
@@ -126,7 +128,7 @@ describe('SubscriptionGeneralTab', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: /Profile/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }));
     expect(screen.getByRole('combobox', { name: 'Profile page' })).toBeTruthy();
     expect(screen.getByText('Custom website')).toBeTruthy();
     expect(screen.getByDisplayValue(storedUrl)).toBeTruthy();
@@ -145,6 +147,7 @@ describe('SubscriptionGeneralTab', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Local subscription server' }));
     const portInput = screen.getByDisplayValue('2096');
     fireEvent.change(portInput, { target: { value: '' } });
     fireEvent.blur(portInput);
@@ -165,6 +168,7 @@ describe('SubscriptionGeneralTab', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Local subscription server' }));
     fireEvent.change(screen.getByDisplayValue('2096'), { target: { value: '8443' } });
 
     expect(updateSetting).toHaveBeenCalledWith({
@@ -193,6 +197,7 @@ describe('SubscriptionGeneralTab', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Local subscription server' }));
     fireEvent.click(screen.getByRole('button', { name: 'Replace 2096 with current port' }));
     expect(updateSetting).toHaveBeenCalledWith({
       subURI: 'https://sub.example.com:8443/sub/',
@@ -219,6 +224,7 @@ describe('SubscriptionGeneralTab', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Local subscription server' }));
     fireEvent.change(screen.getByDisplayValue('2096'), { target: { value: '8443' } });
     expect(updateSetting).toHaveBeenCalledWith({
       subPort: 8443,
@@ -238,9 +244,30 @@ describe('SubscriptionGeneralTab', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Sub Formats' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Subscription formats' }));
 
-    expect(screen.getByTestId('location').textContent).toBe('/settings#subscription-formats');
+    expect(screen.getByTestId('location').textContent).toBe(
+      '/settings?subscriptionTab=formats#subscription',
+    );
+  });
+
+  it('opens the old formats bookmark with the JSON and Clash controls in one section', () => {
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/settings#subscription-formats']}>
+        <ProfileSettingsHarness />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Subscription formats' }).getAttribute('aria-current'),
+    ).toBe('page');
+    const clash = screen.getAllByRole('switch', { name: 'Enable Clash / Mihomo' });
+    expect(clash).toHaveLength(1);
+    fireEvent.click(clash[0]);
+    expect(
+      screen.getByRole('switch', { name: 'Enable Clash / Mihomo' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(screen.queryByRole('textbox', { name: 'Public subscription address' })).toBeNull();
   });
 
   it.each([false, true])(
@@ -257,7 +284,7 @@ describe('SubscriptionGeneralTab', () => {
         </MemoryRouter>,
       );
 
-      fireEvent.click(screen.getByRole('tab', { name: /Happ/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Apps' }));
       expect(
         screen.getByRole('tab', { name: /Routing & Rules/ }).getAttribute('aria-selected'),
       ).toBe('true');

@@ -108,8 +108,6 @@ function AppSidebar() {
   const navigate = useNavigate();
   const { pathname, hash } = useLocation();
   const { allSetting } = useAllSettings();
-  const showSubFormats = !!(allSetting.subJsonEnable || allSetting.subClashEnable);
-  const showSubBalancers = !!allSetting.subJsonEnable;
   const [olcrtcInstalled, setOlcrtcInstalled] = useState(false);
 
   useEffect(() => {
@@ -240,20 +238,8 @@ function AppSidebar() {
         label: t('pages.settings.subSettings'),
       },
     ];
-    if (showSubFormats)
-      children.push({
-        key: '/settings#subscription-formats',
-        icon: <CodeOutlined />,
-        label: t('menu.subFormats'),
-      });
-    if (showSubBalancers)
-      children.push({
-        key: '/settings#subscription-balancers',
-        icon: <ApartmentOutlined />,
-        label: t('pages.settings.subBalancers.menu'),
-      });
     return children;
-  }, [t, showSubFormats, showSubBalancers]);
+  }, [t]);
 
   const tabs = useMemo<
     { key: string; icon: IconName; title: string; children?: MenuProps['items'] }[]
@@ -300,8 +286,10 @@ function AppSidebar() {
   const xrayActive = pathname === '/xray';
   const singBoxActive = pathname === '/singbox';
   const gatewayActive = settingsActive && hash === '#gateway';
+  const settingsHash =
+    hash === '#subscription-formats' || hash === '#subscription-balancers' ? '#subscription' : hash;
   const selectedKey = settingsActive
-    ? `/settings${getAdditionalSettingsTab(hash) ? '#advanced' : hash || '#general'}`
+    ? `/settings${getAdditionalSettingsTab(hash) ? '#advanced' : settingsHash || '#general'}`
     : xrayActive
       ? `/xray${hash || '#basic'}`
       : singBoxActive

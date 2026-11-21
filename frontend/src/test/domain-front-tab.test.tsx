@@ -387,6 +387,7 @@ describe('domain and TLS dashboard', () => {
     })) as HTMLInputElement;
     await waitFor(() => expect(address.placeholder).toBe('https://sub.example.com'));
     expect(address.disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'CDN and reverse proxy' }));
     expect(
       screen.getByRole('switch', { name: 'Subscription through CDN' }).getAttribute('aria-checked'),
     ).toBe('true');

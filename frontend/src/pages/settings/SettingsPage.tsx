@@ -46,12 +46,6 @@ const EmailTab = lazy(() => importWithChunkRecovery(() => import('./EmailTab')))
 const SubscriptionGeneralTab = lazy(() =>
   importWithChunkRecovery(() => import('./SubscriptionGeneralTab')),
 );
-const SubscriptionFormatsTab = lazy(() =>
-  importWithChunkRecovery(() => import('./SubscriptionFormatsTab')),
-);
-const SubscriptionBalancersTab = lazy(() =>
-  importWithChunkRecovery(() => import('./SubscriptionBalancersTab')),
-);
 const AdditionalSettingsTab = lazy(() =>
   importWithChunkRecovery(() => import('./AdditionalSettingsTab')),
 );
@@ -319,6 +313,26 @@ export default function SettingsPage() {
     return classes.join(' ');
   }, [isDark, isUltra]);
 
+  const subscriptionWorkspace =
+    activeSlug === 'subscription' ||
+    activeSlug === 'subscription-formats' ||
+    activeSlug === 'subscription-balancers';
+  const settingsActions = (
+    <Space wrap>
+      <Button type="primary" disabled={saveDisabled} onClick={onSave}>
+        {t('pages.settings.save')}
+      </Button>
+      <Button
+        type={subscriptionWorkspace ? 'default' : 'primary'}
+        danger={!subscriptionWorkspace}
+        disabled={!saveDisabled}
+        onClick={() => restartPanel()}
+      >
+        {t('pages.settings.restartPanel')}
+      </Button>
+    </Space>
+  );
+
   const categoryBody = (() => {
     switch (activeSlug) {
       case 'security':
@@ -334,11 +348,15 @@ export default function SettingsPage() {
       case 'email':
         return <EmailTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'subscription':
-        return <SubscriptionGeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'subscription-formats':
-        return <SubscriptionFormatsTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'subscription-balancers':
-        return <SubscriptionBalancersTab allSetting={allSetting} updateSetting={updateSetting} />;
+        return (
+          <SubscriptionGeneralTab
+            allSetting={allSetting}
+            updateSetting={updateSetting}
+            actions={settingsActions}
+          />
+        );
       case 'advanced':
         return (
           <AdditionalSettingsTab
@@ -412,37 +430,32 @@ export default function SettingsPage() {
                   )}
 
                   <Row gutter={[isMobile ? 8 : 16, isMobile ? 0 : 12]}>
-                    {activeSlug !== 'gateway' && activeSlug !== 'advanced' && (
-                      <Col span={24}>
-                        <Card hoverable>
-                          <Row className="header-row">
-                            <Col xs={24} sm={10} className="header-actions">
-                              <Space wrap>
-                                <Button type="primary" disabled={saveDisabled} onClick={onSave}>
-                                  {t('pages.settings.save')}
-                                </Button>
-                                <Button
-                                  type="primary"
-                                  danger
-                                  disabled={!saveDisabled}
-                                  onClick={() => restartPanel()}
-                                >
-                                  {t('pages.settings.restartPanel')}
-                                </Button>
-                              </Space>
-                            </Col>
-                            <Col xs={24} sm={14} className="header-info">
-                              <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
-                              <Alert type="warning" showIcon title={t('pages.settings.infoDesc')} />
-                            </Col>
-                          </Row>
-                        </Card>
-                      </Col>
-                    )}
+                    {activeSlug !== 'gateway' &&
+                      activeSlug !== 'advanced' &&
+                      !subscriptionWorkspace && (
+                        <Col span={24}>
+                          <Card hoverable>
+                            <Row className="header-row">
+                              <Col xs={24} sm={10} className="header-actions">
+                                {settingsActions}
+                              </Col>
+                              <Col xs={24} sm={14} className="header-info">
+                                <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
+                                <Alert
+                                  type="warning"
+                                  showIcon
+                                  title={t('pages.settings.infoDesc')}
+                                />
+                              </Col>
+                            </Row>
+                          </Card>
+                        </Col>
+                      )}
 
                     <Col span={24}>
                       <Suspense fallback={<Spin size="large" />}>
-                        {activeSlug === 'gateway' ||
+                        {subscriptionWorkspace ||
+                        activeSlug === 'gateway' ||
                         (activeSlug === 'advanced' &&
                           getAdditionalSettingsTab(location.hash) === 'domains') ? (
                           categoryBody
