@@ -597,6 +597,7 @@ a.sub-row-title:hover {
 /* apps */
 .sub-apps {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -605,7 +606,7 @@ a.sub-row-title:hover {
 }
 
 .sub-apps .ant-segmented-item-label {
-  padding-inline: clamp(4px, 2vw, 12px);
+  padding-inline: clamp(4px, 1.2vw, 12px);
 }
 
 .sub-apple-help {
