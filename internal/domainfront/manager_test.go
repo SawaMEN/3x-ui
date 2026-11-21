@@ -641,7 +641,7 @@ func TestCertificatePreparationFailureIsReported(t *testing.T) {
 		}},
 	}
 	data := map[string]any{"identifier": name}
-	if err := manager.runtime.event(context.Background(), "cert_obtaining", data); err != preparationErr {
+	if err := manager.runtime.event(context.Background(), "cert_obtaining", data); !errors.Is(err, preparationErr) {
 		t.Fatalf("unexpected event error: %v", err)
 	}
 	cert := manager.Status(cfg).Certificates[0]
