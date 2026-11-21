@@ -64,7 +64,7 @@ describe('MTProto publication controls', () => {
         <SubscriptionGeneralTab allSetting={new AllSetting()} updateSetting={update} />
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByRole('tab', { name: /Profile/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }));
     for (const [label, key] of [
       ['Local Telegram proxies on subscription page', 'subTelegramLocalEnable'],
       ['Remote-node Telegram proxies on subscription page', 'subTelegramRemoteEnable'],

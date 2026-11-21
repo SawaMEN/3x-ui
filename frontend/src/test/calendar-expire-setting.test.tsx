@@ -16,7 +16,7 @@ describe('calendar expiry presentation setting', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: /Information/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Client information' }));
     const toggle = screen.getByRole('switch', { name: 'Month-end subscription expiry display' });
     expect(toggle.getAttribute('aria-checked')).toBe('false');
     expect(updateSetting).not.toHaveBeenCalled();
