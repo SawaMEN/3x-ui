@@ -155,10 +155,15 @@ func TestLocalComponentStatusDoesNotQueryReleasesOrRunBinaries(t *testing.T) {
 func TestPingtunnelMinimumSupportedRelease(t *testing.T) {
 	for _, tc := range []struct {
 		version string
-		valid bool
+		valid   bool
 	}{
-		{"", false}, {"2.10", false}, {"0.0", false},
-		{"3.0", true}, {"3.1", true}, {"v3.1", true}, {"3.2.1", true},
+		{"", false},
+		{"2.10", false},
+		{"0.0", false},
+		{"3.0", true},
+		{"3.1", true},
+		{"v3.1", true},
+		{"3.2.1", true},
 		{"invalid", false},
 	} {
 		if got := pingtunnelVersionSupported(tc.version); got != tc.valid {

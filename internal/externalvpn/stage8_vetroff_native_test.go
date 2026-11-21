@@ -119,21 +119,48 @@ func TestStage8VetroffNativePayload(t *testing.T) {
 	outboundPlans = map[string]*managedOutbound{}
 	outboundProcesses = map[string]*managedOutbound{}
 	t.Cleanup(func() { KeepOutbounds(nil); outboundPlans = oldPlans; outboundProcesses = oldProcesses })
-	for _, transport := range []string{"h2-connect", "wss", "h3-connect"} {
-		t.Run(transport, func(t *testing.T) {
-			exportInst := inst
+	for _, test := range []struct {
+		name, transport string
+		adaptive        bool
+	}{
+		{name: "h2-connect", transport: "h2-connect"},
+		{name: "wss", transport: "wss"},
+		{name: "h3-connect", transport: "h3-connect"},
+		{name: "adaptive-probe-firefox", transport: "h2-post", adaptive: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			current := inst
 			copyOptions := options
-			exportInst.Settings.Vetroff = &copyOptions
-			copyOptions.Transport = transport
+			current.Settings.Vetroff = &copyOptions
+			copyOptions.Transport = test.transport
 			copyOptions.TLSBackend = "auto"
-			if transport == "h3-connect" {
+			if test.transport == "h3-connect" {
 				copyOptions.TLSBackend = "go"
 			}
-			link, err := exportVetroffLink(exportInst, "alice", "127.0.0.1", port)
+			settings := map[string]any{"enableUDP": true, "caCert": cert}
+			if test.adaptive {
+				copyOptions.ProtocolPolicy = "strict"
+				copyOptions.AdaptivePadding = true
+				copyOptions.AdaptiveFragmentation = true
+				copyOptions.TrafficShaping = true
+				copyOptions.TimingJitter = "1ms"
+				copyOptions.ProbeKey = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
+				if err := manager.Ensure(current); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if err := manager.Ensure(inst); err != nil {
+						t.Error(err)
+					}
+				})
+				settings["browserProfile"] = "firefox-158"
+			}
+			link, err := exportVetroffLink(current, "alice", "127.0.0.1", port)
 			if err != nil {
 				t.Fatal(err)
 			}
-			raw := map[string]any{"tag": "stage8-client", "protocol": "vetroff", "settings": map[string]any{"link": link, "enableUDP": true, "caCert": cert}}
+			settings["link"] = link
+			raw := map[string]any{"tag": "stage8-client", "protocol": "vetroff", "settings": settings}
 			finish, err := ApplyOutbounds([]map[string]any{raw})
 			if err != nil {
 				t.Fatal(err)
@@ -166,7 +193,10 @@ func TestStage8VetroffNativePayload(t *testing.T) {
 			stage8SocksUDP(t, address, udp.LocalAddr().(*net.UDPAddr).Port)
 			// Reconciliation with identical settings must preserve the native server.
 			previous := manager.procs[inst.ID]
-			if err := manager.Ensure(inst); err != nil {
+			if !test.adaptive {
+				current = inst
+			}
+			if err := manager.Ensure(current); err != nil {
 				t.Fatal(err)
 			}
 			if manager.procs[inst.ID] != previous {

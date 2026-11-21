@@ -17,6 +17,32 @@ func vetroffOutboundTestLink(raw string) string {
 	return "vetroff://" + base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
+func TestVetroff011OutboundValidation(t *testing.T) {
+	const link = `{"v":1,"servers":["https://a.example"],"username":"alice","password":"test-password","transport":"h2-post","protocol_policy":"strict","adaptive_padding":true,"adaptive_fragmentation":true,"traffic_shaping":true,"timing_jitter":"2ms","probe_key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"}`
+	settings := OutboundSettings{Link: vetroffOutboundTestLink(link), BrowserProfile: "firefox-158"}
+	if err := validateVetroffOutbound(settings); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ name, old, replacement string }{
+		{"initial and adaptive padding", `"adaptive_padding":true`, `"adaptive_padding":true,"padding":true`},
+		{"fragmentation without padding", `"adaptive_padding":true`, `"adaptive_padding":false`},
+		{"zero jitter", `"2ms"`, `"0s"`},
+		{"excessive jitter", `"2ms"`, `"6ms"`},
+		{"probe key with builtin policy", `"strict"`, `"builtin"`},
+		{"invalid probe key", `AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE`, `invalid`},
+		{"Firefox with HTTP/3", `"h2-post"`, `"h3-post"`},
+		{"Firefox with Go TLS", `"h2-post"`, `"h2-post","tls":"go"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			invalid := settings
+			invalid.Link = vetroffOutboundTestLink(strings.Replace(link, test.old, test.replacement, 1))
+			if err := validateVetroffOutbound(invalid); err == nil {
+				t.Fatal("invalid profile was accepted")
+			}
+		})
+	}
+}
+
 func vetroffOutboundTestConfig(link string, enableUDP bool) map[string]any {
 	return map[string]any{
 		"tag":      "vetroff-out",

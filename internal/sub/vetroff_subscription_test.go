@@ -34,6 +34,11 @@ func seedVetroffSubscription(t *testing.T) (*model.Inbound, string, string) {
 	options.XHTTPPath = "/carrier/"
 	options.XHTTPHost = "front.example.com"
 	options.ProtocolPolicy = "strict"
+	options.AdaptivePadding = true
+	options.AdaptiveFragmentation = true
+	options.TrafficShaping = true
+	options.TimingJitter = "2ms"
+	options.ProbeKey = base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("k", 32)))
 	options.ConnectTimeout = "12s"
 	options.AttemptTimeout = "3s"
 	raw, err := json.Marshal(map[string]any{"hostname": "vpn.example.com", "certificate": cert, "privateKey": key, "vetroff": options, "clients": []model.Client{{Email: "route@example.com", Password: strings.Repeat("v", 48), Enable: true, SubID: subID}}})
@@ -63,6 +68,9 @@ func decodeVetroffProfile(t *testing.T, link string) map[string]any {
 	if profile["password"] != strings.Repeat("v", 48) || profile["sni"] != "vpn.example.com" || profile["transport"] != "xhttp-stream-up" || profile["xhttp_path"] != "/carrier/" || profile["xhttp_host"] != "front.example.com" || profile["protocol_policy"] != "strict" || profile["connect_timeout"] != "12s" || !strings.HasPrefix(profile["pin_sha256"].(string), "sha256/") {
 		t.Fatalf("lost client settings: %s", raw)
 	}
+	if profile["adaptive_padding"] != true || profile["adaptive_fragmentation"] != true || profile["traffic_shaping"] != true || profile["timing_jitter"] != "2ms" || profile["probe_key"] != base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("k", 32))) {
+		t.Fatal("lost VetroffProxy 0.1.1 subscription settings")
+	}
 	return profile
 }
 
@@ -75,7 +83,7 @@ func TestVetroffHTTPSubscriptionAndNativeBinary(t *testing.T) {
 			NewSUBController(router.Group("/"), WithSUBPath("/sub/"), WithSUBEncryption(encrypted))
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodGet, "/sub/"+subID, nil)
-			req.Header.Set("User-Agent", "VetroffProxy/0.1.0")
+			req.Header.Set("User-Agent", "VetroffProxy/0.1.1")
 			router.ServeHTTP(rec, req)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("subscription: %d %s", rec.Code, rec.Body.String())

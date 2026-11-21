@@ -26,17 +26,18 @@ import (
 )
 
 type OutboundSettings struct {
-	CACert     string              `json:"caCert,omitempty"`
-	Link       string              `json:"link"`
-	EnableUDP  bool                `json:"enableUDP"`
-	UDPStream  bool                `json:"udpStream"`
-	Token      string              `json:"token"`
-	MTU        int                 `json:"mtu"`
-	SNI        string              `json:"sni"`
-	Bypass     string              `json:"bypass"`
-	Secret     string              `json:"secret"`
-	Context    string              `json:"context"`
-	Transports []OpenFluxTransport `json:"transports"`
+	CACert         string              `json:"caCert,omitempty"`
+	BrowserProfile string              `json:"browserProfile,omitempty"`
+	Link           string              `json:"link"`
+	EnableUDP      bool                `json:"enableUDP"`
+	UDPStream      bool                `json:"udpStream"`
+	Token          string              `json:"token"`
+	MTU            int                 `json:"mtu"`
+	SNI            string              `json:"sni"`
+	Bypass         string              `json:"bypass"`
+	Secret         string              `json:"secret"`
+	Context        string              `json:"context"`
+	Transports     []OpenFluxTransport `json:"transports"`
 }
 
 type managedOutbound struct {
@@ -556,6 +557,9 @@ func startOutboundContext(parent context.Context, tag string, proc *managedOutbo
 		args := []string{"client", "--link-file", connection, "--listen", net.JoinHostPort("127.0.0.1", strconv.Itoa(proc.port))}
 		if s.CACert != "" {
 			args = append(args, "--ca-cert", s.CACert)
+		}
+		if s.BrowserProfile != "" && s.BrowserProfile != "none" {
+			args = append(args, "--browser-profile", s.BrowserProfile)
 		}
 		if s.EnableUDP {
 			args = append(args, "--enable-udp")

@@ -66,6 +66,7 @@ func vetroffFiles(inst Instance) ([]string, error) {
 		return nil, err
 	}
 	conf := map[string]any{"v": 1, "listen": inst.Bind(), "enable_udp": v.EnableUDP, "cert": cert, "key": key, "users_file": usersPath, "users_state": filepath.Join(folder, "vetroff-usage.json"), "max_tunnels": v.MaxTunnels, "max_connections": v.MaxConnections, "protocol_policy": v.ProtocolPolicy}
+	addVetroffExtensions(conf, v)
 	if v.HTTP3 {
 		conf["h3_listen"] = v.H3Listen
 		if v.H3Listen == "" {
@@ -120,7 +121,7 @@ func vetroffFiles(inst Instance) ([]string, error) {
 		return []string{"server", "--config", path}, nil
 	}
 	args := []string{"server"}
-	for _, name := range []string{"listen", "h3_listen", "cert", "key", "users_file", "users_state", "max_tunnels", "max_connections", "protocol_policy", "xhttp_path", "xhttp_host", "web_root", "egress_proxy", "egress_dns", "bond_upstream", "bond_ca", "bond_sni", "bond_pin_sha256", "cluster_file"} {
+	for _, name := range []string{"listen", "h3_listen", "cert", "key", "users_file", "users_state", "max_tunnels", "max_connections", "protocol_policy", "xhttp_path", "xhttp_host", "web_root", "egress_proxy", "egress_dns", "bond_upstream", "bond_ca", "bond_sni", "bond_pin_sha256", "cluster_file", "timing_jitter"} {
 		if value, ok := conf[name]; ok {
 			flag := strings.ReplaceAll(name, "_", "-")
 			if name == "bond_ca" {
@@ -129,7 +130,7 @@ func vetroffFiles(inst Instance) ([]string, error) {
 			args = append(args, "--"+flag, fmt.Sprint(value))
 		}
 	}
-	for name, enabled := range map[string]bool{"enable-udp": v.EnableUDP, "bond-hub": v.BondHub, "padding": v.Padding, "allow-private": v.AllowPrivate} {
+	for name, enabled := range map[string]bool{"enable-udp": v.EnableUDP, "bond-hub": v.BondHub, "padding": v.Padding, "allow-private": v.AllowPrivate, "adaptive-padding": v.AdaptivePadding, "adaptive-fragmentation": v.AdaptiveFragmentation, "traffic-shaping": v.TrafficShaping} {
 		if enabled {
 			args = append(args, "--"+name)
 		}
@@ -189,6 +190,7 @@ func exportVetroffLink(inst Instance, email, address string, port int) (string, 
 				return "", err
 			}
 			profile := map[string]any{"v": 1, "servers": servers, "username": FPTNUsername(c.Email), "password": c.Password, "sni": inst.Settings.Hostname, "transport": v.Transport, "tls": v.TLSBackend, "encryption": "tls13", "balance": v.Balance, "bond": v.Bond, "discover": v.Discover, "pipeline": v.Pipeline, "padding": v.Padding, "connect_timeout": v.ConnectTimeout, "attempt_timeout": v.AttemptTimeout}
+			addVetroffExtensions(profile, v)
 			if v.ProtocolPolicy == "strict" {
 				profile["protocol_policy"] = "strict"
 			}

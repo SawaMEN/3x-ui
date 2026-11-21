@@ -89,6 +89,23 @@ export default function AdditionalOutboundEditor({
               autoComplete="off"
             />
           </Form.Item>
+          <Form.Item label={t('pages.inbounds.form.vetroffOptions.caCert')}>
+            <Input
+              value={String(settings.caCert ?? '')}
+              onChange={(e) => update({ caCert: e.target.value })}
+              placeholder="/etc/ssl/vetroff/ca.pem"
+            />
+          </Form.Item>
+          <Form.Item label={t('pages.inbounds.form.vetroffOptions.browserProfile')}>
+            <Select
+              value={String(settings.browserProfile || 'none')}
+              onChange={(value) => update({ browserProfile: value === 'none' ? '' : value })}
+              options={[
+                { value: 'none', label: t('pages.inbounds.form.vetroffOptions.automatic') },
+                { value: 'firefox-158', label: 'Firefox 158 (NSS, HTTP/2)' },
+              ]}
+            />
+          </Form.Item>
           <Form.Item label="UDP ASSOCIATE">
             <Switch
               checked={settings.enableUDP === true}

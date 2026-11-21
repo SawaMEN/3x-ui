@@ -175,12 +175,14 @@ export default function SingBoxOutboundModal({
   useEffect(() => {
     session.current++;
     if (!open) return;
-    const initial = normalizeNativeFingerprint(value
-      ? structuredClone(value)
-      : outboundDefaults(
-          initialType,
-          uniqueTag(initialType === 'selector' ? 'group' : 'proxy', tagsRef.current),
-        ));
+    const initial = normalizeNativeFingerprint(
+      value
+        ? structuredClone(value)
+        : outboundDefaults(
+            initialType,
+            uniqueTag(initialType === 'selector' ? 'group' : 'proxy', tagsRef.current),
+          ),
+    );
     autoTagRef.current = value ? '' : text(initial.tag);
     setDraft(initial);
     setJson(JSON.stringify(initial, null, 2));
@@ -301,18 +303,18 @@ export default function SingBoxOutboundModal({
             ? 'PingTunnel: несовместимость с сервером 3.x'
             : type === 'masque'
               ? 'Cloudflare WARP через MASQUE'
-            : type === 'snell'
-              ? 'Snell: данные берутся с сервера'
-              : 'Автоматическая настройка подключения'
+              : type === 'snell'
+                ? 'Snell: данные берутся с сервера'
+                : 'Автоматическая настройка подключения'
         }
         description={
           type === 'pingtunnel'
             ? 'Встроенный PingTunnel-outbound модифицированного sing-box использует старый протокол с key/encryption_key и НЕ подключится к PingTunnel 3.x из этой панели. Для подключения используйте клиентский JSON, экспортированный в подписке, и отдельный PingTunnel 3.x. Настройка здесь предназначена только для старых совместимых серверов.'
             : type === 'masque'
               ? 'Устройство WARP регистрируется ядром sing-box при первом запуске. Выберите HTTP/3 или HTTP/2, сохраните подключение и примените настройки ядра. Кэш регистрации включается автоматически — свой MASQUE-сервер и отдельные ключи не нужны.'
-            : type === 'snell'
-              ? 'Импортируйте подписку или укажите PSK с сервера. User key нужен только для многопользовательского сервера. Версия v6 и необязательные настройки выбраны автоматически. Случайные клиентские ключи Snell не создаются.'
-              : 'Импортируйте ссылку — адрес, ключи и настройки заполнятся сами. Необязательные параметры выбирает ядро. Недостающие учётные данные создаются автоматически; существующие сохраняются. Новые данные нужно указать и на удалённом сервере.'
+              : type === 'snell'
+                ? 'Импортируйте подписку или укажите PSK с сервера. User key нужен только для многопользовательского сервера. Версия v6 и необязательные настройки выбраны автоматически. Случайные клиентские ключи Snell не создаются.'
+                : 'Импортируйте ссылку — адрес, ключи и настройки заполнятся сами. Необязательные параметры выбирает ядро. Недостающие учётные данные создаются автоматически; существующие сохраняются. Новые данные нужно указать и на удалённом сервере.'
         }
         action={
           type === 'masque' || type === 'snell' || type === 'pingtunnel' ? undefined : (

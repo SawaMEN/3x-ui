@@ -298,7 +298,7 @@ func TestOfficialVetroffBundle(t *testing.T) {
 	if archive == "" {
 		t.Skip("set VETROFF_TEST_ARCHIVE to verify the complete official binary release")
 	}
-	digest := map[string]string{"amd64": "492d07be1b430d8fe8cfbe486dd4d3f006e4dcd04399ada2c7091f45380998d3", "arm64": "79ccd166d637ffea8f880c131a99fe6bc28f4ced08ef96b3c44572fb26db0d4c"}[runtime.GOARCH]
+	digest := map[string]string{"amd64": "8020abb2395b76a3cf89c2bd2abd02202e4231d465534d782a1c1475e7e3dd61", "arm64": "a34172a12c1c1f6901b3c5efed2aaf6fb6220a7bfdb3cea5462d6adb127233aa"}[runtime.GOARCH]
 	if digest == "" {
 		t.Fatal("unsupported Vetroff archive architecture")
 	}
@@ -310,7 +310,7 @@ func TestOfficialVetroffBundle(t *testing.T) {
 		t.Fatal(err)
 	}
 	version, err := binaryVersion(t.Context(), filepath.Join(folder, "vetroff-necko/vetroff"), []string{"version"})
-	if err != nil || version != "0.1.0" {
+	if err != nil || version != "0.1.1" {
 		t.Fatalf("official release: %s, %v", version, err)
 	}
 }
