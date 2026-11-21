@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Segmented } from 'antd';
 import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
 
+import SubAppleRegionHelp from './SubAppleRegionHelp';
 import happIcon from './app-icons/happ.svg';
 import { APP_PLATFORMS, buildSubApps, type AppPlatform } from './subPageModel';
 
@@ -30,8 +31,9 @@ export default function SubAppsTab({ subUrl, profileName, initialPlatform }: Sub
         options={PLATFORM_OPTIONS}
         aria-label={t('subscription.tabApps')}
       />
+      {(platform === 'ios' || platform === 'macos') && <SubAppleRegionHelp platform={platform} />}
       <ul className="sub-app-list">
-        {buildSubApps(platform, subUrl, profileName).map(({ name, url, downloadUrl }) => (
+        {buildSubApps(platform, subUrl, profileName).map(({ name, url, downloads }) => (
           <li key={name} className="sub-row sub-app-row">
             <div className="sub-app-identity">
               <span className="sub-app-mark" aria-hidden="true">
@@ -44,15 +46,20 @@ export default function SubAppsTab({ subUrl, profileName, initialPlatform }: Sub
               <span className="sub-app-name">{name}</span>
             </div>
             <div className="sub-app-actions">
-              <Button
-                href={downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                icon={<DownloadOutlined aria-hidden />}
-                aria-label={`${t('download')} · ${name}`}
-              >
-                {t('download')}
-              </Button>
+              <div className="sub-app-downloads">
+                {downloads.map(({ label, href }, index) => (
+                  <Button
+                    key={href}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    icon={index === 0 ? <DownloadOutlined aria-hidden /> : undefined}
+                    aria-label={`${label} · ${name}`}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
               <Button
                 type="primary"
                 href={url}

@@ -110,8 +110,8 @@ describe('buildSubApps', () => {
   it.each([
     ['android', 'app.hiddify.com', 'com.happproxy'],
     ['ios', 'id6596777532', 'id6504287215'],
-    ['windows', 'Hiddify-Windows-Setup-x64.exe', 'setup-Happ.x64.exe'],
-    ['macos', 'Hiddify-MacOS.dmg', 'Happ.macOS.universal.dmg'],
+    ['windows', 'apps.microsoft.com/detail/9ndgwm32bnxk', 'happ-desktop/releases/latest'],
+    ['macos', 'id6596777532?platform=mac', 'id6504287215?platform=mac'],
     ['linux', 'hiddify-app/releases/latest', 'happ-desktop/releases/latest'],
   ] as const)('offers the ordered clients and download links for %s', (platform, hiddify, happ) => {
     const apps = buildSubApps(platform, subUrl, 'Nova Net');
@@ -121,8 +121,10 @@ describe('buildSubApps', () => {
       `hiddify://import/${subUrl}#Nova%20Net`,
       `happ://add/${subUrl}`,
     ]);
-    expect(apps[0].downloadUrl).toContain(hiddify);
-    expect(apps[1].downloadUrl).toBe('https://github.com/hiddify/hiddify-app/releases');
-    expect(apps[2].downloadUrl).toContain(happ);
+    expect(apps[0].downloads[0].href).toContain(hiddify);
+    expect(apps[1].downloads).toEqual([
+      { label: 'GitHub', href: 'https://github.com/hiddify/hiddify-app/releases' },
+    ]);
+    expect(apps[2].downloads[0].href).toContain(happ);
   });
 });

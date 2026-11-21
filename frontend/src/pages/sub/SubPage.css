@@ -608,6 +608,76 @@ a.sub-row-title:hover {
   padding-inline: clamp(4px, 2vw, 12px);
 }
 
+.sub-apple-help {
+  border: 1px solid var(--sub-row-border-hover);
+  border-radius: 14px;
+  background: var(--sub-tile-bg);
+}
+
+.sub-apple-help summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: inherit;
+  list-style: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.sub-apple-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.sub-apple-help summary:hover {
+  background: var(--sub-row-bg-hover);
+}
+
+.sub-apple-help summary:focus-visible {
+  outline: 2px solid var(--sub-ink-from);
+  outline-offset: 3px;
+}
+
+.sub-apple-help summary > .anticon,
+.sub-apple-help-body a {
+  color: var(--sub-ink-from);
+}
+
+.sub-apple-help[open] .sub-apple-help-chevron {
+  transform: rotate(180deg);
+}
+
+.sub-apple-help-body {
+  padding: 14px;
+  border-top: 1px solid var(--sub-row-border);
+  color: var(--ant-color-text-secondary);
+}
+
+.sub-apple-help-body p {
+  margin: 0 0 10px;
+}
+
+.sub-apple-help-body ol {
+  margin: 0 0 12px;
+  padding-inline-start: 22px;
+}
+
+.sub-apple-help-body li + li {
+  margin-top: 6px;
+}
+
+.sub-apple-help-body li::marker {
+  color: var(--sub-ink-from);
+  font-weight: 650;
+}
+
+.sub-apple-help-body a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .sub-app-list {
   display: grid;
   gap: 8px;
@@ -622,7 +692,8 @@ a.sub-row-title:hover {
 }
 
 .sub-app-identity,
-.sub-app-actions {
+.sub-app-actions,
+.sub-app-downloads {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

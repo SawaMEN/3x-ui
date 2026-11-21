@@ -62,30 +62,55 @@ export function detectPlatform(userAgent: string, maxTouchPoints = 0): AppPlatfo
 }
 
 const HIDDIFY_RELEASES = 'https://github.com/hiddify/hiddify-app/releases';
+const HIDDIFY_LATEST = `${HIDDIFY_RELEASES}/latest`;
 const HAPP_DESKTOP = 'https://github.com/Happ-proxy/happ-desktop/releases/latest';
+const HIDDIFY_APP_STORE = 'https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532';
+const HAPP_APP_STORE = 'https://apps.apple.com/app/happ-proxy-utility/id6504287215';
 
-const HIDDIFY_DOWNLOADS: Record<AppPlatform, string> = {
-  android: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
-  ios: 'https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532',
-  windows: `${HIDDIFY_RELEASES}/latest/download/Hiddify-Windows-Setup-x64.exe`,
-  macos: `${HIDDIFY_RELEASES}/latest/download/Hiddify-MacOS.dmg`,
-  linux: `${HIDDIFY_RELEASES}/latest`,
+interface AppDownload {
+  label: string;
+  href: string;
+}
+
+const HIDDIFY_DOWNLOADS: Record<AppPlatform, AppDownload[]> = {
+  android: [
+    { label: 'Google Play', href: 'https://play.google.com/store/apps/details?id=app.hiddify.com' },
+  ],
+  ios: [{ label: 'App Store', href: `${HIDDIFY_APP_STORE}?platform=iphone` }],
+  windows: [
+    { label: 'Microsoft Store', href: 'https://apps.microsoft.com/detail/9ndgwm32bnxk' },
+    { label: '.exe', href: `${HIDDIFY_LATEST}/download/Hiddify-Windows-Setup-x64.exe` },
+  ],
+  macos: [
+    { label: 'App Store', href: `${HIDDIFY_APP_STORE}?platform=mac` },
+    { label: '.dmg', href: `${HIDDIFY_LATEST}/download/Hiddify-MacOS.dmg` },
+  ],
+  linux: [{ label: 'GitHub', href: HIDDIFY_LATEST }],
 };
 
-const HAPP_DOWNLOADS: Record<AppPlatform, string> = {
-  android: 'https://play.google.com/store/apps/details?id=com.happproxy',
-  ios: 'https://apps.apple.com/app/happ-proxy-utility/id6504287215',
-  windows: `${HAPP_DESKTOP}/download/setup-Happ.x64.exe`,
-  macos: `${HAPP_DESKTOP}/download/Happ.macOS.universal.dmg`,
-  linux: HAPP_DESKTOP,
+const HAPP_DOWNLOADS: Record<AppPlatform, AppDownload[]> = {
+  android: [
+    { label: 'Google Play', href: 'https://play.google.com/store/apps/details?id=com.happproxy' },
+  ],
+  ios: [{ label: 'App Store', href: `${HAPP_APP_STORE}?platform=iphone` }],
+  windows: [{ label: 'GitHub', href: HAPP_DESKTOP }],
+  macos: [
+    { label: 'App Store', href: `${HAPP_APP_STORE}?platform=mac` },
+    { label: '.dmg', href: `${HAPP_DESKTOP}/download/Happ.macOS.universal.dmg` },
+  ],
+  linux: [{ label: 'GitHub', href: HAPP_DESKTOP }],
 };
 
 export function buildSubApps(platform: AppPlatform, subUrl: string, profileName: string) {
   const hiddifyImport = `hiddify://import/${subUrl}#${encodeURIComponent(profileName)}`;
 
   return [
-    { name: 'Hiddify', url: hiddifyImport, downloadUrl: HIDDIFY_DOWNLOADS[platform] },
-    { name: 'Hiddify Beta', url: hiddifyImport, downloadUrl: HIDDIFY_RELEASES },
-    { name: 'Happ', url: `happ://add/${subUrl}`, downloadUrl: HAPP_DOWNLOADS[platform] },
+    { name: 'Hiddify', url: hiddifyImport, downloads: HIDDIFY_DOWNLOADS[platform] },
+    {
+      name: 'Hiddify Beta',
+      url: hiddifyImport,
+      downloads: [{ label: 'GitHub', href: HIDDIFY_RELEASES }],
+    },
+    { name: 'Happ', url: `happ://add/${subUrl}`, downloads: HAPP_DOWNLOADS[platform] },
   ];
 }
