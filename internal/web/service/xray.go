@@ -653,15 +653,17 @@ const mtprotoEgressSocksSettings = `{"auth":"noauth","udp":false}`
 // hot-appliable, leaves the stored template untouched, and never forces a full
 // Xray restart. Mirrors injectPanelEgress.
 func injectMtprotoEgress(cfg *xray.Config, inbound *model.Inbound) {
+	if !mtprotoRoutesThroughXray(inbound) {
+		return
+	}
 	var parsed struct {
-		RouteThroughXray bool   `json:"routeThroughXray"`
-		RouteXrayPort    int    `json:"routeXrayPort"`
-		OutboundTag      string `json:"outboundTag"`
+		RouteXrayPort int    `json:"routeXrayPort"`
+		OutboundTag   string `json:"outboundTag"`
 	}
 	if err := json.Unmarshal([]byte(inbound.Settings), &parsed); err != nil {
 		return
 	}
-	if !parsed.RouteThroughXray || parsed.RouteXrayPort <= 0 || inbound.Tag == "" {
+	if parsed.RouteXrayPort <= 0 || parsed.RouteXrayPort > 65535 || inbound.Tag == "" {
 		return
 	}
 	tag := inbound.Tag

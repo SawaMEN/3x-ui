@@ -79,7 +79,7 @@ func TestNormalizeMtprotoXrayPort(t *testing.T) {
 	}
 
 	// Turning routing off strips both the bridge port and the inert outbound.
-	ib = &model.Inbound{Protocol: model.MTProto, Settings: `{"routeThroughXray":false,"routeXrayPort":53000,"outboundTag":"warp"}`}
+	ib = &model.Inbound{Protocol: model.MTProto, Settings: `{"routeThroughXray":false,"routeXrayPort":53000,"outboundTag":"warp","fallbackOutboundTags":["reserve"]}`}
 	if err := s.normalizeMtprotoXrayPort(ib, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -92,6 +92,17 @@ func TestNormalizeMtprotoXrayPort(t *testing.T) {
 	}
 	if _, ok := parsed["outboundTag"]; ok {
 		t.Fatalf("disabling routing must drop the inert outbound tag, got %s", ib.Settings)
+	}
+	if _, ok := parsed["fallbackOutboundTags"]; ok {
+		t.Fatalf("disabling routing must drop the fallback tags, got %s", ib.Settings)
+	}
+
+	ib.Settings = `{"routeThroughXray":true,"routeXrayPort":53000,"outboundTag":"","fallbackOutboundTags":["reserve"]}`
+	if err := s.normalizeMtprotoXrayPort(ib, ""); err != nil {
+		t.Fatal(err)
+	}
+	if !mtprotoRoutesThroughXray(ib) || routeXrayPortOf(t, ib.Settings) != 53000 || strings.Contains(ib.Settings, "fallbackOutboundTags") {
+		t.Fatalf("clearing the primary must keep the bridge for general routing: %s", ib.Settings)
 	}
 }
 

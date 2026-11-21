@@ -1033,7 +1033,7 @@ func (s *InboundService) normalizeMtprotoSecret(inbound *model.Inbound) {
 // mtprotoRoutesThroughXray reports whether an mtproto inbound is configured to
 // egress through the core's router (the loopback SOCKS bridge in §xray.go).
 func mtprotoRoutesThroughXray(inbound *model.Inbound) bool {
-	if inbound == nil || inbound.Protocol != model.MTProto {
+	if inbound == nil || inbound.Protocol != model.MTProto || mtproto.WebProxyInbound(inbound) {
 		return false
 	}
 	var parsed struct {
@@ -1086,14 +1086,39 @@ func (s *InboundService) normalizeMtprotoXrayPort(inbound *model.Inbound, oldSet
 	if inbound.Protocol != model.MTProto {
 		return nil
 	}
-	if err := mtproto.ValidateSettings(inbound.Settings); err != nil {
-		return err
-	}
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(inbound.Settings), &parsed); err != nil || parsed == nil {
-		return nil
+		return mtproto.ValidateSettings(inbound.Settings)
 	}
 	routed, _ := parsed["routeThroughXray"].(bool)
+	primary, _ := parsed["outboundTag"].(string)
+	_, hadPort := parsed["routeXrayPort"]
+	_, hadTag := parsed["outboundTag"]
+	_, hadFallbacks := parsed["fallbackOutboundTags"]
+	removeBridge := !routed && (hadPort || hadTag)
+	removeFallbacks := hadFallbacks && (!routed || strings.TrimSpace(primary) == "")
+	if removeBridge {
+		delete(parsed, "routeXrayPort")
+		delete(parsed, "outboundTag")
+	}
+	if removeFallbacks {
+		delete(parsed, "fallbackOutboundTags")
+	}
+	settings := inbound.Settings
+	if removeBridge || removeFallbacks {
+		bs, err := json.MarshalIndent(parsed, "", "  ")
+		if err != nil {
+			return err
+		}
+		settings = string(bs)
+	}
+	if err := mtproto.ValidateSettings(settings); err != nil {
+		return err
+	}
+	inbound.Settings = settings
+	if !routed || mtproto.WebProxyInbound(inbound) {
+		return nil
+	}
 	if raw, ok := parsed["fallbackOutboundTags"].([]any); ok && len(raw) > 0 {
 		coreType, err := s.coreTypeForInbound(inbound)
 		if err != nil {
@@ -1102,22 +1127,6 @@ func (s *InboundService) normalizeMtprotoXrayPort(inbound *model.Inbound, oldSet
 		if !IsNativeCore(coreType) {
 			return fmt.Errorf("MTProto fallback outbounds require a Sing-box core, got %q", coreType)
 		}
-	}
-	if !routed {
-		_, hadPort := parsed["routeXrayPort"]
-		_, hadTag := parsed["outboundTag"]
-		if !hadPort && !hadTag {
-			return nil
-		}
-		delete(parsed, "routeXrayPort")
-		delete(parsed, "outboundTag")
-		delete(parsed, "fallbackOutboundTags")
-		if bs, err := json.MarshalIndent(parsed, "", "  "); err == nil {
-			inbound.Settings = string(bs)
-		} else {
-			logger.Warning("mtproto: failed to marshal settings after disabling routing:", err)
-		}
-		return nil
 	}
 
 	// Prefer the already-stored port (carried across edits), then any value the

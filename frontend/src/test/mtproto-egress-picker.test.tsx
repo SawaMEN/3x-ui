@@ -24,7 +24,11 @@ function mockConfigWithBlockOutbound() {
       ],
     },
   };
-  vi.spyOn(HttpUtil, 'post').mockResolvedValue(new Msg(true, '', JSON.stringify(payload)));
+  vi.spyOn(HttpUtil, 'post').mockImplementation(async (url) => {
+    if (url === '/panel/api/setting/all') return new Msg(true, '', { coreType: 'xray' });
+    if (url === '/panel/api/xray/') return new Msg(true, '', JSON.stringify(payload));
+    return new Msg(false, 'Unexpected endpoint', null);
+  });
 }
 
 function Harness({ children }: { children: ReactNode }) {

@@ -49,6 +49,20 @@ func TestSingBoxMtprotoEgress(t *testing.T) {
 	}
 }
 
+func TestMtprotoWebDoesNotInstallCoreBridge(t *testing.T) {
+	ib := mtprotoInbound("telegram-web", `{"routeThroughXray":true,"routeXrayPort":50000,"outboundTag":"missing","webProxy":{"enabled":true}}`)
+	xray := egressTestConfig()
+	before := len(xray.InboundConfigs)
+	injectMtprotoEgress(xray, ib)
+	if len(xray.InboundConfigs) != before {
+		t.Fatal("WEB Proxy installed an unused Xray bridge")
+	}
+	native := &singbox.Config{}
+	if err := injectSingBoxMtprotoEgress(native, ib); err != nil || len(native.Inbounds) != 0 {
+		t.Fatalf("WEB Proxy must not change native routing: %v", err)
+	}
+}
+
 func TestSingBoxMtprotoFallbackOutbounds(t *testing.T) {
 	cfg := &singbox.Config{
 		Route:     map[string]any{"rules": []map[string]any{}},

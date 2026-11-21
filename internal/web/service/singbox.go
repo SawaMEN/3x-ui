@@ -21,7 +21,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/oxidns"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
@@ -189,7 +188,7 @@ func editorRoutingInbounds(cfg *singbox.Config, inbounds []*model.Inbound) ([]st
 		case model.AmneziaWG:
 			appendTag(inbound.Tag)
 		case model.MTProto:
-			if mtprotoRoutesThroughXray(inbound) && parseRouteXrayPort(inbound.Settings) > 0 && !mtproto.WebProxyInbound(inbound) {
+			if mtprotoRoutesThroughXray(inbound) && parseRouteXrayPort(inbound.Settings) > 0 {
 				appendTag(inbound.Tag)
 			}
 		case model.MASQUE, model.WireGuard, model.VKTurnProxy:

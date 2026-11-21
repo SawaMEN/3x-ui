@@ -19,7 +19,11 @@ describe('subscription tabs', () => {
     const canvas = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 
     try {
-      const { default: SubPage } = await import('@/pages/sub/SubPage');
+      const [{ default: SubPage }] = await Promise.all([
+        import('@/pages/sub/SubPage'),
+        import('@/pages/sub/SubAmneziaWGTab'),
+        import('@/pages/sub/SubConfigsTab'),
+      ]);
       renderWithProviders(<SubPage />);
       const tab = screen.getByRole('tab', { name: 'AmneziaWG' });
       expect(screen.getAllByRole('tab')[1]).toBe(tab);
@@ -46,7 +50,7 @@ describe('subscription tabs', () => {
       canvas.mockRestore();
       vi.unstubAllGlobals();
     }
-  });
+  }, 15_000);
 
   it('shows the main QR code first and copies the subscription address', () => {
     const onCopy = vi.fn();

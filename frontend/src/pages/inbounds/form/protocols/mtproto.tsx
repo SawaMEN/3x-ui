@@ -30,10 +30,11 @@ export default function MtprotoFields({
   const routeThroughXray = useWatch({ control, name: 'settings.routeThroughXray' }) as
     | boolean
     | undefined;
+  const primaryOutbound = useWatch({ control, name: 'settings.outboundTag' }) as string | undefined;
   const proxyProtocolEnabled = useWatch({ control, name: 'settings.proxyProtocolListener' });
   const legacyFronting = useWatch({ control, name: 'settings.domainFronting' });
   const { data: outboundTags, isFetching: outboundTagsLoading } = useTelemtOutboundTags(
-    Boolean(routeThroughXray),
+    Boolean(routeThroughXray && !webProxyEnabled),
     nodeId,
   );
   const routeThroughXrayHint = i18n.resolvedLanguage?.startsWith('ru')
@@ -335,26 +336,30 @@ export default function MtprotoFields({
                   options={(outboundTags ?? []).map((tag) => ({ value: tag, label: tag }))}
                 />
               </FormField>
-              <FormField
-                name={['settings', 'fallbackOutboundTags']}
-                label={
-                  ru
-                    ? 'Резервные выходы Telegram (Sing-box)'
-                    : 'Fallback Telegram outbounds (Sing-box)'
-                }
-                extra={
-                  ru
-                    ? 'Необязательно. До 3 резервных outbound. Каждые 2 минуты проверяется HTTPS core.telegram.org через каждый выход. При недоступности основного выбирается живой резервный, после восстановления возвращается основной. Работает только в ядрах Sing-box, не в Xray.'
-                    : 'Optional: up to 3 backup outbounds. HTTPS core.telegram.org is checked every 2 minutes per route; available backup is used if primary is down. Returns to primary when it recovers. Sing-box cores only.'
-                }
-              >
-                <Select
-                  mode="multiple"
-                  maxCount={3}
-                  showSearch
-                  options={(outboundTags ?? []).map((tag) => ({ value: tag, label: tag }))}
-                />
-              </FormField>
+              {primaryOutbound && (
+                <FormField
+                  name={['settings', 'fallbackOutboundTags']}
+                  label={
+                    ru
+                      ? 'Резервные выходы Telegram (Sing-box)'
+                      : 'Fallback Telegram outbounds (Sing-box)'
+                  }
+                  extra={
+                    ru
+                      ? 'Необязательно. До 3 резервных outbound. Каждые 2 минуты проверяется HTTPS core.telegram.org через каждый выход. При недоступности основного выбирается живой резервный, после восстановления возвращается основной. Работает только в ядрах Sing-box, не в Xray.'
+                      : 'Optional: up to 3 backup outbounds. HTTPS core.telegram.org is checked every 2 minutes per route; available backup is used if primary is down. Returns to primary when it recovers. Sing-box cores only.'
+                  }
+                >
+                  <Select
+                    mode="multiple"
+                    maxCount={3}
+                    showSearch
+                    options={(outboundTags ?? [])
+                      .filter((tag) => tag !== primaryOutbound)
+                      .map((tag) => ({ value: tag, label: tag }))}
+                  />
+                </FormField>
+              )}
             </>
           )}
           <Collapse
