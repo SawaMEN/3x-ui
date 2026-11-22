@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Menu, Popover, Space } from 'antd';
-import { TranslationOutlined, WifiOutlined } from '@ant-design/icons';
+import { TranslationOutlined } from '@ant-design/icons';
 
 import { LanguageManager } from '@/utils';
 
@@ -44,27 +44,23 @@ export default function SubHeader({
   );
 
   const [failedLogo, setFailedLogo] = useState('');
-  const initial = Array.from(title)[0]?.toUpperCase();
 
   return (
     <header className="sub-header">
       <div className="sub-brand">
-        <span className="sub-brand-mark" aria-hidden="true">
-          {logoURL && failedLogo !== logoURL ? (
-            <img
-              src={logoURL}
-              alt=""
-              referrerPolicy="no-referrer"
-              onError={() => setFailedLogo(logoURL)}
-            />
-          ) : (
-            (initial ?? <WifiOutlined />)
-          )}
-        </span>
+        {logoURL && failedLogo !== logoURL && (
+          <img
+            className="sub-brand-logo"
+            src={logoURL}
+            alt=""
+            referrerPolicy="no-referrer"
+            onError={() => setFailedLogo(logoURL)}
+          />
+        )}
         <div className="sub-brand-text">
-          <div className="sub-brand-title" dir="auto">
+          <h1 className="sub-brand-title" dir="auto">
             {title || t('subscription.title')}
-          </div>
+          </h1>
           <div className="sub-brand-id">
             <bdi>{email ? `${sId} - ${email}` : sId}</bdi>
           </div>

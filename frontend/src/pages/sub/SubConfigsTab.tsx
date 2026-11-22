@@ -39,11 +39,7 @@ export default function SubConfigsTab({ links, telegramRemarks, onCopy }: SubCon
       </div>
       {groups.map((group) => (
         <Fragment key={group.title}>
-          <div className="sub-configs-bar">
-            <strong>
-              {group.title} ({group.items.length})
-            </strong>
-          </div>
+          <h2 className="sub-configs-heading">{group.title}</h2>
           {group.items.map(({ link, idx }) => {
             const parts = parseLinkParts(link);
             const [telegram] = link.startsWith('tg://')
