@@ -314,7 +314,7 @@ func seedSubMtprotoInbound(t *testing.T, subId, tag string, port int) {
 	}
 }
 
-func TestAutoDetectFallsBackToRawWhenFormatHasNoContent(t *testing.T) {
+func TestAutoDetectOmitsTelegramFromDefaultSubscription(t *testing.T) {
 	seedSubDB(t)
 	seedSubMtprotoInbound(t, "s1", "tg", 4490)
 	gin.SetMode(gin.TestMode)
@@ -323,7 +323,8 @@ func TestAutoDetectFallsBackToRawWhenFormatHasNoContent(t *testing.T) {
 	req.Header.Set("User-Agent", "Clash-Verge/v2.4.2")
 	resp := httptest.NewRecorder()
 
-	newSubscriptionTestRouter(subscriptionTestRouterConfig{clashAutoDetect: true, jsonAutoDetect: true}).ServeHTTP(resp, req)
+	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{clashAutoDetect: true, jsonAutoDetect: true})
+	router.ServeHTTP(resp, req)
 
 	if resp.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", resp.Code, resp.Body.String())
@@ -332,8 +333,15 @@ func TestAutoDetectFallsBackToRawWhenFormatHasNoContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fallback response is not base64: %v", err)
 	}
-	if !strings.Contains(string(decoded), "tg://proxy") {
-		t.Fatalf("decoded fallback lacks the Telegram proxy link: %s", decoded)
+	if len(decoded) != 0 {
+		t.Fatalf("default subscription includes a Telegram-only profile: %s", decoded)
+	}
+
+	all := httptest.NewRecorder()
+	router.ServeHTTP(all, httptest.NewRequest(http.MethodGet, "http://sub.example.com/sub/s1?format=all", nil))
+	decoded, err = base64.StdEncoding.DecodeString(all.Body.String())
+	if all.Code != http.StatusOK || err != nil || !strings.Contains(string(decoded), "tg://proxy") {
+		t.Fatalf("all profiles omitted the Telegram proxy: %d %s (%v)", all.Code, decoded, err)
 	}
 }
 

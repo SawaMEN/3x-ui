@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, QRCode } from 'antd';
+import { Button, QRCode, Segmented } from 'antd';
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 
 import SubQrButton from './SubQrButton';
@@ -24,19 +25,11 @@ export default function SubLinksTab({
   onCopy,
 }: SubLinksTabProps) {
   const { t } = useTranslation();
+  const [profileScope, setProfileScope] = useState<'compatible' | 'all'>('compatible');
+  const canExportAllProfiles = subFormatMode === 'both';
+  const qrUrl =
+    canExportAllProfiles && profileScope === 'all' ? appendNativeFormat(subUrl, 'all') : subUrl;
   const rows = [
-    {
-      kind: 'ALL',
-      url: subFormatMode === 'both' ? appendNativeFormat(subUrl, 'links') : '',
-      title: t('subscription.allConnections'),
-      downloadable: false,
-    },
-    {
-      kind: 'STANDALONE',
-      url: appendNativeFormat(subUrl, 'standalone'),
-      title: t('subscription.standaloneProtocols'),
-      downloadable: true,
-    },
     {
       kind: 'XRAY',
       url: subJsonUrl,
@@ -64,7 +57,7 @@ export default function SubLinksTab({
         <section className="sub-qr-card" aria-labelledby="sub-qr-heading">
           <div className="sub-qr-code" aria-hidden="true">
             <QRCode
-              value={subUrl}
+              value={qrUrl}
               size={128}
               type="svg"
               bordered={false}
@@ -77,25 +70,37 @@ export default function SubLinksTab({
               {t('subscription.scanTitle')}
             </h2>
             <p>{t('subscription.scanHint')}</p>
+            {canExportAllProfiles && (
+              <Segmented<'compatible' | 'all'>
+                className="sub-qr-profile-scope"
+                aria-label={t('subscription.profileScope')}
+                value={profileScope}
+                onChange={setProfileScope}
+                options={[
+                  { value: 'compatible', label: t('subscription.compatibleProfiles') },
+                  { value: 'all', label: t('subscription.allConnections') },
+                ]}
+              />
+            )}
             <div className="sub-qr-actions">
               <Button
                 type="primary"
                 icon={<CopyOutlined aria-hidden />}
-                onClick={() => onCopy(subUrl)}
+                onClick={() => onCopy(qrUrl)}
               >
                 {t('pages.inbounds.copyLink')}
               </Button>
-              <SubQrButton value={subUrl} label={t('subscription.title')} onCopy={onCopy} />
+              <SubQrButton value={qrUrl} label={t('subscription.title')} onCopy={onCopy} />
             </div>
             <a
-              href={subUrl}
+              href={qrUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="sub-row-url sub-qr-address"
               dir="ltr"
-              title={subUrl}
+              title={qrUrl}
             >
-              {subUrl}
+              {qrUrl}
             </a>
           </div>
         </section>

@@ -1,6 +1,9 @@
 package sub
 
-import "strings"
+import (
+	"net/url"
+	"strings"
+)
 
 // These share links require clients outside the stock Xray and sing-box
 // protocols. This is a UI/URI classification; it does not imply a common
@@ -32,4 +35,40 @@ func standaloneSubscriptionLinks(links []string) []string {
 		}
 	}
 	return out
+}
+
+// coreSubscriptionLinks keeps URI schemes supported by at least one of the
+// two cores. Unknown schemes from external subscriptions require opting in.
+func coreSubscriptionLinks(links []string) []string {
+	var result []string
+	for _, entry := range links {
+		for _, link := range splitLinkLines(entry) {
+			if isCoreSubscriptionLink(link) {
+				result = append(result, link)
+			}
+		}
+	}
+	return result
+}
+
+func isCoreSubscriptionLink(link string) bool {
+	link = strings.TrimSpace(link)
+	scheme, _, ok := strings.Cut(link, "://")
+	if !ok {
+		return false
+	}
+	switch strings.ToLower(scheme) {
+	case "http", "https":
+		proxy, err := url.Parse(link)
+		if err != nil || proxy.Hostname() == "" {
+			return false
+		}
+		host := strings.ToLower(proxy.Hostname())
+		return host != "t.me" && host != "telegram.me" && host != "telegram.dog"
+	case "vless", "vmess", "trojan", "ss", "socks", "socks5",
+		"hysteria2", "hy2", "wireguard", "wg", "tuic", "anytls", "shadowtls", "snell",
+		"naive", "naive+https", "naive+quic":
+		return true
+	}
+	return false
 }

@@ -220,16 +220,24 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 	if awg["h1"] != "11" || awg["jc"] != float64(4) || cfg.Endpoints[0]["private_key"] != clientKey {
 		t.Fatalf("AWG identity/options lost: %s", data)
 	}
-	// Existing Hiddify URLs must automatically choose the extended JSON renderer.
+	// Ordinary imports exclude extensions, even for Hiddify clients.
 	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{})
 	for _, path := range []string{"/sub/extended", "/json/extended"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("User-Agent", "HiddifyNext/4.0")
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, req)
-		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"type": "sudoku"`) {
-			t.Fatalf("auto-detection lost extended nodes: %d %s", response.Code, response.Body.String())
+		if response.Code != http.StatusOK || response.Body.Len() != 0 {
+			t.Fatalf("default import included extensions: %d %s", response.Code, response.Body.String())
 		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "/sub/extended?format=all", nil)
+	req.Header.Set("User-Agent", "HiddifyNext/4.0")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, req)
+	links := decodeSubscriptionBody(response.Body.Bytes())
+	if response.Code != http.StatusOK || !strings.Contains(strings.Join(links, "\n"), "sudoku://") {
+		t.Fatalf("all profiles omitted Sudoku: %d", response.Code)
 	}
 	assertOwnerCoreAcceptsSubscription(t, data)
 }
