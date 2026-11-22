@@ -38,6 +38,22 @@ func (p *LinkProvider) SubLinksForSubId(host, subId string) ([]string, error) {
 }
 
 func (p *LinkProvider) LinksForClient(host string, inbound *model.Inbound, email string) []string {
+	return p.linksForClient(host, inbound, email, "raw")
+}
+
+// NodeRouteLinks uses the same endpoint and TLS settings as the subscription
+// renderer. Subscription format exclusions do not apply to internal routing.
+func (p *LinkProvider) NodeRouteLinks(host string, inbound *model.Inbound, email string) ([]string, error) {
+	switch {
+	case usesXDriveTransport(inbound):
+		return nil, errors.New("XDrive transport is not supported for managed node routing")
+	case inbound.Protocol == model.ShadowTLS || model.ShadowTLSTransport(inbound.Settings) != nil:
+		return nil, errors.New("ShadowTLS transport is not supported for managed node routing")
+	}
+	return p.linksForClient(host, inbound, email, ""), nil
+}
+
+func (p *LinkProvider) linksForClient(host string, inbound *model.Inbound, email, format string) []string {
 	if !sudokuInboundUsable(inbound) {
 		return nil
 	}
@@ -47,7 +63,7 @@ func (p *LinkProvider) LinksForClient(host string, inbound *model.Inbound, email
 	}
 	svc.projectThroughFallbackMaster(inbound)
 	if client, ok := svc.clientForLink(inbound, email); ok {
-		endpoints, bound := svc.clientHostEndpoints(inbound, client, "raw", svc.hostEndpoints(inbound, "raw"))
+		endpoints, bound := svc.clientHostEndpoints(inbound, client, format, svc.hostEndpoints(inbound, format))
 		if bound || endpoints != nil {
 			return splitLinkLines(svc.linkFromHosts(inbound, client, endpoints))
 		}

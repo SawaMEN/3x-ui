@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -78,10 +79,32 @@ func (s *InboundService) GetScopedInboundLinks(host string, inbound *model.Inbou
 	}
 	links := provider.LinksForClient(host, inbound, email)
 	if len(links) == 0 {
-		return nil, common.NewError("no connection links available; check client, certificate and public endpoint")
+		return nil, errNoConnectionLinks
 	}
 	return links, nil
 }
+
+type nodeRouteLinkProvider interface {
+	NodeRouteLinks(host string, inbound *model.Inbound, email string) ([]string, error)
+}
+
+func (s *InboundService) getNodeRouteLinks(host string, inbound *model.Inbound, email string) ([]string, error) {
+	provider := subLinkProvider()
+	routeProvider, ok := provider.(nodeRouteLinkProvider)
+	if !ok {
+		return s.GetScopedInboundLinks(host, inbound, email)
+	}
+	links, err := routeProvider.NodeRouteLinks(host, inbound, email)
+	if err != nil {
+		return nil, err
+	}
+	if len(links) == 0 {
+		return nil, errNoConnectionLinks
+	}
+	return links, nil
+}
+
+var errNoConnectionLinks = errors.New("no connection links available; check client, certificate and public endpoint")
 
 var (
 	subLinkProviderMu         sync.RWMutex

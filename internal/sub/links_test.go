@@ -2,6 +2,7 @@ package sub
 
 import (
 	"encoding/base64"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -132,6 +133,35 @@ func TestLinksForClient_UsesHostEndpoints(t *testing.T) {
 	}
 	if !strings.Contains(links[0], "proxy.example.com:443") {
 		t.Fatalf("link = %q, want the host endpoint proxy.example.com:443", links[0])
+	}
+}
+
+func TestNodeRouteLinksIgnoreSubscriptionFormatExclusions(t *testing.T) {
+	seedSubDB(t)
+	inbound := seedSubInbound(t, "route-sub", "route", 4431, 1, wsTLSStream)
+	seedHost(t, &model.Host{
+		InboundId: inbound.Id, Address: "disabled.example.com", IsDisabled: true,
+	})
+	seedHost(t, &model.Host{
+		InboundId: inbound.Id, Address: "node.example.com", Port: 8443, Security: "tls",
+		Sni: "node-tls.example.com", Path: "/cascade", ExcludeFromSubTypes: []string{"raw"},
+	})
+
+	provider := NewLinkProvider()
+	if links := provider.LinksForClient("panel.example.com", inbound, "route@e"); len(links) != 0 {
+		t.Fatal("client link export included a host excluded from raw")
+	}
+	links, err := provider.NodeRouteLinks("panel.example.com", inbound, "route@e")
+	if err != nil || len(links) != 1 {
+		t.Fatalf("route links: got %d, error %v", len(links), err)
+	}
+	link, err := url.Parse(links[0])
+	if err != nil {
+		t.Fatal("invalid route link")
+	}
+	if link.Host != "node.example.com:8443" || link.Query().Get("security") != "tls" ||
+		link.Query().Get("sni") != "node-tls.example.com" || link.Query().Get("path") != "/cascade" {
+		t.Fatalf("route did not retain host, TLS and transport settings: %s", link.Redacted())
 	}
 }
 
