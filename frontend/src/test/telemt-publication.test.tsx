@@ -138,10 +138,10 @@ describe('MTProto publication controls', () => {
       },
     }));
     const get = vi.spyOn(HttpUtil, 'get').mockResolvedValue(new Msg(true, '', profiles));
-    const page = renderWithProviders(<RemoteTelegramProxies />);
+    renderWithProviders(<RemoteTelegramProxies />);
     expect(await screen.findByText('Proxy 0')).toBeTruthy();
     expect(screen.queryByText('Proxy 12')).toBeNull();
-    fireEvent.click(page.container.querySelector('.ant-pagination-next') as HTMLElement);
+    fireEvent.click(screen.getByRole('button', { name: 'Next Page' }));
     expect(await screen.findByText('Proxy 12')).toBeTruthy();
     expect(screen.queryByText('Proxy 0')).toBeNull();
     expect(get).toHaveBeenCalledTimes(1);

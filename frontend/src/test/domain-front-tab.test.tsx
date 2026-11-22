@@ -909,7 +909,7 @@ describe('domain and TLS dashboard', () => {
     }));
     renderWithProviders(<DomainFrontTab />);
     await openDomainSection('Domains');
-    fireEvent.click(document.querySelector('.ant-pagination-item-3')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Page 3' }));
     expect(document.querySelector('.domain-config-list')?.textContent).toContain(
       'other16.example.com',
     );
