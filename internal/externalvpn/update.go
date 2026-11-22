@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +23,8 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 )
 
 const maxExternalVPNArchiveSize int64 = 256 << 20
@@ -35,16 +36,8 @@ var (
 	externalVersionPattern    = regexp.MustCompile(`(?i)\bv?(\d+(?:\.\d+)+(?:[-+][0-9a-z.-]+)?)\b`)
 )
 
-type releaseAsset struct {
-	Name   string `json:"name"`
-	URL    string `json:"browser_download_url"`
-	Digest string `json:"digest"`
-}
-
-type githubRelease struct {
-	TagName string         `json:"tag_name"`
-	Assets  []releaseAsset `json:"assets"`
-}
+type releaseAsset = githubrelease.Asset
+type githubRelease = githubrelease.Release
 
 type releaseSpec struct {
 	protocol    model.Protocol
@@ -207,23 +200,9 @@ func pingtunnelVersionSupported(version string) bool {
 }
 
 func fetchLatestRelease(ctx context.Context, spec releaseSpec) (githubRelease, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, spec.api, nil)
-	if err != nil {
-		return githubRelease{}, err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "3x-ui")
-	resp, err := externalVPNHTTPClient.Do(req)
+	release, err := githubrelease.Fetch(ctx, externalVPNHTTPClient, spec.api)
 	if err != nil {
 		return githubRelease{}, fmt.Errorf("fetch %s release: %w", spec.protocol, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return githubRelease{}, fmt.Errorf("%s release API returned %s", spec.protocol, resp.Status)
-	}
-	var release githubRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&release); err != nil {
-		return githubRelease{}, fmt.Errorf("decode %s release: %w", spec.protocol, err)
 	}
 	if normalizeReleaseVersion(release.TagName) == "" {
 		return githubRelease{}, fmt.Errorf("%s release API returned an empty tag", spec.protocol)

@@ -170,8 +170,9 @@ func TestInstallFromOfficialReleasePageWhenAPIIsRateLimited(t *testing.T) {
 					resp.Header.Set("Location", releasesWeb+"tag/"+tag)
 				case "HEAD " + releasesWeb + "tag/" + tag:
 				case "GET " + releasesWeb + "expanded_assets/" + tag:
-					contents = fmt.Sprintf(`<clipboard-copy aria-label="Copy to clipboard digest for zapret2-%s.zip" value="%s"></clipboard-copy>
-<clipboard-copy aria-label="Copy to clipboard digest for %s" value="%s"></clipboard-copy>`, tag, hash, name, test.digest)
+					contents = fmt.Sprintf(`<a href="/bol-van/zapret2/releases/download/%s/%s">%s</a>
+<clipboard-copy aria-label="Copy to clipboard digest for zapret2-%s.zip" value="%s"></clipboard-copy>
+<clipboard-copy aria-label="Copy to clipboard digest for %s" value="%s"></clipboard-copy>`, tag, name, name, tag, hash, name, test.digest)
 				case "GET " + releasesWeb + "download/" + tag + "/" + name:
 					assetDownloaded = true
 					contents = string(archive)

@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 )
 
 const (
@@ -391,16 +393,7 @@ func systemctl(ctx context.Context, args ...string) error {
 
 var unit = strings.Join([]string{"[Unit]", "Description=3x-ui OxiDNS", "After=network-online.target", "Wants=network-online.target", "[Service]", "Type=simple", "ExecStart=/etc/x-ui/oxidns/bin/oxidns start -c /etc/x-ui/oxidns/config.yaml -d /etc/x-ui/oxidns/data", "Restart=on-failure", "RestartSec=3", "NoNewPrivileges=true", "[Install]", "WantedBy=multi-user.target"}, string([]byte{10})) + string([]byte{10})
 
-type releaseAsset struct {
-	Name   string `json:"name"`
-	Digest string `json:"digest"`
-	URL    string `json:"browser_download_url"`
-}
-
-type upstreamRelease struct {
-	Tag    string         `json:"tag_name"`
-	Assets []releaseAsset `json:"assets"`
-}
+type releaseAsset = githubrelease.Asset
 
 func releaseAssetName() (string, error) {
 	switch runtime.GOOS + "/" + runtime.GOARCH {
@@ -418,32 +411,19 @@ func Latest(ctx context.Context) (string, *releaseAsset, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/svenshi/oxidns/releases/latest", nil)
-	if err != nil {
-		return "", nil, err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
 	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
+	rel, err := githubrelease.Fetch(ctx, client, "https://api.github.com/repos/svenshi/oxidns/releases/latest")
 	if err != nil {
 		return "", nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", nil, fmt.Errorf("GitHub API: HTTP %d", resp.StatusCode)
-	}
-	var rel upstreamRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&rel); err != nil {
-		return "", nil, err
-	}
-	if len(rel.Tag) < 6 || !strings.HasPrefix(rel.Tag, "v") || len(rel.Tag) > 64 || strings.ContainsAny(rel.Tag, "/ ?#") {
+	if len(rel.TagName) < 6 || !strings.HasPrefix(rel.TagName, "v") || len(rel.TagName) > 64 || strings.ContainsAny(rel.TagName, "/ ?#") {
 		return "", nil, errors.New("неверная версия OxiDNS из GitHub")
 	}
 	for _, asset := range rel.Assets {
-		expectedURL := "https://github.com/svenshi/oxidns/releases/download/" + rel.Tag + "/" + name
+		expectedURL := "https://github.com/svenshi/oxidns/releases/download/" + rel.TagName + "/" + name
 		if asset.Name == name && asset.URL == expectedURL && strings.HasPrefix(asset.Digest, "sha256:") && len(asset.Digest) == 71 {
 			if _, err := hex.DecodeString(strings.TrimPrefix(asset.Digest, "sha256:")); err == nil {
-				return rel.Tag, &asset, nil
+				return rel.TagName, &asset, nil
 			}
 		}
 	}

@@ -9,9 +9,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 	"io"
 	"net/http"
 	"os"
@@ -30,11 +30,7 @@ const (
 
 var errDownloadExceedsLimit = errors.New("download exceeds size limit")
 
-type Asset struct {
-	Name   string `json:"name"`
-	URL    string `json:"browser_download_url"`
-	Digest string `json:"digest"`
-}
+type Asset = githubrelease.Asset
 type Release struct {
 	Tag    string  `json:"tag_name"`
 	Assets []Asset `json:"assets"`
@@ -257,13 +253,15 @@ func (i Installer) Install(ctx context.Context, engine, version, goos, arch, arm
 		release, _ = i.rememberedRelease(repo, version, name)
 	}
 	if release.Tag == "" {
-		raw, getErr := i.get(ctx, endpoint, 4<<20)
-		if getErr != nil {
-			return "", getErr
+		client := i.Client
+		if client == nil {
+			client = &http.Client{Timeout: 30 * time.Second}
 		}
-		if err = json.Unmarshal(raw, &release); err != nil {
+		rel, err := githubrelease.Fetch(ctx, client, endpoint)
+		if err != nil {
 			return "", err
 		}
+		release = Release{Tag: rel.TagName, Assets: rel.Assets}
 	}
 	if !regexp.MustCompile(`^v?[0-9][A-Za-z0-9._-]{0,79}$`).MatchString(release.Tag) {
 		return "", fmt.Errorf("invalid release tag")
