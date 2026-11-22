@@ -64,7 +64,7 @@ describe('subscription tabs', () => {
     expect(
       screen.getAllByRole('link').filter((link) => link.getAttribute('href') === subUrl),
     ).toHaveLength(1);
-    expect(within(qrCard).getByRole('button', { name: 'QR', exact: true })).toBeTruthy();
+    expect(within(qrCard).getByRole('button', { name: /^QR$/ })).toBeTruthy();
     fireEvent.click(within(qrCard).getByRole('button', { name: /^copy url$/i }));
     expect(onCopy).toHaveBeenCalledWith(subUrl);
   });
