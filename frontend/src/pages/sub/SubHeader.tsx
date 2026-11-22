@@ -9,6 +9,7 @@ interface SubHeaderProps {
   isDark: boolean;
   isLuna?: boolean;
   title: string;
+  description?: string;
   logoURL?: string;
   sId: string;
   email: string;
@@ -18,6 +19,7 @@ interface SubHeaderProps {
 
 export default function SubHeader({
   title,
+  description,
   isDark,
   isLuna = false,
   logoURL,
@@ -61,9 +63,16 @@ export default function SubHeader({
           <h1 className="sub-brand-title" dir="auto">
             {title || t('subscription.title')}
           </h1>
-          <div className="sub-brand-id">
-            <bdi>{email ? `${sId} - ${email}` : sId}</bdi>
-          </div>
+          {(sId || email) && (
+            <div className="sub-brand-id">
+              <bdi>{[sId, email].filter(Boolean).join(' · ')}</bdi>
+            </div>
+          )}
+          {description && (
+            <p className="sub-description" dir="auto">
+              {description}
+            </p>
+          )}
         </div>
       </div>
       <div className="sub-toolbar">
@@ -84,8 +93,6 @@ export default function SubHeader({
           }
         >
           <Button
-            shape="circle"
-            size="large"
             className="toolbar-btn"
             aria-label={t('pages.settings.language')}
             icon={<TranslationOutlined aria-hidden />}

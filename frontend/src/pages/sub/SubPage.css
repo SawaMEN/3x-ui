@@ -1,6 +1,6 @@
 .subscription-page {
   /* --sub-grad-* paints graphics, --sub-ink-* paints text: the cyan end darkens
-     so text clears 4.5:1. --sub-accent is ACCENT.primary in SubPage.tsx. */
+     to improve contrast. --sub-accent can be set by the subscription appearance. */
   --sub-grad-from: #8b5cf6;
   --sub-grad-to: #06b6d4;
   --sub-ink-from: #6d28d9;
@@ -121,8 +121,6 @@
   font-size: 13px;
 }
 
-/* Gradient hairline shared by the header, the stats grid and the footer. */
-.sub-header::after,
 .sub-footer::before {
   content: '';
   position: absolute;
@@ -132,32 +130,36 @@
   opacity: 0.7;
 }
 
-/* header */
 .sub-header {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 16px;
-  margin-bottom: 20px;
-}
-
-.sub-header::after {
-  bottom: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: clamp(8px, 2vw, 20px);
+  margin-bottom: 16px;
+  padding: clamp(14px, 4vw, 32px);
+  border: 1px solid var(--sub-row-border);
+  border-radius: 16px;
+  background:
+    radial-gradient(
+      ellipse at top right,
+      color-mix(in srgb, var(--sub-accent) 12%, transparent),
+      transparent 68%
+    ),
+    var(--sub-tile-bg);
 }
 
 .sub-brand {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: clamp(8px, 2vw, 16px);
   min-width: 0;
 }
 
 .sub-brand-logo {
   display: block;
-  width: clamp(36px, 7vw, 52px);
-  height: clamp(36px, 7vw, 52px);
+  width: clamp(28px, 6vw, 52px);
+  height: clamp(28px, 6vw, 52px);
+  margin-top: 18px;
   flex-shrink: 0;
   object-fit: contain;
   border-radius: 8px;
@@ -168,59 +170,72 @@
   overflow-wrap: anywhere;
 }
 
+.sub-brand-text::before {
+  content: '';
+  display: block;
+  width: 36px;
+  height: 3px;
+  margin-bottom: 12px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--sub-accent), var(--sub-grad-to));
+}
+
 .sub-brand-title {
   margin: 0;
-  font-size: clamp(22px, 4vw, 32px);
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.025em;
+  font-size: clamp(28px, calc(18px + 3vw), 52px);
+  font-weight: 750;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  text-align: start;
+  text-wrap: balance;
   color: var(--ant-color-text);
 }
 
+@supports (background-clip: text) {
+  .sub-brand-title {
+    width: fit-content;
+    max-width: 100%;
+    background: linear-gradient(110deg, var(--ant-color-text) 15%, var(--sub-ink-from));
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@media (forced-colors: active) {
+  .sub-brand-title {
+    color: CanvasText;
+  }
+}
+
 .sub-brand-id {
-  margin-top: 4px;
+  margin-top: 8px;
   font-size: 12px;
   color: var(--ant-color-text-secondary);
 }
 
 .sub-description {
-  max-width: 70ch;
-  margin: 0 0 16px;
+  max-width: 60ch;
+  margin: 10px 0 0;
+  line-height: 1.5;
+  text-align: start;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
   color: var(--ant-color-text-secondary);
 }
 
-.sub-toolbar {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.toolbar-btn {
+.subscription-page .toolbar-btn {
   width: 40px;
   height: 40px;
-  min-width: 40px;
-  border-radius: 50%;
   padding: 0;
-}
-
-.toolbar-btn .anticon {
-  font-size: 18px;
-}
-
-.subscription-page .toolbar-btn {
   border-color: var(--sub-row-border);
+  border-radius: 10px;
   background: var(--sub-glass-bg);
-  color: var(--sub-accent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  color: var(--ant-color-text-secondary);
 }
 
 .subscription-page .toolbar-btn:hover {
   border-color: var(--sub-row-border-hover);
   background: var(--sub-row-bg-hover);
-  color: var(--sub-accent);
+  color: var(--sub-ink-from);
 }
 
 .sub-announce {

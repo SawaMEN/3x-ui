@@ -280,6 +280,7 @@ export default function SubPage() {
           <Card className="sub-card">
             <SubHeader
               title={subTitle}
+              description={appearance?.description}
               isDark={customTheme || isDark}
               isLuna={luna}
               logoURL={appearance?.logoURL}
@@ -288,11 +289,6 @@ export default function SubPage() {
               lang={lang}
               onLangChange={onLangChange}
             />
-            {appearance?.description && (
-              <p className="sub-description" dir="auto">
-                {appearance.description}
-              </p>
-            )}
             {announce && <Alert type="info" showIcon title={announce} className="sub-announce" />}
             <SubHero {...heroData} lang={lang} />
             {tabs.length > 0 && (
