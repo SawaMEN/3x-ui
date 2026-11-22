@@ -98,7 +98,12 @@ export default function SubHero({
             {hasQuota && <span className="sub-muted">{t('subscription.ofTotal', { total })}</span>}
           </div>
         </div>
-        <Tag className="sub-status" color={statusTag.color}>
+        <Tag
+          className="sub-status"
+          color={statusTag.color}
+          role="group"
+          aria-label={t('subscription.status')}
+        >
           {t(statusTag.label)}
         </Tag>
       </div>
