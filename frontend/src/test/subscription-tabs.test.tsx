@@ -67,6 +67,15 @@ describe('subscription tabs', () => {
     expect(within(qrCard).getByRole('button', { name: /^QR$/ })).toBeTruthy();
     fireEvent.click(within(qrCard).getByRole('button', { name: /^copy url$/i }));
     expect(onCopy).toHaveBeenCalledWith(subUrl);
+
+    fireEvent.click(within(qrCard).getByRole('radio', { name: 'All profiles' }));
+    const allProfilesUrl = `${subUrl}?format=all`;
+    expect(within(qrCard).getByRole('link').getAttribute('href')).toBe(allProfilesUrl);
+    fireEvent.click(within(qrCard).getByRole('button', { name: /^copy url$/i }));
+    expect(onCopy).toHaveBeenLastCalledWith(allProfilesUrl);
+
+    fireEvent.click(within(qrCard).getByRole('radio', { name: 'Compatible profiles' }));
+    expect(within(qrCard).getByRole('link').getAttribute('href')).toBe(subUrl);
   });
 
   it('starts on the detected platform and updates download links when switched', () => {

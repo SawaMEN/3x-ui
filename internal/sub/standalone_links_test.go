@@ -31,3 +31,26 @@ func TestStandaloneSubscriptionLinks(t *testing.T) {
 		}
 	}
 }
+
+func TestCoreSubscriptionLinks(t *testing.T) {
+	raw := []string{
+		"vless://uuid@example.org:443#xray\n  pingtunnel://profile",
+		"vpn://awg-profile",
+		"wg://peer",
+		"fptn:YWJjZA==",
+		"mierus://profile",
+		"https://t.me/proxy?server=example.org",
+		"unknown://profile",
+		"Naive+HTTPS://client@example.org:443",
+		"hy2://client@example.org:443",
+	}
+	want := []string{
+		"vless://uuid@example.org:443#xray",
+		"wg://peer",
+		"Naive+HTTPS://client@example.org:443",
+		"hy2://client@example.org:443",
+	}
+	if got := coreSubscriptionLinks(raw); !reflect.DeepEqual(got, want) {
+		t.Fatalf("compatible links = %#v, want %#v", got, want)
+	}
+}

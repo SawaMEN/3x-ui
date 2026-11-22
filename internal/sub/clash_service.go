@@ -35,14 +35,14 @@ func NewSubClashService(enableRouting bool, clashRules string, subService *SubSe
 }
 
 func (s *SubClashService) GetClash(subId string, host string) (string, string, error) {
-	return s.getClash(subId, host, false)
+	return s.getClash(subId, host, false, false)
 }
 
 func (s *SubClashService) GetClashLegacy(subId string, host string) (string, string, error) {
-	return s.getClash(subId, host, true)
+	return s.getClash(subId, host, true, false)
 }
 
-func (s *SubClashService) getClash(subId string, host string, legacy bool) (string, string, error) {
+func (s *SubClashService) getClash(subId string, host string, legacy, coreOnly bool) (string, string, error) {
 	subReq := s.SubService.ForRequest(host)
 	subReq.subscriptionBody = true
 	inbounds, err := subReq.getInboundsBySubId(subId)
@@ -61,6 +61,11 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 	// Returning the format-unsupported sentinel makes auto-detection keep the
 	// complete raw subscription instead of silently dropping an inbound.
 	formatInbounds, _ := subReq.partitionHostFormat(inbounds, "clash")
+	if coreOnly {
+		formatInbounds = slices.DeleteFunc(formatInbounds, func(inbound *model.Inbound) bool {
+			return singBoxUnsupportedProtocol(inbound.Protocol)
+		})
+	}
 	if containsUnsupportedClashProtocol(formatInbounds) || containsShadowTLSTransport(formatInbounds) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
@@ -78,6 +83,13 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 	for _, inbound := range inbounds {
 		clients := subReq.matchingClients(inbound, subId)
 		if len(clients) == 0 {
+			continue
+		}
+		if coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) {
+			for _, client := range clients {
+				seenEmails[client.Email] = struct{}{}
+				hasEnabledClient = hasEnabledClient || client.Enable
+			}
 			continue
 		}
 		subReq.projectThroughFallbackMaster(inbound)
@@ -153,6 +165,9 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 			continue
 		}
 		for _, el := range expandEntry(ext) {
+			if coreOnly && !isCoreSubscriptionLink(el.Link) {
+				continue
+			}
 			name := el.Name
 			if name == "" {
 				name = ext.Email

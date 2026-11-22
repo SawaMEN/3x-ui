@@ -544,8 +544,6 @@ func (a *SUBController) subs(c *gin.Context) {
 			return
 		}
 		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), format != "xray") {
-			// External sidecars such as VetroffProxy cannot be represented
-			// as native JSON outbounds. Keep their separate raw URI links.
 			if !a.formatAllowed(c, "links") {
 				writeSubError(c, nil)
 			} else {
@@ -567,10 +565,14 @@ func (a *SUBController) subs(c *gin.Context) {
 	}
 	// MASQUE has no portable URI scheme. Serve the whole selected subscription
 	// as native JSON by default so unknown User-Agents do not silently lose it.
+	// The all-links export can still carry URI-only siblings when no native
+	// format represents the entire set.
 	if (format == "" || format == "all") && a.hasEnabledMASQUESubscription(c.Param("subid")) {
 		if a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", false, true) {
 			a.recordSubscriptionFetch(c)
 			logSubscriptionRoute(userAgent, "masque-native-sing-box")
+		} else if format == "all" && a.formatAllowed(c, "links") {
+			a.serveRawSubscription(c)
 		} else {
 			writeMASQUEFormatError(c)
 		}
@@ -610,7 +612,7 @@ func (a *SUBController) subs(c *gin.Context) {
 			logSubscriptionRoute(userAgent, "native-sing-box")
 			return
 		}
-		if shouldAutoServeClash(a.subClashAutoDetect, a.clashEnabled, false, userAgent, a.clashUserAgent) && a.serveClashBody(c, false, false) {
+		if shouldAutoServeClash(a.subClashAutoDetect, a.clashEnabled, false, userAgent, a.clashUserAgent) && a.serveClashBody(c, false, false, true) {
 			a.recordSubscriptionFetch(c)
 			logSubscriptionRoute(userAgent, "clash")
 			return
@@ -625,13 +627,13 @@ func (a *SUBController) subs(c *gin.Context) {
 	a.serveRawSubscription(c)
 }
 
-// serveRawSubscription emits the lossless link format when a requested native
-// config cannot represent every protocol in a subscription. The caller already
-// checked the device limit and whether link output is permitted.
+// serveRawSubscription serves the compatible link feed or an explicitly
+// selected export. The caller already checked device and format access.
 func (a *SUBController) serveRawSubscription(c *gin.Context) {
 	userAgent := c.GetHeader("User-Agent")
 	subId := c.Param("subid")
-	if subscriptionFormat(c) != "standalone" && a.hasEnabledMASQUESubscription(subId) {
+	format := subscriptionFormat(c)
+	if format != "standalone" && format != "all" && a.hasEnabledMASQUESubscription(subId) {
 		writeMASQUEFormatError(c)
 		return
 	}
@@ -642,8 +644,13 @@ func (a *SUBController) serveRawSubscription(c *gin.Context) {
 	if err != nil || subs == nil {
 		writeSubError(c, err)
 	} else {
-		if subscriptionFormat(c) == "standalone" {
+		switch format {
+		case "all":
+			// Keep every URI, including those requiring a dedicated client.
+		case "standalone":
 			subs = standaloneSubscriptionLinks(subs)
+		default:
+			subs = coreSubscriptionLinks(subs)
 		}
 		result := buildRawSubscriptionBody(subs)
 
@@ -653,7 +660,7 @@ func (a *SUBController) serveRawSubscription(c *gin.Context) {
 		a.ApplyCommonHeaders(c, header, a.updateInterval, metadata.Title, metadata.SupportURL, metadata.ProfileURL, metadata.Announce, a.subEnableRouting, a.subRoutingRules, a.subHideSettings)
 
 		// Incy's profile rides the raw body; other clients must not see that line (#6062).
-		if subscriptionFormat(c) != "standalone" && IsIncyClient(userAgent) && a.subIncyEnableRouting && a.subIncyRoutingRules != "" {
+		if format != "standalone" && IsIncyClient(userAgent) && a.subIncyEnableRouting && a.subIncyRoutingRules != "" {
 			incyRules, _, err := resolveIncyRoutingSource(a.subIncyRoutingRules)
 			if err == nil && strings.TrimSpace(incyRules) != "" {
 				result += incyRules + "\n"
@@ -1052,11 +1059,11 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 		return false
 	}
 	if format == "hiddify" || (isHiddify && native && format != "xray") {
-		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, false, true, format == "hiddify" || format == "sing-box")
+		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, false, true, format == "hiddify" || format == "sing-box", format != "all")
 	} else if native {
-		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, alwaysReturnArray, false, format == "sing-box")
+		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, alwaysReturnArray, false, format == "sing-box", format != "all")
 	} else {
-		jsonSub, header, err = a.subJsonService.getJson(subId, host, alwaysReturnArray, format == "xray")
+		jsonSub, header, err = a.subJsonService.getJson(subId, host, alwaysReturnArray, format == "xray", true)
 	}
 	if err != nil {
 		if errors.Is(err, errSubscriptionFormatUnsupported) {
@@ -1097,7 +1104,7 @@ func (a *SUBController) subClash(c *gin.Context, legacy bool) {
 		if !a.enforceHwid(c) {
 			return
 		}
-		if !a.serveClashBody(c, true, legacy) {
+		if !a.serveClashBody(c, true, legacy, false) {
 			writeSubError(c, nil)
 		}
 		a.recordSubscriptionFetch(c)
@@ -1109,26 +1116,20 @@ func (a *SUBController) subClash(c *gin.Context, legacy bool) {
 	if !a.enforceHwid(c) {
 		return
 	}
-	if !a.serveClashBody(c, false, legacy) {
+	if !a.serveClashBody(c, false, legacy, false) {
 		writeSubError(c, nil)
 	}
 	a.recordSubscriptionFetch(c)
 }
 
-func (a *SUBController) serveClashBody(c *gin.Context, rawDownload bool, legacy bool) bool {
+func (a *SUBController) serveClashBody(c *gin.Context, rawDownload, legacy, coreOnly bool) bool {
 	subId := c.Param("subid")
 	if a.hasEnabledMASQUESubscription(subId) {
 		writeMASQUEFormatError(c)
 		return true
 	}
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
-	var clashSub, header string
-	var err error
-	if legacy {
-		clashSub, header, err = a.subClashService.GetClashLegacy(subId, host)
-	} else {
-		clashSub, header, err = a.subClashService.GetClash(subId, host)
-	}
+	clashSub, header, err := a.subClashService.getClash(subId, host, legacy, coreOnly)
 	if err != nil {
 		if errors.Is(err, errSubscriptionFormatUnsupported) {
 			return false

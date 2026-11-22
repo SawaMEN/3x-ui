@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -228,7 +229,7 @@ func TestMASQUEMixedSubscriptionDefaultAndFormats(t *testing.T) {
 		}
 	}
 
-	// A non-native sidecar must not be silently omitted when MASQUE is selected.
+	// An unsupported sibling must not prevent importing MASQUE by default.
 	unsupported := &model.Inbound{
 		UserId: 1, Tag: "mixed-mtproto", Enable: true, Protocol: model.MTProto, Port: 18445,
 		Settings: `{"clients":[{"email":"alice","subId":"masque-mixed","enable":true}]}`,
@@ -239,9 +240,12 @@ func TestMASQUEMixedSubscriptionDefaultAndFormats(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: unsupported.Id}).Error; err != nil {
 		t.Fatal(err)
 	}
-	resp = httptest.NewRecorder()
-	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/sub/"+subID+"?format=sing-box", nil))
-	if resp.Code != http.StatusNotAcceptable {
-		t.Fatalf("mixed unsupported format must fail closed, got HTTP %d: %s", resp.Code, resp.Body.String())
+	for _, query := range []string{"", "?format=sing-box"} {
+		resp = httptest.NewRecorder()
+		router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/sub/"+subID+query, nil))
+		if resp.Code != http.StatusOK || !strings.Contains(resp.Body.String(), "masque-client") ||
+			!strings.Contains(resp.Body.String(), "vless") || strings.Contains(resp.Body.String(), "mtproto") {
+			t.Fatalf("compatible MASQUE subscription: %d %s", resp.Code, resp.Body.String())
+		}
 	}
 }
