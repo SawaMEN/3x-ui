@@ -22,11 +22,14 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"golang.org/x/net/html"
 )
 
 const (
-	releasesAPI           = "https://api.github.com/repos/bol-van/zapret2/releases/latest"
-	maxArchiveBytes int64 = 128 << 20
+	releasesAPI              = "https://api.github.com/repos/bol-van/zapret2/releases/latest"
+	releasesWeb              = "https://github.com/bol-van/zapret2/releases/"
+	installerUserAgent       = "3x-ui-zapret2-installer"
+	maxArchiveBytes    int64 = 128 << 20
 )
 
 var (
@@ -50,12 +53,14 @@ type Status struct {
 }
 
 type release struct {
-	Tag    string `json:"tag_name"`
-	Assets []struct {
-		Name   string `json:"name"`
-		URL    string `json:"browser_download_url"`
-		Digest string `json:"digest"`
-	} `json:"assets"`
+	Tag    string         `json:"tag_name"`
+	Assets []releaseAsset `json:"assets"`
+}
+
+type releaseAsset struct {
+	Name   string `json:"name"`
+	URL    string `json:"browser_download_url"`
+	Digest string `json:"digest"`
 }
 
 func Directory() string  { return filepath.Join(config.GetBinFolderPath(), "zapret2") }
@@ -79,15 +84,24 @@ func fetchRelease(ctx context.Context) (release, error) {
 		return release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "3x-ui-zapret2-installer")
+	req.Header.Set("User-Agent", installerUserAgent)
 	resp, err := client.Do(req)
 	if err != nil {
 		return release{}, err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return release{}, fmt.Errorf("official zapret2 release API returned %s", resp.Status)
+		resp.Body.Close()
+		apiErr := fmt.Errorf("official zapret2 release API returned %s", resp.Status)
+		if resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusTooManyRequests {
+			return release{}, apiErr
+		}
+		rel, err := fetchWebRelease(ctx)
+		if err != nil {
+			return release{}, fmt.Errorf("%w; official release page fallback: %w", apiErr, err)
+		}
+		return rel, nil
 	}
+	defer resp.Body.Close()
 	var rel release
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&rel); err != nil {
 		return release{}, err
@@ -96,6 +110,83 @@ func fetchRelease(ctx context.Context) (release, error) {
 		return release{}, fmt.Errorf("invalid official zapret2 release tag")
 	}
 	return rel, nil
+}
+
+func fetchWebRelease(ctx context.Context) (release, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, releasesWeb+"latest", nil)
+	if err != nil {
+		return release{}, err
+	}
+	req.Header.Set("User-Agent", installerUserAgent)
+	resp, err := client.Do(req)
+	if err != nil {
+		return release{}, err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return release{}, fmt.Errorf("latest release page returned %s", resp.Status)
+	}
+	tag, ok := strings.CutPrefix(resp.Request.URL.String(), releasesWeb+"tag/")
+	if !ok || !strings.HasPrefix(tag, "v") || len(tag) < 2 || len(tag) > 64 ||
+		strings.ContainsFunc(tag, func(c rune) bool {
+			return !strings.ContainsRune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-", c)
+		}) {
+		return release{}, fmt.Errorf("unexpected latest release URL")
+	}
+
+	assetsURL := releasesWeb + "expanded_assets/" + tag
+	req, err = http.NewRequestWithContext(ctx, http.MethodGet, assetsURL, nil)
+	if err != nil {
+		return release{}, err
+	}
+	req.Header.Set("User-Agent", installerUserAgent)
+	resp, err = client.Do(req)
+	if err != nil {
+		return release{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Request.URL.String() != assetsURL {
+		return release{}, fmt.Errorf("unexpected release assets response (%s)", resp.Status)
+	}
+
+	// GitHub exposes the archive digest in the asset's copy button.
+	name := releaseArchiveName(tag)
+	label := "Copy to clipboard digest for " + name
+	tokens := html.NewTokenizer(io.LimitReader(resp.Body, 2<<20))
+	for kind := tokens.Next(); kind != html.ErrorToken; kind = tokens.Next() {
+		if kind != html.StartTagToken {
+			continue
+		}
+		element := tokens.Token()
+		if element.Data != "clipboard-copy" {
+			continue
+		}
+		var ariaLabel, value string
+		for _, attr := range element.Attr {
+			switch attr.Key {
+			case "aria-label":
+				ariaLabel = attr.Val
+			case "value":
+				value = attr.Val
+			}
+		}
+		digest, hasPrefix := strings.CutPrefix(value, "sha256:")
+		if ariaLabel != label || !hasPrefix || len(digest) != sha256.Size*2 {
+			continue
+		}
+		if _, err := hex.DecodeString(digest); err == nil {
+			asset := releaseAsset{Name: name, URL: releasesWeb + "download/" + tag + "/" + name, Digest: value}
+			return release{Tag: tag, Assets: []releaseAsset{asset}}, nil
+		}
+	}
+	if err := tokens.Err(); err != io.EOF {
+		return release{}, err
+	}
+	return release{}, fmt.Errorf("release assets page missing SHA-256 digest for %s", name)
+}
+
+func releaseArchiveName(tag string) string {
+	return "zapret2-" + tag + ".tar.gz"
 }
 
 func GetStatus(ctx context.Context) (Status, error) {
@@ -148,7 +239,7 @@ func Update(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	archiveName := "zapret2-" + rel.Tag + ".tar.gz"
+	archiveName := releaseArchiveName(rel.Tag)
 	var assetURL, digest string
 	for _, a := range rel.Assets {
 		if a.Name == archiveName {
@@ -160,7 +251,7 @@ func Update(ctx context.Context) (Status, error) {
 	if assetURL == "" || !strings.HasPrefix(digest, "sha256:") {
 		return Status{}, fmt.Errorf("official release missing archive or SHA-256 digest")
 	}
-	if !strings.HasPrefix(assetURL, "https://github.com/bol-van/zapret2/releases/download/") {
+	if !strings.HasPrefix(assetURL, releasesWeb+"download/") {
 		return Status{}, fmt.Errorf("unexpected upstream archive URL")
 	}
 	if err := os.MkdirAll(filepath.Dir(Directory()), 0o755); err != nil {
@@ -175,7 +266,7 @@ func Update(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	req.Header.Set("User-Agent", "3x-ui-zapret2-installer")
+	req.Header.Set("User-Agent", installerUserAgent)
 	resp, err := client.Do(req)
 	if err != nil {
 		return Status{}, err
