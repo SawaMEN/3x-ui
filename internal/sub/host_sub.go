@@ -15,7 +15,8 @@ import (
 )
 
 // hostEndpoints loads an inbound's enabled hosts for the given subscription
-// format ("raw"|"json"|"clash") and returns them as externalProxy-shaped maps so
+// format ("raw"|"json"|"clash", or empty for internal routing) and returns them
+// as externalProxy-shaped maps so
 // the existing per-format renderers can fan out one link/proxy per host. Returns
 // nil when the inbound has no enabled hosts — the caller then uses the legacy
 // inbound/externalProxy path, preserving byte-identical output for zero-host
@@ -43,7 +44,7 @@ func (s *SubService) hostEndpoints(inbound *model.Inbound, format string) []map[
 			continue
 		}
 		hasEnabled = true
-		if slices.Contains(h.ExcludeFromSubTypes, format) {
+		if format != "" && slices.Contains(h.ExcludeFromSubTypes, format) {
 			continue
 		}
 		eps = append(eps, s.hostEndpointMaps(h, defaultDest, inbound.Port)...)
@@ -515,7 +516,7 @@ func (s *SubService) clientHostEndpoints(inbound *model.Inbound, client model.Cl
 	defaultDest := s.resolveInboundAddress(inbound)
 	var eps []map[string]any
 	for _, h := range hosts {
-		if h.IsDisabled || slices.Contains(h.ExcludeFromSubTypes, format) {
+		if h.IsDisabled || (format != "" && slices.Contains(h.ExcludeFromSubTypes, format)) {
 			continue
 		}
 		eps = append(eps, s.hostEndpointMaps(h, defaultDest, inbound.Port)...)

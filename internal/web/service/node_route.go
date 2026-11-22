@@ -310,7 +310,7 @@ func resolveNodeRouteOutbound(inboundID int, core string) (map[string]any, error
 	if !client.Enable || client.ExpiryTime > 0 && client.ExpiryTime <= time.Now().UnixMilli() || client.TotalGB > 0 {
 		return nil, fmt.Errorf("node route %d: service client disabled, expired or limited", inboundID)
 	}
-	links, err := (&InboundService{}).GetScopedInboundLinks(node.Address, inbound, client.Email)
+	links, err := (&InboundService{}).getNodeRouteLinks(node.Address, inbound, client.Email)
 	if err != nil {
 		return nil, fmt.Errorf("node route %d: no usable link: %w", inboundID, err)
 	}
