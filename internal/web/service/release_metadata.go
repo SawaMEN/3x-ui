@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 )
 
 const (
@@ -76,29 +78,8 @@ func resolveInstalledReleaseTag(binaryPath string, getStored func() (string, err
 func getGitHubLatestReleaseVersion(repo string) (string, error) {
 	releaseURL := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
 	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, releaseURL, nil)
+	release, err := githubrelease.Fetch(context.Background(), client, releaseURL)
 	if err != nil {
-		return "", err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		var errorResponse struct {
-			Message string `json:"message"`
-		}
-		if json.Unmarshal(bodyBytes, &errorResponse) == nil && errorResponse.Message != "" {
-			return "", fmt.Errorf("GitHub API error: %s", errorResponse.Message)
-		}
-		return "", fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, resp.Status)
-	}
-
-	var release Release
-	if err := decodeReleaseMetadata(resp.Body, &release); err != nil {
 		return "", err
 	}
 

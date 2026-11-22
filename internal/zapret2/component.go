@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -22,11 +21,15 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 )
 
 const (
-	releasesAPI           = "https://api.github.com/repos/bol-van/zapret2/releases/latest"
-	maxArchiveBytes int64 = 128 << 20
+	releasesAPI              = "https://api.github.com/repos/bol-van/zapret2/releases/latest"
+	releasesWeb              = "https://github.com/bol-van/zapret2/releases/"
+	installerUserAgent       = "3x-ui-zapret2-installer"
+	maxArchiveBytes    int64 = 128 << 20
 )
 
 var (
@@ -49,15 +52,6 @@ type Status struct {
 	ReadinessReason   string `json:"readinessReason,omitempty"`
 }
 
-type release struct {
-	Tag    string `json:"tag_name"`
-	Assets []struct {
-		Name   string `json:"name"`
-		URL    string `json:"browser_download_url"`
-		Digest string `json:"digest"`
-	} `json:"assets"`
-}
-
 func Directory() string  { return filepath.Join(config.GetBinFolderPath(), "zapret2") }
 func BinaryPath() string { return filepath.Join(Directory(), "bin", "nfqws2") }
 func Installed() bool {
@@ -73,29 +67,19 @@ func supported() bool {
 	return runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")
 }
 
-func fetchRelease(ctx context.Context) (release, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releasesAPI, nil)
+func fetchRelease(ctx context.Context) (githubrelease.Release, error) {
+	rel, err := githubrelease.Fetch(ctx, client, releasesAPI)
 	if err != nil {
-		return release{}, err
+		return githubrelease.Release{}, fmt.Errorf("fetch official zapret2 release: %w", err)
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "3x-ui-zapret2-installer")
-	resp, err := client.Do(req)
-	if err != nil {
-		return release{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return release{}, fmt.Errorf("official zapret2 release API returned %s", resp.Status)
-	}
-	var rel release
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&rel); err != nil {
-		return release{}, err
-	}
-	if !strings.HasPrefix(rel.Tag, "v") || len(rel.Tag) > 64 || strings.ContainsAny(rel.Tag, "/\\") {
-		return release{}, fmt.Errorf("invalid official zapret2 release tag")
+	if !strings.HasPrefix(rel.TagName, "v") || len(rel.TagName) > 64 || strings.ContainsAny(rel.TagName, "/\\") {
+		return githubrelease.Release{}, fmt.Errorf("invalid official zapret2 release tag")
 	}
 	return rel, nil
+}
+
+func releaseArchiveName(tag string) string {
+	return "zapret2-" + tag + ".tar.gz"
 }
 
 func GetStatus(ctx context.Context) (Status, error) {
@@ -124,8 +108,8 @@ func GetStatus(ctx context.Context) (Status, error) {
 	defer cancel()
 	rel, err := fetchRelease(lookupCtx)
 	if err == nil {
-		status.LatestVersion = rel.Tag
-		status.UpdateAvailable = status.Installed && status.Version != "" && status.Version != rel.Tag
+		status.LatestVersion = rel.TagName
+		status.UpdateAvailable = status.Installed && status.Version != "" && status.Version != rel.TagName
 	}
 	// A GitHub outage must not hide an already installed working component.
 	return status, nil
@@ -148,7 +132,7 @@ func Update(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	archiveName := "zapret2-" + rel.Tag + ".tar.gz"
+	archiveName := releaseArchiveName(rel.TagName)
 	var assetURL, digest string
 	for _, a := range rel.Assets {
 		if a.Name == archiveName {
@@ -158,9 +142,9 @@ func Update(ctx context.Context) (Status, error) {
 		}
 	}
 	if assetURL == "" || !strings.HasPrefix(digest, "sha256:") {
-		return Status{}, fmt.Errorf("official release missing archive or SHA-256 digest")
+		return Status{}, fmt.Errorf("official release is missing SHA-256 digest or archive")
 	}
-	if !strings.HasPrefix(assetURL, "https://github.com/bol-van/zapret2/releases/download/") {
+	if !strings.HasPrefix(assetURL, releasesWeb+"download/") {
 		return Status{}, fmt.Errorf("unexpected upstream archive URL")
 	}
 	if err := os.MkdirAll(filepath.Dir(Directory()), 0o755); err != nil {
@@ -175,7 +159,7 @@ func Update(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	req.Header.Set("User-Agent", "3x-ui-zapret2-installer")
+	req.Header.Set("User-Agent", installerUserAgent)
 	resp, err := client.Do(req)
 	if err != nil {
 		return Status{}, err
@@ -238,7 +222,7 @@ func Update(ctx context.Context) (Status, error) {
 			return Status{}, err
 		}
 	}
-	if err := os.WriteFile(filepath.Join(root, "version"), []byte(rel.Tag+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "version"), []byte(rel.TagName+"\n"), 0o644); err != nil {
 		return Status{}, err
 	}
 	destination := Directory()
@@ -258,7 +242,7 @@ func Update(ctx context.Context) (Status, error) {
 		}
 		return Status{}, err
 	}
-	return Status{Installed: true, Supported: true, Version: rel.Tag, LatestVersion: rel.Tag, Binary: BinaryPath(), Source: "bol-van/zapret2"}, nil
+	return Status{Installed: true, Supported: true, Version: rel.TagName, LatestVersion: rel.TagName, Binary: BinaryPath(), Source: "bol-van/zapret2"}, nil
 }
 
 func Remove() error {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +18,8 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 )
 
 const (
@@ -41,16 +42,10 @@ type Status struct {
 	Running           bool   `json:"running"`
 }
 
-type releaseAsset struct {
-	Name   string `json:"name"`
-	URL    string `json:"browser_download_url"`
-	Digest string `json:"digest"`
-}
-
-type release struct {
-	TagName string         `json:"tag_name"`
-	Assets  []releaseAsset `json:"assets"`
-}
+type (
+	releaseAsset = githubrelease.Asset
+	release      = githubrelease.Release
+)
 
 func GetStatus(ctx context.Context) (Status, error) {
 	binary := BinaryPath()
@@ -247,23 +242,9 @@ func installedVersion(binary string) string {
 }
 
 func fetchLatestRelease(ctx context.Context) (release, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releasesAPI, nil)
-	if err != nil {
-		return release{}, err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "3x-ui")
-	resp, err := http.DefaultClient.Do(req)
+	rel, err := githubrelease.Fetch(ctx, http.DefaultClient, releasesAPI)
 	if err != nil {
 		return release{}, fmt.Errorf("fetch Caddy-Naive release: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return release{}, fmt.Errorf("Caddy-Naive release API returned %s", resp.Status)
-	}
-	var rel release
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return release{}, err
 	}
 	if strings.TrimSpace(rel.TagName) == "" {
 		return release{}, fmt.Errorf("Caddy-Naive release API returned an empty tag")

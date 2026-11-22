@@ -40,11 +40,14 @@ arch_name() {
 }
 
 get_latest_tag() {
-  # Only the official published stable release; GitHub excludes prereleases.
-  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
-    --connect-timeout 10 --max-time 60 \
-    "https://api.github.com/repos/${REPO}/releases/latest" |
-    sed -nE 's/^[[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p'
+  # GitHub redirects /latest to the official stable release tag.
+  local base="https://github.com/${REPO}/releases" release_url tag
+  release_url=$(curl -fsSIL --retry 3 --connect-timeout 10 --max-time 30 \
+    -o /dev/null -w '%{url_effective}' "$base/latest") || return 1
+  [[ "$release_url" == "$base/tag/"* ]] || return 1
+  tag=${release_url#"$base/tag/"}
+  [[ "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] || return 1
+  printf '%s\n' "$tag"
 }
 
 binary_version() {

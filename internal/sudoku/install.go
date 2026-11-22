@@ -5,7 +5,6 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,17 +15,13 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 )
 
 const releasesAPI = "https://api.github.com/repos/SUDOKU-ASCII/sudoku/releases"
 
-type release struct {
-	TagName string `json:"tag_name"`
-	Assets  []struct {
-		Name string `json:"name"`
-		URL  string `json:"browser_download_url"`
-	} `json:"assets"`
-}
+type release = githubrelease.Release
 
 func LatestRelease(ctx context.Context) (string, error) {
 	rel, err := fetchLatestRelease(ctx)
@@ -44,25 +39,9 @@ func fetchLatestRelease(ctx context.Context) (release, error) {
 
 // Both stable and development panels use the official stable Sudoku release.
 func fetchRelease(ctx context.Context, client *http.Client) (release, error) {
-	endpoint := releasesAPI + "/latest"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return release{}, err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "3x-ui")
-	resp, err := client.Do(req)
+	rel, err := githubrelease.Fetch(ctx, client, releasesAPI+"/latest")
 	if err != nil {
 		return release{}, fmt.Errorf("fetch Sudoku release: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return release{}, fmt.Errorf("Sudoku release API returned %s", resp.Status)
-	}
-
-	var rel release
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return release{}, err
 	}
 	if _, err := releaseVersion(rel); err != nil {
 		return release{}, err
@@ -195,39 +174,21 @@ func writeInstalledVersion(binDir, version string) error {
 	return os.WriteFile(installedVersionPath(binDir), []byte(version+"\n"), 0o644)
 }
 
-func pickAsset(assets []struct {
-	Name string `json:"name"`
-	URL  string `json:"browser_download_url"`
-}) (struct {
-	Name string
-	URL  string
-}, error,
-) {
+func pickAsset(assets []githubrelease.Asset) (githubrelease.Asset, error) {
 	arch := runtime.GOARCH
 	switch arch {
 	case "amd64", "arm64":
 	default:
-		return struct {
-			Name string
-			URL  string
-		}{}, fmt.Errorf("Sudoku is not published for %s/%s", runtime.GOOS, runtime.GOARCH)
+		return githubrelease.Asset{}, fmt.Errorf("Sudoku is not published for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 	prefix := "sudoku-" + runtime.GOOS + "-" + arch
-	var out struct {
-		Name string
-		URL  string
-	}
 	for _, a := range assets {
 		if strings.HasPrefix(a.Name, prefix+".") &&
 			(strings.HasSuffix(strings.ToLower(a.Name), ".tar.gz") || strings.HasSuffix(strings.ToLower(a.Name), ".zip")) {
-			out.Name, out.URL = a.Name, a.URL
-			break
+			return a, nil
 		}
 	}
-	if out.Name == "" {
-		return out, fmt.Errorf("no Sudoku release asset for %s/%s", runtime.GOOS, runtime.GOARCH)
-	}
-	return out, nil
+	return githubrelease.Asset{}, fmt.Errorf("no Sudoku release asset for %s/%s", runtime.GOOS, runtime.GOARCH)
 }
 
 func download(ctx context.Context, url, dst string) error {
