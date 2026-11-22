@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { renderWithProviders } from './test-utils';
 
@@ -21,6 +21,10 @@ describe('Luna appearance', () => {
     const { default: SubPage } = await import('@/pages/sub/SubPage');
     const page = renderWithProviders(<SubPage />);
     const root = page.container.querySelector('.subscription-page')!;
+    const heading = screen.getByRole('heading', { level: 1, name: 'VetrOFF' });
+    const header = heading.closest('header');
+    if (!header) throw new Error('The subscription header is missing');
+    expect(within(header).getByText('Private connection')).toBeTruthy();
     expect(root.classList.contains('sub-luna')).toBe(true);
     expect(root.classList.contains('is-dark')).toBe(true);
     expect(root.querySelector('.luna-backdrop')?.getAttribute('aria-hidden')).toBe('true');

@@ -91,6 +91,7 @@
     "noExpiry": "Бессрочно",
     "copyAllConfigs": "Копировать все конфигурации",
     "coreProtocols": "Протоколы Xray / sing-box и совместимые",
+    "allConnections": "Все подключения",
     "standaloneProtocols": "Отдельные протоколы (внешние клиенты)",
     "pingtunnelClientJSON": "Конфигурация клиента Pingtunnel 3.x (JSON)",
     "copyAllConfigsCopied": "Все конфигурации скопированы",

@@ -58,70 +58,73 @@ export default function SubHero({
   const hasQuota = totalByte > 0;
   const healthy = status === 'active' || status === 'unlimited';
   const pct = usagePercent(usedByte, totalByte);
-  const ringColor =
+  const usageColor =
     !healthy || pct >= 90 ? token.colorError : pct >= 75 ? token.colorWarning : token.colorPrimary;
   const [amount, unit] = splitSize(hasQuota ? remained : used);
   const formatDate = (ms: number) => IntlUtil.formatDate(ms, datepicker, lang);
   const statusTag = STATUS_TAGS[status];
 
   const stats: { key: string; label: string; value: ReactNode }[] = [
-    { key: 'days', label: t('subscription.daysLeft'), value: daysLeft ?? '∞' },
     {
       key: 'expiry',
       label: t('subscription.expiry'),
       value: expireMs > 0 ? formatDate(expireMs) : t('subscription.noExpiry'),
     },
-    {
-      key: 'status',
-      label: t('subscription.status'),
-      value: <Tag color={statusTag.color}>{t(statusTag.label)}</Tag>,
-    },
-    { key: 'down', label: t('subscription.downloaded'), value: <bdi>{download}</bdi> },
-    { key: 'up', label: t('subscription.uploaded'), value: <bdi>{upload}</bdi> },
-    { key: 'total', label: t('subscription.totalQuota'), value: <bdi>{total}</bdi> },
+    { key: 'days', label: t('subscription.daysLeft'), value: daysLeft ?? '∞' },
     {
       key: 'lastOnline',
       label: t('lastOnline'),
-      value: lastOnlineMs > 0 ? formatDate(lastOnlineMs) : '-',
+      value: lastOnlineMs > 0 ? formatDate(lastOnlineMs) : '—',
+    },
+    { key: 'down', label: t('subscription.downloaded'), value: <bdi>{download}</bdi> },
+    { key: 'up', label: t('subscription.uploaded'), value: <bdi>{upload}</bdi> },
+    {
+      key: 'total',
+      label: t('subscription.totalQuota'),
+      value: hasQuota ? <bdi>{total}</bdi> : t('subscription.unlimited'),
     },
   ];
 
   return (
     <section className={healthy ? 'sub-hero' : 'sub-hero is-alert'}>
-      <Progress
-        type="circle"
-        className="sub-ring"
-        percent={pct}
-        status="normal"
-        size={156}
-        strokeColor={ringColor}
-        format={() => (
-          <span className="sub-ring-center">
-            <span className="sub-ring-value">{hasQuota ? `${pct.toFixed(1)}%` : '∞'}</span>
-            <span className="sub-ring-label">
-              {hasQuota ? t('usage') : t('subscription.unlimited')}
-            </span>
-          </span>
-        )}
-      />
-      <div className="sub-hero-summary">
-        <div className="sub-label">{hasQuota ? t('remained') : t('usage')}</div>
-        <bdi className="sub-big">
-          <span className="sub-big-num">{amount}</span>
-          {unit && <span className="sub-big-unit">{unit}</span>}
-        </bdi>
-        <div className="sub-muted">
-          {hasQuota ? t('subscription.ofTotal', { total }) : t('subscription.unlimited')}
+      <div className="sub-hero-heading">
+        <div className="sub-hero-summary">
+          <div className="sub-label">{hasQuota ? t('remained') : t('usage')}</div>
+          <div className="sub-hero-amount">
+            <bdi className="sub-big">
+              <span className="sub-big-num">{amount}</span>
+              {unit && <span className="sub-big-unit">{unit}</span>}
+            </bdi>
+            {hasQuota && <span className="sub-muted">{t('subscription.ofTotal', { total })}</span>}
+          </div>
         </div>
-        <dl className="sub-stats">
-          {stats.map((stat) => (
-            <div key={stat.key} className="sub-stat">
-              <dt className="sub-label">{stat.label}</dt>
-              <dd className="sub-stat-value">{stat.value}</dd>
-            </div>
-          ))}
-        </dl>
+        <Tag
+          className="sub-status"
+          color={statusTag.color}
+          role="group"
+          aria-label={t('subscription.status')}
+        >
+          {t(statusTag.label)}
+        </Tag>
       </div>
+      {hasQuota && (
+        <Progress
+          className="sub-usage"
+          percent={pct}
+          status="normal"
+          strokeColor={usageColor}
+          format={() => <bdi>{pct.toFixed(1)}%</bdi>}
+          aria-label={t('usage')}
+        />
+      )}
+      <dl className="sub-stats">
+        {stats.map((stat) => (
+          <div key={stat.key} className="sub-stat">
+            <dt className="sub-label">{stat.label}</dt>
+            <dd className="sub-stat-value">{stat.value}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

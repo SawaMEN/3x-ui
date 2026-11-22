@@ -61,6 +61,10 @@ describe('subscription tabs', () => {
     const qrCard = screen.getByRole('region', { name: 'Scan with your phone' });
     expect(container.firstElementChild?.firstElementChild).toBe(qrCard);
     expect(qrCard.querySelector('.sub-qr-code svg')).not.toBeNull();
+    expect(
+      screen.getAllByRole('link').filter((link) => link.getAttribute('href') === subUrl),
+    ).toHaveLength(1);
+    expect(within(qrCard).getByRole('button', { name: /^QR$/ })).toBeTruthy();
     fireEvent.click(within(qrCard).getByRole('button', { name: /^copy url$/i }));
     expect(onCopy).toHaveBeenCalledWith(subUrl);
   });

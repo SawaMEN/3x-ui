@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ConfigProvider, Layout, theme } from 'antd';
 import { undergroundTheme } from '@/pages/sub/undergroundTheme';
@@ -56,8 +56,30 @@ describe('subscription theme selection', () => {
     renderWithProviders(
       <SubHeader title="Test" sId="id" email="" lang="en-US" onLangChange={vi.fn()} isDark />,
     );
+    expect(screen.getByRole('heading', { level: 1, name: 'Test' })).toBeTruthy();
+    expect(screen.queryByText('T', { exact: true })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Theme' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Language' })).toBeTruthy();
+  });
+
+  it('removes a failed custom logo without inserting a monogram', () => {
+    const { container } = renderWithProviders(
+      <SubHeader
+        title="Test"
+        sId="id"
+        email=""
+        lang="en-US"
+        onLangChange={vi.fn()}
+        isDark
+        logoURL="https://example.com/logo.svg"
+      />,
+    );
+    const logo = container.querySelector('img');
+    if (!logo) throw new Error('The custom logo is missing');
+    fireEvent.error(logo);
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Test' })).toBeTruthy();
+    expect(screen.queryByText('T', { exact: true })).toBeNull();
   });
 
   it('uses the configured theme without overwriting the saved panel preference', () => {

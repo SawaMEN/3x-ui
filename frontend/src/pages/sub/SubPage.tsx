@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Card, ConfigProvider, Layout, Tabs, message } from 'antd';
+import { Alert, Card, ConfigProvider, Layout, Tabs, message } from 'antd';
 import type { TabsProps } from 'antd';
 import {
   ApiOutlined,
@@ -274,19 +274,13 @@ export default function SubPage() {
     >
       {messageContextHolder}
       <Layout className={pageClass} dir={direction} style={subscriptionStyle}>
-        {underground ? (
-          <UndergroundBackdrop />
-        ) : luna ? (
-          <LunaBackdrop />
-        ) : (
-          <div className="sub-aurora" aria-hidden="true">
-            <span className="sub-aurora-grid" />
-          </div>
-        )}
+        {underground && <UndergroundBackdrop />}
+        {luna && <LunaBackdrop />}
         <Layout.Content className="sub-content">
           <Card className="sub-card">
             <SubHeader
               title={subTitle}
+              description={appearance?.description}
               isDark={customTheme || isDark}
               isLuna={luna}
               logoURL={appearance?.logoURL}
@@ -295,28 +289,12 @@ export default function SubPage() {
               lang={lang}
               onLangChange={onLangChange}
             />
-            {appearance?.description && (
-              <p className="sub-description sub-luna-description" dir="auto">
-                {appearance.description}
-              </p>
-            )}
-            {(appearance || customTheme) && subUrl && (
-              <Button
-                type="primary"
-                size="large"
-                className="sub-connect sub-luna-connect"
-                icon={<LinkOutlined />}
-                onClick={() => void copy(subUrl)}
-              >
-                {t('pages.inbounds.copyLink')}
-              </Button>
-            )}
             {announce && <Alert type="info" showIcon title={announce} className="sub-announce" />}
             <SubHero {...heroData} lang={lang} />
             {tabs.length > 0 && (
               <Tabs
                 className="sub-tabs"
-                tabBarGutter={24}
+                tabBarGutter={16}
                 items={tabs}
                 activeKey={tabs.some(({ key }) => key === activeTab) ? activeTab : tabs[0].key}
                 onChange={setActiveTab}

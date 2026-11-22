@@ -4,7 +4,6 @@ import { Button, Segmented } from 'antd';
 import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
 
 import SubAppleRegionHelp from './SubAppleRegionHelp';
-import happIcon from './app-icons/happ.svg';
 import { APP_PLATFORMS, buildSubApps, type AppPlatform } from './subPageModel';
 
 interface SubAppsTabProps {
@@ -41,16 +40,7 @@ export default function SubAppsTab({
       <ul className="sub-app-list">
         {buildSubApps(platform, subUrl, profileName).map(({ name, url, downloads }) => (
           <li key={name} className="sub-row sub-app-row">
-            <div className="sub-app-identity">
-              <span className="sub-app-mark" aria-hidden="true">
-                {name === 'Happ' ? (
-                  <span className="sub-app-glyph" style={{ maskImage: `url("${happIcon}")` }} />
-                ) : (
-                  name[0]
-                )}
-              </span>
-              <span className="sub-app-name">{name}</span>
-            </div>
+            <span className="sub-app-name">{name}</span>
             <div className="sub-app-actions">
               <div className="sub-app-downloads">
                 {downloads.map(({ label, href }, index) => (

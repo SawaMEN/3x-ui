@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Button, QRCode, Tag } from 'antd';
+import { Button, QRCode } from 'antd';
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 
 import SubQrButton from './SubQrButton';
@@ -24,41 +24,34 @@ export default function SubLinksTab({
   onCopy,
 }: SubLinksTabProps) {
   const { t } = useTranslation();
-  const subLabel = t('pages.settings.subSettings');
   const rows = [
-    { kind: 'SUB', color: 'green', url: subUrl, title: subLabel, downloadable: false },
     {
       kind: 'ALL',
-      color: 'green',
       url: subFormatMode === 'both' ? appendNativeFormat(subUrl, 'links') : '',
-      title: 'Все подключения',
+      title: t('subscription.allConnections'),
       downloadable: false,
     },
     {
       kind: 'STANDALONE',
-      color: 'orange',
       url: appendNativeFormat(subUrl, 'standalone'),
       title: t('subscription.standaloneProtocols'),
       downloadable: true,
     },
     {
       kind: 'XRAY',
-      color: 'purple',
       url: subJsonUrl,
       title: 'Xray JSON',
       downloadable: true,
     },
-    { kind: 'CLASH', color: 'gold', url: subClashUrl, title: 'Clash / Mihomo', downloadable: true },
+    { kind: 'CLASH', url: subClashUrl, title: 'Clash / Mihomo', downloadable: true },
     {
       kind: 'SING-BOX',
-      color: 'cyan',
       url: subFormatMode === 'xray' ? '' : appendNativeFormat(subUrl, 'sing-box'),
       title: 'Sing-box JSON (AnyTLS / ShadowTLS)',
       downloadable: true,
     },
     {
       kind: 'HIDDIFY',
-      color: 'blue',
       url: subFormatMode === 'xray' ? '' : appendNativeFormat(subUrl, 'hiddify'),
       title: 'Hiddify JSON (AnyTLS / ShadowTLS)',
       downloadable: true,
@@ -84,17 +77,31 @@ export default function SubLinksTab({
               {t('subscription.scanTitle')}
             </h2>
             <p>{t('subscription.scanHint')}</p>
-            <Button icon={<CopyOutlined aria-hidden />} onClick={() => onCopy(subUrl)}>
-              {t('pages.inbounds.copyLink')}
-            </Button>
+            <div className="sub-qr-actions">
+              <Button
+                type="primary"
+                icon={<CopyOutlined aria-hidden />}
+                onClick={() => onCopy(subUrl)}
+              >
+                {t('pages.inbounds.copyLink')}
+              </Button>
+              <SubQrButton value={subUrl} label={t('subscription.title')} onCopy={onCopy} />
+            </div>
+            <a
+              href={subUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sub-row-url sub-qr-address"
+              dir="ltr"
+              title={subUrl}
+            >
+              {subUrl}
+            </a>
           </div>
         </section>
       )}
       {rows.map((row) => (
-        <div key={row.kind} className="sub-row">
-          <Tag color={row.color} className="sub-row-tag">
-            {row.kind}
-          </Tag>
+        <div key={row.kind} className="sub-row sub-format-row">
           <div className="sub-row-main">
             <a href={row.url} target="_blank" rel="noopener noreferrer" className="sub-row-title">
               {row.title}
