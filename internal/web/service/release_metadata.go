@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 )
 
 const (
