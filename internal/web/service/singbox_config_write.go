@@ -24,7 +24,7 @@ type nativeConfigCandidate struct {
 	path, target     string
 	managedOutbounds []map[string]any
 	protocolServers  []protocolserver.Plan
-	zapret2Plans    []zapret2.Plan
+	zapret2Plans     []zapret2.Plan
 	nativeAWGTags    []string
 	published        bool
 }

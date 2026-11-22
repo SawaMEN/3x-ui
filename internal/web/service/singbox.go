@@ -863,7 +863,7 @@ func (s *SingBoxService) Stop(ctx context.Context) error {
 		if err == nil {
 			s.stoppedFlag().Store(true)
 		}
-		return errors.Join(err,zapret2.StopAll(ctx))
+		return errors.Join(err, zapret2.StopAll(ctx))
 	}
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
@@ -891,7 +891,7 @@ func (s *SingBoxService) stopLocked(ctx context.Context) (result error) {
 		return err
 	}
 	s.stoppedFlag().Store(true)
-	return errors.Join(protocolserver.StopAll(),zapret2.StopAll(recovery))
+	return errors.Join(protocolserver.StopAll(), zapret2.StopAll(recovery))
 }
 
 func (s *SingBoxService) IsRunning() bool {

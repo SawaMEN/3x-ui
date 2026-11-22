@@ -20,7 +20,6 @@ describe('inbound client actions', () => {
     'amneziawg',
     'fptn',
     'openflux',
-    'pingtunnel',
     'trusttunnel',
     'vk-turn-proxy',
   ])('exposes bulk client actions for %s', (protocol) => {
@@ -52,6 +51,29 @@ describe('inbound client actions', () => {
     expect(empty?.some((item) => item && 'key' in item && item.key === 'attachExisting')).toBe(
       true,
     );
+  });
+  it('keeps bulk client actions out of the Pingtunnel v3 inbound menu', () => {
+    const record = new DBInbound({ id: 1, protocol: 'pingtunnel', settings: '{}' });
+    const items = buildRowActionsMenu({
+      record,
+      subEnable: true,
+      hasClients: true,
+      t: (key) => key,
+    });
+    const keys = items?.map((item) => (item && 'key' in item ? item.key : undefined));
+
+    expect(keys).toContain('showInfo');
+    for (const key of [
+      'attachExisting',
+      'attachClients',
+      'detachClients',
+      'addToGroup',
+      'delAllClients',
+      'export',
+      'subs',
+    ]) {
+      expect(keys).not.toContain(key);
+    }
   });
   it.each(['http', 'mixed', 'tun', 'tunnel'])(
     'keeps listener/account protocols out of shared client actions: %s',

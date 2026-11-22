@@ -17,7 +17,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/coreinstall"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
- "github.com/SawaMEN/3x-ui/v3/internal/zapret2"
+	"github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 )
 
 var (
