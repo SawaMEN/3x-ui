@@ -59,8 +59,8 @@ func TestVirtualZapret2XrayRoutingIsScopedToLocalSOCKSInbound(t *testing.T) {
 	}
 	var route struct {
 		Rules []struct {
-			Inbound []string `json:"inboundTag"`
-			Outbound string `json:"outboundTag"`
+			Inbound  []string `json:"inboundTag"`
+			Outbound string   `json:"outboundTag"`
 		} `json:"rules"`
 	}
 	if err := json.Unmarshal(cfg.RouterConfig, &route); err != nil {
@@ -80,7 +80,7 @@ func TestVirtualZapret2SingBoxRoutingPreservesExistingRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := singbox.NewConfig()
-	cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type":"socks", "tag":"z2", "server":"127.0.0.1", "server_port":15911})
+	cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "socks", "tag": "z2", "server": "127.0.0.1", "server_port": 15911})
 	cfg.Route["rules"] = []map[string]any{{"inbound": []string{"phone-direct"}, "outbound": "direct"}}
 	cfg.Zapret2Plans = []zapret2.Plan{p}
 	cfg.Route["final"] = "z2"

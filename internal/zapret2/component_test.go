@@ -30,11 +30,11 @@ func fixtureArchive(t *testing.T, tag string) []byte {
 		arch = "arm64"
 	}
 	files := map[string]string{
-		"lua/zapret-lib.lua": "return {}",
-		"lua/zapret-antidpi.lua": "return {}",
-		"blockcheck2.sh": "#!/bin/sh\nexit 0\n",
+		"lua/zapret-lib.lua":                 "return {}",
+		"lua/zapret-antidpi.lua":             "return {}",
+		"blockcheck2.sh":                     "#!/bin/sh\nexit 0\n",
 		"binaries/linux-" + arch + "/nfqws2": "#!/bin/sh\nexit 0\n",
-		"binaries/linux-" + arch + "/mdig": "#!/bin/sh\nexit 0\n",
+		"binaries/linux-" + arch + "/mdig":   "#!/bin/sh\nexit 0\n",
 		"binaries/linux-" + arch + "/ip2net": "#!/bin/sh\nexit 0\n",
 	}
 	var archive bytes.Buffer
@@ -68,7 +68,7 @@ func mockOfficialRelease(t *testing.T, archive []byte, digest string) {
 	asset := "https://github.com/bol-van/zapret2/releases/download/" + tag + "/" + name
 	meta, err := json.Marshal(map[string]any{
 		"tag_name": tag,
-		"assets": []map[string]string{{"name": name, "browser_download_url": asset, "digest": digest}},
+		"assets":   []map[string]string{{"name": name, "browser_download_url": asset, "digest": digest}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -86,9 +86,9 @@ func mockOfficialRelease(t *testing.T, archive []byte, digest string) {
 			}
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Body: io.NopCloser(bytes.NewReader(body)),
-				Header: make(http.Header),
-				Request: req,
+				Body:       io.NopCloser(bytes.NewReader(body)),
+				Header:     make(http.Header),
+				Request:    req,
 			}, nil
 		}),
 	}
