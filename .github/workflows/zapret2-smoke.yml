@@ -1,0 +1,64 @@
+name: Zapret2 official binary smoke
+
+on:
+  pull_request:
+    paths:
+      - 'internal/zapret2/**'
+      - 'internal/web/service/zapret2_virtual*.go'
+      - '.github/workflows/zapret2-smoke.yml'
+  push:
+    branches:
+      - feature/zapret2-virtual-outbound
+    paths:
+      - 'internal/zapret2/**'
+      - 'internal/web/service/zapret2_virtual*.go'
+      - '.github/workflows/zapret2-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-nfqws2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download and verify the latest official zapret2 release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api='https://api.github.com/repos/bol-van/zapret2/releases/latest'
+          release=$(curl -fsSL --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' "$api")
+          tag=$(jq -r '.tag_name' <<<"$release")
+          asset_name="zapret2-$tag.tar.gz"
+          download=$(jq -r --arg name "$asset_name" '.assets[] | select(.name == $name) | .browser_download_url' <<<"$release")
+          digest=$(jq -r --arg name "$asset_name" '.assets[] | select(.name == $name) | .digest' <<<"$release")
+          if [[ "$download" != "https://github.com/bol-van/zapret2/releases/download/"* ||
+                "$digest" != sha256:* ]]; then
+            echo "Unexpected official release asset/digest" >&2
+            exit 1
+          fi
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/zapret2.tar.gz" "$download"
+          printf '%s  %s\n' "${digest#sha256:}" "$RUNNER_TEMP/zapret2.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/unpacked" "$RUNNER_TEMP/3x-ui-bin/zapret2"
+          tar -xzf "$RUNNER_TEMP/zapret2.tar.gz" -C "$RUNNER_TEMP/unpacked"
+          lib=$(find "$RUNNER_TEMP/unpacked" -type f -name zapret-lib.lua -print -quit)
+          [[ -n "$lib" ]] || { echo 'Official Lua files missing'; exit 1; }
+          distribution=$(dirname "$(dirname "$lib")")
+          cp -a "$distribution/." "$RUNNER_TEMP/3x-ui-bin/zapret2/"
+          mkdir -p "$RUNNER_TEMP/3x-ui-bin/zapret2/bin"
+          install -m 0755 "$distribution/binaries/linux-x86_64/nfqws2" "$RUNNER_TEMP/3x-ui-bin/zapret2/bin/nfqws2"
+      - name: Validate profile arguments with real official nfqws2
+        env:
+          XUI_BIN_FOLDER: ${{ runner.temp }}/3x-ui-bin
+          ZAPRET2_UPSTREAM_SMOKE: '1'
+        run: go test ./internal/zapret2 -run TestOfficialNfqws2DryRunProfiles -v -count=1

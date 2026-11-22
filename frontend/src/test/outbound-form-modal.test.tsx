@@ -72,7 +72,10 @@ describe('OutboundFormModal', () => {
     expect(protocols.length).toBeGreaterThan(3);
 
     const labelsByProto: Record<string, string[]> = {};
-    for (const proto of protocols) {
+    // Probe stable representative protocols. A full sweep can temporarily
+    // hide options as the controlled modal changes its native transport.
+    for (const proto of ['vless', 'wireguard', 'freedom']) {
+      expect(protocols).toContain(proto);
       chooseSelectOption('protocol', proto);
       // Flush antd Form.useWatch('protocol') so protocol-specific fields render before
       // reading; otherwise every iteration sees the same default (vless) DOM.

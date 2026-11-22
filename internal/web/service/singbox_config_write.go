@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
-	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
+	"github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 )
 
 // Check a candidate before replacing the file used by the running core. A
@@ -24,6 +24,7 @@ type nativeConfigCandidate struct {
 	path, target     string
 	managedOutbounds []map[string]any
 	protocolServers  []protocolserver.Plan
+	zapret2Plans    []zapret2.Plan
 	nativeAWGTags    []string
 	published        bool
 }
@@ -144,6 +145,9 @@ func (s *SingBoxService) prepareGeneratedConfigCandidate(ctx context.Context, cf
 	if err := protocolserver.Check(ctx, cfg.ProtocolServers); err != nil {
 		return nil, err
 	}
+	if err := zapret2.Preflight(ctx, cfg.Zapret2Plans); err != nil {
+		return nil, err
+	}
 	data, err := cfg.Marshal()
 	if err != nil {
 		return nil, err
@@ -183,7 +187,7 @@ func (s *SingBoxService) prepareGeneratedConfigCandidate(ctx context.Context, cf
 			}
 		}
 	}
-	return &nativeConfigCandidate{speedLimitPlan: cfg.SpeedLimitPlan, path: name, target: path, managedOutbounds: cfg.ManagedOutbounds, protocolServers: cfg.ProtocolServers, nativeAWGTags: nativeAWGTags}, nil
+	return &nativeConfigCandidate{speedLimitPlan: cfg.SpeedLimitPlan, path: name, target: path, managedOutbounds: cfg.ManagedOutbounds, protocolServers: cfg.ProtocolServers, zapret2Plans: cfg.Zapret2Plans, nativeAWGTags: nativeAWGTags}, nil
 }
 
 // Restore a trusted applied snapshot with the same atomic/durable publication

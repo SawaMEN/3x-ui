@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { BlackholeOutboundSettingsSchema } from './blackhole';
+import { Zapret2OutboundSettingsSchema } from './zapret2';
 import { AmneziaWGOutboundSettingsSchema } from './amneziawg';
 import { DNSOutboundSettingsSchema } from './dns';
 import { FreedomOutboundSettingsSchema } from './freedom';
@@ -15,6 +16,7 @@ import { VmessOutboundSettingsSchema } from './vmess';
 import { WireguardOutboundSettingsSchema } from './wireguard';
 
 export * from './blackhole';
+export * from './zapret2';
 export * from './amneziawg';
 export * from './dns';
 export * from './freedom';
@@ -42,5 +44,6 @@ export const OutboundSettingsSchema = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('blackhole'), settings: BlackholeOutboundSettingsSchema }),
   z.object({ protocol: z.literal('dns'), settings: DNSOutboundSettingsSchema }),
   z.object({ protocol: z.literal('loopback'), settings: LoopbackOutboundSettingsSchema }),
+  z.object({ protocol: z.literal('zapret2'), settings: Zapret2OutboundSettingsSchema }),
 ]);
 export type OutboundSettings = z.infer<typeof OutboundSettingsSchema>;

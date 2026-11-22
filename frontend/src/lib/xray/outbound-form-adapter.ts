@@ -1,6 +1,7 @@
 import { migrateLegacyXhttp, XHttpXmuxSchema } from '@/schemas/protocols/stream/xhttp';
 import { OutboundDomainStrategySchema } from '@/schemas/protocols/outbound';
 import { AmneziaWGOutboundSettingsSchema } from '@/schemas/protocols/outbound';
+import { Zapret2CalibrationSchema } from '@/schemas/protocols/outbound/zapret2';
 import { normalizeStreamSettingsForWire } from '@/lib/xray/stream-wire-normalize';
 import { Wireguard } from '@/utils';
 import type { Sniffing, SniffingDest } from '@/schemas/primitives';
@@ -598,6 +599,25 @@ export function rawOutboundToFormValues(raw: RawOutboundRow): OutboundFormValues
     case 'loopback':
       typed = { protocol: 'loopback', settings: loopbackFromWire(settings) };
       break;
+    case 'zapret2': {
+      const calibration = Zapret2CalibrationSchema.safeParse(settings.calibration);
+      typed = {
+        protocol: 'zapret2',
+        settings: {
+          port: asNumber(settings.port, 15900),
+          profile: (['auto', 'safe', 'balanced', 'aggressive'].includes(asString(settings.profile))
+            ? asString(settings.profile)
+            : 'auto') as 'auto' | 'safe' | 'balanced' | 'aggressive',
+          tcp: settings.tcp !== false,
+          udp: settings.udp === true,
+          testDomains: Array.isArray(settings.testDomains)
+            ? settings.testDomains.filter((x): x is string => typeof x === 'string')
+            : [],
+          calibration: calibration.success ? calibration.data : undefined,
+        },
+      };
+      break;
+    }
     default:
       typed = { protocol: 'vless', settings: vlessFromWire(settings) };
   }
@@ -903,6 +923,9 @@ export function formValuesToWirePayload(values: OutboundFormValues): WireOutboun
       break;
     case 'loopback':
       settings = loopbackToWire(values.settings);
+      break;
+    case 'zapret2':
+      settings = { ...values.settings };
       break;
   }
 

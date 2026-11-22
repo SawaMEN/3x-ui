@@ -172,6 +172,9 @@ export function readSettings(settings: unknown): {
 }
 
 export function isInboundMultiUser(record: { protocol: string; settings: unknown }): boolean {
+  // A shared Pingtunnel v3 password is subscription-attachable but does not
+  // provide independent client accounts for bulk management.
+  if (record.protocol === 'pingtunnel') return false;
   if (record.protocol === 'shadowsocks') {
     return isSSMultiUser({ protocol: 'shadowsocks', settings: readSettings(record.settings) });
   }

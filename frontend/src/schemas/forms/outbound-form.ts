@@ -1,4 +1,5 @@
 import { VisionTestseedSchema } from '@/schemas/protocols/vision';
+import { Zapret2OutboundSettingsSchema } from '@/schemas/protocols/outbound/zapret2';
 import { z } from 'zod';
 
 import { PortSchema, SniffingSchema, type Sniffing } from '@/schemas/primitives';
@@ -207,6 +208,7 @@ export const OutboundFormSettingsSchema = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('blackhole'), settings: BlackholeOutboundFormSettingsSchema }),
   z.object({ protocol: z.literal('dns'), settings: DnsOutboundFormSettingsSchema }),
   z.object({ protocol: z.literal('loopback'), settings: LoopbackOutboundFormSettingsSchema }),
+  z.object({ protocol: z.literal('zapret2'), settings: Zapret2OutboundSettingsSchema }),
 ]);
 export type OutboundFormSettings = z.infer<typeof OutboundFormSettingsSchema>;
 
