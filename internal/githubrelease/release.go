@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -180,7 +181,7 @@ func parseAssets(body io.Reader, downloadPath string) ([]Asset, error) {
 			}
 		}
 	}
-	if err := tokens.Err(); err != io.EOF {
+	if err := tokens.Err(); !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 	for i := range assets {

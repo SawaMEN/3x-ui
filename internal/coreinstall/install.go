@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 	"io"
 	"net/http"
 	"os"
@@ -21,6 +20,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 )
 
 const (
@@ -30,11 +31,13 @@ const (
 
 var errDownloadExceedsLimit = errors.New("download exceeds size limit")
 
-type Asset = githubrelease.Asset
-type Release struct {
-	Tag    string  `json:"tag_name"`
-	Assets []Asset `json:"assets"`
-}
+type (
+	Asset   = githubrelease.Asset
+	Release struct {
+		Tag    string  `json:"tag_name"`
+		Assets []Asset `json:"assets"`
+	}
+)
 
 // Preserve the status code so release discovery can distinguish transient
 // GitHub failures from permanent errors without parsing error messages.

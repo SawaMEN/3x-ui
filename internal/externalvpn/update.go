@@ -36,8 +36,10 @@ var (
 	externalVersionPattern    = regexp.MustCompile(`(?i)\bv?(\d+(?:\.\d+)+(?:[-+][0-9a-z.-]+)?)\b`)
 )
 
-type releaseAsset = githubrelease.Asset
-type githubRelease = githubrelease.Release
+type (
+	releaseAsset  = githubrelease.Asset
+	githubRelease = githubrelease.Release
+)
 
 type releaseSpec struct {
 	protocol    model.Protocol

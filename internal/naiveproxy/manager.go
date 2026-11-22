@@ -42,8 +42,10 @@ type Status struct {
 	Running           bool   `json:"running"`
 }
 
-type releaseAsset = githubrelease.Asset
-type release = githubrelease.Release
+type (
+	releaseAsset = githubrelease.Asset
+	release      = githubrelease.Release
+)
 
 func GetStatus(ctx context.Context) (Status, error) {
 	binary := BinaryPath()
