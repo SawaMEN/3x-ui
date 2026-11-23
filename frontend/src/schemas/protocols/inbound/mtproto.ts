@@ -60,16 +60,16 @@ export const MtprotoInboundSettingsSchema = z.object({
   // One MTProto protocol, with a separately provisioned HTTPS WEB transport.
   webProxy: z
     .object({
-      site: TelemtWebSiteSchema.optional(),
+      site: TelemtWebSiteSchema.default({ mode: 'auto' }),
       enabled: z.boolean().default(false),
       domain: z.string().default(''),
       basePath: TelemtWebBasePathSchema.default(''),
       aliases: z.array(TelemtWebDomainSchema).max(7).default([]),
       retryJitter: z
         .object({
-          enabled: z.boolean(),
-          minMs: z.number().int().min(0).max(30000),
-          maxMs: z.number().int().min(0).max(30000),
+          enabled: z.boolean().default(false),
+          minMs: z.number().int().min(0).max(30000).default(0),
+          maxMs: z.number().int().min(0).max(30000).default(250),
         })
         .refine((value) => value.minMs <= value.maxMs)
         .default({ enabled: false, minMs: 0, maxMs: 250 }),

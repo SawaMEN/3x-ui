@@ -39,6 +39,8 @@ import {
   TelemtCarrierSchema,
   TelemtCarriersSchema,
   TelemtWebProxyRequestSchema,
+  completeTelemtWebSettings,
+  defaultTelemtWebSettings,
 } from '@/schemas/telemt-web';
 import TelemtSubscriptionToggle from './TelemtSubscriptionToggle';
 import RemoteTelegramProxies from './RemoteTelegramProxies';
@@ -54,6 +56,7 @@ type WebProxyStatus = {
   carrier: string;
   carriers: string[] | null;
   carrierNegotiationSupported: boolean;
+  retryJitter?: { enabled: boolean; minMs: number; maxMs: number };
   enabled: boolean;
   supported: boolean;
   domain: string;
@@ -200,14 +203,7 @@ export default function TelemtPage() {
   const [webPreflight, setWebPreflight] = useState<WebPreflight | null>(null);
   const [webPreflightRefresh, setWebPreflightRefresh] = useState(0);
   const webForm = useZodForm(TelemtWebProxyRequestSchema, {
-    defaultValues: {
-      domain: '',
-      aliases: [],
-      basePath: '',
-      frontend: 'nginx',
-      carrier: 'https',
-      carriers: [],
-    },
+    defaultValues: defaultTelemtWebSettings(),
   });
   const webProxyDomain = webForm.watch('domain');
   const webBasePath = webForm.watch('basePath');
@@ -216,6 +212,8 @@ export default function TelemtPage() {
   const webCarrier = webForm.watch('carrier');
   const webCarriers = webForm.watch('carriers');
   const webSite = webForm.watch('site');
+  const webRetryJitter = webForm.watch('retryJitter');
+  const webRetryJitterKey = JSON.stringify(webRetryJitter);
   const webSiteKey = JSON.stringify(webSite);
   const webAliasesKey = (webAliases || []).join('|');
   const webCarriersKey = (webCarriers || []).join('|');
@@ -227,6 +225,7 @@ export default function TelemtPage() {
     webCarrier,
     webCarriersKey,
     webSiteKey,
+    webRetryJitterKey,
     webPreflightRefresh,
   ]);
   const webPreflightCurrent = webPreflight?.requestKey === webPreflightKey ? webPreflight : null;
@@ -250,6 +249,7 @@ export default function TelemtPage() {
             carrier: webCarrier || 'https',
             carriers: webCarriersKey ? webCarriersKey.split('|') : [],
             site: webSiteKey ? (JSON.parse(webSiteKey) as TelemtWebSite) : undefined,
+            retryJitter: webRetryJitterKey ? JSON.parse(webRetryJitterKey) : undefined,
           },
           { ...jsonOptions, silent: true, signal: controller.signal },
         );
@@ -300,6 +300,7 @@ export default function TelemtPage() {
     webCarrier,
     webCarriersKey,
     webSiteKey,
+    webRetryJitterKey,
     webPreflightKey,
   ]);
 
@@ -422,20 +423,23 @@ export default function TelemtPage() {
   };
 
   const openWebProxy = () => {
-    webForm.reset({
-      site: TelemtWebSiteSchema.optional().catch(undefined).parse(status.webProxy.site),
-      domain: status.webProxy.domain || status.webProxy.defaultDomain || '',
-      basePath: status.webProxy.basePath || '',
-      aliases: status.webProxy.aliases || [],
-      frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
-      carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
-      carriers: TelemtCarriersSchema.catch([]).parse(
-        status.webProxy.carriers ||
-          (!status.webProxy.enabled && status.webProxy.carrierNegotiationSupported
-            ? ['websocket-lanes', 'websocket', 'https']
-            : []),
-      ),
-    });
+    webForm.reset(
+      completeTelemtWebSettings({
+        site: TelemtWebSiteSchema.optional().catch(undefined).parse(status.webProxy.site),
+        domain: status.webProxy.domain || status.webProxy.defaultDomain || '',
+        basePath: status.webProxy.basePath || '',
+        aliases: status.webProxy.aliases || [],
+        frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
+        carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
+        carriers: TelemtCarriersSchema.catch([]).parse(
+          status.webProxy.carriers ||
+            (!status.webProxy.enabled && status.webProxy.carrierNegotiationSupported
+              ? ['websocket-lanes', 'websocket', 'https']
+              : []),
+        ),
+        retryJitter: status.webProxy.retryJitter,
+      }),
+    );
     setWebPreflight(null);
     setWebProxyOpen(true);
   };

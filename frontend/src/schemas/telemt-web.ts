@@ -94,16 +94,50 @@ export const TelemtWebProxyRequestSchema = z.object({
   aliases: z.array(TelemtWebDomainSchema).max(7).default([]),
   retryJitter: z
     .object({
-      enabled: z.boolean(),
-      minMs: z.number().int().min(0).max(30000),
-      maxMs: z.number().int().min(0).max(30000),
+      enabled: z.boolean().default(false),
+      minMs: z.number().int().min(0).max(30000).default(0),
+      maxMs: z.number().int().min(0).max(30000).default(250),
     })
     .refine((value) => value.minMs <= value.maxMs)
-    .optional(),
+    .default({ enabled: false, minMs: 0, maxMs: 250 }),
   basePath: TelemtWebBasePathSchema.default(''),
-  site: TelemtWebSiteSchema.optional(),
+  site: TelemtWebSiteSchema.default({ mode: 'auto' }),
   domain: TelemtWebDomainSchema,
-  frontend: TelemtFrontendSchema,
-  carrier: TelemtCarrierSchema,
-  carriers: TelemtCarriersSchema,
+  frontend: TelemtFrontendSchema.default('nginx'),
+  carrier: TelemtCarrierSchema.default('https'),
+  carriers: TelemtCarriersSchema.default([]),
 });
+
+// Do not share mutable default arrays across forms or invent public domains.
+export function defaultTelemtWebSettings() {
+  return {
+    enabled: false,
+    site: { mode: 'auto' as const },
+    domain: '',
+    basePath: '',
+    aliases: [] as string[],
+    frontend: 'nginx' as const,
+    carrier: 'https' as const,
+    carriers: [] as z.infer<typeof TelemtCarrierSchema>[],
+    retryJitter: { enabled: false, minMs: 0, maxMs: 250 },
+  };
+}
+
+// Complete legacy WEB settings on enable without overwriting user choices.
+export function completeTelemtWebSettings(
+  value: (Partial<z.infer<typeof TelemtWebProxyRequestSchema>> & { enabled?: boolean }) | undefined,
+) {
+  const defaults = defaultTelemtWebSettings();
+  return {
+    ...defaults,
+    ...value,
+    site: value?.site ?? defaults.site,
+    domain: value?.domain ?? defaults.domain,
+    basePath: value?.basePath ?? defaults.basePath,
+    aliases: value?.aliases ?? defaults.aliases,
+    frontend: value?.frontend || defaults.frontend,
+    carrier: value?.carrier || defaults.carrier,
+    carriers: value?.carriers ?? defaults.carriers,
+    retryJitter: { ...defaults.retryJitter, ...value?.retryJitter },
+  };
+}
