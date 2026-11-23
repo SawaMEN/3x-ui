@@ -46,7 +46,7 @@ export default function SubLinksTab({
     {
       kind: 'HIDDIFY',
       url: subFormatMode === 'xray' ? '' : appendNativeFormat(subUrl, 'hiddify'),
-      title: 'Hiddify JSON (AnyTLS / ShadowTLS)',
+      title: 'Hiddify JSON',
       downloadable: true,
     },
   ].filter((row) => row.url);

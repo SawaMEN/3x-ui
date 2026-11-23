@@ -1014,7 +1014,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		}
 	}
 
-	if (formatUnsupported && !nativeTLSForHiddify && !compatible) || (nativeTLSForHiddify && !nativeTLSGenerated) {
+	if !compatible && (formatUnsupported && !nativeTLSForHiddify || nativeTLSForHiddify && !nativeTLSGenerated) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
 
