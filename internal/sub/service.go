@@ -3245,10 +3245,7 @@ func (s *SubService) buildSingleURL(configuredURI, base, basePath, subId string)
 
 // joinPathWithID safely joins a base path with a subscription ID
 func (s *SubService) joinPathWithID(basePath, subId string) string {
-	if strings.HasSuffix(basePath, "/") {
-		return basePath + subId
-	}
-	return basePath + "/" + subId
+	return strings.TrimRight(basePath, "/") + "/" + subId
 }
 
 // BuildPageData parses header and prepares the template view model.

@@ -406,6 +406,9 @@ func (a *SUBController) configuredSubscriptionPathOwner(candidate string) string
 // browser viewing the HTML info page gets clean, name-only remarks (usage is
 // shown in the page summary).
 func (a *SUBController) maybeServeSubPage(c *gin.Context) bool {
+	if strings.EqualFold(c.Query("view"), "raw") {
+		return false
+	}
 	accept := c.GetHeader("Accept")
 	explicitHTML := c.Query("html") == "1" || strings.EqualFold(c.Query("view"), "html")
 	isHiddify := strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify")
@@ -487,6 +490,12 @@ func (a *SUBController) buildSubPageData(c *gin.Context) (PageData, bool) {
 		subs = []string{}
 	}
 	subURL, subJsonURL, subClashURL := subReq.BuildURLs(a.subPath, a.subJsonPath, a.subClashPath, subId)
+	if legacyBase, err := a.settingService.HiddifySubscriptionBase(subId); err != nil {
+		writeSubError(c, err)
+		return PageData{}, false
+	} else if legacyBase != "" {
+		subURL = strings.TrimRight(legacyBase, "/") + "/" + subId + "/"
+	}
 	if !a.jsonEnabled {
 		subJsonURL = ""
 	}
@@ -585,7 +594,7 @@ func (a *SUBController) subs(c *gin.Context) {
 		logSubscriptionRoute(userAgent, format+"-json")
 		return
 	}
-	if format == "" && a.maybeServeSubPage(c) {
+	if (format == "" || format == "all" && a.formatAllowed(c, "links")) && a.maybeServeSubPage(c) {
 		logSubscriptionRoute(userAgent, "html")
 		return
 	}

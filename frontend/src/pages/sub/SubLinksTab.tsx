@@ -13,9 +13,12 @@ interface SubLinksTabProps {
   onCopy: (value: string) => void;
 }
 
-const appendRawView = (url: string) => `${url}${url.includes('?') ? '&' : '?'}view=raw`;
-const appendNativeFormat = (url: string, format: string) =>
-  url ? `${url}${url.includes('?') ? '&' : '?'}format=${format}` : '';
+function withSubscriptionParam(url: string, name: string, value: string) {
+  if (!url || !URL.canParse(url, window.location.href)) return '';
+  const parsed = new URL(url, window.location.href);
+  parsed.searchParams.set(name, value);
+  return parsed.href;
+}
 
 export default function SubLinksTab({
   subUrl,
@@ -25,10 +28,14 @@ export default function SubLinksTab({
   onCopy,
 }: SubLinksTabProps) {
   const { t } = useTranslation();
-  const [profileScope, setProfileScope] = useState<'compatible' | 'all'>('compatible');
+  const [profileScope, setProfileScope] = useState<'compatible' | 'all'>(() =>
+    new URLSearchParams(window.location.search).get('format') === 'all' ? 'all' : 'compatible',
+  );
   const canExportAllProfiles = subFormatMode === 'both';
   const qrUrl =
-    canExportAllProfiles && profileScope === 'all' ? appendNativeFormat(subUrl, 'all') : subUrl;
+    canExportAllProfiles && profileScope === 'all'
+      ? withSubscriptionParam(subUrl, 'format', 'all')
+      : subUrl;
   const rows = [
     {
       kind: 'XRAY',
@@ -39,13 +46,13 @@ export default function SubLinksTab({
     { kind: 'CLASH', url: subClashUrl, title: 'Clash / Mihomo', downloadable: true },
     {
       kind: 'SING-BOX',
-      url: subFormatMode === 'xray' ? '' : appendNativeFormat(subUrl, 'sing-box'),
+      url: subFormatMode === 'xray' ? '' : withSubscriptionParam(subUrl, 'format', 'sing-box'),
       title: 'Sing-box JSON (AnyTLS / ShadowTLS)',
       downloadable: true,
     },
     {
       kind: 'HIDDIFY',
-      url: subFormatMode === 'xray' ? '' : appendNativeFormat(subUrl, 'hiddify'),
+      url: subFormatMode === 'xray' ? '' : withSubscriptionParam(subUrl, 'format', 'hiddify'),
       title: 'Hiddify JSON',
       downloadable: true,
     },
@@ -118,7 +125,7 @@ export default function SubLinksTab({
           <div className="sub-row-actions">
             {row.downloadable && (
               <Button
-                href={appendRawView(row.url)}
+                href={withSubscriptionParam(row.url, 'view', 'raw')}
                 target="_blank"
                 rel="noopener noreferrer"
                 icon={<DownloadOutlined aria-hidden />}
