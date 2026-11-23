@@ -16,6 +16,7 @@ export default function DomainEditor({
   draft,
   compatible,
   primaryDomain,
+  coverBlocked,
   setPrimaryDomain,
   tab,
   onTab,
@@ -28,6 +29,7 @@ export default function DomainEditor({
   draft: DomainConfigForm;
   compatible: { id: number; remark?: string; network?: string; port?: number }[];
   primaryDomain: boolean;
+  coverBlocked: (name: string, mode: string) => string | undefined;
   setPrimaryDomain: (value: boolean) => void;
   tab: string;
   onTab: (value: string) => void;
@@ -39,6 +41,9 @@ export default function DomainEditor({
   const mode = Form.useWatch('mode', form);
   const siteCatalog = Form.useWatch('siteCatalog', form);
   const tls = Form.useWatch('tls', form);
+  const name = Form.useWatch('name', form);
+  const coverBlock = mode ? coverBlocked(name || '', mode) : undefined;
+  const supportsCover = !!mode && !coverBlock;
   return (
     <Drawer
       open={open}
@@ -121,13 +126,13 @@ export default function DomainEditor({
                                   ? 'auto'
                                   : form.getFieldValue('tls'),
                           });
-                          if (value === 'sni_only') {
+                          if (value === 'sni_only' && !form.getFieldValue('siteCatalog')) {
                             form.setFieldsValue({
                               siteCatalog: 'builtin',
                               siteTemplate: 'notes',
                               siteHtml: '',
                             });
-                          } else {
+                          } else if (value === 'shared_sni' || value === 'cert_only') {
                             form.setFieldsValue({
                               siteCatalog: '',
                               siteTemplate: '',
@@ -168,6 +173,9 @@ export default function DomainEditor({
                         : 'Issues and renews a certificate via DNS-01 on this node without a website or public listeners.'
                       : mode && label(`modeDesc.${mode}`)}
                   </Typography.Paragraph>
+                  {coverBlock && mode !== 'shared_sni' && mode !== 'cert_only' && (
+                    <Typography.Paragraph type="secondary">{coverBlock}</Typography.Paragraph>
+                  )}
                   {mode === 'relay' && (
                     <Form.Item
                       name="origin"
@@ -211,7 +219,7 @@ export default function DomainEditor({
                 </>
               ),
             },
-            ...(mode === 'sni_only'
+            ...(supportsCover
               ? [
                   {
                     key: 'site',
@@ -219,10 +227,11 @@ export default function DomainEditor({
                     forceRender: true,
                     children: (
                       <>
-                        {mode === 'sni_only' && (
+                        {supportsCover && (
                           <>
                             <Form.Item
                               name="siteCatalog"
+                              preserve
                               label={
                                 i18n.language.startsWith('ru')
                                   ? 'Каталог сайта-заглушки'
@@ -231,6 +240,16 @@ export default function DomainEditor({
                             >
                               <Select
                                 options={[
+                                  ...(mode === 'sni_only'
+                                    ? []
+                                    : [
+                                        {
+                                          value: '',
+                                          label: i18n.language.startsWith('ru')
+                                            ? 'Без сайта-заглушки'
+                                            : 'No cover site',
+                                        },
+                                      ]),
                                   ...Object.entries(TelemtWebCatalogs).map(([value, entry]) => ({
                                     value,
                                     label: i18n.language.startsWith('ru') ? entry.ru : entry.en,
@@ -242,14 +261,16 @@ export default function DomainEditor({
                                       : 'Custom HTML',
                                   },
                                 ]}
-                                onChange={(value: 'builtin' | 'mtproxyl' | 'custom') => {
+                                onChange={(value: '' | 'builtin' | 'mtproxyl' | 'custom') => {
                                   form.setFieldValue(
                                     'siteTemplate',
-                                    value === 'custom'
-                                      ? 'html'
-                                      : value === 'builtin'
-                                        ? 'notes'
-                                        : 'stub',
+                                    value === ''
+                                      ? ''
+                                      : value === 'custom'
+                                        ? 'html'
+                                        : value === 'builtin'
+                                          ? 'notes'
+                                          : 'stub',
                                   );
                                   if (value === 'custom' && !form.getFieldValue('siteHtml')) {
                                     form.setFieldValue('siteHtml', starterCoverSiteHTML);
@@ -257,44 +278,48 @@ export default function DomainEditor({
                                 }}
                               />
                             </Form.Item>
-                            <Form.Item
-                              name="siteTemplate"
-                              label={
-                                i18n.language.startsWith('ru')
-                                  ? 'Какой сайт создать'
-                                  : 'Website template'
-                              }
-                              rules={[{ required: true }]}
-                            >
-                              {siteCatalog === 'custom' ? (
-                                <Select
-                                  disabled
-                                  options={[
-                                    {
-                                      value: 'html',
-                                      label: i18n.language.startsWith('ru')
-                                        ? 'Моя HTML-страница'
-                                        : 'My HTML page',
-                                    },
-                                  ]}
-                                />
-                              ) : (
-                                <Select
-                                  options={TelemtWebCatalogs[
-                                    siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'
-                                  ].templates.map((entry) => ({
-                                    value: entry.id,
-                                    label: i18n.language.startsWith('ru') ? entry.ru : entry.en,
-                                    title: i18n.language.startsWith('ru')
-                                      ? entry.descriptionRu
-                                      : entry.descriptionEn,
-                                  }))}
-                                />
-                              )}
-                            </Form.Item>
+                            {(mode === 'sni_only' || !!siteCatalog) && (
+                              <Form.Item
+                                name="siteTemplate"
+                                preserve
+                                label={
+                                  i18n.language.startsWith('ru')
+                                    ? 'Какой сайт создать'
+                                    : 'Website template'
+                                }
+                                rules={[{ required: true }]}
+                              >
+                                {siteCatalog === 'custom' ? (
+                                  <Select
+                                    disabled
+                                    options={[
+                                      {
+                                        value: 'html',
+                                        label: i18n.language.startsWith('ru')
+                                          ? 'Моя HTML-страница'
+                                          : 'My HTML page',
+                                      },
+                                    ]}
+                                  />
+                                ) : (
+                                  <Select
+                                    options={TelemtWebCatalogs[
+                                      siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'
+                                    ].templates.map((entry) => ({
+                                      value: entry.id,
+                                      label: i18n.language.startsWith('ru') ? entry.ru : entry.en,
+                                      title: i18n.language.startsWith('ru')
+                                        ? entry.descriptionRu
+                                        : entry.descriptionEn,
+                                    }))}
+                                  />
+                                )}
+                              </Form.Item>
+                            )}
                             {siteCatalog === 'custom' && (
                               <Form.Item
                                 name="siteHtml"
+                                preserve
                                 rules={[
                                   {
                                     validator: (_, value: string) =>
@@ -302,8 +327,8 @@ export default function DomainEditor({
                                         ? Promise.reject(
                                             new Error(
                                               i18n.language.startsWith('ru')
-                                                ? 'Укажите полный HTML до 256 КБ'
-                                                : 'Enter a full HTML document up to 256 KiB',
+                                                ? 'Укажите полный HTML до 1 МиБ'
+                                                : 'Enter a full HTML document up to 1 MiB',
                                             ),
                                           )
                                         : Promise.resolve(),

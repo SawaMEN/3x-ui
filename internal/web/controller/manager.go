@@ -8,6 +8,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 )
@@ -44,7 +45,11 @@ func (a *ManagerController) state(c *gin.Context) {
 }
 
 func managerBind(c *gin.Context, v any) bool {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
+	limit := int64(2 << 20)
+	if _, ok := v.(*service.ManagerCoverSiteInput); ok {
+		limit = domainfront.CoverSiteRequestMaxBytes
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 	if err := c.ShouldBindJSON(v); err != nil {
 		c.JSON(400, gin.H{"success": false, "msg": err.Error()})
 		return false

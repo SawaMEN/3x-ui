@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { COVER_SITE_HTML_MAX_BYTES } from './cover-site-html';
 import { isTelemtWebCatalogTemplate, TelemtWebThemes } from './telemt-web-catalog';
 
 export const TelemtFrontendSchema = z.enum(['nginx', 'caddy', 'haproxy']);
@@ -33,8 +34,8 @@ export const TelemtWebSiteSchema = z
     html: z
       .string()
       .refine(
-        (value) => new TextEncoder().encode(value).length <= 256 * 1024,
-        'HTML: максимум 256 КиБ',
+        (value) => new TextEncoder().encode(value).length <= COVER_SITE_HTML_MAX_BYTES,
+        'HTML: максимум 1 МиБ',
       )
       .optional(),
   })

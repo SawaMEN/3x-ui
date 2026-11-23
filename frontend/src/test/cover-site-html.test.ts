@@ -17,6 +17,10 @@ describe('cover-site custom HTML', () => {
     expect(coverSiteHTMLValidation('<html>invalid\0content</html>')).toBe('document');
   });
 
+  it('accepts HTML larger than the old 256 KiB limit', () => {
+    expect(coverSiteHTMLValidation('<html>' + 'a'.repeat(512 * 1024) + '</html>')).toBeNull();
+  });
+
   it('enforces the byte limit, not the character count', () => {
     const opening = '<html>';
     const closing = '</html>';

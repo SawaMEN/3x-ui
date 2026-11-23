@@ -524,6 +524,9 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		panelPort = override
 	}
 	backend.SharedHTTP, backend.SharedHTTPS = domainSharesListener(cfg, settings.WebListen, panelPort, settings.WebCertFile != "" && settings.WebKeyFile != "")
+	if err := validateCoverPanelPaths(cfg, backend.PanelHost, backend.PanelPath, backend.SharedHTTPS); err != nil {
+		return backend, err
+	}
 	if settings.SubEnable {
 		sharedHTTP, sharedHTTPS := domainSharesListener(cfg, settings.SubListen, settings.SubPort, subTLS)
 		if subListener != nil {
@@ -551,7 +554,7 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		if !d.Enabled || d.Mode == "shared_sni" || d.Mode == "cert_only" {
 			continue
 		}
-		if d.Mode == "sni_only" {
+		if d.HasCoverSite() {
 			// Reuse Telemt's existing decoy-site renderer and atomic file writer
 			// instead of maintaining a second set of website templates.
 			sitePath := filepath.Join(config.GetDBFolderPath(), "domain-tls", "sni-sites", fmt.Sprintf("%x", sha256.Sum256([]byte(d.Name))))
@@ -560,14 +563,16 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 				var siteErr error
 				site, siteErr = managedCoverSiteOptions(d.SiteCatalog, d.SiteTemplate, d.SiteHTML)
 				if siteErr != nil {
-					return backend, fmt.Errorf("SNI site %s: %w", d.Name, siteErr)
+					return backend, fmt.Errorf("cover site %s: %w", d.Name, siteErr)
 				}
 			}
 			dir, siteErr := prepareTelemtWebSite(d.Name, filepath.Join(sitePath, "default"), filepath.Join(sitePath, "snapshots"), site)
 			if siteErr != nil {
-				return backend, fmt.Errorf("SNI site %s: %w", d.Name, siteErr)
+				return backend, fmt.Errorf("cover site %s: %w", d.Name, siteErr)
 			}
 			backend.DecoyDirectories[d.Name] = dir
+		}
+		if d.Mode == "sni_only" {
 			continue
 		}
 		for _, id := range d.InboundIDs {
@@ -593,6 +598,21 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		}
 	}
 	return backend, nil
+}
+
+// validateCoverPanelPaths is also used by preflight, without rendering files.
+func validateCoverPanelPaths(cfg domainfront.DomainFrontConfig, host, path string, shared bool) error {
+	if !cfg.Enabled || !shared || (path != "" && path != "/") {
+		return nil
+	}
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	for _, d := range cfg.Domains {
+		if d.Enabled && d.HasCoverSite() && (d.Mode != "sni_only" || d.SiteCatalog != "") &&
+			strings.EqualFold(strings.TrimSuffix(strings.TrimSpace(d.Name), "."), host) {
+			return fmt.Errorf("cover site %s: configure a non-root panel path or separate panel port", d.Name)
+		}
+	}
+	return nil
 }
 
 func domainPathOverlap(a, b string) bool {
