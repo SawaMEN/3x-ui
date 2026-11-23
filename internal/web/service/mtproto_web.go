@@ -21,15 +21,16 @@ import (
 )
 
 type mtprotoWebSettings struct {
-	Site        *TelemtWebSiteOptions `json:"site,omitempty"`
-	Enabled     bool                  `json:"enabled"`
-	Domain      string                `json:"domain"`
-	BasePath    string                `json:"basePath"`
-	Aliases     []string              `json:"aliases"`
-	Frontend    string                `json:"frontend"`
-	Carrier     string                `json:"carrier"`
-	Carriers    []string              `json:"carriers"`
-	RetryJitter *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
+	SharedIngress *TelemtWebIngress     `json:"sharedIngress,omitempty"`
+	Site          *TelemtWebSiteOptions `json:"site,omitempty"`
+	Enabled       bool                  `json:"enabled"`
+	Domain        string                `json:"domain"`
+	BasePath      string                `json:"basePath"`
+	Aliases       []string              `json:"aliases"`
+	Frontend      string                `json:"frontend"`
+	Carrier       string                `json:"carrier"`
+	Carriers      []string              `json:"carriers"`
+	RetryJitter   *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
 }
 
 func telemtWebRetryJitterEqual(a, b *TelemtWebRetryJitter) bool {
@@ -114,7 +115,7 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if _, err := normalizeTelemtWebAliases(domain, opts.Aliases); err != nil {
 		return err
 	}
-	normalizedSettings, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases, RetryJitter: opts.RetryJitter})
+	normalizedSettings, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{SharedIngress: opts.SharedIngress, Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases, RetryJitter: opts.RetryJitter})
 	if err != nil {
 		return err
 	}
@@ -211,7 +212,7 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 
 	if len(selected) == 0 || !mtprotoWebHasUsers(selected[0]) {
 		if state.ManagedInboundID == 0 {
-			return nil
+			return refreshTelemtIngress(state)
 		}
 		if err := disableTelemtWebProxy(); err != nil {
 			return err
@@ -231,7 +232,7 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 	if opts.Site == nil {
 		opts.Site = &TelemtWebSiteOptions{Mode: "auto"}
 	}
-	normalized, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases, RetryJitter: opts.RetryJitter})
+	normalized, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{SharedIngress: opts.SharedIngress, Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases, RetryJitter: opts.RetryJitter})
 	if err != nil {
 		return err
 	}
@@ -258,13 +259,19 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		telemtWebCarrier(state) == normalized.Carrier &&
 		strings.Join(state.Carriers, ",") == strings.Join(normalized.Carriers, ",") &&
 		telemtWebSitesEqual(state.Site, normalized.Site) &&
-		telemtWebRetryJitterEqual(state.RetryJitter, normalized.RetryJitter)
+		telemtWebRetryJitterEqual(state.RetryJitter, normalized.RetryJitter) &&
+		telemtWebIngressEqual(state.SharedIngress, normalized.SharedIngress)
 	// An older imported snapshot may still contain CSS/JS blocked by Telemt's
 	// CSP. Reconcile it once into a new immutable snapshot after an upgrade.
 	if unchanged && normalized.Site != nil && normalized.Site.Mode == "html" {
 		unchanged = state.DecoyDir == telemtWebImportedSnapshotPath(telemtWebDecoyDir+"-sites", normalized.Site.HTML)
 	}
 	svc := TelemtService{}
+	if unchanged {
+		if err := refreshTelemtIngress(state); err != nil {
+			return err
+		}
+	}
 	if unchanged && state.UserFingerprint == fingerprint && svc.WebProxyTelemtActive() {
 		if err := refreshMtprotoWebTrafficBinding(ctx); err != nil {
 			return err

@@ -21,7 +21,17 @@ func (s *SettingService) GetSubPublicURL() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return subscriptionPublicURL(cfg, settings), nil
+	return effectiveSubscriptionPublicURL(cfg, settings), nil
+}
+
+func effectiveSubscriptionPublicURL(cfg domainfront.DomainFrontConfig, settings *entity.AllSetting) string {
+	if url := subscriptionPublicURL(cfg, settings); url != "" {
+		return url
+	}
+	if settings.SubEnable {
+		return telemtIngressSubscriptionOrigin()
+	}
+	return ""
 }
 
 func configuredSubscriptionDomain(cfg domainfront.DomainFrontConfig) (domainfront.DomainFrontDomain, bool) {
@@ -150,7 +160,7 @@ func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string
 	if primary != "" && !restricted {
 		hosts[strings.TrimSuffix(strings.ToLower(primary), ".")] = true
 	}
-	publicURL := subscriptionPublicURL(cfg, settings)
+	publicURL := effectiveSubscriptionPublicURL(cfg, settings)
 	if restricted && publicURL == "" {
 		publicURL = directSubscriptionOrigin(settings)
 	}

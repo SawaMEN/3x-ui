@@ -90,7 +90,13 @@ export const TelemtWebDomainSchema = z
   .max(253)
   .regex(/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/);
 
+export const TelemtSharedIngressSchema = z.object({
+  enabled: z.boolean().default(false),
+  naiveInboundId: z.number().int().nonnegative().optional(),
+});
+
 export const TelemtWebProxyRequestSchema = z.object({
+  sharedIngress: TelemtSharedIngressSchema.optional(),
   aliases: z.array(TelemtWebDomainSchema).max(7).default([]),
   retryJitter: z
     .object({

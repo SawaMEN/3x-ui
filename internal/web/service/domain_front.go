@@ -665,6 +665,11 @@ func domainInboundRoute(inbound *model.Inbound, host string) (domainfront.Route,
 func (s *SettingService) DomainFrontHosts(inbounds []*model.Inbound) (map[int][]*model.Host, error) {
 	cfg, err := s.GetDomainFrontConfig()
 	out := map[int][]*model.Host{}
+	for _, inbound := range inbounds {
+		if host := telemtIngressNaiveHost(inbound); host != nil {
+			out[inbound.Id] = append(out[inbound.Id], host)
+		}
+	}
 	if err != nil || !cfg.Enabled {
 		return out, err
 	}

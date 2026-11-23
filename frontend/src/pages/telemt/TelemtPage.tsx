@@ -1,3 +1,4 @@
+import TelemtNaiveSelect from './TelemtNaiveSelect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -48,6 +49,7 @@ import TelemtWebGuide, { telemtWebFieldHelp } from './TelemtWebGuide';
 import './TelemtPage.css';
 
 type WebProxyStatus = {
+  sharedIngress?: { enabled: boolean; naiveInboundId?: number };
   site?: TelemtWebSite;
   frontend: string;
   frontendActive: boolean;
@@ -213,6 +215,8 @@ export default function TelemtPage() {
   const webBasePath = webForm.watch('basePath');
   const webAliases = webForm.watch('aliases');
   const webFrontend = webForm.watch('frontend');
+  const sharedIngressEnabled = webForm.watch('sharedIngress.enabled');
+  const sharedNaiveInbound = webForm.watch('sharedIngress.naiveInboundId');
   const webCarrier = webForm.watch('carrier');
   const webCarriers = webForm.watch('carriers');
   const webSite = webForm.watch('site');
@@ -227,6 +231,8 @@ export default function TelemtPage() {
     webCarrier,
     webCarriersKey,
     webSiteKey,
+    sharedIngressEnabled,
+    sharedNaiveInbound,
     webPreflightRefresh,
   ]);
   const webPreflightCurrent = webPreflight?.requestKey === webPreflightKey ? webPreflight : null;
@@ -247,6 +253,12 @@ export default function TelemtPage() {
             basePath: webBasePath || '',
             aliases: webAliasesKey ? webAliasesKey.split('|') : [],
             frontend: webFrontend || 'nginx',
+            ...(webFrontend === 'haproxy' && {
+              sharedIngress: {
+                enabled: sharedIngressEnabled ?? false,
+                naiveInboundId: sharedNaiveInbound ?? undefined,
+              },
+            }),
             carrier: webCarrier || 'https',
             carriers: webCarriersKey ? webCarriersKey.split('|') : [],
             site: webSiteKey ? (JSON.parse(webSiteKey) as TelemtWebSite) : undefined,
@@ -300,6 +312,8 @@ export default function TelemtPage() {
     webCarrier,
     webCarriersKey,
     webSiteKey,
+    sharedIngressEnabled,
+    sharedNaiveInbound,
     webPreflightKey,
   ]);
 
@@ -428,6 +442,7 @@ export default function TelemtPage() {
       basePath: status.webProxy.basePath || '',
       aliases: status.webProxy.aliases || [],
       frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
+      sharedIngress: status.webProxy.sharedIngress,
       carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
       carriers: TelemtCarriersSchema.catch([]).parse(
         status.webProxy.carriers ||
@@ -445,7 +460,9 @@ export default function TelemtPage() {
       const signal = lifetime.current?.signal;
       setWebProxyLoading(true);
       try {
-        const r = await HttpUtil.post('/panel/api/telemt/webproxy/enable', payload, jsonOptions);
+        const { sharedIngress, ...options } = payload;
+        const request = payload.frontend === 'haproxy' ? { ...options, sharedIngress } : options;
+        const r = await HttpUtil.post('/panel/api/telemt/webproxy/enable', request, jsonOptions);
         if (signal?.aborted) return;
         if (r?.success) {
           messageApi.success(
@@ -983,6 +1000,27 @@ export default function TelemtPage() {
                   options={TelemtFrontendSchema.options.map((value) => ({ value, label: value }))}
                 />
               </FormField>
+              {webFrontend === 'haproxy' && (
+                <>
+                  <FormField
+                    name="sharedIngress.enabled"
+                    label="Общий HTTPS-вход на порту 443"
+                    extra="HAProxy использует настроенные порты панели и подписок. Если путь Telemt WEB пустой, панель задаст его автоматически."
+                    valueProp="checked"
+                  >
+                    <Switch disabled={webProxyLoading} />
+                  </FormField>
+                  {sharedIngressEnabled && (
+                    <FormField
+                      name="sharedIngress.naiveInboundId"
+                      label="Входящий NaiveProxy"
+                      extra="Необязательно. Укажите локальное TCP-подключение с отдельным доменом SNI."
+                    >
+                      <TelemtNaiveSelect disabled={webProxyLoading} />
+                    </FormField>
+                  )}
+                </>
+              )}
               <FormField
                 name="carrier"
                 label="Основной транспорт (WEB carrier)"

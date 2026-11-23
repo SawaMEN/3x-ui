@@ -3,6 +3,7 @@ import {
   TelemtWebBasePathSchema,
   TelemtWebDomainSchema,
   TelemtWebSiteSchema,
+  TelemtSharedIngressSchema,
 } from '@/schemas/telemt-web';
 
 // Legacy mtg-multi domain-fronting payload. Telemt migrates these fields to its native mask host/port;
@@ -61,6 +62,7 @@ export const MtprotoInboundSettingsSchema = z.object({
   webProxy: z
     .object({
       site: TelemtWebSiteSchema.optional(),
+      sharedIngress: TelemtSharedIngressSchema.optional(),
       enabled: z.boolean().default(false),
       domain: z.string().default(''),
       basePath: TelemtWebBasePathSchema.default(''),

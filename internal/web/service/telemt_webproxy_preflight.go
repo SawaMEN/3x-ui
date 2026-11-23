@@ -150,6 +150,27 @@ func (s TelemtService) PreflightWebProxyForInbound(ctx context.Context, domain s
 	} else {
 		check("https-port", false, "TCP 443 занят другим сервисом.")
 	}
+	if validDomain && aliasesErr == nil && options.SharedIngress != nil && options.SharedIngress.Enabled {
+		path := state.BasePath
+		if options.BasePath != nil {
+			path = *options.BasePath
+		}
+		plan, err := buildTelemtWebIngress(TelemtWebProxyState{
+			SharedIngress: options.SharedIngress, Domain: domain, Aliases: aliases, BasePath: path,
+		})
+		if err == nil {
+			message := "Панель: https://" + plan.panel.host + plan.panel.paths[0] + "/. Telemt WEB: /" + path + "."
+			if plan.subscriptions.host != "" {
+				message += " Подписки: https://" + plan.subscriptions.host + "."
+			}
+			if plan.naiveHost != "" {
+				message += " NaiveProxy: " + plan.naiveHost + ":443."
+			}
+			check("shared-ingress", true, message)
+		} else {
+			check("shared-ingress", false, err.Error())
+		}
+	}
 	if options.Frontend == "nginx" && telemtWebCommandExists("nginx") {
 		for _, alias := range aliases {
 			conflict, inspectErr := telemtWebNginxHostConflict(ctx, alias)
