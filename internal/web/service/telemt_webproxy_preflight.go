@@ -155,11 +155,18 @@ func (s TelemtService) PreflightWebProxyForInbound(ctx context.Context, domain s
 		if options.BasePath != nil {
 			path = *options.BasePath
 		}
-		_, err := buildTelemtWebIngress(TelemtWebProxyState{
+		plan, err := buildTelemtWebIngress(TelemtWebProxyState{
 			SharedIngress: options.SharedIngress, Domain: domain, Aliases: aliases, BasePath: path,
 		})
 		if err == nil {
-			check("shared-ingress", true, "HAProxy опубликует локальные службы через TCP 443.")
+			message := "Панель: https://" + plan.panel.host + plan.panel.paths[0] + "/. Telemt WEB: /" + path + "."
+			if plan.subscriptions.host != "" {
+				message += " Подписки: https://" + plan.subscriptions.host + "."
+			}
+			if plan.naiveHost != "" {
+				message += " NaiveProxy: " + plan.naiveHost + ":443."
+			}
+			check("shared-ingress", true, message)
 		} else {
 			check("shared-ingress", false, err.Error())
 		}

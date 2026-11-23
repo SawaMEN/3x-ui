@@ -49,7 +49,19 @@ describe('Telemt WEB settings', () => {
             }
           : url.endsWith('/proxy')
             ? []
-            : {},
+            : url.endsWith('/inbounds/options')
+              ? [
+                  {
+                    id: 42,
+                    remark: 'Naive test',
+                    protocol: 'naive',
+                    enable: true,
+                    network: 'tcp',
+                    listen: '127.0.0.1',
+                    port: 9443,
+                  },
+                ]
+              : {},
       }));
       vi.mocked(HttpUtil.post).mockImplementation(async (url) => ({
         success: true,
@@ -65,9 +77,8 @@ describe('Telemt WEB settings', () => {
       expect(screen.getByLabelText('Домен')).toHaveProperty('value', 'web.example.com');
       if (frontend === 'haproxy') {
         fireEvent.click(screen.getByRole('switch', { name: 'Общий HTTPS-вход на порту 443' }));
-        fireEvent.change(screen.getByLabelText('ID входящего NaiveProxy'), {
-          target: { value: '42' },
-        });
+        fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Входящий NaiveProxy' }));
+        fireEvent.click(await screen.findByText('Naive test · 9443'));
       }
       fireEvent.click(screen.getByRole('button', { name: 'Выше: websocket' }));
       await waitFor(() =>

@@ -81,6 +81,10 @@ func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, 
 		}
 		o.BasePath = &path
 	}
+	if o.SharedIngress != nil && o.SharedIngress.Enabled && (o.BasePath == nil || *o.BasePath == "") {
+		path := telemtWebIngressDefaultPath
+		o.BasePath = &path
+	}
 	if !slices.Contains([]string{"nginx", "caddy", "haproxy"}, o.Frontend) {
 		return o, errors.New("WEB Proxy frontend must be nginx, caddy or haproxy")
 	}
@@ -213,6 +217,17 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 	}
 	if err != nil {
 		return result, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
+	}
+	if o.SharedIngress != nil && o.SharedIngress.Enabled {
+		current, err := readTelemtWebState()
+		if err != nil {
+			return result, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
+		}
+		if err := refreshTelemtIngress(current); err != nil {
+			return result, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
+		}
+	} else {
+		publishedTelemtIngress.Store(nil)
 	}
 	return result, nil
 }
@@ -438,6 +453,10 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 	if err != nil {
 		return err
 	}
+	return writeTelemtWebFrontendFiles(s, data)
+}
+
+func writeTelemtWebFrontendFiles(s TelemtWebProxyState, data []byte) error {
 	if err := os.MkdirAll(telemtWebFrontDir, 0o700); err != nil {
 		return err
 	}
@@ -450,11 +469,24 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(telemtWebFrontDir+"/tls.pem", append(append(cert, '\n'), key...), 0o600); err != nil {
+		if err := writeTelemtWebFrontendFile(telemtWebFrontDir+"/tls.pem", append(append(cert, '\n'), key...)); err != nil {
 			return err
 		}
 	}
-	return os.WriteFile(telemtWebFrontDir+"/config", data, 0o600)
+	return writeTelemtWebFrontendFile(telemtWebFrontDir+"/config", data)
+}
+
+func writeTelemtWebFrontendFile(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".telemt-frontend-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	_, writeErr := tmp.Write(data)
+	if err := errors.Join(writeErr, tmp.Close()); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 func telemtWebCertificateName(path string) (string, error) {

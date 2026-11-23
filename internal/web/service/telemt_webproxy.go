@@ -571,11 +571,12 @@ func disableTelemtWebProxy() error {
 	if !state.Enabled {
 		removeTelemtWebAcmeConfig()
 		_ = removeTelemtWebFrontendConfig(state)
-		if state.NginxManaged {
+		if state.NginxManaged || telemtWebFrontend(state) != "nginx" {
 			_ = telemtWebRestoreFrontend(state)
 		} else if telemtWebFrontendActive(state) {
 			_ = telemtWebReloadFrontend(state)
 		}
+		publishedTelemtIngress.Store(nil)
 		return clearTelemtWebState()
 	}
 	oldState := state
@@ -598,7 +599,7 @@ func disableTelemtWebProxy() error {
 		_ = (TelemtService{}).SaveConfig(cfg)
 		return err
 	}
-	if oldState.NginxManaged {
+	if oldState.NginxManaged || telemtWebFrontend(oldState) != "nginx" {
 		if err := telemtWebRestoreFrontend(oldState); err != nil {
 			_ = writeTelemtWebState(oldState)
 			_ = (TelemtService{}).SaveConfig(cfg)
@@ -616,6 +617,7 @@ func disableTelemtWebProxy() error {
 			return err
 		}
 	}
+	publishedTelemtIngress.Store(nil)
 	return clearTelemtWebState()
 }
 
@@ -823,6 +825,9 @@ func RefreshTelemtWebSubscriptionRoutes() error {
 	state, err := readTelemtWebState()
 	if err != nil || !state.Enabled {
 		return err
+	}
+	if state.SharedIngress != nil && state.SharedIngress.Enabled {
+		return refreshTelemtIngress(state)
 	}
 	if telemtWebFrontend(state) != "nginx" {
 		previous, err := os.ReadFile(telemtWebFrontDir + "/config")

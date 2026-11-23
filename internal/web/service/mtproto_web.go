@@ -212,7 +212,7 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 
 	if len(selected) == 0 || !mtprotoWebHasUsers(selected[0]) {
 		if state.ManagedInboundID == 0 {
-			return nil
+			return refreshTelemtIngress(state)
 		}
 		if err := disableTelemtWebProxy(); err != nil {
 			return err
@@ -267,6 +267,11 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		unchanged = state.DecoyDir == telemtWebImportedSnapshotPath(telemtWebDecoyDir+"-sites", normalized.Site.HTML)
 	}
 	svc := TelemtService{}
+	if unchanged {
+		if err := refreshTelemtIngress(state); err != nil {
+			return err
+		}
+	}
 	if unchanged && state.UserFingerprint == fingerprint && svc.WebProxyTelemtActive() {
 		if err := refreshMtprotoWebTrafficBinding(ctx); err != nil {
 			return err

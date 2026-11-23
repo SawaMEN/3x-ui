@@ -1490,7 +1490,7 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears 
 			return err
 		}
 		_, managedSubscriptionOrigin = configuredSubscriptionDomain(cfg)
-		managedSubscriptionOrigin = managedSubscriptionOrigin || directSubscriptionOrigin(allSetting) != ""
+		managedSubscriptionOrigin = managedSubscriptionOrigin || directSubscriptionOrigin(allSetting) != "" || telemtIngressSubscriptionOrigin() != ""
 	}
 	if err := validateSubscriptionDomains(allSetting, managedSubscriptionOrigin); err != nil {
 		return err

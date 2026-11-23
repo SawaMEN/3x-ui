@@ -1,13 +1,17 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
+	"os"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -24,6 +28,40 @@ func telemtWebIngressEqual(a, b *TelemtWebIngress) bool {
 	return aEnabled == bEnabled && (!aEnabled || *a == *b)
 }
 
+const telemtWebIngressDefaultPath = "telegram/web"
+
+type telemtIngressPublication struct {
+	subscriptionHost string
+	naiveHost        string
+	naiveInboundID   int
+}
+
+var publishedTelemtIngress atomic.Pointer[telemtIngressPublication]
+
+func publishTelemtIngress(state TelemtWebProxyState, plan telemtIngressPlan) {
+	publishedTelemtIngress.Store(&telemtIngressPublication{
+		subscriptionHost: plan.subscriptions.host,
+		naiveHost:        plan.naiveHost,
+		naiveInboundID:   state.SharedIngress.NaiveInboundID,
+	})
+}
+
+func telemtIngressSubscriptionOrigin() string {
+	if published := publishedTelemtIngress.Load(); published != nil && published.subscriptionHost != "" {
+		return "https://" + published.subscriptionHost
+	}
+	return ""
+}
+
+func telemtIngressNaiveHost(inbound *model.Inbound) *model.Host {
+	published := publishedTelemtIngress.Load()
+	if published == nil || published.naiveInboundID != inbound.Id || published.naiveHost == "" {
+		return nil
+	}
+	host := published.naiveHost
+	return &model.Host{InboundId: inbound.Id, Remark: host, Address: host, Port: 443, Security: "tls", Sni: host, HostHeader: host}
+}
+
 const telemtWebIngressTLSSocket = "/run/3x-ui-telemt-front/haproxy-web.sock"
 
 type telemtIngressRoute struct {
@@ -36,6 +74,7 @@ type telemtIngressRoute struct {
 
 type telemtIngressPlan struct {
 	panel         telemtIngressRoute
+	legacyPaths   []string
 	subscriptions telemtIngressRoute
 	naiveHost     string
 	naiveAddress  string
@@ -58,6 +97,14 @@ func appendIngressPaths(route *telemtIngressRoute, paths ...string) error {
 }
 
 func configureTelemtIngressUpstream(route *telemtIngressRoute, listen string, port int, cert, key string) error {
+	// Keep the operator's existing listeners reachable. For a wildcard bind
+	// HAProxy can dial the same socket through loopback.
+	switch listen {
+	case "", "0.0.0.0":
+		listen = "127.0.0.1"
+	case "::":
+		listen = "::1"
+	}
 	ip := net.ParseIP(listen)
 	if ip == nil || !ip.IsLoopback() || port < 1 || port > 65535 || port == 443 {
 		return fmt.Errorf("shared ingress backend must use a loopback IP and an internal port: %q:%d", listen, port)
@@ -106,6 +153,10 @@ func telemtIngressNaiveEndpoint(inbound *model.Inbound) (host, address string, e
 }
 
 func buildTelemtWebIngress(state TelemtWebProxyState) (telemtIngressPlan, error) {
+	return planTelemtWebIngress(state, true)
+}
+
+func planTelemtWebIngress(state TelemtWebProxyState, requireNaive bool) (telemtIngressPlan, error) {
 	var plan telemtIngressPlan
 	service := &SettingService{}
 	settings, err := service.GetAllSetting()
@@ -144,16 +195,21 @@ func buildTelemtWebIngress(state TelemtWebProxyState) (telemtIngressPlan, error)
 	if err != nil {
 		return plan, err
 	}
+	var legacy telemtIngressRoute
 	for _, alias := range aliases {
 		if path := strings.Trim(alias.Path, "/"); path != "" {
-			if err := appendIngressPaths(&plan.panel, "/"+path); err != nil {
+			if err := appendIngressPaths(&legacy, "/"+path); err != nil {
 				return plan, err
 			}
 		}
 	}
+	plan.legacyPaths = legacy.paths
 
 	if settings.SubEnable {
 		publicURL := subscriptionPublicURL(gateway, settings)
+		if publicURL == "" {
+			publicURL = "https://" + state.Domain
+		}
 		for _, host := range hosts {
 			if publicURL == "https://"+host {
 				plan.subscriptions.host = host
@@ -184,17 +240,19 @@ func buildTelemtWebIngress(state TelemtWebProxyState) (telemtIngressPlan, error)
 	if state.BasePath == "" {
 		return plan, fmt.Errorf("shared ingress requires a non-empty Telemt WEB base path")
 	}
-	for _, path := range append(slices.Clone(plan.panel.paths), plan.subscriptions.paths...) {
+	for _, path := range slices.Concat(plan.panel.paths, plan.legacyPaths, plan.subscriptions.paths) {
 		if domainPathOverlap(path, "/"+state.BasePath) {
 			return plan, fmt.Errorf("Telemt WEB base path conflicts with %s", path)
 		}
 	}
+	protected := plan.legacyPaths
 	if plan.panel.host == plan.subscriptions.host {
-		for _, path := range plan.panel.paths {
-			for _, subPath := range plan.subscriptions.paths {
-				if domainPathOverlap(path, subPath) {
-					return plan, fmt.Errorf("panel and subscription paths overlap: %s and %s", path, subPath)
-				}
+		protected = slices.Concat(protected, plan.panel.paths)
+	}
+	for _, path := range protected {
+		for _, subPath := range plan.subscriptions.paths {
+			if domainPathOverlap(path, subPath) {
+				return plan, fmt.Errorf("panel and subscription paths overlap: %s and %s", path, subPath)
 			}
 		}
 	}
@@ -202,15 +260,22 @@ func buildTelemtWebIngress(state TelemtWebProxyState) (telemtIngressPlan, error)
 	if id := state.SharedIngress.NaiveInboundID; id > 0 {
 		var inbound model.Inbound
 		if err := database.GetDB().First(&inbound, id).Error; err != nil {
+			if !requireNaive && database.IsNotFound(err) {
+				return plan, nil
+			}
 			return plan, fmt.Errorf("load Naive inbound %d: %w", id, err)
 		}
-		plan.naiveHost, plan.naiveAddress, err = telemtIngressNaiveEndpoint(&inbound)
+		host, address, err := telemtIngressNaiveEndpoint(&inbound)
+		if err == nil && slices.Contains(hosts, host) {
+			err = fmt.Errorf("Naive SNI %q must differ from the panel and Telemt WEB hostnames", host)
+		}
 		if err != nil {
-			return plan, err
+			if requireNaive {
+				return plan, err
+			}
+			return plan, nil
 		}
-		if slices.Contains(hosts, plan.naiveHost) {
-			return plan, fmt.Errorf("Naive SNI %q must differ from the panel and Telemt WEB hostnames", plan.naiveHost)
-		}
+		plan.naiveHost, plan.naiveAddress = host, address
 	}
 	return plan, nil
 }
@@ -233,6 +298,12 @@ func renderTelemtWebIngress(state TelemtWebProxyState, plan telemtIngressPlan) [
 	fmt.Fprintf(&cfg, "    http-request deny deny_status 404 unless { var(txn.host) -m str %s }\n", strings.Join(telemtWebHosts(state), " "))
 	cfg.WriteString("    http-request return status 421 unless { var(txn.sni),strcmp(txn.host) eq 0 }\n    http-request deny if METH_CONNECT\n")
 	cfg.WriteString("    http-request del-header Forwarded\n    http-request set-header X-Real-IP %[src]\n    http-request set-header X-Forwarded-For %[src]\n    http-request set-header X-Forwarded-Proto https\n    http-request set-header X-Forwarded-Host %[var(txn.host)]\n    http-request set-header X-Forwarded-Port 443\n")
+	for _, path := range plan.legacyPaths {
+		fmt.Fprintf(&cfg, "    acl legacy_path path -m str %s\n    acl legacy_path path_beg %s/\n", path, path)
+	}
+	if len(plan.legacyPaths) > 0 {
+		cfg.WriteString("    use_backend panel if legacy_path\n")
+	}
 	routes := []struct {
 		name string
 		telemtIngressRoute
@@ -261,4 +332,49 @@ func renderTelemtWebIngress(state TelemtWebProxyState, plan telemtIngressPlan) [
 		cfg.WriteByte('\n')
 	}
 	return []byte(cfg.String())
+}
+
+// refreshTelemtIngress runs with telemtWebOperationMu held. Continuous
+// reconciliation updates routes independently of the Telemt user list.
+func refreshTelemtIngress(state TelemtWebProxyState) error {
+	if !state.Enabled || state.SharedIngress == nil || !state.SharedIngress.Enabled {
+		return nil
+	}
+	plan, err := planTelemtWebIngress(state, false)
+	if err != nil {
+		return err
+	}
+	path := telemtWebFrontDir + "/config"
+	old, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	data := renderTelemtWebIngress(state, plan)
+	active := telemtWebFrontendActive(state)
+	changed := !bytes.Equal(old, data)
+	if changed || !active {
+		// Routine routing reloads leave certificate renewal to its hook.
+		var writeErr error
+		if active {
+			writeErr = writeTelemtWebFrontendFile(path, data)
+		} else {
+			writeErr = writeTelemtWebFrontendFiles(state, data)
+		}
+		if writeErr != nil {
+			return writeErr
+		}
+		if active {
+			err = telemtWebReloadFrontend(state)
+		} else {
+			err = telemtWebEnsureFrontendRunning(state)
+		}
+		if err != nil {
+			if old != nil {
+				return errors.Join(err, writeTelemtWebFrontendFile(path, old))
+			}
+			return err
+		}
+	}
+	publishTelemtIngress(state, plan)
+	return nil
 }

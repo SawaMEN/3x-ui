@@ -1,3 +1,4 @@
+import TelemtNaiveSelect from '@/pages/telemt/TelemtNaiveSelect';
 import { useTranslation } from 'react-i18next';
 import { Alert, Collapse, Input, InputNumber, Select, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
@@ -195,14 +196,14 @@ export default function MtprotoFields({
               {sharedIngressEnabled && (
                 <FormField
                   name={['settings', 'webProxy', 'sharedIngress', 'naiveInboundId']}
-                  label={ru ? 'ID входящего NaiveProxy' : 'NaiveProxy inbound ID'}
+                  label={ru ? 'Входящий NaiveProxy' : 'NaiveProxy inbound'}
                   extra={
                     ru
                       ? 'Необязательно. Локальное TCP-подключение с отдельным доменом SNI.'
                       : 'Optional. Use a loopback TCP inbound with a dedicated SNI hostname.'
                   }
                 >
-                  <InputNumber min={1} precision={0} />
+                  {nodeId ? <InputNumber min={1} precision={0} /> : <TelemtNaiveSelect />}
                 </FormField>
               )}
             </>

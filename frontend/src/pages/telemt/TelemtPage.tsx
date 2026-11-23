@@ -1,3 +1,4 @@
+import TelemtNaiveSelect from './TelemtNaiveSelect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -1004,7 +1005,7 @@ export default function TelemtPage() {
                   <FormField
                     name="sharedIngress.enabled"
                     label="Общий HTTPS-вход на порту 443"
-                    extra="Панель и подписки должны слушать локальные порты. Укажите отдельные пути панели, подписки и Telemt WEB."
+                    extra="HAProxy использует настроенные порты панели и подписок. Если путь Telemt WEB пустой, панель задаст его автоматически."
                     valueProp="checked"
                   >
                     <Switch disabled={webProxyLoading} />
@@ -1012,10 +1013,10 @@ export default function TelemtPage() {
                   {sharedIngressEnabled && (
                     <FormField
                       name="sharedIngress.naiveInboundId"
-                      label="ID входящего NaiveProxy"
+                      label="Входящий NaiveProxy"
                       extra="Необязательно. Укажите локальное TCP-подключение с отдельным доменом SNI."
                     >
-                      <InputNumber min={1} precision={0} disabled={webProxyLoading} />
+                      <TelemtNaiveSelect disabled={webProxyLoading} />
                     </FormField>
                   )}
                 </>
