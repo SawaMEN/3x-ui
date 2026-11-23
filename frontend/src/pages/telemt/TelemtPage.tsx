@@ -252,10 +252,12 @@ export default function TelemtPage() {
             basePath: webBasePath || '',
             aliases: webAliasesKey ? webAliasesKey.split('|') : [],
             frontend: webFrontend || 'nginx',
-            sharedIngress: {
-              enabled: sharedIngressEnabled ?? false,
-              naiveInboundId: sharedNaiveInbound ?? undefined,
-            },
+            ...(webFrontend === 'haproxy' && {
+              sharedIngress: {
+                enabled: sharedIngressEnabled ?? false,
+                naiveInboundId: sharedNaiveInbound ?? undefined,
+              },
+            }),
             carrier: webCarrier || 'https',
             carriers: webCarriersKey ? webCarriersKey.split('|') : [],
             site: webSiteKey ? (JSON.parse(webSiteKey) as TelemtWebSite) : undefined,
@@ -439,7 +441,7 @@ export default function TelemtPage() {
       basePath: status.webProxy.basePath || '',
       aliases: status.webProxy.aliases || [],
       frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
-      sharedIngress: status.webProxy.sharedIngress ?? { enabled: false },
+      sharedIngress: status.webProxy.sharedIngress,
       carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
       carriers: TelemtCarriersSchema.catch([]).parse(
         status.webProxy.carriers ||
@@ -457,7 +459,9 @@ export default function TelemtPage() {
       const signal = lifetime.current?.signal;
       setWebProxyLoading(true);
       try {
-        const r = await HttpUtil.post('/panel/api/telemt/webproxy/enable', payload, jsonOptions);
+        const { sharedIngress, ...options } = payload;
+        const request = payload.frontend === 'haproxy' ? { ...options, sharedIngress } : options;
+        const r = await HttpUtil.post('/panel/api/telemt/webproxy/enable', request, jsonOptions);
         if (signal?.aborted) return;
         if (r?.success) {
           messageApi.success(
