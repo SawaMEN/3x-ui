@@ -234,12 +234,14 @@ export default function DomainEditor({
                                 options={[
                                   ...(mode === 'sni_only'
                                     ? []
-                                    : [{
-                                        value: '',
-                                        label: i18n.language.startsWith('ru')
-                                          ? 'Без сайта-заглушки'
-                                          : 'No cover site',
-                                      }]),
+                                    : [
+                                        {
+                                          value: '',
+                                          label: i18n.language.startsWith('ru')
+                                            ? 'Без сайта-заглушки'
+                                            : 'No cover site',
+                                        },
+                                      ]),
                                   ...Object.entries(TelemtWebCatalogs).map(([value, entry]) => ({
                                     value,
                                     label: i18n.language.startsWith('ru') ? entry.ru : entry.en,
@@ -269,41 +271,41 @@ export default function DomainEditor({
                               />
                             </Form.Item>
                             {(mode === 'sni_only' || !!siteCatalog) && (
-                            <Form.Item
-                              name="siteTemplate"
-                              label={
-                                i18n.language.startsWith('ru')
-                                  ? 'Какой сайт создать'
-                                  : 'Website template'
-                              }
-                              rules={[{ required: true }]}
-                            >
-                              {siteCatalog === 'custom' ? (
-                                <Select
-                                  disabled
-                                  options={[
-                                    {
-                                      value: 'html',
-                                      label: i18n.language.startsWith('ru')
-                                        ? 'Моя HTML-страница'
-                                        : 'My HTML page',
-                                    },
-                                  ]}
-                                />
-                              ) : (
-                                <Select
-                                  options={TelemtWebCatalogs[
-                                    siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'
-                                  ].templates.map((entry) => ({
-                                    value: entry.id,
-                                    label: i18n.language.startsWith('ru') ? entry.ru : entry.en,
-                                    title: i18n.language.startsWith('ru')
-                                      ? entry.descriptionRu
-                                      : entry.descriptionEn,
-                                  }))}
-                                />
-                              )}
-                            </Form.Item>
+                              <Form.Item
+                                name="siteTemplate"
+                                label={
+                                  i18n.language.startsWith('ru')
+                                    ? 'Какой сайт создать'
+                                    : 'Website template'
+                                }
+                                rules={[{ required: true }]}
+                              >
+                                {siteCatalog === 'custom' ? (
+                                  <Select
+                                    disabled
+                                    options={[
+                                      {
+                                        value: 'html',
+                                        label: i18n.language.startsWith('ru')
+                                          ? 'Моя HTML-страница'
+                                          : 'My HTML page',
+                                      },
+                                    ]}
+                                  />
+                                ) : (
+                                  <Select
+                                    options={TelemtWebCatalogs[
+                                      siteCatalog === 'mtproxyl' ? 'mtproxyl' : 'builtin'
+                                    ].templates.map((entry) => ({
+                                      value: entry.id,
+                                      label: i18n.language.startsWith('ru') ? entry.ru : entry.en,
+                                      title: i18n.language.startsWith('ru')
+                                        ? entry.descriptionRu
+                                        : entry.descriptionEn,
+                                    }))}
+                                  />
+                                )}
+                              </Form.Item>
                             )}
                             {siteCatalog === 'custom' && (
                               <Form.Item
