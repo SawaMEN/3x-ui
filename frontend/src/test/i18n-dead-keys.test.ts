@@ -96,9 +96,7 @@ describe('i18n keys', () => {
     const dead = enKeys.filter(
       (key) => !tokens.has(key) && !prefixes.some((p) => key.startsWith(p)),
     );
-    expect(dead, `dead i18n keys (delete from all locales):\n  ${dead.join('\n  ')}`).toEqual(
-      [],
-    );
+    expect(dead, `dead i18n keys (delete from all locales):\n  ${dead.join('\n  ')}`).toEqual([]);
   });
 
   it('keeps interpolation placeholders identical across translations', () => {
@@ -114,9 +112,7 @@ describe('i18n keys', () => {
       }, {});
     const enValues = flattenValues(enUS);
     const placeholders = (value: string) =>
-      [...value.matchAll(/\{\{[^{}]*\}\}|\{[A-Za-z_][\w.]*\}/g)]
-        .map((match) => match[0])
-        .sort();
+      [...value.matchAll(/\{\{[^{}]*\}\}|\{[A-Za-z_][\w.]*\}/g)].map((match) => match[0]).sort();
 
     for (const file of readdirSync(translationDir).filter((entry) => entry.endsWith('.json'))) {
       const values = flattenValues(JSON.parse(readFileSync(join(translationDir, file), 'utf8')));
@@ -142,11 +138,18 @@ describe('i18n keys', () => {
         return out;
       }, {});
     const errors = Object.entries(flattenValues(ruValues))
-      .filter(([key]) => /error|fail|invalid|missing|require|unable|timeout|denied|incorrect|forbid|expired|reject|busy|notFound|warning|blocked|problem/i.test(key))
-      .filter(([key, value]) =>
-        !['pages.inbounds.toasts.invalidField', 'pages.inbounds.form.tcpUserTimeout'].includes(key) &&
-        /[A-Za-z]{4}/.test(value) &&
-        !/[а-яА-ЯёЁ]/.test(value),
+      .filter(([key]) =>
+        /error|fail|invalid|missing|require|unable|timeout|denied|incorrect|forbid|expired|reject|busy|notFound|warning|blocked|problem/i.test(
+          key,
+        ),
+      )
+      .filter(
+        ([key, value]) =>
+          !['pages.inbounds.toasts.invalidField', 'pages.inbounds.form.tcpUserTimeout'].includes(
+            key,
+          ) &&
+          /[A-Za-z]{4}/.test(value) &&
+          !/[а-яА-ЯёЁ]/.test(value),
       )
       .map(([key]) => key);
     expect(errors, `untranslated Russian errors:\n  ${errors.join('\n  ')}`).toEqual([]);
