@@ -747,3 +747,17 @@ func TestCoverSiteKeepsExistingRoutes(t *testing.T) {
 		t.Fatal("panel route was not preserved")
 	}
 }
+
+// A site may not claim a root subscription path or a transport resource.
+func TestCoverSiteRejectsOccupiedPaths(t *testing.T) {
+	d := DomainFrontDomain{Name: "cover.example.org", Mode: "direct", Enabled: true, SiteCatalog: "builtin", SiteTemplate: "notes"}
+	for _, path := range []string{"/", "/site.js", "/index.html"} {
+		r := &frontRuntime{backend: Backend{
+			SubscriptionPaths: []string{path},
+			DecoyDirectories:  map[string]string{d.Name: t.TempDir()},
+		}}
+		if _, err := r.domainHandler(d); err == nil || !strings.Contains(err.Error(), "conflicts") {
+			t.Fatalf("occupied path %s accepted: %v", path, err)
+		}
+	}
+}

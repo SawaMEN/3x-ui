@@ -548,11 +548,13 @@ export default function DomainFrontTab({
     }
     const old = editing != null && editing >= 0 ? draft.domains[editing] : undefined;
     const supportsCover = value.mode !== 'shared_sni' && value.mode !== 'cert_only';
-    const siteCatalog = supportsCover ? value.siteCatalog || '' : '';
+    const siteCatalog = supportsCover
+      ? (value.siteCatalog ?? form.getFieldValue('siteCatalog') ?? '')
+      : '';
     const blocked = coverBlocked(value.name, value.mode);
     if (
       supportsCover &&
-      (siteCatalog || old?.siteCatalog || value.mode === 'sni_only') &&
+      (siteCatalog || value.mode === 'sni_only') &&
       blocked
     ) {
       messageApi.error(blocked);
@@ -575,8 +577,11 @@ export default function DomainFrontTab({
           : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
       siteCatalog,
-      siteTemplate: siteCatalog ? value.siteTemplate || '' : '',
-      siteHtml: siteCatalog === 'custom' ? value.siteHtml || '' : '',
+      siteTemplate: siteCatalog
+        ? (value.siteTemplate ?? form.getFieldValue('siteTemplate') ?? '')
+        : '',
+      siteHtml:
+        siteCatalog === 'custom' ? (value.siteHtml ?? form.getFieldValue('siteHtml') ?? '') : '',
       certFile:
         value.tls === 'manual' && value.mode !== 'shared_sni' && value.mode !== 'cert_only'
           ? value.certFile

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 )
 
@@ -80,6 +81,17 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 		report.Ready = false
 		report.Checks = append(report.Checks, domainPreflightCheck{
 			Code: "invalid_config", Severity: "error", Domain: panel.WebDomain, Message: sourceErr.Error(),
+		})
+	}
+	panelPort := panel.WebPort
+	if override, configured, overrideErr := config.GetPortOverride(); configured && overrideErr == nil {
+		panelPort = override
+	}
+	_, sharedHTTPS := domainSharesListener(cfg, panel.WebListen, panelPort, panel.WebCertFile != "" && panel.WebKeyFile != "")
+	if coverErr := validateCoverPanelPaths(cfg, panel.WebDomain, panel.WebBasePath, sharedHTTPS); coverErr != nil {
+		report.Ready = false
+		report.Checks = append(report.Checks, domainPreflightCheck{
+			Code: "invalid_config", Severity: "error", Domain: panel.WebDomain, Message: coverErr.Error(),
 		})
 	}
 	augmentDomainPreflightWithNodeEvidence(ctx, cfg, &report)

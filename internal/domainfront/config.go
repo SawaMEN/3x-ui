@@ -224,7 +224,7 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		default:
 			return fmt.Errorf("unknown domain mode: %s", d.Mode)
 		}
-		if wildcard && (d.SiteCatalog != "" || d.SiteTemplate != "" || d.SiteHTML != "") {
+		if wildcard && (d.Mode == "sni_only" || d.SiteCatalog != "" || d.SiteTemplate != "" || d.SiteHTML != "") {
 			return fmt.Errorf("%s: select a concrete hostname for a cover site", d.Name)
 		}
 		if d.Mode != "cert_only" {

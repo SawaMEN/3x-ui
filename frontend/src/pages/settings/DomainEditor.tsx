@@ -126,7 +126,7 @@ export default function DomainEditor({
                                   ? 'auto'
                                   : form.getFieldValue('tls'),
                           });
-                          if (value === 'sni_only') {
+                          if (value === 'sni_only' && !form.getFieldValue('siteCatalog')) {
                             form.setFieldsValue({
                               siteCatalog: 'builtin',
                               siteTemplate: 'notes',
@@ -231,6 +231,7 @@ export default function DomainEditor({
                           <>
                             <Form.Item
                               name="siteCatalog"
+                              preserve
                               label={
                                 i18n.language.startsWith('ru')
                                   ? 'Каталог сайта-заглушки'
@@ -280,6 +281,7 @@ export default function DomainEditor({
                             {(mode === 'sni_only' || !!siteCatalog) && (
                               <Form.Item
                                 name="siteTemplate"
+                                preserve
                                 label={
                                   i18n.language.startsWith('ru')
                                     ? 'Какой сайт создать'
@@ -317,6 +319,7 @@ export default function DomainEditor({
                             {siteCatalog === 'custom' && (
                               <Form.Item
                                 name="siteHtml"
+                                preserve
                                 rules={[
                                   {
                                     validator: (_, value: string) =>

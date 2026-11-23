@@ -745,6 +745,13 @@ func staticCoverSite(dir string) http.Handler {
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
 	var cover http.Handler
 	if d.HasCoverSite() {
+		if d.Mode != "sni_only" {
+			for _, path := range []string{"/", "/index.html", "/site.css", "/site.js"} {
+				if r.protectedRedirectPath(d, path) {
+					return nil, fmt.Errorf("cover site %s: path %s conflicts with an existing service", d.Name, path)
+				}
+			}
+		}
 		dir := r.backend.DecoyDirectories[d.Name]
 		if dir == "" {
 			return nil, fmt.Errorf("cover site %s has no prepared website", d.Name)
