@@ -17,8 +17,12 @@ func TestWebLocalizationIsIsolatedPerRequest(t *testing.T) {
 	defer func() { i18nBundle, LocalizerWeb = oldBundle, oldWeb }()
 	bundle := i18n.NewBundle(language.MustParse("en-US"))
 	bundle.RegisterUnmarshalFunc("json", json.Unmarshal)
-	bundle.AddMessages(language.MustParse("en-US"), &i18n.Message{ID: "test.error", Other: "Invalid domain"})
-	bundle.AddMessages(language.MustParse("ru-RU"), &i18n.Message{ID: "test.error", Other: "Неверный домен"})
+	if err := bundle.AddMessages(language.MustParse("en-US"), &i18n.Message{ID: "test.error", Other: "Invalid domain"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := bundle.AddMessages(language.MustParse("ru-RU"), &i18n.Message{ID: "test.error", Other: "Неверный домен"}); err != nil {
+		t.Fatal(err)
+	}
 	i18nBundle = bundle
 	gin.SetMode(gin.TestMode)
 
