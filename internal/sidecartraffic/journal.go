@@ -58,7 +58,7 @@ func Capture(source string, id int, emails []string, routed bool) (*Owner, error
 	owner := &Owner{source: source, dir: filepath.Join(config.GetDBFolderPath(), source+"-traffic-journal"), inboundID: id, clients: map[string]int{}, routed: routed}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := database.ReadSnapshot(db.WithContext(ctx), func(tx *gorm.DB) error {
 		var inbound model.Inbound
 		err := tx.Select("id").Where("id = ? AND node_id IS NULL", id).Take(&inbound).Error
 		if err != nil {
