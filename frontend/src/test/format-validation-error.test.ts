@@ -11,6 +11,7 @@ import {
 const templates: Record<string, string> = {
   'pages.inbounds.toasts.invalidClientField': 'Client {client}: {field} — {reason}',
   'pages.inbounds.toasts.invalidField': '{field} — {reason}',
+  'pages.inbounds.toasts.invalidInput': 'Invalid input',
   'pages.inbounds.toasts.moreIssues': '{message}  (+{count} more)',
   'pages.inbounds.toasts.invalidCertificate': 'TLS certificate {index}: {reason}',
   clients: 'clients',

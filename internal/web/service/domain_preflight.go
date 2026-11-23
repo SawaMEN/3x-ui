@@ -51,6 +51,10 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 	if err != nil {
 		return domainPreflightReport{}, err
 	}
+	panel, err := s.GetAllSetting()
+	if err != nil {
+		return domainPreflightReport{}, err
+	}
 	status, err := DomainFrontStatus()
 	if err != nil {
 		return domainPreflightReport{}, err
@@ -70,6 +74,14 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 			return err == nil && credential.Configured
 		},
 	})
+	// Applying this draft must not orphan the TLS certificate used by
+	// the panel. Report the blocker before the administrator clicks Apply.
+	if sourceErr := validatePanelCertificateSource(old, cfg, panel.WebDomain, panel.WebCertFile, panel.WebKeyFile); sourceErr != nil {
+		report.Ready = false
+		report.Checks = append(report.Checks, domainPreflightCheck{
+			Code: "invalid_config", Severity: "error", Domain: panel.WebDomain, Message: sourceErr.Error(),
+		})
+	}
 	augmentDomainPreflightWithNodeEvidence(ctx, cfg, &report)
 	return report, nil
 }
