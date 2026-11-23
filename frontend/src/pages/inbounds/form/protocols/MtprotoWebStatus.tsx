@@ -79,6 +79,7 @@ export default function MtprotoWebStatus({
     basePath: proposed?.basePath ?? '',
     retryJitter: proposed?.retryJitter,
     site: proposed?.site,
+    sharedIngress: proposed?.sharedIngress,
   });
   const [preflight, setPreflight] = useState<{ key: string; result: WebPreflight }>();
   const result = preflight?.key === requestKey ? preflight.result : undefined;

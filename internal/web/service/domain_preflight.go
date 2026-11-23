@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 )
 
@@ -81,6 +82,34 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 		report.Checks = append(report.Checks, domainPreflightCheck{
 			Code: "invalid_config", Severity: "error", Domain: panel.WebDomain, Message: sourceErr.Error(),
 		})
+	}
+	panelPort := panel.WebPort
+	if override, configured, overrideErr := config.GetPortOverride(); configured && overrideErr == nil {
+		panelPort = override
+	}
+	_, sharedHTTPS := domainSharesListener(cfg, panel.WebListen, panelPort, panel.WebCertFile != "" && panel.WebKeyFile != "")
+	if coverErr := validateCoverPanelPaths(cfg, panel.WebDomain, panel.WebBasePath, sharedHTTPS); coverErr != nil {
+		report.Ready = false
+		report.Checks = append(report.Checks, domainPreflightCheck{
+			Code: "invalid_config", Severity: "error", Domain: panel.WebDomain, Message: coverErr.Error(),
+		})
+	}
+	if cfg.Enabled {
+		backend := domainfront.Backend{
+			PanelPath:         panel.WebBasePath,
+			SubscriptionPaths: []string{panel.SubPath, panel.SubJsonPath, panel.SubClashPath, "/assets/"},
+		}
+		for _, domain := range cfg.Domains {
+			if !domain.Enabled {
+				continue
+			}
+			if coverErr := backend.ValidateCoverPaths(domain); coverErr != nil {
+				report.Ready = false
+				report.Checks = append(report.Checks, domainPreflightCheck{
+					Code: "invalid_config", Severity: "error", Domain: domain.Name, Message: coverErr.Error(),
+				})
+			}
+		}
 	}
 	augmentDomainPreflightWithNodeEvidence(ctx, cfg, &report)
 	return report, nil

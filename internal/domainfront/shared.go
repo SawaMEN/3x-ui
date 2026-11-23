@@ -66,18 +66,19 @@ func (m *Manager) ServePanelCover(w http.ResponseWriter, req *http.Request, pane
 	}
 	domain, ok := r.domain(req.Host)
 	dir := r.backend.DecoyDirectories[domain.Name]
-	if !ok || domain.Mode != "sni_only" || dir == "" || !strings.EqualFold(domain.Name, r.backend.PanelHost) {
+	if !ok || !domain.HasCoverSite() || dir == "" || !strings.EqualFold(domain.Name, r.backend.PanelHost) {
 		m.mu.Unlock()
 		return false
 	}
 	panelPath := r.panelRequestPath(req.URL.Path)
+	protected := domain.Mode != "sni_only" && r.protectedRedirectPath(domain, req.URL.Path)
 	m.mu.Unlock()
 
 	if panelPath {
 		panel.ServeHTTP(w, req)
 		return true
 	}
-	if !isCoverSitePath(req.URL.Path) {
+	if protected || !isCoverSitePath(req.URL.Path) {
 		return false
 	}
 	// Custom HTML must run in an opaque origin when served alongside the

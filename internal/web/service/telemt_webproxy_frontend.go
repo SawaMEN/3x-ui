@@ -35,13 +35,14 @@ type TelemtWebRetryJitter struct {
 }
 
 type TelemtWebProxyOptions struct {
-	Site        *TelemtWebSiteOptions `json:"site,omitempty"`
-	Frontend    string                `json:"frontend"`
-	Carrier     string                `json:"carrier"`
-	BasePath    *string               `json:"basePath,omitempty"`
-	Aliases     *[]string             `json:"aliases,omitempty"`
-	Carriers    []string              `json:"carriers"`
-	RetryJitter *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
+	SharedIngress *TelemtWebIngress     `json:"sharedIngress,omitempty"`
+	Site          *TelemtWebSiteOptions `json:"site,omitempty"`
+	Frontend      string                `json:"frontend"`
+	Carrier       string                `json:"carrier"`
+	BasePath      *string               `json:"basePath,omitempty"`
+	Aliases       *[]string             `json:"aliases,omitempty"`
+	Carriers      []string              `json:"carriers"`
+	RetryJitter   *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
 }
 
 func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, error) {
@@ -57,6 +58,11 @@ func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, 
 	}
 	if o.Frontend == "" {
 		o.Frontend = "nginx"
+	}
+	if o.Frontend != "haproxy" {
+		o.SharedIngress = nil
+	} else if o.SharedIngress != nil && o.SharedIngress.NaiveInboundID < 0 {
+		return o, errors.New("shared ingress requires a valid Naive inbound ID")
 	}
 	if o.Carrier == "" {
 		o.Carrier = "https"
@@ -78,6 +84,10 @@ func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, 
 		if err != nil {
 			return o, err
 		}
+		o.BasePath = &path
+	}
+	if o.SharedIngress != nil && o.SharedIngress.Enabled && (o.BasePath == nil || *o.BasePath == "") {
+		path := telemtWebIngressDefaultPath
 		o.BasePath = &path
 	}
 	if !slices.Contains([]string{"nginx", "caddy", "haproxy"}, o.Frontend) {
@@ -132,8 +142,11 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	o := TelemtWebProxyOptions{Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site, BasePath: &old.BasePath, Aliases: &old.Aliases, RetryJitter: old.RetryJitter}
+	o := TelemtWebProxyOptions{SharedIngress: old.SharedIngress, Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site, BasePath: &old.BasePath, Aliases: &old.Aliases, RetryJitter: old.RetryJitter}
 	if len(options) > 0 {
+		if options[0].SharedIngress != nil {
+			o.SharedIngress = options[0].SharedIngress
+		}
 		if options[0].Aliases != nil {
 			o.Aliases = options[0].Aliases
 		}
@@ -145,6 +158,9 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 		}
 		if options[0].Frontend != "" {
 			o.Frontend = options[0].Frontend
+			if o.Frontend != "haproxy" && options[0].SharedIngress == nil {
+				o.SharedIngress = nil
+			}
 		}
 		if options[0].Carrier != "" {
 			o.Carrier = options[0].Carrier
@@ -206,6 +222,17 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 	}
 	if err != nil {
 		return result, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
+	}
+	if o.SharedIngress != nil && o.SharedIngress.Enabled {
+		current, err := readTelemtWebState()
+		if err != nil {
+			return result, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
+		}
+		if err := refreshTelemtIngress(current); err != nil {
+			return result, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
+		}
+	} else {
+		publishedTelemtIngress.Store(nil)
 	}
 	return result, nil
 }
@@ -413,33 +440,28 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 		if err != nil {
 			return err
 		}
-		data, err := os.ReadFile(sub.TLSCAFile)
+		sub.TLSServerName, err = telemtWebCertificateName(sub.TLSCAFile)
 		if err != nil {
 			return err
-		}
-		block, _ := pem.Decode(data)
-		if block == nil {
-			return errors.New("invalid panel TLS certificate")
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return err
-		}
-		if len(cert.DNSNames) > 0 {
-			sub.TLSServerName = cert.DNSNames[0]
-			if strings.HasPrefix(sub.TLSServerName, "*.") {
-				sub.TLSServerName = "x-ui." + strings.TrimPrefix(sub.TLSServerName, "*.")
-			}
-		} else if len(cert.IPAddresses) > 0 {
-			sub.TLSServerName = cert.IPAddresses[0].String()
-		} else {
-			return errors.New("panel TLS certificate requires a DNS name or IP SAN")
 		}
 	}
-	data, err := telemtWebFrontendConfig(s, sub)
+	var data []byte
+	if s.SharedIngress != nil && s.SharedIngress.Enabled {
+		plan, planErr := buildTelemtWebIngress(s)
+		if planErr != nil {
+			return planErr
+		}
+		data = renderTelemtWebIngress(s, plan)
+	} else {
+		data, err = telemtWebFrontendConfig(s, sub)
+	}
 	if err != nil {
 		return err
 	}
+	return writeTelemtWebFrontendFiles(s, data)
+}
+
+func writeTelemtWebFrontendFiles(s TelemtWebProxyState, data []byte) error {
 	if err := os.MkdirAll(telemtWebFrontDir, 0o700); err != nil {
 		return err
 	}
@@ -452,11 +474,46 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(telemtWebFrontDir+"/tls.pem", append(append(cert, '\n'), key...), 0o600); err != nil {
+		if err := writeTelemtWebFrontendFile(telemtWebFrontDir+"/tls.pem", append(append(cert, '\n'), key...)); err != nil {
 			return err
 		}
 	}
-	return os.WriteFile(telemtWebFrontDir+"/config", data, 0o600)
+	return writeTelemtWebFrontendFile(telemtWebFrontDir+"/config", data)
+}
+
+func writeTelemtWebFrontendFile(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".telemt-frontend-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	_, writeErr := tmp.Write(data)
+	if err := errors.Join(writeErr, tmp.Close()); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+func telemtWebCertificateName(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return "", errors.New("invalid TLS certificate")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", err
+	}
+	if len(cert.DNSNames) > 0 {
+		return strings.Replace(cert.DNSNames[0], "*.", "x-ui.", 1), nil
+	}
+	if len(cert.IPAddresses) > 0 {
+		return cert.IPAddresses[0].String(), nil
+	}
+	return "", errors.New("TLS certificate requires a DNS name or IP SAN")
 }
 
 func telemtWebFrontUnitContent(front, binary string) string {

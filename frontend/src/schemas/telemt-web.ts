@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { COVER_SITE_HTML_MAX_BYTES } from './cover-site-html';
 import { isTelemtWebCatalogTemplate, TelemtWebThemes } from './telemt-web-catalog';
 
 export const TelemtFrontendSchema = z.enum(['nginx', 'caddy', 'haproxy']);
@@ -33,8 +34,8 @@ export const TelemtWebSiteSchema = z
     html: z
       .string()
       .refine(
-        (value) => new TextEncoder().encode(value).length <= 256 * 1024,
-        'HTML: максимум 256 КиБ',
+        (value) => new TextEncoder().encode(value).length <= COVER_SITE_HTML_MAX_BYTES,
+        'HTML: максимум 1 МиБ',
       )
       .optional(),
   })
@@ -90,7 +91,13 @@ export const TelemtWebDomainSchema = z
   .max(253)
   .regex(/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/);
 
+export const TelemtSharedIngressSchema = z.object({
+  enabled: z.boolean().default(false),
+  naiveInboundId: z.number().int().nonnegative().optional(),
+});
+
 export const TelemtWebProxyRequestSchema = z.object({
+  sharedIngress: TelemtSharedIngressSchema.optional(),
   aliases: z.array(TelemtWebDomainSchema).max(7).default([]),
   retryJitter: z
     .object({

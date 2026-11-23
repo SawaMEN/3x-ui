@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import TelemtNaiveSelect from '@/pages/telemt/TelemtNaiveSelect';
 import { useTranslation } from 'react-i18next';
 import { Alert, Collapse, Input, InputNumber, Select, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
@@ -27,6 +28,11 @@ export default function MtprotoFields({
   const webProxyEnabled = useWatch({ control, name: 'settings.webProxy.enabled' }) as
     | boolean
     | undefined;
+  const webFrontend = useWatch({ control, name: 'settings.webProxy.frontend' });
+  const sharedIngressEnabled = useWatch({
+    control,
+    name: 'settings.webProxy.sharedIngress.enabled',
+  });
   useEffect(() => {
     if (!webProxyEnabled) return;
     const saved = getValues('settings.webProxy') as Parameters<typeof completeTelemtWebSettings>[0];
@@ -182,6 +188,35 @@ export default function MtprotoFields({
               options={['nginx', 'caddy', 'haproxy'].map((value) => ({ value, label: value }))}
             />
           </FormField>
+          {webFrontend === 'haproxy' && (
+            <>
+              <FormField
+                name={['settings', 'webProxy', 'sharedIngress', 'enabled']}
+                label={ru ? 'Общий HTTPS-вход на порту 443' : 'Shared HTTPS ingress on port 443'}
+                extra={
+                  ru
+                    ? 'Панель и подписки должны слушать локальные порты. Укажите отдельные URL-пути.'
+                    : 'Bind the panel and subscriptions to loopback and use separate URL paths.'
+                }
+                valueProp="checked"
+              >
+                <Switch />
+              </FormField>
+              {sharedIngressEnabled && (
+                <FormField
+                  name={['settings', 'webProxy', 'sharedIngress', 'naiveInboundId']}
+                  label={ru ? 'Входящий NaiveProxy' : 'NaiveProxy inbound'}
+                  extra={
+                    ru
+                      ? 'Необязательно. Локальное TCP-подключение с отдельным доменом SNI.'
+                      : 'Optional. Use a loopback TCP inbound with a dedicated SNI hostname.'
+                  }
+                >
+                  {nodeId ? <InputNumber min={1} precision={0} /> : <TelemtNaiveSelect />}
+                </FormField>
+              )}
+            </>
+          )}
           <FormField
             name={['settings', 'webProxy', 'carrier']}
             label={ru ? 'Основной транспорт (WEB carrier)' : 'Primary transport (WEB carrier)'}
