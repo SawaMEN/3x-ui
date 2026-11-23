@@ -370,16 +370,16 @@ func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, c
 // The existing /json/ format remains Xray-compatible; callers opt into this format
 // explicitly with ?format=sing-box so existing subscriptions are not changed.
 func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnArray bool) (string, string, error) {
-	return s.getSingBoxJson(subId, host, alwaysReturnArray, false, false, false)
+	return s.getSingBoxJson(subId, host, alwaysReturnArray, false, false, false, false)
 }
 
 // Hiddify expects a single JSON document with an outbounds array, including
 // the hidden ShadowTLS transport used by the visible inner proxy.
 func (s *SubJsonService) GetHiddifySingBoxJson(subId string, host string) (string, string, error) {
-	return s.getSingBoxJson(subId, host, false, true, false, false)
+	return s.getSingBoxJson(subId, host, false, true, false, false, true)
 }
 
-func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnArray, hiddify, compatible, coreOnly bool) (string, string, error) {
+func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnArray, hiddify, compatible, coreOnly, includeHiddifyExtensions bool) (string, string, error) {
 	translateOutbound := singbox.TranslateXrayOutbound
 	if hiddify {
 		translateOutbound = hiddifycore.TranslateOutbound
@@ -441,8 +441,9 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			seenEmails[client.Email] = struct{}{}
 			active = active || client.Enable
 		}
-		unsupported := coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) &&
-			(!hiddify || !officialHiddifyExtendedProtocol(inbound.Protocol))
+		hiddifyExtension := hiddify && (inbound.Protocol == model.Mieru ||
+			includeHiddifyExtensions && officialHiddifyExtendedProtocol(inbound.Protocol))
+		unsupported := coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) && !hiddifyExtension
 		return !active || unsupported
 	})
 	// MASQUE has no portable URI fallback. The remaining profiles must

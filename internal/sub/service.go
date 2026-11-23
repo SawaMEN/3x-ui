@@ -150,6 +150,7 @@ type SubService struct {
 	// the name-only template, like Remnawave.
 	subscriptionBody bool
 	nativeProfile    bool
+	hiddifyLinks     bool
 	// usageShown emits info once per subscription identity, including twins.
 	// PrepareForRequest resets this per-request state.
 	usageShown                 map[string]bool

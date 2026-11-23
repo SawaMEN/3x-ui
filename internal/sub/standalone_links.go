@@ -38,12 +38,13 @@ func standaloneSubscriptionLinks(links []string) []string {
 }
 
 // coreSubscriptionLinks keeps URI schemes supported by at least one of the
-// two cores. Unknown schemes from external subscriptions require opting in.
-func coreSubscriptionLinks(links []string) []string {
+// two cores, plus verified Mieru URIs for Hiddify. Unknown external schemes
+// require opting in.
+func coreSubscriptionLinks(links []string, hiddify bool) []string {
 	var result []string
 	for _, entry := range links {
 		for _, link := range splitLinkLines(entry) {
-			if isCoreSubscriptionLink(link) {
+			if isCoreSubscriptionLink(link) || hiddify && strings.HasPrefix(strings.ToLower(link), "mierus://") {
 				result = append(result, link)
 			}
 		}

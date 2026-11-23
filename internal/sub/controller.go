@@ -559,6 +559,7 @@ func buildRawSubscriptionBody(subs []string) string {
 // subs handles HTTP requests for subscription links, returning either HTML page or base64-encoded subscription data.
 func (a *SUBController) subs(c *gin.Context) {
 	userAgent := c.GetHeader("User-Agent")
+	isHiddify := strings.Contains(strings.ToLower(userAgent), "hiddify")
 	// Fetch page extras through the URL that actually served the page. This
 	// also works for migrated Hiddify aliases and reverse proxies whose public
 	// port differs from the subscription listener.
@@ -604,8 +605,7 @@ func (a *SUBController) subs(c *gin.Context) {
 	// A known Hiddify client can import these profiles even when the default
 	// for unknown clients is raw links or Xray JSON.
 	if format == "" && a.formatAllowed(c, "sing-box") &&
-		strings.Contains(strings.ToLower(userAgent), "hiddify") &&
-		a.hasHiddifyNativeSubscription(c.Param("subid")) &&
+		isHiddify && a.hasHiddifyNativeSubscription(c.Param("subid")) &&
 		a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
 		a.recordSubscriptionFetch(c)
 		logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
@@ -624,6 +624,13 @@ func (a *SUBController) subs(c *gin.Context) {
 		} else {
 			writeMASQUEFormatError(c)
 		}
+		return
+	}
+	// Hiddify reads the same compatible links as the full export. Avoid
+	// auto-detected Clash or native JSON for ordinary URI-capable profiles.
+	if format == "" && isHiddify && a.formatAllowed(c, "links") {
+		logSubscriptionRoute(userAgent, "hiddify-compatible-links")
+		a.serveRawSubscription(c)
 		return
 	}
 	if format == "" {
@@ -682,6 +689,7 @@ func (a *SUBController) serveRawSubscription(c *gin.Context) {
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	subReq := a.subService.ForRequest(host)
 	subReq.subscriptionBody = true
+	subReq.hiddifyLinks = format == "" && strings.Contains(strings.ToLower(userAgent), "hiddify")
 	subs, _, _, traffic, err := subReq.getSubs(subId)
 	if err != nil || subs == nil {
 		writeSubError(c, err)
@@ -692,7 +700,7 @@ func (a *SUBController) serveRawSubscription(c *gin.Context) {
 		case "standalone":
 			subs = standaloneSubscriptionLinks(subs)
 		default:
-			subs = coreSubscriptionLinks(subs)
+			subs = coreSubscriptionLinks(subs, subReq.hiddifyLinks)
 		}
 		result := buildRawSubscriptionBody(subs)
 
@@ -737,7 +745,8 @@ func (a *SUBController) hasHiddifyNativeSubscription(subID string) bool {
 		return false
 	}
 	for _, inbound := range inbounds {
-		if !officialHiddifyExtendedProtocol(inbound.Protocol) && inbound.Protocol != model.MASQUE && inbound.Protocol != model.WireGuard && inbound.Protocol != model.NaiveProxy && !containsNativeTLSSubscription([]*model.Inbound{inbound}) && !usesXDriveTransport(inbound) {
+		if inbound.Protocol != model.MASQUE && inbound.Protocol != model.WireGuard &&
+			!containsNativeTLSSubscription([]*model.Inbound{inbound}) && !usesXDriveTransport(inbound) {
 			continue
 		}
 		for _, client := range req.matchingClients(inbound, subID) {
@@ -1104,9 +1113,9 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 	}
 	if format == "hiddify" || (isHiddify && native && format != "xray") {
 		compatible := format != "all"
-		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, false, true, compatible, compatible)
+		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, false, true, compatible, compatible, format == "hiddify")
 	} else if native {
-		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, alwaysReturnArray, false, format == "sing-box", format != "all")
+		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, alwaysReturnArray, false, format == "sing-box", format != "all", false)
 	} else {
 		jsonSub, header, err = a.subJsonService.getJson(subId, host, alwaysReturnArray, format == "xray", true)
 	}

@@ -144,7 +144,7 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 	settings := s.linkSettings(inbound)
 	network, _ := settings["network"].(string)
 	linkFormat, _ := settings["shareLinkFormat"].(string)
-	useHiddifyFormat := strings.EqualFold(strings.TrimSpace(linkFormat), "hiddify")
+	useHiddifyFormat := s.hiddifyLinks || strings.EqualFold(strings.TrimSpace(linkFormat), "hiddify")
 	isQUIC := strings.EqualFold(strings.TrimSpace(network), "udp")
 	scheme := "naive+https"
 	if isQUIC {
@@ -308,8 +308,10 @@ func (s *SubService) genMieruLink(inbound *model.Inbound, email string) string {
 		// address; every listener port belongs in the paired port/protocol
 		// query values (including an externally forwarded port).
 		host := formatShareHost(endpoint.Address)
-		if full, err := mieruFullConfigLink(endpoint.Address, client.Email, client.Password, publicEntries, mtu, multiplexing, handshakeMode); err == nil {
-			links = append(links, full)
+		if !s.hiddifyLinks {
+			if full, err := mieruFullConfigLink(endpoint.Address, client.Email, client.Password, publicEntries, mtu, multiplexing, handshakeMode); err == nil {
+				links = append(links, full)
+			}
 		}
 		link := fmt.Sprintf("mierus://%s:%s@%s?%s",
 			encodeUserinfo(client.Email),

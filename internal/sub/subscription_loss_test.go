@@ -224,6 +224,43 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 		t.Fatalf("AWG identity/options lost: %s", data)
 	}
 	seedSubInbound(t, record.SubID, "standard-vless", 9445, 0, dnsTestStream)
+	naiveClient := &model.ClientRecord{Email: "naive@example.test", SubID: record.SubID, Password: "naive-test-password", Enable: true}
+	if err := db.Create(naiveClient).Error; err != nil {
+		t.Fatal(err)
+	}
+	naive := &model.Inbound{
+		UserId: 1, Tag: "native-naive", Protocol: model.NaiveProxy, Enable: true,
+		Port: 9447, Listen: "naive.example.test",
+		Settings: `{"network":"tcp","tls":{"serverName":"tls.example.test"}}`,
+	}
+	if err := db.Create(naive).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: naiveClient.Id, InboundId: naive.Id}).Error; err != nil {
+		t.Fatal(err)
+	}
+	const hiddifyAgent = "HiddifyNext/5.9.15 (linux) like ClashMeta v2ray sing-box"
+	for _, fallback := range []string{"auto", "links", "xray", "sing-box"} {
+		t.Run("ordinary/"+fallback, func(t *testing.T) {
+			router := gin.New()
+			NewSUBController(router.Group("/"), WithSUBFormats("both", fallback), WithSUBClashEnabled(true), WithSUBClashAutoDetect(true), WithSUBEncryption(false))
+			req := httptest.NewRequest(http.MethodGet, "/sub/extended", nil)
+			req.Header.Set("User-Agent", hiddifyAgent)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, req)
+			links := decodeSubscriptionBody(response.Body.Bytes())
+			if response.Code != http.StatusOK || len(links) != 3 {
+				t.Fatalf("expected three compatible links: %d %s", response.Code, response.Body.String())
+			}
+			if !strings.Contains(response.Body.String(), "naive://") || !strings.Contains(response.Body.String(), "sni=tls.example.test") ||
+				!strings.Contains(response.Body.String(), "mierus://") || !strings.Contains(response.Body.String(), "vless://") {
+				t.Fatalf("compatible links lost protocols or Naive SNI: %s", response.Body.String())
+			}
+			if fallback == "auto" {
+				assertUpstreamHiddifyParsesSubscription(t, response.Body.Bytes(), "vless", "naive", "mieru")
+			}
+		})
+	}
 	// An advertised AnyTLS endpoint forced to plaintext cannot be rendered.
 	// The other Hiddify profiles should still import.
 	anyTLS := &model.Inbound{
@@ -255,7 +292,7 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 			if strings.HasSuffix(path, "format=hiddify") {
 				req.Header.Set("Accept", "text/html")
 			} else {
-				req.Header.Set("User-Agent", "HiddifyNext/5.9.15 (linux) like ClashMeta v2ray sing-box")
+				req.Header.Set("User-Agent", hiddifyAgent)
 			}
 			response := httptest.NewRecorder()
 			importRouter.ServeHTTP(response, req)
@@ -266,7 +303,11 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 			if err := json.Unmarshal(response.Body.Bytes(), &profile); response.Code != http.StatusOK || err != nil {
 				t.Fatalf("invalid Hiddify subscription: %d %s", response.Code, response.Body.String())
 			}
-			want := map[any]bool{"vless": true, "mieru": true, "sudoku": true, "trusttunnel": true}
+			want := map[any]bool{"vless": true, "mieru": true, "naive": true}
+			explicit := strings.HasSuffix(path, "format=hiddify")
+			if explicit {
+				want["sudoku"], want["trusttunnel"] = true, true
+			}
 			for _, proxy := range profile.Outbounds {
 				protocol := proxy["type"]
 				if !want[protocol] {
@@ -277,11 +318,12 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 					t.Fatalf("Mieru has an unsupported field: %v", proxy)
 				}
 			}
-			if len(want) != 0 || len(profile.Endpoints) != 1 || profile.Endpoints[0]["type"] != "awg" {
-				t.Fatalf("missing Hiddify profiles: %s", response.Body.String())
+			if len(want) != 0 || explicit && (len(profile.Endpoints) != 1 || profile.Endpoints[0]["type"] != "awg") ||
+				!explicit && len(profile.Endpoints) != 0 {
+				t.Fatalf("incorrect Hiddify profiles: %s", response.Body.String())
 			}
-			if path == "/sub/extended" && tc.fallback == "links" {
-				assertUpstreamHiddifyParsesSubscription(t, response.Body.Bytes())
+			if explicit {
+				assertUpstreamHiddifyParsesSubscription(t, response.Body.Bytes(), "vless", "naive", "mieru", "sudoku", "trusttunnel", "awg")
 			}
 		})
 	}
@@ -333,7 +375,7 @@ func assertOwnerCoreAcceptsSubscription(t *testing.T, data string) {
 
 // Use the official profile parser, which also validates the imported
 // configuration. The pinned panel core has a separate check command.
-func assertUpstreamHiddifyParsesSubscription(t *testing.T, data []byte) {
+func assertUpstreamHiddifyParsesSubscription(t *testing.T, data []byte, protocols ...string) {
 	t.Helper()
 	binary := os.Getenv("HIDDIFY_UPSTREAM_TEST_BINARY")
 	if binary == "" {
@@ -364,7 +406,7 @@ func assertUpstreamHiddifyParsesSubscription(t *testing.T, data []byte) {
 	for _, profile := range append(config.Outbounds, config.Endpoints...) {
 		imported[profile.Type] = true
 	}
-	for _, protocol := range []string{"vless", "mieru", "sudoku", "trusttunnel", "awg"} {
+	for _, protocol := range protocols {
 		if !imported[protocol] {
 			t.Fatalf("Hiddify lost %s during import", protocol)
 		}

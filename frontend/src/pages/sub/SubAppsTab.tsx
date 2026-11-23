@@ -8,7 +8,6 @@ import { APP_PLATFORMS, buildSubApps, type AppPlatform } from './subPageModel';
 
 interface SubAppsTabProps {
   subUrl: string;
-  subFormatMode?: string;
   profileName: string;
   initialPlatform: AppPlatform;
   onOpenAmneziaWG?: () => void;
@@ -21,14 +20,13 @@ const PLATFORM_OPTIONS = (Object.keys(APP_PLATFORMS) as AppPlatform[]).map((valu
 
 export default function SubAppsTab({
   subUrl,
-  subFormatMode,
   profileName,
   initialPlatform,
   onOpenAmneziaWG,
 }: SubAppsTabProps) {
   const { t } = useTranslation();
   const [platform, setPlatform] = useState(initialPlatform);
-  const apps = buildSubApps(platform, subUrl, profileName, subFormatMode);
+  const apps = buildSubApps(platform, subUrl, profileName);
 
   return (
     <div className="sub-apps">

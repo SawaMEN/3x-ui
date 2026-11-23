@@ -113,7 +113,7 @@ describe('subscription tabs', () => {
       /Hiddify-Windows-Setup-x64\.exe$/,
     );
     expect(screen.getByRole('link', { name: 'Add · Hiddify' }).getAttribute('href')).toBe(
-      `hiddify://import/?url=${encodeURIComponent(subUrl + '?format=hiddify')}#Profile`,
+      `hiddify://import/?url=${encodeURIComponent(subUrl)}#Profile`,
     );
   });
 

@@ -50,7 +50,7 @@ func TestCoreSubscriptionLinks(t *testing.T) {
 		"Naive+HTTPS://client@example.org:443",
 		"hy2://client@example.org:443",
 	}
-	if got := coreSubscriptionLinks(raw); !reflect.DeepEqual(got, want) {
+	if got := coreSubscriptionLinks(raw, false); !reflect.DeepEqual(got, want) {
 		t.Fatalf("compatible links = %#v, want %#v", got, want)
 	}
 }
