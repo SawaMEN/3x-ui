@@ -10,7 +10,6 @@ const standaloneSchemes = new Set([
   'vetroff',
   'tt',
   'sudoku',
-  'tg',
   'naive',
   'naive+https',
   'naive+quic',

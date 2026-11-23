@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import SubAppsTab from '@/pages/sub/SubAppsTab';
 import SubLinksTab from '@/pages/sub/SubLinksTab';
+import { ClipboardManager } from '@/utils';
 import { renderWithProviders } from './test-utils';
 
 const subUrl = 'https://sub.example.com:8443/sub/abc';
@@ -11,12 +12,15 @@ describe('subscription tabs', () => {
   it('shows each AWG profile once in the second tab and gives its QR the native config', async () => {
     const config = '[Interface]\nPrivateKey = test\n# AWG North\n[Peer]\nPublicKey = test\n';
     const awgLink = `vpn://${Buffer.from(config).toString('base64url')}`;
+    const telegram = 'tg://proxy?server=telegram.example&port=443&secret=ee1234';
+    const web = 'tg://webproxy?server=telegram-web.example&secret=ee1234';
     vi.stubGlobal('__SUB_PAGE_DATA__', {
       subUrl,
       enabled: true,
-      links: ['vless://test@vpn.example:443#Core', awgLink, awgLink],
+      links: ['vless://test@vpn.example:443#Core', awgLink, awgLink, telegram, web],
     });
     const canvas = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    const copy = vi.spyOn(ClipboardManager, 'copyText').mockResolvedValue(true);
 
     try {
       const [{ default: SubPage }] = await Promise.all([
@@ -46,8 +50,17 @@ describe('subscription tabs', () => {
       const core = await screen.findByRole('tabpanel', { name: /^Configs/ });
       expect(await within(core).findByText('Core', { selector: '.sub-row-title' })).toBeTruthy();
       expect(within(core).queryByText('AWG North')).toBeNull();
+      expect(within(core).getAllByRole('button', { name: /^QR$/ })).toHaveLength(1);
+      fireEvent.click(within(core).getByRole('button', { name: 'Copy All Configs' }));
+      expect(copy).toHaveBeenLastCalledWith('vless://test@vpn.example:443#Core');
+      fireEvent.click(screen.getByRole('tab', { name: /Telegram Proxy/ }));
+      const telegramTab = screen.getByRole('tabpanel', { name: /Telegram Proxy/ });
+      expect(
+        await within(telegramTab).findAllByRole('button', { name: 'Open in Telegram' }),
+      ).toHaveLength(2);
     } finally {
       canvas.mockRestore();
+      copy.mockRestore();
       vi.unstubAllGlobals();
     }
   }, 15_000);

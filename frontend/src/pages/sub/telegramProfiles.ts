@@ -1,5 +1,25 @@
 import type { TelegramProxyProfile, TelegramSubscription } from '@/generated/types';
 
+export function isTelegramProxyLink(link: string): boolean {
+  try {
+    const url = new URL(link);
+    const kinds = ['proxy', 'webproxy', 'socks'];
+    const host = url.hostname.toLowerCase().replace(/[.]$/, '');
+    if (url.protocol === 'tg:') return kinds.includes(host);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    return (
+      ['t.me', 'telegram.me', 'telegram.dog'].includes(host) &&
+      kinds.includes(
+        decodeURIComponent(url.pathname)
+          .replace(/^\/+|\/+$/g, '')
+          .toLowerCase(),
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function telegramEndpoint({ host, port }: TelegramProxyProfile): string {
   const [domain] = host.split('/', 1);
   if (!port) return domain;

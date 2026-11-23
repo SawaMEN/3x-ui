@@ -314,34 +314,45 @@ func seedSubMtprotoInbound(t *testing.T, subId, tag string, port int) {
 	}
 }
 
-func TestAutoDetectOmitsTelegramFromDefaultSubscription(t *testing.T) {
+func TestSubscriptionExportsOmitTelegramProxy(t *testing.T) {
 	seedSubDB(t)
 	seedSubMtprotoInbound(t, "s1", "tg", 4490)
-	gin.SetMode(gin.TestMode)
-
-	req := httptest.NewRequest(http.MethodGet, "http://sub.example.com/sub/s1", nil)
-	req.Header.Set("User-Agent", "Clash-Verge/v2.4.2")
-	resp := httptest.NewRecorder()
-
+	seedSubInbound(t, "s1", "standard", 4491, 1, dnsTestStream)
 	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{clashAutoDetect: true, jsonAutoDetect: true})
-	router.ServeHTTP(resp, req)
+	for _, tc := range []struct {
+		path   string
+		base64 bool
+		vless  bool
+	}{
+		{"/sub/s1", true, true},
+		{"/sub/s1?format=all", true, true},
+		{"/sub/s1?format=standalone", true, false},
+		{"/sub/s1?format=xray", false, true},
+		{"/sub/s1?format=sing-box", false, true},
+		{"/sub/s1?format=hiddify", false, true},
+		{"/mihomo/s1?view=raw", false, true},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			resp := httptest.NewRecorder()
+			router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "http://sub.example.com"+tc.path, nil))
+			body := resp.Body.String()
+			if tc.base64 {
+				decoded, err := base64.StdEncoding.DecodeString(body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				body = string(decoded)
+			}
+			if resp.Code != http.StatusOK || strings.Contains(body, "tg://") || strings.Contains(body, "vless") != tc.vless {
+				t.Fatalf("unexpected content: HTTP %d %s", resp.Code, body)
+			}
+		})
+	}
 
-	if resp.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", resp.Code, resp.Body.String())
-	}
-	decoded, err := base64.StdEncoding.DecodeString(resp.Body.String())
-	if err != nil {
-		t.Fatalf("fallback response is not base64: %v", err)
-	}
-	if len(decoded) != 0 {
-		t.Fatalf("default subscription includes a Telegram-only profile: %s", decoded)
-	}
-
-	all := httptest.NewRecorder()
-	router.ServeHTTP(all, httptest.NewRequest(http.MethodGet, "http://sub.example.com/sub/s1?format=all", nil))
-	decoded, err = base64.StdEncoding.DecodeString(all.Body.String())
-	if all.Code != http.StatusOK || err != nil || !strings.Contains(string(decoded), "tg://proxy") {
-		t.Fatalf("all profiles omitted the Telegram proxy: %d %s (%v)", all.Code, decoded, err)
+	telegram := httptest.NewRecorder()
+	router.ServeHTTP(telegram, httptest.NewRequest(http.MethodGet, "http://sub.example.com/sub/s1?format=telemt", nil))
+	if telegram.Code != http.StatusOK || !strings.Contains(telegram.Body.String(), "tg://proxy") {
+		t.Fatalf("Telegram endpoint lost the proxy: HTTP %d %s", telegram.Code, telegram.Body.String())
 	}
 }
 

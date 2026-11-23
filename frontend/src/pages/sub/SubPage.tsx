@@ -19,7 +19,7 @@ import { amneziawgConfigFromLink } from '@/lib/xray/inbound-link';
 import SubHeader from './SubHeader';
 import SubHero from './SubHero';
 import SubLinksTab from './SubLinksTab';
-import { telegramProfiles } from './telegramProfiles';
+import { isTelegramProxyLink, telegramProfiles } from './telegramProfiles';
 import type { TelegramSubscription } from '@/generated/types';
 import { buildTelemtEndpoint, daysUntil, detectPlatform, resolveSubStatus } from './subPageModel';
 import './SubPage.css';
@@ -94,6 +94,7 @@ export default function SubPage() {
   const { configLinks, amneziaWGConfigs } = useMemo(() => {
     const amneziaWGConfigs = new Map<string, string>();
     const configLinks = (profileData.links ?? []).filter((link) => {
+      if (isTelegramProxyLink(link)) return false;
       const config = amneziawgConfigFromLink(link);
       if (!config) return true;
       amneziaWGConfigs.set(link, config);
@@ -256,7 +257,7 @@ export default function SubPage() {
         ),
       });
     }
-    const profiles = telegramProfiles(telemtData, configLinks, telegramRemarks);
+    const profiles = telegramProfiles(telemtData, profileData.links ?? [], telegramRemarks);
     if (profiles.length > 0 || telemtLoading || telemtError) {
       items.push({
         key: 'telemt',
@@ -287,7 +288,7 @@ export default function SubPage() {
         ),
         children: (
           <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
-            <SubConfigsTab links={configLinks} telegramRemarks={telegramRemarks} onCopy={copy} />
+            <SubConfigsTab links={configLinks} onCopy={copy} />
           </Suspense>
         ),
       });
@@ -304,6 +305,7 @@ export default function SubPage() {
     subFormatMode,
     amneziaWGConfigs,
     configLinks,
+    profileData.links,
     telegramRemarks,
     telemtData,
     telemtLoading,

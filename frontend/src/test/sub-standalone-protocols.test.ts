@@ -10,11 +10,18 @@ describe('standalone subscription protocols', () => {
       'vetroff://',
       'tt://',
       'sudoku://',
-      'tg://',
     ]) {
       expect(isStandaloneLink(protocol)).toBe(true);
     }
-    for (const protocol of ['vless://', 'vmess://', 'ss://', 'hysteria2://', 'tuic://', 'wg://']) {
+    for (const protocol of [
+      'vless://',
+      'vmess://',
+      'ss://',
+      'hysteria2://',
+      'tuic://',
+      'wg://',
+      'tg://',
+    ]) {
       expect(isStandaloneLink(protocol)).toBe(false);
     }
   });

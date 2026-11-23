@@ -48,3 +48,16 @@ func TestBuildRawSubscriptionBodyEmpty(t *testing.T) {
 		t.Fatalf("empty subscription body = %q, want empty", got)
 	}
 }
+
+func TestBuildRawSubscriptionBodyOmitsTelegramProxyLinks(t *testing.T) {
+	got := buildRawSubscriptionBody([]string{
+		"tg://proxy?server=telegram.example&port=443&secret=ee1234",
+		"tg://webproxy?server=telegram.example&secret=ee1234\nss://vpn-profile",
+		"https://t.me/proxy?server=telegram.example&port=443&secret=ee1234",
+		"https://Telegram.Me/socks?server=telegram.example&port=1080",
+		"https://vpn.example:443#HTTPS proxy",
+	})
+	if want := "ss://vpn-profile\nhttps://vpn.example:443#HTTPS proxy\n"; got != want {
+		t.Fatalf("body = %q, want %q", got, want)
+	}
+}

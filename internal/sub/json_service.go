@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	hiddifycore "github.com/SawaMEN/3x-ui/v3/internal/hiddify"
@@ -142,19 +143,17 @@ func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, c
 	}
 
 	excludedEmails := map[string]bool{}
-	if compatible || coreOnly {
-		inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
-			excluded := coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) ||
-				compatible && (containsUnsupportedJSONProtocol([]*model.Inbound{inbound}) || containsShadowTLSTransport([]*model.Inbound{inbound}))
-			if !excluded {
-				return false
-			}
-			for _, client := range subReq.matchingClients(inbound, subId) {
-				excludedEmails[client.Email] = client.Enable || excludedEmails[client.Email]
-			}
-			return true
-		})
-	}
+	inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
+		excluded := inbound.Protocol == model.MTProto || coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) ||
+			compatible && (containsUnsupportedJSONProtocol([]*model.Inbound{inbound}) || containsShadowTLSTransport([]*model.Inbound{inbound}))
+		if !excluded {
+			return false
+		}
+		for _, client := range subReq.matchingClients(inbound, subId) {
+			excludedEmails[client.Email] = client.Enable || excludedEmails[client.Email]
+		}
+		return true
+	})
 	// JSON uses Xray's outbound model. Refuse the whole format when any linked
 	// inbound cannot be represented, otherwise auto-detection could silently
 	// drop one connection and still return HTTP 200.
@@ -302,7 +301,7 @@ func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, c
 			continue
 		}
 		for _, el := range expandEntry(ext) {
-			if coreOnly && !isCoreSubscriptionLink(el.Link) {
+			if coremodel.IsTelegramProxyLink(el.Link) || coreOnly && !isCoreSubscriptionLink(el.Link) {
 				seenEmails[ext.Email] = struct{}{}
 				continue
 			}
@@ -444,7 +443,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		hiddifyExtension := hiddify && (inbound.Protocol == model.Mieru ||
 			includeHiddifyExtensions && officialHiddifyExtendedProtocol(inbound.Protocol))
 		unsupported := coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) && !hiddifyExtension
-		return !active || unsupported
+		return !active || inbound.Protocol == model.MTProto || unsupported
 	})
 	// MASQUE has no portable URI fallback. The remaining profiles must
 	// render together after the core-only feed has excluded sidecars.
@@ -980,7 +979,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			continue
 		}
 		for _, el := range expandEntry(ext) {
-			if coreOnly && !isCoreSubscriptionLink(el.Link) {
+			if coremodel.IsTelegramProxyLink(el.Link) || coreOnly && !isCoreSubscriptionLink(el.Link) {
 				seenEmails[ext.Email] = struct{}{}
 				continue
 			}

@@ -10,7 +10,7 @@ import (
 // client app can import every scheme.
 var standaloneSubscriptionSchemes = map[string]struct{}{
 	"pingtunnel": {}, "fptn": {}, "openflux": {}, "vetroff": {},
-	"tt": {}, "sudoku": {}, "tg": {},
+	"tt": {}, "sudoku": {},
 	"naive": {}, "naive+https": {}, "naive+quic": {},
 }
 

@@ -15,6 +15,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
@@ -61,11 +62,9 @@ func (s *SubClashService) getClash(subId string, host string, legacy, coreOnly b
 	// Returning the format-unsupported sentinel makes auto-detection keep the
 	// complete raw subscription instead of silently dropping an inbound.
 	formatInbounds, _ := subReq.partitionHostFormat(inbounds, "clash")
-	if coreOnly {
-		formatInbounds = slices.DeleteFunc(formatInbounds, func(inbound *model.Inbound) bool {
-			return singBoxUnsupportedProtocol(inbound.Protocol)
-		})
-	}
+	formatInbounds = slices.DeleteFunc(formatInbounds, func(inbound *model.Inbound) bool {
+		return inbound.Protocol == model.MTProto || coreOnly && singBoxUnsupportedProtocol(inbound.Protocol)
+	})
 	if containsUnsupportedClashProtocol(formatInbounds) || containsShadowTLSTransport(formatInbounds) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
@@ -85,7 +84,7 @@ func (s *SubClashService) getClash(subId string, host string, legacy, coreOnly b
 		if len(clients) == 0 {
 			continue
 		}
-		if coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) {
+		if inbound.Protocol == model.MTProto || coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) {
 			for _, client := range clients {
 				seenEmails[client.Email] = struct{}{}
 				hasEnabledClient = hasEnabledClient || client.Enable
@@ -165,7 +164,7 @@ func (s *SubClashService) getClash(subId string, host string, legacy, coreOnly b
 			continue
 		}
 		for _, el := range expandEntry(ext) {
-			if coreOnly && !isCoreSubscriptionLink(el.Link) {
+			if coremodel.IsTelegramProxyLink(el.Link) || coreOnly && !isCoreSubscriptionLink(el.Link) {
 				continue
 			}
 			name := el.Name

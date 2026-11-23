@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -550,6 +551,9 @@ func dedupeEmails(emails []string) []string {
 func buildRawSubscriptionBody(subs []string) string {
 	var result strings.Builder
 	for _, link := range normalizeGeneratedLinks(subs) {
+		if coremodel.IsTelegramProxyLink(link) {
+			continue
+		}
 		result.WriteString(link)
 		result.WriteByte('\n')
 	}
@@ -696,7 +700,7 @@ func (a *SUBController) serveRawSubscription(c *gin.Context) {
 	} else {
 		switch format {
 		case "all":
-			// Keep every URI, including those requiring a dedicated client.
+			// Keep every VPN URI, including those requiring a dedicated client.
 		case "standalone":
 			subs = standaloneSubscriptionLinks(subs)
 		default:
