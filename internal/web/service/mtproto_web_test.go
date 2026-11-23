@@ -139,8 +139,32 @@ func TestValidateMtprotoWebCanonicalEndpoint(t *testing.T) {
 	if !strings.Contains(ib.Settings, `"custom":"preserve"`) {
 		t.Fatal("unrelated setting lost")
 	}
-	if strings.Contains(ib.Settings, `"carriers":null`) {
-		t.Fatal("absent carriers must not become null: frontend rejects null arrays")
+	for _, required := range []string{`"frontend":"nginx"`, `"carrier":"https"`, `"carriers":[]`} {
+		if !strings.Contains(ib.Settings, required) {
+			t.Fatalf("canonical WEB defaults missing %s: %s", required, ib.Settings)
+		}
+	}
+}
+
+func TestValidateMtprotoWebPreservesExplicitOptions(t *testing.T) {
+	setupConflictDB(t)
+	ib := &model.Inbound{
+		Protocol: model.MTProto,
+		Enable:   true,
+		Settings: `{"webProxy":{"enabled":true,"domain":"web.example.com","frontend":"caddy","carrier":"websocket","carriers":["websocket","https"],"retryJitter":{"enabled":true,"minMs":5,"maxMs":50}},"clients":[]}`,
+	}
+	if err := ValidateMtprotoWebInbound(ib); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`"frontend":"caddy"`,
+		`"carrier":"websocket"`,
+		`"carriers":["websocket","https"]`,
+		`"retryJitter":{"enabled":true,"minMs":5,"maxMs":50}`,
+	} {
+		if !strings.Contains(ib.Settings, expected) {
+			t.Fatalf("custom WEB setting %s was changed: %s", expected, ib.Settings)
+		}
 	}
 }
 

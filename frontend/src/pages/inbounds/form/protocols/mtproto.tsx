@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import TelemtNaiveSelect from '@/pages/telemt/TelemtNaiveSelect';
 import { useTranslation } from 'react-i18next';
 import { Alert, Collapse, Input, InputNumber, Select, Switch } from 'antd';
@@ -7,7 +8,7 @@ import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
 import { useTelemtOutboundTags } from '@/api/queries/useOutboundTags';
 import MtprotoWebStatus from './MtprotoWebStatus';
-import { TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
+import { completeTelemtWebSettings, TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
 import MtprotoMekoStatus from './MtprotoMekoStatus';
 import TelemtWebSiteFields from '@/pages/telemt/TelemtWebSiteFields';
 import TelemtWebGuide, { telemtWebFieldHelp } from '@/pages/telemt/TelemtWebGuide';
@@ -20,7 +21,7 @@ export default function MtprotoFields({
   nodeId?: number | null;
 }) {
   const { t, i18n } = useTranslation();
-  const { control } = useFormContext();
+  const { control, getValues, setValue } = useFormContext();
   const ru = i18n.resolvedLanguage?.startsWith('ru') ?? false;
   const help = telemtWebFieldHelp[ru ? 'ru' : 'en'];
   const webDomain = useWatch({ control, name: 'settings.webProxy.domain' }) as string | undefined;
@@ -32,6 +33,14 @@ export default function MtprotoFields({
     control,
     name: 'settings.webProxy.sharedIngress.enabled',
   });
+  useEffect(() => {
+    if (!webProxyEnabled) return;
+    const saved = getValues('settings.webProxy') as Parameters<typeof completeTelemtWebSettings>[0];
+    const completed = completeTelemtWebSettings(saved);
+    if (JSON.stringify(saved) !== JSON.stringify(completed)) {
+      setValue('settings.webProxy', completed, { shouldValidate: true });
+    }
+  }, [webProxyEnabled, getValues, setValue]);
   const mekoEnabled = useWatch({ control, name: 'settings.mekoFix' }) as boolean | undefined;
   const routeThroughXray = useWatch({ control, name: 'settings.routeThroughXray' }) as
     | boolean

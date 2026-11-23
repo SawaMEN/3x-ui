@@ -67,6 +67,11 @@ func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, 
 	if o.Carrier == "" {
 		o.Carrier = "https"
 	}
+	// An explicit empty list must be serialised as [] (never null) for
+	// clients and form validators that require an array of transports.
+	if o.Carriers == nil {
+		o.Carriers = []string{}
+	}
 	if o.Aliases != nil {
 		aliases, err := normalizeTelemtWebAliases("", *o.Aliases)
 		if err != nil {

@@ -14,6 +14,8 @@ describe('Telemt WEB request validation', () => {
       ...valid,
       aliases: [],
       basePath: '',
+      site: { mode: 'auto' },
+      retryJitter: { enabled: false, minMs: 0, maxMs: 250 },
     });
   });
   it('accepts only paths whose segments begin with letters or digits', () => {
