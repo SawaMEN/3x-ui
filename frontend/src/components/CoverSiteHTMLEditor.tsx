@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Alert, Button, Card, Input, Space, Typography, Upload } from 'antd';
 import { useTranslation } from 'react-i18next';
-
 import { COVER_SITE_HTML_MAX_BYTES } from '@/schemas/cover-site-html';
+
 export { COVER_SITE_HTML_MAX_BYTES } from '@/schemas/cover-site-html';
 
 // A complete, responsive example that can be edited before publishing.

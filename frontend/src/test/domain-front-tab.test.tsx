@@ -274,6 +274,23 @@ describe('domain and TLS dashboard', () => {
     },
   );
 
+  it.each(['shared_sni', 'cert_only', 'wildcard'] as const)(
+    'hides the local cover-site editor for %s',
+    async (kind) => {
+      const f = fixture();
+      f.config.subscriptionDomain = '';
+      if (kind === 'wildcard') {
+        f.config.domains[0].name = '*.example.com';
+        f.config.domains[0].mode = 'direct';
+      } else {
+        f.config.domains[0].mode = kind;
+      }
+      renderWithProviders(<DomainFrontTab />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+      expect(screen.queryByRole('tab', { name: 'Cover site' })).toBeNull();
+    },
+  );
+
   it('offers one edit action per cover site and keeps its draft in the editor', async () => {
     const f = fixture();
     f.config.domains[0].mode = 'sni_only';
