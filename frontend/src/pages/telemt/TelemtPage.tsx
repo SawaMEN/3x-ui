@@ -1044,6 +1044,27 @@ export default function TelemtPage() {
                   Выбор транспортов требует Telemt 3.5.4 или новее.
                 </Typography.Text>
               )}
+              <Collapse
+                items={[
+                  {
+                    key: 'retry-jitter',
+                    label: 'Задержка повторных HTTP-запросов (Telemt 3.5.16+)',
+                    children: (
+                      <>
+                        <FormField name="retryJitter.enabled" label="Включить случайную задержку" valueProp="checked">
+                          <Switch disabled={webProxyLoading} />
+                        </FormField>
+                        <FormField name="retryJitter.minMs" label="Минимум, мс">
+                          <InputNumber min={0} max={30000} style={{ width: '100%' }} disabled={webProxyLoading} />
+                        </FormField>
+                        <FormField name="retryJitter.maxMs" label="Максимум, мс">
+                          <InputNumber min={0} max={30000} style={{ width: '100%' }} disabled={webProxyLoading} />
+                        </FormField>
+                      </>
+                    ),
+                  },
+                ]}
+              />
             </Form>
           </FormProvider>
 
