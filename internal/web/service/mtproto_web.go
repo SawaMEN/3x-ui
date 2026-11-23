@@ -139,6 +139,18 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if err != nil {
 		return err
 	}
+	// Canonicalise required options for inbounds created by old UIs or API
+	// clients. Otherwise the WEB form reopens with empty selectors.
+	for name, value := range map[string]any{
+		"frontend": normalizedSettings.Frontend,
+		"carrier":  normalizedSettings.Carrier,
+		"carriers": normalizedSettings.Carriers,
+	} {
+		webPayload[name], err = json.Marshal(value)
+		if err != nil {
+			return err
+		}
+	}
 	payload["webProxy"], err = json.Marshal(webPayload)
 	if err != nil {
 		return err

@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -141,6 +142,56 @@ func TestValidateMtprotoWebCanonicalEndpoint(t *testing.T) {
 	}
 	if strings.Contains(ib.Settings, `"carriers":null`) {
 		t.Fatal("absent carriers must not become null: frontend rejects null arrays")
+	}
+}
+
+func TestValidateMtprotoWebFillsRequiredSettings(t *testing.T) {
+	cases := []struct {
+		name     string
+		settings string
+		frontend string
+		carrier  string
+		carriers []string
+	}{
+		{
+			name:     "legacy omitted options",
+			settings: `{"webProxy":{"enabled":true,"domain":"web.example.com"},"clients":[]}`,
+			frontend: "nginx", carrier: "https", carriers: []string{},
+		},
+		{
+			name: "explicit custom values",
+			settings: `{"webProxy":{"enabled":true,"domain":"web.example.com","frontend":"caddy","carrier":"websocket","carriers":["websocket","https"],"retryJitter":{"enabled":true,"minMs":5,"maxMs":50}},"clients":[]}`,
+			frontend: "caddy", carrier: "websocket", carriers: []string{"websocket", "https"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			setupConflictDB(t)
+			ib := &model.Inbound{Protocol: model.MTProto, Enable: true, Port: 8443, Settings: tc.settings}
+			if err := ValidateMtprotoWebInbound(ib); err != nil {
+				t.Fatal(err)
+			}
+			var parsed struct {
+				WebProxy struct {
+					Frontend string              `json:"frontend"`
+					Carrier   string              `json:"carrier"`
+					Carriers  []string            `json:"carriers"`
+					RetryJitter *TelemtWebRetryJitter `json:"retryJitter"`
+				} `json:"webProxy"`
+			}
+			if err := json.Unmarshal([]byte(ib.Settings), &parsed); err != nil {
+				t.Fatal(err)
+			}
+			web := parsed.WebProxy
+			if web.Frontend != tc.frontend || web.Carrier != tc.carrier ||
+				!slices.Equal(web.Carriers, tc.carriers) || web.Carriers == nil {
+				t.Fatalf("missing or overwritten WEB defaults: %+v", web)
+			}
+			if tc.frontend == "caddy" && (web.RetryJitter == nil || !web.RetryJitter.Enabled ||
+				web.RetryJitter.MinMS != 5 || web.RetryJitter.MaxMS != 50) {
+				t.Fatalf("custom retry jitter was overwritten: %+v", web.RetryJitter)
+			}
+		})
 	}
 }
 
