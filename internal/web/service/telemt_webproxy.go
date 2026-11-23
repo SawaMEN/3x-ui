@@ -32,6 +32,7 @@ const (
 	telemtWebListenPort = 15080
 	telemtWebUser       = "webproxy"
 	telemtWebMinEngine  = "3.5.1"
+	telemtWebFrontendConfigRevision = 1
 )
 
 const telemtWebDomainPatternSource = "^(?:[A-Za-z0-9]" +
@@ -45,6 +46,7 @@ var (
 )
 
 type TelemtWebProxyState struct {
+	FrontendConfigRevision int `json:"frontendConfigRevision,omitempty"`
 	SharedIngress      *TelemtWebIngress     `json:"sharedIngress,omitempty"`
 	Site               *TelemtWebSiteOptions `json:"site,omitempty"`
 	ManagedInboundID   int                   `json:"managedInboundId,omitempty"`
@@ -507,13 +509,18 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 		return TelemtWebProxyStatus{}, err
 	}
 	if !oldState.Enabled {
-		state.ListenPort, err = pickTelemtWebListenPort(cfg.Port)
+		nativePort := cfg.Port
+		if state.ManagedInboundID != 0 && state.BackendPort > 0 {
+			nativePort = state.BackendPort
+		}
+		state.ListenPort, err = pickTelemtWebListenPort(nativePort)
 		if err != nil {
 			rollbackNginx()
 			return TelemtWebProxyStatus{}, err
 		}
 	}
 	state.Enabled = true
+	state.FrontendConfigRevision = telemtWebFrontendConfigRevision
 	state.Domain = domain
 	state.DecoyDir = decoyDir
 	state.Site = options.Site
@@ -931,8 +938,8 @@ func telemtWebNginxEnabled() bool {
 }
 
 func telemtWebEnsureNginxRunning() error {
-	if err := exec.CommandContext(context.Background(), "nginx", "-t").Run(); err != nil {
-		return errors.New("nginx configuration test failed")
+	if out, err := exec.CommandContext(context.Background(), "nginx", "-t").CombinedOutput(); err != nil {
+		return fmt.Errorf("nginx configuration test failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	if telemtWebNginxActive() {
 		return nil

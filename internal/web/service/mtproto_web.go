@@ -224,7 +224,10 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 
 	if len(selected) == 0 || !mtprotoWebHasUsers(selected[0]) {
 		if state.ManagedInboundID == 0 {
-			return refreshTelemtIngress(state)
+			if err := refreshTelemtIngress(state); err != nil {
+				return err
+			}
+			return telemtWebUpgradeFrontend(ctx, state)
 		}
 		if err := disableTelemtWebProxy(); err != nil {
 			return err
@@ -285,6 +288,9 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		}
 	}
 	if unchanged && state.UserFingerprint == fingerprint && svc.WebProxyTelemtActive() {
+		if err := telemtWebUpgradeFrontend(ctx, state); err != nil {
+			return err
+		}
 		if err := refreshMtprotoWebTrafficBinding(ctx); err != nil {
 			return err
 		}
@@ -313,6 +319,9 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 			return err
 		}
 		if err := svc.EnsureWebProxyBackend(); err != nil {
+			return err
+		}
+		if err := telemtWebUpgradeFrontend(ctx, state); err != nil {
 			return err
 		}
 		if !telemtWebFrontendActive(state) {

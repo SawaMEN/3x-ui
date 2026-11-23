@@ -34,7 +34,7 @@ func TestTelemtWebHealthyDecoyStatus(t *testing.T) {
 }
 
 func TestPreparedTelemtWebSiteRequiresSuccessfulRoot(t *testing.T) {
-	for _, status := range []int{301, 403, 404, 405, 502} {
+	for _, status := range []int{204, 206, 301, 403, 404, 405, 502} {
 		if telemtWebSiteReady(TelemtWebProxyState{}, status) {
 			t.Errorf("prepared site incorrectly marked ready on HTTP %d", status)
 		}

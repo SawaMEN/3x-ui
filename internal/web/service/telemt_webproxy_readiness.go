@@ -21,7 +21,7 @@ func telemtWebHealthyDecoyStatus(status int) bool {
 // wrong virtual host or a freshly bound frontend is not enough.
 func telemtWebSiteReady(state TelemtWebProxyState, status int) bool {
 	if state.Site == nil || state.Site.Mode != "origin" {
-		return status >= 200 && status < 300
+		return status == http.StatusOK
 	}
 	return telemtWebHealthyDecoyStatus(status)
 }

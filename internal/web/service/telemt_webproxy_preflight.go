@@ -348,7 +348,7 @@ func telemtWebNginxConfigHasHostPort(config, domain string, port int) bool {
 			if !telemtWebServerStart.MatchString(line) {
 				continue
 			}
-			inServer, skip = true, currentFile == telemtWebNginxConf
+			inServer, skip = true, currentFile == telemtWebNginxConf || currentFile == telemtWebAcmeConf
 			block.Reset()
 			line = line[telemtWebServerStart.FindStringIndex(line)[0]:]
 		}

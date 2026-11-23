@@ -314,11 +314,16 @@ func telemtWebFrontendCertificate(ctx context.Context, s TelemtWebProxyState, do
 		}
 		return "", "", errors.New("additional WEB domains require an existing SAN or wildcard certificate covering every hostname")
 	}
-	if telemtWebFrontend(s) == "nginx" {
-		return telemtWebEnsureCertificate(ctx, domain, cert, key)
-	}
 	if telemtWebCertificatePairReady(cert, key, domain) {
 		return cert, key, nil
+	}
+	// Preflight accepts the persisted certificate. Deployment must use the
+	// same valid pair instead of trying to issue another certificate.
+	if telemtWebCertificatePairReady(s.CertFile, s.KeyFile, domain) {
+		return s.CertFile, s.KeyFile, nil
+	}
+	if telemtWebFrontend(s) == "nginx" {
+		return telemtWebEnsureCertificate(ctx, domain, cert, key)
 	}
 	cert = "/etc/letsencrypt/live/" + domain + "/fullchain.pem"
 	key = "/etc/letsencrypt/live/" + domain + "/privkey.pem"
@@ -626,6 +631,57 @@ func telemtWebProbeHosts(ctx context.Context, state TelemtWebProxyState, client 
 		}
 	}
 	return nil
+}
+
+// Upgrade persisted frontend configurations without changing users, secrets
+// or certificates. The caller owns telemtWebOperationMu.
+func telemtWebUpgradeFrontend(ctx context.Context, state TelemtWebProxyState) error {
+	if !state.Enabled || state.FrontendConfigRevision >= telemtWebFrontendConfigRevision {
+		return nil
+	}
+	path := telemtWebFrontDir + "/config"
+	if telemtWebFrontend(state) == "nginx" {
+		path = telemtWebNginxConf
+	}
+	old, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	active := telemtWebFrontendActive(state)
+	if err := writeTelemtWebFrontendConfig(state); err != nil {
+		return err
+	}
+	rollback := func(cause error) error {
+		if old == nil {
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return errors.Join(cause, err)
+			}
+		} else if err := telemtWebFrontendRestoreFile(path, old); err != nil {
+			return errors.Join(cause, err)
+		}
+		if active {
+			return errors.Join(cause, telemtWebReloadFrontend(state))
+		}
+		return errors.Join(cause, telemtWebStopFrontend(state, false))
+	}
+	if err := telemtWebEnsureFrontendRunning(state); err != nil {
+		return rollback(err)
+	}
+	if err := telemtWebReloadFrontend(state); err != nil {
+		return rollback(err)
+	}
+	if err := telemtWebWaitFrontendReady(ctx, state); err != nil {
+		return rollback(err)
+	}
+	state.FrontendConfigRevision = telemtWebFrontendConfigRevision
+	return writeTelemtWebState(state)
+}
+
+func telemtWebFrontendRestoreFile(path string, data []byte) error {
+	if path == telemtWebNginxConf {
+		return os.WriteFile(path, data, 0o644)
+	}
+	return writeTelemtWebFrontendFile(path, data)
 }
 
 func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) error {
