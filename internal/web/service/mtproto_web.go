@@ -293,9 +293,12 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 			if err := telemtWebEnsureFrontendRunning(state); err != nil {
 				return err
 			}
-			return telemtWebWaitFrontendReady(ctx, state)
 		}
-		return nil
+		// An active process can still return 502/404 or present the wrong TLS
+		// virtual host. Do not report a healthy reconciliation in that case.
+		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		return telemtWebWaitFrontendReady(probeCtx, state)
 	}
 	if unchanged {
 		cfg, cfgErr := getConfig()
@@ -346,20 +349,10 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		return withTelemtRollbackError(err, writeTelemtWebState(previousState))
 	}
 	mtprotoWebLastError = time.Time{}
-	state, err = readState()
-	if err != nil {
-		return err
-	}
-	state.ManagedInboundID = ib.Id
-	state.UserFingerprint = fingerprint
-	if err := writeTelemtWebState(state); err != nil {
-		return err
-	}
-	cfg, err := getConfig()
-	if err != nil {
-		return err
-	}
-	return svc.SaveConfig(cfg)
+	// enableWebProxyLocked already persisted the managed inbound, rendered
+	// its users, started the backend and verified HTTPS. Saving again would
+	// restart the just-verified backend and invalidate that readiness check.
+	return nil
 }
 
 // Stop the standalone WEB backend only when it has no independent/legacy

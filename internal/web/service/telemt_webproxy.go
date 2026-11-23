@@ -733,6 +733,31 @@ func selectTelemtWebPublicIP(dns, local []net.IP) net.IP {
 	return nil
 }
 
+// The advertised endpoint is a single IP, not an instruction to disable
+// the other address family on the HTTPS frontend.
+func telemtWebNeedsIPv6(state TelemtWebProxyState) bool {
+	host, _, err := net.SplitHostPort(state.PublicAddr)
+	if err != nil {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
+		return true
+	}
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, addr := range addrs {
+		if subnet, ok := addr.(*net.IPNet); ok {
+			ip := subnet.IP
+			if ip.To4() == nil && ip.IsGlobalUnicast() && !ip.IsPrivate() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if data, err := os.ReadFile("/etc/letsencrypt/renewal/" + state.Domain + ".conf"); err == nil && telemtWebRenewalMode(data) == "managed-webroot" {
 		if err := telemtWebWriteAcmeNginxConfig(state.Domain); err != nil {
@@ -746,14 +771,14 @@ func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 		return errors.New("WEB certificate does not cover all configured domains")
 	}
 	listen := "listen 443 ssl;"
-	if host, _, err := net.SplitHostPort(state.PublicAddr); err == nil && net.ParseIP(host) != nil && net.ParseIP(host).To4() == nil {
-		listen = "listen [::]:443 ssl;"
+	if telemtWebNeedsIPv6(state) {
+		listen += "\n    listen [::]:443 ssl;"
 	}
 	locations, err := telemtWebSubscriptionLocations(&SettingService{})
 	if err != nil {
 		return err
 	}
-	config := fmt.Sprintf("map $http_upgrade $xui_telemt_connection_upgrade {\n    default upgrade;\n    ''      '';\n}\n\nupstream xui_telemt_web {\n    server %s:%d;\n    keepalive 64;\n}\n\nserver {\n    %s\n    server_name %s;\n    access_log off;\n\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    client_max_body_size 2m;\n\n%s    location / {\n        proxy_pass http://xui_telemt_web;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection $xui_telemt_connection_upgrade;\n        proxy_connect_timeout 5s;\n        proxy_read_timeout 65s;\n        proxy_send_timeout 65s;\n        proxy_request_buffering off;\n        proxy_buffering off;\n        proxy_next_upstream off;\n    }\n}\n", telemtWebListenIP, state.ListenPort, listen, strings.Join(telemtWebHosts(state), " "), state.CertFile, state.KeyFile, locations)
+	config := fmt.Sprintf("map $http_upgrade $xui_telemt_connection_upgrade {\n    default upgrade;\n    ''      '';\n}\n\nupstream xui_telemt_web {\n    server %s:%d;\n    keepalive 64;\n}\n\nserver {\n    %s\n    server_name %s;\n    access_log off;\n\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    client_max_body_size 2m;\n\n%s    location / {\n        proxy_pass http://xui_telemt_web;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header X-Forwarded-Proto https;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection $xui_telemt_connection_upgrade;\n        proxy_connect_timeout 5s;\n        proxy_read_timeout 65s;\n        proxy_send_timeout 65s;\n        proxy_request_buffering off;\n        proxy_buffering off;\n        proxy_next_upstream off;\n    }\n}\n", telemtWebListenIP, state.ListenPort, listen, strings.Join(telemtWebHosts(state), " "), state.CertFile, state.KeyFile, locations)
 	if err := os.MkdirAll(filepath.Dir(telemtWebNginxConf), 0o755); err != nil {
 		return err
 	}
@@ -1063,7 +1088,7 @@ func telemtWebWriteAcmeNginxConfig(domain string) error {
 	if err := os.MkdirAll(filepath.Join(telemtWebDecoyDir, ".well-known", "acme-challenge"), 0o755); err != nil {
 		return err
 	}
-	conf := fmt.Sprintf("server {\n    listen 80;\n    server_name %s;\n    root %s;\n    location /.well-known/acme-challenge/ {\n        try_files $uri =404;\n    }\n}\n", domain, telemtWebDecoyDir)
+	conf := fmt.Sprintf("server {\n    listen 80;\n    server_name %s;\n    root %s;\n    location /.well-known/acme-challenge/ {\n        try_files $uri =404;\n    }\n    location / {\n        return 308 https://$host$request_uri;\n    }\n}\n", domain, telemtWebDecoyDir)
 	return os.WriteFile(telemtWebAcmeConf, []byte(conf), 0o644)
 }
 

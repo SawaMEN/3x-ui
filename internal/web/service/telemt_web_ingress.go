@@ -282,7 +282,7 @@ func planTelemtWebIngress(state TelemtWebProxyState, requireNaive bool) (telemtI
 
 func renderTelemtWebIngress(state TelemtWebProxyState, plan telemtIngressPlan) []byte {
 	bind := ":443"
-	if host, _, err := net.SplitHostPort(state.PublicAddr); err == nil && net.ParseIP(host) != nil && net.ParseIP(host).To4() == nil {
+	if telemtWebNeedsIPv6(state) {
 		bind = "[::]:443 v4v6"
 	}
 	var cfg strings.Builder

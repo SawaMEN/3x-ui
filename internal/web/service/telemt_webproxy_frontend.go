@@ -234,7 +234,8 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 	} else {
 		publishedTelemtIngress.Store(nil)
 	}
-	return result, nil
+	// The initial status was captured before the backend was started.
+	return s.WebProxyStatus(domain, cert, key)
 }
 
 func (TelemtService) DisableWebProxy() error {
@@ -387,7 +388,7 @@ func telemtWebFrontendConfig(s TelemtWebProxyState, sub telemtWebSubscriptionTar
 		return json.MarshalIndent(config, "", "  ")
 	case "haproxy":
 		bind := ":443"
-		if host, _, err := net.SplitHostPort(s.PublicAddr); err == nil && net.ParseIP(host) != nil && net.ParseIP(host).To4() == nil {
+		if telemtWebNeedsIPv6(s) {
 			bind = "[::]:443 v4v6"
 		}
 		var b strings.Builder
@@ -606,6 +607,27 @@ func removeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 	return nil
 }
 
+// Probe every configured virtual host with its own HTTP Host and TLS SNI.
+// Dial loopback explicitly so DNS, CDN and environment proxies cannot turn
+// this local readiness check into a request to an unrelated server.
+func telemtWebProbeHosts(ctx context.Context, state TelemtWebProxyState, client *http.Client) error {
+	for _, host := range telemtWebHosts(state) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+host+"/", nil)
+		if err != nil {
+			return err
+		}
+		response, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("%s: %w", host, err)
+		}
+		_ = response.Body.Close()
+		if !telemtWebSiteReady(state, response.StatusCode) {
+			return fmt.Errorf("%s: WEB HTTPS endpoint returned HTTP %d", host, response.StatusCode)
+		}
+	}
+	return nil
+}
+
 func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) error {
 	data, err := os.ReadFile(state.CertFile)
 	if err != nil {
@@ -619,30 +641,26 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 	if ip, _, err := net.SplitHostPort(state.PublicAddr); err == nil && net.ParseIP(ip) != nil && net.ParseIP(ip).To4() == nil {
 		host = "::1"
 	}
+	dialer := &net.Dialer{Timeout: 2 * time.Second}
 	client := &http.Client{
-		Timeout:       2 * time.Second,
-		Transport:     &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: state.Domain, MinVersion: tls.VersionTLS12}},
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			Proxy: nil,
+			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				return dialer.DialContext(ctx, network, net.JoinHostPort(host, "443"))
+			},
+			TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
+		},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	defer client.CloseIdleConnections()
 	deadline, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	var lastErr error
 	for {
-		req, err := http.NewRequestWithContext(deadline, http.MethodGet, "https://"+net.JoinHostPort(host, "443")+"/", nil)
-		if err != nil {
-			return err
+		lastErr := telemtWebProbeHosts(deadline, state, client)
+		if lastErr == nil {
+			return nil
 		}
-		req.Host = state.Domain
-		response, err := client.Do(req)
-		if err == nil {
-			_ = response.Body.Close()
-			if telemtWebSiteReady(state, response.StatusCode) {
-				return nil
-			}
-			err = fmt.Errorf("WEB HTTPS endpoint returned HTTP %d", response.StatusCode)
-		}
-		lastErr = err
 		select {
 		case <-deadline.Done():
 			return fmt.Errorf("WEB HTTPS frontend is not ready: %w", lastErr)

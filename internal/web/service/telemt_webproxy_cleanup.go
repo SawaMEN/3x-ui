@@ -59,12 +59,25 @@ func captureTelemtConfigSnapshot() (telemtConfigSnapshot, error) {
 }
 
 func restoreTelemtConfigSnapshot(snapshot telemtConfigSnapshot) error {
+	unchanged := false
 	if snapshot.exists {
 		if current, err := os.ReadFile(telemtConfigPath); err == nil && bytes.Equal(current, snapshot.data) {
-			return nil
+			unchanged = true
 		}
 	} else if _, err := os.Stat(telemtConfigPath); errors.Is(err, os.ErrNotExist) {
-		return nil
+		unchanged = true
+	}
+	// A byte-identical configuration does not imply the service is in its
+	// original running/stopped state after a failed setup.
+	if unchanged {
+		active := systemctl("is-active", "--quiet", telemtServiceName) == nil
+		if active == snapshot.active {
+			return nil
+		}
+		if snapshot.active {
+			return systemctl("start", telemtServiceName)
+		}
+		return systemctl("stop", telemtServiceName)
 	}
 
 	if snapshot.exists {
