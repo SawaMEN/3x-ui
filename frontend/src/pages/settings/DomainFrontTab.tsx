@@ -466,6 +466,16 @@ export default function DomainFrontTab({
       return ru
         ? 'TCP 443 занят Telemt WEB. Используйте другой порт шлюза.'
         : 'Telemt WEB owns TCP 443. Choose a different gateway port.';
+    if (
+      mode !== 'sni_only' &&
+      allSetting &&
+      [allSetting.subPath, allSetting.subJsonPath, allSetting.subClashPath].some((path) =>
+        ['/', '/index.html', '/site.css', '/site.js'].includes(path.replace(/\/+$/, '') || '/'),
+      )
+    )
+      return ru
+        ? 'Путь подписки конфликтует с файлами сайта.'
+        : 'A subscription path conflicts with website files.';
     const panelHost = allSetting?.webDomain.trim().toLowerCase().replace(/\.$/, '');
     if (
       host === panelHost &&
@@ -552,11 +562,7 @@ export default function DomainFrontTab({
       ? (value.siteCatalog ?? form.getFieldValue('siteCatalog') ?? '')
       : '';
     const blocked = coverBlocked(value.name, value.mode);
-    if (
-      supportsCover &&
-      (siteCatalog || value.mode === 'sni_only') &&
-      blocked
-    ) {
+    if (supportsCover && (siteCatalog || value.mode === 'sni_only') && blocked) {
       messageApi.error(blocked);
       return;
     }

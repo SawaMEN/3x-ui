@@ -94,6 +94,23 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 			Code: "invalid_config", Severity: "error", Domain: panel.WebDomain, Message: coverErr.Error(),
 		})
 	}
+	if cfg.Enabled {
+		backend := domainfront.Backend{
+			PanelPath:         panel.WebBasePath,
+			SubscriptionPaths: []string{panel.SubPath, panel.SubJsonPath, panel.SubClashPath, "/assets/"},
+		}
+		for _, domain := range cfg.Domains {
+			if !domain.Enabled {
+				continue
+			}
+			if coverErr := backend.ValidateCoverPaths(domain); coverErr != nil {
+				report.Ready = false
+				report.Checks = append(report.Checks, domainPreflightCheck{
+					Code: "invalid_config", Severity: "error", Domain: domain.Name, Message: coverErr.Error(),
+				})
+			}
+		}
+	}
 	augmentDomainPreflightWithNodeEvidence(ctx, cfg, &report)
 	return report, nil
 }

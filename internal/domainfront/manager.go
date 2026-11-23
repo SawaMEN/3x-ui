@@ -729,6 +729,20 @@ func isCoverSitePath(path string) bool {
 	}
 }
 
+// ValidateCoverPaths checks that static website resources do not shadow service routes.
+func (b Backend) ValidateCoverPaths(d DomainFrontDomain) error {
+	if !d.HasCoverSite() || d.Mode == "sni_only" {
+		return nil
+	}
+	r := &frontRuntime{backend: b}
+	for _, path := range []string{"/", "/index.html", "/site.css", "/site.js"} {
+		if r.protectedRedirectPath(d, path) {
+			return fmt.Errorf("cover site %s: path %s conflicts with an existing service", d.Name, path)
+		}
+	}
+	return nil
+}
+
 func staticCoverSite(dir string) http.Handler {
 	static := http.FileServer(http.Dir(dir))
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -745,12 +759,8 @@ func staticCoverSite(dir string) http.Handler {
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
 	var cover http.Handler
 	if d.HasCoverSite() {
-		if d.Mode != "sni_only" {
-			for _, path := range []string{"/", "/index.html", "/site.css", "/site.js"} {
-				if r.protectedRedirectPath(d, path) {
-					return nil, fmt.Errorf("cover site %s: path %s conflicts with an existing service", d.Name, path)
-				}
-			}
+		if err := r.backend.ValidateCoverPaths(d); err != nil {
+			return nil, err
 		}
 		dir := r.backend.DecoyDirectories[d.Name]
 		if dir == "" {
