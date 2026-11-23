@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
@@ -222,15 +224,41 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 		t.Fatalf("AWG identity/options lost: %s", data)
 	}
 	seedSubInbound(t, record.SubID, "standard-vless", 9445, 0, dnsTestStream)
+	// An advertised AnyTLS endpoint forced to plaintext cannot be rendered.
+	// The other Hiddify profiles should still import.
+	anyTLS := &model.Inbound{
+		UserId: 1, Tag: "tls-unavailable", Protocol: model.AnyTLS, Enable: true, Port: 9446,
+		Settings:       `{"clients":[{"email":"extended","enable":true,"password":"test-password"}]}`,
+		StreamSettings: `{"externalProxy":[{"dest":"broken.example","port":9446,"forceTls":"none"}]}`,
+	}
+	if err := db.Create(anyTLS).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: record.Id, InboundId: anyTLS.Id}).Error; err != nil {
+		t.Fatal(err)
+	}
 	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{})
-	for _, path := range []string{"/sub/extended", "/json/extended", "/sub/extended?format=hiddify"} {
-		t.Run(path, func(t *testing.T) {
+	for _, tc := range []struct {
+		path, fallback string
+	}{
+		{"/sub/extended", "auto"},
+		{"/sub/extended", "links"},
+		{"/sub/extended", "xray"},
+		{"/json/extended", "auto"},
+		{"/sub/extended?format=hiddify", "links"},
+	} {
+		t.Run(tc.path+"/"+tc.fallback, func(t *testing.T) {
+			path := tc.path
+			importRouter := gin.New()
+			NewSUBController(importRouter.Group("/"), WithSUBJsonEnabled(true), WithSUBFormats("both", tc.fallback))
 			req := httptest.NewRequest(http.MethodGet, path, nil)
-			if !strings.HasSuffix(path, "format=hiddify") {
+			if strings.HasSuffix(path, "format=hiddify") {
+				req.Header.Set("Accept", "text/html")
+			} else {
 				req.Header.Set("User-Agent", "HiddifyNext/5.9.15 (linux) like ClashMeta v2ray sing-box")
 			}
 			response := httptest.NewRecorder()
-			router.ServeHTTP(response, req)
+			importRouter.ServeHTTP(response, req)
 			var profile struct {
 				Outbounds []map[string]any
 				Endpoints []map[string]any
@@ -252,8 +280,8 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 			if len(want) != 0 || len(profile.Endpoints) != 1 || profile.Endpoints[0]["type"] != "awg" {
 				t.Fatalf("missing Hiddify profiles: %s", response.Body.String())
 			}
-			if path == "/sub/extended" {
-				assertUpstreamHiddifyBuildsSubscription(t, response.Body.Bytes())
+			if path == "/sub/extended" && tc.fallback == "links" {
+				assertUpstreamHiddifyParsesSubscription(t, response.Body.Bytes())
 			}
 		})
 	}
@@ -303,9 +331,9 @@ func assertOwnerCoreAcceptsSubscription(t *testing.T, data string) {
 	}
 }
 
-// The official distribution uses build to import a subscription. The panel's
-// pinned core also has a separate check command exercised by the existing CI.
-func assertUpstreamHiddifyBuildsSubscription(t *testing.T, data []byte) {
+// Use the official profile parser, which also validates the imported
+// configuration. The pinned panel core has a separate check command.
+func assertUpstreamHiddifyParsesSubscription(t *testing.T, data []byte) {
 	t.Helper()
 	binary := os.Getenv("HIDDIFY_UPSTREAM_TEST_BINARY")
 	if binary == "" {
@@ -316,7 +344,7 @@ func assertUpstreamHiddifyBuildsSubscription(t *testing.T, data []byte) {
 	if err := os.WriteFile(input, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(binary, "build", "-c", input, "-o", output)
+	cmd := exec.Command(binary, "parse", input, "-o", output)
 	cmd.Dir = dir
 	if result, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("upstream Hiddify rejected the subscription: %v %s", err, result)

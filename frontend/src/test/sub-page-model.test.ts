@@ -107,6 +107,17 @@ describe('detectPlatform', () => {
 describe('buildSubApps', () => {
   const subUrl = 'https://sub.example.com/sub/abc?token=1';
 
+  it('keeps subscription URL parameters and respects Xray-only mode', () => {
+    const original = `${subUrl}&key=a%2Bb&format=all#old`;
+    const [hiddify] = buildSubApps('android', original, 'New');
+    const deepLink = new URL(hiddify.url!);
+    expect(deepLink.searchParams.get('url')).toBe(`${subUrl}&key=a%2Bb&format=hiddify`);
+    expect(deepLink.hash).toBe('#New');
+
+    const [xray] = buildSubApps('android', subUrl, 'Xray', 'xray');
+    expect(new URL(xray.url!).searchParams.get('url')).toBe(subUrl);
+  });
+
   it.each([
     ['android', 'app.hiddify.com', 'com.happproxy', 'org.amnezia.awg'],
     ['ios', 'id6596777532', 'id6504287215', 'id6478942365?platform=iphone'],
@@ -129,8 +140,8 @@ describe('buildSubApps', () => {
       const apps = buildSubApps(platform, subUrl, 'Nova Net');
       expect(apps.map((app) => app.name)).toEqual(['Hiddify', 'Hiddify Beta', 'Happ', 'AmneziaWG']);
       expect(apps.map((app) => app.url)).toEqual([
-        `hiddify://import/${subUrl}#Nova%20Net`,
-        `hiddify://import/${subUrl}#Nova%20Net`,
+        `hiddify://import/?url=${encodeURIComponent(subUrl + '&format=hiddify')}#Nova%20Net`,
+        `hiddify://import/?url=${encodeURIComponent(subUrl + '&format=hiddify')}#Nova%20Net`,
         `happ://add/${subUrl}`,
         undefined,
       ]);

@@ -117,8 +117,18 @@ const AMNEZIAWG_DOWNLOADS: Record<AppPlatform, AppDownload[]> = {
   linux: [{ label: 'GitHub', href: 'https://github.com/amnezia-vpn/amneziawg-tools' }],
 };
 
-export function buildSubApps(platform: AppPlatform, subUrl: string, profileName: string) {
-  const hiddifyImport = `hiddify://import/${subUrl}#${encodeURIComponent(profileName)}`;
+export function buildSubApps(
+  platform: AppPlatform,
+  subUrl: string,
+  profileName: string,
+  subFormatMode = 'both',
+) {
+  const hiddifyUrl = URL.canParse(subUrl) ? new URL(subUrl) : undefined;
+  if (hiddifyUrl) {
+    if (subFormatMode !== 'xray') hiddifyUrl.searchParams.set('format', 'hiddify');
+    hiddifyUrl.hash = '';
+  }
+  const hiddifyImport = `hiddify://import/?url=${encodeURIComponent(hiddifyUrl?.href ?? subUrl)}#${encodeURIComponent(profileName)}`;
 
   return [
     { name: 'Hiddify', url: hiddifyImport, downloads: HIDDIFY_DOWNLOADS[platform] },

@@ -8,6 +8,7 @@ import { APP_PLATFORMS, buildSubApps, type AppPlatform } from './subPageModel';
 
 interface SubAppsTabProps {
   subUrl: string;
+  subFormatMode?: string;
   profileName: string;
   initialPlatform: AppPlatform;
   onOpenAmneziaWG?: () => void;
@@ -20,12 +21,14 @@ const PLATFORM_OPTIONS = (Object.keys(APP_PLATFORMS) as AppPlatform[]).map((valu
 
 export default function SubAppsTab({
   subUrl,
+  subFormatMode,
   profileName,
   initialPlatform,
   onOpenAmneziaWG,
 }: SubAppsTabProps) {
   const { t } = useTranslation();
   const [platform, setPlatform] = useState(initialPlatform);
+  const apps = buildSubApps(platform, subUrl, profileName, subFormatMode);
 
   return (
     <div className="sub-apps">
@@ -38,7 +41,7 @@ export default function SubAppsTab({
       />
       {(platform === 'ios' || platform === 'macos') && <SubAppleRegionHelp platform={platform} />}
       <ul className="sub-app-list">
-        {buildSubApps(platform, subUrl, profileName).map(({ name, url, downloads }) => (
+        {apps.map(({ name, url, downloads }) => (
           <li key={name} className="sub-row sub-app-row">
             <span className="sub-app-name">{name}</span>
             <div className="sub-app-actions">

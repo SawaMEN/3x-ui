@@ -563,6 +563,16 @@ func (a *SUBController) subs(c *gin.Context) {
 	if !a.enforceHwid(c) {
 		return
 	}
+	// A known Hiddify client can import these profiles even when the default
+	// for unknown clients is raw links or Xray JSON.
+	if format == "" && a.formatAllowed(c, "sing-box") &&
+		strings.Contains(strings.ToLower(userAgent), "hiddify") &&
+		a.hasHiddifyNativeSubscription(c.Param("subid")) &&
+		a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
+		a.recordSubscriptionFetch(c)
+		logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
+		return
+	}
 	// MASQUE has no portable URI scheme. Serve the whole selected subscription
 	// as native JSON by default so unknown User-Agents do not silently lose it.
 	// The all-links export can still carry URI-only siblings when no native
@@ -600,12 +610,6 @@ func (a *SUBController) subs(c *gin.Context) {
 		return
 	}
 	if format != "links" && format != "all" && format != "standalone" {
-		if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasHiddifyNativeSubscription(c.Param("subid")) &&
-			a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
-			a.recordSubscriptionFetch(c)
-			logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
-			return
-		}
 		// MASQUE endpoints and ShadowTLS detours require native JSON for sing-box clients.
 		if wantsNativeSingBox(userAgent) && a.hasNativeSingBoxSubscription(c.Param("subid")) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
 			a.recordSubscriptionFetch(c)

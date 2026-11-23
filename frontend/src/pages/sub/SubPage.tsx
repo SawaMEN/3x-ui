@@ -204,6 +204,7 @@ export default function SubPage() {
           <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
             <SubAppsTab
               subUrl={subUrl}
+              subFormatMode={subData.subFormatMode}
               profileName={subTitle || sId}
               initialPlatform={initialPlatform}
               onOpenAmneziaWG={amneziaWGConfigs.size > 0 ? openAmneziaWG : undefined}
