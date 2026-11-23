@@ -16,6 +16,7 @@ export default function DomainEditor({
   draft,
   compatible,
   primaryDomain,
+  coverBlocked,
   setPrimaryDomain,
   tab,
   onTab,
@@ -28,6 +29,7 @@ export default function DomainEditor({
   draft: DomainConfigForm;
   compatible: { id: number; remark?: string; network?: string; port?: number }[];
   primaryDomain: boolean;
+  coverBlocked: (name: string, mode: string) => string | undefined;
   setPrimaryDomain: (value: boolean) => void;
   tab: string;
   onTab: (value: string) => void;
@@ -39,7 +41,9 @@ export default function DomainEditor({
   const mode = Form.useWatch('mode', form);
   const siteCatalog = Form.useWatch('siteCatalog', form);
   const tls = Form.useWatch('tls', form);
-  const supportsCover = !!mode && mode !== 'shared_sni' && mode !== 'cert_only';
+  const name = Form.useWatch('name', form);
+  const coverBlock = mode ? coverBlocked(name || '', mode) : undefined;
+  const supportsCover = !!mode && !coverBlock;
   return (
     <Drawer
       open={open}
@@ -169,6 +173,9 @@ export default function DomainEditor({
                         : 'Issues and renews a certificate via DNS-01 on this node without a website or public listeners.'
                       : mode && label(`modeDesc.${mode}`)}
                   </Typography.Paragraph>
+                  {coverBlock && mode !== 'shared_sni' && mode !== 'cert_only' && (
+                    <Typography.Paragraph type="secondary">{coverBlock}</Typography.Paragraph>
+                  )}
                   {mode === 'relay' && (
                     <Form.Item
                       name="origin"
@@ -317,8 +324,8 @@ export default function DomainEditor({
                                         ? Promise.reject(
                                             new Error(
                                               i18n.language.startsWith('ru')
-                                                ? 'Укажите полный HTML до 256 КБ'
-                                                : 'Enter a full HTML document up to 256 KiB',
+                                                ? 'Укажите полный HTML до 1 МиБ'
+                                                : 'Enter a full HTML document up to 1 MiB',
                                             ),
                                           )
                                         : Promise.resolve(),

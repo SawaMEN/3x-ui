@@ -451,6 +451,22 @@ export default function DomainFrontTab({
     }
   }
 
+  function coverBlocked(name: string, mode: string): string | undefined {
+    const ru = i18n.language.startsWith('ru');
+    const host = name.trim().toLowerCase().replace(/\.$/, '');
+    if (mode === 'shared_sni' || mode === 'cert_only')
+      return ru ? 'Этот домен не обслуживает локальный сайт.' : 'This domain does not serve a local website.';
+    if (host.startsWith('*.'))
+      return ru ? 'Для сайта укажите конкретный домен, без wildcard.' : 'Use a concrete hostname, not a wildcard.';
+    if (draft.httpsPort === 443 && telemtSites.length)
+      return ru ? 'TCP 443 занят Telemt WEB. Используйте другой порт шлюза.' : 'Telemt WEB owns TCP 443. Choose a different gateway port.';
+    const panelHost = allSetting?.webDomain.trim().toLowerCase().replace(/\.$/, '');
+    if (host && host === panelHost && allSetting?.webPort === draft.httpsPort &&
+        (!allSetting.webBasePath || allSetting.webBasePath === '/'))
+      return ru ? 'Укажите отдельный путь панели или порт шлюза.' : 'Configure a separate panel path or gateway port.';
+    return undefined;
+  }
+
   function openPreset(preset: DomainPreset) {
     if (!initialized || busy || preflighting) return;
     openEditor(-1, preset === 'sni', preset === 'shared');
@@ -522,6 +538,11 @@ export default function DomainFrontTab({
     const old = editing != null && editing >= 0 ? draft.domains[editing] : undefined;
     const supportsCover = value.mode !== 'shared_sni' && value.mode !== 'cert_only';
     const siteCatalog = supportsCover ? value.siteCatalog || '' : '';
+    const blocked = coverBlocked(value.name, value.mode);
+    if (supportsCover && (siteCatalog || value.mode === 'sni_only') && blocked) {
+      messageApi.error(blocked);
+      return;
+    }
     const domain = DomainFormSchema.parse({
       ...defaultDomain,
       ...value,
@@ -1448,6 +1469,7 @@ export default function DomainFrontTab({
         draft={draft}
         compatible={compatible}
         primaryDomain={primaryDomain}
+        coverBlocked={coverBlocked}
         setPrimaryDomain={setPrimaryDomain}
         tab={editorTab}
         onTab={setEditorTab}

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Alert, Button, Card, Input, Space, Typography } from 'antd';
+import { Alert, Button, Card, Input, Space, Typography, Upload } from 'antd';
 import { useTranslation } from 'react-i18next';
 
-export const COVER_SITE_HTML_MAX_BYTES = 256 * 1024;
+import { COVER_SITE_HTML_MAX_BYTES } from '@/schemas/cover-site-html';
+export { COVER_SITE_HTML_MAX_BYTES } from '@/schemas/cover-site-html';
 
 // A complete, responsive example that can be edited before publishing.
 export const starterCoverSiteHTML = `<!doctype html>
@@ -48,6 +49,7 @@ export default function CoverSiteHTMLEditor({ value = '', onChange = () => {}, d
   const { i18n } = useTranslation();
   const ru = i18n.language.startsWith('ru');
   const [preview, setPreview] = useState(false);
+  const [fileError, setFileError] = useState<string>();
   const error = coverSiteHTMLValidation(value);
   const bytes = new TextEncoder().encode(value).length;
   return (
@@ -60,6 +62,32 @@ export default function CoverSiteHTMLEditor({ value = '', onChange = () => {}, d
           ? 'Вставьте готовый HTML целиком или измените пример. Для собственного дизайна используйте встроенный CSS. Файлы и адреса сайта настраиваются автоматически.'
           : 'Paste a complete HTML page or edit the example. You can embed CSS for styling. Hosting and domain settings are handled automatically.'}
       </Typography.Text>
+      <Upload
+        accept=".html,.htm,text/html"
+        showUploadList={false}
+        disabled={disabled}
+        beforeUpload={async (file) => {
+          setFileError(undefined);
+          if (file.size > COVER_SITE_HTML_MAX_BYTES) {
+            setFileError(ru ? 'Максимальный размер — 1 МиБ' : 'Maximum size is 1 MiB');
+            return Upload.LIST_IGNORE;
+          }
+          try {
+            const html = await file.text();
+            if (coverSiteHTMLValidation(html)) {
+              setFileError(ru ? 'Нужен корректный HTML до 1 МиБ' : 'Enter valid HTML up to 1 MiB');
+            } else {
+              onChange(html);
+            }
+          } catch {
+            setFileError(ru ? 'Не удалось прочитать файл' : 'Could not read the file');
+          }
+          return Upload.LIST_IGNORE;
+        }}
+      >
+        <Button disabled={disabled}>{ru ? 'Выбрать HTML-файл' : 'Choose HTML file'}</Button>
+      </Upload>
+      {fileError && <Alert type="warning" showIcon title={fileError} />}
       <Input.TextArea
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -71,7 +99,8 @@ export default function CoverSiteHTMLEditor({ value = '', onChange = () => {}, d
       />
       <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
         <Typography.Text type={error === 'size' ? 'danger' : 'secondary'}>
-          {new Intl.NumberFormat(ru ? 'ru-RU' : 'en-US').format(bytes)} / 262 144{' '}
+          {new Intl.NumberFormat(ru ? 'ru-RU' : 'en-US').format(bytes)} /{' '}
+          {new Intl.NumberFormat(ru ? 'ru-RU' : 'en-US').format(COVER_SITE_HTML_MAX_BYTES)}{' '}
           {ru ? 'байт' : 'bytes'}
         </Typography.Text>
         <Button size="small" onClick={() => setPreview((current) => !current)}>
@@ -91,8 +120,8 @@ export default function CoverSiteHTMLEditor({ value = '', onChange = () => {}, d
           title={
             error === 'size'
               ? ru
-                ? 'Максимальный размер — 256 КБ'
-                : 'Maximum size is 256 KiB'
+                ? 'Максимальный размер — 1 МиБ'
+                : 'Maximum size is 1 MiB'
               : ru
                 ? 'Нужен полный HTML-документ с тегом <html>'
                 : 'A full HTML document with an <html> tag is required'

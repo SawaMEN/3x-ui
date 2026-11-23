@@ -115,6 +115,12 @@ func DefaultConfig() DomainFrontConfig {
 	return DomainFrontConfig{Listen: "0.0.0.0", HTTPPort: 80, HTTPSPort: 443, PublicPort: 443, Domains: []DomainFrontDomain{}}
 }
 
+// CoverSiteHTMLMaxBytes bounds raw UTF-8 HTML for all local websites.
+const CoverSiteHTMLMaxBytes = 1 << 20
+
+// CoverSiteRequestMaxBytes allows six-byte JSON escapes and metadata.
+const CoverSiteRequestMaxBytes = 8 << 20
+
 var coverSiteHTMLDocument = regexp.MustCompile(`(?i)<html(?:\s|>)`)
 
 func (c *DomainFrontConfig) Validate() error { return c.ValidateWithCertificates(nil) }
@@ -218,14 +224,17 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		default:
 			return fmt.Errorf("unknown domain mode: %s", d.Mode)
 		}
+		if wildcard && (d.SiteCatalog != "" || d.SiteTemplate != "" || d.SiteHTML != "") {
+			return fmt.Errorf("%s: select a concrete hostname for a cover site", d.Name)
+		}
 		if d.Mode != "cert_only" {
 			if (d.SiteCatalog == "") != (d.SiteTemplate == "") {
 				return fmt.Errorf("%s: cover site catalog and template must be selected together", d.Name)
 			}
 			if d.SiteCatalog == "custom" {
-				if d.SiteTemplate != "html" || len(d.SiteHTML) == 0 || len(d.SiteHTML) > 256*1024 ||
+				if d.SiteTemplate != "html" || len(d.SiteHTML) == 0 || len(d.SiteHTML) > CoverSiteHTMLMaxBytes ||
 					strings.ContainsRune(d.SiteHTML, '\x00') || !coverSiteHTMLDocument.MatchString(d.SiteHTML) {
-					return fmt.Errorf("%s: custom site requires a complete HTML document (up to 256 KiB)", d.Name)
+					return fmt.Errorf("%s: custom site requires a complete HTML document (up to 1 MiB)", d.Name)
 				}
 			} else if d.SiteHTML != "" {
 				return fmt.Errorf("%s: HTML is only allowed with the custom site template", d.Name)

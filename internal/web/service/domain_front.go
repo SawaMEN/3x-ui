@@ -553,7 +553,7 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 			continue
 		}
 		if d.HasCoverSite() {
-			if cfg.Enabled && d.Mode != "sni_only" && sharesPanelHTTPS && d.Name == backend.PanelHost &&
+			if cfg.Enabled && (d.Mode != "sni_only" || d.SiteCatalog != "") && sharesPanelHTTPS && d.Name == backend.PanelHost &&
 				(backend.PanelPath == "" || backend.PanelPath == "/") {
 				return backend, fmt.Errorf("cover site %s: configure a non-root panel path or separate panel port", d.Name)
 			}
