@@ -659,7 +659,7 @@ func TestCertificatePreparationFailureIsReported(t *testing.T) {
 func TestPanelListenerSharesHostnameWithCoverSite(t *testing.T) {
 	const host = "panel.example.org"
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>cover</html>"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>cover</html>"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	manager := &Manager{runtime: &frontRuntime{

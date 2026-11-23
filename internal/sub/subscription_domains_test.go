@@ -197,5 +197,4 @@ func TestManagedSubscriptionPageServesTLSOnConfiguredPort(t *testing.T) {
 			t.Fatalf("standalone subscription (restart=%t): status %d", restart, resp.StatusCode)
 		}
 	}
-
 }
