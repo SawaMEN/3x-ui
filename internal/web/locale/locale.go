@@ -44,6 +44,9 @@ func InitLocalizer(i18nFS fs.FS, settingService SettingService) error {
 	if err := parseTranslationFiles(i18nFS, i18nBundle); err != nil {
 		return err
 	}
+	// Default to English for legacy context-free web callers; requests use
+	// their own localizer through the middleware instead of modifying this.
+	LocalizerWeb = i18n.NewLocalizer(i18nBundle, "en-US")
 
 	// setup bot locale
 	if err := initTGBotLocalizer(settingService); err != nil {
@@ -63,6 +66,9 @@ func createTemplateData(params []string, separator ...string) map[string]any {
 	templateData := make(map[string]any)
 	for _, param := range params {
 		parts := strings.SplitN(param, sep, 2)
+		if len(parts) != 2 || parts[0] == "" {
+			continue
+		}
 		templateData[parts[0]] = parts[1]
 	}
 
@@ -154,6 +160,7 @@ func LocalizerMiddleware() gin.HandlerFunc {
 			if err := loadTranslationsFromDisk(i18nBundle); err != nil {
 				logger.Warning("i18n lazy load failed:", err)
 			}
+			LocalizerWeb = i18n.NewLocalizer(i18nBundle, "en-US")
 		}
 		var lang string
 
@@ -163,10 +170,23 @@ func LocalizerMiddleware() gin.HandlerFunc {
 			lang = c.GetHeader("Accept-Language")
 		}
 
-		LocalizerWeb = i18n.NewLocalizer(i18nBundle, lang)
-
-		c.Set("localizer", LocalizerWeb)
-		c.Set("I18n", I18n)
+		// Capture a localizer for each request. A shared LocalizerWeb pointer
+		// can return another user's language under concurrent requests.
+		localizer := i18n.NewLocalizer(i18nBundle, lang)
+		c.Set("localizer", localizer)
+		c.Set("I18n", func(kind I18nType, key string, params ...string) string {
+			if kind != Web {
+				return I18n(kind, key, params...)
+			}
+			msg, err := localizer.Localize(&i18n.LocalizeConfig{
+				MessageID: key, TemplateData: createTemplateData(params),
+			})
+			if err != nil {
+				logger.Errorf("Failed to localize web message: %v", err)
+				return ""
+			}
+			return msg
+		})
 		c.Next()
 	}
 }

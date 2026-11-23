@@ -6,7 +6,7 @@ import { createInstance } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
 /*
- * Guards the 14-locale translation set two ways: every key in en-US must be
+ * Guards the available translation set: every key in en-US must be
  * referenced somewhere in the frontend or Go sources (dead keys accumulate
  * silently — this test deleted over two hundred of them when it was
  * introduced), and every locale must carry exactly the en-US key set
@@ -96,9 +96,60 @@ describe('i18n keys', () => {
     const dead = enKeys.filter(
       (key) => !tokens.has(key) && !prefixes.some((p) => key.startsWith(p)),
     );
-    expect(dead, `dead i18n keys (delete from all 14 locales):\n  ${dead.join('\n  ')}`).toEqual(
+    expect(dead, `dead i18n keys (delete from all locales):\n  ${dead.join('\n  ')}`).toEqual(
       [],
     );
+  });
+
+  it('keeps interpolation placeholders identical across translations', () => {
+    const flattenValues = (obj: Record<string, unknown>, prefix = ''): Record<string, string> =>
+      Object.entries(obj).reduce<Record<string, string>>((out, [key, value]) => {
+        const path = prefix ? `${prefix}.${key}` : key;
+        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+          Object.assign(out, flattenValues(value as Record<string, unknown>, path));
+        } else if (typeof value === 'string') {
+          out[path] = value;
+        }
+        return out;
+      }, {});
+    const enValues = flattenValues(enUS);
+    const placeholders = (value: string) =>
+      [...value.matchAll(/\{\{[^{}]*\}\}|\{[A-Za-z_][\w.]*\}/g)]
+        .map((match) => match[0])
+        .sort();
+
+    for (const file of readdirSync(translationDir).filter((entry) => entry.endsWith('.json'))) {
+      const values = flattenValues(JSON.parse(readFileSync(join(translationDir, file), 'utf8')));
+      for (const key of enKeys) {
+        expect(values[key]?.trim(), `${file}: blank translation ${key}`).toBeTruthy();
+        expect(placeholders(values[key]), `${file}: placeholders differ in ${key}`).toEqual(
+          placeholders(enValues[key]),
+        );
+      }
+    }
+  });
+
+  it('does not expose English error prose in the Russian interface', () => {
+    const ruValues = JSON.parse(readFileSync(join(translationDir, 'ru-RU.json'), 'utf8'));
+    const flattenValues = (obj: Record<string, unknown>, prefix = ''): Record<string, string> =>
+      Object.entries(obj).reduce<Record<string, string>>((out, [key, value]) => {
+        const path = prefix ? `${prefix}.${key}` : key;
+        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+          Object.assign(out, flattenValues(value as Record<string, unknown>, path));
+        } else if (typeof value === 'string') {
+          out[path] = value;
+        }
+        return out;
+      }, {});
+    const errors = Object.entries(flattenValues(ruValues))
+      .filter(([key]) => /error|fail|invalid|missing|require|unable|timeout|denied|incorrect|forbid|expired|reject|busy|notFound|warning|blocked|problem/i.test(key))
+      .filter(([key, value]) =>
+        !['pages.inbounds.toasts.invalidField', 'pages.inbounds.form.tcpUserTimeout'].includes(key) &&
+        /[A-Za-z]{4}/.test(value) &&
+        !/[а-яА-ЯёЁ]/.test(value),
+      )
+      .map(([key]) => key);
+    expect(errors, `untranslated Russian errors:\n  ${errors.join('\n  ')}`).toEqual([]);
   });
 
   it('every locale carries exactly the en-US key set', () => {

@@ -8,8 +8,9 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
 )
 
 func TestGetRemoteIpIgnoresForwardedHeadersFromUntrustedRemote(t *testing.T) {
