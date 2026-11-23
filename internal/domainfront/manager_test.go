@@ -707,10 +707,10 @@ func TestCoverSiteKeepsExistingRoutes(t *testing.T) {
 			_, _ = io.WriteString(w, "subscription")
 		}),
 		SubscriptionPaths: []string{"/sub/"},
-		ProtectedPaths: []string{"/legacy/"},
-		Routes: map[string][]Route{host: {{Path: "/vpn", Target: vpn.URL}}},
-		DecoyDirectories: map[string]string{host: dir},
-		RedirectURL: "https://elsewhere.example.org/",
+		ProtectedPaths:    []string{"/legacy/"},
+		Routes:            map[string][]Route{host: {{Path: "/vpn", Target: vpn.URL}}},
+		DecoyDirectories:  map[string]string{host: dir},
+		RedirectURL:       "https://elsewhere.example.org/",
 	}}
 	h, err := r.handler()
 	if err != nil {
@@ -718,8 +718,8 @@ func TestCoverSiteKeepsExistingRoutes(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		method, path string
-		status int
-		body string
+		status       int
+		body         string
 	}{
 		{"GET", "/", 200, "<html>cover</html>"},
 		{"POST", "/", 404, "404 page not found\n"},
