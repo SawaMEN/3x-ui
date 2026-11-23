@@ -21,8 +21,13 @@ import (
 // must not use the stock sing-box compatibility gate or silently disappear
 // when AnyTLS switches a mixed subscription to native JSON.
 func hiddifyExtendedProtocol(protocol model.Protocol) bool {
+	return officialHiddifyExtendedProtocol(protocol) || protocol == model.FPTN || protocol == model.OpenFlux
+}
+
+// These extensions are registered by the official Hiddify client core.
+func officialHiddifyExtendedProtocol(protocol model.Protocol) bool {
 	switch protocol {
-	case model.Mieru, model.Sudoku, model.TrustTunnel, model.FPTN, model.OpenFlux, model.AmneziaWG:
+	case model.Mieru, model.Sudoku, model.TrustTunnel, model.AmneziaWG:
 		return true
 	}
 	return false
@@ -88,9 +93,6 @@ func (s *SubJsonService) genHiddifyExtendedEndpoint(subReq *SubService, ib *mode
 			handshake = "HANDSHAKE_STANDARD"
 		}
 		ob["multiplexing"], ob["handshake_mode"] = multiplexing, handshake
-		if mtu, ok := settings["mtu"]; ok {
-			ob["mtu"] = mtu
-		}
 	case model.Sudoku:
 		// Reuse the canonical short-link payload to preserve defaults, client keys,
 		// HTTP masking and endpoint overrides in both export formats.
@@ -114,13 +116,16 @@ func (s *SubJsonService) genHiddifyExtendedEndpoint(subReq *SubService, ib *mode
 		if json.Unmarshal(payloadRaw, &payload) != nil {
 			return nil
 		}
-		for source, target := range map[string]string{"k": "key", "a": "ascii", "e": "aead", "ts": "custom_tables"} {
+		for source, target := range map[string]string{"k": "key", "a": "table_type", "e": "aead_method", "t": "custom_table", "ts": "custom_tables"} {
 			if v, ok := payload[source]; ok {
 				ob[target] = v
 			}
 		}
-		if table, ok := payload["t"]; ok {
-			ob["custom_tables"] = []any{table}
+		switch ob["table_type"] {
+		case "ascii":
+			ob["table_type"] = "prefer_ascii"
+		case "entropy":
+			ob["table_type"] = "prefer_entropy"
 		}
 		ob["enable_pure_downlink"] = payload["x"] != true
 		for source, target := range map[string]string{"paddingMin": "padding_min", "paddingMax": "padding_max"} {
@@ -128,13 +133,21 @@ func (s *SubJsonService) genHiddifyExtendedEndpoint(subReq *SubService, ib *mode
 				ob[target] = v
 			}
 		}
-		mask := map[string]any{}
-		for source, target := range map[string]string{"hd": "disable", "hm": "mode", "ht": "tls", "hh": "host", "hy": "path_root", "hx": "multiplex"} {
+		mask := map[string]any{"enabled": payload["hd"] != true}
+		for source, target := range map[string]string{"hm": "mode", "hh": "host", "hy": "path_root", "hx": "multiplex"} {
 			if v, ok := payload[source]; ok {
 				mask[target] = v
 			}
 		}
-		ob["httpmask"] = mask
+		if payload["ht"] == true {
+			tls := map[string]any{"enabled": true}
+			if sni, ok := externalProxySNI(ep.ep); ok {
+				tls["server_name"] = sni
+			}
+			applyNativeTLSHostOptions(tls, ep.ep)
+			mask["tls"] = tls
+		}
+		ob["http_mask"] = mask
 	case model.TrustTunnel:
 		if ep.ForceTls == "none" {
 			return nil

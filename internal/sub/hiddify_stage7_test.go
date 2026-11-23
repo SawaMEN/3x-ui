@@ -89,6 +89,14 @@ func TestHiddifySubscriptionXHTTPPreservesIdentity(t *testing.T) {
 	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &served) != nil || !strings.Contains(response.Body.String(), `"type": "xhttp"`) {
 		t.Fatalf("existing subscription URL failed: %d %s", response.Code, response.Body.String())
 	}
+	request = httptest.NewRequest(http.MethodGet, "/sub/"+record.SubID, nil)
+	request.Header.Set("User-Agent", "Hiddify/2.0")
+	request.Header.Set("Accept", "text/html,*/*")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || strings.Contains(response.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("Hiddify received a browser page: %d %s", response.Code, response.Header().Get("Content-Type"))
+	}
 	var after model.ClientRecord
 	if err := db.First(&after, record.Id).Error; err != nil {
 		t.Fatal(err)

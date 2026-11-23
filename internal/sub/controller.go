@@ -40,7 +40,7 @@ func writeSubError(c *gin.Context, err error) {
 		c.Status(http.StatusNotFound)
 		return
 	}
-	logger.Warningf("Subscription request failed (format=%q, error=%T)", subscriptionFormat(c), err)
+	logger.Warningf("Subscription request failed (error=%T)", err)
 	c.Status(http.StatusInternalServerError)
 }
 
@@ -585,7 +585,6 @@ func (a *SUBController) subs(c *gin.Context) {
 		logSubscriptionRoute(userAgent, format+"-json")
 		return
 	}
-	isHiddify := strings.Contains(strings.ToLower(userAgent), "hiddify")
 	if format == "" && a.maybeServeSubPage(c) {
 		logSubscriptionRoute(userAgent, "html")
 		return
@@ -610,14 +609,6 @@ func (a *SUBController) subs(c *gin.Context) {
 	}
 	if format == "" {
 		format = a.defaultBodyFormat(c)
-		if (format == "" || format == "auto") && isHiddify && a.hasHiddifyNativeSubscription(c.Param("subid")) {
-			c.Set("subscriptionFormat", "hiddify")
-			if a.serveJsonBody(c, false, "application/json; charset=utf-8", false, true) {
-				a.recordSubscriptionFetch(c)
-				logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
-				return
-			}
-		}
 		c.Set("subscriptionFormat", format)
 	}
 	if format == "xray" || format == "sing-box" {
@@ -638,6 +629,12 @@ func (a *SUBController) subs(c *gin.Context) {
 		return
 	}
 	if format != "links" && format != "all" && format != "standalone" {
+		if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasHiddifyNativeSubscription(c.Param("subid")) &&
+			a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
+			a.recordSubscriptionFetch(c)
+			logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
+			return
+		}
 		// MASQUE endpoints and ShadowTLS detours require native JSON for sing-box clients.
 		if wantsNativeSingBox(userAgent) && a.hasNativeSingBoxSubscription(c.Param("subid")) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
 			a.recordSubscriptionFetch(c)
@@ -727,7 +724,7 @@ func (a *SUBController) hasHiddifyNativeSubscription(subID string) bool {
 		return false
 	}
 	for _, inbound := range inbounds {
-		if !hiddifyExtendedProtocol(inbound.Protocol) && inbound.Protocol != model.MASQUE && inbound.Protocol != model.WireGuard && !containsNativeTLSSubscription([]*model.Inbound{inbound}) && !usesXDriveTransport(inbound) {
+		if !officialHiddifyExtendedProtocol(inbound.Protocol) && inbound.Protocol != model.MASQUE && inbound.Protocol != model.WireGuard && inbound.Protocol != model.NaiveProxy && !containsNativeTLSSubscription([]*model.Inbound{inbound}) && !usesXDriveTransport(inbound) {
 			continue
 		}
 		for _, client := range req.matchingClients(inbound, subID) {
@@ -1081,10 +1078,9 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 	var err error
 	format := subscriptionFormat(c)
 	isHiddify := strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify")
-	// Hiddify needs native sing-box JSON for AnyTLS and ShadowTLS even if the
-	// user imported the panel's /json/ subscription path. Plain Xray JSON
-	// cannot encode either protocol. An explicit format also works when the
-	// importing app does not identify itself in User-Agent.
+	// Negotiate native Hiddify JSON for profiles that need it, including on
+	// the legacy /json/ path. An explicit format can also select it without
+	// relying on the importing app's User-Agent.
 	native := forceSingBox || format == "sing-box" || format == "hiddify" || (format != "xray" && (isHiddify && a.hasHiddifyNativeSubscription(subId) || wantsNativeSingBox(c.Request.UserAgent()) && a.hasNativeSingBoxSubscription(subId)))
 	if !native && a.hasEnabledMASQUESubscription(subId) {
 		writeMASQUEFormatError(c)
@@ -1094,7 +1090,8 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 		return false
 	}
 	if format == "hiddify" || (isHiddify && native && format != "xray") {
-		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, false, true, format == "hiddify" || format == "sing-box", format != "all")
+		compatible := format != "all"
+		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, false, true, compatible, compatible)
 	} else if native {
 		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, alwaysReturnArray, false, format == "sing-box", format != "all")
 	} else {
