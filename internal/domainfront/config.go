@@ -29,6 +29,18 @@ type DomainFrontDomain struct {
 	SiteHTML     string `json:"siteHtml,omitempty"`
 }
 
+// HasCoverSite reports whether this domain serves a local website.
+func (d DomainFrontDomain) HasCoverSite() bool {
+	switch d.Mode {
+	case "sni_only":
+		return true
+	case "direct", "cdn", "relay", "sub_link_only":
+		return d.SiteCatalog != "" && d.SiteTemplate != ""
+	default:
+		return false
+	}
+}
+
 type DomainFrontConfig struct {
 	Enabled            bool                `json:"enabled"`
 	Listen             string              `json:"listen"`
@@ -190,6 +202,9 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		}
 		names[d.Name] = true
 		if d.Mode == "shared_sni" {
+			if d.SiteCatalog != "" || d.SiteTemplate != "" || d.SiteHTML != "" {
+				return fmt.Errorf("%s: external SNI domains cannot configure a local cover site", d.Name)
+			}
 			// A foreign cover site is registered on the controlling panel only.
 			// It must never issue a certificate or serve traffic from here.
 			if d.Panel || len(d.InboundIDs) != 0 || strings.TrimSpace(d.Origin) != "" {
@@ -203,7 +218,7 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		default:
 			return fmt.Errorf("unknown domain mode: %s", d.Mode)
 		}
-		if d.Mode == "sni_only" {
+		if d.Mode != "cert_only" {
 			if (d.SiteCatalog == "") != (d.SiteTemplate == "") {
 				return fmt.Errorf("%s: cover site catalog and template must be selected together", d.Name)
 			}
@@ -216,7 +231,7 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 				return fmt.Errorf("%s: HTML is only allowed with the custom site template", d.Name)
 			}
 		} else if d.SiteCatalog != "" || d.SiteTemplate != "" || d.SiteHTML != "" {
-			return fmt.Errorf("%s: only SNI-only domains can select a cover site template", d.Name)
+			return fmt.Errorf("%s: certificate-only domains cannot select a cover site template", d.Name)
 		}
 		switch d.TLS {
 		case "auto", "certmagic", "existing":

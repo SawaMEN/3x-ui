@@ -39,6 +39,7 @@ export default function DomainEditor({
   const mode = Form.useWatch('mode', form);
   const siteCatalog = Form.useWatch('siteCatalog', form);
   const tls = Form.useWatch('tls', form);
+  const supportsCover = !!mode && mode !== 'shared_sni' && mode !== 'cert_only';
   return (
     <Drawer
       open={open}
@@ -127,7 +128,7 @@ export default function DomainEditor({
                               siteTemplate: 'notes',
                               siteHtml: '',
                             });
-                          } else {
+                          } else if (value === 'shared_sni' || value === 'cert_only') {
                             form.setFieldsValue({
                               siteCatalog: '',
                               siteTemplate: '',
@@ -211,7 +212,7 @@ export default function DomainEditor({
                 </>
               ),
             },
-            ...(mode === 'sni_only'
+            ...(supportsCover
               ? [
                   {
                     key: 'site',
@@ -219,7 +220,7 @@ export default function DomainEditor({
                     forceRender: true,
                     children: (
                       <>
-                        {mode === 'sni_only' && (
+                        {supportsCover && (
                           <>
                             <Form.Item
                               name="siteCatalog"
@@ -231,6 +232,14 @@ export default function DomainEditor({
                             >
                               <Select
                                 options={[
+                                  ...(mode === 'sni_only'
+                                    ? []
+                                    : [{
+                                        value: '',
+                                        label: i18n.language.startsWith('ru')
+                                          ? 'Без сайта-заглушки'
+                                          : 'No cover site',
+                                      }]),
                                   ...Object.entries(TelemtWebCatalogs).map(([value, entry]) => ({
                                     value,
                                     label: i18n.language.startsWith('ru') ? entry.ru : entry.en,
@@ -242,14 +251,16 @@ export default function DomainEditor({
                                       : 'Custom HTML',
                                   },
                                 ]}
-                                onChange={(value: 'builtin' | 'mtproxyl' | 'custom') => {
+                                onChange={(value: '' | 'builtin' | 'mtproxyl' | 'custom') => {
                                   form.setFieldValue(
                                     'siteTemplate',
-                                    value === 'custom'
-                                      ? 'html'
-                                      : value === 'builtin'
-                                        ? 'notes'
-                                        : 'stub',
+                                    value === ''
+                                      ? ''
+                                      : value === 'custom'
+                                        ? 'html'
+                                        : value === 'builtin'
+                                          ? 'notes'
+                                          : 'stub',
                                   );
                                   if (value === 'custom' && !form.getFieldValue('siteHtml')) {
                                     form.setFieldValue('siteHtml', starterCoverSiteHTML);
@@ -257,6 +268,7 @@ export default function DomainEditor({
                                 }}
                               />
                             </Form.Item>
+                            {(mode === 'sni_only' || !!siteCatalog) && (
                             <Form.Item
                               name="siteTemplate"
                               label={
@@ -292,6 +304,7 @@ export default function DomainEditor({
                                 />
                               )}
                             </Form.Item>
+                            )}
                             {siteCatalog === 'custom' && (
                               <Form.Item
                                 name="siteHtml"

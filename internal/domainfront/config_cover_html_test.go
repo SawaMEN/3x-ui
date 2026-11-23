@@ -28,3 +28,27 @@ func TestSNIOnlyCustomSiteHTMLValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestCoverSiteWithExistingDomainRoles(t *testing.T) {
+	for _, mode := range []string{"direct", "cdn", "relay", "sub_link_only", "shared_sni", "cert_only"} {
+		t.Run(mode, func(t *testing.T) {
+			cfg := DefaultConfig()
+			d := DomainFrontDomain{Name: "site.example.org", Mode: mode, Enabled: true, TLS: "auto",
+				SiteCatalog: "builtin", SiteTemplate: "notes"}
+			if mode == "relay" {
+				d.Origin = "https://origin.example.org"
+			}
+			if mode == "cert_only" {
+				d.TLS = "certmagic"
+			}
+			cfg.Domains = []DomainFrontDomain{d}
+			allowed := mode != "shared_sni" && mode != "cert_only"
+			if err := cfg.Validate(); (err == nil) != allowed {
+				t.Fatalf("mode %s: unexpected validation result: %v", mode, err)
+			}
+			if d.HasCoverSite() != allowed {
+				t.Fatalf("mode %s: unexpected website state", mode)
+			}
+		})
+	}
+}

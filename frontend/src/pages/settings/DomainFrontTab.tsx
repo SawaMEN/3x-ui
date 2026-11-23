@@ -520,6 +520,8 @@ export default function DomainFrontTab({
       return;
     }
     const old = editing != null && editing >= 0 ? draft.domains[editing] : undefined;
+    const supportsCover = value.mode !== 'shared_sni' && value.mode !== 'cert_only';
+    const siteCatalog = supportsCover ? value.siteCatalog || '' : '';
     const domain = DomainFormSchema.parse({
       ...defaultDomain,
       ...value,
@@ -536,10 +538,9 @@ export default function DomainFrontTab({
           ? []
           : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
-      siteCatalog: value.mode === 'sni_only' ? value.siteCatalog || '' : '',
-      siteTemplate: value.mode === 'sni_only' ? value.siteTemplate || '' : '',
-      siteHtml:
-        value.mode === 'sni_only' && value.siteCatalog === 'custom' ? value.siteHtml || '' : '',
+      siteCatalog,
+      siteTemplate: siteCatalog ? value.siteTemplate || '' : '',
+      siteHtml: siteCatalog === 'custom' ? value.siteHtml || '' : '',
       certFile:
         value.tls === 'manual' && value.mode !== 'shared_sni' && value.mode !== 'cert_only'
           ? value.certFile

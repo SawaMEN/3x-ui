@@ -442,7 +442,7 @@ func (r *frontRuntime) redirectHTTPS(w http.ResponseWriter, req *http.Request) {
 	if r.backend.GetRedirect != nil {
 		redirectURL, _ = r.backend.GetRedirect()
 	}
-	if d.Mode != "sni_only" && !r.protectedRedirectPath(d, req.URL.Path) {
+	if d.Mode != "sni_only" && !(d.HasCoverSite() && isCoverSitePath(req.URL.Path)) && !r.protectedRedirectPath(d, req.URL.Path) {
 		if target := RootRedirectTarget(req, redirectURL); target != "" {
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Referrer-Policy", "no-referrer")
@@ -743,14 +743,18 @@ func staticCoverSite(dir string) http.Handler {
 }
 
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
+	var cover http.Handler
+	if d.HasCoverSite() {
+		dir := r.backend.DecoyDirectories[d.Name]
+		if dir == "" {
+			return nil, fmt.Errorf("cover site %s has no prepared website", d.Name)
+		}
+		cover = staticCoverSite(dir)
+	}
 	// SNI-only hosts serve Telemt's generated static website while denying
 	// every panel, subscription and inbound route, even if its path exists.
 	if d.Mode == "sni_only" {
-		dir := r.backend.DecoyDirectories[d.Name]
-		if dir == "" {
-			return nil, fmt.Errorf("SNI site %s has no prepared website", d.Name)
-		}
-		return staticCoverSite(dir), nil
+		return cover, nil
 	}
 	var subscription http.Handler
 	if r.backend.SubscriptionHandler != nil && d.Mode != "relay" {
@@ -828,6 +832,13 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 			// An unmatched legacy/application endpoint must never fall
 			// through to the public decoy. Its former behavior was 404.
 			http.NotFound(w, req)
+			return
+		}
+		if cover != nil && isCoverSitePath(req.URL.Path) {
+			// Isolate website scripts from application cookies and storage on
+			// a hostname that also serves private subscription endpoints.
+			w.Header().Set("Content-Security-Policy", "sandbox allow-scripts; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'")
+			cover.ServeHTTP(w, req)
 			return
 		}
 		redirectURL := r.backend.RedirectURL

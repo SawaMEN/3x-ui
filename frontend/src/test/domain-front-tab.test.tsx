@@ -261,6 +261,19 @@ describe('domain and TLS dashboard', () => {
     expect(f.applied).toBeUndefined();
   });
 
+  it.each(['direct', 'cdn', 'sub_link_only'] as const)(
+    'offers optional cover site for the existing %s domain',
+    async (mode) => {
+      const f = fixture();
+      f.config.domains[0].mode = mode;
+      renderWithProviders(<DomainFrontTab />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+      fireEvent.click(await screen.findByRole('tab', { name: 'Cover site' }));
+      expect(await screen.findByRole('combobox', { name: 'Cover site catalog' })).toBeTruthy();
+      expect(f.applied).toBeUndefined();
+    },
+  );
+
   it('offers one edit action per cover site and keeps its draft in the editor', async () => {
     const f = fixture();
     f.config.domains[0].mode = 'sni_only';
