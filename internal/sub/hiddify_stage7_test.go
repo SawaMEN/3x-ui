@@ -132,3 +132,28 @@ func TestHiddifySubscriptionDuplicateLabels(t *testing.T) {
 		t.Fatal("stored labels mutated")
 	}
 }
+
+func TestHiddifySubscriptionAssignsMissingTags(t *testing.T) {
+	proxies := []map[string]any{
+		{"type": "naive", "tag": ""},
+		{"type": "naive", "tag": "naive"},
+		{"type": "naive", "tag": " "},
+	}
+	body, err := buildHiddifySingBoxSubscription(proxies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Outbounds []struct{ Tag string } `json:"outbounds"`
+	}
+	if err := json.Unmarshal([]byte(body), &config); err != nil {
+		t.Fatal(err)
+	}
+	var tags []string
+	for _, outbound := range config.Outbounds {
+		tags = append(tags, outbound.Tag)
+	}
+	if !reflect.DeepEqual(tags, []string{"naive-2", "naive", "naive-3"}) {
+		t.Fatalf("outbound tags = %v", tags)
+	}
+}

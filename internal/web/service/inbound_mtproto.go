@@ -114,15 +114,20 @@ func (s *InboundService) applyLocalMtproto(inboundId int) {
 	if err := rt.UpdateInbound(context.Background(), inbound, payload); err != nil {
 		logger.Debug("mtproto: immediate client apply failed for inbound", inboundId, ":", err)
 	}
-	if mtproto.WebProxyInbound(inbound) {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
-			defer cancel()
-			if err := ReconcileMtprotoWebProxy(ctx); err != nil {
-				logger.Warning("mtproto: immediate WEB client apply failed:", err)
-			}
-		}()
+	scheduleMtprotoWebApply(inbound)
+}
+
+func scheduleMtprotoWebApply(inbound *model.Inbound) {
+	if inbound.NodeID != nil || !mtproto.WebProxyInbound(inbound) {
+		return
 	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		if err := ReconcileMtprotoWebProxy(ctx); err != nil {
+			logger.Warning("mtproto: immediate WEB apply failed:", err)
+		}
+	}()
 }
 
 func (s *InboundService) resetMtprotoClientQuota(email string) {

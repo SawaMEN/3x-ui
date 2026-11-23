@@ -11,7 +11,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
@@ -164,8 +163,10 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 }
 
 var (
-	mtprotoWebSyncMu    sync.Mutex
+	mtprotoWebSync      = make(chan struct{}, 1)
 	mtprotoWebLastError time.Time
+	mtprotoWebFailedID  int
+	mtprotoWebFailedCfg [sha256.Size]byte
 )
 
 // ReconcileMtprotoWebProxy derives service state from MTProto inbounds.
@@ -179,10 +180,12 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !mtprotoWebSyncMu.TryLock() {
-		return nil
+	select {
+	case mtprotoWebSync <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	defer mtprotoWebSyncMu.Unlock()
+	defer func() { <-mtprotoWebSync }()
 	telemtWebOperationMu.Lock()
 	defer telemtWebOperationMu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -236,12 +239,17 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		return errors.New("mtproto web: legacy WEB Proxy is active; migrate or disable it before creating a managed WEB inbound")
 	}
 	if state.Enabled && state.ManagedInboundID != 0 && state.ManagedInboundID != ib.Id {
-		// Ownership moves in two steps: stop the old frontend first, then
-		// allow the new inbound to acquire port 443 on the next reconcile.
+		// Release the old owner before applying the replacement.
 		if err := disableTelemtWebProxy(); err != nil {
 			return err
 		}
-		return cleanupWebProxyBootUnit()
+		if err := cleanupWebProxyBootUnit(); err != nil {
+			return err
+		}
+		state, err = readState()
+		if err != nil {
+			return err
+		}
 	}
 
 	fingerprint := mtprotoWebFingerprint(ib)
@@ -282,11 +290,20 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		if err := writeTelemtWebState(state); err != nil {
 			return err
 		}
-		return svc.EnsureWebProxyBackend()
+		if err := svc.EnsureWebProxyBackend(); err != nil {
+			return err
+		}
+		if !telemtWebFrontendActive(state) {
+			if err := telemtWebEnsureFrontendRunning(state); err != nil {
+				return err
+			}
+		}
+		return telemtWebWaitFrontendReady(ctx, state)
 	}
 	// Avoid repeatedly attempting certificate issuance on every periodic job
 	// when DNS, ports, or certificate preconditions cannot be satisfied.
-	if time.Since(mtprotoWebLastError) < time.Minute {
+	desired := sha256.Sum256([]byte(ib.Settings))
+	if mtprotoWebFailedID == ib.Id && mtprotoWebFailedCfg == desired && time.Since(mtprotoWebLastError) < time.Minute {
 		return nil
 	}
 	settings := SettingService{}
@@ -306,10 +323,10 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		return err
 	}
 	if _, err := svc.enableWebProxyLocked(ctx, domain, cert, key, normalized); err != nil {
-		mtprotoWebLastError = time.Now()
-		_ = writeTelemtWebState(previousState)
-		return err
+		mtprotoWebLastError, mtprotoWebFailedID, mtprotoWebFailedCfg = time.Now(), ib.Id, desired
+		return withTelemtRollbackError(err, writeTelemtWebState(previousState))
 	}
+	mtprotoWebLastError = time.Time{}
 	state, err = readState()
 	if err != nil {
 		return err

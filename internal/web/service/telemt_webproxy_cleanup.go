@@ -249,14 +249,14 @@ func (TelemtService) EnsureWebProxyBackend() error {
 	var lastErr error
 	for {
 		if systemctl("is-active", "--quiet", telemtServiceName) == nil {
-			request, err := http.NewRequestWithContext(context.Background(), http.MethodHead, "http://"+addr+"/", nil)
+			request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+addr+"/", nil)
 			if err == nil {
 				request.Host = state.Domain
 				var response *http.Response
 				response, err = client.Do(request)
 				if err == nil {
 					_ = response.Body.Close()
-					if telemtWebHealthyDecoyStatus(response.StatusCode) {
+					if telemtWebSiteReady(state, response.StatusCode) {
 						return nil
 					}
 					err = fmt.Errorf("WEB listener returned HTTP %d", response.StatusCode)

@@ -29,3 +29,15 @@ func TestTelemtWebHealthyDecoyStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestPreparedTelemtWebSiteRequiresSuccessfulRoot(t *testing.T) {
+	for _, status := range []int{301, 403, 404, 405, 502} {
+		if telemtWebSiteReady(TelemtWebProxyState{}, status) {
+			t.Errorf("prepared site incorrectly marked ready on HTTP %d", status)
+		}
+	}
+	if !telemtWebSiteReady(TelemtWebProxyState{}, 200) ||
+		!telemtWebSiteReady(TelemtWebProxyState{Site: &TelemtWebSiteOptions{Mode: "origin"}}, 302) {
+		t.Fatal("ready site incorrectly marked unavailable")
+	}
+}

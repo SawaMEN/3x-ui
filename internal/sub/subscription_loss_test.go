@@ -220,15 +220,20 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 	if awg["h1"] != "11" || awg["jc"] != float64(4) || cfg.Endpoints[0]["private_key"] != clientKey {
 		t.Fatalf("AWG identity/options lost: %s", data)
 	}
-	// Ordinary imports exclude extensions, even for Hiddify clients.
+	// The default Hiddify feed includes Mieru and excludes the other sidecars.
 	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{})
 	for _, path := range []string{"/sub/extended", "/json/extended"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("User-Agent", "HiddifyNext/4.0")
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, req)
-		if response.Code != http.StatusOK || response.Body.Len() != 0 {
-			t.Fatalf("default import included extensions: %d %s", response.Code, response.Body.String())
+		var compatible struct {
+			Outbounds []struct{ Type string } `json:"outbounds"`
+			Endpoints []json.RawMessage
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &compatible); response.Code != http.StatusOK || err != nil ||
+			len(compatible.Outbounds) != 1 || compatible.Outbounds[0].Type != "mieru" || len(compatible.Endpoints) != 0 {
+			t.Fatalf("default Hiddify import returned an unexpected profile: %d %s", response.Code, response.Body.String())
 		}
 	}
 	req := httptest.NewRequest(http.MethodGet, "/sub/extended?format=all", nil)

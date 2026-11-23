@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
@@ -167,18 +168,24 @@ func buildHiddifySingBoxSubscription(proxies []map[string]any) (string, error) {
 	reserved := make(map[string]bool, len(proxies))
 	for _, proxy := range proxies {
 		tag, _ := proxy["tag"].(string)
-		if tag == "" {
-			return "", fmt.Errorf("Hiddify subscription has an empty proxy tag")
+		if strings.TrimSpace(tag) != "" {
+			reserved[tag] = true
 		}
-		reserved[tag] = true
 	}
 	usedTags := make(map[string]bool, len(proxies))
 	named := make([]map[string]any, 0, len(proxies))
 	for _, original := range proxies {
 		proxy := maps.Clone(original)
-		base := proxy["tag"].(string)
+		base, _ := proxy["tag"].(string)
+		anonymous := strings.TrimSpace(base) == ""
+		if anonymous {
+			base, _ = proxy["type"].(string)
+			if base == "" {
+				base = "proxy"
+			}
+		}
 		tag := base
-		if usedTags[tag] {
+		if usedTags[tag] || anonymous && reserved[tag] {
 			for suffix := 2; ; suffix++ {
 				tag = fmt.Sprintf("%s-%d", base, suffix)
 				if !usedTags[tag] && !reserved[tag] {

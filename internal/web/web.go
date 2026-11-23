@@ -725,9 +725,11 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	if err != nil {
 		return err
 	}
+	secure := false
 	if certFile != "" || keyFile != "" {
 		cert, err := network.NewFileCertificate(certFile, keyFile)
 		if err == nil {
+			secure = true
 			c := &tls.Config{
 				GetCertificate: service.DomainFrontTLS(cert.GetCertificate, listen, port),
 				NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
@@ -760,7 +762,7 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 
 	s.httpServer = &http.Server{
 		ErrorLog:          logger.StandardLogger(),
-		Handler:           service.DomainFrontHandler(engine, listen, port, certFile != "" && keyFile != ""),
+		Handler:           service.DomainFrontPanelHandler(engine, listen, port, secure),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,

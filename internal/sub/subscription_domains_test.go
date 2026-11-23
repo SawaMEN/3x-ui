@@ -105,7 +105,7 @@ func TestManagedSubscriptionPageServesTLSOnConfiguredPort(t *testing.T) {
 		t.Fatal(err)
 	}
 	for key, value := range map[string]string{
-		"domainFrontConfig": string(raw), "subDomain": name, "subPort": strconv.Itoa(subPort), "subPath": "/sub/",
+		"domainFrontConfig": string(raw), "subDomain": name, "subPort": strconv.Itoa(subPort), "subPath": "/sub/", "subRestrictDomains": "true",
 	} {
 		if err := database.GetDB().Where(model.Setting{Key: key}).Assign(model.Setting{Value: value}).FirstOrCreate(&model.Setting{}).Error; err != nil {
 			t.Fatal(err)
@@ -163,4 +163,39 @@ func TestManagedSubscriptionPageServesTLSOnConfiguredPort(t *testing.T) {
 		}
 		_ = resp.Body.Close()
 	}
+
+	cfg.Enabled = false
+	if _, err := service.ApplyDomainFront(t.Context(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	settings := &service.SettingService{}
+	if got := settings.BuildSubURIBase(name); got != "https://"+host {
+		t.Fatalf("standalone subscription origin after gateway shutdown = %s", got)
+	}
+	for _, restart := range []bool{false, true} {
+		client.CloseIdleConnections()
+		if restart {
+			if err := server.Stop(); err != nil {
+				t.Fatal(err)
+			}
+			if err := server.Start(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(subPort))+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = host
+		req.Header.Set("Accept", "text/html")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || len(resp.TLS.VerifiedChains) == 0 {
+			t.Fatalf("standalone subscription (restart=%t): status %d", restart, resp.StatusCode)
+		}
+	}
+
 }

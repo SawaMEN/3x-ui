@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -382,8 +384,33 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	if err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
-	if panel.SubRestrictDomains && strings.TrimSpace(panel.SubPublicURL) == "" && (!cfg.Enabled || cfg.SubscriptionDomain == "") {
-		return domainfront.DomainFrontStatus{}, fmt.Errorf("restricted subscriptions require a public subscription URL or an enabled gateway subscription domain")
+	manager := managedDomainFront()
+	subFallback := make(map[string]string)
+	oldDomain, hadGatewaySubscription := configuredSubscriptionDomain(old)
+	_, hasGatewaySubscription := configuredSubscriptionDomain(cfg)
+	if hadGatewaySubscription && !hasGatewaySubscription && panel.SubEnable {
+		managedListener := managedSubscriptionListenerDomain(old, panel)
+		if strings.TrimSpace(panel.SubDomain) == "" && strings.TrimSpace(panel.SubPublicURL) == "" && !net.ParseIP(panel.SubListen).IsLoopback() {
+			panel.SubDomain = oldDomain.Name
+			subFallback["subDomain"] = panel.SubDomain
+		}
+		if managedListener == oldDomain.Name && panel.SubCertFile == "" && panel.SubKeyFile == "" {
+			// Keep the certificate already presented by the direct TLS
+			// listener available after the gateway stops and after restart.
+			for _, cert := range manager.Status(old).Certificates {
+				if cert.Name == oldDomain.Name && telemtWebCertificatePairReady(cert.CertFile, cert.KeyFile, cert.Name) {
+					panel.SubCertFile, panel.SubKeyFile = cert.CertFile, cert.KeyFile
+					subFallback["subCertFile"], subFallback["subKeyFile"] = cert.CertFile, cert.KeyFile
+					break
+				}
+			}
+			if panel.SubCertFile == "" {
+				return manager.Status(old), fmt.Errorf("no usable certificate for the direct subscription listener")
+			}
+		}
+	}
+	if panel.SubRestrictDomains && subscriptionPublicURL(cfg, panel) == "" && directSubscriptionOrigin(panel) == "" {
+		return manager.Status(old), fmt.Errorf("restricted subscriptions require a public subscription URL or a publicly listening subscription service with a domain")
 	}
 	if err := validatePanelCertificateSource(old, cfg, panel.WebDomain, panel.WebCertFile, panel.WebKeyFile); err != nil {
 		return domainfront.DomainFrontStatus{}, err
@@ -398,13 +425,19 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	}
 	backend.ChallengeRoots = roots
 	backend.CertificateEvent = DomainCertificateAuditedEventsForDNS(cfg.HTTPPort, cfg.HTTPSPort, cfg.DNS01Provider != "")
-	manager := managedDomainFront()
 	if err := manager.ApplyAndCommit(ctx, cfg, backend, func() error {
 		raw, err := json.Marshal(cfg)
 		if err != nil {
 			return err
 		}
-		return s.setString("domainFrontConfig", string(raw))
+		return database.GetDB().Transaction(func(tx *gorm.DB) error {
+			for key, value := range subFallback {
+				if err := saveSettingIn(tx, key, value); err != nil {
+					return err
+				}
+			}
+			return saveSettingIn(tx, "domainFrontConfig", string(raw))
+		})
 	}); err != nil {
 		rollback()
 		return manager.Status(old), err
@@ -481,6 +514,7 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 	backend := domainfront.Backend{
 		SubscriptionTarget: localDomainTarget(settings.SubListen, settings.SubPort, subTLS),
 		PanelPath:          settings.WebBasePath,
+		PanelHost:          strings.TrimSuffix(strings.ToLower(strings.TrimSpace(settings.WebDomain)), "."),
 		SubscriptionPaths:  []string{settings.SubPath, settings.SubJsonPath, settings.SubClashPath, "/assets/"},
 		Routes:             map[string][]domainfront.Route{},
 		DecoyDirectories:   map[string]string{},
