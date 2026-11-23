@@ -441,7 +441,9 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			seenEmails[client.Email] = struct{}{}
 			active = active || client.Enable
 		}
-		return !active || coreOnly && singBoxUnsupportedProtocol(inbound.Protocol)
+		unsupported := coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) &&
+			(!hiddify || !officialHiddifyExtendedProtocol(inbound.Protocol))
+		return !active || unsupported
 	})
 	// MASQUE has no portable URI fallback. The remaining profiles must
 	// render together after the core-only feed has excluded sidecars.
