@@ -20,8 +20,21 @@ const (
 )
 
 type trafficWriteRequest struct {
-	apply func() error
-	done  chan error
+	apply     func() error
+	done      chan error
+	submitted time.Time
+}
+
+func (req *trafficWriteRequest) run() {
+	queued := time.Since(req.submitted)
+	started := time.Now()
+	err := safeApply(req.apply)
+	elapsed := time.Since(started)
+	if queued >= 2*time.Second || elapsed >= 2*time.Second {
+		// Never log SQL arguments, client identities or credentials here.
+		logger.Warningf("slow traffic writer request: queued=%s execution=%s failed=%t", queued, elapsed, err != nil)
+	}
+	req.done <- err
 }
 
 var (
@@ -114,12 +127,12 @@ func runTrafficWriter(ctx context.Context, queue chan *trafficWriteRequest, done
 	for {
 		select {
 		case req := <-queue:
-			req.done <- safeApply(req.apply)
+			req.run()
 		case <-ctx.Done():
 			for {
 				select {
 				case req := <-queue:
-					req.done <- safeApply(req.apply)
+					req.run()
 				default:
 					return
 				}
@@ -165,7 +178,7 @@ func safeApply(fn func() error) (err error) {
 }
 
 func submitTrafficWrite(fn func() error) error {
-	req := &trafficWriteRequest{apply: fn, done: make(chan error, 1)}
+	req := &trafficWriteRequest{apply: fn, done: make(chan error, 1), submitted: time.Now()}
 
 	twMu.Lock()
 	queue := twQueue

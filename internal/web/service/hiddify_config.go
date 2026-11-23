@@ -1,7 +1,6 @@
 package service
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -71,7 +70,7 @@ func loadNativeConfigSnapshot() (*nativeConfigSnapshot, error) {
 
 func loadNativeConfigSnapshotForTemplate(template *string) (*nativeConfigSnapshot, error) {
 	snapshot := &nativeConfigSnapshot{settings: map[string]string{}, capturedAt: time.Now()}
-	err := database.GetDB().Transaction(func(tx *gorm.DB) error {
+	err := database.ReadSnapshot(database.GetDB(), func(tx *gorm.DB) error {
 		if err := tx.Preload("ClientStats").Order("id ASC").Find(&snapshot.inbounds).Error; err != nil {
 			return err
 		}
@@ -136,7 +135,7 @@ func loadNativeConfigSnapshotForTemplate(template *string) (*nativeConfigSnapsho
 			}
 		}
 		return nil
-	}, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	})
 	return snapshot, err
 }
 

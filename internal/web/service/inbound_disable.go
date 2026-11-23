@@ -19,6 +19,9 @@ func (s *InboundService) disableInvalidInbounds(tx *gorm.DB, mutationBatch *traf
 		Find(&inbounds).Error; err != nil {
 		return false, 0, err
 	}
+	if len(inbounds) == 0 {
+		return false, 0, nil
+	}
 	for i := range inbounds {
 		mutationBatch.localPlans = append(mutationBatch.localPlans, trafficLocalApplyPlan{
 			action: trafficDisableInbound, inbound: inbounds[i],

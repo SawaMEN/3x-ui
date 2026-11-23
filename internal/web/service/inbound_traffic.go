@@ -123,7 +123,7 @@ func (s *InboundService) addInboundTraffic(tx *gorm.DB, traffics []*coremodel.Tr
 		if traffic == nil {
 			continue
 		}
-		if traffic.IsInbound {
+		if traffic.IsInbound && (traffic.Up != 0 || traffic.Down != 0) {
 			err = tx.Model(&model.Inbound{}).Where("tag = ? AND node_id IS NULL", traffic.Tag).
 				Updates(map[string]any{
 					"up":   gorm.Expr(database.ClampedAddExpr("up"), traffic.Up),
@@ -1106,6 +1106,10 @@ func (s *InboundService) GetClientTrafficTgBot(tgId int64) ([]*coremodel.ClientT
 // moved no bytes this poll — the traffic path (addClientTraffic) only bumps
 // last_online on a non-zero delta, so idle-but-connected clients would
 // otherwise show a stale "last online" while being reported online.
+// Coalesce heartbeats within a short window: the online set is maintained
+// separately and actual traffic already advances the same durable timestamp.
+const lastOnlineWriteInterval = 15 * time.Second
+
 func (s *InboundService) BumpClientsLastOnline(emails []string) error {
 	uniq := uniqueNonEmptyStrings(emails)
 	if len(uniq) == 0 {
@@ -1115,7 +1119,9 @@ func (s *InboundService) BumpClientsLastOnline(emails []string) error {
 	return submitTrafficWrite(func() error {
 		db := database.GetDB()
 		for _, batch := range chunkStrings(uniq, sqliteMaxVars) {
-			if err := db.Model(coremodel.ClientTraffic{}).Where("email IN ?", batch).Update("last_online", now).Error; err != nil {
+			if err := db.Model(coremodel.ClientTraffic{}).
+				Where("email IN ? AND (last_online IS NULL OR last_online <= ?)", batch, now-lastOnlineWriteInterval.Milliseconds()).
+				Update("last_online", now).Error; err != nil {
 				return err
 			}
 		}
