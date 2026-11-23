@@ -75,7 +75,9 @@ describe('Telegram WEB Proxy defaults', () => {
   });
 
   it('does not invent a domain or repair invalid explicit settings', () => {
-    expect(TelemtWebProxyRequestSchema.safeParse(completeTelemtWebSettings({})).success).toBe(false);
+    expect(TelemtWebProxyRequestSchema.safeParse(completeTelemtWebSettings({})).success).toBe(
+      false,
+    );
     expect(
       TelemtWebProxyRequestSchema.safeParse({
         domain: 'web.example.com',

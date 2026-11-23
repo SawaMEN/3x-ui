@@ -29,9 +29,7 @@ export default function MtprotoFields({
     | undefined;
   useEffect(() => {
     if (!webProxyEnabled) return;
-    const saved = getValues('settings.webProxy') as Parameters<
-      typeof completeTelemtWebSettings
-    >[0];
+    const saved = getValues('settings.webProxy') as Parameters<typeof completeTelemtWebSettings>[0];
     const completed = completeTelemtWebSettings(saved);
     if (JSON.stringify(saved) !== JSON.stringify(completed)) {
       setValue('settings.webProxy', completed, { shouldValidate: true });
