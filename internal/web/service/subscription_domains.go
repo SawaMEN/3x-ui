@@ -56,6 +56,29 @@ func subscriptionPublicURL(cfg domainfront.DomainFrontConfig, settings *entity.A
 	return "https://" + host
 }
 
+// The standalone listener remains a valid publication after the gateway
+// is disabled. A loopback-only listener still requires an explicit proxy URL.
+func directSubscriptionOrigin(settings *entity.AllSetting) string {
+	if !settings.SubEnable || settings.SubPort <= 0 || net.ParseIP(settings.SubListen).IsLoopback() {
+		return ""
+	}
+	host, err := netsafe.NormalizeHost(strings.ToLower(strings.TrimSpace(settings.SubDomain)))
+	if err != nil || host == "" {
+		return ""
+	}
+	secure := settings.SubCertFile != "" && settings.SubKeyFile != ""
+	scheme, defaultPort := "http", 80
+	if secure {
+		scheme, defaultPort = "https", 443
+	}
+	if settings.SubPort != defaultPort {
+		host = net.JoinHostPort(host, strconv.Itoa(settings.SubPort))
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	return scheme + "://" + host
+}
+
 func (s *SettingService) subscriptionPublishingSettings() (domainfront.DomainFrontConfig, *entity.AllSetting, error) {
 	settings, err := s.GetAllSetting()
 	if err != nil {
@@ -128,6 +151,9 @@ func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string
 		hosts[strings.TrimSuffix(strings.ToLower(primary), ".")] = true
 	}
 	publicURL := subscriptionPublicURL(cfg, settings)
+	if restricted && publicURL == "" {
+		publicURL = directSubscriptionOrigin(settings)
+	}
 	if publicURL != "" {
 		u, err := url.Parse(publicURL)
 		if err != nil {

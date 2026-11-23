@@ -412,7 +412,7 @@ func (s *SettingService) SaveHiddifySubscriptionURL(alias HiddifyLegacySubscript
 
 func (s *SettingService) GetHiddifySubscriptionURIs() (map[string]string, error) {
 	var records []model.ClientRecord
-	if err := database.GetDB().Model(&model.ClientRecord{}).Select("sub_id", "hiddify_sub_uri").Where("hiddify_sub_uri <> ?", "").Find(&records).Error; err != nil {
+	if err := database.GetDB().Model(&model.ClientRecord{}).Select("sub_id", "hiddify_sub_uri").Where("hiddify_sub_uri <> ?", "").Order("id").Find(&records).Error; err != nil {
 		return nil, err
 	}
 	urls := make(map[string]string, len(records))
@@ -422,6 +422,22 @@ func (s *SettingService) GetHiddifySubscriptionURIs() (map[string]string, error)
 		}
 	}
 	return urls, nil
+}
+
+// HiddifySubscriptionBase resolves the same legacy address used by the client
+// card without loading the full subscription URL map on the public page.
+func (s *SettingService) HiddifySubscriptionBase(subID string) (string, error) {
+	var record model.ClientRecord
+	err := database.GetDB().Select("hiddify_sub_uri").
+		Where("sub_id = ? AND hiddify_sub_uri <> ?", subID, "").
+		Order("id DESC").Take(&record).Error
+	if database.IsNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return normalizeHiddifyLegacySubscriptionURI(record.HiddifySubURI), nil
 }
 
 func (s *SettingService) IsHiddifySubscriptionPath(subID, requestPath string) bool {

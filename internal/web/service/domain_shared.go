@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
@@ -58,6 +59,22 @@ func DomainFrontHandler(fallback http.Handler, listen string, port int, secure b
 	})
 }
 
+func DomainFrontPanelHandler(panel http.Handler, listen string, port int, secure bool) http.Handler {
+	shared := DomainFrontHandler(panel, listen, port, secure)
+	if !secure {
+		return shared
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		domainFrontState.Lock()
+		manager := domainFrontState.manager
+		domainFrontState.Unlock()
+		if manager != nil && manager.ServePanelCover(w, req, panel) {
+			return
+		}
+		shared.ServeHTTP(w, req)
+	})
+}
+
 func DomainFrontTLS(fallback func(*tls.ClientHelloInfo) (*tls.Certificate, error), listen string, port int) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 	return func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		domainFrontState.Lock()
@@ -87,12 +104,26 @@ func DomainSubscriptionTLS(domain string, fallback func(*tls.ClientHelloInfo) (*
 		domainFrontState.Unlock()
 		if manager != nil {
 			cert, err := manager.SubscriptionCertificate(hello, domain)
-			if cert != nil || (err != nil && fallback == nil) {
+			if cert != nil {
 				return cert, err
 			}
 		}
 		if fallback != nil {
 			return fallback(hello)
+		}
+		// During gateway shutdown the live listener still uses this callback.
+		// Read the TLS pair saved as part of the same settings transaction.
+		if hello != nil && strings.EqualFold(strings.TrimSuffix(hello.ServerName, "."), domain) {
+			settings := &SettingService{}
+			certFile, certErr := settings.GetSubCertFile()
+			keyFile, keyErr := settings.GetSubKeyFile()
+			if certErr == nil && keyErr == nil && certFile != "" && keyFile != "" {
+				cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+				if err != nil {
+					return nil, err
+				}
+				return &cert, nil
+			}
 		}
 		return nil, errors.New("managed subscription certificate is unavailable for this server name")
 	}

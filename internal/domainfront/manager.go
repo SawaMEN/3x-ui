@@ -720,6 +720,28 @@ func (r *frontRuntime) protectedRedirectPath(d DomainFrontDomain, path string) b
 	return r.panelRequestPath(path)
 }
 
+func isCoverSitePath(path string) bool {
+	switch path {
+	case "/", "/index.html", "/site.css", "/site.js":
+		return true
+	default:
+		return false
+	}
+}
+
+func staticCoverSite(dir string) http.Handler {
+	static := http.FileServer(http.Dir(dir))
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		if (req.Method != http.MethodGet && req.Method != http.MethodHead) || !isCoverSitePath(req.URL.Path) {
+			http.NotFound(w, req)
+			return
+		}
+		static.ServeHTTP(w, req)
+	})
+}
+
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
 	// SNI-only hosts serve Telemt's generated static website while denying
 	// every panel, subscription and inbound route, even if its path exists.
@@ -728,21 +750,7 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 		if dir == "" {
 			return nil, fmt.Errorf("SNI site %s has no prepared website", d.Name)
 		}
-		static := http.FileServer(http.Dir(dir))
-		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
-			w.Header().Set("Cache-Control", "public, max-age=300")
-			if req.Method != http.MethodGet && req.Method != http.MethodHead {
-				http.NotFound(w, req)
-				return
-			}
-			switch req.URL.Path {
-			case "/", "/index.html", "/site.css", "/site.js":
-				static.ServeHTTP(w, req)
-			default:
-				http.NotFound(w, req)
-			}
-		}), nil
+		return staticCoverSite(dir), nil
 	}
 	var subscription http.Handler
 	if r.backend.SubscriptionHandler != nil && d.Mode != "relay" {

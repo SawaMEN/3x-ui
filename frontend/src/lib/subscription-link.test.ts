@@ -27,6 +27,12 @@ describe('clientSubscriptionLink', () => {
     expect(link).toBe('https://sub.example.com:8443/sub/client-id');
   });
 
+  it('joins a configured subscription URL without a trailing slash', () => {
+    expect(
+      clientSubscriptionLink({ subURI: 'https://sub.example.com:8443/sub' }, 'client-id'),
+    ).toBe('https://sub.example.com:8443/sub/client-id');
+  });
+
   it('uses an explicit per-client Hiddify URL before the settings map', () => {
     const link = clientSubscriptionLink(
       {

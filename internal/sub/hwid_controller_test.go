@@ -292,3 +292,48 @@ func TestSubscriptionHwidStatusHidesUnknownVersusDisabled(t *testing.T) {
 		t.Fatalf("404 body = %q, want empty", disabled.Body.String())
 	}
 }
+
+func TestProfilePageRefreshUpdatesPortsAndHonorsDeviceLimit(t *testing.T) {
+	router, subID := initHwidSubRouter(t, 0)
+	db := database.GetDB()
+	var client model.ClientRecord
+	if err := db.Where("sub_id = ?", subID).First(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&client).Update("password", "test-password").Error; err != nil {
+		t.Fatal(err)
+	}
+	inbound := model.Inbound{
+		Protocol: model.NaiveProxy, Tag: "naive-refresh", Enable: true, Port: 34443,
+		Settings: `{"network":"tcp","tls":{"serverName":"naive.example.org"}}`,
+	}
+	if err := db.Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatal(err)
+	}
+	refresh := func() string {
+		t.Helper()
+		response := requestSub(t, router, http.MethodGet, "/sub/"+subID+"?format=page-links", "", "")
+		if response.Code != http.StatusOK || !strings.Contains(response.Header().Get("Cache-Control"), "no-store") {
+			t.Fatalf("profile refresh status=%d headers=%v", response.Code, response.Header())
+		}
+		return response.Body.String()
+	}
+	if body := refresh(); !strings.Contains(body, ":34443") {
+		t.Fatalf("initial profile uses unexpected port: %s", body)
+	}
+	if err := db.Model(&inbound).Update("port", 35443).Error; err != nil {
+		t.Fatal(err)
+	}
+	if body := refresh(); !strings.Contains(body, ":35443") || strings.Contains(body, ":34443") {
+		t.Fatalf("updated profile uses stale port: %s", body)
+	}
+	if err := db.Model(&client).Update("limit_hwid", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if body := refresh(); !strings.Contains(body, `"links":[]`) || strings.Contains(body, "test-password") {
+		t.Fatalf("profile refresh exposed device-limited links: %s", body)
+	}
+}

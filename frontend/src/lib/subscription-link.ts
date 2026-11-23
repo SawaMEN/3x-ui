@@ -17,6 +17,6 @@ export function clientSubscriptionLink(
   const legacy = clientOverride || settings?.hiddifySubURIs?.[subId];
   if (legacy) return `${legacy.replace(/\/$/, '')}/${subId}/`;
 
-  if (settings?.subURI) return `${settings.subURI}${subId}`;
+  if (settings?.subURI) return `${settings.subURI.replace(/\/+$/, '')}/${subId}`;
   return '';
 }

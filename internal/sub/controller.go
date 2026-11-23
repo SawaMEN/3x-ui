@@ -40,6 +40,7 @@ func writeSubError(c *gin.Context, err error) {
 		c.Status(http.StatusNotFound)
 		return
 	}
+	logger.Warningf("Subscription request failed (error=%T)", err)
 	c.Status(http.StatusInternalServerError)
 }
 
@@ -405,27 +406,55 @@ func (a *SUBController) configuredSubscriptionPathOwner(candidate string) string
 // browser viewing the HTML info page gets clean, name-only remarks (usage is
 // shown in the page summary).
 func (a *SUBController) maybeServeSubPage(c *gin.Context) bool {
+	if strings.EqualFold(c.Query("view"), "raw") {
+		return false
+	}
 	accept := c.GetHeader("Accept")
-	wantsHTML := strings.Contains(strings.ToLower(accept), "text/html") || c.Query("html") == "1" || strings.EqualFold(c.Query("view"), "html")
+	explicitHTML := c.Query("html") == "1" || strings.EqualFold(c.Query("view"), "html")
+	isHiddify := strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify")
+	wantsHTML := explicitHTML || !isHiddify && strings.Contains(strings.ToLower(accept), "text/html")
 	if !wantsHTML {
 		return false
 	}
+	page, ok := a.buildSubPageWithProfileVisibility(c)
+	if ok {
+		a.serveSubPage(c, page.BasePath, page)
+	}
+	return true
+}
+
+func (a *SUBController) buildSubPageWithProfileVisibility(c *gin.Context) (PageData, bool) {
 	page, ok := a.buildSubPageData(c)
 	if !ok {
-		return true
+		return PageData{}, false
 	}
-	// HTML previews do not consume HWID slots; never expose download credentials.
+	// HTML previews and in-page refreshes must never expose links protected
+	// by the device limit, and must not consume a slot themselves.
 	hwid, found, err := a.clientService.HwidSlotStatusForSubID(c.Param("subid"))
 	if err != nil {
 		c.AbortWithStatus(http.StatusServiceUnavailable)
-		return true
+		return PageData{}, false
 	}
 	if !found || hwid.Active {
 		page.Result = []string{}
 		page.Emails = []string{}
 		page.TelegramRemarks = nil
 	}
-	a.serveSubPage(c, page.BasePath, page)
+	return page, true
+}
+
+func (a *SUBController) maybeServePageLinks(c *gin.Context) bool {
+	if !strings.EqualFold(c.Query("format"), "page-links") {
+		return false
+	}
+	setNoCacheHeaders(c)
+	if page, ok := a.buildSubPageWithProfileVisibility(c); ok {
+		c.JSON(http.StatusOK, gin.H{
+			"links": page.Result, "telegramRemarks": page.TelegramRemarks,
+			"subUrl": page.SubUrl, "subJsonUrl": page.SubJsonUrl, "subClashUrl": page.SubClashUrl,
+			"subFormatMode": page.SubFormatMode,
+		})
+	}
 	return true
 }
 
@@ -461,6 +490,12 @@ func (a *SUBController) buildSubPageData(c *gin.Context) (PageData, bool) {
 		subs = []string{}
 	}
 	subURL, subJsonURL, subClashURL := subReq.BuildURLs(a.subPath, a.subJsonPath, a.subClashPath, subId)
+	if legacyBase, err := a.settingService.HiddifySubscriptionBase(subId); err != nil {
+		writeSubError(c, err)
+		return PageData{}, false
+	} else if legacyBase != "" {
+		subURL = strings.TrimRight(legacyBase, "/") + "/" + subId + "/"
+	}
 	if !a.jsonEnabled {
 		subJsonURL = ""
 	}
@@ -531,6 +566,9 @@ func (a *SUBController) subs(c *gin.Context) {
 		serveTelemtSubscription(c)
 		return
 	}
+	if a.maybeServePageLinks(c) {
+		return
+	}
 	if a.maybeServeSubInfo(c) {
 		logSubscriptionRoute(userAgent, "info")
 		return
@@ -556,7 +594,7 @@ func (a *SUBController) subs(c *gin.Context) {
 		logSubscriptionRoute(userAgent, format+"-json")
 		return
 	}
-	if format == "" && a.maybeServeSubPage(c) {
+	if (format == "" || format == "all" && a.formatAllowed(c, "links")) && a.maybeServeSubPage(c) {
 		logSubscriptionRoute(userAgent, "html")
 		return
 	}
@@ -1012,6 +1050,9 @@ func (a *SUBController) loadSubTemplate(themeDir string) (*template.Template, er
 // subJsons handles HTTP requests for JSON subscription configurations. The
 // device limit is enforced on every body route, ?view=raw included (#GHSA-7ww3).
 func (a *SUBController) subJsons(c *gin.Context) {
+	if a.maybeServePageLinks(c) {
+		return
+	}
 	format := subscriptionFormat(c)
 	if format == "" && a.formatMode(c) != "both" && a.formatMode(c) != "" {
 		format = a.defaultBodyFormat(c)
@@ -1104,6 +1145,9 @@ func (a *SUBController) subClashLegacy(c *gin.Context) {
 }
 
 func (a *SUBController) subClash(c *gin.Context, legacy bool) {
+	if a.maybeServePageLinks(c) {
+		return
+	}
 	if strings.EqualFold(c.Query("view"), "raw") {
 		if !a.enforceHwid(c) {
 			return

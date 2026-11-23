@@ -89,6 +89,14 @@ func TestHiddifySubscriptionXHTTPPreservesIdentity(t *testing.T) {
 	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &served) != nil || !strings.Contains(response.Body.String(), `"type": "xhttp"`) {
 		t.Fatalf("existing subscription URL failed: %d %s", response.Code, response.Body.String())
 	}
+	request = httptest.NewRequest(http.MethodGet, "/sub/"+record.SubID, nil)
+	request.Header.Set("User-Agent", "Hiddify/2.0")
+	request.Header.Set("Accept", "text/html,*/*")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || strings.Contains(response.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("Hiddify received a browser page: %d %s", response.Code, response.Header().Get("Content-Type"))
+	}
 	var after model.ClientRecord
 	if err := db.First(&after, record.Id).Error; err != nil {
 		t.Fatal(err)
@@ -130,5 +138,30 @@ func TestHiddifySubscriptionDuplicateLabels(t *testing.T) {
 	after, _ := json.Marshal(proxies)
 	if string(before) != string(after) {
 		t.Fatal("stored labels mutated")
+	}
+}
+
+func TestHiddifySubscriptionAssignsMissingTags(t *testing.T) {
+	proxies := []map[string]any{
+		{"type": "naive", "tag": ""},
+		{"type": "naive", "tag": "naive"},
+		{"type": "naive", "tag": " "},
+	}
+	body, err := buildHiddifySingBoxSubscription(proxies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Outbounds []struct{ Tag string } `json:"outbounds"`
+	}
+	if err := json.Unmarshal([]byte(body), &config); err != nil {
+		t.Fatal(err)
+	}
+	var tags []string
+	for _, outbound := range config.Outbounds {
+		tags = append(tags, outbound.Tag)
+	}
+	if !reflect.DeepEqual(tags, []string{"naive-2", "naive", "naive-3"}) {
+		t.Fatalf("outbound tags = %v", tags)
 	}
 }

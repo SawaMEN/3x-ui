@@ -655,3 +655,37 @@ func TestCertificatePreparationFailureIsReported(t *testing.T) {
 		t.Fatalf("stale certificate preparation error: %+v", cert)
 	}
 }
+
+func TestPanelListenerSharesHostnameWithCoverSite(t *testing.T) {
+	const host = "panel.example.org"
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>cover</html>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{runtime: &frontRuntime{
+		cfg: DomainFrontConfig{Domains: []DomainFrontDomain{{Name: host, Mode: "sni_only", Enabled: true}}},
+		backend: Backend{
+			PanelHost: host, PanelPath: "/private/",
+			DecoyDirectories: map[string]string{host: dir},
+		},
+	}}
+	panel := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "panel") })
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{"https://" + host + ":8443/", "<html>cover</html>"},
+		{"https://" + host + ":8443/private/panel", "panel"},
+		{"https://" + host + "/sub/id", ""},
+		{"https://another.example.org/", ""},
+	} {
+		response := httptest.NewRecorder()
+		handled := manager.ServePanelCover(response, httptest.NewRequest(http.MethodGet, tc.path, nil), panel)
+		if handled != (tc.want != "") || response.Body.String() != tc.want {
+			t.Fatalf("%s handled=%t, body=%q", tc.path, handled, response.Body.String())
+		}
+		if tc.want == "<html>cover</html>" && !strings.Contains(response.Header().Get("Content-Security-Policy"), "sandbox allow-scripts") {
+			t.Fatal("the panel origin must sandbox the cover site")
+		}
+	}
+}

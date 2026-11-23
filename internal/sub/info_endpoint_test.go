@@ -128,3 +128,40 @@ func TestSubInfoEndpoint_HTMLPageStillWinsWithoutFormatParam(t *testing.T) {
 		t.Fatalf("injected page data must carry isOnline; body=%s", w.Body.String())
 	}
 }
+
+func TestSubscriptionPageAndQRKeepImportedAddress(t *testing.T) {
+	initSubDB(t)
+	oldDist := distFS
+	SetDistFS(testDistFS)
+	t.Cleanup(func() { SetDistFS(oldDist) })
+	const subID = "imported-sub-page"
+	seedInfoEndpointSub(t, subID, "imported@example.org")
+	if err := database.GetDB().Model(&model.ClientRecord{}).Where("sub_id = ?", subID).
+		Update("hiddify_sub_uri", "http://old.example.org:2096/legacy/").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{})
+	const path = "/sub/" + subID
+	const want = "https://old.example.org/legacy/" + subID + "/"
+	for _, tc := range []struct {
+		query, accept, contentType string
+	}{
+		{"", "text/html", "text/html"},
+		{"?format=all", "text/html", "text/html"},
+		{"?format=all", "text/plain", "text/plain"},
+		{"?format=all&view=raw", "text/html", "text/plain"},
+		{"?format=page-links", "application/json", "application/json"},
+	} {
+		req := httptest.NewRequest(http.MethodGet, path+tc.query, nil)
+		req.Header.Set("Accept", tc.accept)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, req)
+		if response.Code != http.StatusOK || !strings.Contains(response.Header().Get("Content-Type"), tc.contentType) {
+			t.Fatalf("%s Accept %s status=%d type=%s", tc.query, tc.accept, response.Code, response.Header().Get("Content-Type"))
+		}
+		if tc.contentType != "text/plain" && !strings.Contains(response.Body.String(), want) {
+			t.Fatalf("%s did not publish the imported URL %q", tc.query, want)
+		}
+	}
+}

@@ -507,7 +507,14 @@ export default function DomainFrontTab({
       }
       throw error;
     });
-    if (value.mode === 'sni_only' && telemtSites.some((site) => site.name === value.name)) {
+    const panelHost = allSetting?.webDomain.trim().toLowerCase().replace(/\.$/, '');
+    const coverHost = value.name.trim().toLowerCase().replace(/\.$/, '');
+    const usesSeparatePanelListener = coverHost === panelHost && draft.httpsPort !== 443;
+    if (
+      value.mode === 'sni_only' &&
+      !usesSeparatePanelListener &&
+      telemtSites.some((site) => site.name === coverHost)
+    ) {
       messageApi.info(label('telemtAlreadyExists'));
       setEditing(undefined);
       return;

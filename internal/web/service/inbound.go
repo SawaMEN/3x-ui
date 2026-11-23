@@ -1512,6 +1512,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	if postCommitApply != nil {
 		postCommitApply()
 	}
+	scheduleMtprotoWebApply(inbound)
 	if inbound.Protocol == model.Sudoku {
 		if err := RefreshSudokuCredentialsOnInbound(inbound); err != nil {
 			logger.Warning("AddInbound: Sudoku credentials initialization failed:", err)
@@ -1670,6 +1671,7 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 	if mtprotoRoutesThroughXray(&ib) || usesCoreSidecarRelay(&ib) {
 		needRestart = true
 	}
+	scheduleMtprotoWebApply(&ib)
 	return needRestart, nodePush, nil
 }
 
@@ -1837,6 +1839,8 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 		return false, err
 	}
 	inbound.Enable = enable
+
+	scheduleMtprotoWebApply(inbound)
 
 	if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.MASQUE || inbound.Protocol == model.Snell || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
 		core, coreErr := s.coreTypeForInbound(inbound)
@@ -2294,6 +2298,10 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	}
 	if postCommitApply != nil {
 		postCommitApply()
+	}
+	scheduleMtprotoWebApply(inbound)
+	if !mtproto.WebProxyInbound(inbound) {
+		scheduleMtprotoWebApply(oldInbound)
 	}
 	if inbound.Protocol == model.Sudoku {
 		if err := RefreshSudokuCredentialsOnInbound(inbound); err != nil {

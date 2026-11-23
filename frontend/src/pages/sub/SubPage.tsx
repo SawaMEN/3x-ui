@@ -39,9 +39,6 @@ const SubTelegramTab = lazy(() => import('./SubTelegramTab'));
 const subData = window.__SUB_PAGE_DATA__ || {};
 
 const sId = subData.sId || '';
-const subUrl = subData.subUrl || '';
-const subJsonUrl = subData.subJsonUrl || '';
-const subClashUrl = subData.subClashUrl || '';
 const appearance = subData.appearance?.enabled ? subData.appearance : undefined;
 const luna = ['luna', 'whitemax'].includes(subData.appearance?.theme ?? '');
 const underground = subData.appearance?.theme === 'underground';
@@ -50,15 +47,6 @@ const subTitle = appearance?.title || subData.subTitle || '';
 const subSupportUrl = subData.subSupportUrl || '';
 const updateHours = Number(subData.subUpdates || 0);
 const announce = subData.announce || '';
-const links: string[] = Array.isArray(subData.links) ? subData.links : [];
-const amneziaWGConfigs = new Map<string, string>();
-const configLinks = links.filter((link) => {
-  const config = amneziawgConfigFromLink(link);
-  if (!config) return true;
-  amneziaWGConfigs.set(link, config);
-  return false;
-});
-const telegramRemarks = subData.telegramRemarks;
 const linkEmails: string[] = Array.isArray(subData.emails) ? subData.emails : [];
 const totalByte = Number(subData.totalByte || 0);
 const usedByte =
@@ -95,6 +83,62 @@ export default function SubPage() {
   }, [messageApi]);
   const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage('subscription'));
   const [activeTab, setActiveTab] = useState<string>();
+  const [profileData, setProfileData] = useState(subData);
+  const {
+    subUrl = '',
+    subJsonUrl = '',
+    subClashUrl = '',
+    subFormatMode,
+    telegramRemarks,
+  } = profileData;
+  const { configLinks, amneziaWGConfigs } = useMemo(() => {
+    const amneziaWGConfigs = new Map<string, string>();
+    const configLinks = (profileData.links ?? []).filter((link) => {
+      const config = amneziawgConfigFromLink(link);
+      if (!config) return true;
+      amneziaWGConfigs.set(link, config);
+      return false;
+    });
+    return { configLinks, amneziaWGConfigs };
+  }, [profileData.links]);
+
+  useEffect(() => {
+    if (!sId) return;
+
+    let request: AbortController | undefined;
+    const refreshProfiles = () => {
+      if (document.hidden || request) return;
+      const controller = new AbortController();
+      request = controller;
+      const timeout = window.setTimeout(() => controller.abort(), 8000);
+      const url = new URL(window.location.href);
+      url.search = new URLSearchParams({ format: 'page-links' }).toString();
+      void fetch(url, { cache: 'no-store', signal: controller.signal })
+        .then(async (response) => {
+          if (response.status === 403 || response.status === 404) {
+            setProfileData({});
+          } else if (response.ok) {
+            const data = (await response.json()) as typeof subData;
+            if (Array.isArray(data.links)) setProfileData(data);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          window.clearTimeout(timeout);
+          request = undefined;
+        });
+    };
+    const interval = window.setInterval(refreshProfiles, 15000);
+    window.addEventListener('focus', refreshProfiles);
+    document.addEventListener('visibilitychange', refreshProfiles);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshProfiles);
+      document.removeEventListener('visibilitychange', refreshProfiles);
+      request?.abort();
+    };
+  }, []);
+
   const telemtEndpoint = buildTelemtEndpoint(window.location.href, sId);
   const [telemtData, setTelemtData] = useState<Partial<TelegramSubscription>>({});
   const [telemtLoading, setTelemtLoading] = useState(() => Boolean(telemtEndpoint));
@@ -176,7 +220,7 @@ export default function SubPage() {
           <SubLinksTab
             subUrl={subUrl}
             subJsonUrl={subJsonUrl}
-            subFormatMode={subData.subFormatMode}
+            subFormatMode={subFormatMode}
             subClashUrl={subClashUrl}
             onCopy={copy}
           />
@@ -204,7 +248,7 @@ export default function SubPage() {
           <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
             <SubAppsTab
               subUrl={subUrl}
-              subFormatMode={subData.subFormatMode}
+              subFormatMode={subFormatMode}
               profileName={subTitle || sId}
               initialPlatform={initialPlatform}
               onOpenAmneziaWG={amneziaWGConfigs.size > 0 ? openAmneziaWG : undefined}
@@ -250,7 +294,22 @@ export default function SubPage() {
       });
     }
     return items;
-  }, [t, copy, open, openAmneziaWG, telemtData, telemtLoading, telemtError]);
+  }, [
+    t,
+    copy,
+    open,
+    openAmneziaWG,
+    subUrl,
+    subJsonUrl,
+    subClashUrl,
+    subFormatMode,
+    amneziaWGConfigs,
+    configLinks,
+    telegramRemarks,
+    telemtData,
+    telemtLoading,
+    telemtError,
+  ]);
 
   const direction = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
   const pageClass = [

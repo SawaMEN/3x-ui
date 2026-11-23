@@ -54,6 +54,39 @@ func (m *Manager) ServeShared(w http.ResponseWriter, req *http.Request, listen s
 	return true
 }
 
+// ServePanelCover applies only on the panel's original listener. Gateway
+// listeners on other ports keep their independent public routing.
+func (m *Manager) ServePanelCover(w http.ResponseWriter, req *http.Request, panel http.Handler) bool {
+	m.mu.Lock()
+	r := m.runtime
+	if r == nil || r.backend.PanelPath == "" || r.backend.PanelPath == "/" || r.backend.PanelHost == "" ||
+		strings.HasPrefix(req.URL.Path, "/.well-known/acme-challenge/") {
+		m.mu.Unlock()
+		return false
+	}
+	domain, ok := r.domain(req.Host)
+	dir := r.backend.DecoyDirectories[domain.Name]
+	if !ok || domain.Mode != "sni_only" || dir == "" || !strings.EqualFold(domain.Name, r.backend.PanelHost) {
+		m.mu.Unlock()
+		return false
+	}
+	panelPath := r.panelRequestPath(req.URL.Path)
+	m.mu.Unlock()
+
+	if panelPath {
+		panel.ServeHTTP(w, req)
+		return true
+	}
+	if !isCoverSitePath(req.URL.Path) {
+		return false
+	}
+	// Custom HTML must run in an opaque origin when served alongside the
+	// administration UI. It cannot read panel cookies, storage or responses.
+	w.Header().Set("Content-Security-Policy", "sandbox allow-scripts; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'")
+	staticCoverSite(dir).ServeHTTP(w, req)
+	return true
+}
+
 func (m *Manager) SharedCertificate(hello *tls.ClientHelloInfo, listen string, port int) (*tls.Certificate, error) {
 	m.mu.Lock()
 	r := m.runtime

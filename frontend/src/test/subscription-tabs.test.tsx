@@ -52,7 +52,7 @@ describe('subscription tabs', () => {
     }
   }, 15_000);
 
-  it('shows the main QR code first and copies the subscription address', () => {
+  it('shows the same address in the link, copy action and QR modal', async () => {
     const onCopy = vi.fn();
     const { container } = render(
       <SubLinksTab subUrl={subUrl} subJsonUrl="" subClashUrl="" onCopy={onCopy} />,
@@ -73,6 +73,10 @@ describe('subscription tabs', () => {
     expect(within(qrCard).getByRole('link').getAttribute('href')).toBe(allProfilesUrl);
     fireEvent.click(within(qrCard).getByRole('button', { name: /^copy url$/i }));
     expect(onCopy).toHaveBeenLastCalledWith(allProfilesUrl);
+    fireEvent.click(within(qrCard).getByRole('button', { name: /^QR$/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole<HTMLTextAreaElement>('textbox').value).toBe(allProfilesUrl);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
 
     fireEvent.click(within(qrCard).getByRole('radio', { name: 'Compatible profiles' }));
     expect(within(qrCard).getByRole('link').getAttribute('href')).toBe(subUrl);
