@@ -95,6 +95,25 @@ class OfficialTelemtTests(unittest.TestCase):
                         module.install(item, "amd64", Path(tmp))
                         self.assertEqual((Path(tmp) / "telemt").read_bytes(), bytes(binary))
 
+UPDATER_CURL_STUB = """#!/bin/bash
+set -eu
+output=''
+format=''
+while (( $# )); do
+    case "$1" in
+        -o) output="$2"; shift 2 ;;
+        -w) format="$2"; shift 2 ;;
+        *) url="$1"; shift ;;
+    esac
+done
+if [[ "$url" == "https://github.com/telemt/telemt/releases/latest" && "$format" == '%{url_effective}' ]]; then
+    printf '%s' "https://github.com/telemt/telemt/releases/tag/3.5.14"
+else
+    cp "$SERVED/${url##*/}" "$output"
+fi
+"""
+
+
 class TelemtUpdaterTests(unittest.TestCase):
     def test_bad_checksum_or_binary_version_preserves_running_proxy(self):
         for failure in ("checksum", "version"):
@@ -125,14 +144,7 @@ class TelemtUpdaterTests(unittest.TestCase):
                 script.write_text(source)
                 bin = root / "stubs"
                 bin.mkdir()
-                (bin / "curl").write_text("""#!/bin/bash
-set -eu
-output=''
-while (( $# )); do
- if [[ "$1" == -o ]]; then output="$2"; shift 2; else url="$1"; shift; fi
-done
-if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "tag_name": "3.5.14",\\n'; fi
-""")
+                (bin / "curl").write_text(UPDATER_CURL_STUB)
                 (bin / "curl").chmod(0o755)
                 (bin / "uname").write_text("#!/bin/sh\necho x86_64\n")
                 (bin / "uname").chmod(0o755)
@@ -193,14 +205,7 @@ if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "t
                 stubs = root / "stubs"
                 stubs.mkdir()
                 commands = {
-                    "curl": """#!/bin/bash
-set -eu
-output=''
-while (( $# )); do
- if [[ "$1" == -o ]]; then output="$2"; shift 2; else url="$1"; shift; fi
-done
-if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "tag_name": "3.5.14",\\n'; fi
-""",
+                    "curl": UPDATER_CURL_STUB,
                     "uname": "#!/bin/sh\necho x86_64\n",
                     "systemctl": '#!/bin/sh\necho "$*" >> "$SERVICE_LOG"\nexit 1\n',
                     "pgrep": "#!/bin/sh\nexit 1\n",
