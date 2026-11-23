@@ -1,11 +1,14 @@
 package controller
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
 	"github.com/gin-gonic/gin"
 )
 
@@ -139,5 +142,32 @@ func TestProxyAddrInCIDRsIPv4Mapped(t *testing.T) {
 				t.Fatalf("proxyAddrInCIDRs(%q, %q) = %v; want %v", tt.addr, tt.cidrs, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestJSONErrorLocalizesPanelCertificateSourceKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/panel/api/domains/apply", nil)
+	const key = "pages.settings.domains.panelDomain.sourceRequired"
+	const explanation = "Switch the panel certificate before disabling its issuer."
+	c.Set("I18n", func(kind locale.I18nType, name string, _ ...string) string {
+		if kind == locale.Web && name == key {
+			return explanation
+		}
+		return name
+	})
+	jsonObj(c, nil, errors.New(key))
+
+	var result struct {
+		Success bool   `json:"success"`
+		Msg     string `json:"msg"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Success || result.Msg != explanation {
+		t.Fatalf("localized error response: %+v", result)
 	}
 }

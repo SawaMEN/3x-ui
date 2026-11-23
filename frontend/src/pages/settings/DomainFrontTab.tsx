@@ -1419,8 +1419,8 @@ export default function DomainFrontTab({
                         <Typography.Text>{label('preflight.code.' + check.code)}</Typography.Text>
                       </Space>
                       <Typography.Text type="secondary">
-                          {t(check.message, { defaultValue: check.message })}
-                        </Typography.Text>
+                        {t(check.message, { defaultValue: check.message })}
+                      </Typography.Text>
                       {check.addresses?.length ? (
                         <Typography.Text code>{check.addresses.join(', ')}</Typography.Text>
                       ) : null}
