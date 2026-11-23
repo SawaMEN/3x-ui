@@ -173,9 +173,9 @@ func TestValidateMtprotoWebFillsRequiredSettings(t *testing.T) {
 			}
 			var parsed struct {
 				WebProxy struct {
-					Frontend string              `json:"frontend"`
-					Carrier   string              `json:"carrier"`
-					Carriers  []string            `json:"carriers"`
+					Frontend    string                `json:"frontend"`
+					Carrier     string                `json:"carrier"`
+					Carriers    []string              `json:"carriers"`
 					RetryJitter *TelemtWebRetryJitter `json:"retryJitter"`
 				} `json:"webProxy"`
 			}
