@@ -86,10 +86,16 @@ func validatePanelCertificateSource(old, next domainfront.DomainFrontConfig, dom
 	if !isDomainManagedCertificatePair(certFile, keyFile) {
 		return nil
 	}
+	// A stale domain entry is not an active certificate issuer.
+	// Only protect a source that was actually managed by the old gateway.
+	if !old.Enabled {
+		return nil
+	}
 	owned := false
 	for _, d := range old.Domains {
-		if d.Enabled && d.Name == domain {
+		if d.Enabled && d.Name == domain && d.Mode != "shared_sni" && (d.TLS == "auto" || d.TLS == "certmagic") {
 			owned = true
+			break
 		}
 	}
 	if !owned {

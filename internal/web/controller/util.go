@@ -177,8 +177,17 @@ func jsonMsgObj(c *gin.Context, msg string, obj any, err error) {
 		middleware.MarkRequestFailureLogged(c)
 		logger.Errorf("%s operation failed: %s", requestErrorContext(c), logger.ErrorSummary(err))
 		errStr := err.Error()
-		if errStr != "" {
+		// Service validation can return an i18n key. Resolve it before
+		// formatting the response, otherwise the UI displays the raw key.
+		if strings.HasPrefix(errStr, "pages.") {
+			if translated := I18nWeb(c, errStr); translated != "" && translated != errStr {
+				errStr = translated
+			}
+		}
+		if errStr != "" && msg != "" {
 			m.Msg = msg + " (" + errStr + ")"
+		} else if errStr != "" {
+			m.Msg = errStr
 		} else if msg != "" {
 			m.Msg = msg
 		} else {

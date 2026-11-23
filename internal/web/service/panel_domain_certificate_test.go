@@ -96,4 +96,32 @@ func TestPanelCertificateSharingKeepsGatewayIssuerAndPreventsSourceRemoval(t *te
 	if isDomainManagedCertificatePair(filepath.Join(root, "domain-tls-other", "a.crt"), managedKey) {
 		t.Fatal("accepted unrelated directory")
 	}
+	// Unrelated changes must not block panel certificate renewal.
+	portChange := cfg
+	portChange.HTTPPort++
+	if err := validatePanelCertificateSource(cfg, portChange, settings.WebDomain, managedCert, managedKey); err != nil {
+		t.Fatalf("blocked a harmless gateway port change: %v", err)
+	}
+	staging := cfg
+	staging.Staging = !cfg.Staging
+	if err := validatePanelCertificateSource(cfg, staging, settings.WebDomain, managedCert, managedKey); err == nil {
+		t.Fatal("allowed changing the issuer staging environment")
+	}
+	changedTLS := cfg
+	changedTLS.Domains = []domainfront.DomainFrontDomain{{Name: "golden-fixture.test", Mode: "direct", TLS: "existing", Enabled: true}}
+	if err := validatePanelCertificateSource(cfg, changedTLS, settings.WebDomain, managedCert, managedKey); err == nil {
+		t.Fatal("allowed switching the panel certificate issuer to external TLS")
+	}
+	// Disabled or externally managed gateways must not retain a stale
+	// dependency on an issuer that is no longer running.
+	oldDisabled := cfg
+	oldDisabled.Enabled = false
+	if err := validatePanelCertificateSource(oldDisabled, removed, settings.WebDomain, managedCert, managedKey); err != nil {
+		t.Fatalf("blocked cleanup of an already disabled gateway: %v", err)
+	}
+	oldExternal := cfg
+	oldExternal.Domains = []domainfront.DomainFrontDomain{{Name: "golden-fixture.test", Mode: "direct", TLS: "existing", Enabled: true}}
+	if err := validatePanelCertificateSource(oldExternal, removed, settings.WebDomain, managedCert, managedKey); err != nil {
+		t.Fatalf("blocked cleanup of an externally managed certificate: %v", err)
+	}
 }
