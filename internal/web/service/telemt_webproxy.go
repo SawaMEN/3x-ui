@@ -33,7 +33,7 @@ const (
 	telemtWebListenPort             = 15080
 	telemtWebUser                   = "webproxy"
 	telemtWebMinEngine              = "3.5.1"
-	telemtWebFrontendConfigRevision = 3
+	telemtWebFrontendConfigRevision = 2
 )
 
 const telemtWebDomainPatternSource = "^(?:[A-Za-z0-9]" +

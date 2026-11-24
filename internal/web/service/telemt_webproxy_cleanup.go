@@ -267,6 +267,11 @@ func (TelemtService) ensureWebProxyBackend(ctx context.Context) error {
 		return fmt.Errorf("telemt: failed to start WEB Proxy backend: %w%s", err, telemtBackendServiceState())
 	}
 
+	return telemtWebWaitBackendReady(ctx, state, 30*time.Second)
+}
+
+// Check the HTTP backend independently of TLS termination, for every vhost.
+func telemtWebWaitBackendReady(ctx context.Context, state TelemtWebProxyState, timeout time.Duration) error {
 	addr := net.JoinHostPort(telemtWebListenIP, strconv.Itoa(state.ListenPort))
 	client := &http.Client{
 		Timeout:       2 * time.Second,
@@ -274,7 +279,7 @@ func (TelemtService) ensureWebProxyBackend(ctx context.Context) error {
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	defer client.CloseIdleConnections()
-	deadline, cancel := context.WithTimeout(ctx, 30*time.Second)
+	deadline, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var lastErr error
 	for {
@@ -283,20 +288,10 @@ func (TelemtService) ensureWebProxyBackend(ctx context.Context) error {
 			break
 		}
 		if systemctl("is-active", "--quiet", telemtServiceName) == nil {
-			request, err := http.NewRequestWithContext(deadline, http.MethodGet, "http://"+addr+"/", nil)
-			if err == nil {
-				request.Host = state.Domain
-				var response *http.Response
-				response, err = client.Do(request)
-				if err == nil {
-					err = telemtWebVerifySiteResponse(state, response)
-					_ = response.Body.Close()
-					if err == nil {
-						return nil
-					}
-				}
+			lastErr = telemtWebProbeBackendHosts(deadline, state, addr, client)
+			if lastErr == nil {
+				return nil
 			}
-			lastErr = err
 		} else {
 			lastErr = errors.New("service is not active")
 		}
@@ -306,6 +301,26 @@ func (TelemtService) ensureWebProxyBackend(ctx context.Context) error {
 		}
 	}
 	return fmt.Errorf("telemt: WEB Proxy backend %s is not ready: %w%s; see journalctl -u telemt.service -n 50 --no-pager", addr, lastErr, telemtBackendServiceState())
+}
+
+func telemtWebProbeBackendHosts(ctx context.Context, state TelemtWebProxyState, addr string, client *http.Client) error {
+	for _, host := range telemtWebHosts(state) {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/", nil)
+		if err != nil {
+			return err
+		}
+		request.Host = host
+		response, err := client.Do(request)
+		if err != nil {
+			return fmt.Errorf("backend %s: %w", host, err)
+		}
+		probeErr := telemtWebVerifySiteResponse(state, response)
+		_ = response.Body.Close()
+		if probeErr != nil {
+			return fmt.Errorf("backend %s: %w", host, probeErr)
+		}
+	}
+	return nil
 }
 
 func telemtBackendServiceState() string {

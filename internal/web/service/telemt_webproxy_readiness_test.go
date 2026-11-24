@@ -97,6 +97,28 @@ func TestTelemtWebIPv6AdvertisedAddressNeedsIPv6Listener(t *testing.T) {
 	}
 }
 
+func TestTelemtWebBackendProbeChecksEveryHost(t *testing.T) {
+	state := TelemtWebProxyState{Domain: "example.com", Aliases: []string{"alias.example.com"},
+		Site: &TelemtWebSiteOptions{Mode: "origin"}}
+	var hosts []string
+	client := &http.Client{Transport: telemtWebTestTransport(func(r *http.Request) (*http.Response, error) {
+		hosts = append(hosts, r.Host)
+		if r.URL.Host != "127.0.0.1:15080" || r.URL.Path != "/" {
+			t.Fatalf("unexpected backend URL: %s", r.URL)
+		}
+		status := http.StatusOK
+		if r.Host == "alias.example.com" {
+			status = http.StatusBadGateway
+		}
+		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader("site")), Header: make(http.Header)}, nil
+	})}
+	err := telemtWebProbeBackendHosts(context.Background(), state, "127.0.0.1:15080", client)
+	if err == nil || !strings.Contains(err.Error(), "alias.example.com") ||
+		strings.Join(hosts, ",") != "example.com,alias.example.com" {
+		t.Fatalf("backend alias failure was missed: %v (%v)", err, hosts)
+	}
+}
+
 func TestTelemtWebProbeAddressFamilies(t *testing.T) {
 	if got := strings.Join(telemtWebProbeLoopbacks(false), ","); got != "127.0.0.1" {
 		t.Fatalf("IPv4-only probe: %s", got)

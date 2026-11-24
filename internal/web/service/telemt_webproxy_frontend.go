@@ -28,6 +28,10 @@ const (
 
 var telemtWebOperationMu sync.Mutex
 
+// Protected by telemtWebOperationMu. Avoid repeated frontend reloads during a
+// sustained failure while keeping healthy connections and Telemt users intact.
+var telemtWebLastFrontendRepair time.Time
+
 type TelemtWebRetryJitter struct {
 	Enabled bool `json:"enabled"`
 	MinMS   int  `json:"minMs"`
@@ -875,6 +879,23 @@ func telemtWebRecoverFrontend(ctx context.Context, state TelemtWebProxyState) er
 				return err
 			}
 		}
+	}
+	err := telemtWebWaitFrontendReady(ctx, state)
+	if err == nil || ctx.Err() != nil {
+		return err
+	}
+	// A healthy local backend and a failed public HTTPS probe isolate the
+	// failure to the frontend. Reload only validated on-disk configuration
+	// and never restart Telemt merely because HTTPS is unreachable.
+	if backendErr := telemtWebWaitBackendReady(ctx, state, 5*time.Second); backendErr != nil {
+		return errors.Join(err, backendErr)
+	}
+	if time.Since(telemtWebLastFrontendRepair) < time.Minute {
+		return err
+	}
+	telemtWebLastFrontendRepair = time.Now()
+	if reloadErr := telemtWebReloadFrontend(state); reloadErr != nil {
+		return errors.Join(err, reloadErr)
 	}
 	return telemtWebWaitFrontendReady(ctx, state)
 }
