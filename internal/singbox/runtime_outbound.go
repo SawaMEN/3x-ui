@@ -38,6 +38,9 @@ func normalizeOutboundsForRuntime(outbounds []map[string]any) ([]map[string]any,
 	}
 
 	for index, outbound := range normalized {
+		if outbound == nil {
+			return nil, fmt.Errorf("outbounds[%d] must be an object", index)
+		}
 		outboundType := strings.ToLower(strings.TrimSpace(rawString(outbound, "type")))
 		outbound["type"] = outboundType
 		switch outboundType {

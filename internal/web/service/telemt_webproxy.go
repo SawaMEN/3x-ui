@@ -32,7 +32,7 @@ const (
 	telemtWebListenPort             = 15080
 	telemtWebUser                   = "webproxy"
 	telemtWebMinEngine              = "3.5.1"
-	telemtWebFrontendConfigRevision = 1
+	telemtWebFrontendConfigRevision = 2
 )
 
 const telemtWebDomainPatternSource = "^(?:[A-Za-z0-9]" +
@@ -775,11 +775,6 @@ func telemtWebNeedsIPv6(state TelemtWebProxyState) bool {
 }
 
 func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
-	if data, err := os.ReadFile("/etc/letsencrypt/renewal/" + state.Domain + ".conf"); err == nil && telemtWebRenewalMode(data) == "managed-webroot" {
-		if err := telemtWebWriteAcmeNginxConfig(state.Domain); err != nil {
-			return err
-		}
-	}
 	if state.CertFile == "" || state.KeyFile == "" {
 		return errors.New("WEB Proxy certificate is not configured")
 	}
@@ -789,6 +784,9 @@ func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	listen := "listen 443 ssl;"
 	if telemtWebNeedsIPv6(state) {
 		listen += "\n    listen [::]:443 ssl;"
+	}
+	if err := telemtWebEnsureNginxHTTPRedirect(state); err != nil {
+		return err
 	}
 	locations, err := telemtWebSubscriptionLocations(&SettingService{})
 	if err != nil {
@@ -1100,12 +1098,33 @@ func telemtWebEnsureCertificate(ctx context.Context, domain, panelCert, panelKey
 	return acmeCert, acmeKey, nil
 }
 
+// Keep HTTP navigation working even when the HTTPS certificate was supplied
+// by the panel rather than issued by our ACME client. Never claim port 80
+// from another service; HTTPS remains available in that case.
+func telemtWebEnsureNginxHTTPRedirect(state TelemtWebProxyState) error {
+	if !telemtWebPortAvailable(80) && !telemtWebNginxOwnsPort(80) {
+		return nil
+	}
+	return telemtWebWriteHTTPNginxConfig(telemtWebHosts(state), telemtWebNeedsIPv6(state))
+}
+
 func telemtWebWriteAcmeNginxConfig(domain string) error {
+	return telemtWebWriteHTTPNginxConfig([]string{domain}, false)
+}
+
+func telemtWebWriteHTTPNginxConfig(hosts []string, ipv6 bool) error {
 	if err := os.MkdirAll(filepath.Join(telemtWebDecoyDir, ".well-known", "acme-challenge"), 0o755); err != nil {
 		return err
 	}
-	conf := fmt.Sprintf("server {\n    listen 80;\n    server_name %s;\n    root %s;\n    location /.well-known/acme-challenge/ {\n        try_files $uri =404;\n    }\n    location / {\n        return 308 https://$host$request_uri;\n    }\n}\n", domain, telemtWebDecoyDir)
-	return os.WriteFile(telemtWebAcmeConf, []byte(conf), 0o644)
+	return os.WriteFile(telemtWebAcmeConf, []byte(renderTelemtWebHTTPNginxConfig(hosts, ipv6)), 0o644)
+}
+
+func renderTelemtWebHTTPNginxConfig(hosts []string, ipv6 bool) string {
+	listen := "listen 80;"
+	if ipv6 {
+		listen += "\n    listen [::]:80;"
+	}
+	return fmt.Sprintf("server {\n    %s\n    server_name %s;\n    root %s;\n    location /.well-known/acme-challenge/ {\n        try_files $uri =404;\n    }\n    location / {\n        return 308 https://$host$request_uri;\n    }\n}\n", listen, strings.Join(hosts, " "), telemtWebDecoyDir)
 }
 
 func removeTelemtWebAcmeConfig() { _ = os.Remove(telemtWebAcmeConf); _ = telemtWebReloadNginx() }

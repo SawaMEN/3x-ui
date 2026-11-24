@@ -498,8 +498,8 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 		plan, err := buildTelemtWebIngress(s)
 		if err != nil { return err }
 		if telemtWebFrontend(s) == "nginx" {
-			if data, err := os.ReadFile("/etc/letsencrypt/renewal/" + s.Domain + ".conf"); err == nil && telemtWebRenewalMode(data) == "managed-webroot" {
-				if err := telemtWebWriteAcmeNginxConfig(s.Domain); err != nil { return err }
+			if err := telemtWebEnsureNginxHTTPRedirect(s); err != nil {
+				return err
 			}
 		}
 		return writeTelemtIngressFrontend(s, plan)
@@ -720,9 +720,10 @@ func telemtWebProbeHosts(ctx context.Context, state TelemtWebProxyState, client 
 		if err != nil {
 			return fmt.Errorf("%s: %w", host, err)
 		}
+		probeErr := telemtWebVerifySiteResponse(state, response)
 		_ = response.Body.Close()
-		if !telemtWebSiteReady(state, response.StatusCode) {
-			return fmt.Errorf("%s: WEB HTTPS endpoint returned HTTP %d", host, response.StatusCode)
+		if probeErr != nil {
+			return fmt.Errorf("%s: WEB HTTPS endpoint: %w", host, probeErr)
 		}
 	}
 	return nil

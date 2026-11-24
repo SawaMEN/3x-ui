@@ -271,11 +271,11 @@ func (TelemtService) EnsureWebProxyBackend() error {
 				var response *http.Response
 				response, err = client.Do(request)
 				if err == nil {
+					err = telemtWebVerifySiteResponse(state, response)
 					_ = response.Body.Close()
-					if telemtWebSiteReady(state, response.StatusCode) {
+					if err == nil {
 						return nil
 					}
-					err = fmt.Errorf("WEB listener returned HTTP %d", response.StatusCode)
 				}
 			}
 			lastErr = err

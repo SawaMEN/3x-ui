@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -53,7 +55,11 @@ func (f telemtWebTestTransport) RoundTrip(r *http.Request) (*http.Response, erro
 }
 
 func TestTelemtWebProbeChecksEveryHost(t *testing.T) {
-	state := TelemtWebProxyState{Domain: "example.com", Aliases: []string{"alias.example.com"}}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("site"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	state := TelemtWebProxyState{Domain: "example.com", Aliases: []string{"alias.example.com"}, DecoyDir: dir}
 	var hosts []string
 	aliasStatus := http.StatusBadGateway
 	client := &http.Client{
@@ -88,5 +94,29 @@ func TestTelemtWebIPv6AdvertisedAddressNeedsIPv6Listener(t *testing.T) {
 	}
 	if telemtWebNeedsIPv6(TelemtWebProxyState{}) {
 		t.Fatal("empty endpoint must not change default listener")
+	}
+}
+
+func TestTelemtWebVerifyPreparedIndex(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("site"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	state := TelemtWebProxyState{DecoyDir: dir}
+	for _, body := range []string{"", "default nginx page", "site", "site extra"} {
+		resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}
+		err := telemtWebVerifySiteResponse(state, resp)
+		if (err == nil) != (body == "site") {
+			t.Fatalf("body %q: %v", body, err)
+		}
+	}
+}
+
+func TestTelemtWebHTTPRedirectWithAliases(t *testing.T) {
+	conf := renderTelemtWebHTTPNginxConfig([]string{"example.com", "alias.example.com"}, true)
+	for _, expected := range []string{"listen 80;", "listen [::]:80;", "server_name example.com alias.example.com;", "/.well-known/acme-challenge/", "return 308 https://$host$request_uri;"} {
+		if !strings.Contains(conf, expected) {
+			t.Fatalf("missing %q in HTTP config: %s", expected, conf)
+		}
 	}
 }
