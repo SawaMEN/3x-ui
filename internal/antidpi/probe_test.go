@@ -1,6 +1,8 @@
 package antidpi
 
 import (
+	"context"
+	"errors"
 	"net/netip"
 	"testing"
 )
@@ -26,5 +28,26 @@ func TestValidHost(t *testing.T) {
 	}
 	if !validHost("vpn.example.com") {
 		t.Fatal("valid hostname rejected")
+	}
+}
+
+func TestCollectObservationsCancellation(t *testing.T) {
+	for _, count := range []int{1, 2} {
+		ctx, cancel := context.WithCancel(context.Background())
+		ips := []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("8.8.8.8")}
+		report := Report{Host: "example.com", Port: 443}
+		calls := 0
+		err := collectObservations(ctx, &report, ips[:count], func(_ context.Context, host string, ip netip.Addr, port int) Observation {
+			calls++
+			if host != report.Host || port != report.Port {
+				t.Fatal("unexpected probe arguments")
+			}
+			cancel()
+			return Observation{IP: ip.String()}
+		})
+		cancel()
+		if !errors.Is(err, context.Canceled) || calls != 1 || len(report.Observations) != 1 {
+			t.Fatalf("count=%d: error=%v calls=%d report=%+v", count, err, calls, report)
+		}
 	}
 }

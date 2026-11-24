@@ -97,3 +97,27 @@ func TestStaleSuccessNotReused(t *testing.T) {
 		t.Fatal(d)
 	}
 }
+
+func TestConfirmRejectsStaleConfirmation(t *testing.T) {
+	p := DefaultPolicy()
+	s, err := New(p, []Candidate{{"main", 0}, {"reserve", 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1000, 0)
+	if !s.Confirm(now, "main") || !s.Confirm(now.Add(3*time.Second), "main") {
+		t.Fatal("valid confirmation rejected")
+	}
+	if s.Confirm(now.Add(2*time.Second), "reserve") {
+		t.Fatal("stale confirmation changed the active connection")
+	}
+	if d := s.Decide(now.Add(2 * time.Second)); d.Current != "main" || d.Reason != "clock-regression" {
+		t.Fatal(d)
+	}
+	if !s.Confirm(now.Add(4*time.Second), "reserve") {
+		t.Fatal("fresh confirmation rejected")
+	}
+	if d := s.Decide(now.Add(4 * time.Second)); d.Current != "reserve" {
+		t.Fatal(d)
+	}
+}

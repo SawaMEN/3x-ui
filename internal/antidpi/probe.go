@@ -13,22 +13,7 @@ import (
 	"time"
 )
 
-var hostname = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]{0,251}[a-zA-Z0-9])?// Package antidpi provides bounded, read-only connectivity diagnostics.
-package antidpi
-
-import (
-	"context"
-	"crypto/tls"
-	"fmt"
-	"net"
-	"net/netip"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
-)
-
-)
+var hostname = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]{0,251}[a-zA-Z0-9])?$`)
 
 type Observation struct {
 	IP         string `json:"ip"`
@@ -108,13 +93,20 @@ func Probe(ctx context.Context, host string, port int) (Report, error) {
 		}
 	}
 	report := Report{Scope: "server", Host: host, Port: port, CheckedAt: time.Now().UTC(), Observations: []Observation{}}
+	err = collectObservations(ctx, &report, ips, probeAddress)
+	return report, err
+}
+
+// collectObservations preserves completed observations, but never reports
+// success when the overall request was canceled during the last address.
+func collectObservations(ctx context.Context, report *Report, ips []netip.Addr, probe func(context.Context, string, netip.Addr, int) Observation) error {
 	for _, ip := range ips {
-		if ctx.Err() != nil {
-			return report, ctx.Err()
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		report.Observations = append(report.Observations, probeAddress(ctx, host, ip.Unmap(), port))
+		report.Observations = append(report.Observations, probe(ctx, report.Host, ip.Unmap(), report.Port))
 	}
-	return report, nil
+	return ctx.Err()
 }
 
 func probeAddress(ctx context.Context, host string, ip netip.Addr, port int) Observation {

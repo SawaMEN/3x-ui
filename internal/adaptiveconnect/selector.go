@@ -45,13 +45,14 @@ type Decision struct {
 }
 
 type Selector struct {
-	mu           sync.Mutex
-	policy       Policy
-	candidates   []Candidate
-	health       map[string]health
-	current      string
-	lastSwitch   time.Time
-	lastDecision time.Time
+	mu            sync.Mutex
+	policy        Policy
+	candidates    []Candidate
+	health        map[string]health
+	current       string
+	lastSwitch    time.Time
+	lastDecision  time.Time
+	lastConfirmed time.Time
 }
 
 func New(policy Policy, candidates []Candidate) (*Selector, error) {
@@ -125,7 +126,7 @@ func (s *Selector) Decide(now time.Time) Decision {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d := Decision{Current: s.current, Reason: "healthy-or-awaiting-evidence"}
-	if now.Before(s.lastDecision) {
+	if now.Before(s.lastDecision) || now.Before(s.lastConfirmed) {
 		d.Reason = "clock-regression"
 		return d
 	}
@@ -183,11 +184,12 @@ func (s *Selector) Decide(now time.Time) Decision {
 func (s *Selector) Confirm(now time.Time, id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.known(id) || now.IsZero() || now.Before(s.lastDecision) || now.Before(s.lastSwitch) {
+	if !s.known(id) || now.IsZero() || now.Before(s.lastDecision) || now.Before(s.lastConfirmed) {
 		return false
 	}
 	if id != s.current {
 		s.current, s.lastSwitch = id, now
 	}
+	s.lastConfirmed = now
 	return true
 }
