@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/zapret2"
 )
 
@@ -44,20 +46,35 @@ func (a *SettingController) zapret2Remove(c *gin.Context) {
 		jsonObj(c, nil, err)
 		return
 	}
-	var template struct {
-		Outbounds []struct {
-			Protocol string `json:"protocol"`
-			Tag      string `json:"tag"`
-		} `json:"outbounds"`
-	}
-	if err := json.Unmarshal([]byte(raw), &template); err != nil {
-		jsonObj(c, nil, err)
-		return
-	}
-	for _, outbound := range template.Outbounds {
-		if outbound.Protocol == "zapret2" {
-			jsonObj(c, nil, fmt.Errorf("remove zapret2 outbound %q from routing and outbounds before uninstalling the component", outbound.Tag))
+	templates := []string{raw}
+	for _, core := range []string{service.CoreTypeSingBox, service.CoreTypeSingBoxUpstream} {
+		native, err := a.settingService.GetNativeCoreConfigTemplate(core)
+		if err != nil {
+			jsonObj(c, nil, err)
 			return
+		}
+		templates = append(templates, native)
+	}
+	for _, raw := range templates {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		var template struct {
+			Outbounds []struct {
+				Protocol string `json:"protocol"`
+				Type     string `json:"type"`
+				Tag      string `json:"tag"`
+			} `json:"outbounds"`
+		}
+		if err := json.Unmarshal([]byte(raw), &template); err != nil {
+			jsonObj(c, nil, err)
+			return
+		}
+		for _, outbound := range template.Outbounds {
+			if outbound.Protocol == "zapret2" || outbound.Type == "zapret2" {
+				jsonObj(c, nil, fmt.Errorf("remove zapret2 outbound %q from routing and outbounds before uninstalling the component", outbound.Tag))
+				return
+			}
 		}
 	}
 	err = zapret2.Remove()

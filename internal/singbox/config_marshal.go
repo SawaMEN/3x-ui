@@ -262,16 +262,16 @@ func validateSingBoxRequiredFields(outbound map[string]any, protocol, tag string
 func validateSingBoxOutbound(outbound map[string]any) error {
 	protocol := strings.ToLower(strings.TrimSpace(rawString(outbound, "type")))
 	tag := rawString(outbound, "tag")
-	if protocol == "hysteria" || protocol == "hysteria2" || protocol == "tuic" {
-		if utls := rawObject(rawObject(outbound, "tls"), "utls"); rawBool(utls, "enabled") {
-			return fmt.Errorf("sing-box QUIC outbound %q cannot use TCP uTLS", tag)
-		}
-	}
 	if err := validateSingBoxOutboundType(protocol, tag); err != nil {
 		return err
 	}
 	if err := validateSingBoxRequiredFields(outbound, protocol, tag); err != nil {
 		return err
+	}
+	if protocol == "hysteria" || protocol == "hysteria2" || protocol == "tuic" {
+		if err := validateRuntimeQUICTransport(outbound, "outbound"); err != nil {
+			return err
+		}
 	}
 	if err := validateHysteriaOutboundOptions(outbound, protocol, tag); err != nil {
 		return err
@@ -516,6 +516,9 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	}
 
 	for _, source := range c.Endpoints {
+		if source == nil {
+			return nil, fmt.Errorf("sing-box endpoint must be an object")
+		}
 		endpoint := maps.Clone(source)
 		if err := validateSingBoxEndpoint(endpoint); err != nil {
 			return nil, err
@@ -533,8 +536,38 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		clone.Endpoints = append(clone.Endpoints, endpoint)
 	}
 
+	for index, inbound := range clone.Inbounds {
+		if inbound == nil {
+			return nil, fmt.Errorf("inbounds[%d] must be an object", index)
+		}
+		protocol := strings.ToLower(strings.TrimSpace(rawString(inbound, "type")))
+		transport := rawObject(inbound, "transport")
+		if protocol == "hysteria" || protocol == "hysteria2" || protocol == "tuic" ||
+			strings.EqualFold(rawString(transport, "type"), "quic") {
+			if err := validateRuntimeQUICTransport(inbound, "inbound"); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if err := normalizeRuntimeTLSConfig(&clone); err != nil {
 		return nil, err
 	}
 	return json.Marshal(clone)
+}
+
+// QUIC uses native Go TLS 1.3, not a TCP TLS adapter. Native templates can
+// bypass the panel protocol translators, so enforce the constraint at marshal.
+func validateRuntimeQUICTransport(node map[string]any, direction string) error {
+	tls := rawObject(node, "tls")
+	tag := rawString(node, "tag")
+	if !rawBool(tls, "enabled") {
+		return fmt.Errorf("sing-box QUIC %s %q requires TLS", direction, tag)
+	}
+	if rawBool(rawObject(tls, "utls"), "enabled") || rawBool(rawObject(tls, "reality"), "enabled") {
+		return fmt.Errorf("sing-box QUIC %s %q requires native Go TLS; uTLS and REALITY are incompatible", direction, tag)
+	}
+	if maximum := rawString(tls, "max_version"); maximum != "" && maximum != "1.3" {
+		return fmt.Errorf("sing-box QUIC %s %q requires TLS 1.3", direction, tag)
+	}
+	return nil
 }

@@ -529,7 +529,12 @@ func renderTelemtWebIngress(state TelemtWebProxyState, plan telemtIngressPlan) [
 	}
 	var cfg strings.Builder
 	cfg.WriteString("global\n    maxconn 4096\n\ndefaults\n    mode http\n    timeout connect 5s\n    timeout client 65s\n    timeout server 65s\n    timeout tunnel 1h\n")
-	if len(plan.proxies) > 0 {
+	// Keep the TCP/HTTPS socket topology stable when selected VPN routes
+	// temporarily disappear (disabled inbound, duplicate SNI, or an edit).
+	// Otherwise a graceful reload must replace the TLS-terminating TCP 443
+	// listener with a raw TCP listener, and may interrupt the WEB service.
+	ids, _ := telemtIngressInboundIDs(state.SharedIngress)
+	if len(ids) > 0 || len(plan.proxies) > 0 {
 		fmt.Fprintf(&cfg, "\nfrontend entry\n    mode tcp\n    bind %s\n    tcp-request inspect-delay 5s\n    tcp-request content accept if { req.ssl_hello_type 1 }\n", bind)
 		for _, route := range plan.proxies {
 			fmt.Fprintf(&cfg, "    use_backend proxy_%d if { req.ssl_sni -i %s }\n", route.id, route.host)
@@ -661,6 +666,17 @@ func refreshTelemtIngress(state TelemtWebProxyState) error {
 		// 443. Keep the rollback snapshot until ownership is verified.
 		if err := telemtIngressWaitPublicOwner(state); err != nil {
 			return rollback(err)
+		}
+		// Socket ownership alone does not prove that the new HTTP frontend
+		// can reach Telemt. Verify the actual site before publishing routes
+		// when the backend is active; a stopped backend is repaired by reconcile.
+		if (TelemtService{}).WebProxyTelemtActive() {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			err := telemtWebWaitFrontendReady(ctx, state)
+			cancel()
+			if err != nil {
+				return rollback(err)
+			}
 		}
 	} else if err := telemtIngressWaitPublicOwner(state); err != nil {
 		publishedTelemtIngress.Store(nil)

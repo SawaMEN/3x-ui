@@ -165,8 +165,9 @@ func telemtVPNMigrationRevision(inbound model.Inbound) string {
 }
 
 func planTelemtVPNMigrations(ctx context.Context, state TelemtWebProxyState, reserved ...int) ([]telemtVPNMigrationPlan, error) {
+	db := database.GetDB().WithContext(ctx)
 	var inbounds []model.Inbound
-	if err := database.GetDB().WithContext(ctx).Where("node_id IS NULL").Order("id").Find(&inbounds).Error; err != nil {
+	if err := db.Where("node_id IS NULL").Order("id").Find(&inbounds).Error; err != nil {
 		return nil, err
 	}
 	ids, err := telemtIngressInboundIDs(state.SharedIngress)
@@ -175,8 +176,10 @@ func planTelemtVPNMigrations(ctx context.Context, state TelemtWebProxyState, res
 	}
 	items := []telemtVPNMigrationPlan{}
 	counts := map[string]int{}
+	candidates := make(map[int]int)
+	candidateIDs := make([]int, 0)
 	hosts := telemtWebHosts(state)
-	for _, inbound := range inbounds {
+	for index, inbound := range inbounds {
 		item, relevant := telemtVPNMigrationCandidate(inbound, state.Domain, hosts)
 		if relevant {
 			if inbound.Protocol == model.MTProto && inbound.Id == state.ManagedInboundID {
@@ -185,6 +188,8 @@ func planTelemtVPNMigrations(ctx context.Context, state TelemtWebProxyState, res
 			items = append(items, item)
 			if item.Reason == "" {
 				counts[item.SNI]++
+				candidates[item.ID] = index
+				candidateIDs = append(candidateIDs, item.ID)
 			}
 		} else if slices.Contains(ids, inbound.Id) {
 			// The proposed new route cannot reuse an existing selected SNI.
@@ -193,16 +198,23 @@ func planTelemtVPNMigrations(ctx context.Context, state TelemtWebProxyState, res
 			}
 		}
 	}
+	// Fetch references in batches; each query uses the ID list twice.
+	dependent := make(map[int]bool)
+	for _, batch := range chunkInts(candidateIDs, sqlInChunk/2) {
+		var references []model.InboundFallback
+		if err := db.Select("master_id", "child_id").Where("master_id IN ? OR child_id IN ?", batch, batch).Find(&references).Error; err != nil {
+			return nil, err
+		}
+		for _, reference := range references {
+			dependent[reference.MasterId], dependent[reference.ChildId] = true, true
+		}
+	}
 	for i := range items {
 		item := &items[i]
 		if item.Reason != "" {
 			continue
 		}
-		var references int64
-		if err := database.GetDB().WithContext(ctx).Model(&model.InboundFallback{}).Where("master_id = ? OR child_id = ?", item.ID, item.ID).Count(&references).Error; err != nil {
-			return nil, err
-		}
-		if references > 0 {
+		if dependent[item.ID] {
 			item.Reason = "dependent-listener"
 			continue
 		}
@@ -213,21 +225,13 @@ func planTelemtVPNMigrations(ctx context.Context, state TelemtWebProxyState, res
 			}
 		}
 		if item.Security == "reality" {
-			var inbound model.Inbound
-			if err := database.GetDB().WithContext(ctx).First(&inbound, item.ID).Error; err != nil {
-				return nil, err
-			}
-			if _, err := buildTelemtRealityMigrationProbe(&inbound, *item); err != nil {
+			if _, err := buildTelemtRealityMigrationProbe(&inbounds[candidates[item.ID]], *item); err != nil {
 				item.Reason = "reality-client-required"
 				continue
 			}
 		}
 		if item.Protocol == string(model.ShadowTLS) {
-			var inbound model.Inbound
-			if err := database.GetDB().WithContext(ctx).First(&inbound, item.ID).Error; err != nil {
-				return nil, err
-			}
-			if _, err := buildTelemtShadowTLSMigrationProbe(&inbound, *item); err != nil {
+			if _, err := buildTelemtShadowTLSMigrationProbe(&inbounds[candidates[item.ID]], *item); err != nil {
 				item.Reason = "shadowtls-client-required"
 				continue
 			}

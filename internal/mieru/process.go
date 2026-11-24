@@ -91,6 +91,7 @@ func (p *Process) Start() error {
 		}
 	}
 	cmd := exec.CommandContext(context.Background(), GetBinaryPath(), "run")
+	cmd.WaitDelay = 2 * time.Second
 	socketPath := p.socketPath
 	configPath := p.configPath
 	if abs, err := filepath.Abs(socketPath); err == nil {
@@ -105,26 +106,41 @@ func (p *Process) Start() error {
 	cmd.Stdout = lw
 	cmd.Stderr = lw
 	done := make(chan struct{})
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start mita: %w", err)
+	}
 	p.mu.Lock()
 	p.cmd, p.done, p.exitErr = cmd, done, nil
-	p.mu.Unlock()
 	p.intentionalStop.Store(false)
-	if err := cmd.Start(); err != nil {
-		close(done)
-		p.mu.Lock()
-		p.cmd = nil
-		p.mu.Unlock()
-		return err
-	}
+	p.mu.Unlock()
 	go p.wait(cmd, done)
-	return nil
+
+	// A spawned process is not necessarily a successfully started server.
+	// Surface immediate configuration and bind failures to the manager.
+	timer := time.NewTimer(500 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-done:
+		p.mu.RLock()
+		err := p.exitErr
+		p.mu.RUnlock()
+		if err == nil {
+			return errors.New("mita exited during startup")
+		}
+		return fmt.Errorf("mita exited during startup: %w", err)
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (p *Process) wait(cmd *exec.Cmd, done chan struct{}) {
 	defer close(done)
 	err := cmd.Wait()
-	if err == nil || p.intentionalStop.Load() {
+	if p.intentionalStop.Load() {
 		return
+	}
+	if err == nil {
+		err = errors.New("mita exited without a stop request")
 	}
 	logger.Errorf("mieru: mita %s exited: %v", p.label, err)
 	p.mu.Lock()
@@ -147,6 +163,7 @@ func (p *Process) Reload() error {
 		configPath = abs
 	}
 	cmd := exec.CommandContext(ctx, GetBinaryPath(), "reload")
+	cmd.WaitDelay = 2 * time.Second
 	cmd.Env = append(os.Environ(),
 		"MITA_CONFIG_JSON_FILE="+configPath,
 		"MITA_UDS_PATH="+socketPath,
@@ -166,7 +183,7 @@ func (p *Process) Reload() error {
 
 func (p *Process) Stop() error {
 	if !p.IsRunning() {
-		return errors.New("mita is not running")
+		return nil
 	}
 	p.intentionalStop.Store(true)
 	p.mu.RLock()
@@ -209,13 +226,20 @@ type logWriter struct {
 func (w *logWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	const maxPendingLine = 64 * 1024
+	// A child can emit arbitrarily long lines without a newline. Bound
+	// retained partial output so a failed component cannot exhaust panel RAM.
 	w.buf += string(p)
 	for {
 		idx := strings.IndexByte(w.buf, '\n')
 		if idx < 0 {
+			if len(w.buf) > maxPendingLine {
+				w.buf = strings.Clone(w.buf[len(w.buf)-maxPendingLine:])
+			}
 			break
 		}
-		line := strings.TrimSpace(w.buf[:idx])
+		start := max(0, idx-maxPendingLine)
+		line := strings.TrimSpace(w.buf[start:idx])
 		w.buf = w.buf[idx+1:]
 		if line != "" {
 			logger.Infof("mieru: mita %s | %s", w.label, line)

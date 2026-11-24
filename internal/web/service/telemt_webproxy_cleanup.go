@@ -212,6 +212,10 @@ WantedBy=multi-user.target
 	if telemtIngressUsesRouter(state) {
 		unit = strings.ReplaceAll(unit, "telemt.service\n", "telemt.service "+telemtIngressRouterUnit+"\n")
 	}
+	if current, err := os.ReadFile(telemtWebBootUnitPath); err == nil && string(current) == unit &&
+		systemctl("is-enabled", "--quiet", telemtWebBootUnitName) == nil {
+		return nil
+	}
 	if err := os.WriteFile(telemtWebBootUnitPath, []byte(unit), 0o644); err != nil {
 		return fmt.Errorf("telemt: write WEB Proxy boot unit: %w", err)
 	}
@@ -238,7 +242,14 @@ func cleanupWebProxyBootUnit() error {
 	return nil
 }
 
-func (TelemtService) EnsureWebProxyBackend() error {
+func (s TelemtService) EnsureWebProxyBackend() error {
+	return s.ensureWebProxyBackend(context.Background())
+}
+
+func (TelemtService) ensureWebProxyBackend(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	state, err := readTelemtWebState()
 	if err != nil {
 		return err
@@ -251,44 +262,65 @@ func (TelemtService) EnsureWebProxyBackend() error {
 	}
 	_ = systemctl("reset-failed", telemtServiceName)
 	if err := systemctl("start", telemtServiceName); err != nil {
-		_ = cleanupWebProxyBootUnit()
+		// The configured boot dependency must survive transient startup
+		// failures. The enable transaction owns rollback of a new setup.
 		return fmt.Errorf("telemt: failed to start WEB Proxy backend: %w%s", err, telemtBackendServiceState())
 	}
 
+	return telemtWebWaitBackendReady(ctx, state, 30*time.Second)
+}
+
+// Check the HTTP backend independently of TLS termination, for every vhost.
+func telemtWebWaitBackendReady(ctx context.Context, state TelemtWebProxyState, timeout time.Duration) error {
 	addr := net.JoinHostPort(telemtWebListenIP, strconv.Itoa(state.ListenPort))
 	client := &http.Client{
 		Timeout:       2 * time.Second,
-		Transport:     &http.Transport{Proxy: nil},
+		Transport:     &http.Transport{Proxy: nil, DisableKeepAlives: true},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	deadline := time.Now().Add(30 * time.Second)
+	defer client.CloseIdleConnections()
+	deadline, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	var lastErr error
 	for {
+		if err := deadline.Err(); err != nil {
+			lastErr = errors.Join(lastErr, err)
+			break
+		}
 		if systemctl("is-active", "--quiet", telemtServiceName) == nil {
-			request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+addr+"/", nil)
-			if err == nil {
-				request.Host = state.Domain
-				var response *http.Response
-				response, err = client.Do(request)
-				if err == nil {
-					_ = response.Body.Close()
-					if telemtWebSiteReady(state, response.StatusCode) {
-						return nil
-					}
-					err = fmt.Errorf("WEB listener returned HTTP %d", response.StatusCode)
-				}
+			lastErr = telemtWebProbeBackendHosts(deadline, state, addr, client)
+			if lastErr == nil {
+				return nil
 			}
-			lastErr = err
 		} else {
 			lastErr = errors.New("service is not active")
 		}
-		if time.Now().After(deadline) {
-			break
+		select {
+		case <-deadline.Done():
+		case <-time.After(200 * time.Millisecond):
 		}
-		time.Sleep(200 * time.Millisecond)
 	}
-	_ = cleanupWebProxyBootUnit()
 	return fmt.Errorf("telemt: WEB Proxy backend %s is not ready: %w%s; see journalctl -u telemt.service -n 50 --no-pager", addr, lastErr, telemtBackendServiceState())
+}
+
+func telemtWebProbeBackendHosts(ctx context.Context, state TelemtWebProxyState, addr string, client *http.Client) error {
+	for _, host := range telemtWebHosts(state) {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/", nil)
+		if err != nil {
+			return err
+		}
+		request.Host = host
+		response, err := client.Do(request)
+		if err != nil {
+			return fmt.Errorf("backend %s: %w", host, err)
+		}
+		probeErr := telemtWebVerifySiteResponse(state, response)
+		_ = response.Body.Close()
+		if probeErr != nil {
+			return fmt.Errorf("backend %s: %w", host, probeErr)
+		}
+	}
+	return nil
 }
 
 func telemtBackendServiceState() string {

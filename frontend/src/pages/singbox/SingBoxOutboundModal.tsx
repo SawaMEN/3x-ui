@@ -68,6 +68,7 @@ import nativeFields from './native-outbound-fields.json';
 import { patchOption, type OptionSchema } from './protocol-option-model';
 import MasqueConnectionFields from './MasqueConnectionFields';
 import { snellHelp } from './snell-help';
+import Zapret2Fields from './Zapret2Fields';
 import './SingBoxOutboundModal.css';
 function Field({
   label,
@@ -202,7 +203,7 @@ export default function SingBoxOutboundModal({
     reality = object(tls.reality),
     transport = object(draft.transport);
   const group = ['selector', 'urltest', 'balancer'].includes(type),
-    remote = !group && !['direct', 'block'].includes(type);
+    remote = !group && !['direct', 'block', 'zapret2'].includes(type);
   const availableTags = existingTags.filter((t) => t !== text(value?.tag));
   const update = (next: ConfigObject) => {
     const normalized = normalizeNativeFingerprint(next);
@@ -431,6 +432,21 @@ export default function SingBoxOutboundModal({
         >
           {input('tag', false, 'proxy')}
         </Field>
+        {type === 'zapret2' && (
+          <Col span={24}>
+            <Zapret2Fields
+              value={object(draft.settings)}
+              onChange={(settings) => update({ ...draft, settings })}
+              onValidity={(valid) =>
+                setInvalidOptions((current) =>
+                  valid
+                    ? current.filter((item) => item !== 'zapret2')
+                    : [...new Set([...current, 'zapret2'])],
+                )
+              }
+            />
+          </Col>
+        )}
         {remote && (
           <>
             {nativeServerTypes.includes(type) && (
@@ -679,7 +695,7 @@ export default function SingBoxOutboundModal({
             )}
           </>
         )}
-        {!group && !['block', 'bridge'].includes(type) && (
+        {!group && !['block', 'bridge', 'zapret2'].includes(type) && (
           <Field
             label="Подключиться через"
             wide
@@ -709,16 +725,18 @@ export default function SingBoxOutboundModal({
             <MasqueConnectionFields value={draft} onChange={update} />
           </Col>
         )}
-        <ProtocolOptionFields
-          key={`${type}-${optionsRevision}`}
-          value={draft}
-          onChange={patch}
-          onValidity={(key, valid) =>
-            setInvalidOptions((current) =>
-              valid ? current.filter((item) => item !== key) : [...new Set([...current, key])],
-            )
-          }
-        />
+        {type !== 'zapret2' && (
+          <ProtocolOptionFields
+            key={`${type}-${optionsRevision}`}
+            value={draft}
+            onChange={patch}
+            onValidity={(key, valid) =>
+              setInvalidOptions((current) =>
+                valid ? current.filter((item) => item !== key) : [...new Set([...current, key])],
+              )
+            }
+          />
+        )}
       </Row>
     </Form>
   );

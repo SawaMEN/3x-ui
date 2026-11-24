@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -53,7 +55,11 @@ func (f telemtWebTestTransport) RoundTrip(r *http.Request) (*http.Response, erro
 }
 
 func TestTelemtWebProbeChecksEveryHost(t *testing.T) {
-	state := TelemtWebProxyState{Domain: "example.com", Aliases: []string{"alias.example.com"}}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("site"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	state := TelemtWebProxyState{Domain: "example.com", Aliases: []string{"alias.example.com"}, DecoyDir: dir}
 	var hosts []string
 	aliasStatus := http.StatusBadGateway
 	client := &http.Client{
@@ -88,5 +94,65 @@ func TestTelemtWebIPv6AdvertisedAddressNeedsIPv6Listener(t *testing.T) {
 	}
 	if telemtWebNeedsIPv6(TelemtWebProxyState{}) {
 		t.Fatal("empty endpoint must not change default listener")
+	}
+}
+
+func TestTelemtWebBackendProbeChecksEveryHost(t *testing.T) {
+	state := TelemtWebProxyState{Domain: "example.com", Aliases: []string{"alias.example.com"},
+		Site: &TelemtWebSiteOptions{Mode: "origin"}}
+	var hosts []string
+	client := &http.Client{Transport: telemtWebTestTransport(func(r *http.Request) (*http.Response, error) {
+		hosts = append(hosts, r.Host)
+		if r.URL.Host != "127.0.0.1:15080" || r.URL.Path != "/" {
+			t.Fatalf("unexpected backend URL: %s", r.URL)
+		}
+		status := http.StatusOK
+		if r.Host == "alias.example.com" {
+			status = http.StatusBadGateway
+		}
+		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader("site")), Header: make(http.Header)}, nil
+	})}
+	err := telemtWebProbeBackendHosts(context.Background(), state, "127.0.0.1:15080", client)
+	if err == nil || !strings.Contains(err.Error(), "alias.example.com") ||
+		strings.Join(hosts, ",") != "example.com,alias.example.com" {
+		t.Fatalf("backend alias failure was missed: %v (%v)", err, hosts)
+	}
+}
+
+func TestTelemtWebProbeAddressFamilies(t *testing.T) {
+	if got := strings.Join(telemtWebProbeLoopbacks(false), ","); got != "127.0.0.1" {
+		t.Fatalf("IPv4-only probe: %s", got)
+	}
+	if got := strings.Join(telemtWebProbeLoopbacks(true), ","); got != "127.0.0.1,::1" {
+		t.Fatalf("dual-stack probe: %s", got)
+	}
+	client := telemtWebFrontendProbeClient("127.0.0.1", nil)
+	transport := client.Transport.(*http.Transport)
+	if !transport.DisableKeepAlives || !transport.ForceAttemptHTTP2 || transport.Proxy != nil {
+		t.Fatal("frontend health check must use fresh direct browser-compatible connections")
+	}
+}
+
+func TestTelemtWebVerifyPreparedIndex(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("site"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	state := TelemtWebProxyState{DecoyDir: dir}
+	for _, body := range []string{"", "default nginx page", "site", "site extra"} {
+		resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}
+		err := telemtWebVerifySiteResponse(state, resp)
+		if (err == nil) != (body == "site") {
+			t.Fatalf("body %q: %v", body, err)
+		}
+	}
+}
+
+func TestTelemtWebHTTPRedirectWithAliases(t *testing.T) {
+	conf := renderTelemtWebHTTPNginxConfig([]string{"example.com", "alias.example.com"}, true)
+	for _, expected := range []string{"listen 80;", "listen [::]:80;", "server_name example.com alias.example.com;", "/.well-known/acme-challenge/", "return 308 https://$host$request_uri;"} {
+		if !strings.Contains(conf, expected) {
+			t.Fatalf("missing %q in HTTP config: %s", expected, conf)
+		}
 	}
 }

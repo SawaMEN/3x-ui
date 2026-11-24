@@ -266,6 +266,22 @@ func TestTelemtIngressMultipleRoutes(t *testing.T) {
 	}
 }
 
+func TestTelemtIngressKeepsWEBListenerWhenRoutesDisappear(t *testing.T) {
+	state := TelemtWebProxyState{Frontend: "haproxy", Domain: "web.example.com", ListenPort: 15080,
+		SharedIngress: &TelemtWebIngress{Enabled: true, InboundIDs: []int{1}}}
+	for _, plan := range []telemtIngressPlan{
+		{proxies: []telemtIngressProxyRoute{{id: 1, host: "vpn.example.com", address: "127.0.0.1:9443"}}},
+		{},
+	} {
+		cfg := string(renderTelemtWebIngress(state, plan))
+		for _, want := range []string{"frontend entry", "default_backend web_tls", "send-proxy-v2", telemtWebIngressTLSSocket + " accept-proxy", "server telemt 127.0.0.1:15080"} {
+			if !strings.Contains(cfg, want) {
+				t.Fatalf("WEB listener topology changed: missing %q", want)
+			}
+		}
+	}
+}
+
 func TestTelemtIngressLegacySelectionMigration(t *testing.T) {
 	legacy := &TelemtWebIngress{Enabled: true, NaiveInboundID: 42}
 	current := &TelemtWebIngress{Enabled: true, InboundIDs: []int{42, 42}}

@@ -28,6 +28,10 @@ const (
 
 var telemtWebOperationMu sync.Mutex
 
+// Protected by telemtWebOperationMu. Avoid repeated frontend reloads during a
+// sustained failure while keeping healthy connections and Telemt users intact.
+var telemtWebLastFrontendRepair time.Time
+
 type TelemtWebRetryJitter struct {
 	Enabled bool `json:"enabled"`
 	MinMS   int  `json:"minMs"`
@@ -498,8 +502,8 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 		plan, err := buildTelemtWebIngress(s)
 		if err != nil { return err }
 		if telemtWebFrontend(s) == "nginx" {
-			if data, err := os.ReadFile("/etc/letsencrypt/renewal/" + s.Domain + ".conf"); err == nil && telemtWebRenewalMode(data) == "managed-webroot" {
-				if err := telemtWebWriteAcmeNginxConfig(s.Domain); err != nil { return err }
+			if err := telemtWebEnsureNginxHTTPRedirect(s); err != nil {
+				return err
 			}
 		}
 		return writeTelemtIngressFrontend(s, plan)
@@ -720,9 +724,10 @@ func telemtWebProbeHosts(ctx context.Context, state TelemtWebProxyState, client 
 		if err != nil {
 			return fmt.Errorf("%s: %w", host, err)
 		}
+		probeErr := telemtWebVerifySiteResponse(state, response)
 		_ = response.Body.Close()
-		if !telemtWebSiteReady(state, response.StatusCode) {
-			return fmt.Errorf("%s: WEB HTTPS endpoint returned HTTP %d", host, response.StatusCode)
+		if probeErr != nil {
+			return fmt.Errorf("%s: WEB HTTPS endpoint: %w", host, probeErr)
 		}
 	}
 	return nil
@@ -788,27 +793,23 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 	if !roots.AppendCertsFromPEM(data) {
 		return errors.New("invalid WEB certificate bundle")
 	}
-	host := "127.0.0.1"
-	if ip, _, err := net.SplitHostPort(state.PublicAddr); err == nil && net.ParseIP(ip) != nil && net.ParseIP(ip).To4() == nil {
-		host = "::1"
+	clients := make(map[string]*http.Client)
+	hosts := telemtWebProbeLoopbacks(telemtWebNeedsIPv6(state))
+	for _, host := range hosts {
+		client := telemtWebFrontendProbeClient(host, roots)
+		clients[host] = client
+		defer client.CloseIdleConnections()
 	}
-	dialer := &net.Dialer{Timeout: 2 * time.Second}
-	client := &http.Client{
-		Timeout: 2 * time.Second,
-		Transport: &http.Transport{
-			Proxy: nil,
-			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
-				return dialer.DialContext(ctx, network, net.JoinHostPort(host, "443"))
-			},
-			TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
-		},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
-	defer client.CloseIdleConnections()
-	deadline, cancel := context.WithTimeout(ctx, 10*time.Second)
+	deadline, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	for {
-		lastErr := telemtWebProbeHosts(deadline, state, client)
+		var lastErr error
+		for _, host := range hosts {
+			if err := telemtWebProbeHosts(deadline, state, clients[host]); err != nil {
+				lastErr = fmt.Errorf("loopback %s: %w", host, err)
+				break
+			}
+		}
 		if lastErr == nil {
 			if !telemtIngressEntryActive(state) {
 				lastErr = fmt.Errorf("selected HTTPS frontend %s is not running", telemtWebFrontend(state))
@@ -824,6 +825,79 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+// Both address families are served by a dual-stack frontend. Always check
+// IPv4, even when the advertised endpoint selected by DNS is IPv6.
+func telemtWebProbeLoopbacks(ipv6 bool) []string {
+	if ipv6 {
+		return []string{"127.0.0.1", "::1"}
+	}
+	return []string{"127.0.0.1"}
+}
+
+func telemtWebFrontendProbeClient(host string, roots *x509.CertPool) *http.Client {
+	dialer := &net.Dialer{Timeout: 2 * time.Second}
+	return &http.Client{
+		Timeout: 3 * time.Second,
+		Transport: &http.Transport{
+			Proxy: nil,
+			// Check a fresh connection instead of a surviving socket from
+			// the previous frontend generation. Enable browser-like HTTP/2.
+			DisableKeepAlives: true,
+			ForceAttemptHTTP2: true,
+			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				return dialer.DialContext(ctx, network, net.JoinHostPort(host, "443"))
+			},
+			TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
+		},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}
+
+// Recover stopped components without restarting a healthy Telemt process.
+// Call under telemtWebOperationMu; shared ingress reconciliation validates
+// its own route configuration before this check.
+func telemtWebRecoverFrontend(ctx context.Context, state TelemtWebProxyState) error {
+	if !state.Enabled {
+		return nil
+	}
+	if !(TelemtService{}).WebProxyTelemtActive() {
+		if err := (TelemtService{}).ensureWebProxyBackend(ctx); err != nil {
+			return err
+		}
+	}
+	if err := telemtWebUpgradeFrontend(ctx, state); err != nil {
+		return err
+	}
+	if !telemtIngressEntryActive(state) {
+		if err := telemtWebEnsureFrontendRunning(state); err != nil {
+			return err
+		}
+		if telemtIngressUsesRouter(state) {
+			if err := telemtIngressEnsureRouter(state); err != nil {
+				return err
+			}
+		}
+	}
+	err := telemtWebWaitFrontendReady(ctx, state)
+	if err == nil || ctx.Err() != nil {
+		return err
+	}
+	// A healthy local backend and a failed public HTTPS probe isolate the
+	// failure to the frontend. Reload only validated on-disk configuration
+	// and never restart Telemt merely because HTTPS is unreachable.
+	if backendErr := telemtWebWaitBackendReady(ctx, state, 5*time.Second); backendErr != nil {
+		return errors.Join(err, backendErr)
+	}
+	if time.Since(telemtWebLastFrontendRepair) < time.Minute {
+		return err
+	}
+	telemtWebLastFrontendRepair = time.Now()
+	if reloadErr := telemtWebReloadFrontend(state); reloadErr != nil {
+		return errors.Join(err, reloadErr)
+	}
+	return telemtWebWaitFrontendReady(ctx, state)
 }
 
 // Distribution packages may still provide Caddy 2.6, whose strict JSON parser

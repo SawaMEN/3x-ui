@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -53,17 +54,40 @@ func readReleaseMetadata(binaryPath string) (string, error) {
 
 func writeReleaseMetadata(binaryPath string, tag string) error {
 	tag = strings.TrimSpace(tag)
+	path := releaseMetadataPath(binaryPath)
 	if tag == "" {
-		_ = os.Remove(releaseMetadataPath(binaryPath))
-		return nil
+		err := os.Remove(path)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
 	}
-	return os.WriteFile(releaseMetadataPath(binaryPath), []byte(tag+"\n"), 0o644)
+	file, err := os.CreateTemp(filepath.Dir(path), ".release-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	_, err = file.WriteString(tag + "\n")
+	if err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), path)
 }
 
 func resolveInstalledReleaseTag(binaryPath string, getStored func() (string, error), setStored func(string) error) string {
 	if tag, err := readReleaseMetadata(binaryPath); err == nil && tag != "" {
 		if setStored != nil {
-			_ = setStored(tag)
+			stored := ""
+			if getStored != nil {
+				stored, _ = getStored()
+			}
+			if strings.TrimSpace(stored) != tag {
+				_ = setStored(tag)
+			}
 		}
 		return tag
 	}

@@ -139,20 +139,58 @@ func portBindingsFromSettings(raw map[string]any, primaryPort int) []PortBinding
 				}
 			}
 		}
+		values := make([]any, 0, len(legacyPorts))
 		for _, port := range legacyPorts {
-			for _, protocol := range protocols {
-				if binding, ok := parsePortBinding(port, protocol); ok {
-					key := binding.Protocol + ":" + strconv.Itoa(binding.Port)
-					if _, exists := seen[key]; exists {
-						continue
-					}
-					seen[key] = struct{}{}
-					bindings = append(bindings, binding)
-				}
-			}
+			values = append(values, port)
+		}
+		for _, protocol := range protocols {
+			addPortBindings(&bindings, seen, values, protocol)
 		}
 	}
-	return bindings
+	return mergeOverlappingBindings(bindings)
+}
+
+// Mita cannot bind the same transport and port twice. Normalize overlapping
+// ranges (including a single port inside a range) without dropping listeners.
+func mergeOverlappingBindings(bindings []PortBinding) []PortBinding {
+	type interval struct {
+		protocol    string
+		first, last int
+	}
+	ranges := make([]interval, 0, len(bindings))
+	for _, binding := range bindings {
+		first, last := binding.Port, binding.Port
+		if lo, hi, ok := strings.Cut(binding.PortRange, "-"); ok {
+			first, _ = strconv.Atoi(lo)
+			last, _ = strconv.Atoi(hi)
+		}
+		ranges = append(ranges, interval{binding.Protocol, first, last})
+	}
+	slices.SortFunc(ranges, func(a, b interval) int {
+		if a.protocol != b.protocol {
+			return strings.Compare(a.protocol, b.protocol)
+		}
+		return a.first - b.first
+	})
+	merged := make([]interval, 0, len(ranges))
+	for _, next := range ranges {
+		if n := len(merged); n > 0 && merged[n-1].protocol == next.protocol && next.first <= merged[n-1].last {
+			merged[n-1].last = max(merged[n-1].last, next.last)
+		} else {
+			merged = append(merged, next)
+		}
+	}
+	result := make([]PortBinding, 0, len(merged))
+	for _, span := range merged {
+		binding := PortBinding{Protocol: span.protocol}
+		if span.first == span.last {
+			binding.Port = span.first
+		} else {
+			binding.PortRange = fmt.Sprintf("%d-%d", span.first, span.last)
+		}
+		result = append(result, binding)
+	}
+	return result
 }
 
 // PortBindingsFromInbound reports the actual TCP/UDP listeners even if the
@@ -182,7 +220,14 @@ func ValidatePortBindings(ib *model.Inbound) error {
 	for _, entry := range []struct {
 		field, protocol string
 	}{{"tcpPorts", "TCP"}, {"udpPorts", "UDP"}} {
-		values, _ := raw[entry.field].([]any)
+		value, exists := raw[entry.field]
+		if !exists || value == nil {
+			continue
+		}
+		values, ok := value.([]any)
+		if !ok {
+			return fmt.Errorf("Mieru %s must be an array of ports", entry.field)
+		}
 		for _, value := range values {
 			if _, ok := parsePortBinding(portEntryString(value), entry.protocol); !ok {
 				return fmt.Errorf("invalid Mieru %s port %q: use 1025-65535", entry.protocol, portEntryString(value))
@@ -371,7 +416,25 @@ func writeConfig(inst Instance) (string, error) {
 		return "", err
 	}
 	path := configPathForID(inst.Id)
-	if err := os.WriteFile(path, append(data, '\n'), 0o640); err != nil {
+	file, err := os.CreateTemp(filepath.Dir(path), ".mita-config-*.json")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(file.Name())
+	defer file.Close()
+	if err := file.Chmod(0o640); err != nil {
+		return "", err
+	}
+	if _, err := file.Write(append(data, '\n')); err != nil {
+		return "", err
+	}
+	if err := file.Sync(); err != nil {
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		return "", err
+	}
+	if err := os.Rename(file.Name(), path); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -422,7 +485,9 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	}
 
 	if cur := m.procs[inst.Id]; cur != nil {
-		_ = cur.proc.Stop()
+		if err := cur.proc.Stop(); err != nil {
+			return fmt.Errorf("stop previous mita instance: %w", err)
+		}
 		delete(m.procs, inst.Id)
 		delete(m.traffic, inst.Id)
 	}
@@ -479,7 +544,10 @@ func (m *Manager) reconcileLocked(desired []Instance) ([]Instance, error) {
 	for id, cur := range m.procs {
 		if _, ok := want[id]; !ok {
 			m.handoffTrafficLocked(id, cur)
-			_ = cur.proc.Stop()
+			if err := cur.proc.Stop(); err != nil {
+				logger.Warningf("mieru: failed to stop inbound %d: %v", id, err)
+				continue
+			}
 			delete(m.procs, id)
 			delete(m.traffic, id)
 			_ = os.Remove(configPathForID(id))
@@ -504,7 +572,10 @@ func (m *Manager) Remove(id int) {
 func (m *Manager) removeLocked(id int) {
 	if cur := m.procs[id]; cur != nil {
 		m.handoffTrafficLocked(id, cur)
-		_ = cur.proc.Stop()
+		if err := cur.proc.Stop(); err != nil {
+			logger.Warningf("mieru: failed to remove inbound %d: %v", id, err)
+			return
+		}
 		delete(m.procs, id)
 	}
 	delete(m.traffic, id)
@@ -517,7 +588,10 @@ func (m *Manager) StopAll() {
 	defer m.mu.Unlock()
 	for id, cur := range m.procs {
 		m.handoffTrafficLocked(id, cur)
-		_ = cur.proc.Stop()
+		if err := cur.proc.Stop(); err != nil {
+			logger.Warningf("mieru: failed to stop inbound %d: %v", id, err)
+			continue
+		}
 		_ = os.Remove(configPathForID(id))
 		_ = os.Remove(socketPathForID(id))
 		delete(m.procs, id)

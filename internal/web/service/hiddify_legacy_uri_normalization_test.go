@@ -52,3 +52,25 @@ func TestHiddifySubscriptionPathDoesNotAcceptRootOrMalformedBase(t *testing.T) {
 		t.Fatal("legacy path boundary was not respected")
 	}
 }
+
+func TestInvalidLegacyHiddifyBaseIsNotPublished(t *testing.T) {
+	setupConflictDB(t)
+	const id = "768e8bdd-bee3-4442-9006-b26464148aaa"
+	if err := database.GetDB().Create(&model.ClientRecord{
+		Email: "hiddify_invalid", SubID: id, HiddifySubURI: "https://cdn.example.com/BackupPath123/?secret=invalid",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s := &SettingService{}
+	base, err := s.HiddifySubscriptionBase(id)
+	if err != nil || base != "" {
+		t.Fatalf("invalid stored base was published: %q, %v", base, err)
+	}
+	urls, err := s.GetHiddifySubscriptionURIs()
+	if err != nil || len(urls) != 0 {
+		t.Fatal("invalid stored base appeared in client URLs")
+	}
+	if s.IsHiddifySubscriptionPath(id, "/BackupPath123/"+id) {
+		t.Fatal("invalid stored base authorized a request")
+	}
+}

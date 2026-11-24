@@ -137,6 +137,55 @@ func injectXrayZapret2(cfg *xray.Config) error {
 	return nil
 }
 
+// translateNativeZapret2 resolves only the effective native editor template.
+// The editable virtual rows stay intact until runtime generation.
+func translateNativeZapret2(cfg *singbox.Config) error {
+	var plans []zapret2.Plan
+	var ordinary, virtual []map[string]any
+	for _, row := range cfg.Outbounds {
+		if row["type"] != "zapret2" {
+			ordinary = append(ordinary, row)
+			continue
+		}
+		if !zapret2.Installed() {
+			return fmt.Errorf("zapret2 is not installed; install it in Settings before saving")
+		}
+		tag, _ := row["tag"].(string)
+		if strings.HasPrefix(tag, zapret2TagPrefix) {
+			return fmt.Errorf("zapret2 outbound tag uses a reserved prefix")
+		}
+		plan, err := zapret2.Parse(tag, row["settings"])
+		if err != nil {
+			return err
+		}
+		plans = append(plans, plan)
+		virtual = append(virtual, map[string]any{
+			"type": "socks", "tag": tag, "server": "127.0.0.1", "server_port": plan.Options.Port,
+		})
+	}
+	if len(plans) == 0 {
+		return nil
+	}
+	if len(ordinary) == 0 {
+		return fmt.Errorf("zapret2 requires a separate default outbound")
+	}
+	assigned, err := zapret2.AssignQueues(plans)
+	if err != nil {
+		return err
+	}
+	if cfg.Route == nil {
+		cfg.Route = map[string]any{}
+	}
+	for _, plan := range assigned {
+		if cfg.Route["final"] == plan.Tag {
+			return fmt.Errorf("zapret2 %q cannot be the default outbound; assign it through a routing rule", plan.Tag)
+		}
+	}
+	cfg.Outbounds = append(ordinary, virtual...)
+	cfg.Zapret2Plans = assigned
+	return nil
+}
+
 func injectSingBoxZapret2(cfg *singbox.Config) error {
 	if cfg == nil || len(cfg.Zapret2Plans) == 0 {
 		return nil

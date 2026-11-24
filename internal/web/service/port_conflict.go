@@ -312,6 +312,11 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 		copy.Port = 443
 		inbound = &copy
 	}
+	if inbound.NodeID == nil {
+		if detail, err := checkRoutedSidecarRelayConflict(db, inbound, ignoreId); err != nil || detail != nil {
+			return detail, err
+		}
+	}
 	if inbound.Protocol == model.Pingtunnel {
 		var other model.Inbound
 		err := db.Where("protocol = ? AND enable = ? AND id <> ? AND node_id IS NULL", model.Pingtunnel, true, ignoreId).First(&other).Error
