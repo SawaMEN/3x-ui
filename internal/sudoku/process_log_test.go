@@ -2,6 +2,10 @@ package sudoku
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -18,5 +22,20 @@ func TestLogWriterBoundsIncompleteLines(t *testing.T) {
 	}
 	if writer.buf != string(suffix) {
 		t.Fatalf("unterminated log line retained %d bytes; want its last %d", len(writer.buf), limit)
+	}
+}
+
+func TestValidationBoundsDiagnosticOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires POSIX shell")
+	}
+	binary := filepath.Join(t.TempDir(), "validator")
+	script := "#!/bin/sh\nhead -c 131072 /dev/zero | tr '\\000' x\nprintf '\\nfinal-validation-error\\n'\nexit 1\n"
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	err := validateConfig(binary, "unused.json")
+	if err == nil || !strings.Contains(err.Error(), "final-validation-error") || len(err.Error()) > 2300 {
+		t.Fatalf("unexpected validation error: %v", err)
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
 )
 
 const (
@@ -74,6 +75,7 @@ func (p *Process) Start(binary string) error {
 	}
 
 	cmd := exec.CommandContext(context.Background(), binary, "-c", p.configPath)
+	cmd.WaitDelay = 2 * time.Second
 	cmd.Env = append(os.Environ(), "SUDOKU_LOG_NO_TIMESTAMP=true")
 	cmd.Env = clientlimit.Default.Environment(cmd.Env)
 	lw := &logWriter{label: p.label}
@@ -113,7 +115,10 @@ func validateConfig(binary, path string) error {
 	cmd := exec.CommandContext(ctx, binary, "-test", "-c", path)
 	cmd.Env = append(os.Environ(), "SUDOKU_LOG_NO_TIMESTAMP=true")
 	cmd.Env = clientlimit.Default.Environment(cmd.Env)
-	output, err := cmd.CombinedOutput()
+	cmd.WaitDelay = 2 * time.Second
+	output := tail.NewRecentOutputBuffer(64 << 10)
+	cmd.Stdout, cmd.Stderr = output, output
+	err := cmd.Run()
 	if ctx.Err() != nil {
 		return fmt.Errorf("Sudoku config validation timed out after %s: %w", configTestTimeout, ctx.Err())
 	}
@@ -121,7 +126,10 @@ func validateConfig(binary, path string) error {
 		return nil
 	}
 
-	detail := strings.TrimSpace(string(output))
+	detail := strings.TrimSpace(string(output.CompleteBytes()))
+	if detail == "" && output.Truncated() {
+		detail = "validation output exceeded the log limit"
+	}
 	if len(detail) > 2048 {
 		detail = detail[len(detail)-2048:]
 	}
@@ -134,8 +142,11 @@ func validateConfig(binary, path string) error {
 func (p *Process) wait(cmd *exec.Cmd, done chan struct{}) {
 	defer close(done)
 	err := cmd.Wait()
-	if err == nil || p.intentionalStop.Load() {
+	if p.intentionalStop.Load() {
 		return
+	}
+	if err == nil {
+		err = errors.New("Sudoku exited without a stop request")
 	}
 	logger.Errorf("sudoku: %s exited: %v", p.label, err)
 	p.mu.Lock()
@@ -221,7 +232,7 @@ func (w *logWriter) Write(p []byte) (int, error) {
 		}
 	}
 	if len(w.buf) > maxSudokuLogLineBytes {
-		w.buf = w.buf[len(w.buf)-maxSudokuLogLineBytes:]
+		w.buf = strings.Clone(w.buf[len(w.buf)-maxSudokuLogLineBytes:])
 	}
 	return len(p), nil
 }

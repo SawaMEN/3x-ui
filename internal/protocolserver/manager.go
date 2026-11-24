@@ -109,7 +109,10 @@ func Suspend() ([]Plan, error) {
 	var result error
 	for tag, p := range state.processes {
 		plans = append(plans, p.plan)
-		result = errors.Join(result, stop(p))
+		if err := stop(p); err != nil {
+			result = errors.Join(result, fmt.Errorf("stop %s: %w", tag, err))
+			continue
+		}
 		delete(state.processes, tag)
 	}
 	return plans, result
@@ -133,7 +136,10 @@ func Start(ctx context.Context, plans []Plan) error {
 		p, err := start(ctx, plan)
 		if err != nil {
 			for tag, running := range state.processes {
-				_ = stop(running)
+				if stopErr := stop(running); stopErr != nil {
+					err = errors.Join(err, fmt.Errorf("stop %s: %w", tag, stopErr))
+					continue
+				}
 				delete(state.processes, tag)
 			}
 			return err
@@ -226,10 +232,10 @@ func start(ctx context.Context, plan Plan) (*process, error) {
 	p.epoch = fmt.Sprintf("%d:%d", p.cmd.Process.Pid, time.Now().UnixNano())
 	go func() {
 		_ = p.cmd.Wait()
-		close(p.done)
 		if p.auth != nil {
 			_ = p.auth.Close()
 		}
+		close(p.done)
 	}()
 	deadline := time.NewTimer(8 * time.Second)
 	defer deadline.Stop()
@@ -301,8 +307,18 @@ func stop(p *process) error {
 	if err := p.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return err
 	}
-	<-p.done
-	return nil
+	return waitForProcessExit(p.done, 2*time.Second)
+}
+
+func waitForProcessExit(done <-chan struct{}, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return nil
+	case <-timer.C:
+		return fmt.Errorf("process did not exit within %s", timeout)
+	}
 }
 
 func authHandler(plan Plan) http.Handler {

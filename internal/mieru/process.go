@@ -52,6 +52,7 @@ func GetBinaryPath() string {
 }
 
 type Process struct {
+	opMu                          sync.Mutex
 	mu                            sync.RWMutex
 	cmd                           *exec.Cmd
 	done                          chan struct{}
@@ -82,6 +83,9 @@ func (p *Process) IsRunning() bool {
 }
 
 func (p *Process) Start() error {
+	p.opMu.Lock()
+	defer p.opMu.Unlock()
+
 	if p.IsRunning() {
 		return errors.New("mita is already running")
 	}
@@ -149,6 +153,9 @@ func (p *Process) wait(cmd *exec.Cmd, done chan struct{}) {
 }
 
 func (p *Process) Reload() error {
+	p.opMu.Lock()
+	defer p.opMu.Unlock()
+
 	if !p.IsRunning() {
 		return errors.New("mita is not running")
 	}
@@ -182,6 +189,9 @@ func (p *Process) Reload() error {
 }
 
 func (p *Process) Stop() error {
+	p.opMu.Lock()
+	defer p.opMu.Unlock()
+
 	if !p.IsRunning() {
 		return nil
 	}
@@ -193,7 +203,9 @@ func (p *Process) Stop() error {
 		return errors.New("mita is not running")
 	}
 	if runtime.GOOS == "windows" {
-		_ = cmd.Process.Kill()
+		if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return err
+		}
 		return waitForExit(done, 2*time.Second)
 	}
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
@@ -202,7 +214,9 @@ func (p *Process) Stop() error {
 	if err := waitForExit(done, 5*time.Second); err == nil {
 		return nil
 	}
-	_ = cmd.Process.Kill()
+	if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return err
+	}
 	return waitForExit(done, 2*time.Second)
 }
 

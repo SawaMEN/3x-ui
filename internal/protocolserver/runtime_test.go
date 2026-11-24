@@ -450,3 +450,14 @@ func TestInstalledSelectionMustBeAppliedEvenWithoutStandalonePlans(t *testing.T)
 		t.Fatal("selection keeps requesting redundant applies")
 	}
 }
+
+func TestWaitForProcessExitIsBounded(t *testing.T) {
+	done := make(chan struct{})
+	if err := waitForProcessExit(done, time.Millisecond); err == nil {
+		t.Fatal("unfinished process reported as stopped")
+	}
+	close(done)
+	if err := waitForProcessExit(done, time.Second); err != nil {
+		t.Fatal(err)
+	}
+}
