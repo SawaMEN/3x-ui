@@ -1,5 +1,5 @@
-import { Zapret2OutboundSettingsSchema } from '@/schemas/protocols/outbound/zapret2';
 import { MasqueInboundSettingsSchema } from '@/schemas/protocols/inbound/masque';
+import { Zapret2OutboundSettingsSchema } from '@/schemas/protocols/outbound/zapret2';
 import { masqueClientDefaults, warpMasqueDefaults } from './masque-settings';
 import { isNativeEndpoint, nativeServerTypes } from './native-import';
 export type ConfigObject = Record<string, unknown>;

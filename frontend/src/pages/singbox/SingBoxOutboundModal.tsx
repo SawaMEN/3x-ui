@@ -725,16 +725,18 @@ export default function SingBoxOutboundModal({
             <MasqueConnectionFields value={draft} onChange={update} />
           </Col>
         )}
-        {type !== 'zapret2' && <ProtocolOptionFields
-          key={`${type}-${optionsRevision}`}
-          value={draft}
-          onChange={patch}
-          onValidity={(key, valid) =>
-            setInvalidOptions((current) =>
-              valid ? current.filter((item) => item !== key) : [...new Set([...current, key])],
-            )
-          }
-        />}
+        {type !== 'zapret2' && (
+          <ProtocolOptionFields
+            key={`${type}-${optionsRevision}`}
+            value={draft}
+            onChange={patch}
+            onValidity={(key, valid) =>
+              setInvalidOptions((current) =>
+                valid ? current.filter((item) => item !== key) : [...new Set([...current, key])],
+              )
+            }
+          />
+        )}
       </Row>
     </Form>
   );

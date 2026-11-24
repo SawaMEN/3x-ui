@@ -137,3 +137,23 @@ func TestNativeZapret2TemplateTranslation(t *testing.T) {
 		t.Fatal("native settings were lost")
 	}
 }
+
+func TestNativeZapret2RejectsDefaultAndDuplicatePorts(t *testing.T) {
+	testInstallZapret2(t)
+	cfg := singbox.NewConfig()
+	cfg.Outbounds = []map[string]any{
+		{"type": "direct", "tag": "direct"},
+		{"type": "zapret2", "tag": "one", "settings": map[string]any{"port": 15900}},
+	}
+	cfg.Route["final"] = "one"
+	if err := translateNativeZapret2(cfg); err == nil {
+		t.Fatal("expected an error for a virtual default outbound")
+	}
+	cfg.Route["final"] = "direct"
+	cfg.Outbounds = append(cfg.Outbounds, map[string]any{
+		"type": "zapret2", "tag": "two", "settings": map[string]any{"port": 15900},
+	})
+	if err := translateNativeZapret2(cfg); err == nil {
+		t.Fatal("expected an error for duplicate SOCKS ports")
+	}
+}

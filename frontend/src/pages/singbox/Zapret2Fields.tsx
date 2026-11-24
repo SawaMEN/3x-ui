@@ -1,8 +1,10 @@
 import { Alert, Button, Form, InputNumber, Select, Space, Switch } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { HttpUtil } from '@/utils';
-import { Zapret2OutboundSettingsSchema } from '@/schemas/protocols/outbound/zapret2';
-import type { Zapret2Calibration } from '@/schemas/protocols/outbound/zapret2';
+import {
+  Zapret2OutboundSettingsSchema,
+  type Zapret2Calibration,
+} from '@/schemas/protocols/outbound/zapret2';
 import type { ConfigObject } from './simple-settings';
 
 export default function Zapret2Fields({
@@ -26,7 +28,9 @@ export default function Zapret2Fields({
   const settings = parsed.success ? parsed.data : Zapret2OutboundSettingsSchema.parse({});
   const valid = parsed.success && (settings.tcp || settings.udp) && installed && !busy;
   const validity = useRef(onValidity);
+  const change = useRef(onChange);
   validity.current = onValidity;
+  change.current = onChange;
   useEffect(() => {
     validity.current(valid);
   }, [valid]);
@@ -55,7 +59,7 @@ export default function Zapret2Fields({
       window.removeEventListener('zapret2:changed', refresh);
     };
   }, []);
-  const patch = (next: Partial<typeof settings>) => onChange({ ...settings, ...next });
+  const patch = (next: Partial<typeof settings>) => change.current({ ...settings, ...next });
   async function diagnose() {
     const domains = settings.testDomains;
     if (domains.length < 1 || domains.length > 12) {
@@ -96,32 +100,77 @@ export default function Zapret2Fields({
       <Alert
         type={installed ? 'info' : 'warning'}
         showIcon
-        title={installed ? 'Zapret2 установлен' : statusLoaded ? 'Zapret2 недоступен' : 'Проверка компонента'}
+        title={
+          installed
+            ? 'Zapret2 установлен'
+            : statusLoaded
+              ? 'Zapret2 недоступен'
+              : 'Проверка компонента'
+        }
         description="Виртуальный локальный выход. Для применения выберите его в правиле маршрутизации. Не назначайте выходом по умолчанию."
       />
       <Form.Item label="Локальный SOCKS-порт">
-        <InputNumber disabled={busy} min={1025} max={65535} precision={0} value={settings.port} onChange={(port) => port !== null && patch({ port })} />
+        <InputNumber
+          disabled={busy}
+          min={1025}
+          max={65535}
+          precision={0}
+          value={settings.port}
+          onChange={(port) => port !== null && patch({ port })}
+        />
       </Form.Item>
       <Form.Item label="Профиль">
-        <Select disabled={busy} value={settings.profile} options={['auto', 'safe', 'balanced', 'aggressive'].map((v) => ({ value: v, label: v }))} onChange={(profile: typeof settings.profile) => patch({ profile })} />
+        <Select
+          disabled={busy}
+          value={settings.profile}
+          options={['auto', 'safe', 'balanced', 'aggressive'].map((v) => ({ value: v, label: v }))}
+          onChange={(profile: typeof settings.profile) => patch({ profile })}
+        />
       </Form.Item>
       <Space wrap>
         TCP <Switch disabled={busy} checked={settings.tcp} onChange={(tcp) => patch({ tcp })} />
         UDP/QUIC <Switch disabled={busy} checked={settings.udp} onChange={(udp) => patch({ udp })} />
       </Space>
       <Form.Item label="Тестовые домены">
-        <Select mode="tags" disabled={busy} tokenSeparators={[',', ' ']} value={settings.testDomains} onChange={(testDomains: string[]) => patch({ testDomains })} />
+        <Select
+          mode="tags"
+          disabled={busy}
+          tokenSeparators={[',', ' ']}
+          value={settings.testDomains}
+          onChange={(testDomains: string[]) => patch({ testDomains })}
+        />
       </Form.Item>
       <Space wrap>
-        <Select disabled={busy} value={level} onChange={setLevel} options={[{ value: 'quick', label: 'Быстрая' }, { value: 'standard', label: 'Полная' }, { value: 'force', label: 'Максимальная' }]} />
-        Повторы <InputNumber disabled={busy} min={1} max={3} precision={0} value={repeats} onChange={(v) => setRepeats(v ?? 2)} />
+        <Select
+          disabled={busy}
+          value={level}
+          onChange={setLevel}
+          options={[
+            { value: 'quick', label: 'Быстрая' },
+            { value: 'standard', label: 'Полная' },
+            { value: 'force', label: 'Максимальная' },
+          ]}
+        />
+        Повторы{' '}
+        <InputNumber
+          disabled={busy}
+          min={1}
+          max={3}
+          precision={0}
+          value={repeats}
+          onChange={(v) => setRepeats(v ?? 2)}
+        />
         IPv6 <Switch disabled={busy} checked={ipv6} onChange={setIpv6} />
       </Space>
-      {settings.calibration && <Alert type="success" title={`Стратегия проверена: ${settings.calibration.testedAt}`} />}
+      {settings.calibration && (
+        <Alert type="success" title={`Стратегия проверена: ${settings.calibration.testedAt}`} />
+      )}
       <Button disabled={!installed || busy} loading={busy} onClick={() => void diagnose()}>
         Автоматически проверить и подобрать стратегию
       </Button>
-      {report && <pre style={{ whiteSpace: 'pre-wrap', maxHeight: 320, overflow: 'auto' }}>{report}</pre>}
+      {report && (
+        <pre style={{ whiteSpace: 'pre-wrap', maxHeight: 320, overflow: 'auto' }}>{report}</pre>
+      )}
     </Space>
   );
 }
