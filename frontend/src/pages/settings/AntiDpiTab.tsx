@@ -3,6 +3,7 @@ import { Alert, Button, Card, Input, Space, Table, Tag, Typography } from 'antd'
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import type { AllSetting } from '@/models/setting';
+import VetroffDiagnosticCard from './VetroffDiagnosticCard';
 import SiberianActiveCheck from './SiberianActiveCheck';
 import AdaptiveConnectPolicyCard from './AdaptiveConnectPolicyCard';
 import AdaptiveConnectAudit from './AdaptiveConnectAudit';
@@ -133,6 +134,7 @@ export default function AntiDpiTab(props: {
         </Space>
       </Card>
       <SiberianActiveCheck />
+      <VetroffDiagnosticCard />
       <AdaptiveConnectAudit />
       <AdaptiveConnectPolicyCard />
       <Card size="small" title={l('Optional connection resilience', 'Опциональная устойчивость подключений')}>
