@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import type { AllSetting } from '@/models/setting';
 import SiberianActiveCheck from './SiberianActiveCheck';
+import AdaptiveConnectPolicyCard from './AdaptiveConnectPolicyCard';
 import AdaptiveConnectAudit from './AdaptiveConnectAudit';
 import SubscriptionBalancersTab from './SubscriptionBalancersTab';
 import { parseSiberianReport, type SiberianEvidence } from './anti-dpi-report';
@@ -133,6 +134,7 @@ export default function AntiDpiTab(props: {
       </Card>
       <SiberianActiveCheck />
       <AdaptiveConnectAudit />
+      <AdaptiveConnectPolicyCard />
       <Card size="small" title={l('Optional connection resilience', 'Опциональная устойчивость подключений')}>
         <Space orientation="vertical" style={{ width: '100%' }}>
           <Alert type="info" title={l(
