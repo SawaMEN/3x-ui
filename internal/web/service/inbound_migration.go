@@ -40,6 +40,10 @@ func (s *InboundService) MigrationRequirements() (err error) {
 		return tx.Error
 	}
 	defer func() {
+		if recovered := recover(); recovered != nil {
+			_ = tx.Rollback().Error
+			panic(recovered)
+		}
 		if err == nil {
 			if commitErr := tx.Commit().Error; commitErr != nil {
 				err = commitErr

@@ -2,9 +2,11 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"sort"
 	"time"
 
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -18,7 +20,9 @@ func mergeModelClientIpEntries(old, incoming []model.ClientIpEntry, cutoff int64
 		if e.IP == "" || e.Timestamp < cutoff {
 			continue
 		}
-		ipMap[e.IP] = e.Timestamp
+		if cur, ok := ipMap[e.IP]; !ok || e.Timestamp > cur {
+			ipMap[e.IP] = e.Timestamp
+		}
 	}
 	for _, e := range incoming {
 		if e.IP == "" || e.Timestamp < cutoff {
@@ -44,17 +48,8 @@ func upsertNodeClientIps(guid string, perEmail map[string][]model.ClientIpEntry)
 	db := database.GetDB()
 	cutoff := time.Now().Unix() - clientIpStaleAfterSeconds
 
-	var existing []model.NodeClientIp
-	if err := db.Where("node_guid = ?", guid).Find(&existing).Error; err != nil {
-		return err
-	}
-	existingByEmail := make(map[string]*model.NodeClientIp, len(existing))
-	for i := range existing {
-		existingByEmail[existing[i].Email] = &existing[i]
-	}
-
-	// Deterministic row order keeps concurrent guid merges from deadlocking on
-	// Postgres (40P01) — same discipline as MergeInboundClientIps.
+	// Acquire row locks in the same order in every merge. SQLite's immediate
+	// write transaction serializes the reads; PostgreSQL locks individual rows.
 	emails := make([]string, 0, len(perEmail))
 	for email := range perEmail {
 		if email != "" {
@@ -62,46 +57,72 @@ func upsertNodeClientIps(guid string, perEmail map[string][]model.ClientIpEntry)
 		}
 	}
 	sort.Strings(emails)
+	if len(emails) == 0 {
+		return nil
+	}
 
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	for _, email := range emails {
-		incoming := perEmail[email]
-		var old []model.ClientIpEntry
-		if cur, ok := existingByEmail[email]; ok && cur.Ips != "" {
-			_ = json.Unmarshal([]byte(cur.Ips), &old)
-		}
-		merged := mergeModelClientIpEntries(old, incoming, cutoff)
-		if len(merged) == 0 {
-			// Nothing fresh: drop any stale row so attribution doesn't linger.
-			if _, ok := existingByEmail[email]; ok {
-				if err := tx.Where("node_guid = ? AND email = ?", guid, email).
-					Delete(&model.NodeClientIp{}).Error; err != nil {
-					tx.Rollback()
-					return err
-				}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, email := range emails {
+			if err := mergeNodeClientIpRow(tx, guid, email, perEmail[email], cutoff); err != nil {
+				return err
 			}
-			continue
 		}
-		encoded, _ := model.MarshalClientIpEntries(merged)
-		if current := existingByEmail[email]; current != nil && current.Ips == encoded {
-			continue
+		return nil
+	})
+}
+
+func mergeNodeClientIpRow(tx *gorm.DB, guid, email string, incoming []model.ClientIpEntry, cutoff int64) error {
+	load := func(row *model.NodeClientIp) error {
+		q := tx.Where("node_guid = ? AND email = ?", guid, email)
+		if tx.Name() == database.DialectPostgres {
+			q = q.Clauses(clause.Locking{Strength: "UPDATE"})
 		}
-		row := model.NodeClientIp{NodeGuid: guid, Email: email, Ips: encoded}
-		if err := tx.Clauses(clause.OnConflict{
+		return q.First(row).Error
+	}
+	var row model.NodeClientIp
+	err := load(&row)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		fresh := mergeModelClientIpEntries(nil, incoming, cutoff)
+		if len(fresh) == 0 {
+			return nil
+		}
+		encoded, err := model.MarshalClientIpEntries(fresh)
+		if err != nil {
+			return err
+		}
+		created := model.NodeClientIp{NodeGuid: guid, Email: email, Ips: encoded}
+		result := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "node_guid"}, {Name: "email"}},
-			DoUpdates: clause.AssignmentColumns([]string{"ips"}),
-		}).Create(&row).Error; err != nil {
-			tx.Rollback()
+			DoNothing: true,
+		}).Create(&created)
+		if result.Error != nil || result.RowsAffected == 1 {
+			return result.Error
+		}
+		// A concurrent PostgreSQL insert won. Merge its committed data rather
+		// than replacing the entire JSON blob with our own observations.
+		err = load(&row)
+	}
+	if err != nil {
+		return err
+	}
+	var old []model.ClientIpEntry
+	if row.Ips != "" {
+		if err := json.Unmarshal([]byte(row.Ips), &old); err != nil {
 			return err
 		}
 	}
-	return tx.Commit().Error
+	merged := mergeModelClientIpEntries(old, incoming, cutoff)
+	if len(merged) == 0 {
+		return tx.Delete(&row).Error
+	}
+	encoded, err := model.MarshalClientIpEntries(merged)
+	if err != nil {
+		return err
+	}
+	if row.Ips == encoded {
+		return nil
+	}
+	return tx.Model(&row).Update("ips", encoded).Error
 }
 
 // RecordLocalClientIps stores the scanner's local observations under this panel's GUID.
@@ -308,7 +329,7 @@ func pruneStaleNodeClientIps(cutoff int64) error {
 		}
 		kept := mergeModelClientIpEntries(nil, entries, cutoff)
 		if len(kept) == 0 {
-			if err := db.Delete(&model.NodeClientIp{}, row.Id).Error; err != nil {
+			if err := db.Where("id = ? AND ips = ?", row.Id, row.Ips).Delete(&model.NodeClientIp{}).Error; err != nil {
 				return err
 			}
 			continue
@@ -317,7 +338,7 @@ func pruneStaleNodeClientIps(cutoff int64) error {
 			continue
 		}
 		encoded, _ := model.MarshalClientIpEntries(kept)
-		if err := db.Model(&model.NodeClientIp{}).Where("id = ?", row.Id).Update("ips", encoded).Error; err != nil {
+		if err := db.Model(&model.NodeClientIp{}).Where("id = ? AND ips = ?", row.Id, row.Ips).Update("ips", encoded).Error; err != nil {
 			return err
 		}
 	}

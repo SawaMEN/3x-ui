@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -164,5 +165,48 @@ func TestGetClientIpsWithNodes_LabelsNodes(t *testing.T) {
 	}
 	if byIP["2.2.2.2"] != "edge-1" {
 		t.Fatalf("node IP should be labelled edge-1, got %q", byIP["2.2.2.2"])
+	}
+}
+
+func TestConcurrentNodeClientIpMergesPreserveObservations(t *testing.T) {
+	setupClientIpTestDB(t)
+	now := time.Now().Unix()
+	const writers = 8
+	start := make(chan struct{})
+	results := make(chan error, writers)
+	for i := range writers {
+		go func() {
+			<-start
+			results <- upsertNodeClientIps("shared", map[string][]model.ClientIpEntry{
+				"u@x": {{IP: fmt.Sprintf("1.1.1.%d", i+1), Timestamp: now}},
+			})
+		}()
+	}
+	close(start)
+	for range writers {
+		if err := <-results; err != nil {
+			t.Error(err)
+		}
+	}
+	trees, err := (&InboundService{}).GetClientIpsByGuid()
+	if err != nil || len(trees["shared"]["u@x"]) != writers {
+		t.Fatalf("concurrent observations lost: %v, err=%v", trees, err)
+	}
+}
+
+func TestClientIpMergeRetainsMaximumTimestamp(t *testing.T) {
+	old := []model.ClientIpEntry{
+		{IP: "1.1.1.1", Timestamp: 100},
+		{IP: "1.1.1.1", Timestamp: 90},
+		{IP: "", Timestamp: 110},
+	}
+	for _, merge := range []func([]model.ClientIpEntry, []model.ClientIpEntry, int64) []model.ClientIpEntry{
+		mergeClientIpEntries,
+		mergeModelClientIpEntries,
+	} {
+		got := merge(old, nil, 80)
+		if len(got) != 1 || got[0].IP != "1.1.1.1" || got[0].Timestamp != 100 {
+			t.Fatalf("invalid merge: %+v", got)
+		}
 	}
 }

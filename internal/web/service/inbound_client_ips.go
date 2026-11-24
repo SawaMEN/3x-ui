@@ -54,13 +54,15 @@ const clientIpStaleAfterSeconds = int64(30 * 60)
 func mergeClientIpEntries(old, incoming []model.ClientIpEntry, cutoff int64) []model.ClientIpEntry {
 	ipMap := make(map[string]int64, len(old)+len(incoming))
 	for _, e := range old {
-		if e.Timestamp < cutoff {
+		if e.IP == "" || e.Timestamp < cutoff {
 			continue
 		}
-		ipMap[e.IP] = e.Timestamp
+		if cur, ok := ipMap[e.IP]; !ok || e.Timestamp > cur {
+			ipMap[e.IP] = e.Timestamp
+		}
 	}
 	for _, e := range incoming {
-		if e.Timestamp < cutoff {
+		if e.IP == "" || e.Timestamp < cutoff {
 			continue
 		}
 		if cur, ok := ipMap[e.IP]; !ok || e.Timestamp > cur {
@@ -102,11 +104,10 @@ func (s *InboundService) MergeInboundClientIps(incomingIps []model.InboundClient
 	})
 
 	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer tx.Rollback()
 
 	for _, incoming := range incomingIps {
 		if incoming.ClientEmail == "" || incoming.Ips == "" {
@@ -253,7 +254,7 @@ func (s *InboundService) PruneStaleClientIps() error {
 		}
 		kept := mergeClientIpEntries(nil, entries, cutoff)
 		if len(kept) == 0 {
-			if err := db.Delete(&model.InboundClientIps{}, row.Id).Error; err != nil {
+			if err := db.Where("id = ? AND ips = ?", row.Id, row.Ips).Delete(&model.InboundClientIps{}).Error; err != nil {
 				return err
 			}
 			continue
@@ -262,7 +263,7 @@ func (s *InboundService) PruneStaleClientIps() error {
 			continue
 		}
 		encoded, _ := model.MarshalClientIpEntries(kept)
-		if err := db.Model(&model.InboundClientIps{}).Where("id = ?", row.Id).Update("ips", encoded).Error; err != nil {
+		if err := db.Model(&model.InboundClientIps{}).Where("id = ? AND ips = ?", row.Id, row.Ips).Update("ips", encoded).Error; err != nil {
 			return err
 		}
 	}
