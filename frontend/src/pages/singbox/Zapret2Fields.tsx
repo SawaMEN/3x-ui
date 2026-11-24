@@ -29,8 +29,10 @@ export default function Zapret2Fields({
   const valid = parsed.success && (settings.tcp || settings.udp) && installed && !busy;
   const validity = useRef(onValidity);
   const change = useRef(onChange);
-  validity.current = onValidity;
-  change.current = onChange;
+  useEffect(() => {
+    validity.current = onValidity;
+    change.current = onChange;
+  }, [onValidity, onChange]);
   useEffect(() => {
     validity.current(valid);
   }, [valid]);

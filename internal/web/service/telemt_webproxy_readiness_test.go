@@ -98,8 +98,10 @@ func TestTelemtWebIPv6AdvertisedAddressNeedsIPv6Listener(t *testing.T) {
 }
 
 func TestTelemtWebBackendProbeChecksEveryHost(t *testing.T) {
-	state := TelemtWebProxyState{Domain: "example.com", Aliases: []string{"alias.example.com"},
-		Site: &TelemtWebSiteOptions{Mode: "origin"}}
+	state := TelemtWebProxyState{
+		Domain: "example.com", Aliases: []string{"alias.example.com"},
+		Site: &TelemtWebSiteOptions{Mode: "origin"},
+	}
 	var hosts []string
 	client := &http.Client{Transport: telemtWebTestTransport(func(r *http.Request) (*http.Response, error) {
 		hosts = append(hosts, r.Host)

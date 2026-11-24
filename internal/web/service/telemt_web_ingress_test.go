@@ -347,8 +347,10 @@ func TestTelemtIngressMultipleRoutes(t *testing.T) {
 }
 
 func TestTelemtIngressKeepsWEBListenerWhenRoutesDisappear(t *testing.T) {
-	state := TelemtWebProxyState{Frontend: "haproxy", Domain: "web.example.com", ListenPort: 15080,
-		SharedIngress: &TelemtWebIngress{Enabled: true, InboundIDs: []int{1}}}
+	state := TelemtWebProxyState{
+		Frontend: "haproxy", Domain: "web.example.com", ListenPort: 15080,
+		SharedIngress: &TelemtWebIngress{Enabled: true, InboundIDs: []int{1}},
+	}
 	for _, plan := range []telemtIngressPlan{
 		{proxies: []telemtIngressProxyRoute{{id: 1, host: "vpn.example.com", address: "127.0.0.1:9443"}}},
 		{},
