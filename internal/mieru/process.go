@@ -181,7 +181,7 @@ func (p *Process) Reload() error {
 
 func (p *Process) Stop() error {
 	if !p.IsRunning() {
-		return errors.New("mita is not running")
+		return nil
 	}
 	p.intentionalStop.Store(true)
 	p.mu.RLock()

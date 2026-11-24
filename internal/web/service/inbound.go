@@ -1397,6 +1397,13 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 		if err := tx.Omit("ClientStats").Save(inbound).Error; err != nil {
 			return err
 		}
+		if inbound.NodeID == nil {
+			if conflict, err := checkRoutedSidecarRelayConflict(tx, inbound, inbound.Id); err != nil {
+				return err
+			} else if conflict != nil {
+				return common.NewError(conflict.String())
+			}
+		}
 		// The relay port is derived from the id, only known after Save, and only a
 		// local row owns one: checkPortConflictTx ran no relay check with ignoreId==0.
 		if inbound.NodeID == nil && inbound.Protocol == model.AmneziaWG {

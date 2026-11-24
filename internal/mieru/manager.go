@@ -467,7 +467,9 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	}
 
 	if cur := m.procs[inst.Id]; cur != nil {
-		_ = cur.proc.Stop()
+		if err := cur.proc.Stop(); err != nil {
+			return fmt.Errorf("stop previous mita instance: %w", err)
+		}
 		delete(m.procs, inst.Id)
 		delete(m.traffic, inst.Id)
 	}
@@ -524,7 +526,10 @@ func (m *Manager) reconcileLocked(desired []Instance) ([]Instance, error) {
 	for id, cur := range m.procs {
 		if _, ok := want[id]; !ok {
 			m.handoffTrafficLocked(id, cur)
-			_ = cur.proc.Stop()
+			if err := cur.proc.Stop(); err != nil {
+				logger.Warningf("mieru: failed to stop inbound %d: %v", id, err)
+				continue
+			}
 			delete(m.procs, id)
 			delete(m.traffic, id)
 			_ = os.Remove(configPathForID(id))
@@ -549,7 +554,10 @@ func (m *Manager) Remove(id int) {
 func (m *Manager) removeLocked(id int) {
 	if cur := m.procs[id]; cur != nil {
 		m.handoffTrafficLocked(id, cur)
-		_ = cur.proc.Stop()
+		if err := cur.proc.Stop(); err != nil {
+			logger.Warningf("mieru: failed to remove inbound %d: %v", id, err)
+			return
+		}
 		delete(m.procs, id)
 	}
 	delete(m.traffic, id)
@@ -562,7 +570,10 @@ func (m *Manager) StopAll() {
 	defer m.mu.Unlock()
 	for id, cur := range m.procs {
 		m.handoffTrafficLocked(id, cur)
-		_ = cur.proc.Stop()
+		if err := cur.proc.Stop(); err != nil {
+			logger.Warningf("mieru: failed to stop inbound %d: %v", id, err)
+			continue
+		}
 		_ = os.Remove(configPathForID(id))
 		_ = os.Remove(socketPathForID(id))
 		delete(m.procs, id)
