@@ -97,6 +97,20 @@ func TestTelemtWebIPv6AdvertisedAddressNeedsIPv6Listener(t *testing.T) {
 	}
 }
 
+func TestTelemtWebProbeAddressFamilies(t *testing.T) {
+	if got := strings.Join(telemtWebProbeLoopbacks(false), ","); got != "127.0.0.1" {
+		t.Fatalf("IPv4-only probe: %s", got)
+	}
+	if got := strings.Join(telemtWebProbeLoopbacks(true), ","); got != "127.0.0.1,::1" {
+		t.Fatalf("dual-stack probe: %s", got)
+	}
+	client := telemtWebFrontendProbeClient("127.0.0.1", nil)
+	transport := client.Transport.(*http.Transport)
+	if !transport.DisableKeepAlives || !transport.ForceAttemptHTTP2 || transport.Proxy != nil {
+		t.Fatal("frontend health check must use fresh direct browser-compatible connections")
+	}
+}
+
 func TestTelemtWebVerifyPreparedIndex(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("site"), 0o644); err != nil {

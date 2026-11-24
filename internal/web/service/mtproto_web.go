@@ -255,7 +255,7 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 			if err := refreshTelemtIngress(state); err != nil {
 				return err
 			}
-			return telemtWebUpgradeFrontend(ctx, state)
+			return telemtWebRecoverFrontend(ctx, state)
 		}
 		if err := disableTelemtWebProxy(); err != nil {
 			return err
@@ -316,23 +316,10 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		}
 	}
 	if unchanged && state.UserFingerprint == fingerprint && svc.WebProxyTelemtActive() {
-		if err := telemtWebUpgradeFrontend(ctx, state); err != nil {
-			return err
-		}
 		if err := refreshMtprotoWebTrafficBinding(ctx); err != nil {
 			return err
 		}
-		// Recover the HTTPS entry point even when only its process was stopped.
-		if !telemtWebFrontendActive(state) {
-			if err := telemtWebEnsureFrontendRunning(state); err != nil {
-				return err
-			}
-		}
-		// An active process can still return 502/404 or present the wrong TLS
-		// virtual host. Do not report a healthy reconciliation in that case.
-		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		defer cancel()
-		return telemtWebWaitFrontendReady(probeCtx, state)
+		return telemtWebRecoverFrontend(ctx, state)
 	}
 	if unchanged {
 		cfg, cfgErr := getConfig()
@@ -346,18 +333,10 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		if err := writeTelemtWebState(state); err != nil {
 			return err
 		}
-		if err := svc.EnsureWebProxyBackend(); err != nil {
+		if err := svc.ensureWebProxyBackend(ctx); err != nil {
 			return err
 		}
-		if err := telemtWebUpgradeFrontend(ctx, state); err != nil {
-			return err
-		}
-		if !telemtWebFrontendActive(state) {
-			if err := telemtWebEnsureFrontendRunning(state); err != nil {
-				return err
-			}
-		}
-		return telemtWebWaitFrontendReady(ctx, state)
+		return telemtWebRecoverFrontend(ctx, state)
 	}
 	// Avoid repeatedly attempting certificate issuance on every periodic job
 	// when DNS, ports, or certificate preconditions cannot be satisfied.

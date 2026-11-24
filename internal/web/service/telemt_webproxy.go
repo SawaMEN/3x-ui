@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -32,7 +33,7 @@ const (
 	telemtWebListenPort             = 15080
 	telemtWebUser                   = "webproxy"
 	telemtWebMinEngine              = "3.5.1"
-	telemtWebFrontendConfigRevision = 2
+	telemtWebFrontendConfigRevision = 3
 )
 
 const telemtWebDomainPatternSource = "^(?:[A-Za-z0-9]" +
@@ -796,7 +797,7 @@ func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if err := os.MkdirAll(filepath.Dir(telemtWebNginxConf), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(telemtWebNginxConf, []byte(config), 0o644)
+	return writeTelemtWebFrontendFile(telemtWebNginxConf, []byte(config))
 }
 
 // Route imported Hiddify paths through the panel's NoRoute handler.
@@ -876,11 +877,15 @@ func RefreshTelemtWebSubscriptionRoutes() error {
 		if err := writeTelemtWebFrontendConfig(state); err != nil {
 			return err
 		}
-		if err := telemtWebReloadFrontend(state); err != nil {
-			if previous != nil {
-				_ = os.WriteFile(telemtWebFrontDir+"/config", previous, 0o600)
-			}
+		updated, err := os.ReadFile(telemtWebFrontDir + "/config")
+		if err != nil {
 			return err
+		}
+		if bytes.Equal(previous, updated) {
+			return nil
+		}
+		if err := telemtWebReloadFrontend(state); err != nil {
+			return errors.Join(err, telemtIngressRestoreConfig(telemtWebFrontDir+"/config", previous))
 		}
 		return nil
 	}
