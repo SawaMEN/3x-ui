@@ -28,7 +28,7 @@ func TestNodeTransportNegotiatesHTTP2(t *testing.T) {
 
 	roots := x509.NewCertPool()
 	roots.AddCert(server.Certificate())
-	transport := newNodeTransport(&tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12})
+	transport := newNodeTransport(&tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}, true)
 	defer transport.CloseIdleConnections()
 	if !transport.ForceAttemptHTTP2 {
 		t.Fatal("node transport must negotiate HTTP/2")

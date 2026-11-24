@@ -122,9 +122,11 @@ func buildTelemtIngressPreview(ctx context.Context, state, old TelemtWebProxySta
 		return nil, err
 	}
 	preview := &telemtIngressPreview{Routes: []telemtIngressPreviewRoute{}, SuggestedAliases: append([]string{}, state.Aliases...), Manual: []string{}, PanelPort: settings.WebPort, TelemtPort: backendPort}
-	if port, set, err := config.GetPortOverride(); err != nil {
+	port, panelOverridden, err := config.GetPortOverride()
+	if err != nil {
 		return nil, err
-	} else if set {
+	}
+	if panelOverridden {
 		preview.PanelPort = port
 		if port == 443 {
 			preview.Manual = append(preview.Manual, "panel-env-port")
@@ -188,7 +190,7 @@ func buildTelemtIngressPreview(ctx context.Context, state, old TelemtWebProxySta
 	preview.CertificateAction = telemtIngressCertificateAction(state, old, cert, key)
 	// Suggested ports do not move existing listeners; changing the panel
 	// requires a separate restart and may disconnect the administrator.
-	if preview.PanelPort <= 0 || preview.PanelPort == 443 {
+	if !panelOverridden && (preview.PanelPort <= 0 || preview.PanelPort == 443) {
 		preview.SuggestedPanelPort, err = telemtIngressFindPort(ctx, 18080, 18179, nativePort, backendPort, preview.SubscriptionPort)
 		if err != nil {
 			preview.Manual = append(preview.Manual, "port-unavailable")

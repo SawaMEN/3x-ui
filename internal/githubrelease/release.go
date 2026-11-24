@@ -19,6 +19,16 @@ import (
 
 const metadataLimit = 4 << 20
 
+// HTTPError preserves the REST response status for callers that need to
+// distinguish an absent release from an unavailable API.
+type HTTPError struct {
+	StatusCode int
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("GitHub release API returned HTTP %d", e.StatusCode)
+}
+
 type Asset struct {
 	Name   string `json:"name"`
 	URL    string `json:"browser_download_url"`
@@ -49,7 +59,7 @@ func Fetch(ctx context.Context, client *http.Client, endpoint string) (Release, 
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		apiErr := fmt.Errorf("GitHub release API returned HTTP %d", resp.StatusCode)
+		apiErr := &HTTPError{StatusCode: resp.StatusCode}
 		path := releaseAPIPath.FindStringSubmatch(req.URL.Path)
 		if (resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusTooManyRequests) ||
 			req.URL.Scheme != "https" || req.URL.Host != "api.github.com" || len(path) == 0 {

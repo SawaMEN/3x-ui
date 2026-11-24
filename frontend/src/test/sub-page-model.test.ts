@@ -120,6 +120,11 @@ describe('buildSubApps', () => {
     expect(new URL(xray.url!).searchParams.get('url')).toBe(subUrl);
   });
 
+  it.each(['', 'javascript:alert(1)', 'not a URL'])('does not import invalid URL %s', (url) => {
+    const apps = buildSubApps('android', url, 'Profile');
+    expect(apps.every((app) => app.url === undefined)).toBe(true);
+  });
+
   it.each([
     ['android', 'app.hiddify.com', 'com.happproxy', 'org.amnezia.awg'],
     ['ios', 'id6596777532', 'id6504287215', 'id6478942365?platform=iphone'],

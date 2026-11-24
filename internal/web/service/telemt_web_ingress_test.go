@@ -415,3 +415,19 @@ func TestTelemtIngressPreviewPreservesSettingsAndReservations(t *testing.T) {
 		t.Fatalf("preview changed actual panel path: %s %v", path, err)
 	}
 }
+
+func TestTelemtIngressPreviewDoesNotSuggestOverriddenPanelPort(t *testing.T) {
+	setupConflictDB(t)
+	t.Setenv("XUI_PORT", "443")
+	state := TelemtWebProxyState{Domain: "web.example.com", BasePath: "telegram/web", SharedIngress: &TelemtWebIngress{Enabled: true}}
+	preview, err := buildTelemtIngressPreview(t.Context(), state, TelemtWebProxyState{}, "", "", 8443, 15080)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.PanelPort != 443 || preview.SuggestedPanelPort != 0 {
+		t.Fatalf("cannot migrate an environment-controlled port: %+v", preview)
+	}
+	if !strings.Contains(strings.Join(preview.Manual, ","), "panel-env-port") {
+		t.Fatal("missing instruction to change the environment override")
+	}
+}

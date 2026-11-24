@@ -143,12 +143,14 @@ const (
 	maxIdleNodeConnsPerHost = 8
 )
 
-func newNodeTransport(tlsCfg *tls.Config) *http.Transport {
+func newNodeTransport(tlsCfg *tls.Config, allowPrivate bool) *http.Transport {
 	return &http.Transport{
 		MaxIdleConns:        maxIdleNodeConns,
 		MaxIdleConnsPerHost: maxIdleNodeConnsPerHost,
 		IdleConnTimeout:     60 * time.Second,
-		DialContext:         netsafe.SSRFGuardedDialContext,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			return netsafe.SSRFGuardedDialContext(netsafe.ContextWithAllowPrivate(ctx, allowPrivate), network, address)
+		},
 		TLSClientConfig:     tlsCfg,
 		// A custom dialer disables Go's automatic HTTP/2 opt-in. Some HTTPS
 		// node endpoints only accept h2 after TLS ALPN negotiation.
@@ -169,11 +171,7 @@ func rejectNodeRedirect(*http.Request, []*http.Request) error {
 // Connection reuse does not call DialContext again. Public-only and explicitly
 // private-enabled nodes must never share a transport, even at the same origin.
 func sharedNodeHTTPClient(allowPrivate bool) *http.Client {
-	transport := newNodeTransport(nil)
-	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		return netsafe.SSRFGuardedDialContext(netsafe.ContextWithAllowPrivate(ctx, allowPrivate), network, address)
-	}
-	return &http.Client{Transport: transport, CheckRedirect: rejectNodeRedirect}
+	return &http.Client{Transport: newNodeTransport(nil, allowPrivate), CheckRedirect: rejectNodeRedirect}
 }
 
 var (
@@ -299,11 +297,12 @@ func nodeProxyHTTPClient(n *model.Node, proxyURL string) (*http.Client, error) {
 			return nil, common.NewError("node SOCKS transport does not support guarded destination dialing")
 		}
 		dial := transport.DialContext
+		allowPrivate := n.AllowPrivateAddress
 		// The requested SOCKS bridge, not an environment HTTP_PROXY, must
 		// handle node traffic; the latter could redirect credentials.
 		transport.Proxy = nil
 		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-			return netsafe.SSRFGuardedDialWith(ctx, network, address, dial)
+			return netsafe.SSRFGuardedDialWith(netsafe.ContextWithAllowPrivate(ctx, allowPrivate), network, address, dial)
 		}
 	}
 	return client, nil
@@ -344,7 +343,7 @@ func buildNodeHTTPClient(n *model.Node, mode, proxyURL string) (*http.Client, er
 		}
 		transport, ok := client.Transport.(*http.Transport)
 		if !ok {
-			return client, nil
+			return nil, common.NewError("node proxy transport does not support the selected TLS policy")
 		}
 		tlsCfg, err := tlsConfigForNode(n)
 		if err != nil {
@@ -359,7 +358,7 @@ func buildNodeHTTPClient(n *model.Node, mode, proxyURL string) (*http.Client, er
 			if err != nil {
 				return nil, err
 			}
-			return newNodeTransport(tlsCfg), nil
+			return newNodeTransport(tlsCfg, n.AllowPrivateAddress), nil
 		}
 		transport, err := newCredentialRotatingTransport(build)
 		if err != nil {
@@ -371,7 +370,7 @@ func buildNodeHTTPClient(n *model.Node, mode, proxyURL string) (*http.Client, er
 	if err != nil {
 		return nil, err
 	}
-	return &http.Client{Transport: newNodeTransport(tlsCfg)}, nil
+	return &http.Client{Transport: newNodeTransport(tlsCfg, n.AllowPrivateAddress)}, nil
 }
 
 func tlsConfigForNode(n *model.Node) (*tls.Config, error) {

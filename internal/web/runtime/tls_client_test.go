@@ -703,3 +703,42 @@ func TestSharedNodeClientsIsolatePrivateAddressPolicy(t *testing.T) {
 		t.Fatal("public-only client reached a private endpoint")
 	}
 }
+
+func TestNodeTLSClientEnforcesConfiguredAddressPolicy(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer server.Close()
+	pin := sha256.Sum256(server.Certificate().Raw)
+	for _, mode := range []string{"skip", "pin"} {
+		t.Run(mode, func(t *testing.T) {
+			node := nodeForServer(t, server, mode, hex.EncodeToString(pin[:]))
+			node.AllowPrivateAddress = false
+			client, err := HTTPClientForNode(node, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.CloseIdleConnections()
+			req, err := http.NewRequestWithContext(netsafe.ContextWithAllowPrivate(t.Context(), true), http.MethodGet, server.URL, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if response, err := client.Do(req); err == nil {
+				_ = response.Body.Close()
+				t.Fatal("request context bypassed the configured public-only policy")
+			}
+			privateNode := *node
+			privateNode.AllowPrivateAddress = true
+			private, err := HTTPClientForNode(&privateNode, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer private.CloseIdleConnections()
+			response, err := private.Get(server.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = response.Body.Close()
+		})
+	}
+}

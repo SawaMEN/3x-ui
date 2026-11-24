@@ -1,6 +1,7 @@
 package githubrelease
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -96,5 +97,16 @@ func TestParseAssetsRejectsConflictingDigests(t *testing.T) {
 	assets, err := parseAssets(strings.NewReader(page(strings.ToUpper(first))), prefix)
 	if err != nil || len(assets) != 1 || assets[0].Digest != "sha256:"+first {
 		t.Fatalf("identical digests must be accepted: %+v, %v", assets, err)
+	}
+}
+
+func TestFetchPreservesHTTPErrorStatus(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusNotFound, Header: make(http.Header), Body: http.NoBody, Request: req}, nil
+	})}
+	_, err := Fetch(t.Context(), client, "https://api.github.com/repos/owner/project/releases/latest")
+	var statusErr *HTTPError
+	if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected a typed 404 response, got %v", err)
 	}
 }

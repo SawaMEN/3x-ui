@@ -161,7 +161,9 @@ export function buildSubApps(platform: AppPlatform, subUrl: string, profileName:
     hiddifyUrl.searchParams.delete('format');
     hiddifyUrl.hash = '';
   }
-  const hiddifyImport = `hiddify://import/?url=${encodeURIComponent(hiddifyUrl?.href ?? subUrl)}#${encodeURIComponent(profileName)}`;
+  const hiddifyImport = hiddifyUrl
+    ? `hiddify://import/?url=${encodeURIComponent(hiddifyUrl.href)}#${encodeURIComponent(profileName)}`
+    : undefined;
 
   return [
     { name: 'Hiddify', url: hiddifyImport, downloads: HIDDIFY_DOWNLOADS[platform] },
@@ -170,7 +172,11 @@ export function buildSubApps(platform: AppPlatform, subUrl: string, profileName:
       url: hiddifyImport,
       downloads: [{ label: 'GitHub', href: HIDDIFY_RELEASES }],
     },
-    { name: 'Happ', url: `happ://add/${subUrl}`, downloads: HAPP_DOWNLOADS[platform] },
+    {
+      name: 'Happ',
+      url: hiddifyUrl ? `happ://add/${subUrl}` : undefined,
+      downloads: HAPP_DOWNLOADS[platform],
+    },
     { name: 'AmneziaWG', url: undefined, downloads: AMNEZIAWG_DOWNLOADS[platform] },
   ];
 }

@@ -242,7 +242,8 @@ func fetchLatestRelease(ctx context.Context, spec releaseSpec) (githubRelease, e
 			}
 			return rel, nil
 		}
-		if err.Error() != "GitHub release API returned HTTP 404" {
+		var statusErr *githubrelease.HTTPError
+		if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusNotFound {
 			return githubRelease{}, fmt.Errorf("fetch managed TrustTunnel release: %w", err)
 		}
 	}
