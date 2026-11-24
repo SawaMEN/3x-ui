@@ -6,39 +6,37 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 )
 
-// normalizeHiddifySubURI keeps imported Hiddify subscription bases on the
-// public HTTPS vhost. Older databases may still contain the regular
-// subscription listener port (for example :2096); imported Hiddify links must
-// instead use standard HTTPS port 443.
-func normalizeHiddifySubURI(value string) string {
+// NormalizeHiddifySubURI keeps imported subscription bases on HTTPS/443.
+// Invalid stored values are ignored without modifying the database.
+func NormalizeHiddifySubURI(value string) string {
 	raw := strings.TrimSpace(value)
-	if raw == "" {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.User != nil || parsed.Hostname() == "" ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") ||
+		parsed.ForceQuery || parsed.RawQuery != "" || strings.Contains(raw, "#") {
 		return ""
 	}
-
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.User != nil || parsed.Hostname() == "" {
-		return raw
+	host, err := netsafe.NormalizeHost(strings.ToLower(parsed.Hostname()))
+	if err != nil {
+		return ""
 	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return raw
-	}
-
-	host := parsed.Hostname()
 	if strings.Contains(host, ":") {
 		host = "[" + host + "]"
 	}
-	path := parsed.EscapedPath()
-	if path == "" {
-		path = "/"
+	path := strings.Trim(parsed.Path, "/")
+	if path == "" || len(path) > 128 {
+		return ""
 	}
-	if !strings.HasSuffix(path, "/") {
-		path += "/"
+	for _, r := range path {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			return ""
+		}
 	}
-
-	return "https://" + host + path
+	return "https://" + host + "/" + path + "/"
 }
 
 // AfterFind normalizes legacy Hiddify URLs as records leave the database. This
@@ -55,7 +53,7 @@ func (r *ClientRecord) AfterFind(_ *gorm.DB) error {
 	}
 
 	if r.HiddifySubURI != "" {
-		r.HiddifySubURI = normalizeHiddifySubURI(r.HiddifySubURI)
+		r.HiddifySubURI = NormalizeHiddifySubURI(r.HiddifySubURI)
 	}
 	return nil
 }

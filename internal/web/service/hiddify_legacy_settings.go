@@ -71,31 +71,6 @@ func normalizeHiddifyLegacyDomain(value string) (string, error) {
 	return value, nil
 }
 
-// normalizeHiddifyLegacySubscriptionURI keeps migrated Hiddify links on the
-// public HTTPS vhost. Old imports may have persisted the dedicated subscription
-// listener port (for example :2096); that listener is an internal implementation
-// detail for migrated URLs, which must continue to use standard HTTPS/443.
-func normalizeHiddifyLegacySubscriptionURI(value string) string {
-	raw := strings.TrimSpace(value)
-	if raw == "" {
-		return ""
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Host == "" || parsed.User != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return raw
-	}
-	host := parsed.Hostname()
-	if host == "" {
-		return raw
-	}
-	if strings.Contains(host, ":") {
-		host = "[" + host + "]"
-	}
-	parsed.Scheme = "https"
-	parsed.Host = host
-	return parsed.String()
-}
-
 func normalizeHiddifyLegacySubscriptionAlias(alias HiddifyLegacySubscriptionAlias) (HiddifyLegacySubscriptionAlias, error) {
 	path, err := normalizeHiddifyLegacySubPath(alias.Path)
 	if err != nil {
@@ -382,10 +357,14 @@ func isImportedHiddifyClient(rec model.ClientRecord) bool {
 }
 
 func (s *SettingService) SaveHiddifySubscriptionURL(alias HiddifyLegacySubscriptionAlias, uri string, items []ClientCreatePayload) error {
+	normalized := model.NormalizeHiddifySubURI(uri)
+	if strings.TrimSpace(uri) != "" && normalized == "" {
+		return fmt.Errorf("invalid Hiddify subscription URL")
+	}
 	if err := s.AddHiddifyLegacySubscriptionAlias(alias); err != nil {
 		return err
 	}
-	uri = normalizeHiddifyLegacySubscriptionURI(uri)
+	uri = normalized
 	if uri == "" {
 		return nil
 	}
@@ -417,8 +396,13 @@ func (s *SettingService) GetHiddifySubscriptionURIs() (map[string]string, error)
 	}
 	urls := make(map[string]string, len(records))
 	for _, rec := range records {
-		if rec.SubID != "" {
-			urls[rec.SubID] = normalizeHiddifyLegacySubscriptionURI(rec.HiddifySubURI)
+		if rec.SubID == "" {
+			continue
+		}
+		if rec.HiddifySubURI == "" {
+			delete(urls, rec.SubID)
+		} else {
+			urls[rec.SubID] = rec.HiddifySubURI
 		}
 	}
 	return urls, nil
@@ -437,7 +421,7 @@ func (s *SettingService) HiddifySubscriptionBase(subID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return normalizeHiddifyLegacySubscriptionURI(record.HiddifySubURI), nil
+	return record.HiddifySubURI, nil
 }
 
 func (s *SettingService) IsHiddifySubscriptionPath(subID, requestPath string) bool {
@@ -451,13 +435,11 @@ func (s *SettingService) IsHiddifySubscriptionPath(subID, requestPath string) bo
 		return false
 	}
 	for _, base := range bases {
-		uri, err := url.Parse(strings.TrimSpace(base))
-		if err != nil || uri.Hostname() == "" || uri.User != nil ||
-			(uri.Scheme != "http" && uri.Scheme != "https") {
+		uri, err := url.Parse(model.NormalizeHiddifySubURI(base))
+		if err != nil || uri.Host == "" {
 			continue
 		}
-		path, err := normalizeHiddifyLegacySubPath(uri.Path)
-		if err == nil && path != "" && strings.HasPrefix(requestPath, "/"+path+"/") {
+		if strings.HasPrefix(requestPath, uri.Path) {
 			return true
 		}
 	}
