@@ -2,6 +2,7 @@ package adblock
 
 import (
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -81,5 +82,17 @@ func TestSuffixRoundTripAndExceptions(t *testing.T) {
 	again, err := ParseDomains(strings.NewReader(strings.Join(got, "\n")), nil)
 	if err != nil || !reflect.DeepEqual(got, again) {
 		t.Fatalf("round trip: %v, %v", again, err)
+	}
+}
+
+func TestParseDomainsBoundsExceptions(t *testing.T) {
+	var input strings.Builder
+	for i := 0; i <= DefaultMaxDomains; i++ {
+		input.WriteString("@@||")
+		input.WriteString(strconv.Itoa(i))
+		input.WriteString(".example^\n")
+	}
+	if _, err := ParseDomains(strings.NewReader(input.String()), nil); err == nil || !strings.Contains(err.Error(), "allowlist exceeds") {
+		t.Fatalf("unbounded filter exceptions returned %v", err)
 	}
 }

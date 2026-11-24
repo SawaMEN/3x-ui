@@ -2,6 +2,7 @@ package adblock
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -88,5 +89,28 @@ func TestCachedSourcesMissingCacheAndCancellationAreAtomic(t *testing.T) {
 	}
 	if len(cache[server.URL].Domains) != 1 || cache[server.URL].LastError != "" {
 		t.Fatal("caller cache mutated")
+	}
+}
+
+func TestCachedSourcesCancellationWithoutNetwork(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, sources := range [][]string{nil, {"", "# comment"}} {
+		if _, err := (Manager{}).FetchCached(ctx, sources, nil, true); !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled empty refresh returned %v", err)
+		}
+	}
+
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+	const source = "https://example.com/list"
+	manager := Manager{ValidateURL: func(raw string) (string, error) {
+		cancel()
+		return raw, nil
+	}}
+	cache := map[string]SourceCache{source: {Domains: []string{"ads.example"}}}
+	got, err := manager.FetchCached(ctx, []string{source}, cache, true)
+	if !errors.Is(err, context.Canceled) || got.Cache != nil || len(got.Domains) != 0 {
+		t.Fatalf("canceled cache refresh returned %+v, %v", got, err)
 	}
 }

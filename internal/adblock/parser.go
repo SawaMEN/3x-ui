@@ -28,6 +28,9 @@ func ParseDomains(r io.Reader, allowlist []string) ([]string, error) {
 	for _, entry := range allowlist {
 		if domain, ok := normalizeDomain(entry); ok {
 			allowed[domain] = struct{}{}
+			if len(allowed) > DefaultMaxDomains {
+				return nil, fmt.Errorf("allowlist exceeds %d domains", DefaultMaxDomains)
+			}
 		}
 	}
 
@@ -40,6 +43,9 @@ func ParseDomains(r io.Reader, allowlist []string) ([]string, error) {
 		if strings.HasPrefix(line, "@@||") && strings.HasSuffix(line, "^") {
 			if name, ok := normalizeDomain(strings.TrimSuffix(strings.TrimPrefix(line, "@@||"), "^")); ok {
 				allowed[name] = struct{}{}
+				if len(allowed) > DefaultMaxDomains {
+					return nil, fmt.Errorf("allowlist exceeds %d domains", DefaultMaxDomains)
+				}
 			}
 			continue
 		}

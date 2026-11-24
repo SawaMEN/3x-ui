@@ -31,6 +31,9 @@ type SourceStatus struct {
 // FetchCached refreshes each source independently. A failed source can only
 // fall back to its own validated cache; new failed sources abort the transaction.
 func (m Manager) FetchCached(ctx context.Context, sources []string, previous map[string]SourceCache, useCache bool) (FetchResult, error) {
+	if err := ctx.Err(); err != nil {
+		return FetchResult{}, err
+	}
 	result := FetchResult{Cache: map[string]SourceCache{}}
 	set := map[string]bool{}
 	cacheEntries := 0
@@ -98,6 +101,9 @@ func (m Manager) FetchCached(ctx context.Context, sources []string, previous map
 		result.Domains = append(result.Domains, domain)
 	}
 	sort.Strings(result.Domains)
+	if err := ctx.Err(); err != nil {
+		return FetchResult{}, err
+	}
 	return result, nil
 }
 
