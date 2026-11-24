@@ -36,14 +36,22 @@ describe('Telemt WEB settings', () => {
       msg: '',
       obj: [
         { id: 1, protocol: 'vless', enable: true, port: 443, sharedIngressSni: 'one.example.com' },
-        { id: 2, protocol: 'anytls', enable: true, port: 9443, sharedIngressSni: 'two.example.com' },
+        {
+          id: 2,
+          protocol: 'anytls',
+          enable: true,
+          port: 9443,
+          sharedIngressSni: 'two.example.com',
+        },
         { id: 3, protocol: 'trojan', enable: true, port: 9444, sharedIngressError: 'TLS required' },
         { id: 4, protocol: 'hysteria', enable: true, port: 443, udp443: true },
       ],
     });
     const onChange = vi.fn();
     render(<TelemtNaiveSelect onChange={onChange} />);
-    const automatic = await screen.findByRole('button', { name: 'Select compatible automatically' });
+    const automatic = await screen.findByRole('button', {
+      name: 'Select compatible automatically',
+    });
     await waitFor(() => expect(automatic).toHaveProperty('disabled', false));
     fireEvent.click(automatic);
     expect(onChange).toHaveBeenCalledWith([1, 2]);
