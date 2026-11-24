@@ -16,6 +16,16 @@ describe('VetrOFF-Core diagnostic reports',()=>{
     expect(parse({control:timeout}).evidence).toBe('inconclusive');
     expect(parse({ip:'',baseline:null,burst:null,control:undefined}).evidence).toBe('inconclusive');
   });
+  it('accepts explicit diagnostic TLS presets but compares matching profiles only',()=>{
+    for (const fingerprint of ['go-standard','utls-chrome-auto','utls-firefox-auto','utls-safari-auto']) {
+      const physical=parse({fingerprint});
+      const tunnel=parse({scope:'client-tunnel',fingerprint,burst:[ok,ok,ok,ok]});
+      expect(physical.fingerprint).toBe(fingerprint);
+      expect(compareClientDiagnostics(physical,tunnel,now)).toBe('physical-only-signal');
+    }
+    expect(compareClientDiagnostics(parse({fingerprint:'utls-chrome-auto'}),parse({scope:'client-tunnel',fingerprint:'utls-firefox-auto'}),now)).toBe('not-comparable');
+    expect(()=>parse({fingerprint:'randomized'})).toThrow();
+  });
   it('rejects malformed report fields',()=>{
     for(const patch of [{version:2},{scope:'server'},{fingerprint:'chrome'},{ip:'not-ip'},
       {baseline:[ok,ok,ok]},{burst:[{...ok,durationMs:-1}]},{host:'http://bad'},

@@ -1,5 +1,10 @@
 import type { Evidence } from './anti-dpi-report';
 
+export type DiagnosticFingerprint = 'go-standard' | 'utls-chrome-auto' | 'utls-firefox-auto' | 'utls-safari-auto';
+function diagnosticFingerprint(value: unknown): value is DiagnosticFingerprint {
+  return value === 'go-standard' || value === 'utls-chrome-auto' ||
+    value === 'utls-firefox-auto' || value === 'utls-safari-auto';
+}
 export type DiagnosticScope = 'client-physical' | 'client-tunnel';
 type Stage = 'tcp' | 'tls';
 type Outcome = 'ok' | 'error' | 'timeout' | 'canceled';
@@ -13,7 +18,7 @@ export interface ClientDiagnostic {
   host: string;
   controlHost: string;
   ip: string;
-  fingerprint: string;
+  fingerprint: DiagnosticFingerprint;
   checkedAt: string;
   baseline: DiagnosticAttempt[];
   burst: DiagnosticAttempt[];
@@ -62,7 +67,7 @@ export function parseClientDiagnostic(raw: string): ClientDiagnostic {
       typeof r.checkedAt !== 'string' || r.checkedAt.length > 40 ||
       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(r.checkedAt) ||
       !Number.isFinite(Date.parse(r.checkedAt)) ||
-      r.fingerprint !== 'go-standard' ||
+      !diagnosticFingerprint(r.fingerprint) ||
       typeof r.ip !== 'string' || r.ip.length > 45 ||
       (r.ip !== '' && !validIP(r.ip))) throw new Error('Unsupported client report');
   const host = diagnosticHostname(r.host), controlHost = diagnosticHostname(r.controlHost);
