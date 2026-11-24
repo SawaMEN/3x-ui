@@ -102,7 +102,11 @@ export default function Zapret2Fields({
       if (!response.success) throw new Error(response.msg || 'Ошибка диагностики Zapret2');
       const result = response.obj;
       if (result?.calibration) {
-        change.current({ ...latestSettings.current, profile: 'auto', calibration: result.calibration });
+        change.current({
+          ...latestSettings.current,
+          profile: 'auto',
+          calibration: result.calibration,
+        });
       }
       setReport(
         [
@@ -114,7 +118,8 @@ export default function Zapret2Fields({
         ].join('\n'),
       );
     } catch (error) {
-      if (!controller.signal.aborted) setReport(error instanceof Error ? error.message : String(error));
+      if (!controller.signal.aborted)
+        setReport(error instanceof Error ? error.message : String(error));
     } finally {
       if (diagnostic.finish(controller)) setBusy(false);
     }
@@ -153,7 +158,8 @@ export default function Zapret2Fields({
       </Form.Item>
       <Space wrap>
         TCP <Switch disabled={busy} checked={settings.tcp} onChange={(tcp) => patch({ tcp })} />
-        UDP/QUIC <Switch disabled={busy} checked={settings.udp} onChange={(udp) => patch({ udp })} />
+        UDP/QUIC{' '}
+        <Switch disabled={busy} checked={settings.udp} onChange={(udp) => patch({ udp })} />
       </Space>
       <Form.Item label="Тестовые домены">
         <Select

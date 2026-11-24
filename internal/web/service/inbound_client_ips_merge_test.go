@@ -539,7 +539,7 @@ func TestClientIpSyncCASExhaustionRollsBack(t *testing.T) {
 	}
 }
 
-func TestNodeClientIpCanonicalUnchangedSkipsUpsert(t *testing.T) {
+func TestNodeClientIpCanonicalUnchangedSkipsWrite(t *testing.T) {
 	setupClientIpTestDB(t)
 	now := time.Now().Unix()
 	report := map[string][]model.ClientIpEntry{"u@x": {{IP: "192.0.2.1", Timestamp: now - 1}, {IP: "192.0.2.2", Timestamp: now}}}
@@ -558,8 +558,10 @@ func TestNodeClientIpCanonicalUnchangedSkipsUpsert(t *testing.T) {
 	if err := (&InboundService{}).RecordLocalClientIps("guid", report); err != nil {
 		t.Fatal(err)
 	}
-	if counts.creates.Load() != 1 || counts.affected.Load() != 1 {
-		t.Fatalf("advancing attribution attempts/affected = %d/%d, want 1/1", counts.creates.Load(), counts.affected.Load())
+	// Existing rows are locked and updated directly; inserts are only used
+	// when the (node_guid, email) row does not exist.
+	if counts.selects.Load() != 2 || counts.creates.Load() != 0 || counts.updates.Load() != 1 || counts.affected.Load() != 1 {
+		t.Fatalf("advancing attribution SELECT/create/update/affected = %d/%d/%d/%d, want 2/0/1/1", counts.selects.Load(), counts.creates.Load(), counts.updates.Load(), counts.affected.Load())
 	}
 	trees, err := (&InboundService{}).GetClientIpsByGuid()
 	if err != nil {
