@@ -82,3 +82,19 @@ func TestParseAssetsDeduplicatesLinks(t *testing.T) {
 		t.Fatalf("assets = %+v, error = %v", assets, err)
 	}
 }
+
+func TestParseAssetsRejectsConflictingDigests(t *testing.T) {
+	const prefix = "/owner/project/releases/download/v1/"
+	first := strings.Repeat("a", 64)
+	second := strings.Repeat("b", 64)
+	page := func(other string) string {
+		return fmt.Sprintf(`<a href="%sfile.tar.gz">file</a><clipboard-copy value="sha256:%s" aria-label="Copy to clipboard digest for file.tar.gz"></clipboard-copy><clipboard-copy value="sha256:%s" aria-label="Copy to clipboard digest for file.tar.gz"></clipboard-copy>`, prefix, first, other)
+	}
+	if _, err := parseAssets(strings.NewReader(page(second)), prefix); err == nil {
+		t.Fatal("accepted conflicting asset digests")
+	}
+	assets, err := parseAssets(strings.NewReader(page(strings.ToUpper(first))), prefix)
+	if err != nil || len(assets) != 1 || assets[0].Digest != "sha256:"+first {
+		t.Fatalf("identical digests must be accepted: %+v, %v", assets, err)
+	}
+}

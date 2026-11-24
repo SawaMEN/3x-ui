@@ -199,7 +199,11 @@ func parseAssets(body io.Reader, downloadPath string) ([]Asset, error) {
 			digest, ok := strings.CutPrefix(value, "sha256:")
 			if name != "" && ok && len(digest) == sha256.Size*2 {
 				if _, err := hex.DecodeString(digest); err == nil {
-					digests[name] = "sha256:" + strings.ToLower(digest)
+					normalized := "sha256:" + strings.ToLower(digest)
+					if previous, exists := digests[name]; exists && previous != normalized {
+						return nil, fmt.Errorf("conflicting SHA-256 digests for release asset %q", name)
+					}
+					digests[name] = normalized
 				}
 			}
 		}

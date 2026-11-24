@@ -121,10 +121,7 @@ func buildTelemtIngressPreview(ctx context.Context, state, old TelemtWebProxySta
 	if err != nil {
 		return nil, err
 	}
-	preview := &telemtIngressPreview{Routes: []telemtIngressPreviewRoute{}, SuggestedAliases: slices.Clone(state.Aliases), Manual: []string{}, PanelPort: settings.WebPort, TelemtPort: backendPort}
-	if preview.SuggestedAliases == nil {
-		preview.SuggestedAliases = []string{}
-	}
+	preview := &telemtIngressPreview{Routes: []telemtIngressPreviewRoute{}, SuggestedAliases: append([]string{}, state.Aliases...), Manual: []string{}, PanelPort: settings.WebPort, TelemtPort: backendPort}
 	if port, set, err := config.GetPortOverride(); err != nil {
 		return nil, err
 	} else if set {

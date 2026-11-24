@@ -121,10 +121,12 @@ func (TelemtService) StagePortMigration(ctx context.Context, req TelemtPortMigra
 		return nil, err
 	}
 	effectivePanel := settings.WebPort
-	if port, overridden, err := config.GetPortOverride(); err != nil {
+	portOverride, overridden, err := config.GetPortOverride()
+	if err != nil {
 		return nil, err
-	} else if overridden {
-		effectivePanel = port
+	}
+	if overridden {
+		effectivePanel = portOverride
 	}
 	if req.ExpectedPanelPort != effectivePanel || (settings.SubEnable && req.ExpectedSubscriptionPort != settings.SubPort) {
 		return nil, errors.New("listener settings changed; refresh the setup preview")
@@ -134,7 +136,7 @@ func (TelemtService) StagePortMigration(ctx context.Context, req TelemtPortMigra
 		m.OldSubscription, m.NewSubscription = settings.SubPort, settings.SubPort
 	}
 	if req.PanelPort != 0 {
-		if _, overridden, err := config.GetPortOverride(); err != nil || overridden {
+		if overridden {
 			return nil, errors.New("panel port is controlled by XUI_PORT; change the service environment instead")
 		}
 		if settings.WebPort != 443 {

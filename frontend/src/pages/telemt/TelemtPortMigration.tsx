@@ -104,6 +104,7 @@ export function TelemtPortMigrationConfirmation() {
   useEffect(() => {
     if (done) return;
     let active = true;
+    let timer: number | undefined;
     const read = async () => {
       try {
         const response = await HttpUtil.get<Migration>(endpoint, undefined, { silent: true });
@@ -111,19 +112,23 @@ export function TelemtPortMigrationConfirmation() {
         if (response?.success && response.obj) setMigration(response.obj);
         else setMigration(undefined);
       } catch {
-        /* rollback remains server-side even if the browser disconnects */
+        if (active) setMigration(undefined);
+      } finally {
+        // Poll only after the previous request finishes; stale responses must not
+        // replace the current migration or re-enable an expired confirmation.
+        if (active) timer = window.setTimeout(() => void read(), 2000);
       }
     };
     void read();
-    const timer = window.setInterval(() => void read(), 2000);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
   }, [done]);
   const confirm = async () => {
-    if (!migration?.ready) return;
+    if (!migration?.ready || busy || Date.parse(migration.deadline) <= Date.now()) return;
     setBusy(true);
+    setError('');
     try {
       const response = await HttpUtil.post(
         endpoint + '/confirm',
@@ -167,7 +172,7 @@ export function TelemtPortMigrationConfirmation() {
           </Typography.Text>
           <Button
             type="primary"
-            disabled={!migration?.ready}
+            disabled={!migration?.ready || Date.parse(migration.deadline) <= Date.now()}
             loading={busy}
             onClick={() => void confirm()}
           >
