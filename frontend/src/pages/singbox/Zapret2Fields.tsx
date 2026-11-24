@@ -106,7 +106,9 @@ export default function Zapret2Fields({
       }
       setReport(
         [
-          result?.calibration ? 'Стратегия подобрана. Сохраните подключение.' : 'Настройки не изменены.',
+          result?.calibration
+            ? 'Стратегия подобрана. Сохраните подключение.'
+            : 'Настройки не изменены.',
           ...(result?.warnings ?? []),
           result?.summary || '',
         ].join('\n'),

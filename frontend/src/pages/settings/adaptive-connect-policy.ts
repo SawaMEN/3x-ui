@@ -34,13 +34,19 @@ export function exportAdaptivePolicy(policy: AdaptiveConnectPolicy): string {
   }
   // Copy only the public v1 fields. Never include other form data, tokens,
   // inbound identifiers, subscription URLs or credentials.
-  return JSON.stringify({
-    version: policy.version,
-    enabled: policy.enabled,
-    failureThreshold: policy.failureThreshold,
-    recoveryThreshold: policy.recoveryThreshold,
-    cooldownSeconds: policy.cooldownSeconds,
-    maxAgeSeconds: policy.maxAgeSeconds,
-    failback: policy.failback,
-  }, null, 2) + '\n';
+  return (
+    JSON.stringify(
+      {
+        version: policy.version,
+        enabled: policy.enabled,
+        failureThreshold: policy.failureThreshold,
+        recoveryThreshold: policy.recoveryThreshold,
+        cooldownSeconds: policy.cooldownSeconds,
+        maxAgeSeconds: policy.maxAgeSeconds,
+        failback: policy.failback,
+      },
+      null,
+      2,
+    ) + '\n'
+  );
 }

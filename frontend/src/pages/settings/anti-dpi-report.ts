@@ -9,7 +9,8 @@ export interface SiberianEvidence {
 }
 
 function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid report');
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('Invalid report');
   return value as Record<string, unknown>;
 }
 
@@ -43,9 +44,12 @@ export function parseSiberianReport(raw: string): SiberianEvidence[] {
       const alphaError = attemptError(check.alpha);
       const betaError = attemptError(check.beta);
       const fingerprint = stringField(check.fingerprint, 128);
-      const evidence: Evidence = betaError || check.retried_with_real_sni === true
-        ? 'inconclusive'
-        : alphaError ? 'asymmetry' : 'no-signal';
+      const evidence: Evidence =
+        betaError || check.retried_with_real_sni === true
+          ? 'inconclusive'
+          : alphaError
+            ? 'asymmetry'
+            : 'no-signal';
       rows.push({ ip: address, fingerprint, alphaError, betaError, evidence });
     }
   }

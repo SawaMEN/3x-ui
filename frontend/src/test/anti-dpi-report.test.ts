@@ -3,10 +3,22 @@ import { parseSiberianReport } from '@/pages/settings/anti-dpi-report';
 import { getAdditionalSettingsTab } from '@/pages/settings/additional-settings';
 
 function report(alpha: string, beta: string, retried = false) {
-  return JSON.stringify({ ips: [{ ip: '1.1.1.1', checks: [{
-    fingerprint: 'chrome', alpha: { error: alpha }, beta: { error: beta },
-    siberian_detected: true, retried_with_real_sni: retried,
-  }] }] });
+  return JSON.stringify({
+    ips: [
+      {
+        ip: '1.1.1.1',
+        checks: [
+          {
+            fingerprint: 'chrome',
+            alpha: { error: alpha },
+            beta: { error: beta },
+            siberian_detected: true,
+            retried_with_real_sni: retried,
+          },
+        ],
+      },
+    ],
+  });
 }
 
 describe('Anti-DPI', () => {

@@ -2,9 +2,19 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseClientDiagnostic } from '@/pages/settings/vetroff-diagnostic-report';
-import { parseConnectivityReport, connectivityFindings } from '@/pages/settings/connectivity-report';
-import { parseAddressReport, addressFindings, compareAddressReports } from '@/pages/settings/address-report';
-import { DEFAULT_ADAPTIVE_POLICY, exportAdaptivePolicy } from '@/pages/settings/adaptive-connect-policy';
+import {
+  parseConnectivityReport,
+  connectivityFindings,
+} from '@/pages/settings/connectivity-report';
+import {
+  parseAddressReport,
+  addressFindings,
+  compareAddressReports,
+} from '@/pages/settings/address-report';
+import {
+  DEFAULT_ADAPTIVE_POLICY,
+  exportAdaptivePolicy,
+} from '@/pages/settings/adaptive-connect-policy';
 
 const dir = process.env.VETROFF_CONTRACT_DIR;
 const now = Date.parse('2026-11-25T10:01:00Z');
@@ -35,17 +45,23 @@ describe.skipIf(!dir)('real VetrOFF-Core v1 JSON contract', () => {
     expect(connectivityFindings(report, now)).toEqual(
       expect.arrayContaining(['reachable', 'http-server-error', 'no-address']),
     );
-    expect(connectivityFindings(parseConnectivityReport(read('connectivity-partial.json')), now)).toEqual(['incomplete']);
+    expect(
+      connectivityFindings(parseConnectivityReport(read('connectivity-partial.json')), now),
+    ).toEqual(['incomplete']);
   });
   it('compares address reports without DNS assumptions', () => {
     const physical = parseAddressReport(read('address-physical.json'));
     const tunnel = parseAddressReport(read('address-tunnel.json'));
     expect(compareAddressReports(physical, tunnel, now)).toBe('tunnel-only');
     expect(addressFindings(tunnel, now)).toEqual(['reachable', 'http-server-error']);
-    expect(addressFindings(parseAddressReport(read('address-partial.json')), now)).toEqual(['incomplete']);
+    expect(addressFindings(parseAddressReport(read('address-partial.json')), now)).toEqual([
+      'incomplete',
+    ]);
   });
   it('exports actual panel policies for the strict Go parser', () => {
-    expect(JSON.parse(exportAdaptivePolicy({ ...DEFAULT_ADAPTIVE_POLICY }))).toEqual(JSON.parse(read('core-policy.json')));
+    expect(JSON.parse(exportAdaptivePolicy({ ...DEFAULT_ADAPTIVE_POLICY }))).toEqual(
+      JSON.parse(read('core-policy.json')),
+    );
     const enabled = {
       ...DEFAULT_ADAPTIVE_POLICY,
       enabled: true,
@@ -56,7 +72,14 @@ describe.skipIf(!dir)('real VetrOFF-Core v1 JSON contract', () => {
       failback: true,
     };
     const output = dir!;
-    writeFileSync(join(output, 'panel-default.json'), exportAdaptivePolicy({ ...DEFAULT_ADAPTIVE_POLICY }), { mode: 0o600, flag: 'wx' });
-    writeFileSync(join(output, 'panel-enabled.json'), exportAdaptivePolicy(enabled), { mode: 0o600, flag: 'wx' });
+    writeFileSync(
+      join(output, 'panel-default.json'),
+      exportAdaptivePolicy({ ...DEFAULT_ADAPTIVE_POLICY }),
+      { mode: 0o600, flag: 'wx' },
+    );
+    writeFileSync(join(output, 'panel-enabled.json'), exportAdaptivePolicy(enabled), {
+      mode: 0o600,
+      flag: 'wx',
+    });
   });
 });

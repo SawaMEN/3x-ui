@@ -23379,6 +23379,138 @@
         }
       }
     },
+    "/panel/api/setting/anti-dpi/probe": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Check public DNS, TCP and TLS connectivity from the panel server.",
+        "operationId": "post_panel_api_setting_anti_dpi_probe",
+        "description": "HTTPS port 443 only; results describe the server network, not the client.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "description": "Public DNS hostname."
+                  },
+                  "port": {
+                    "type": "integer",
+                    "enum": [
+                      443
+                    ],
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "host",
+                  "port"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/anti-dpi/siberian": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Run a bounded verified TLS comparison from the panel server.",
+        "operationId": "post_panel_api_setting_anti_dpi_siberian",
+        "description": "Requires two distinct operator-owned hostnames sharing one public IP, explicit confirmation and a one-minute interval between runs.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "controlHost": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "fingerprint": {
+                    "type": "string",
+                    "enum": [
+                      "chrome",
+                      "firefox",
+                      "safari",
+                      "android"
+                    ],
+                    "description": ""
+                  },
+                  "confirmed": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ],
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "host",
+                  "controlHost",
+                  "fingerprint",
+                  "confirmed"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/setting/zapret2/status": {
       "get": {
         "tags": [
