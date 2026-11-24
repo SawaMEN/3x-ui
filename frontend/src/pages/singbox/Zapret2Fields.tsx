@@ -1,6 +1,7 @@
 import { Alert, Button, Form, InputNumber, Select, Space, Switch } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { HttpUtil } from '@/utils';
+import { useRequestSlot } from '@/hooks/useRequestSlot';
 import {
   Zapret2OutboundSettingsSchema,
   type Zapret2Calibration,
@@ -23,32 +24,42 @@ export default function Zapret2Fields({
   const [repeats, setRepeats] = useState(2);
   const [ipv6, setIpv6] = useState(false);
   const [report, setReport] = useState('');
-  const active = useRef(true);
+  const diagnostic = useRequestSlot();
   const parsed = Zapret2OutboundSettingsSchema.safeParse(value);
   const settings = parsed.success ? parsed.data : Zapret2OutboundSettingsSchema.parse({});
   const valid = parsed.success && (settings.tcp || settings.udp) && installed && !busy;
   const validity = useRef(onValidity);
   const change = useRef(onChange);
+  const latestSettings = useRef(settings);
   useEffect(() => {
     validity.current = onValidity;
     change.current = onChange;
   }, [onValidity, onChange]);
   useEffect(() => {
+    latestSettings.current = settings;
+  }, [settings]);
+  useEffect(() => {
     validity.current(valid);
   }, [valid]);
   useEffect(() => {
-    active.current = true;
+    let current: AbortController | undefined;
     const refresh = () => {
-      void HttpUtil.get('/panel/api/setting/zapret2/status', undefined, { silent: true })
+      current?.abort();
+      const controller = new AbortController();
+      current = controller;
+      void HttpUtil.get('/panel/api/setting/zapret2/status', undefined, {
+        silent: true,
+        signal: controller.signal,
+      })
         .then((response: unknown) => {
           const status = response as { success?: boolean; obj?: { installed?: boolean } };
-          if (active.current) {
+          if (!controller.signal.aborted) {
             setInstalled(status.success === true && status.obj?.installed === true);
             setStatusLoaded(true);
           }
         })
         .catch(() => {
-          if (active.current) {
+          if (!controller.signal.aborted) {
             setInstalled(false);
             setStatusLoaded(true);
           }
@@ -57,33 +68,42 @@ export default function Zapret2Fields({
     refresh();
     window.addEventListener('zapret2:changed', refresh);
     return () => {
-      active.current = false;
+      current?.abort();
       window.removeEventListener('zapret2:changed', refresh);
     };
   }, []);
   const patch = (next: Partial<typeof settings>) => change.current({ ...settings, ...next });
   async function diagnose() {
+    if (diagnostic.isPending()) return;
     const domains = settings.testDomains;
     if (domains.length < 1 || domains.length > 12) {
       setReport('Укажите от 1 до 12 тестовых доменов.');
       return;
     }
+    const controller = diagnostic.begin();
     setBusy(true);
     setReport('');
     try {
       const response = (await HttpUtil.post(
         '/panel/api/setting/zapret2/diagnose',
         { domains, scanLevel: level, repeats, checkQuic: settings.udp, checkIpv6: ipv6 },
-        { timeout: 1860000, headers: { 'Content-Type': 'application/json' } },
+        {
+          timeout: 1860000,
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          silent: true,
+        },
       )) as {
         success?: boolean;
         msg?: string;
         obj?: { summary?: string; warnings?: string[]; calibration?: Zapret2Calibration };
       };
-      if (!active.current) return;
+      if (controller.signal.aborted) return;
       if (!response.success) throw new Error(response.msg || 'Ошибка диагностики Zapret2');
       const result = response.obj;
-      if (result?.calibration) patch({ profile: 'auto', calibration: result.calibration });
+      if (result?.calibration) {
+        change.current({ ...latestSettings.current, profile: 'auto', calibration: result.calibration });
+      }
       setReport(
         [
           result?.calibration ? 'Стратегия подобрана. Сохраните подключение.' : 'Настройки не изменены.',
@@ -92,9 +112,9 @@ export default function Zapret2Fields({
         ].join('\n'),
       );
     } catch (error) {
-      if (active.current) setReport(error instanceof Error ? error.message : String(error));
+      if (!controller.signal.aborted) setReport(error instanceof Error ? error.message : String(error));
     } finally {
-      if (active.current) setBusy(false);
+      if (diagnostic.finish(controller)) setBusy(false);
     }
   }
   return (

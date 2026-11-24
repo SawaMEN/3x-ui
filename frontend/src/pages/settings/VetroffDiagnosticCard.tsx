@@ -46,7 +46,7 @@ export default function VetroffDiagnosticCard() {
       <input type="file" accept=".json,application/json" aria-label={l('Import VetrOFF report','Импорт отчёта VetrOFF')} onChange={(e)=>{
         const file=e.target.files?.[0]; e.target.value=''; if(file) void load(file);
       }}/>
-      <Button disabled={!reports.length} onClick={()=>{++request.current;setPhysical(undefined);setTunnel(undefined);setError('');}}>{l('Clear reports','Очистить отчёты')}</Button>
+      <Button onClick={()=>{++request.current;setPhysical(undefined);setTunnel(undefined);setError('');}}>{l('Clear reports','Очистить отчёты')}</Button>
       {error && <Alert type="error" title={error}/>}
       {reports.map((r)=><Card key={r.scope} size="small" title={r.scope==='client-physical'?l('Physical network','Физическая сеть'):l('VPN tunnel','VPN-туннель')}>
         <Space orientation="vertical" style={{width:'100%'}}>

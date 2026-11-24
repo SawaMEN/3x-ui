@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Button, Card, Input, Space, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
+import { useRequestSlot } from '@/hooks/useRequestSlot';
 import type { AllSetting } from '@/models/setting';
 import AddressReportCard from './AddressReportCard';
 import ConnectivityReportCard from './ConnectivityReportCard';
@@ -41,31 +42,38 @@ export default function AntiDpiTab(props: {
   const [importError, setImportError] = useState('');
   const [report, setReport] = useState<ProbeReport>();
   const [rows, setRows] = useState<SiberianEvidence[]>([]);
+  const request = useRequestSlot();
+  const importSequence = useRef(0);
 
   async function probe() {
+    if (request.isPending()) return;
+    const controller = request.begin();
     setBusy(true);
     setError('');
     setReport(undefined);
     try {
       const result = await HttpUtil.post<ProbeReport>('/panel/api/setting/anti-dpi/probe',
-        { host: host.trim(), port: 443 }, { timeout: 25000 });
+        { host: host.trim(), port: 443 }, { timeout: 25000, signal: controller.signal, silent: true });
+      if (controller.signal.aborted) return;
       if (!result?.success || !result.obj) throw new Error(result?.msg || 'Probe failed');
       setReport(result.obj);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (!controller.signal.aborted) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setBusy(false);
+      if (request.finish(controller)) setBusy(false);
     }
   }
 
   async function importReport(file: File) {
+    const sequence = ++importSequence.current;
     setImportError('');
     setRows([]);
     try {
       if (file.size > 1_000_000) throw new Error('Report exceeds 1 MB');
-      setRows(parseSiberianReport(await file.text()));
+      const parsed = parseSiberianReport(await file.text());
+      if (sequence === importSequence.current) setRows(parsed);
     } catch (err) {
-      setImportError(err instanceof Error ? err.message : String(err));
+      if (sequence === importSequence.current) setImportError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -81,7 +89,7 @@ export default function AntiDpiTab(props: {
             'Read-only DNS, TCP and verified TLS checks from this panel server. Enter a hostname you control.',
             'DNS, TCP и TLS с проверкой сертификата из сети панели. Укажите принадлежащий вам домен.',
           )}</Typography.Text>
-          <Input value={host} onChange={(e) => setHost(e.target.value)} placeholder="vpn.example.com" aria-label={l('Hostname', 'Домен')} />
+          <Input disabled={busy} value={host} onChange={(e) => setHost(e.target.value)} placeholder="vpn.example.com" aria-label={l('Hostname', 'Домен')} />
           <Button type="primary" loading={busy} disabled={!host.trim()} onClick={() => void probe()}>
             {l('Check HTTPS port 443', 'Проверить порт HTTPS 443')}
           </Button>
@@ -116,7 +124,7 @@ export default function AntiDpiTab(props: {
           }} />
           {importError && <Alert type="error" title={importError} />}
           {rows.length > 0 && <>
-            <Table size="small" scroll={{ x: true }} pagination={{ pageSize: 10 }} rowKey={(row) => JSON.stringify(row)} dataSource={rows} columns={[
+            <Table size="small" scroll={{ x: true }} pagination={{ pageSize: 10 }} rowKey="key" dataSource={rows.map((row, key) => ({ ...row, key }))} columns={[
               { title: 'IP', dataIndex: 'ip' },
               { title: 'TLS fingerprint', dataIndex: 'fingerprint' },
               { title: 'Alpha', dataIndex: 'alphaError' },

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Button, Card, Checkbox, Input, Select, Space, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
+import { useRequestSlot } from '@/hooks/useRequestSlot';
 
 interface Attempt {
   stage: string;
@@ -31,8 +32,11 @@ export default function SiberianActiveCheck() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<Result>();
+  const request = useRequestSlot();
 
   async function run() {
+    if (request.isPending() || !confirmed) return;
+    const controller = request.begin();
     setBusy(true);
     setConfirmed(false);
     setError('');
@@ -40,13 +44,14 @@ export default function SiberianActiveCheck() {
     try {
       const response = await HttpUtil.post<Result>('/panel/api/setting/anti-dpi/siberian',
         { host: host.trim(), controlHost: controlHost.trim(), fingerprint, confirmed: true },
-        { timeout: 35000 });
+        { timeout: 35000, signal: controller.signal, silent: true });
+      if (controller.signal.aborted) return;
       if (!response?.success || !response.obj) throw new Error(response?.msg || 'Diagnostic failed');
       setResult(response.obj);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (!controller.signal.aborted) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setBusy(false);
+      if (request.finish(controller)) setBusy(false);
     }
   }
 
