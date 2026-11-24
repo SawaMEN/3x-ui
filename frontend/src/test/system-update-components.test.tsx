@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router';
 import SystemUpdatePanel from '@/pages/settings/SystemUpdatePanel';
 import { HttpUtil } from '@/utils';
 
@@ -92,7 +93,7 @@ beforeEach(() => {
 });
 
 async function openComponents() {
-  render(<SystemUpdatePanel section="components" />);
+  render(<SystemUpdatePanel section="components" />, { wrapper: MemoryRouter });
   await screen.findByText('Pingtunnel');
   await waitFor(() =>
     expect(
@@ -109,7 +110,7 @@ function card(name: string) {
 
 it('updates Linux packages without loading or updating optional components', async () => {
   installedHysteria = true;
-  render(<SystemUpdatePanel section="system" />);
+  render(<SystemUpdatePanel section="system" />, { wrapper: MemoryRouter });
   const update = screen.getByRole('button', {
     name: /Update panel packages & kernel/,
   }) as HTMLButtonElement;
@@ -228,7 +229,7 @@ it('updates an installed Hysteria server while incompatible inbounds use sing-bo
 
 it('does not treat restored connectivity as confirmation that system updates succeeded', async () => {
   installedHysteria = true;
-  render(<SystemUpdatePanel section="system" />);
+  render(<SystemUpdatePanel section="system" />, { wrapper: MemoryRouter });
   await waitFor(() =>
     expect(
       (screen.getByRole('button', { name: /Update panel packages & kernel/ }) as HTMLButtonElement)

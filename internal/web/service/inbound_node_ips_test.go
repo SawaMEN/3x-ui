@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
@@ -208,5 +210,46 @@ func TestClientIpMergeRetainsMaximumTimestamp(t *testing.T) {
 		if len(got) != 1 || got[0].IP != "1.1.1.1" || got[0].Timestamp != 100 {
 			t.Fatalf("invalid merge: %+v", got)
 		}
+	}
+}
+
+func TestNodeClientIpCreateConflictMergesWinner(t *testing.T) {
+	setupClientIpTestDB(t)
+	db := database.GetDB()
+	now := time.Now().Unix()
+	winner, err := model.MarshalClientIpEntries([]model.ClientIpEntry{{IP: "192.0.2.1", Timestamp: now}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const callback = "test:node_ip_create_winner"
+	injected := false
+	if err := db.Callback().Create().Before("gorm:create").Register(callback, func(tx *gorm.DB) {
+		row, ok := tx.Statement.Dest.(*model.NodeClientIp)
+		if injected || tx.Statement.Table != "node_client_ips" || !ok || row.Email != "conflict@x" {
+			return
+		}
+		injected = true
+		if err := tx.Exec("INSERT INTO node_client_ips (node_guid, email, ips) VALUES (?, ?, ?)", row.NodeGuid, row.Email, winner).Error; err != nil {
+			tx.AddError(err)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Callback().Create().Remove(callback) })
+	if err := upsertNodeClientIps("shared", map[string][]model.ClientIpEntry{
+		"conflict@x": {{IP: "192.0.2.2", Timestamp: now + 1}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !injected {
+		t.Fatal("create conflict was not injected")
+	}
+	trees, err := (&InboundService{}).GetClientIpsByGuid()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := trees["shared"]["conflict@x"]
+	if len(got) != 2 || got[0].IP != "192.0.2.1" || got[0].Timestamp != now || got[1].IP != "192.0.2.2" || got[1].Timestamp != now+1 {
+		t.Fatalf("conflicting observations lost: %+v", got)
 	}
 }

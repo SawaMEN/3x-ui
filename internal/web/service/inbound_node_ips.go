@@ -86,9 +86,9 @@ func mergeNodeClientIpRow(tx *gorm.DB, guid, email string, incoming []model.Clie
 		if len(fresh) == 0 {
 			return nil
 		}
-		encoded, err := model.MarshalClientIpEntries(fresh)
-		if err != nil {
-			return err
+		encoded, marshalErr := model.MarshalClientIpEntries(fresh)
+		if marshalErr != nil {
+			return marshalErr
 		}
 		created := model.NodeClientIp{NodeGuid: guid, Email: email, Ips: encoded}
 		result := tx.Clauses(clause.OnConflict{

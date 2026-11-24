@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithProviders as render } from './test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import SingBoxOutboundModal from '@/pages/singbox/SingBoxOutboundModal';
@@ -48,8 +48,30 @@ describe('protocol-specific outbound options', () => {
   });
 
   it('covers every selectable native outbound and endpoint', () => {
-    for (const type of [...nativeOutboundTypes, ...nativeEndpointTypes])
-      expect(fields.protocols).toHaveProperty(type);
+    for (const type of [...nativeOutboundTypes, ...nativeEndpointTypes]) {
+      // Zapret2 is a virtual local outbound with its own settings editor.
+      if (type !== 'zapret2') expect(fields.protocols).toHaveProperty(type);
+    }
+    expect(nativeOutboundTypes).toContain('zapret2');
+  });
+
+  it('renders the dedicated Zapret2 editor and rejects saving when unavailable', async () => {
+    const onSave = vi.fn();
+    render(
+      <SingBoxOutboundModal
+        open
+        value={{ type: 'zapret2', tag: 'zapret', settings: { port: 15900, tcp: true } }}
+        existingTags={[]}
+        onCancel={() => {}}
+        onSave={onSave}
+      />,
+    );
+    await screen.findByText('Zapret2 недоступен');
+    expect(screen.getByText('Локальный SOCKS-порт')).toBeTruthy();
+    const save = screen.getByRole('button', { name: 'Сохранить изменения' }) as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(true));
+    fireEvent.click(save);
+    expect(onSave).not.toHaveBeenCalled();
   });
   it('saves Naive concurrency while preserving imported settings', () => {
     const onSave = vi.fn();
