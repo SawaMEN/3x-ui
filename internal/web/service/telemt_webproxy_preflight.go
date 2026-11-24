@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -184,7 +185,19 @@ func (s TelemtService) PreflightWebProxyForInbound(ctx context.Context, domain s
 		} else {
 			result.Warnings = append(result.Warnings, "Не удалось подготовить рекомендации: "+previewErr.Error())
 		}
-		plan, err := buildTelemtWebIngress(draft)
+		var selectedMoves []telemtVPNMigrationPlan
+		if result.Preview != nil && !state.Enabled {
+			ids, _ := telemtIngressInboundIDs(draft.SharedIngress)
+			for _, move := range result.Preview.VPNMigrations {
+				if move.Reason == "" && move.NewPort > 0 && slices.Contains(ids, move.ID) {
+					selectedMoves = append(selectedMoves, move)
+				}
+			}
+		}
+		if len(selectedMoves) > 0 {
+			check("vpn-migration", false, "Выбранные подключения занимают TCP 443. Подтвердите перенос на внутренние порты в плане ниже.")
+		}
+		plan, err := planTelemtWebIngressWithMoves(draft, true, selectedMoves)
 		proposed := TelemtWebProxyState{Frontend: options.Frontend, SharedIngress: options.SharedIngress, IngressRouter: options.ingressRouter, IngressRouterModule: options.ingressRouterModule}
 		if proposed.IngressRouter == "" {
 			proposed.IngressRouter, proposed.IngressRouterModule = telemtIngressSelectRouter(ctx, proposed)

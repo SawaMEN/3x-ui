@@ -13,7 +13,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
-func TestTelemtWebSharedNaiveRequiresTCPAndLoopback(t *testing.T) {
+func TestTelemtWebSharedNaiveRequiresTCPAndLocalListener(t *testing.T) {
 	naive := model.Inbound{
 		Protocol: model.NaiveProxy,
 		Listen:   "127.0.0.1",
@@ -26,7 +26,7 @@ func TestTelemtWebSharedNaiveRequiresTCPAndLoopback(t *testing.T) {
 		t.Fatalf("Naive endpoint = %s %s, %v", host, address, err)
 	}
 	for _, mutate := range []func(*model.Inbound){
-		func(ib *model.Inbound) { ib.Listen = "0.0.0.0" },
+		func(ib *model.Inbound) { ib.Listen = "192.0.2.1" },
 		func(ib *model.Inbound) { ib.Port = 443 },
 		func(ib *model.Inbound) { ib.Settings = `{"network":"udp","tls":{"serverName":"naive.example.com"}}` },
 		func(ib *model.Inbound) { ib.Settings = `{"network":"tcp","tls":{"serverName":"malicious host"}}` },
@@ -36,6 +36,86 @@ func TestTelemtWebSharedNaiveRequiresTCPAndLoopback(t *testing.T) {
 		if _, _, err := telemtIngressNaiveEndpoint(&invalid); err == nil {
 			t.Fatalf("unsafe or unsupported Naive endpoint accepted: %+v", invalid)
 		}
+	}
+}
+
+func TestTelemtIngressOptionsIncludeWildcardAndMigration(t *testing.T) {
+	for _, listen := range []string{"", "0.0.0.0", "::", "127.0.0.1"} {
+		for _, port := range []int{8443, 443} {
+			inbound := model.Inbound{
+				Id: 1, Protocol: model.VLESS, Listen: listen, Port: port, Enable: true,
+				Settings: "{}", StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"vpn.example.com"}}`,
+			}
+			sni, err := telemtIngressOptionSNI(&inbound)
+			if err != nil || sni != "vpn.example.com" {
+				t.Fatalf("option %q:%d = %q, %v", listen, port, sni, err)
+			}
+			_, address, _, _, err := telemtIngressProxyEndpoint(&inbound, "web.example.com")
+			if port == 443 {
+				if err == nil {
+					t.Fatal("runtime accepted an unmigrated TCP 443 listener")
+				}
+			} else if err != nil || (address != "127.0.0.1:8443" && address != "[::1]:8443") {
+				t.Fatalf("unexpected backend: %s, %v", address, err)
+			}
+		}
+	}
+	inbound := model.Inbound{
+		Protocol: model.VLESS, Listen: "192.0.2.1", Port: 8443, Enable: true,
+		Settings: "{}", StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"vpn.example.com"}}`,
+	}
+	if _, err := telemtIngressOptionSNI(&inbound); err == nil {
+		t.Fatal("accepted a non-local backend")
+	}
+}
+
+func TestTelemtIngressMigrationProjectionDoesNotPublishOrWrite(t *testing.T) {
+	setupConflictDB(t)
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certFile, keyFile := telemtWebTestCertificate(t, key, time.Now().Add(time.Hour))
+	service := &SettingService{}
+	for k, v := range map[string]string{
+		"webDomain": "web.example.com", "webListen": "127.0.0.1", "webPort": "8443",
+		"webBasePath": "/admin-path/", "webCertFile": certFile, "webKeyFile": keyFile,
+		"subEnable": "false",
+	} {
+		if err := service.setString(k, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	inbound := model.Inbound{
+		Protocol: model.VLESS, Enable: true, Tag: "selected-443", Listen: "0.0.0.0", Port: 443,
+		Settings: "{}", StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"vpn.example.com"}}`,
+	}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	state := TelemtWebProxyState{
+		Domain: "web.example.com", BasePath: "telegram/web",
+		SharedIngress: &TelemtWebIngress{Enabled: true, InboundIDs: []int{inbound.Id}},
+	}
+	if _, err := buildTelemtWebIngress(state); err == nil {
+		t.Fatal("runtime accepted the unrelocated listener")
+	}
+	move, relevant := telemtVPNMigrationCandidate(inbound, state.Domain, telemtWebHosts(state))
+	if !relevant || move.Reason != "" {
+		t.Fatalf("unexpected migration: %+v", move)
+	}
+	move.NewPort = telemtVPNMigrationFirstPort
+	plan, err := planTelemtWebIngressWithMoves(state, true, []telemtVPNMigrationPlan{move})
+	if err != nil || len(plan.proxies) != 1 || plan.proxies[0].address != "127.0.0.1:18200" {
+		t.Fatalf("projected route: %+v, %v", plan, err)
+	}
+	var stored model.Inbound
+	if err := database.GetDB().First(&stored, inbound.Id).Error; err != nil || stored.Port != 443 || stored.Listen != "0.0.0.0" {
+		t.Fatalf("preview modified listener: %+v, %v", stored, err)
+	}
+	move.Revision = "stale"
+	if _, err := planTelemtWebIngressWithMoves(state, true, []telemtVPNMigrationPlan{move}); err == nil {
+		t.Fatal("accepted stale migration projection")
 	}
 }
 

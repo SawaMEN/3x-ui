@@ -184,14 +184,31 @@ func configureTelemtIngressUpstream(route *telemtIngressRoute, listen string, po
 	return nil
 }
 
+// A wildcard listener is reachable through loopback without changing its
+// existing socket or exposing a new backend address. Never dial an arbitrary
+// configured IP; explicit non-loopback listeners remain unsupported.
+func telemtIngressLocalIP(listen string) net.IP {
+	switch listen {
+	case "", "0.0.0.0":
+		return net.ParseIP("127.0.0.1")
+	case "::", "::0", "[::]", "[::0]":
+		return net.ParseIP("::1")
+	}
+	ip := net.ParseIP(listen)
+	if ip != nil && ip.IsLoopback() {
+		return ip
+	}
+	return nil
+}
+
 func telemtIngressNaiveEndpoint(inbound *model.Inbound) (host, address string, err error) {
 	if inbound == nil {
 		return "", "", errors.New("missing Naive inbound")
 	}
-	ip := net.ParseIP(inbound.Listen)
+	ip := telemtIngressLocalIP(inbound.Listen)
 	if inbound.Protocol != model.NaiveProxy || inbound.NodeID != nil || !inbound.Enable ||
 		ip == nil || !ip.IsLoopback() || inbound.Port <= 0 || inbound.Port >= 65536 || inbound.Port == 443 {
-		return "", "", fmt.Errorf("Naive ingress requires an enabled local Naive inbound on a loopback IP and an internal port")
+		return "", "", fmt.Errorf("Naive ingress requires an enabled local Naive inbound on a loopback or wildcard IP and a non-443 port")
 	}
 	var settings struct {
 		Network string `json:"network"`
@@ -295,10 +312,10 @@ func telemtIngressProxyEndpoint(inbound *model.Inbound, publicDomain string) (ho
 		host, address, err = telemtIngressNaiveEndpoint(inbound)
 		return host, address, host, "tls", err
 	}
-	ip := net.ParseIP(inbound.Listen)
+	ip := telemtIngressLocalIP(inbound.Listen)
 	if inbound.NodeID != nil || !inbound.Enable || ip == nil || !ip.IsLoopback() ||
 		inbound.Port <= 0 || inbound.Port >= 65536 || inbound.Port == 443 {
-		return "", "", "", "", errors.New("shared ingress requires an enabled local inbound on a loopback IP and an internal port")
+		return "", "", "", "", errors.New("shared ingress requires an enabled local inbound on a loopback or wildcard IP and a non-443 port")
 	}
 	if model.ShadowTLSTransport(inbound.Settings) != nil {
 		return "", "", "", "", errors.New("shared TLS ingress does not support an additional ShadowTLS wrapper")
@@ -365,6 +382,12 @@ func buildTelemtWebIngress(state TelemtWebProxyState) (telemtIngressPlan, error)
 }
 
 func planTelemtWebIngress(state TelemtWebProxyState, strict bool) (telemtIngressPlan, error) {
+	return planTelemtWebIngressWithMoves(state, strict, nil)
+}
+
+// Only preflight supplies proposed moves. Runtime publication always validates
+// the actual stored listeners, never the projected configuration.
+func planTelemtWebIngressWithMoves(state TelemtWebProxyState, strict bool, moves []telemtVPNMigrationPlan) (telemtIngressPlan, error) {
 	var plan telemtIngressPlan
 	if state.SharedIngress == nil || !state.SharedIngress.Enabled {
 		return plan, errors.New("shared ingress is not enabled")
@@ -483,6 +506,25 @@ func planTelemtWebIngress(state TelemtWebProxyState, strict bool) (telemtIngress
 	}
 	if strict && len(inbounds) != len(ids) {
 		return plan, errors.New("one or more shared ingress inbounds no longer exist")
+	}
+	for i := range inbounds {
+		for _, move := range moves {
+			if move.ID != inbounds[i].Id || move.Reason != "" || move.NewPort == 0 {
+				continue
+			}
+			if telemtVPNMigrationRevision(inbounds[i]) != move.Revision {
+				return plan, fmt.Errorf("inbound %d changed; refresh migration preview", move.ID)
+			}
+			inbounds[i].Listen, inbounds[i].Port = move.NewListen, move.NewPort
+			inbounds[i].Settings, err = patchTelemtVetroffH3(inbounds[i].Settings, move, false)
+			if err != nil {
+				return plan, err
+			}
+			inbounds[i].Settings, err = patchTelemtTrustTunnelBind(inbounds[i].Settings, move, false)
+			if err != nil {
+				return plan, err
+			}
+		}
 	}
 	plan.proxies, err = planTelemtIngressProxies(inbounds, hosts, state.Domain, strict)
 	if err != nil {
