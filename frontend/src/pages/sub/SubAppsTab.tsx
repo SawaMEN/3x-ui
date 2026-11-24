@@ -67,7 +67,8 @@ export default function SubAppsTab({
                   {t('add')}
                 </Button>
               ) : (
-                name === 'AmneziaWG' && onOpenAmneziaWG && (
+                name === 'AmneziaWG' &&
+                onOpenAmneziaWG && (
                   <Button
                     type="primary"
                     onClick={onOpenAmneziaWG}

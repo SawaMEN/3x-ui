@@ -100,7 +100,7 @@ func TestMieruAndNativeCoreConcurrentTraffic(t *testing.T) {
 			map[string]any{"type": "socks", "tag": "ordinary", "listen": "127.0.0.1", "listen_port": ordinaryPort},
 		},
 		"outbounds": []any{map[string]any{"type": "direct", "tag": "direct"}},
-		"route": map[string]any{"final": "direct", "rules": []any{map[string]any{"inbound": []string{"mieru"}, "action": "sniff", "sniffer": []string{"http", "tls", "quic"}}}},
+		"route":     map[string]any{"final": "direct", "rules": []any{map[string]any{"inbound": []string{"mieru"}, "action": "sniff", "sniffer": []string{"http", "tls", "quic"}}}},
 	}
 	save := func(name string, value any) string {
 		t.Helper()
