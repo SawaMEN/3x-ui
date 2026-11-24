@@ -19,6 +19,20 @@ function stage(v: unknown, allowed: readonly string[]): Stage {
       (s.outcome === 'not-tested' && s.durationMs !== 0)) throw new Error('Invalid stage');
   return { outcome: s.outcome as Outcome, durationMs: s.durationMs };
 }
+export function parseAddressCheck(item: unknown): AddressCheck {
+  const a = object(item);
+  if (typeof a.ip !== 'string' || a.ip.length > 45 || !validIP(a.ip)) throw new Error('Invalid IP');
+  const tcp=stage(a.tcp,['ok',...errors]);
+  const tls=stage(a.tls,['ok',...errors,'certificate-error','not-tested']);
+  const http=stage(a.http,['ok',...errors,'not-tested']);
+  if ((tcp.outcome==='ok') !== (tls.outcome!=='not-tested') ||
+      (tls.outcome==='ok') !== (http.outcome!=='not-tested')) throw new Error('Inconsistent stages');
+  const httpStatus=a.httpStatus;
+  if (httpStatus!==undefined && (typeof httpStatus!=='number'||!Number.isInteger(httpStatus)||httpStatus<100||httpStatus>999)) throw new Error('Invalid HTTP status');
+  if (http.outcome==='ok' && (httpStatus===undefined||httpStatus<200||httpStatus>599)) throw new Error('Missing final response');
+  if (http.outcome==='not-tested' && httpStatus!==undefined) throw new Error('Unexpected HTTP status');
+  return {ip:a.ip,tcp,tls,http,httpStatus};
+}
 export function parseConnectivityReport(raw: string): ConnectivityReport {
   if (raw.length > 65536) throw new Error('Report too large');
   const r = object(JSON.parse(raw));
@@ -41,19 +55,9 @@ export function parseConnectivityReport(raw: string): ConnectivityReport {
     if ((dns.outcome === 'ok') !== (f.resolved > 0)) throw new Error('Inconsistent DNS result');
     const addresses: AddressCheck[] = [];
     for (const item of f.addresses) {
-      const a = object(item);
-      if (typeof a.ip !== 'string' || a.ip.length > 45 || !validIP(a.ip) ||
-          (f.family === 'ip4') !== !a.ip.includes(':') || addresses.some(x=>x.ip===a.ip)) throw new Error('Invalid IP');
-      const tcp=stage(a.tcp,['ok',...errors]);
-      const tls=stage(a.tls,['ok',...errors,'certificate-error','not-tested']);
-      const http=stage(a.http,['ok',...errors,'not-tested']);
-      if ((tcp.outcome==='ok') !== (tls.outcome!=='not-tested') ||
-          (tls.outcome==='ok') !== (http.outcome!=='not-tested')) throw new Error('Inconsistent stages');
-      const httpStatus=a.httpStatus;
-      if (httpStatus!==undefined && (typeof httpStatus!=='number'||!Number.isInteger(httpStatus)||httpStatus<100||httpStatus>999)) throw new Error('Invalid HTTP status');
-      if (http.outcome==='ok' && (httpStatus===undefined||httpStatus<200||httpStatus>599)) throw new Error('Missing final response');
-      if (http.outcome==='not-tested' && httpStatus!==undefined) throw new Error('Unexpected HTTP status');
-      addresses.push({ip:a.ip,tcp,tls,http,httpStatus});
+      const a = parseAddressCheck(item);
+      if ((f.family === 'ip4') !== !a.ip.includes(':') || addresses.some(x=>x.ip===a.ip)) throw new Error('Invalid address family or duplicate IP');
+      addresses.push(a);
     }
     families.push({family:f.family,dns,resolved:f.resolved,truncated:f.truncated,addresses});
   }
