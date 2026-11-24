@@ -539,7 +539,7 @@ func TestClientIpSyncCASExhaustionRollsBack(t *testing.T) {
 	}
 }
 
-func TestNodeClientIpCanonicalUnchangedSkipsWrite(t *testing.T) {
+func TestNodeClientIpCanonicalUnchangedSkipsUpsert(t *testing.T) {
 	setupClientIpTestDB(t)
 	now := time.Now().Unix()
 	report := map[string][]model.ClientIpEntry{"u@x": {{IP: "192.0.2.1", Timestamp: now - 1}, {IP: "192.0.2.2", Timestamp: now}}}
