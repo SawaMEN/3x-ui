@@ -43,6 +43,7 @@ type RecoveryFunc func(context.Context) error
 // enabled safely through service environment variables first.
 type Monitor struct {
 	cfg          Config
+	stepGate     chan struct{}
 	client       *http.Client
 	recover      RecoveryFunc
 	failures     int
@@ -129,10 +130,11 @@ func newWithClient(cfg Config, client *http.Client, recover RecoveryFunc) *Monit
 	}
 
 	return &Monitor{
-		cfg:     cfg,
-		client:  client,
-		recover: recover,
-		now:     time.Now,
+		cfg:      cfg,
+		stepGate: make(chan struct{}, 1),
+		client:   client,
+		recover:  recover,
+		now:      time.Now,
 	}
 }
 
@@ -169,6 +171,13 @@ func (m *Monitor) Step(ctx context.Context) (bool, error) {
 	if m == nil {
 		return false, errors.New("nil monitor")
 	}
+	// Serialize probes and recovery, including callers outside Run.
+	select {
+	case m.stepGate <- struct{}{}:
+		defer func() { <-m.stepGate }()
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -177,7 +186,9 @@ func (m *Monitor) Step(ctx context.Context) (bool, error) {
 		if ctx.Err() != nil {
 			return false, ctx.Err()
 		}
-		m.failures++
+		if m.failures < m.cfg.FailureThreshold {
+			m.failures++
+		}
 
 		if m.failures < m.cfg.FailureThreshold {
 			return false, fmt.Errorf("probe failed %d/%d: %w", m.failures, m.cfg.FailureThreshold, err)
@@ -203,6 +214,9 @@ func (m *Monitor) Step(ctx context.Context) (bool, error) {
 		return true, err
 	}
 
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	if m.failures > 0 {
 		logger.Info("Tunnel health monitor recovered after successful probe")
 	}

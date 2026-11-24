@@ -383,3 +383,50 @@ func waitClientCount(t *testing.T, h *Hub, want int) {
 	}
 	t.Fatalf("client count never reached %d (last seen %d)", want, h.GetClientCount())
 }
+
+func TestHubStopDuringRetryClosesClients(t *testing.T) {
+	h := NewHub()
+	defer h.Stop()
+	registered := NewClient("registered")
+	h.clients[registered] = struct{}{}
+	queued := NewClient("queued")
+	h.Register(queued)
+	failed := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		h.runWithRetry(func() bool {
+			close(failed)
+			return false
+		})
+	}()
+	<-failed
+	h.Stop()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("hub did not stop during retry")
+	}
+	for _, c := range []*Client{registered, queued} {
+		select {
+		case _, ok := <-c.Send:
+			if ok {
+				t.Fatal("unexpected queued message")
+			}
+		default:
+			t.Fatalf("client %s remained open", c.ID)
+		}
+	}
+	if h.GetClientCount() != 0 {
+		t.Fatal("registered clients retained after shutdown")
+	}
+}
+
+func TestHubDoesNotScheduleTimerAfterStop(t *testing.T) {
+	h := NewHub()
+	h.shouldThrottle(MessageTypeTraffic)
+	h.Stop()
+	if !h.shouldThrottle(MessageTypeTraffic) || len(h.pendingInvalidations) != 0 {
+		t.Fatal("stopped hub scheduled invalidation")
+	}
+}

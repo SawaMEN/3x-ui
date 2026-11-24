@@ -318,3 +318,31 @@ func TestSNIRankingHasConsistentOrderForUnusableResults(t *testing.T) {
 		}
 	}
 }
+
+func TestSNIJobCancellationAfterRunnerReturnsSuccess(t *testing.T) {
+	entered := make(chan struct{})
+	m := newSNIJobManager(func(ctx context.Context, _ *sniJob) error {
+		close(entered)
+		<-ctx.Done()
+		return nil
+	}, func(SNIJobSnapshot) error {
+		return errors.New("canceled scan must not be saved")
+	})
+	t.Cleanup(m.close)
+	view, err := m.start(SNIScanRequest{Mode: "candidates"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("scan did not start")
+	}
+	if _, err := m.get(view.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	result := waitSNIJob(t, m, view.ID)
+	if result.State != "canceled" || result.Error != "" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}

@@ -500,3 +500,50 @@ func TestMonitorRunStopsOnContextCancel(t *testing.T) {
 		t.Fatal("Run did not return after context cancellation")
 	}
 }
+
+func TestMonitorConcurrentStepCancellation(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.FailureThreshold = 1
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		once.Do(func() { close(entered) })
+		<-release
+		return nil, errors.New("tunnel down")
+	})}
+	monitor := newWithClient(cfg, client, func(context.Context) error { return nil })
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = monitor.Step(context.Background())
+	}()
+	defer func() {
+		close(release)
+		<-done
+	}()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("first step did not start")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if recovered, err := monitor.Step(ctx); recovered || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("second step: recovered=%v err=%v", recovered, err)
+	}
+}
+
+func TestMonitorFailedRecoveryCapsFailureCount(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.FailureThreshold = 2
+	monitor := newWithClient(cfg, failingClient(), func(context.Context) error {
+		return errors.New("restart failed")
+	})
+	for range 10 {
+		_, _ = monitor.Step(context.Background())
+	}
+	if monitor.failures != cfg.FailureThreshold {
+		t.Fatalf("failures=%d, want %d", monitor.failures, cfg.FailureThreshold)
+	}
+}

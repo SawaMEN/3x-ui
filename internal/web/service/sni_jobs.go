@@ -235,6 +235,13 @@ func (m *sniJobManager) worker() {
 		if err == nil {
 			err = m.run(ctx, j)
 		}
+		// A runner may finish normally just as its request is canceled.
+		// Do not persist a canceled or expired scan as a successful job.
+		if err == nil {
+			err = ctx.Err()
+		}
+		cancel()
+		j.cancel()
 		j.mu.Lock()
 		view := j.view
 		view.Results = append([]*RealityScanResult{}, view.Results...)
@@ -264,8 +271,6 @@ func (m *sniJobManager) worker() {
 		m.count--
 		j.mu.Unlock()
 		m.mu.Unlock()
-		cancel()
-		j.cancel()
 	}
 }
 

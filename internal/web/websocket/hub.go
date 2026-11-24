@@ -111,6 +111,9 @@ func (h *Hub) shouldThrottle(msgType MessageType) bool {
 	}
 	h.throttleMu.Lock()
 	defer h.throttleMu.Unlock()
+	if h.ctx.Err() != nil {
+		return true
+	}
 	now := time.Now()
 	if last, ok := h.lastBroadcast[msgType]; ok && now.Sub(last) < minBroadcastInterval {
 		if h.pendingInvalidations[msgType] == nil {
@@ -135,8 +138,18 @@ func (h *Hub) shouldThrottle(msgType MessageType) bool {
 // panic doesn't permanently kill real-time updates for commercial deployments.
 // After the cap, the hub stays down and the frontend falls back to REST polling.
 func (h *Hub) Run() {
+	h.runWithRetry(h.runOnce)
+}
+
+func (h *Hub) runWithRetry(run func() bool) {
+	// Every exit path, including cancellation during retry backoff, must
+	// release registered clients and pending lifecycle operations.
+	defer func() {
+		h.Stop()
+		h.shutdown()
+	}()
 	for attempt := range hubRestartAttempts {
-		stopped := h.runOnce()
+		stopped := run()
 		if stopped {
 			return
 		}
@@ -154,8 +167,7 @@ func (h *Hub) Run() {
 	// Release read-pump waiters and their buffers if the hub can no longer
 	// consume lifecycle events. Leaving ctx open would strand connections in
 	// Register/Unregister after a terminal hub failure.
-	h.Stop()
-	h.shutdown()
+	// Deferred shutdown also handles terminal failure.
 }
 
 // runOnce drives the event loop once and returns true if the hub stopped
@@ -172,7 +184,6 @@ func (h *Hub) runOnce() (stopped bool) {
 	for {
 		select {
 		case <-h.ctx.Done():
-			h.shutdown()
 			return true
 
 		case op := <-h.ops:
