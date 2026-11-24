@@ -91,6 +91,37 @@ describe('httpRequest against the MSW-mocked network', () => {
     },
   );
 
+  it.each([
+    { action: 'probe', payload: { host: 'owned.example.com', port: 443 } },
+    {
+      action: 'siberian',
+      payload: {
+        host: 'owned.example.com',
+        controlHost: 'control.example.com',
+        fingerprint: 'chrome',
+        confirmed: true,
+      },
+    },
+  ])('sends Anti-DPI $action requests as JSON with CSRF', async ({ action, payload }) => {
+    const path = `/panel/api/setting/anti-dpi/${action}`;
+    let received: unknown;
+    let contentType: string | null = null;
+    let token: string | null = null;
+    server.use(
+      http.post(`${ORIGIN}${path}`, async ({ request }) => {
+        contentType = request.headers.get('Content-Type');
+        token = request.headers.get('X-CSRF-Token');
+        received = await request.json();
+        return HttpResponse.json({ success: true, obj: {} });
+      }),
+    );
+    const response = await httpRequest('POST', path, payload);
+    expect(response.status).toBe(200);
+    expect(received).toEqual(payload);
+    expect(contentType).toBe('application/json; charset=UTF-8');
+    expect(token).toBe(CSRF_TOKEN);
+  });
+
   it('resolves a safe GET without requesting a CSRF token', async () => {
     let csrfHits = 0;
     server.use(

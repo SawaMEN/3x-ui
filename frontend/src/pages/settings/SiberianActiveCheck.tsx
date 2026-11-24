@@ -14,7 +14,7 @@ interface Result {
   host: string;
   controlHost: string;
   fingerprint: string;
-  baseline: Attempt[];
+  baseline: Attempt[] | null;
   burst: Attempt[] | null;
   control?: Attempt;
   evidence: 'asymmetry' | 'inconclusive' | 'no-signal';
@@ -38,9 +38,9 @@ export default function SiberianActiveCheck() {
     setError('');
     setResult(undefined);
     try {
-      const response = await HttpUtil.post('/panel/api/setting/anti-dpi/siberian',
+      const response = await HttpUtil.post<Result>('/panel/api/setting/anti-dpi/siberian',
         { host: host.trim(), controlHost: controlHost.trim(), fingerprint, confirmed: true },
-        { timeout: 35000 }) as { success?: boolean; msg?: string; obj?: Result };
+        { timeout: 35000 });
       if (!response?.success || !response.obj) throw new Error(response?.msg || 'Diagnostic failed');
       setResult(response.obj);
     } catch (err) {
@@ -51,7 +51,7 @@ export default function SiberianActiveCheck() {
   }
 
   const rows = result ? [
-    ...result.baseline.map((a, i) => ({ ...a, key: 'baseline-' + i, phase: 'Baseline ' + (i + 1) })),
+    ...(result.baseline ?? []).map((a, i) => ({ ...a, key: 'baseline-' + i, phase: 'Baseline ' + (i + 1) })),
     ...(result.burst ?? []).map((a, i) => ({ ...a, key: 'burst-' + i, phase: 'Burst ' + (i + 1) })),
     ...(result.control ? [{ ...result.control, key: 'control', phase: 'Control' }] : []),
   ] : [];

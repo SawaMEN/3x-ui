@@ -16,6 +16,7 @@ const JSON_ONLY_API_PREFIXES = [
   '/panel/api/oxidns/',
   '/panel/api/dnstt/',
   '/panel/api/olcrtc/',
+  '/panel/api/setting/anti-dpi/',
   // The OpenFlux check/diagnostic handlers use ShouldBindJSON. Without these
   // routes the legacy form serializer sends type=yandex instead of JSON,
   // causing `invalid character 'y' in literal true` on the backend.

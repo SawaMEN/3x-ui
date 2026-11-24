@@ -47,10 +47,8 @@ export default function AntiDpiTab(props: {
     setError('');
     setReport(undefined);
     try {
-      const result = await HttpUtil.post('/panel/api/setting/anti-dpi/probe',
-        { host: host.trim(), port: 443 }, { timeout: 25000 }) as {
-          success?: boolean; msg?: string; obj?: ProbeReport;
-        };
+      const result = await HttpUtil.post<ProbeReport>('/panel/api/setting/anti-dpi/probe',
+        { host: host.trim(), port: 443 }, { timeout: 25000 });
       if (!result?.success || !result.obj) throw new Error(result?.msg || 'Probe failed');
       setReport(result.obj);
     } catch (err) {

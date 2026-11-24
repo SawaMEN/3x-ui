@@ -1,0 +1,73 @@
+name: Anti-DPI validation
+
+on:
+  push:
+    branches: [Anti-DPI]
+    paths:
+      - 'frontend/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.nvmrc'
+      - 'tools/ci/download-go-modules.sh'
+      - '.github/workflows/anti-dpi.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: anti-dpi-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'push' }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Anti-DPI frontend and report contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Diagnostic parsers, policy and HTTP contract
+        run: |
+          npm test -- --project unit src/test/anti-dpi-report.test.ts src/test/adaptive-connect-audit.test.ts src/test/adaptive-connect-policy.test.ts src/test/vetroff-diagnostic-report.test.ts src/test/connectivity-report.test.ts src/test/address-report.test.ts src/test/http-init-msw.test.ts
+      - name: Full frontend typecheck
+        if: ${{ !cancelled() }}
+        run: npm run typecheck
+      - name: Production frontend build
+        if: ${{ !cancelled() }}
+        run: npm run build:ci
+
+  backend:
+    name: Anti-DPI server and subscription integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GOPROXY: 'https://proxy.golang.org|direct'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub embedded frontend for backend compilation
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download dependencies
+        run: bash tools/ci/download-go-modules.sh
+      - name: Race-test server diagnostics
+        run: go test -race -count=1 -timeout=5m ./internal/antidpi
+      - name: Compile settings controllers
+        if: ${{ !cancelled() }}
+        run: go test -count=1 -timeout=10m ./internal/web/controller -run '^$'
+      - name: Subscription observatory regression
+        if: ${{ !cancelled() }}
+        run: go test -count=1 -timeout=10m ./internal/sub -run '^TestSubJson_ObservatoryConfigInvalidValuesFallBack$'
