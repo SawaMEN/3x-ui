@@ -523,3 +523,32 @@ func TestTelemtVPNMigrationRejectsDuplicateJournalEntries(t *testing.T) {
 		}
 	}
 }
+
+func TestTelemtVPNMigrationPreviewRejectsBothFallbackEndpoints(t *testing.T) {
+	setupConflictDB(t)
+	db := database.GetDB()
+	var rows []model.Inbound
+	for _, name := range []string{"master", "child"} {
+		row := model.Inbound{
+			Protocol: model.VLESS, Enable: true, Tag: name, Port: 443, Listen: "0.0.0.0",
+			Settings: "{}", StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"` + name + `.example.com"}}`,
+		}
+		if err := db.Create(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+		rows = append(rows, row)
+	}
+	if err := db.Create(&model.InboundFallback{MasterId: rows[0].Id, ChildId: rows[1].Id}).Error; err != nil {
+		t.Fatal(err)
+	}
+	state := TelemtWebProxyState{Domain: "web.example.com", SharedIngress: &TelemtWebIngress{Enabled: true}}
+	items, err := planTelemtVPNMigrations(t.Context(), state)
+	if err != nil || len(items) != 2 {
+		t.Fatalf("unexpected migration preview: %v, %v", items, err)
+	}
+	for _, item := range items {
+		if item.Reason != "dependent-listener" || item.NewPort != 0 {
+			t.Fatalf("fallback endpoint must not be migrated: %+v", item)
+		}
+	}
+}

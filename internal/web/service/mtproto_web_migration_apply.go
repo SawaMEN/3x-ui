@@ -149,7 +149,12 @@ func restoreManagedMigrationDraftTx(tx *gorm.DB, journal *telemtVPNMigrationJour
 	if err != nil {
 		return err
 	}
-	if !opts.Enabled {
+	// A previous recovery may already have restored the draft. Do not
+	// overwrite subsequent edits when retrying runtime restoration.
+	if mtprotoWebMigrationDraft(&row) {
+		return nil
+	}
+	if !opts.Enabled || row.Listen != "" || row.Port != 443 {
 		return errors.New("managed WEB settings changed; refusing unsafe rollback")
 	}
 	settings, err := patchManagedMigrationDraft(row.Settings, journal.ManagedOriginalIngress, true)

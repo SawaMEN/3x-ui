@@ -90,8 +90,22 @@ func TestManagedWebMigrationAtomicActivationAndRollback(t *testing.T) {
 	if err := restoreTelemtVPNMigrationRows(); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.First(&active, draft.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	editedIngress := &TelemtWebIngress{Enabled: true, InboundIDs: []int{999}}
+	edited, err := patchManagedMigrationDraft(active.Settings, editedIngress, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&active).Update("settings", edited).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := restoreTelemtVPNMigrationRows(); err != nil {
 		t.Fatal(err)
+	}
+	if err := db.First(&active, draft.Id).Error; err != nil || active.Settings != edited {
+		t.Fatal("repeated rollback overwrote the restored draft")
 	}
 	if err := db.First(&active, draft.Id).Error; err != nil || !mtprotoWebMigrationDraft(&active) {
 		t.Fatalf("draft not restored: %v", err)
