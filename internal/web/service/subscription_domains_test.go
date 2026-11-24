@@ -55,6 +55,9 @@ func TestSubscriptionDomainValidation(t *testing.T) {
 		want     string
 	}{
 		{"path", entity.AllSetting{SubPublicURL: "https://sub.example.com/private/"}, "subscription public URL must be an HTTP/HTTPS origin without a path, credentials, query or fragment"},
+		{"empty query", entity.AllSetting{SubPublicURL: "https://sub.example.com?"}, "subscription public URL must be an HTTP/HTTPS origin without a path, credentials, query or fragment"},
+		{"empty fragment", entity.AllSetting{SubPublicURL: "https://sub.example.com#"}, "subscription public URL must be an HTTP/HTTPS origin without a path, credentials, query or fragment"},
+		{"empty port", entity.AllSetting{SubPublicURL: "https://sub.example.com:"}, "subscription public port must be between 1 and 65535"},
 		{"zero port", entity.AllSetting{SubPublicURL: "https://sub.example.com:0"}, "subscription public port must be between 1 and 65535"},
 		{"large port", entity.AllSetting{SubPublicURL: "https://sub.example.com:65536"}, "subscription public port must be between 1 and 65535"},
 		{"cdn without address", entity.AllSetting{SubCDNEnable: true}, "CDN mode requires a subscription public URL"},
@@ -261,5 +264,15 @@ func TestDirectSubscriptionOriginRejectsInvalidListener(t *testing.T) {
 		if got := directSubscriptionOrigin(&settings); got != "" {
 			t.Fatalf("invalid listener published as %q", got)
 		}
+	}
+}
+
+func TestSubscriptionDomainValidationDeduplicatesAliases(t *testing.T) {
+	settings := entity.AllSetting{SubAllowedDomains: "Alias.example.com, alias.example.com.; second.example.com"}
+	if err := validateSubscriptionDomains(&settings, false); err != nil {
+		t.Fatal(err)
+	}
+	if settings.SubAllowedDomains != "alias.example.com,second.example.com" {
+		t.Fatalf("unexpected normalized aliases: %q", settings.SubAllowedDomains)
 	}
 }

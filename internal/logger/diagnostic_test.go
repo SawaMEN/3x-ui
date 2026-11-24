@@ -73,3 +73,15 @@ func TestDiagnosticRedactsExtendedSubscriptionURIs(t *testing.T) {
 		}
 	}
 }
+
+func TestDiagnosticRedactsUppercaseHTTPAndOversizedQuotedSecrets(t *testing.T) {
+	inputs := []string{
+		"invalid HTTPS://user:PRIVATE_SECRET@example.org/path?key=PRIVATE_SECRET",
+		`{"password":"PRIVATE_SECRET` + strings.Repeat("x", 64<<10) + `"}`,
+	}
+	for _, input := range inputs {
+		if got := SanitizeDiagnostic(input); strings.Contains(got, "PRIVATE_SECRET") {
+			t.Fatal("diagnostic leaked a credential")
+		}
+	}
+}

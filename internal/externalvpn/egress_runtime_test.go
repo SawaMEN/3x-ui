@@ -183,7 +183,7 @@ func testTrustTunnelPayloadUsesCoreSOCKS(t *testing.T, split bool) {
 		start(endpoint, []string{quicPath, plan.HostsPath}, "quic.log")
 		deadline := time.Now().Add(8 * time.Second)
 		for {
-			_, err := readTrustTunnelMetrics(quicMetrics)
+			_, err := readTrustTunnelMetrics(t.Context(), quicMetrics)
 			if err == nil {
 				break
 			}

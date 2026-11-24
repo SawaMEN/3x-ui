@@ -144,7 +144,7 @@ func probeTrustTunnelQUICOnly(ctx context.Context, path string) error {
 			<-done
 			return fmt.Errorf("independent QUIC endpoint readiness timed out (%s): %s", lastCheck, diagnostic())
 		case <-ticker.C:
-			rows, err := readTrustTunnelMetrics(metricsAddr)
+			rows, err := readTrustTunnelMetrics(ctx, metricsAddr)
 			if err != nil {
 				lastCheck = err.Error()
 				continue

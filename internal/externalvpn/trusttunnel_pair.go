@@ -3,7 +3,6 @@ package externalvpn
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -110,20 +109,21 @@ func waitExternalVPNChildren(primary, companion *exec.Cmd, cancel context.Cancel
 }
 
 func waitTrustTunnelPairReady(proc *running) error {
-	deadline := time.NewTimer(8 * time.Second)
-	defer deadline.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-proc.done:
 			return errors.New("TrustTunnel split endpoint exited during startup")
-		case <-deadline.C:
-			return fmt.Errorf("TrustTunnel split metrics did not become ready")
+		case <-ctx.Done():
+			return errors.New("TrustTunnel split metrics did not become ready")
 		case <-ticker.C:
-			_, tcpErr := readTrustTunnelMetrics(proc.metricsAddr)
-			_, quicErr := readTrustTunnelMetrics(proc.quicMetricsAddr)
-			if tcpErr == nil && quicErr == nil {
+			if _, err := readTrustTunnelMetrics(ctx, proc.metricsAddr); err != nil {
+				continue
+			}
+			if _, err := readTrustTunnelMetrics(ctx, proc.quicMetricsAddr); err == nil && ctx.Err() == nil {
 				select {
 				case <-proc.done:
 					return errors.New("TrustTunnel split endpoint exited during startup")

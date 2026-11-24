@@ -770,13 +770,13 @@ func (m *Manager) collectProcessTrafficMode(proc *running, includeIdle bool) ([]
 		}
 		return nil, nil // This protocol does not expose per-client metrics.
 	}
-	primary, err := readTrustTunnelMetrics(proc.metricsAddr)
+	primary, err := readTrustTunnelMetrics(context.Background(), proc.metricsAddr)
 	if err != nil {
 		return nil, err
 	}
 	var secondary []trustTunnelMetric
 	if proc.quicMetricsAddr != "" {
-		secondary, err = readTrustTunnelMetrics(proc.quicMetricsAddr)
+		secondary, err = readTrustTunnelMetrics(context.Background(), proc.quicMetricsAddr)
 		if err != nil {
 			// Both samples must succeed before either baseline advances.
 			return nil, err

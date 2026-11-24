@@ -189,8 +189,11 @@ func validateSubscriptionDomains(settings *entity.AllSetting, managedOrigin bool
 	}
 	if settings.SubPublicURL != "" {
 		u, err := url.Parse(settings.SubPublicURL)
-		if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.ForceQuery || u.RawQuery != "" || strings.Contains(settings.SubPublicURL, "#") || (u.Path != "" && u.Path != "/") {
 			return fmt.Errorf("subscription public URL must be an HTTP/HTTPS origin without a path, credentials, query or fragment")
+		}
+		if strings.HasSuffix(u.Host, ":") {
+			return fmt.Errorf("subscription public port must be between 1 and 65535")
 		}
 		if port := u.Port(); port != "" {
 			n, err := strconv.Atoi(port)
@@ -210,6 +213,7 @@ func validateSubscriptionDomains(settings *entity.AllSetting, managedOrigin bool
 		return fmt.Errorf("CDN mode requires a subscription public URL")
 	}
 	var hosts []string
+	seen := make(map[string]bool)
 	for _, host := range strings.FieldsFunc(settings.SubAllowedDomains, func(r rune) bool { return r == ',' || r == '\n' || r == ' ' || r == ';' }) {
 		host = strings.TrimSuffix(strings.ToLower(host), ".")
 		if net.ParseIP(host) != nil {
@@ -218,7 +222,10 @@ func validateSubscriptionDomains(settings *entity.AllSetting, managedOrigin bool
 		if _, err := netsafe.NormalizeHost(host); err != nil {
 			return fmt.Errorf("invalid subscription alias: %w", err)
 		}
-		hosts = append(hosts, host)
+		if !seen[host] {
+			seen[host] = true
+			hosts = append(hosts, host)
+		}
 	}
 	settings.SubAllowedDomains = strings.Join(hosts, ",")
 	return nil

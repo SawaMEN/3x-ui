@@ -14,7 +14,7 @@ var (
 	diagnosticHeader     = regexp.MustCompile(`(?im)\b(?:authorization|proxy-authorization|cookie|set-cookie)\s*:\s*[^\r\n]+`)
 	diagnosticBearer     = regexp.MustCompile(`(?i)\bBearer[ \t]+[^\s,;"']+`)
 	diagnosticSecret     = regexp.MustCompile(`(?i)\b(password|passwd|token|apiToken|api_token|access_token|refresh_token|secret|privateKey(?:PEM)?|private_key(?:_pem)?|apiKey|api_key|dnsToken)\b[ \t]*[:=][ \t]*(?:"(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`)
-	diagnosticURL        = regexp.MustCompile(`https?://[^\s"'<>]+`)
+	diagnosticURL        = regexp.MustCompile(`(?i)https?://[^\s"'<>]+`)
 	diagnosticPrivateURI = regexp.MustCompile(`(?i)\b(?:vless|vmess|trojan|ss|hysteria2?|hy2|tuic|wireguard|awg|amneziawg|vpn|tg|mtproto|naive(?:\+https|\+quic)?|anytls|shadowtls|mieru|snell|sudoku|fptn|trusttunnel|openflux|vetroff(?:-proxy)?|vk-turn-proxy|pingtunnel|masque(?:-client)?|socks5?|ssh|postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/[^\s"'<>]+`)
 )
 
@@ -22,7 +22,8 @@ var (
 // formats. Request/response bodies and headers must still never be logged.
 func SanitizeDiagnostic(value string) string {
 	if len(value) > 64<<10 {
-		value = value[:64<<10]
+		// Cutting an unredacted value could split a quoted credential in half.
+		return "[oversized diagnostic truncated]"
 	}
 	value = diagnosticPEM.ReplaceAllString(value, "[PEM redacted]")
 	value = diagnosticJSONSecret.ReplaceAllString(value, `${1}"[redacted]"`)

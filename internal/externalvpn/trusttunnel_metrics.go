@@ -17,8 +17,8 @@ type trustTunnelMetric struct {
 	Outbound uint64 `json:"outbound"`
 }
 
-func readTrustTunnelMetrics(address string) ([]trustTunnelMetric, error) {
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+address+"/clients", nil)
+func readTrustTunnelMetrics(ctx context.Context, address string) ([]trustTunnelMetric, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/clients", nil)
 	if err != nil {
 		return nil, errors.New("client metrics unavailable")
 	}

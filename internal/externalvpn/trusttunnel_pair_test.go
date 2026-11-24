@@ -107,3 +107,15 @@ func TestTrustTunnelPairStopsCompanionOnExit(t *testing.T) {
 		t.Fatal("pair exit did not reap both children")
 	}
 }
+
+func TestTrustTunnelMetricsHonorCanceledContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `[]`)
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := readTrustTunnelMetrics(ctx, strings.TrimPrefix(server.URL, "http://")); err == nil {
+		t.Fatal("metrics request ignored a canceled context")
+	}
+}
