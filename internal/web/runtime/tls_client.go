@@ -151,7 +151,7 @@ func newNodeTransport(tlsCfg *tls.Config, allowPrivate bool) *http.Transport {
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			return netsafe.SSRFGuardedDialContext(netsafe.ContextWithAllowPrivate(ctx, allowPrivate), network, address)
 		},
-		TLSClientConfig:     tlsCfg,
+		TLSClientConfig: tlsCfg,
 		// A custom dialer disables Go's automatic HTTP/2 opt-in. Some HTTPS
 		// node endpoints only accept h2 after TLS ALPN negotiation.
 		ForceAttemptHTTP2:   true,

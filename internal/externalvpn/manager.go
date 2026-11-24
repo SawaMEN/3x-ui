@@ -784,12 +784,3 @@ func (m *Manager) collectProcessTrafficMode(proc *running, includeIdle bool) ([]
 	}
 	return collectTrustTunnelMetrics(proc, primary, secondary, includeIdle), nil
 }
-
-// Omit the QUIC table only on an explicit TCP-only configuration. Legacy
-// records retain all three protocols.
-func trustTunnelListenProtocols(tcpOnly bool) string {
-	if tcpOnly {
-		return trustTunnelProtocolTables(trustTunnelTCP)
-	}
-	return trustTunnelProtocolTables(trustTunnelCombined)
-}

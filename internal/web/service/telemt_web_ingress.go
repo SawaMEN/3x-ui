@@ -73,7 +73,7 @@ type telemtIngressPublication struct {
 
 var publishedTelemtIngress atomic.Pointer[telemtIngressPublication]
 
-func publishTelemtIngress(_ TelemtWebProxyState, plan telemtIngressPlan) {
+func publishTelemtIngress(plan telemtIngressPlan) {
 	routes := make(map[int]telemtIngressProxyRoute, len(plan.proxies))
 	for _, route := range plan.proxies {
 		routes[route.id] = route
@@ -666,7 +666,7 @@ func refreshTelemtIngress(state TelemtWebProxyState) error {
 		publishedTelemtIngress.Store(nil)
 		return err
 	}
-	publishTelemtIngress(state, plan)
+	publishTelemtIngress(plan)
 	return nil
 }
 

@@ -123,7 +123,7 @@ func TestTelemtWebSharedIngressPublishesAutomaticAddresses(t *testing.T) {
 	if plan.panel.address != "127.0.0.1:8443" || plan.subscriptions.address != "[::1]:2096" || len(plan.proxies) != 1 || plan.proxies[0].address != "127.0.0.1:9443" {
 		t.Fatalf("unexpected routing plan: %+v", plan)
 	}
-	publishTelemtIngress(state, plan)
+	publishTelemtIngress(plan)
 	if origin, err := settings.GetSubPublicURL(); err != nil || origin != "https://web.example.com" {
 		t.Fatalf("automatic subscription origin: %q, %v", origin, err)
 	}
@@ -137,7 +137,7 @@ func TestTelemtWebSharedIngressPublishesAutomaticAddresses(t *testing.T) {
 	if err != nil || len(plan.proxies) != 0 {
 		t.Fatalf("disabled Naive backend remained in plan: %+v, %v", plan, err)
 	}
-	publishTelemtIngress(state, plan)
+	publishTelemtIngress(plan)
 	if telemtIngressProxyHost(&inbound) != nil {
 		t.Fatal("disabled Naive endpoint is still published")
 	}
@@ -223,8 +223,7 @@ func TestTelemtWebNativeTLSSharedProxy(t *testing.T) {
 				t.Fatalf("native endpoint %q %q %q %q: %v", host, addr, public, security, err)
 			}
 			t.Cleanup(func() { publishedTelemtIngress.Store(nil) })
-			publishTelemtIngress(TelemtWebProxyState{SharedIngress: &TelemtWebIngress{Enabled: true, NaiveInboundID: inbound.Id}},
-				telemtIngressPlan{proxies: []telemtIngressProxyRoute{{id: inbound.Id, host: host, address: addr, publicAddress: public, security: security, protocol: inbound.Protocol}}})
+			publishTelemtIngress(telemtIngressPlan{proxies: []telemtIngressProxyRoute{{id: inbound.Id, host: host, address: addr, publicAddress: public, security: security, protocol: inbound.Protocol}}})
 			if entry := telemtIngressProxyHost(inbound); entry == nil || entry.Port != 443 || entry.Address != public || entry.Sni != host {
 				t.Fatalf("native public route: %+v", entry)
 			}
@@ -248,7 +247,7 @@ func TestTelemtIngressMultipleRoutes(t *testing.T) {
 			t.Fatalf("missing %q in config", expected)
 		}
 	}
-	publishTelemtIngress(state, plan)
+	publishTelemtIngress(plan)
 	for _, inbound := range []model.Inbound{one, two} {
 		if endpoint := telemtIngressProxyHost(&inbound); endpoint == nil || endpoint.Port != 443 {
 			t.Fatalf("missing published endpoint for %d", inbound.Id)

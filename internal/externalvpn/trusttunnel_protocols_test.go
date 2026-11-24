@@ -22,7 +22,14 @@ func TestTrustTunnelListenProtocols(t *testing.T) {
 		if err := json.Unmarshal([]byte(tc.settings), &settings); err != nil {
 			t.Fatal(err)
 		}
-		output := trustTunnelListenProtocols(settings.TrustTunnelTCPOnly)
+		mode := trustTunnelCombined
+		if settings.TrustTunnelTCPOnly {
+			mode = trustTunnelTCP
+		}
+		output, err := renderTrustTunnelEndpointConfig("127.0.0.1:443", "credentials.toml", "127.0.0.1:1080", "127.0.0.1:9090", mode)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !strings.Contains(output, "[listen_protocols.http1]") || !strings.Contains(output, "[listen_protocols.http2]") ||
 			strings.Contains(output, "[listen_protocols.quic]") != tc.wantQUIC {
 			t.Fatalf("unexpected listen protocols for %s: %s", tc.settings, output)
