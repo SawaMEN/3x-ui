@@ -416,7 +416,25 @@ func writeConfig(inst Instance) (string, error) {
 		return "", err
 	}
 	path := configPathForID(inst.Id)
-	if err := os.WriteFile(path, append(data, '\n'), 0o640); err != nil {
+	file, err := os.CreateTemp(filepath.Dir(path), ".mita-config-*.json")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(file.Name())
+	defer file.Close()
+	if err := file.Chmod(0o640); err != nil {
+		return "", err
+	}
+	if _, err := file.Write(append(data, '\n')); err != nil {
+		return "", err
+	}
+	if err := file.Sync(); err != nil {
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		return "", err
+	}
+	if err := os.Rename(file.Name(), path); err != nil {
 		return "", err
 	}
 	return path, nil

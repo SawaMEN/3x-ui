@@ -91,6 +91,7 @@ func (p *Process) Start() error {
 		}
 	}
 	cmd := exec.CommandContext(context.Background(), GetBinaryPath(), "run")
+	cmd.WaitDelay = 2 * time.Second
 	socketPath := p.socketPath
 	configPath := p.configPath
 	if abs, err := filepath.Abs(socketPath); err == nil {
@@ -162,6 +163,7 @@ func (p *Process) Reload() error {
 		configPath = abs
 	}
 	cmd := exec.CommandContext(ctx, GetBinaryPath(), "reload")
+	cmd.WaitDelay = 2 * time.Second
 	cmd.Env = append(os.Environ(),
 		"MITA_CONFIG_JSON_FILE="+configPath,
 		"MITA_UDS_PATH="+socketPath,
@@ -224,13 +226,20 @@ type logWriter struct {
 func (w *logWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	const maxPendingLine = 64 * 1024
+	// A child can emit arbitrarily long lines without a newline. Bound
+	// retained partial output so a failed component cannot exhaust panel RAM.
 	w.buf += string(p)
 	for {
 		idx := strings.IndexByte(w.buf, '\n')
 		if idx < 0 {
+			if len(w.buf) > maxPendingLine {
+				w.buf = strings.Clone(w.buf[len(w.buf)-maxPendingLine:])
+			}
 			break
 		}
-		line := strings.TrimSpace(w.buf[:idx])
+		start := max(0, idx-maxPendingLine)
+		line := strings.TrimSpace(w.buf[start:idx])
 		w.buf = w.buf[idx+1:]
 		if line != "" {
 			logger.Infof("mieru: mita %s | %s", w.label, line)
