@@ -3834,6 +3834,34 @@ export const sections: readonly Section[] = [
         summary: 'Install or update the managed Sudoku tunnel binary.',
       },
       {
+        method: 'POST',
+        path: '/panel/api/setting/anti-dpi/probe',
+        summary: 'Check public DNS, TCP and TLS connectivity from the panel server.',
+        description: 'HTTPS port 443 only; results describe the server network, not the client.',
+        params: [
+          { name: 'host', in: 'body (json)', type: 'string', desc: 'Public DNS hostname.' },
+          { name: 'port', in: 'body (json)', type: 'integer', enum: [443] },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/anti-dpi/siberian',
+        summary: 'Run a bounded verified TLS comparison from the panel server.',
+        description:
+          'Requires two distinct operator-owned hostnames sharing one public IP, explicit confirmation and a one-minute interval between runs.',
+        params: [
+          { name: 'host', in: 'body (json)', type: 'string' },
+          { name: 'controlHost', in: 'body (json)', type: 'string' },
+          {
+            name: 'fingerprint',
+            in: 'body (json)',
+            type: 'string',
+            enum: ['chrome', 'firefox', 'safari', 'android'],
+          },
+          { name: 'confirmed', in: 'body (json)', type: 'boolean', enum: [true] },
+        ],
+      },
+      {
         method: 'GET',
         path: '/panel/api/setting/zapret2/status',
         summary: 'Return official zapret2 installation state, version and upgrade availability.',

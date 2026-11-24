@@ -10,47 +10,47 @@ import (
 )
 
 type Policy struct {
-	FailureThreshold int
+	FailureThreshold  int
 	RecoveryThreshold int
-	Cooldown time.Duration
-	MaxAge time.Duration
-	Failback bool
+	Cooldown          time.Duration
+	MaxAge            time.Duration
+	Failback          bool
 }
 
 func DefaultPolicy() Policy {
-	return Policy{FailureThreshold: 2, RecoveryThreshold: 3, Cooldown: 30*time.Second, MaxAge: 90*time.Second}
+	return Policy{FailureThreshold: 2, RecoveryThreshold: 3, Cooldown: 30 * time.Second, MaxAge: 90 * time.Second}
 }
 
 type Candidate struct {
-	ID string
+	ID       string
 	Priority int // lower is preferred
 }
 
 type Sample struct {
-	ID string
-	At time.Time
+	ID      string
+	At      time.Time
 	Success bool // must represent end-to-end data transfer, not TCP alone
 }
 
 type health struct {
-	at time.Time
+	at        time.Time
 	successes int
-	failures int
+	failures  int
 }
 
 type Decision struct {
 	Current string
-	Target string // empty when no change is advised
-	Reason string
+	Target  string // empty when no change is advised
+	Reason  string
 }
 
 type Selector struct {
-	mu sync.Mutex
-	policy Policy
-	candidates []Candidate
-	health map[string]health
-	current string
-	lastSwitch time.Time
+	mu           sync.Mutex
+	policy       Policy
+	candidates   []Candidate
+	health       map[string]health
+	current      string
+	lastSwitch   time.Time
 	lastDecision time.Time
 }
 
@@ -71,7 +71,7 @@ func New(policy Policy, candidates []Candidate) (*Selector, error) {
 		seen[c.ID] = true
 	}
 	list := append([]Candidate(nil), candidates...)
-	sort.SliceStable(list, func(i,j int) bool { return list[i].Priority < list[j].Priority })
+	sort.SliceStable(list, func(i, j int) bool { return list[i].Priority < list[j].Priority })
 	return &Selector{policy: policy, candidates: list, health: make(map[string]health)}, nil
 }
 
@@ -93,10 +93,14 @@ func (s *Selector) Record(now time.Time, sample Sample) bool {
 	h.at = sample.At
 	if sample.Success {
 		h.failures = 0
-		if h.successes < s.policy.RecoveryThreshold { h.successes++ }
+		if h.successes < s.policy.RecoveryThreshold {
+			h.successes++
+		}
 	} else {
 		h.successes = 0
-		if h.failures < s.policy.FailureThreshold { h.failures++ }
+		if h.failures < s.policy.FailureThreshold {
+			h.failures++
+		}
 	}
 	s.health[sample.ID] = h
 	return true
@@ -104,7 +108,9 @@ func (s *Selector) Record(now time.Time, sample Sample) bool {
 
 func (s *Selector) known(id string) bool {
 	for _, candidate := range s.candidates {
-		if candidate.ID == id { return true }
+		if candidate.ID == id {
+			return true
+		}
 	}
 	return false
 }
@@ -127,24 +133,38 @@ func (s *Selector) Decide(now time.Time) Decision {
 	if s.current != "" {
 		h := s.health[s.current]
 		failed := s.fresh(h, now) && h.failures >= s.policy.FailureThreshold
-		if !failed && !s.policy.Failback { return d }
+		if !failed && !s.policy.Failback {
+			return d
+		}
 		if !s.lastSwitch.IsZero() && now.Sub(s.lastSwitch) < s.policy.Cooldown {
 			d.Reason = "cooldown"
 			return d
 		}
 		for _, c := range s.candidates {
 			if c.ID == s.current {
-				if !failed { return d }
+				if !failed {
+					return d
+				}
 				continue
 			}
 			other := s.health[c.ID]
-			if !s.fresh(other, now) || other.successes < s.policy.RecoveryThreshold { continue }
-			if !failed && (!s.fresh(h, now) || h.successes == 0) { return d }
+			if !s.fresh(other, now) || other.successes < s.policy.RecoveryThreshold {
+				continue
+			}
+			if !failed && (!s.fresh(h, now) || h.successes == 0) {
+				return d
+			}
 			d.Target = c.ID
-			if failed { d.Reason = "consecutive-failures" } else { d.Reason = "preferred-recovered" }
+			if failed {
+				d.Reason = "consecutive-failures"
+			} else {
+				d.Reason = "preferred-recovered"
+			}
 			return d
 		}
-		if failed { d.Reason = "no-verified-alternative" }
+		if failed {
+			d.Reason = "no-verified-alternative"
+		}
 		return d
 	}
 	for _, c := range s.candidates {
@@ -163,7 +183,9 @@ func (s *Selector) Decide(now time.Time) Decision {
 func (s *Selector) Confirm(now time.Time, id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.known(id) || now.IsZero() || now.Before(s.lastDecision) || now.Before(s.lastSwitch) { return false }
+	if !s.known(id) || now.IsZero() || now.Before(s.lastDecision) || now.Before(s.lastSwitch) {
+		return false
+	}
 	if id != s.current {
 		s.current, s.lastSwitch = id, now
 	}

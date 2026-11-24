@@ -21,7 +21,7 @@ func (a *SettingController) antiDpiProbe(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
 	var payload struct {
 		Host string `json:"host"`
-		Port int `json:"port"`
+		Port int    `json:"port"`
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		jsonObj(c, nil, err)

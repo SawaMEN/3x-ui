@@ -13,21 +13,36 @@ import (
 	"time"
 )
 
-var hostname = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]{0,251}[a-zA-Z0-9])?$`)
+var hostname = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]{0,251}[a-zA-Z0-9])?// Package antidpi provides bounded, read-only connectivity diagnostics.
+package antidpi
+
+import (
+	"context"
+	"crypto/tls"
+	"fmt"
+	"net"
+	"net/netip"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
+
+)
 
 type Observation struct {
-	IP string `json:"ip"`
-	TCP string `json:"tcp"`
-	TLS string `json:"tls"`
-	Detail string `json:"detail,omitempty"`
-	DurationMS int64 `json:"durationMs"`
+	IP         string `json:"ip"`
+	TCP        string `json:"tcp"`
+	TLS        string `json:"tls"`
+	Detail     string `json:"detail,omitempty"`
+	DurationMS int64  `json:"durationMs"`
 }
 
 type Report struct {
-	Scope string `json:"scope"`
-	Host string `json:"host"`
-	Port int `json:"port"`
-	CheckedAt time.Time `json:"checkedAt"`
+	Scope        string        `json:"scope"`
+	Host         string        `json:"host"`
+	Port         int           `json:"port"`
+	CheckedAt    time.Time     `json:"checkedAt"`
 	Observations []Observation `json:"observations"`
 }
 

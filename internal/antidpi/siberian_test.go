@@ -34,10 +34,10 @@ func TestSiberianClassification(t *testing.T) {
 func TestSharedAddress(t *testing.T) {
 	a := netip.MustParseAddr("1.1.1.1")
 	b := netip.MustParseAddr("8.8.8.8")
-	if got, err := sharedAddress([]netip.Addr{a,b}, []netip.Addr{a}); err != nil || got != a {
+	if got, err := sharedAddress([]netip.Addr{a, b}, []netip.Addr{a}); err != nil || got != a {
 		t.Fatalf("%v %v", got, err)
 	}
-	if _, err := sharedAddress([]netip.Addr{a,b}, []netip.Addr{a,b}); err == nil {
+	if _, err := sharedAddress([]netip.Addr{a, b}, []netip.Addr{a, b}); err == nil {
 		t.Fatal("ambiguous IP accepted")
 	}
 	if _, err := sharedAddress([]netip.Addr{a}, []netip.Addr{b}); err == nil {

@@ -30,15 +30,15 @@ type TLSAttempt struct {
 }
 
 type SiberianReport struct {
-	Scope        string       `json:"scope"`
-	Host         string       `json:"host"`
-	ControlHost  string       `json:"controlHost"`
-	IP           string       `json:"ip"`
-	Fingerprint  string       `json:"fingerprint"`
-	Baseline     []TLSAttempt `json:"baseline"`
-	Burst        []TLSAttempt `json:"burst"`
-	Control      *TLSAttempt  `json:"control,omitempty"`
-	Evidence     string       `json:"evidence"`
+	Scope       string       `json:"scope"`
+	Host        string       `json:"host"`
+	ControlHost string       `json:"controlHost"`
+	IP          string       `json:"ip"`
+	Fingerprint string       `json:"fingerprint"`
+	Baseline    []TLSAttempt `json:"baseline"`
+	Burst       []TLSAttempt `json:"burst"`
+	Control     *TLSAttempt  `json:"control,omitempty"`
+	Evidence    string       `json:"evidence"`
 }
 
 func fingerprint(name string) (tls.ClientHelloID, bool) {
