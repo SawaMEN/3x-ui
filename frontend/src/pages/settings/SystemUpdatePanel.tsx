@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { installOpenFlux } from '@/api/openflux-install';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -261,6 +262,7 @@ function normalizeSystemUpdateResult(value: unknown): SystemUpdateResult {
 }
 
 export default function SystemUpdatePanel({ section }: { section: 'components' | 'system' }) {
+  const navigate = useNavigate();
   const componentsOnly = section === 'components';
   const { t } = useTranslation();
   const { isMobile } = useMediaQuery();
@@ -991,6 +993,11 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
                   </Typography.Paragraph>
                 )}
                 <Space wrap className="system-component-actions">
+                  {dependency.key === 'zapret2' && dependency.installed && (
+                    <Button size="small" onClick={() => navigate('/outbound')}>
+                      Настроить
+                    </Button>
+                  )}
                   {action.supported === false ? (
                     <Alert
                       type="info"

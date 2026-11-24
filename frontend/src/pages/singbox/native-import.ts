@@ -28,6 +28,7 @@ export const nativeOutboundTypes = [
   'psiphon',
   'mieru',
   'sudoku',
+  'zapret2',
   'openflux',
   'fptn',
   'pingtunnel',

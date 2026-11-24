@@ -116,3 +116,24 @@ func TestVirtualZapret2RequiresOfficialInstallation(t *testing.T) {
 		t.Fatal("uninstalled zapret2 must not be added as outbound")
 	}
 }
+
+func TestNativeZapret2TemplateTranslation(t *testing.T) {
+	testInstallZapret2(t)
+	cfg := singbox.NewConfig()
+	cfg.Outbounds = []map[string]any{
+		{"type": "zapret2", "tag": "z2", "settings": map[string]any{"port": 15912}},
+		{"type": "direct", "tag": "direct"},
+	}
+	if err := translateNativeZapret2(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Zapret2Plans) != 1 || cfg.Outbounds[0]["tag"] != "direct" || cfg.Outbounds[1]["type"] != "socks" {
+		t.Fatalf("unexpected virtual outbound translation: %#v", cfg.Outbounds)
+	}
+	if err := injectSingBoxZapret2(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Zapret2Plans) != 1 || cfg.Zapret2Plans[0].Options.Port != 15912 {
+		t.Fatal("native settings were lost")
+	}
+}

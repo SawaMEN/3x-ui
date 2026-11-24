@@ -1,3 +1,4 @@
+import { Zapret2OutboundSettingsSchema } from '@/schemas/protocols/outbound/zapret2';
 import { MasqueInboundSettingsSchema } from '@/schemas/protocols/inbound/masque';
 import { masqueClientDefaults, warpMasqueDefaults } from './masque-settings';
 import { isNativeEndpoint, nativeServerTypes } from './native-import';
@@ -144,6 +145,7 @@ export function setDefaultOutbound(config: ConfigObject, tag: string): ConfigObj
 
 export function outboundDefaults(type: string, tag: string, group: string[] = []): ConfigObject {
   const base = { type, tag };
+  if (type === 'zapret2') return { ...base, settings: Zapret2OutboundSettingsSchema.parse({}) };
   if (type === 'masque-client') return masqueClientDefaults(tag);
   if (type === 'masque') return warpMasqueDefaults(tag);
   if (type === 'selector') return { ...base, outbounds: group };
@@ -192,6 +194,13 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
   else if (otherTags.includes(tag))
     errors.push('Это название уже используется другим подключением или туннелем.');
   if (!type) errors.push('Выберите протокол.');
+  if (type === 'zapret2') {
+    const settings = Zapret2OutboundSettingsSchema.safeParse(value.settings);
+    if (!settings.success) errors.push('Некорректные настройки Zapret2.');
+    else if (!settings.data.tcp && !settings.data.udp)
+      errors.push('Включите TCP или UDP для Zapret2.');
+    return errors;
+  }
   if (type === 'masque-client') {
     if (typeof value.server !== 'string' || !value.server.trim())
       errors.push('Укажите MASQUE-сервер.');
