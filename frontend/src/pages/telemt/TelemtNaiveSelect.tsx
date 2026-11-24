@@ -80,14 +80,21 @@ export default function TelemtNaiveSelect(props: Props) {
   ]
     .slice(0, 64)
     .map((inbound) => inbound.id);
+  const supportedProtocols = new Set([
+    'vless', 'vmess', 'trojan', 'shadowsocks', 'naive', 'naiveproxy',
+    'vetroff', 'vetroff-proxy', 'anytls', 'trusttunnel', 'masque', 'shadowtls',
+  ]);
   const options = local
-    .filter((inbound) => inbound.sharedIngressSni || selectedSet.has(inbound.id))
+    .filter((inbound) =>
+      inbound.sharedIngressSni || selectedSet.has(inbound.id) ||
+      supportedProtocols.has(inbound.protocol?.toLowerCase() ?? ''),
+    )
     .map((inbound) => {
       const sni = inbound.sharedIngressSni?.toLowerCase();
       const valid = Boolean(sni && eligibleIds.has(inbound.id));
       return {
         value: inbound.id,
-        label: `${inbound.remark || inbound.tag || '#' + inbound.id} · ${inbound.protocol} · ${inbound.port}${sni ? ' · ' + sni : ''}`,
+        label: `${inbound.remark || inbound.tag || '#' + inbound.id} · ${inbound.protocol} · ${inbound.port}${sni ? ' · ' + sni : ''}${valid && inbound.port === 443 ? (ru ? ' · требуется перенос' : ' · migration required') : ''}${!valid ? ' · ' + (inbound.sharedIngressError || (ru ? 'SNI недоступен или конфликтует' : 'SNI unavailable or conflicting')) : ''}`,
         title:
           inbound.sharedIngressError ||
           (sni && webHosts.has(sni)
@@ -155,6 +162,15 @@ export default function TelemtNaiveSelect(props: Props) {
             : `Selected ${selected.length}/64 · conflict-free ${automatic.length}`}
         </Typography.Text>
       </Space>
+      {eligible.some((inbound) => selectedSet.has(inbound.id) && inbound.port === 443) && (
+        <Alert
+          type="info"
+          showIcon
+          title={ru
+            ? 'Подключения на TCP 443 требуют подтверждённого переноса. Проверьте план настройки ниже.'
+            : 'Inbounds on TCP 443 require a confirmed migration. Review the setup preview below.'}
+        />
+      )}
       {ambiguous > 0 && (
         <Alert
           type="warning"

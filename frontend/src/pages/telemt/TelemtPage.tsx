@@ -1051,7 +1051,7 @@ export default function TelemtPage() {
                     <FormField
                       name="sharedIngress.inboundIds"
                       label="Входящие TLS/SNI-подключения"
-                      extra="Необязательно. Выберите локальные TCP-подключения с TLS или REALITY. Для каждого нужен уникальный SNI. TCP-движок определяется автоматически. UDP 443 проверяется отдельно."
+                      extra="Выберите локальные TCP-подключения с TLS или REALITY для публикации на 443. Для каждого нужен уникальный SNI. Подключения, уже занимающие TCP 443, требуют подтверждения переноса. UDP проверяется отдельно."
                     >
                       <TelemtNaiveSelect
                         disabled={webProxyLoading}
@@ -1205,7 +1205,7 @@ export default function TelemtPage() {
                   onApplyVPNMigration={
                     !status.webProxy.enabled &&
                     webPreflightCurrent.checks.every(
-                      (check) => check.ok || check.id === 'https-port',
+                      (check) => check.ok || check.id === 'https-port' || check.id === 'vpn-migration',
                     )
                       ? (moves) => {
                           Modal.confirm({

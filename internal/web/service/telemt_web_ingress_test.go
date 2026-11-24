@@ -13,7 +13,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
-func TestTelemtWebSharedNaiveRequiresTCPAndLoopback(t *testing.T) {
+func TestTelemtWebSharedNaiveRequiresTCPAndLocalListener(t *testing.T) {
 	naive := model.Inbound{
 		Protocol: model.NaiveProxy,
 		Listen:   "127.0.0.1",
@@ -26,7 +26,7 @@ func TestTelemtWebSharedNaiveRequiresTCPAndLoopback(t *testing.T) {
 		t.Fatalf("Naive endpoint = %s %s, %v", host, address, err)
 	}
 	for _, mutate := range []func(*model.Inbound){
-		func(ib *model.Inbound) { ib.Listen = "0.0.0.0" },
+		func(ib *model.Inbound) { ib.Listen = "192.0.2.1" },
 		func(ib *model.Inbound) { ib.Port = 443 },
 		func(ib *model.Inbound) { ib.Settings = `{"network":"udp","tls":{"serverName":"naive.example.com"}}` },
 		func(ib *model.Inbound) { ib.Settings = `{"network":"tcp","tls":{"serverName":"malicious host"}}` },
@@ -36,6 +36,32 @@ func TestTelemtWebSharedNaiveRequiresTCPAndLoopback(t *testing.T) {
 		if _, _, err := telemtIngressNaiveEndpoint(&invalid); err == nil {
 			t.Fatalf("unsafe or unsupported Naive endpoint accepted: %+v", invalid)
 		}
+	}
+}
+
+func TestTelemtIngressOptionsIncludeWildcardAndMigration(t *testing.T) {
+	for _, listen := range []string{"", "0.0.0.0", "::", "127.0.0.1"} {
+		for _, port := range []int{8443, 443} {
+			inbound := model.Inbound{Id: 1, Protocol: model.VLESS, Listen: listen, Port: port, Enable: true,
+				Settings: "{}", StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"vpn.example.com"}}`}
+			sni, err := telemtIngressOptionSNI(&inbound)
+			if err != nil || sni != "vpn.example.com" {
+				t.Fatalf("option %q:%d = %q, %v", listen, port, sni, err)
+			}
+			_, address, _, _, err := telemtIngressProxyEndpoint(&inbound, "web.example.com")
+			if port == 443 {
+				if err == nil {
+					t.Fatal("runtime accepted an unmigrated TCP 443 listener")
+				}
+			} else if err != nil || (address != "127.0.0.1:8443" && address != "[::1]:8443") {
+				t.Fatalf("unexpected backend: %s, %v", address, err)
+			}
+		}
+	}
+	inbound := model.Inbound{Protocol: model.VLESS, Listen: "192.0.2.1", Port: 8443, Enable: true,
+		Settings: "{}", StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"vpn.example.com"}}`}
+	if _, err := telemtIngressOptionSNI(&inbound); err == nil {
+		t.Fatal("accepted a non-local backend")
 	}
 }
 

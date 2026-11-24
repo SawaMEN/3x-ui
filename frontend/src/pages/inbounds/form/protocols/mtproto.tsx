@@ -211,8 +211,8 @@ export default function MtprotoFields({
                   label={ru ? 'Входящие TLS/SNI-подключения' : 'TLS/SNI inbounds'}
                   extra={
                     ru
-                      ? 'Необязательно. Локальные TCP-подключения с TLS или REALITY, каждое с уникальным SNI. Для Nginx/Caddy с VPN-маршрутами используется отдельный TCP/SNI-диспетчер.'
-                      : 'Optional. Use loopback TCP inbounds with TLS or REALITY and unique SNIs. Nginx/Caddy use a separate TCP/SNI dispatcher for VPN routes.'
+                      ? 'Выберите локальные TCP-подключения с TLS или REALITY для публикации на 443. Для каждого нужен уникальный SNI. Занятый TCP 443 требует подтверждённого переноса.'
+                      : 'Select local TCP inbounds with TLS or REALITY and unique SNIs for public port 443. Inbounds already on TCP 443 require confirmed migration. Nginx/Caddy use a separate TCP/SNI dispatcher.'
                   }
                 >
                   <TelemtNaiveSelect

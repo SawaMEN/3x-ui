@@ -453,7 +453,7 @@ func (s *InboundService) GetInboundOptions(userId int) ([]InboundOption, error) 
 		// Use the same validator as preflight. For node options, eligibility is
 		// a preview relative to the hosting node; its own panel validates again.
 		candidate := &model.Inbound{Id: r.Id, Protocol: model.Protocol(r.Protocol), Enable: r.Enable, Listen: r.Listen, Port: r.Port, StreamSettings: r.StreamSettings, Settings: r.Settings}
-		sni, _, _, _, ingressErr := telemtIngressProxyEndpoint(candidate, "")
+		sni, ingressErr := telemtIngressOptionSNI(candidate)
 		ingressError := ""
 		if ingressErr != nil {
 			ingressError = ingressErr.Error()
@@ -486,6 +486,23 @@ func (s *InboundService) GetInboundOptions(userId int) ([]InboundOption, error) 
 		})
 	}
 	return out, nil
+}
+
+// The picker includes eligible TCP 443 listeners before relocation. The
+// actual migration plan still checks dependencies, conflicts and client probes.
+func telemtIngressOptionSNI(inbound *model.Inbound) (string, error) {
+	sni, _, _, _, err := telemtIngressProxyEndpoint(inbound, "")
+	if err == nil || inbound == nil || inbound.Port != 443 {
+		return sni, err
+	}
+	move, relevant := telemtVPNMigrationCandidate(*inbound, "", nil)
+	if relevant && move.Reason == "" {
+		return move.SNI, nil
+	}
+	if relevant && move.Reason != "" {
+		return "", fmt.Errorf("VPN migration: %s", move.Reason)
+	}
+	return "", err
 }
 
 func inboundStreamHints(protocol string, streamSettings string, settings string) (string, string) {

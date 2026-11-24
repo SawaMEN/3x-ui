@@ -284,9 +284,9 @@ func (s TelemtService) enableWithVPNMigrationDraftLocked(ctx context.Context, do
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	// The occupied TCP 443 is the only expected failure before relocation.
+	// Occupied TCP 443 and the explicit migration requirement are expected before relocation.
 	for _, check := range preflight.Checks {
-		if !check.OK && check.ID != "https-port" {
+		if !check.OK && check.ID != "https-port" && check.ID != "vpn-migration" {
 			return TelemtWebProxyStatus{}, fmt.Errorf("WEB preflight (%s): %s", check.ID, check.Message)
 		}
 	}
