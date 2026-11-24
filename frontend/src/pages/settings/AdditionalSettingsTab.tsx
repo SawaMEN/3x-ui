@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 import type { AllSetting } from '@/models/setting';
 import { FirewallManager } from '@/pages/firewall/FirewallManager';
+import AntiDpiTab from './AntiDpiTab';
 import DomainFrontTab from './DomainFrontTab';
 import type { PanelDomainPatch } from './PanelDomainCertificate';
 import ProxyCoreTab from './ProxyCoreTab';
@@ -36,6 +37,12 @@ export default function AdditionalSettingsTab(props: {
       label: t('pages.settings.advanced.firewall'),
       icon: <SafetyOutlined />,
       children: <FirewallManager />,
+    },
+    {
+      key: 'anti-dpi',
+      label: 'Anti-DPI',
+      icon: <SafetyOutlined />,
+      children: <AntiDpiTab {...props} />,
     },
     {
       key: 'core',

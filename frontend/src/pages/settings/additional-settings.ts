@@ -1,5 +1,6 @@
 export const additionalSettingsTabs = [
   'firewall',
+  'anti-dpi',
   'core',
   'components',
   'system',
