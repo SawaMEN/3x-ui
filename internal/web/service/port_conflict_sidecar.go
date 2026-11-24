@@ -58,8 +58,10 @@ func checkRoutedSidecarRelayConflict(db *gorm.DB, inbound *model.Inbound, id int
 		return false
 	}
 	detail := func(row *model.Inbound, port int) *portConflictDetail {
-		return &portConflictDetail{InboundID: row.Id, Tag: row.Tag, Remark: row.Remark,
-			Listen: "127.0.0.1", Port: port, Relay: true, Transports: transportTCP | transportUDP}
+		return &portConflictDetail{
+			InboundID: row.Id, Tag: row.Tag, Remark: row.Remark,
+			Listen: "127.0.0.1", Port: port, Relay: true, Transports: transportTCP | transportUDP,
+		}
 	}
 	if hit(public, relay) {
 		return detail(inbound, relay), nil

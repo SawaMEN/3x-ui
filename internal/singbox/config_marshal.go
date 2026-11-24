@@ -262,16 +262,16 @@ func validateSingBoxRequiredFields(outbound map[string]any, protocol, tag string
 func validateSingBoxOutbound(outbound map[string]any) error {
 	protocol := strings.ToLower(strings.TrimSpace(rawString(outbound, "type")))
 	tag := rawString(outbound, "tag")
-	if protocol == "hysteria" || protocol == "hysteria2" || protocol == "tuic" {
-		if err := validateRuntimeQUICTransport(outbound, "outbound"); err != nil {
-			return err
-		}
-	}
 	if err := validateSingBoxOutboundType(protocol, tag); err != nil {
 		return err
 	}
 	if err := validateSingBoxRequiredFields(outbound, protocol, tag); err != nil {
 		return err
+	}
+	if protocol == "hysteria" || protocol == "hysteria2" || protocol == "tuic" {
+		if err := validateRuntimeQUICTransport(outbound, "outbound"); err != nil {
+			return err
+		}
 	}
 	if err := validateHysteriaOutboundOptions(outbound, protocol, tag); err != nil {
 		return err

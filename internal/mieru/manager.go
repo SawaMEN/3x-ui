@@ -154,7 +154,7 @@ func portBindingsFromSettings(raw map[string]any, primaryPort int) []PortBinding
 // ranges (including a single port inside a range) without dropping listeners.
 func mergeOverlappingBindings(bindings []PortBinding) []PortBinding {
 	type interval struct {
-		protocol string
+		protocol    string
 		first, last int
 	}
 	ranges := make([]interval, 0, len(bindings))

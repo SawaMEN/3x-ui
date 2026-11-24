@@ -31,7 +31,7 @@ func TestMieruRelayReservedBeforeCoreRestart(t *testing.T) {
 	if hit, err := svc.checkPortConflict(&self, self.Id); err != nil || hit == nil || !hit.Relay {
 		t.Fatalf("self collision missed: %v, %v", hit, err)
 	}
-	wrapped := &model.Inbound{Id: ib.Id+sidecaregress.Slots, Protocol: model.TrustTunnel, Port: 24002}
+	wrapped := &model.Inbound{Id: ib.Id + sidecaregress.Slots, Protocol: model.TrustTunnel, Port: 24002}
 	if hit, err := svc.checkPortConflict(wrapped, wrapped.Id); err != nil || hit == nil || !hit.Relay {
 		t.Fatalf("wrapped slot collision missed: %v, %v", hit, err)
 	}
