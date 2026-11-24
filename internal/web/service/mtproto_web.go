@@ -11,7 +11,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
@@ -22,15 +21,17 @@ import (
 )
 
 type mtprotoWebSettings struct {
-	Site        *TelemtWebSiteOptions `json:"site,omitempty"`
-	Enabled     bool                  `json:"enabled"`
-	Domain      string                `json:"domain"`
-	BasePath    string                `json:"basePath"`
-	Aliases     []string              `json:"aliases"`
-	Frontend    string                `json:"frontend"`
-	Carrier     string                `json:"carrier"`
-	Carriers    []string              `json:"carriers"`
-	RetryJitter *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
+	SharedIngress  *TelemtWebIngress     `json:"sharedIngress,omitempty"`
+	Site           *TelemtWebSiteOptions `json:"site,omitempty"`
+	Enabled        bool                  `json:"enabled"`
+	MigrationDraft bool                  `json:"migrationDraft,omitempty"`
+	Domain         string                `json:"domain"`
+	BasePath       string                `json:"basePath"`
+	Aliases        []string              `json:"aliases"`
+	Frontend       string                `json:"frontend"`
+	Carrier        string                `json:"carrier"`
+	Carriers       []string              `json:"carriers"`
+	RetryJitter    *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
 }
 
 func telemtWebRetryJitterEqual(a, b *TelemtWebRetryJitter) bool {
@@ -98,7 +99,11 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if err != nil || !opts.Enabled {
 		return err
 	}
-	if !ib.Enable {
+	if opts.MigrationDraft {
+		if ib.NodeID != nil || ib.Enable || opts.SharedIngress == nil || !opts.SharedIngress.Enabled {
+			return errors.New("MTProto migration draft must be a disabled local WEB inbound with shared ingress")
+		}
+	} else if !ib.Enable {
 		return nil
 	}
 	domain := normalizeTelemtWebDomain(opts.Domain)
@@ -115,7 +120,7 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if _, err := normalizeTelemtWebAliases(domain, opts.Aliases); err != nil {
 		return err
 	}
-	normalizedSettings, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases, RetryJitter: opts.RetryJitter})
+	normalizedSettings, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{SharedIngress: opts.SharedIngress, Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases, RetryJitter: opts.RetryJitter})
 	if err != nil {
 		return err
 	}
@@ -140,6 +145,26 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if err != nil {
 		return err
 	}
+	// Canonicalise required options for inbounds created by old UIs or API
+	// clients. Otherwise the WEB form reopens with empty selectors.
+	for name, value := range map[string]any{
+		"frontend": normalizedSettings.Frontend,
+		"carrier":  normalizedSettings.Carrier,
+		"carriers": normalizedSettings.Carriers,
+	} {
+		webPayload[name], err = json.Marshal(value)
+		if err != nil {
+			return err
+		}
+	}
+	if normalizedSettings.SharedIngress == nil {
+		delete(webPayload, "sharedIngress")
+	} else {
+		webPayload["sharedIngress"], err = json.Marshal(normalizedSettings.SharedIngress)
+		if err != nil {
+			return err
+		}
+	}
 	payload["webProxy"], err = json.Marshal(webPayload)
 	if err != nil {
 		return err
@@ -151,6 +176,9 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	ib.Settings = string(encoded)
 	ib.Port = 443
 	ib.Listen = ""
+	if opts.MigrationDraft {
+		return nil
+	}
 	others, err := mtprotoWebCandidatesForNode(ib.NodeID)
 	if err != nil {
 		return err
@@ -164,8 +192,11 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 }
 
 var (
-	mtprotoWebSyncMu    sync.Mutex
-	mtprotoWebLastError time.Time
+	mtprotoWebSync       = make(chan struct{}, 1)
+	mtprotoWebLastError  time.Time
+	mtprotoWebFailedID   int
+	mtprotoWebFailedCfg  [sha256.Size]byte
+	mtprotoWebApplyError error
 )
 
 // ReconcileMtprotoWebProxy derives service state from MTProto inbounds.
@@ -179,10 +210,12 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !mtprotoWebSyncMu.TryLock() {
-		return nil
+	select {
+	case mtprotoWebSync <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	defer mtprotoWebSyncMu.Unlock()
+	defer func() { <-mtprotoWebSync }()
 	telemtWebOperationMu.Lock()
 	defer telemtWebOperationMu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -207,8 +240,22 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 	}
 
 	if len(selected) == 0 || !mtprotoWebHasUsers(selected[0]) {
+		if journal, err := loadTelemtVPNMigrationForEnable(); err != nil {
+			return err
+		} else if journal != nil && journal.ManagedInboundID > 0 {
+			if state.ManagedInboundID != 0 && state.ManagedInboundID != journal.ManagedInboundID {
+				return errors.New("managed WEB migration owner mismatch")
+			}
+			if err := (TelemtService{}).restoreVPNMigrationLocked(); err != nil {
+				return err
+			}
+			return stopMtprotoWebServiceIfUnused()
+		}
 		if state.ManagedInboundID == 0 {
-			return nil
+			if err := refreshTelemtIngress(state); err != nil {
+				return err
+			}
+			return telemtWebUpgradeFrontend(ctx, state)
 		}
 		if err := disableTelemtWebProxy(); err != nil {
 			return err
@@ -228,7 +275,7 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 	if opts.Site == nil {
 		opts.Site = &TelemtWebSiteOptions{Mode: "auto"}
 	}
-	normalized, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases, RetryJitter: opts.RetryJitter})
+	normalized, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{SharedIngress: opts.SharedIngress, Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases, RetryJitter: opts.RetryJitter})
 	if err != nil {
 		return err
 	}
@@ -236,12 +283,17 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		return errors.New("mtproto web: legacy WEB Proxy is active; migrate or disable it before creating a managed WEB inbound")
 	}
 	if state.Enabled && state.ManagedInboundID != 0 && state.ManagedInboundID != ib.Id {
-		// Ownership moves in two steps: stop the old frontend first, then
-		// allow the new inbound to acquire port 443 on the next reconcile.
+		// Release the old owner before applying the replacement.
 		if err := disableTelemtWebProxy(); err != nil {
 			return err
 		}
-		return cleanupWebProxyBootUnit()
+		if err := cleanupWebProxyBootUnit(); err != nil {
+			return err
+		}
+		state, err = readState()
+		if err != nil {
+			return err
+		}
 	}
 
 	fingerprint := mtprotoWebFingerprint(ib)
@@ -250,14 +302,23 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		telemtWebCarrier(state) == normalized.Carrier &&
 		strings.Join(state.Carriers, ",") == strings.Join(normalized.Carriers, ",") &&
 		telemtWebSitesEqual(state.Site, normalized.Site) &&
-		telemtWebRetryJitterEqual(state.RetryJitter, normalized.RetryJitter)
+		telemtWebRetryJitterEqual(state.RetryJitter, normalized.RetryJitter) &&
+		telemtWebIngressEqual(state.SharedIngress, normalized.SharedIngress)
 	// An older imported snapshot may still contain CSS/JS blocked by Telemt's
 	// CSP. Reconcile it once into a new immutable snapshot after an upgrade.
 	if unchanged && normalized.Site != nil && normalized.Site.Mode == "html" {
 		unchanged = state.DecoyDir == telemtWebImportedSnapshotPath(telemtWebDecoyDir+"-sites", normalized.Site.HTML)
 	}
 	svc := TelemtService{}
+	if unchanged {
+		if err := refreshTelemtIngress(state); err != nil {
+			return err
+		}
+	}
 	if unchanged && state.UserFingerprint == fingerprint && svc.WebProxyTelemtActive() {
+		if err := telemtWebUpgradeFrontend(ctx, state); err != nil {
+			return err
+		}
 		if err := refreshMtprotoWebTrafficBinding(ctx); err != nil {
 			return err
 		}
@@ -266,9 +327,12 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 			if err := telemtWebEnsureFrontendRunning(state); err != nil {
 				return err
 			}
-			return telemtWebWaitFrontendReady(ctx, state)
 		}
-		return nil
+		// An active process can still return 502/404 or present the wrong TLS
+		// virtual host. Do not report a healthy reconciliation in that case.
+		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		return telemtWebWaitFrontendReady(probeCtx, state)
 	}
 	if unchanged {
 		cfg, cfgErr := getConfig()
@@ -282,12 +346,24 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 		if err := writeTelemtWebState(state); err != nil {
 			return err
 		}
-		return svc.EnsureWebProxyBackend()
+		if err := svc.EnsureWebProxyBackend(); err != nil {
+			return err
+		}
+		if err := telemtWebUpgradeFrontend(ctx, state); err != nil {
+			return err
+		}
+		if !telemtWebFrontendActive(state) {
+			if err := telemtWebEnsureFrontendRunning(state); err != nil {
+				return err
+			}
+		}
+		return telemtWebWaitFrontendReady(ctx, state)
 	}
 	// Avoid repeatedly attempting certificate issuance on every periodic job
 	// when DNS, ports, or certificate preconditions cannot be satisfied.
-	if time.Since(mtprotoWebLastError) < time.Minute {
-		return nil
+	desired := sha256.Sum256([]byte(ib.Settings))
+	if mtprotoWebFailedID == ib.Id && mtprotoWebFailedCfg == desired && time.Since(mtprotoWebLastError) < time.Minute {
+		return mtprotoWebApplyError
 	}
 	settings := SettingService{}
 	cert, _ := settings.GetCertFile()
@@ -305,25 +381,22 @@ func reconcileMtprotoWebProxy(ctx context.Context, readState func() (TelemtWebPr
 	if err := writeTelemtWebState(state); err != nil {
 		return err
 	}
+	// An inbound is a complete desired configuration, unlike the partial
+	// standalone enable API. Omission must clear previously enabled ingress.
+	if normalized.SharedIngress == nil {
+		normalized.SharedIngress = &TelemtWebIngress{Enabled: false}
+	}
 	if _, err := svc.enableWebProxyLocked(ctx, domain, cert, key, normalized); err != nil {
-		mtprotoWebLastError = time.Now()
-		_ = writeTelemtWebState(previousState)
-		return err
+		mtprotoWebLastError, mtprotoWebFailedID, mtprotoWebFailedCfg = time.Now(), ib.Id, desired
+		mtprotoWebApplyError = withTelemtRollbackError(err, writeTelemtWebState(previousState))
+		return mtprotoWebApplyError
 	}
-	state, err = readState()
-	if err != nil {
-		return err
-	}
-	state.ManagedInboundID = ib.Id
-	state.UserFingerprint = fingerprint
-	if err := writeTelemtWebState(state); err != nil {
-		return err
-	}
-	cfg, err := getConfig()
-	if err != nil {
-		return err
-	}
-	return svc.SaveConfig(cfg)
+	mtprotoWebLastError = time.Time{}
+	mtprotoWebApplyError = nil
+	// enableWebProxyLocked already persisted the managed inbound, rendered
+	// its users, started the backend and verified HTTPS. Saving again would
+	// restart the just-verified backend and invalidate that readiness check.
+	return nil
 }
 
 // Stop the standalone WEB backend only when it has no independent/legacy
@@ -414,4 +487,14 @@ func mtprotoWebFingerprint(ib *model.Inbound) string {
 	slices.Sort(parts)
 	fingerprint := sha256.Sum256([]byte(strings.Join(parts, "|")))
 	return fmt.Sprintf("%x", fingerprint)
+}
+
+// An explicitly saved, disabled local draft cannot listen on TCP 443.
+// Ordinary disabled inbounds continue to reserve their configured ports.
+func mtprotoWebMigrationDraft(ib *model.Inbound) bool {
+	if ib == nil || ib.Enable || ib.NodeID != nil || ib.Protocol != model.MTProto {
+		return false
+	}
+	opts, err := mtprotoWebForInbound(ib)
+	return err == nil && opts.Enabled && opts.MigrationDraft && opts.SharedIngress != nil && opts.SharedIngress.Enabled
 }

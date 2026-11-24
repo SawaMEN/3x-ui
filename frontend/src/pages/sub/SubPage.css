@@ -516,6 +516,10 @@ a.sub-row-title:hover {
   min-width: 0;
 }
 
+.sub-qr-profile-scope {
+  margin-bottom: 12px;
+}
+
 .sub-qr-actions {
   display: flex;
   flex-wrap: wrap;

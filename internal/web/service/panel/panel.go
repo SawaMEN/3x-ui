@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/version"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
@@ -401,7 +402,8 @@ func downloadPanelUpdater() (string, error) {
 }
 
 func fetchLatestPanelVersion() (string, error) {
-	release, err := fetchPanelRelease("")
+	client := (&service.SettingService{}).NewProxiedHTTPClient(10 * time.Second)
+	release, err := githubrelease.Fetch(context.Background(), client, "https://api.github.com/repos/SawaMEN/3x-ui/releases/latest")
 	if err != nil {
 		return "", err
 	}

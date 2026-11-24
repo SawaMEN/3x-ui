@@ -1,3 +1,4 @@
+import { hydrateHysteriaObfs } from '@/lib/xray/hysteria-obfs';
 import { migrateLegacyXhttp, XHttpXmuxSchema } from '@/schemas/protocols/stream/xhttp';
 import { OutboundDomainStrategySchema } from '@/schemas/protocols/outbound';
 import { AmneziaWGOutboundSettingsSchema } from '@/schemas/protocols/outbound';
@@ -553,7 +554,13 @@ export function rawOutboundToFormValues(raw: RawOutboundRow): OutboundFormValues
     raw.streamSettings &&
     typeof raw.streamSettings === 'object' &&
     Object.keys(raw.streamSettings as Raw).length > 0;
-  const streamSettings = hasStream ? hydrateStreamForm(raw.streamSettings as Raw) : undefined;
+  const streamSettings = hasStream
+    ? hydrateStreamForm(
+        protocol === 'hysteria'
+          ? hydrateHysteriaObfs(raw.streamSettings as Raw)
+          : (raw.streamSettings as Raw),
+      )
+    : undefined;
 
   let typed: OutboundFormSettings;
   switch (protocol) {

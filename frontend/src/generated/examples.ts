@@ -986,10 +986,13 @@ export const EXAMPLES: Record<string, unknown> = {
     "security": "",
     "shareAddr": "",
     "shareAddrStrategy": "",
+    "sharedIngressError": "",
+    "sharedIngressSni": "",
     "ssMethod": "",
     "tag": "in-443-tcp",
     "tlsFlowCapable": true,
     "tuicServer": null,
+    "udp443": false,
     "wgDns": "",
     "wgMtu": 0,
     "wgPublicKey": ""

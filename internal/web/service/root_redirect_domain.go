@@ -15,11 +15,7 @@ func rootRedirectDomainConfig(cfg domainfront.DomainFrontConfig, settings *entit
 	if len(cfg.Domains) == 0 {
 		cfg.Domains = seedDomainFront(settings).Domains
 	}
-	if len(cfg.Domains) > 0 {
-		cfg.Enabled = true
-		cfg.HTTPPort, cfg.HTTPSPort, cfg.PublicPort = 80, 443, 443
-	}
-	return cfg
+	return cfg.StandalonePublicConfig(true)
 }
 
 func (s *SettingService) GetRootRedirectSettings() (bool, string, error) {
@@ -38,7 +34,7 @@ func (s *SettingService) ReconcileRootRedirect(oldEnabled bool, oldURL string) e
 	if err != nil {
 		return err
 	}
-	cfg, err := s.GetDomainFrontConfig()
+	cfg, err := s.GetRuntimeDomainFrontConfig()
 	if err == nil && enabled {
 		var names []string
 		for _, d := range cfg.Domains {

@@ -1,3 +1,4 @@
+import { selectHysteriaObfs } from '@/lib/xray/hysteria-obfs';
 import { useOpenFluxInstalled } from '@/api/useOpenFluxInstalled';
 import { checkOpenFluxInstalled } from '@/api/openflux-install';
 import { VetroffFields } from './protocols/vetroff';
@@ -372,6 +373,8 @@ export default function InboundFormModal({
   const mixedUdpOn = (useWatch({ control, name: 'settings.udp' }) ?? false) as boolean;
   const network = (useWatch({ control, name: 'streamSettings.network' }) ?? '') as string;
   const security = (useWatch({ control, name: 'streamSettings.security' }) ?? 'none') as string;
+  const hysteriaVersion =
+    useWatch({ control, name: 'streamSettings.hysteriaSettings.version' }) ?? 2;
   const streamEnabled =
     canEnableStream({ protocol }) || SHADOWTLS_STREAMLESS_PROTOCOLS.has(protocol);
   const sniffingSupported = canEnableSniffing({ protocol });
@@ -693,17 +696,10 @@ export default function InboundFormModal({
         setV('streamSettings', {
           network: 'hysteria',
           security: 'tls',
-          hysteriaSettings: HysteriaStreamSettingsSchema.parse({}),
+          hysteriaSettings: HysteriaStreamSettingsSchema.parse({
+            obfs: selectHysteriaObfs('salamander', undefined, true),
+          }),
           tlsSettings: createHysteriaTlsSettingsWithDefaultCert(),
-          finalmask: {
-            tcp: [],
-            udp: [
-              {
-                type: 'salamander',
-                settings: { password: RandomUtil.randomLowerAndNum(16) },
-              },
-            ],
-          },
         });
       } else if (
         next === Protocols.WIREGUARD ||
@@ -1241,6 +1237,7 @@ export default function InboundFormModal({
                 onChange={field.onChange}
                 network={network}
                 protocol={protocol}
+                nativeHysteriaQuic={hysteriaVersion === 2}
               />
             )}
           />

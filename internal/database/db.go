@@ -1578,6 +1578,9 @@ func isTableEmpty(tableName string) (bool, error) {
 }
 
 func InitDB(dbPath string) error {
+	if err := closeSQLiteSnapshotPool(); err != nil {
+		return err
+	}
 	var gormLogger logger.Interface
 	if config.IsDebug() {
 		gormLogger = logger.New(
@@ -1616,7 +1619,10 @@ func InitDB(dbPath string) error {
 
 		sync := sqliteSynchronous()
 		journal := sqliteJournalMode()
-		dsn := dbPath + "?_journal_mode=" + journal + "&_busy_timeout=10000&_synchronous=" + sync + "&_txlock=immediate"
+		dsn, dsnErr := sqliteFileDSN(dbPath, "_journal_mode="+journal+"&_busy_timeout=10000&_synchronous="+sync+"&_txlock=immediate")
+		if dsnErr != nil {
+			return dsnErr
+		}
 		db, err = gorm.Open(sqlite.Open(dsn), c)
 		if err != nil {
 			return err
@@ -1700,7 +1706,13 @@ func InitDB(dbPath string) error {
 	} else if username != "" {
 		log.Print("Initial panel user created. Set login credentials with: x-ui setting -username <username> -password <password>")
 	}
-	return runSeeders(isUsersEmpty)
+	if err := runSeeders(isUsersEmpty); err != nil {
+		return err
+	}
+	if db.Name() == DialectSQLite {
+		return openSQLiteSnapshotPool(dbPath, sqlDB)
+	}
+	return nil
 }
 
 func normalizeApiTokenCreatedAtSeconds() error {
@@ -1805,14 +1817,15 @@ func envInt(key string, def int) int {
 }
 
 func CloseDB() error {
+	readErr := closeSQLiteSnapshotPool()
 	if db != nil {
 		sqlDB, err := db.DB()
 		if err != nil {
-			return err
+			return errors.Join(readErr, err)
 		}
-		return sqlDB.Close()
+		return errors.Join(readErr, sqlDB.Close())
 	}
-	return nil
+	return readErr
 }
 
 func GetDB() *gorm.DB {

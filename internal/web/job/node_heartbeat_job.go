@@ -50,6 +50,7 @@ func (j *NodeHeartbeatJob) Run() {
 	}
 	j.nodeService.RetainEnabledNodeDescendants(nodes)
 	if len(nodes) == 0 {
+		j.health = nil
 		return
 	}
 

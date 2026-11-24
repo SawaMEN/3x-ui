@@ -7,6 +7,8 @@ import {
   detectPlatform,
   resolveSubStatus,
   usagePercent,
+  sameProfileLinks,
+  parseSubscriptionURL,
 } from '@/pages/sub/subPageModel';
 
 const DAY = 86_400_000;
@@ -107,6 +109,17 @@ describe('detectPlatform', () => {
 describe('buildSubApps', () => {
   const subUrl = 'https://sub.example.com/sub/abc?token=1';
 
+  it('uses the default subscription and preserves other query parameters', () => {
+    const original = `${subUrl}&key=a%2Bb&format=all#old`;
+    const [hiddify] = buildSubApps('android', original, 'New');
+    const deepLink = new URL(hiddify.url!);
+    expect(deepLink.searchParams.get('url')).toBe(`${subUrl}&key=a%2Bb`);
+    expect(deepLink.hash).toBe('#New');
+
+    const [xray] = buildSubApps('android', subUrl, 'Xray');
+    expect(new URL(xray.url!).searchParams.get('url')).toBe(subUrl);
+  });
+
   it.each([
     ['android', 'app.hiddify.com', 'com.happproxy', 'org.amnezia.awg'],
     ['ios', 'id6596777532', 'id6504287215', 'id6478942365?platform=iphone'],
@@ -129,8 +142,8 @@ describe('buildSubApps', () => {
       const apps = buildSubApps(platform, subUrl, 'Nova Net');
       expect(apps.map((app) => app.name)).toEqual(['Hiddify', 'Hiddify Beta', 'Happ', 'AmneziaWG']);
       expect(apps.map((app) => app.url)).toEqual([
-        `hiddify://import/${subUrl}#Nova%20Net`,
-        `hiddify://import/${subUrl}#Nova%20Net`,
+        `hiddify://import/?url=${encodeURIComponent(subUrl)}#Nova%20Net`,
+        `hiddify://import/?url=${encodeURIComponent(subUrl)}#Nova%20Net`,
         `happ://add/${subUrl}`,
         undefined,
       ]);
@@ -142,4 +155,35 @@ describe('buildSubApps', () => {
       expect(apps[3].downloads[0].href).toContain(awg);
     },
   );
+});
+
+describe('profile refresh', () => {
+  it('does not replace identical links when remark keys are reordered', () => {
+    const previous = {
+      links: ['a', 'b'],
+      telegramRemarks: { a: 'A', b: 'B' },
+      subUrl: 'https://sub.example/id',
+    };
+    expect(
+      sameProfileLinks(previous, {
+        ...previous,
+        links: ['a', 'b'],
+        telegramRemarks: { b: 'B', a: 'A' },
+      }),
+    ).toBe(true);
+    expect(sameProfileLinks(previous, { ...previous, links: ['b', 'a'] })).toBe(false);
+    expect(sameProfileLinks(previous, { ...previous, telegramRemarks: { a: 'new', b: 'B' } })).toBe(
+      false,
+    );
+    expect(sameProfileLinks(previous, {})).toBe(false);
+  });
+
+  it('parses subscription URLs without URL.canParse', () => {
+    expect(parseSubscriptionURL('/sub/id', 'https://example.com')?.href).toBe(
+      'https://example.com/sub/id',
+    );
+    expect(parseSubscriptionURL('https://example.com/sub/id')?.hostname).toBe('example.com');
+    expect(parseSubscriptionURL('javascript:alert(1)')).toBeUndefined();
+    expect(parseSubscriptionURL('not a URL')).toBeUndefined();
+  });
 });

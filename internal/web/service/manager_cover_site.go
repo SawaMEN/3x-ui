@@ -101,7 +101,7 @@ func managerCoverSiteConfig(cfg domainfront.DomainFrontConfig, req ManagerCoverS
 			SiteCatalog: req.SiteCatalog, SiteTemplate: req.SiteTemplate, SiteHTML: req.SiteHTML,
 		})
 	}
-	cfg.Enabled, cfg.AcceptTerms, cfg.Email = true, true, email
+	cfg.AcceptTerms, cfg.Email = true, email
 	return cfg, nil
 }
 

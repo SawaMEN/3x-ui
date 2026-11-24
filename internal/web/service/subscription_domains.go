@@ -21,7 +21,17 @@ func (s *SettingService) GetSubPublicURL() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return subscriptionPublicURL(cfg, settings), nil
+	return effectiveSubscriptionPublicURL(cfg, settings), nil
+}
+
+func effectiveSubscriptionPublicURL(cfg domainfront.DomainFrontConfig, settings *entity.AllSetting) string {
+	if url := subscriptionPublicURL(cfg, settings); url != "" {
+		return url
+	}
+	if settings.SubEnable {
+		return telemtIngressSubscriptionOrigin()
+	}
+	return ""
 }
 
 func configuredSubscriptionDomain(cfg domainfront.DomainFrontConfig) (domainfront.DomainFrontDomain, bool) {
@@ -54,6 +64,31 @@ func subscriptionPublicURL(cfg domainfront.DomainFrontConfig, settings *entity.A
 		host = net.JoinHostPort(host, strconv.Itoa(port))
 	}
 	return "https://" + host
+}
+
+// The standalone listener remains a valid publication after the gateway
+// is disabled. A loopback-only listener still requires an explicit proxy URL.
+func directSubscriptionOrigin(settings *entity.AllSetting) string {
+	if !settings.SubEnable || settings.SubPort <= 0 || settings.SubPort > 65535 ||
+		net.ParseIP(strings.TrimSpace(settings.SubListen)).IsLoopback() ||
+		(settings.SubCertFile == "") != (settings.SubKeyFile == "") {
+		return ""
+	}
+	host, err := netsafe.NormalizeHost(strings.ToLower(strings.TrimSpace(settings.SubDomain)))
+	if err != nil || host == "" {
+		return ""
+	}
+	secure := settings.SubCertFile != "" && settings.SubKeyFile != ""
+	scheme, defaultPort := "http", 80
+	if secure {
+		scheme, defaultPort = "https", 443
+	}
+	if settings.SubPort != defaultPort {
+		host = net.JoinHostPort(host, strconv.Itoa(settings.SubPort))
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	return scheme + "://" + host
 }
 
 func (s *SettingService) subscriptionPublishingSettings() (domainfront.DomainFrontConfig, *entity.AllSetting, error) {
@@ -127,7 +162,10 @@ func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string
 	if primary != "" && !restricted {
 		hosts[strings.TrimSuffix(strings.ToLower(primary), ".")] = true
 	}
-	publicURL := subscriptionPublicURL(cfg, settings)
+	publicURL := effectiveSubscriptionPublicURL(cfg, settings)
+	if restricted && publicURL == "" {
+		publicURL = directSubscriptionOrigin(settings)
+	}
 	if publicURL != "" {
 		u, err := url.Parse(publicURL)
 		if err != nil {

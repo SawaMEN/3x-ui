@@ -29,8 +29,21 @@ type DomainFrontDomain struct {
 	SiteHTML     string `json:"siteHtml,omitempty"`
 }
 
+// HasCoverSite reports whether this domain serves a local website.
+func (d DomainFrontDomain) HasCoverSite() bool {
+	switch d.Mode {
+	case "sni_only":
+		return true
+	case "direct", "cdn", "relay", "sub_link_only":
+		return d.SiteCatalog != "" && d.SiteTemplate != ""
+	default:
+		return false
+	}
+}
+
 type DomainFrontConfig struct {
 	Enabled            bool                `json:"enabled"`
+	PublicOnly         bool                `json:"-"`
 	Listen             string              `json:"listen"`
 	HTTPPort           int                 `json:"httpPort" example:"80"`
 	HTTPSPort          int                 `json:"httpsPort" example:"443"`
@@ -44,6 +57,28 @@ type DomainFrontConfig struct {
 	DNS01Propagation   int                 `json:"dns01Propagation,omitempty"`
 	SubscriptionDomain string              `json:"subscriptionDomain"`
 	Domains            []DomainFrontDomain `json:"domains"`
+}
+
+// StandalonePublicConfig activates the public HTTP/HTTPS listener without
+// enabling gateway forwarding or changing the saved domain roles.
+func (c DomainFrontConfig) StandalonePublicConfig(redirect bool) DomainFrontConfig {
+	if c.Enabled {
+		return c
+	}
+	domains := make([]DomainFrontDomain, 0, len(c.Domains))
+	for _, d := range c.Domains {
+		if !d.Enabled || d.Mode == "shared_sni" || d.Mode == "cert_only" {
+			continue
+		}
+		if d.HasCoverSite() || redirect {
+			domains = append(domains, d)
+		}
+	}
+	c.Domains = domains
+	c.Enabled = len(domains) > 0
+	c.PublicOnly = c.Enabled
+	c.SubscriptionDomain = ""
+	return c
 }
 
 // HasPublicSites is false for DNS-01 certificate-only and foreign SNI records.
@@ -102,6 +137,12 @@ type Backend struct {
 func DefaultConfig() DomainFrontConfig {
 	return DomainFrontConfig{Listen: "0.0.0.0", HTTPPort: 80, HTTPSPort: 443, PublicPort: 443, Domains: []DomainFrontDomain{}}
 }
+
+// CoverSiteHTMLMaxBytes bounds raw UTF-8 HTML for all local websites.
+const CoverSiteHTMLMaxBytes = 1 << 20
+
+// CoverSiteRequestMaxBytes allows six-byte JSON escapes and metadata.
+const CoverSiteRequestMaxBytes = 8 << 20
 
 var coverSiteHTMLDocument = regexp.MustCompile(`(?i)<html(?:\s|>)`)
 
@@ -190,6 +231,9 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		}
 		names[d.Name] = true
 		if d.Mode == "shared_sni" {
+			if d.SiteCatalog != "" || d.SiteTemplate != "" || d.SiteHTML != "" {
+				return fmt.Errorf("%s: external SNI domains cannot configure a local cover site", d.Name)
+			}
 			// A foreign cover site is registered on the controlling panel only.
 			// It must never issue a certificate or serve traffic from here.
 			if d.Panel || len(d.InboundIDs) != 0 || strings.TrimSpace(d.Origin) != "" {
@@ -203,20 +247,23 @@ func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]Certificat
 		default:
 			return fmt.Errorf("unknown domain mode: %s", d.Mode)
 		}
-		if d.Mode == "sni_only" {
+		if wildcard && (d.Mode == "sni_only" || d.SiteCatalog != "" || d.SiteTemplate != "" || d.SiteHTML != "") {
+			return fmt.Errorf("%s: select a concrete hostname for a cover site", d.Name)
+		}
+		if d.Mode != "cert_only" {
 			if (d.SiteCatalog == "") != (d.SiteTemplate == "") {
 				return fmt.Errorf("%s: cover site catalog and template must be selected together", d.Name)
 			}
 			if d.SiteCatalog == "custom" {
-				if d.SiteTemplate != "html" || len(d.SiteHTML) == 0 || len(d.SiteHTML) > 256*1024 ||
+				if d.SiteTemplate != "html" || len(d.SiteHTML) == 0 || len(d.SiteHTML) > CoverSiteHTMLMaxBytes ||
 					strings.ContainsRune(d.SiteHTML, '\x00') || !coverSiteHTMLDocument.MatchString(d.SiteHTML) {
-					return fmt.Errorf("%s: custom site requires a complete HTML document (up to 256 KiB)", d.Name)
+					return fmt.Errorf("%s: custom site requires a complete HTML document (up to 1 MiB)", d.Name)
 				}
 			} else if d.SiteHTML != "" {
 				return fmt.Errorf("%s: HTML is only allowed with the custom site template", d.Name)
 			}
 		} else if d.SiteCatalog != "" || d.SiteTemplate != "" || d.SiteHTML != "" {
-			return fmt.Errorf("%s: only SNI-only domains can select a cover site template", d.Name)
+			return fmt.Errorf("%s: certificate-only domains cannot select a cover site template", d.Name)
 		}
 		switch d.TLS {
 		case "auto", "certmagic", "existing":

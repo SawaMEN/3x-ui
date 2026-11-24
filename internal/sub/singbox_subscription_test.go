@@ -619,3 +619,38 @@ func TestHiddifySubscriptionIncludesVisibleAnyTLSAndShadowTLS(t *testing.T) {
 		t.Fatalf("wrong ShadowTLS outer TLS: %#v", transport)
 	}
 }
+
+func TestHiddifySubscriptionNamesAreUniqueAndDoNotMutateInput(t *testing.T) {
+	proxies := []map[string]any{
+		{"type": "vless", "tag": "edge"},
+		{"type": "vless", "tag": "edge"},
+		{"type": "vless", "tag": "edge-2"},
+		{"type": "vless", "tag": "edge"},
+		{"type": "vless"},
+	}
+	data, err := buildHiddifySingBoxSubscription(proxies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Outbounds []map[string]any `json:"outbounds"`
+	}
+	if err := json.Unmarshal([]byte(data), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	var tags []string
+	for _, proxy := range cfg.Outbounds {
+		tag, _ := proxy["tag"].(string)
+		tags = append(tags, tag)
+	}
+	want := []string{"edge", "edge-3", "edge-2", "edge-4", "vless"}
+	if !reflect.DeepEqual(tags, want) {
+		t.Fatalf("tags = %v, want %v", tags, want)
+	}
+	if proxies[1]["tag"] != "edge" || proxies[4]["tag"] != nil {
+		t.Fatal("subscription generation mutated input")
+	}
+	if _, err := buildHiddifySingBoxSubscription([]map[string]any{nil}); err == nil {
+		t.Fatal("nil outbound was accepted")
+	}
+}

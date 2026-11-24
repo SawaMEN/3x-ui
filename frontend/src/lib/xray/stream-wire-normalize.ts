@@ -1,3 +1,4 @@
+import { syncHysteriaObfsForWire } from '@/lib/xray/hysteria-obfs';
 import { migrateLegacyXhttp } from '@/schemas/protocols/stream/xhttp';
 
 // Shapes the streamSettings subtree that 3x-ui persists to match what
@@ -347,7 +348,10 @@ export function normalizeStreamSettingsForWire(
   stream: Record<string, unknown>,
   opts: { side: StreamWireSide },
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...stream };
+  const out: Record<string, unknown> =
+    String(stream.method ?? stream.network ?? '').toLowerCase() === 'hysteria'
+      ? { ...syncHysteriaObfsForWire(stream) }
+      : { ...stream };
 
   // The form retains old transport subforms when switching tabs. Only the
   // selected transport belongs on the wire; preserve unknown future settings.

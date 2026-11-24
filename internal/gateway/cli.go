@@ -64,11 +64,16 @@ func CLI(args []string) error {
 	}
 	defer release()
 	before := network.Status(ctx)
-	if before.Error != "" {
+	if action != "disable" && before.Error != "" {
 		return fmt.Errorf("Gateway recovery state: %s", before.Error)
 	}
+	if action == "disable" {
+		if err := network.Suspend(ctx); err != nil {
+			return err
+		}
+	}
 	states := map[string]State{}
-	for _, name := range []string{service.CoreTypeXray, service.CoreTypeSingBox} {
+	for _, name := range []string{service.CoreTypeXray, service.CoreTypeSingBox, service.CoreTypeSingBoxUpstream} {
 		state, stateErr := StateForCore(name)
 		if stateErr != nil {
 			return stateErr
@@ -76,18 +81,14 @@ func CLI(args []string) error {
 		states[name] = state
 	}
 	changed := []string{}
-	rollback := func(disabling bool, original error) error {
+	rollback := func(original error) error {
 		recovery, done := context.WithTimeout(context.Background(), 45*time.Second)
 		defer done()
 		if before.Configured {
 			original = errors.Join(original, network.Suspend(recovery))
 		}
 		for i := len(changed) - 1; i >= 0; i-- {
-			if disabling {
-				original = errors.Join(original, RestoreForCore(changed[i]))
-			} else {
-				original = errors.Join(original, DisableForCore(changed[i]))
-			}
+			original = errors.Join(original, DisableForCore(changed[i]))
 		}
 		if len(changed) != 0 {
 			original = errors.Join(original, restartGatewayPanel(recovery))
@@ -98,25 +99,18 @@ func CLI(args []string) error {
 		return original
 	}
 	if action == "disable" {
-		if err := network.Suspend(ctx); err != nil {
+		for _, name := range []string{service.CoreTypeXray, service.CoreTypeSingBox, service.CoreTypeSingBoxUpstream} {
+			if states[name].Enabled {
+				if err := DisableForCore(name); err != nil {
+					return err
+				}
+			}
+		}
+		if err := restartGatewayPanel(ctx); err != nil {
 			return err
 		}
-		for _, name := range []string{service.CoreTypeXray, service.CoreTypeSingBox} {
-			if !states[name].Enabled {
-				continue
-			}
-			changed = append(changed, name)
-			if err := DisableForCore(name); err != nil {
-				return rollback(true, err)
-			}
-		}
-		if len(changed) != 0 {
-			if err := restartGatewayPanel(ctx); err != nil {
-				return rollback(true, err)
-			}
-		}
 		if err := network.Disable(ctx); err != nil {
-			return rollback(true, err)
+			return err
 		}
 		fmt.Println("Gateway Mode disabled")
 		return nil
@@ -127,12 +121,10 @@ func CLI(args []string) error {
 	if err := network.Validate(ctx, cfg); err != nil {
 		return err
 	}
-	other := service.CoreTypeSingBox
-	if service.IsNativeCore(core) {
-		other = service.CoreTypeXray
-	}
-	if states[other].Enabled {
-		return fmt.Errorf("Gateway belongs to %s; disable it before enabling %s", other, core)
+	for _, other := range []string{service.CoreTypeXray, service.CoreTypeSingBox, service.CoreTypeSingBoxUpstream} {
+		if other != core && states[other].Enabled {
+			return fmt.Errorf("Gateway belongs to %s; disable it before enabling %s", other, core)
+		}
 	}
 	if states[core].Enabled && !states[core].Configured {
 		return fmt.Errorf("Gateway template recovery required; disable Gateway first")
@@ -143,7 +135,7 @@ func CLI(args []string) error {
 		}
 		changed = append(changed, core)
 		if err := restartGatewayPanel(ctx); err != nil {
-			return rollback(false, err)
+			return rollback(err)
 		}
 	}
 	if err := network.Enable(ctx, cfg); err != nil {
@@ -151,7 +143,7 @@ func CLI(args []string) error {
 		if network.Status(ctx).Configured && !before.Configured {
 			return err
 		}
-		return rollback(false, err)
+		return rollback(err)
 	}
 	fmt.Println("Gateway Mode enabled (" + core + ")")
 	return nil

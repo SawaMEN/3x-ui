@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -142,6 +143,9 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 		if err := db.Where("id = ? AND user_id = ? AND enable = ?", e.ActiveInboundID, sub.UserID, true).First(&ib).Error; err != nil {
 			continue
 		}
+		if ib.Protocol == model.MTProto {
+			continue
+		}
 		var n int64
 		if err := db.Model(&model.ClientInbound{}).Where("client_id = ? AND inbound_id = ?", client.Id, ib.Id).Count(&n).Error; err != nil || n == 0 {
 			continue
@@ -175,7 +179,11 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 			out = append(out, p)
 		}
 	}
-	if len(out) == 0 && configBody == "" {
+	lines := strings.Split(strings.Join(out, "\n"), "\n")
+	lines = slices.DeleteFunc(lines, func(line string) bool {
+		return strings.TrimSpace(line) == "" || coremodel.IsTelegramProxyLink(line)
+	})
+	if len(lines) == 0 && configBody == "" {
 		http.Error(w, "subscription is not generated", http.StatusServiceUnavailable)
 		return
 	}
@@ -196,7 +204,7 @@ func ServeManagerSubscription(w http.ResponseWriter, r *http.Request, token stri
 	if traffic != nil {
 		w.Header().Set("subscription-userinfo", fmt.Sprintf("upload=%d; download=%d; total=%d; expire=%d", traffic.Up, traffic.Down, client.TotalGB, max(0, client.ExpiryTime/1000)))
 	}
-	body := strings.Join(out, "\n")
+	body := strings.Join(lines, "\n")
 	if r.URL.Query().Get("format") != "raw" {
 		body = base64.StdEncoding.EncodeToString([]byte(body))
 	}

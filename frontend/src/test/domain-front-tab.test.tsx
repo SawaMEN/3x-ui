@@ -261,6 +261,36 @@ describe('domain and TLS dashboard', () => {
     expect(f.applied).toBeUndefined();
   });
 
+  it.each(['direct', 'cdn', 'sub_link_only'] as const)(
+    'offers optional cover site for the existing %s domain',
+    async (mode) => {
+      const f = fixture();
+      f.config.domains[0].mode = mode;
+      renderWithProviders(<DomainFrontTab />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+      fireEvent.click(await screen.findByRole('tab', { name: 'Cover site' }));
+      expect(await screen.findByRole('combobox', { name: 'Cover site catalog' })).toBeTruthy();
+      expect(f.applied).toBeUndefined();
+    },
+  );
+
+  it.each(['shared_sni', 'cert_only', 'wildcard'] as const)(
+    'hides the local cover-site editor for %s',
+    async (kind) => {
+      const f = fixture();
+      f.config.subscriptionDomain = '';
+      if (kind === 'wildcard') {
+        f.config.domains[0].name = '*.example.com';
+        f.config.domains[0].mode = 'direct';
+      } else {
+        f.config.domains[0].mode = kind;
+      }
+      renderWithProviders(<DomainFrontTab />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+      expect(screen.queryByRole('tab', { name: 'Cover site' })).toBeNull();
+    },
+  );
+
   it('offers one edit action per cover site and keeps its draft in the editor', async () => {
     const f = fixture();
     f.config.domains[0].mode = 'sni_only';

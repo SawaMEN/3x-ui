@@ -52,6 +52,9 @@ func TestDomainPreflightAPIIsReadOnlyAndExplainsInvalidConfig(t *testing.T) {
 	if !payload.Success || payload.Obj.Ready || len(payload.Obj.Checks) == 0 {
 		t.Fatalf("preflight did not report the invalid draft: %s", res.Body.String())
 	}
+	if payload.Obj.Checks[0].Code != "panel_forbidden" || payload.Obj.Checks[0].Severity != "error" {
+		t.Fatalf("preflight did not explain the forbidden panel route: %s", res.Body.String())
+	}
 	var persisted model.Setting
 	if err := database.GetDB().Where("key = ?", "domainFrontConfig").First(&persisted).Error; err == nil {
 		t.Fatalf("preflight unexpectedly persisted the draft: %+v", persisted)

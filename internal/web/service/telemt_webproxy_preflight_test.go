@@ -21,6 +21,11 @@ server {
     server_name web.example.com;
     location / { proxy_pass http://127.0.0.1:15080; }
 }
+# configuration file /etc/nginx/conf.d/3x-ui-telemt-web-acme.conf:
+server {
+    listen 80;
+    server_name web.example.com;
+}
 # configuration file /etc/nginx/conf.d/old-website.conf:
 server {
     listen 80;
@@ -41,7 +46,7 @@ server {
 		t.Fatal("HTTP-only vhost should conflict with installing a duplicate HTTP-01 challenge vhost")
 	}
 	if telemtWebNginxConfigHasHostPort(config, "web.example.com", 80) {
-		t.Fatal("existing HTTPS WEB vhost is not an HTTP-01 conflict")
+		t.Fatal("panel-owned HTTPS and ACME vhosts must not conflict with WEB renewal")
 	}
 	for _, tt := range []struct {
 		domain string

@@ -1,3 +1,8 @@
+import TelemtNaiveSelect from './TelemtNaiveSelect';
+import TelemtIngressPreview, {
+  type IngressPreview,
+  type VPNMigrationRequest,
+} from './TelemtIngressPreview';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -32,13 +37,15 @@ import {
   SyncOutlined,
 } from '@ant-design/icons';
 import { HttpUtil, RandomUtil } from '@/utils';
-import { FormProvider } from 'react-hook-form';
+import { FormProvider, useWatch } from 'react-hook-form';
 import { FormField, useZodForm } from '@/components/form/rhf';
 import {
   TelemtFrontendSchema,
   TelemtCarrierSchema,
   TelemtCarriersSchema,
   TelemtWebProxyRequestSchema,
+  completeTelemtWebSettings,
+  defaultTelemtWebSettings,
 } from '@/schemas/telemt-web';
 import TelemtSubscriptionToggle from './TelemtSubscriptionToggle';
 import RemoteTelegramProxies from './RemoteTelegramProxies';
@@ -48,12 +55,15 @@ import TelemtWebGuide, { telemtWebFieldHelp } from './TelemtWebGuide';
 import './TelemtPage.css';
 
 type WebProxyStatus = {
+  ingressRouter?: string;
+  sharedIngress?: { enabled: boolean; inboundIds?: number[]; naiveInboundId?: number };
   site?: TelemtWebSite;
   frontend: string;
   frontendActive: boolean;
   carrier: string;
   carriers: string[] | null;
   carrierNegotiationSupported: boolean;
+  retryJitter?: { enabled: boolean; minMs: number; maxMs: number };
   enabled: boolean;
   supported: boolean;
   domain: string;
@@ -83,6 +93,9 @@ type WebDiagnostics = {
 };
 
 type WebPreflight = {
+  preview?: IngressPreview;
+  ingressRouter?: string;
+  udp443?: { observed: boolean; busy: boolean; owner?: string; reservations: string[] };
   requestKey?: string;
   ready: boolean;
   domain: string;
@@ -146,10 +159,14 @@ type ServiceAction = 'start' | 'stop' | 'restart' | 'enable' | 'disable';
 
 export default function TelemtPage() {
   const lifetime = useRef<AbortController | null>(null);
+  const statusRequest = useRef<AbortController | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     lifetime.current = controller;
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      statusRequest.current?.abort();
+    };
   }, []);
   const [messageApi, messageHolder] = message.useMessage();
   const [form] = Form.useForm<Config>();
@@ -201,21 +218,22 @@ export default function TelemtPage() {
   const [webPreflightRefresh, setWebPreflightRefresh] = useState(0);
   const webForm = useZodForm(TelemtWebProxyRequestSchema, {
     defaultValues: {
-      domain: '',
-      aliases: [],
-      basePath: '',
-      frontend: 'nginx',
-      carrier: 'https',
-      carriers: [],
+      ...defaultTelemtWebSettings(),
+      sharedIngress: { enabled: false, inboundIds: [] },
     },
   });
   const webProxyDomain = webForm.watch('domain');
   const webBasePath = webForm.watch('basePath');
   const webAliases = webForm.watch('aliases');
   const webFrontend = webForm.watch('frontend');
+  const sharedIngress = useWatch({ control: webForm.control, name: 'sharedIngress' });
+  const sharedIngressEnabled = sharedIngress?.enabled ?? false;
+  const sharedInboundKey = (sharedIngress?.inboundIds ?? []).join(',');
   const webCarrier = webForm.watch('carrier');
   const webCarriers = webForm.watch('carriers');
   const webSite = webForm.watch('site');
+  const webRetryJitter = webForm.watch('retryJitter');
+  const webRetryJitterKey = JSON.stringify(webRetryJitter);
   const webSiteKey = JSON.stringify(webSite);
   const webAliasesKey = (webAliases || []).join('|');
   const webCarriersKey = (webCarriers || []).join('|');
@@ -227,6 +245,9 @@ export default function TelemtPage() {
     webCarrier,
     webCarriersKey,
     webSiteKey,
+    webRetryJitterKey,
+    sharedIngressEnabled,
+    sharedInboundKey,
     webPreflightRefresh,
   ]);
   const webPreflightCurrent = webPreflight?.requestKey === webPreflightKey ? webPreflight : null;
@@ -247,9 +268,17 @@ export default function TelemtPage() {
             basePath: webBasePath || '',
             aliases: webAliasesKey ? webAliasesKey.split('|') : [],
             frontend: webFrontend || 'nginx',
+            sharedIngress: {
+              enabled: sharedIngressEnabled ?? false,
+              inboundIds:
+                sharedIngressEnabled && sharedInboundKey
+                  ? sharedInboundKey.split(',').map(Number)
+                  : [],
+            },
             carrier: webCarrier || 'https',
             carriers: webCarriersKey ? webCarriersKey.split('|') : [],
             site: webSiteKey ? (JSON.parse(webSiteKey) as TelemtWebSite) : undefined,
+            retryJitter: webRetryJitterKey ? JSON.parse(webRetryJitterKey) : undefined,
           },
           { ...jsonOptions, silent: true, signal: controller.signal },
         );
@@ -300,17 +329,27 @@ export default function TelemtPage() {
     webCarrier,
     webCarriersKey,
     webSiteKey,
+    webRetryJitterKey,
+    sharedIngressEnabled,
+    sharedInboundKey,
     webPreflightKey,
   ]);
 
   const loadStatus = useCallback(async () => {
-    const signal = lifetime.current?.signal;
-    if (signal?.aborted) return;
-    const r = await HttpUtil.get<Status>('/panel/api/telemt/status', undefined, { signal });
-    if (signal?.aborted) return;
-    if (r?.success && r.obj) {
-      setStatus(r.obj);
-      return r.obj;
+    if (lifetime.current?.signal.aborted) return;
+    statusRequest.current?.abort();
+    const controller = new AbortController();
+    statusRequest.current = controller;
+    try {
+      const r = await HttpUtil.get<Status>('/panel/api/telemt/status', undefined, {
+        signal: controller.signal,
+      });
+      if (!controller.signal.aborted && r?.success && r.obj) {
+        setStatus(r.obj);
+        return r.obj;
+      }
+    } finally {
+      if (statusRequest.current === controller) statusRequest.current = null;
     }
   }, []);
 
@@ -343,8 +382,8 @@ export default function TelemtPage() {
     setRefreshing(true);
     try {
       const current = await loadStatus();
-      if (signal?.aborted) return;
-      if (current?.installed) await Promise.all([loadConfig(), loadProxies()]);
+      if (signal?.aborted || !current) return;
+      if (current.installed) await Promise.all([loadConfig(), loadProxies()]);
       else setProxies([]);
     } finally {
       if (!signal?.aborted) setRefreshing(false);
@@ -353,10 +392,15 @@ export default function TelemtPage() {
 
   useEffect(() => {
     const initialRefresh = window.setTimeout(() => void refreshAll(), 0);
-    const timer = window.setInterval(() => void loadStatus(), 15000);
+    const poll = () => {
+      if (!document.hidden && !statusRequest.current) void loadStatus();
+    };
+    const timer = window.setInterval(poll, 15000);
+    document.addEventListener('visibilitychange', poll);
     return () => {
       window.clearTimeout(initialRefresh);
       window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', poll);
     };
   }, [loadStatus, refreshAll]);
 
@@ -422,30 +466,40 @@ export default function TelemtPage() {
   };
 
   const openWebProxy = () => {
-    webForm.reset({
-      site: TelemtWebSiteSchema.optional().catch(undefined).parse(status.webProxy.site),
-      domain: status.webProxy.domain || status.webProxy.defaultDomain || '',
-      basePath: status.webProxy.basePath || '',
-      aliases: status.webProxy.aliases || [],
-      frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
-      carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
-      carriers: TelemtCarriersSchema.catch([]).parse(
-        status.webProxy.carriers ||
-          (!status.webProxy.enabled && status.webProxy.carrierNegotiationSupported
-            ? ['websocket-lanes', 'websocket', 'https']
-            : []),
-      ),
-    });
+    webForm.reset(
+      completeTelemtWebSettings({
+        site: TelemtWebSiteSchema.optional().catch(undefined).parse(status.webProxy.site),
+        domain: status.webProxy.domain || status.webProxy.defaultDomain || '',
+        basePath: status.webProxy.basePath || '',
+        aliases: status.webProxy.aliases || [],
+        frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
+        sharedIngress: status.webProxy.sharedIngress ?? { enabled: false, inboundIds: [] },
+        carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
+        carriers: TelemtCarriersSchema.catch([]).parse(
+          status.webProxy.carriers ||
+            (!status.webProxy.enabled && status.webProxy.carrierNegotiationSupported
+              ? ['websocket-lanes', 'websocket', 'https']
+              : []),
+        ),
+        retryJitter: status.webProxy.retryJitter,
+      }),
+    );
     setWebPreflight(null);
     setWebProxyOpen(true);
   };
 
-  const enableWebProxy = () =>
+  const enableWebProxy = (vpnMigrations?: VPNMigrationRequest[]) =>
     webForm.handleSubmit(async (payload) => {
       const signal = lifetime.current?.signal;
       setWebProxyLoading(true);
       try {
-        const r = await HttpUtil.post('/panel/api/telemt/webproxy/enable', payload, jsonOptions);
+        const { sharedIngress, ...options } = payload;
+        const request = {
+          ...options,
+          sharedIngress: sharedIngress ?? { enabled: false },
+          ...(vpnMigrations?.length ? { vpnMigrations } : {}),
+        };
+        const r = await HttpUtil.post('/panel/api/telemt/webproxy/enable', request, jsonOptions);
         if (signal?.aborted) return;
         if (r?.success) {
           messageApi.success(
@@ -983,6 +1037,30 @@ export default function TelemtPage() {
                   options={TelemtFrontendSchema.options.map((value) => ({ value, label: value }))}
                 />
               </FormField>
+              {webFrontend && (
+                <>
+                  <FormField
+                    name="sharedIngress.enabled"
+                    label="Общий HTTPS-вход на порту 443"
+                    extra="Выбранный HTTPS-сервер использует настроенные порты панели и подписок. Если путь Telemt WEB пустой, панель задаст его автоматически."
+                    valueProp="checked"
+                  >
+                    <Switch disabled={webProxyLoading} />
+                  </FormField>
+                  {sharedIngressEnabled && (
+                    <FormField
+                      name="sharedIngress.inboundIds"
+                      label="Входящие TLS/SNI-подключения"
+                      extra="Необязательно. Выберите локальные TCP-подключения с TLS или REALITY. Для каждого нужен уникальный SNI. TCP-движок определяется автоматически. UDP 443 проверяется отдельно."
+                    >
+                      <TelemtNaiveSelect
+                        disabled={webProxyLoading}
+                        webHosts={[webProxyDomain || '', ...(webAliases || [])]}
+                      />
+                    </FormField>
+                  )}
+                </>
+              )}
               <FormField
                 name="carrier"
                 label="Основной транспорт (WEB carrier)"
@@ -1040,6 +1118,41 @@ export default function TelemtPage() {
                   Выбор транспортов требует Telemt 3.5.4 или новее.
                 </Typography.Text>
               )}
+              <Collapse
+                items={[
+                  {
+                    key: 'retry-jitter',
+                    label: 'Задержка повторных HTTP-запросов (Telemt 3.5.16+)',
+                    children: (
+                      <>
+                        <FormField
+                          name="retryJitter.enabled"
+                          label="Включить случайную задержку"
+                          valueProp="checked"
+                        >
+                          <Switch disabled={webProxyLoading} />
+                        </FormField>
+                        <FormField name="retryJitter.minMs" label="Минимум, мс">
+                          <InputNumber
+                            min={0}
+                            max={30000}
+                            style={{ width: '100%' }}
+                            disabled={webProxyLoading}
+                          />
+                        </FormField>
+                        <FormField name="retryJitter.maxMs" label="Максимум, мс">
+                          <InputNumber
+                            min={0}
+                            max={30000}
+                            style={{ width: '100%' }}
+                            disabled={webProxyLoading}
+                          />
+                        </FormField>
+                      </>
+                    ),
+                  },
+                ]}
+              />
             </Form>
           </FormProvider>
 
@@ -1085,6 +1198,43 @@ export default function TelemtPage() {
                   </Descriptions.Item>
                 ))}
               </Descriptions>
+              {webPreflightCurrent.preview && (
+                <TelemtIngressPreview
+                  preview={webPreflightCurrent.preview}
+                  allowPortMigration={!status.webProxy.enabled}
+                  onApplyVPNMigration={
+                    !status.webProxy.enabled &&
+                    webPreflightCurrent.checks.every(
+                      (check) => check.ok || check.id === 'https-port',
+                    )
+                      ? (moves) => {
+                          Modal.confirm({
+                            title: 'Перенести VPN-подключения и запустить HTTPS-вход?',
+                            content:
+                              'Ядро VPN будет перезапущено. Возможен временный разрыв соединений. При ошибке панель попытается восстановить исходные порты.',
+                            okText: 'Перенести и запустить',
+                            cancelText: 'Отмена',
+                            onOk: () => enableWebProxy(moves),
+                          });
+                        }
+                      : undefined
+                  }
+                  aliases={webAliases || []}
+                  basePath={webBasePath || ''}
+                  disabled={webProxyLoading}
+                  onAccept={(aliases, basePath) => {
+                    webForm.setValue('aliases', aliases, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                    if (basePath)
+                      webForm.setValue('basePath', basePath, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                  }}
+                />
+              )}
               {webPreflightCurrent.warnings.map((warning) => (
                 <Alert key={warning} type="warning" showIcon title={warning} />
               ))}
@@ -1095,9 +1245,39 @@ export default function TelemtPage() {
             <Descriptions.Item label="Telemt WEB">
               127.0.0.1:{status.webProxy.listenPort || 15080}
             </Descriptions.Item>
-            <Descriptions.Item label={webFrontend}>
-              {status.webProxy.frontendActive ? 'запущен' : 'будет запущен автоматически'}
+            <Descriptions.Item label="Текущий HTTPS-сервер">
+              {status.webProxy.enabled
+                ? `${status.webProxy.frontend || 'nginx'} — ${status.webProxy.frontendActive ? 'запущен' : 'не запущен'}`
+                : 'WEB Proxy отключён'}
             </Descriptions.Item>
+            <Descriptions.Item label="Выбранный HTTPS-сервер">
+              {webFrontend || 'nginx'}
+              {status.webProxy.enabled &&
+                (webFrontend || 'nginx') !== (status.webProxy.frontend || 'nginx') &&
+                ' — переключение после применения'}
+            </Descriptions.Item>
+            <Descriptions.Item label="TCP 443 — текущий движок">
+              {status.webProxy.enabled
+                ? status.webProxy.ingressRouter || status.webProxy.frontend
+                : 'Отключён'}
+            </Descriptions.Item>
+            {webPreflightCurrent?.ingressRouter && (
+              <Descriptions.Item label="TCP 443 — после применения">
+                {webPreflightCurrent.ingressRouter}
+              </Descriptions.Item>
+            )}
+            {webPreflightCurrent?.udp443 && (
+              <Descriptions.Item label="UDP 443 — независимо от TCP">
+                {!webPreflightCurrent.udp443.observed
+                  ? 'Не удалось проверить'
+                  : webPreflightCurrent.udp443.busy
+                    ? `Занят: ${webPreflightCurrent.udp443.owner || 'неизвестный процесс'}`
+                    : 'Нет активного слушателя'}
+                {webPreflightCurrent.udp443.reservations.length > 0 && (
+                  <div>Резерв: {webPreflightCurrent.udp443.reservations.join(', ')}</div>
+                )}
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label="TLS">
               {status.webProxy.certificateReady
                 ? 'существующий сертификат готов (проверьте выбранный домен выше)'

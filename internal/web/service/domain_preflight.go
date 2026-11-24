@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 )
 
@@ -42,12 +43,24 @@ type preflightDeps struct {
 // DNS checks are intentionally advisory: a brand-new hostname may not be
 // published yet, and the panel cannot prove external HTTP-01 reachability.
 func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (domainPreflightReport, error) {
+	// Validate the submitted draft before runtime normalization clears legacy
+	// panel flags. ApplyDomainFront rejects the same draft.
+	if err := validateDomainPanelExposure(cfg); err != nil {
+		return domainPreflightReport{
+			Ready: false, CheckedAt: time.Now().Unix(),
+			Checks: []domainPreflightCheck{{Code: "panel_forbidden", Severity: "error", Message: err.Error()}},
+		}, nil
+	}
 	s := &SettingService{}
 	files, _, err := s.domainCertificateFiles(cfg)
 	if err != nil {
 		return domainPreflightReport{}, err
 	}
 	old, err := s.GetDomainFrontConfig()
+	if err != nil {
+		return domainPreflightReport{}, err
+	}
+	panel, err := s.GetAllSetting()
 	if err != nil {
 		return domainPreflightReport{}, err
 	}
@@ -59,7 +72,9 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 	if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled && telemtWebFrontendActive(state) {
 		telemtCover = state.Domain
 	}
-	report := runDomainPreflight(ctx, cfg, files, old, status.Running, preflightDeps{
+	effective := runtimeDomainFrontConfig(cfg, panel)
+	oldRuntime := runtimeDomainFrontConfig(old, panel)
+	report := runDomainPreflight(ctx, effective, files, oldRuntime, status.Running, preflightDeps{
 		lookup: func(ctx context.Context, name string) ([]net.IPAddr, error) {
 			return net.DefaultResolver.LookupIPAddr(ctx, name+".")
 		},
@@ -70,6 +85,42 @@ func PreflightDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig
 			return err == nil && credential.Configured
 		},
 	})
+	// Applying this draft must not orphan the TLS certificate used by
+	// the panel. Report the blocker before the administrator clicks Apply.
+	if sourceErr := validatePanelCertificateSource(oldRuntime, effective, panel.WebDomain, panel.WebCertFile, panel.WebKeyFile); sourceErr != nil {
+		report.Ready = false
+		report.Checks = append(report.Checks, domainPreflightCheck{
+			Code: "invalid_config", Severity: "error", Domain: panel.WebDomain, Message: sourceErr.Error(),
+		})
+	}
+	panelPort := panel.WebPort
+	if override, configured, overrideErr := config.GetPortOverride(); configured && overrideErr == nil {
+		panelPort = override
+	}
+	_, sharedHTTPS := domainSharesListener(effective, panel.WebListen, panelPort, panel.WebCertFile != "" && panel.WebKeyFile != "")
+	if coverErr := validateCoverPanelPaths(effective, panel.WebDomain, panel.WebBasePath, sharedHTTPS); coverErr != nil {
+		report.Ready = false
+		report.Checks = append(report.Checks, domainPreflightCheck{
+			Code: "invalid_config", Severity: "error", Domain: panel.WebDomain, Message: coverErr.Error(),
+		})
+	}
+	if effective.Enabled {
+		backend := domainfront.Backend{
+			PanelPath:         panel.WebBasePath,
+			SubscriptionPaths: []string{panel.SubPath, panel.SubJsonPath, panel.SubClashPath, "/assets/"},
+		}
+		for _, domain := range effective.Domains {
+			if !domain.Enabled {
+				continue
+			}
+			if coverErr := backend.ValidateCoverPaths(domain); coverErr != nil {
+				report.Ready = false
+				report.Checks = append(report.Checks, domainPreflightCheck{
+					Code: "invalid_config", Severity: "error", Domain: domain.Name, Message: coverErr.Error(),
+				})
+			}
+		}
+	}
 	augmentDomainPreflightWithNodeEvidence(ctx, cfg, &report)
 	return report, nil
 }
@@ -102,10 +153,9 @@ func runDomainPreflight(
 	}
 	// Validation normalizes a copy; do not change the UI's submitted draft.
 	cfg.Domains = append([]domainfront.DomainFrontDomain(nil), cfg.Domains...)
-	for _, domain := range cfg.Domains {
-		if domain.Panel {
-			add("panel_forbidden", "error", domain.Name, "Gateway domains cannot expose the admin panel.")
-		}
+	if err := validateDomainPanelExposure(cfg); err != nil {
+		add("panel_forbidden", "error", "", err.Error())
+		return result
 	}
 	if err := cfg.ValidateWithCertificates(files); err != nil {
 		add("invalid_config", "error", "", err.Error())

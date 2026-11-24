@@ -36,6 +36,7 @@ type GatewayNetworkConfig struct {
 type GatewayNetworkStatus struct {
 	ListenerReady bool                 `json:"listenerReady"`
 	Configured    bool                 `json:"configured"`
+	DesiredActive bool                 `json:"desiredActive"`
 	Config        GatewayNetworkConfig `json:"config"`
 	RPFilter      bool                 `json:"rpFilter"`
 	Forwarding    bool                 `json:"forwarding"`
@@ -92,12 +93,15 @@ func (s *GatewayNetworkService) Status(ctx context.Context) GatewayNetworkStatus
 	defer cancel()
 	state, err := s.loadGatewayNetworkState()
 	if err != nil {
-		if _, statErr := os.Stat(s.networkPaths().state); statErr == nil {
+		if !os.IsNotExist(err) {
 			return GatewayNetworkStatus{Configured: true, Error: err.Error()}
+		}
+		if s.orphanedGatewayNetwork(ctx) {
+			return GatewayNetworkStatus{Configured: true, Error: "Gateway network artifacts exist without recovery state; disable Gateway to clean up"}
 		}
 		return GatewayNetworkStatus{}
 	}
-	status := GatewayNetworkStatus{Configured: true, Config: state.Config}
+	status := GatewayNetworkStatus{Configured: true, Config: state.Config, DesiredActive: state.DesiredActive}
 	status.RPFilter = true
 	for _, name := range []string{"all", state.Config.LANInterface} {
 		if value, err := s.command(ctx, "sysctl", "-n", "net/ipv4/conf/"+name+"/rp_filter"); err != nil || strings.TrimSpace(value) != "0" {
@@ -210,8 +214,17 @@ func (s *GatewayNetworkService) Enable(ctx context.Context, cfg GatewayNetworkCo
 // and policy routing remain until Disable completes or Enable resumes. The
 // managed LAN stays fail-closed, without affecting local INPUT/management.
 func (s *GatewayNetworkService) Suspend(ctx context.Context) error {
+	// Serialize against a watchdog already restoring interception.
+	release, err := s.runtimeLease(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 	state, err := s.loadGatewayNetworkState()
 	if os.IsNotExist(err) {
+		if s.orphanedGatewayNetwork(ctx) {
+			return s.disableOrphanedGatewayNetwork(ctx)
+		}
 		return nil
 	}
 	if err != nil {
@@ -246,9 +259,41 @@ func (s *GatewayNetworkService) replaceGatewayTables(ctx context.Context, replac
 	return s.commandInput(ctx, batch.String(), "nft", "-f", "-")
 }
 
+// A foreign policy route alone is not evidence of Gateway ownership.
+func (s *GatewayNetworkService) orphanedGatewayNetwork(ctx context.Context) bool {
+	paths := s.networkPaths()
+	for _, path := range []string{paths.rpFilter, paths.nft, paths.routingUnit, paths.firewallUnit, paths.restoreScript} {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
+	}
+	tables, err := s.command(ctx, "nft", "list", "tables")
+	return err == nil && (gatewayTablePresent(tables, "inet", "xui_gateway") || gatewayTablePresent(tables, "ip", "xui_gateway_nat"))
+}
+
+func (s *GatewayNetworkService) disableOrphanedGatewayNetwork(ctx context.Context) error {
+	// No forwarding baseline is available; do not guess ip_forward.
+	if err := s.stopGatewayNetworkUnits(ctx); err != nil {
+		return err
+	}
+	if err := s.removeGatewayPolicyRoutes(ctx); err != nil {
+		return err
+	}
+	if err := s.restoreGatewayRPFilter(ctx); err != nil {
+		return err
+	}
+	if err := s.removeGatewayTables(ctx); err != nil {
+		return err
+	}
+	return s.removeGatewayNetworkFiles(ctx)
+}
+
 func (s *GatewayNetworkService) Disable(ctx context.Context) error {
 	state, err := s.loadGatewayNetworkState()
 	if os.IsNotExist(err) {
+		if s.orphanedGatewayNetwork(ctx) {
+			return s.disableOrphanedGatewayNetwork(ctx)
+		}
 		return nil
 	}
 	if err != nil {
@@ -257,6 +302,34 @@ func (s *GatewayNetworkService) Disable(ctx context.Context) error {
 	if err := s.Suspend(ctx); err != nil {
 		return err
 	}
+	if err := s.stopGatewayNetworkUnits(ctx); err != nil {
+		return err
+	}
+	if err := s.removeGatewayPolicyRoutes(ctx); err != nil {
+		return err
+	}
+	current, err := s.command(ctx, "sysctl", "-n", "net.ipv4.ip_forward")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(current) != state.OldForwarding {
+		if _, err := s.command(ctx, "sysctl", "-w", "net.ipv4.ip_forward="+state.OldForwarding); err != nil {
+			return fmt.Errorf("restore IPv4 forwarding: %w", err)
+		}
+	}
+	if err := s.restoreGatewayRPFilter(ctx); err != nil {
+		return err
+	}
+	if err := s.removeGatewayTables(ctx); err != nil {
+		return err
+	}
+	if err := s.removeGatewayNetworkFiles(ctx); err != nil {
+		return err
+	}
+	return os.Remove(s.networkPaths().state)
+}
+
+func (s *GatewayNetworkService) stopGatewayNetworkUnits(ctx context.Context) error {
 	for _, unit := range []struct{ path, name string }{{s.networkPaths().firewallUnit, "xui-gateway-firewall.service"}, {s.networkPaths().routingUnit, "xui-gateway-routing.service"}} {
 		if _, statErr := os.Stat(unit.path); statErr == nil {
 			if err := s.commandOnly(ctx, "systemctl", "disable", "--now", unit.name); err != nil {
@@ -264,6 +337,10 @@ func (s *GatewayNetworkService) Disable(ctx context.Context) error {
 			}
 		}
 	}
+	return nil
+}
+
+func (s *GatewayNetworkService) removeGatewayPolicyRoutes(ctx context.Context) error {
 	rules, err := s.command(ctx, "ip", "-N", "-4", "rule", "show")
 	if err != nil {
 		return err
@@ -282,21 +359,10 @@ func (s *GatewayNetworkService) Disable(ctx context.Context) error {
 			return err
 		}
 	}
-	current, err := s.command(ctx, "sysctl", "-n", "net.ipv4.ip_forward")
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(current) != state.OldForwarding {
-		if _, err := s.command(ctx, "sysctl", "-w", "net.ipv4.ip_forward="+state.OldForwarding); err != nil {
-			return fmt.Errorf("restore IPv4 forwarding: %w", err)
-		}
-	}
-	if err := s.restoreGatewayRPFilter(ctx); err != nil {
-		return err
-	}
-	if err := s.removeGatewayTables(ctx); err != nil {
-		return err
-	}
+	return nil
+}
+
+func (s *GatewayNetworkService) removeGatewayNetworkFiles(ctx context.Context) error {
 	for _, path := range []string{s.networkPaths().firewallUnit, s.networkPaths().routingUnit, s.networkPaths().restoreScript, s.networkPaths().nft} {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			return err
@@ -308,7 +374,7 @@ func (s *GatewayNetworkService) Disable(ctx context.Context) error {
 	if err := os.Remove(s.networkPaths().rpFilter); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return os.Remove(s.networkPaths().state)
+	return nil
 }
 
 func (s *GatewayNetworkService) applyGatewayNetwork(ctx context.Context, cfg GatewayNetworkConfig, lanNetwork, oldForwarding string, persistState bool) (err error) {

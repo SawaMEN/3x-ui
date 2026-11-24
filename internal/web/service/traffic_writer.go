@@ -20,16 +20,30 @@ const (
 )
 
 type trafficWriteRequest struct {
-	apply func() error
-	done  chan error
+	apply     func() error
+	done      chan error
+	submitted time.Time
+}
+
+func (req *trafficWriteRequest) run() {
+	queued := time.Since(req.submitted)
+	started := time.Now()
+	err := applyTrafficWrite(req.apply)
+	elapsed := time.Since(started)
+	if queued >= 2*time.Second || elapsed >= 2*time.Second {
+		// Never log SQL arguments, client identities or credentials here.
+		logger.Warningf("slow traffic writer request: queued=%s execution=%s failed=%t", queued, elapsed, err != nil)
+	}
+	req.done <- err
 }
 
 var (
-	twMu     sync.Mutex
-	twQueue  chan *trafficWriteRequest
-	twCtx    context.Context
-	twCancel context.CancelFunc
-	twDone   chan struct{}
+	twApplyMu sync.Mutex // Also serializes writes when the worker is not running.
+	twMu      sync.Mutex
+	twQueue   chan *trafficWriteRequest
+	twCtx     context.Context
+	twCancel  context.CancelFunc
+	twDone    chan struct{}
 )
 
 // StartTrafficWriter spins up the serial writer goroutine. Safe to call again
@@ -114,12 +128,12 @@ func runTrafficWriter(ctx context.Context, queue chan *trafficWriteRequest, done
 	for {
 		select {
 		case req := <-queue:
-			req.done <- safeApply(req.apply)
+			req.run()
 		case <-ctx.Done():
 			for {
 				select {
 				case req := <-queue:
-					req.done <- safeApply(req.apply)
+					req.run()
 				default:
 					return
 				}
@@ -154,6 +168,12 @@ func runSerializedTx(fn func(tx *gorm.DB) error) error {
 	})
 }
 
+func applyTrafficWrite(fn func() error) error {
+	twApplyMu.Lock()
+	defer twApplyMu.Unlock()
+	return safeApply(fn)
+}
+
 func safeApply(fn func() error) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -165,43 +185,50 @@ func safeApply(fn func() error) (err error) {
 }
 
 func submitTrafficWrite(fn func() error) error {
-	req := &trafficWriteRequest{apply: fn, done: make(chan error, 1)}
+	req := &trafficWriteRequest{apply: fn, done: make(chan error, 1), submitted: time.Now()}
 
-	twMu.Lock()
-	queue := twQueue
-	ctx := twCtx
-	done := twDone
-	if queue == nil || ctx == nil || done == nil {
-		twMu.Unlock()
-		return safeApply(fn)
-	}
+	for {
+		twMu.Lock()
+		queue, ctx, done := twQueue, twCtx, twDone
+		if queue == nil || ctx == nil || done == nil {
+			twMu.Unlock()
+			return applyTrafficWrite(fn)
+		}
 
-	select {
-	case <-ctx.Done():
-		twMu.Unlock()
-		return safeApply(fn)
-	default:
-	}
+		if ctx.Err() != nil {
+			// Stop still owns the queue until its consumer has drained it.
+			// Wait outside twMu, then recheck whether Start installed a new
+			// generation instead of bypassing the serial writer.
+			twMu.Unlock()
+			<-done
+			twMu.Lock()
+			if twDone == done {
+				clearTrafficWriterState()
+			}
+			twMu.Unlock()
+			continue
+		}
 
-	timer := time.NewTimer(trafficWriterSubmitTimeout)
-	defer timer.Stop()
-	select {
-	case queue <- req:
-		twMu.Unlock()
-	case <-timer.C:
-		twMu.Unlock()
-		return errors.New("traffic writer queue full")
-	}
+		timer := time.NewTimer(trafficWriterSubmitTimeout)
+		select {
+		case queue <- req:
+			timer.Stop()
+			twMu.Unlock()
+		case <-timer.C:
+			twMu.Unlock()
+			return errors.New("traffic writer queue full")
+		}
 
-	select {
-	case err := <-req.done:
-		return err
-	case <-done:
 		select {
 		case err := <-req.done:
 			return err
-		default:
-			return errors.New("traffic writer stopped before write completed")
+		case <-done:
+			select {
+			case err := <-req.done:
+				return err
+			default:
+				return errors.New("traffic writer stopped before write completed")
+			}
 		}
 	}
 }

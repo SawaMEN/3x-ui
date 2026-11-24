@@ -10,6 +10,7 @@ interface FinalMaskFieldProps {
   network: string;
   protocol: string;
   showAll?: boolean;
+  nativeHysteriaQuic?: boolean;
 }
 
 const EMPTY: FinalMaskStreamSettings = { tcp: [], udp: [] };
@@ -20,6 +21,7 @@ export default function FinalMaskField({
   network,
   protocol,
   showAll,
+  nativeHysteriaQuic,
 }: FinalMaskFieldProps) {
   const [form] = Form.useForm();
   const [initial] = useState(() => value ?? EMPTY);
@@ -55,6 +57,8 @@ export default function FinalMaskField({
         protocol={protocol}
         form={form}
         showAll={showAll}
+        nativeHysteriaObfs
+        nativeHysteriaQuic={nativeHysteriaQuic}
       />
     </Form>
   );

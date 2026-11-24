@@ -189,7 +189,7 @@ func managerPreflightPorts(ctx context.Context, ib *model.Inbound) error {
 
 func managerPortListeners(ib *model.Inbound) []*model.Inbound {
 	listeners := []*model.Inbound{ib}
-	if udp := vetroffH3Listener(ib); udp != nil {
+	if udp := independentUDPListener(ib); udp != nil {
 		listeners = append(listeners, udp)
 	}
 	return listeners

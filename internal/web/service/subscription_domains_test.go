@@ -251,3 +251,15 @@ func TestManagedSubscriptionUsesConfiguredListenerPort(t *testing.T) {
 		})
 	}
 }
+
+func TestDirectSubscriptionOriginRejectsInvalidListener(t *testing.T) {
+	for _, settings := range []entity.AllSetting{
+		{SubEnable: true, SubDomain: "sub.example.com", SubPort: 65536},
+		{SubEnable: true, SubDomain: "sub.example.com", SubPort: 443, SubCertFile: "cert.pem"},
+		{SubEnable: true, SubDomain: "sub.example.com", SubPort: 2096, SubListen: " 127.0.0.1 "},
+	} {
+		if got := directSubscriptionOrigin(&settings); got != "" {
+			t.Fatalf("invalid listener published as %q", got)
+		}
+	}
+}

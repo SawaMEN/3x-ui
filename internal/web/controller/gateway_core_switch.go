@@ -42,7 +42,7 @@ func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, 
 				return
 			}
 		}
-		if snapshot.Configured && snapshot.Error == "" {
+		if snapshot.Configured && snapshot.DesiredActive && snapshot.Error == "" {
 			err = errors.Join(err, network.Enable(recovery, snapshot.Config))
 		}
 	}()
@@ -83,7 +83,7 @@ func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, 
 	if err = a.startGatewayCore(ctx, newCore); err != nil {
 		return err
 	}
-	if snapshot.Configured {
+	if snapshot.Configured && snapshot.DesiredActive {
 		err = network.Enable(ctx, snapshot.Config)
 	}
 	return err

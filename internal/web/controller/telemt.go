@@ -15,6 +15,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 )
 
 type TelemtController struct {
@@ -37,6 +38,10 @@ func NewTelemtController(g *gin.RouterGroup, settingService service.SettingServi
 	g.POST("/webproxy/availability", a.webProxyAvailability)
 	g.POST("/webproxy/preflight", a.webProxyPreflight)
 	g.POST("/webproxy/enable", a.enableWebProxy)
+	g.POST("/webproxy/managed-migration", a.applyManagedWebMigration)
+	g.GET("/webproxy/port-migration", a.portMigrationStatus)
+	g.POST("/webproxy/port-migration", a.stagePortMigration)
+	g.POST("/webproxy/port-migration/confirm", a.confirmPortMigration)
 	g.POST("/webproxy/disable", a.disableWebProxy)
 	g.GET("/config", a.config)
 	g.POST("/config", a.saveConfig)
@@ -218,6 +223,42 @@ func (a *TelemtController) webProxyPreflight(c *gin.Context) {
 	jsonObj(c, result, err)
 }
 
+func (a *TelemtController) portMigrationStatus(c *gin.Context) {
+	migration, err := service.TelemtPendingPortMigration()
+	jsonObj(c, migration, err)
+}
+
+func (a *TelemtController) stagePortMigration(c *gin.Context) {
+	var req service.TelemtPortMigrationRequest
+	if c.Query("nodeId") != "" {
+		jsonMsg(c, "Port migration must be performed on the hosting panel", errors.New("remote migration is not supported"))
+		return
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid port migration request", err)
+		return
+	}
+	coreManagementMu.Lock()
+	defer coreManagementMu.Unlock()
+	migration, err := a.service.StagePortMigration(c.Request.Context(), req)
+	if err == nil {
+		err = (&panel.PanelService{}).RestartPanel(3 * time.Second)
+	}
+	jsonObj(c, migration, err)
+}
+
+func (a *TelemtController) confirmPortMigration(c *gin.Context) {
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid port migration confirmation", err)
+		return
+	}
+	err := service.ConfirmTelemtPortMigration(req.ID)
+	jsonMsg(c, "Listener port migration confirmed", err)
+}
+
 func (a *TelemtController) enableWebProxy(c *gin.Context) {
 	var req struct {
 		Domain string `json:"domain"`
@@ -232,6 +273,10 @@ func (a *TelemtController) enableWebProxy(c *gin.Context) {
 	}
 	certFile, _ := a.settingService.GetCertFile()
 	keyFile, _ := a.settingService.GetKeyFile()
+	if len(req.VPNMigrations) > 0 {
+		coreManagementMu.Lock()
+		defer coreManagementMu.Unlock()
+	}
 	_, err := a.service.EnableWebProxy(c.Request.Context(), req.Domain, certFile, keyFile, req.TelemtWebProxyOptions)
 	if err != nil {
 		jsonMsg(c, "WEB Proxy setup failed", err)
@@ -475,4 +520,18 @@ func (a *TelemtController) remoteProxies(c *gin.Context) {
 	c.Header("Cache-Control", "private, no-store")
 	profiles, err := service.RemoteTelegramProxies(c.Request.Context())
 	jsonObj(c, profiles, err)
+}
+
+func (a *TelemtController) applyManagedWebMigration(c *gin.Context) {
+	var req service.ManagedWebMigrationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid managed WEB migration request", err)
+		return
+	}
+	coreManagementMu.Lock()
+	defer coreManagementMu.Unlock()
+	cert, _ := a.settingService.GetCertFile()
+	key, _ := a.settingService.GetKeyFile()
+	result, err := a.service.ApplyManagedWebMigration(c.Request.Context(), req, cert, key)
+	jsonObj(c, result, err)
 }

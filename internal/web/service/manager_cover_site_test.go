@@ -19,7 +19,7 @@ func TestManagerCoverSiteConfigUsesExistingCertMagic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !out.Enabled || !out.AcceptTerms || out.Email != "owner@example.org" ||
+	if out.Enabled || !out.StandalonePublicConfig(false).Enabled || !out.AcceptTerms || out.Email != "owner@example.org" ||
 		len(out.Domains) != 2 || out.Domains[0].Name != "sub.example.org" ||
 		out.Domains[1].Name != "decoy.example.org" ||
 		out.Domains[1].Mode != "sni_only" ||

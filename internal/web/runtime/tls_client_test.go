@@ -196,6 +196,7 @@ func TestHTTPClientForNodeKeepsOneClientPerNode(t *testing.T) {
 
 	verify := *node
 	verify.TlsVerifyMode = "verify"
+	verify.AllowPrivateAddress = false
 	if client, err := HTTPClientForNode(&verify, ""); err != nil || client != defaultNodeHTTPClient {
 		t.Fatalf("verify client = %p, want the shared one (%p); err=%v", client, defaultNodeHTTPClient, err)
 	}
@@ -660,5 +661,45 @@ func TestDecodeCertPin(t *testing.T) {
 				t.Fatalf("decoded bytes mismatch for %q", c.in)
 			}
 		})
+	}
+}
+
+func TestSharedNodeClientsIsolatePrivateAddressPolicy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer server.Close()
+	privateNode := &model.Node{Scheme: "http", TlsVerifyMode: "verify", AllowPrivateAddress: true}
+	publicNode := *privateNode
+	publicNode.AllowPrivateAddress = false
+	privateClient, err := HTTPClientForNode(privateNode, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicClient, err := HTTPClientForNode(&publicNode, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if privateClient.Transport == publicClient.Transport {
+		t.Fatal("different private-address policies share a connection pool")
+	}
+	defer privateClient.CloseIdleConnections()
+	defer publicClient.CloseIdleConnections()
+	resp, err := privateClient.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(netsafe.ContextWithAllowPrivate(context.Background(), true), http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response, err := publicClient.Do(req); err == nil {
+		_ = response.Body.Close()
+		t.Fatal("public-only client reached a private endpoint")
 	}
 }

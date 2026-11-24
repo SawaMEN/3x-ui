@@ -48,18 +48,20 @@ type Settings struct {
 	Context         string              `json:"context"`
 	Transports      []OpenFluxTransport `json:"transports"`
 
-	Password       string   `json:"password"`
-	Key            int      `json:"key"` // Legacy v2, migrated on save
-	Encrypt        string   `json:"encrypt"`
-	EncryptKey     string   `json:"encryptKey"`
-	MaxConn        int      `json:"maxConn"`
-	ConnectTimeout int      `json:"connectTimeout"`
-	Forward        string   `json:"forward"`
-	Congestion     string   `json:"congestion"`
-	Hostname       string   `json:"hostname"`
-	Certificate    string   `json:"certificate"`
-	PrivateKey     string   `json:"privateKey"`
-	Clients        []Client `json:"clients"`
+	Password            string   `json:"password"`
+	Key                 int      `json:"key"` // Legacy v2, migrated on save
+	Encrypt             string   `json:"encrypt"`
+	EncryptKey          string   `json:"encryptKey"`
+	MaxConn             int      `json:"maxConn"`
+	ConnectTimeout      int      `json:"connectTimeout"`
+	Forward             string   `json:"forward"`
+	Congestion          string   `json:"congestion"`
+	Hostname            string   `json:"hostname"`
+	TrustTunnelTCPOnly  bool     `json:"trustTunnelTcpOnly,omitempty"`
+	TrustTunnelQUICBind string   `json:"trustTunnelQuicBind,omitempty"`
+	Certificate         string   `json:"certificate"`
+	PrivateKey          string   `json:"privateKey"`
+	Clients             []Client `json:"clients"`
 }
 
 type Instance struct {
@@ -71,6 +73,8 @@ type Instance struct {
 	Listen         string
 	Port           int
 	Settings       Settings
+	// Runtime projection of the migration-owned QUIC bind.
+	TrustTunnelQUICBind string `json:",omitempty"`
 }
 
 func FromInbound(ib *model.Inbound) (Instance, error) {
@@ -87,10 +91,18 @@ func FromInbound(ib *model.Inbound) (Instance, error) {
 		return Instance{}, fmt.Errorf("%s settings: %w", ib.Protocol, err)
 	}
 	inst := Instance{Revision: sidecartraffic.RevisionOf(ib), ClientRevision: ib.RuntimeClientRevision, ID: ib.Id, Tag: ib.Tag, Protocol: ib.Protocol, Listen: ib.Listen, Port: ib.Port, Settings: settings}
+	if ib.Protocol == model.TrustTunnel {
+		inst.TrustTunnelQUICBind = settings.TrustTunnelQUICBind
+	}
 	return inst, inst.Validate()
 }
 
 func (inst Instance) Validate() error {
+	if inst.TrustTunnelQUICBind != "" {
+		if _, err := trustTunnelOriginalInstance(inst); err != nil {
+			return err
+		}
+	}
 	if inst.Protocol == model.VetroffProxy {
 		return validateVetroff(inst)
 	}

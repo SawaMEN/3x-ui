@@ -3546,6 +3546,12 @@
           "shareAddrStrategy": {
             "type": "string"
           },
+          "sharedIngressError": {
+            "type": "string"
+          },
+          "sharedIngressSni": {
+            "type": "string"
+          },
           "ssMethod": {
             "type": "string"
           },
@@ -3564,6 +3570,9 @@
               }
             ],
             "nullable": true
+          },
+          "udp443": {
+            "type": "boolean"
           },
           "wgDns": {
             "type": "string"
@@ -9483,10 +9492,13 @@
                       "security": "",
                       "shareAddr": "",
                       "shareAddrStrategy": "",
+                      "sharedIngressError": "",
+                      "sharedIngressSni": "",
                       "ssMethod": "",
                       "tag": "in-443-tcp",
                       "tlsFlowCapable": true,
                       "tuicServer": null,
+                      "udp443": false,
                       "wgDns": "",
                       "wgMtu": 0,
                       "wgPublicKey": ""
@@ -24075,6 +24087,176 @@
                 "frontend": "nginx",
                 "carrier": "https",
                 "carriers": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/port-migration": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Read the pending panel and subscription listener migration, if any.",
+        "operationId": "get_panel_api_telemt_webproxy_port_migration",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Stage listener port changes and restart the hosting panel.",
+        "operationId": "post_panel_api_telemt_webproxy_port_migration",
+        "description": "Requires the current port values from the setup preview. Unconfirmed changes are rolled back after the confirmation window.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "panelPort": 18080,
+                "subscriptionPort": 0,
+                "expectedPanelPort": 443,
+                "expectedSubscriptionPort": 2096
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/port-migration/confirm": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Confirm access after the listener port migration.",
+        "operationId": "post_panel_api_telemt_webproxy_port_migration_confirm",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "id": "<migration-id>"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/managed-migration": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Apply a saved local MTProto WEB migration draft.",
+        "operationId": "post_panel_api_telemt_webproxy_managed_migration",
+        "description": "Requires the saved draft revision and all confirmed VPN moves from the current preflight. The server restores the previous listeners on failure.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "inboundId": 12,
+                "draftRevision": "<draft-revision>",
+                "vpnMigrations": [
+                  {
+                    "id": 7,
+                    "newPort": 18200,
+                    "revision": "<vpn-revision>"
+                  }
+                ]
               }
             }
           }

@@ -463,3 +463,44 @@ esac
 		t.Fatal("paused boot must restore only the forwarding guard, not interception", delta)
 	}
 }
+
+func TestGatewayDisableCleansOrphanedNetwork(t *testing.T) {
+	s, h, cfg := newGatewayTestHost(t)
+	ctx := context.Background()
+	if err := s.Enable(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(s.paths.state); err != nil {
+		t.Fatal(err)
+	}
+	if status := s.Status(ctx); !status.Configured || status.Error == "" {
+		t.Fatalf("orphaned gateway hidden: %+v", status)
+	}
+	if err := s.Suspend(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Disable(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if h.firewall != "" || h.rules != 0 || h.route != "" || h.enabled {
+		t.Fatalf("orphaned gateway survived disable: %+v", h)
+	}
+	if h.sys["net.ipv4.ip_forward"] != "1" {
+		t.Fatal("unknown forwarding baseline must not be guessed")
+	}
+	if s.Status(ctx).Configured {
+		t.Fatal("cleaned orphan remains configured")
+	}
+}
+
+func TestGatewayDisableDoesNotTouchForeignRoutesWithoutOwnership(t *testing.T) {
+	s, h, _ := newGatewayTestHost(t)
+	h.foreignRule = "32760: from all lookup 100\n"
+	h.route = "local default dev lo scope host\n"
+	if err := s.Disable(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.mutations != 0 || h.route == "" {
+		t.Fatal("disable modified unowned routing")
+	}
+}

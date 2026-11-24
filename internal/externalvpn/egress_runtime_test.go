@@ -3,6 +3,7 @@ package externalvpn
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	stdbinary "encoding/binary"
 	"io"
@@ -16,14 +17,38 @@ import (
 	"testing"
 	"time"
 
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 )
 
 func TestTrustTunnelPayloadUsesCoreSOCKS(t *testing.T) {
+	for _, split := range []bool{false, true} {
+		name := "combined"
+		if split {
+			name = "split"
+		}
+		t.Run(name, func(t *testing.T) { testTrustTunnelPayloadUsesCoreSOCKS(t, split) })
+	}
+}
+
+func testTrustTunnelPayloadUsesCoreSOCKS(t *testing.T, split bool) {
 	endpoint := os.Getenv("TRUSTTUNNEL_TEST_BINARY")
 	if endpoint == "" {
 		t.Skip("set TRUSTTUNNEL_TEST_BINARY for the official endpoint test")
+	}
+	if split {
+		// Official upstream 1.1.0 (and 1.3.1) still binds TCP for pings
+		// even in QUIC-only mode. Do not mistake a config table for an
+		// independent UDP listener. A patched endpoint must pass the probe.
+		if err := probeTrustTunnelQUICOnly(context.Background(), endpoint); err != nil {
+			if os.Getenv("TRUSTTUNNEL_REQUIRE_SPLIT") == "1" {
+				t.Fatalf("required independent QUIC endpoint is unavailable: %v", err)
+			}
+			t.Skipf("independent QUIC listener unavailable; production migration is blocked: %v", err)
+		}
 	}
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
@@ -37,7 +62,7 @@ func TestTrustTunnelPayloadUsesCoreSOCKS(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer udp.Close()
-	seen := make(chan byte, 4)
+	seen := make(chan byte, 16)
 	go func() {
 		b := make([]byte, 65535)
 		for {
@@ -95,15 +120,27 @@ func TestTrustTunnelPayloadUsesCoreSOCKS(t *testing.T) {
 			}()
 		}
 	}()
-	freePort := func() int {
-		l, e := net.Listen("tcp", "127.0.0.1:0")
-		if e != nil {
-			t.Fatal(e)
+	// Hold all TCP reservations simultaneously to avoid reusing an ephemeral
+	// port between listener and metrics allocations.
+	reserved := make([]net.Listener, 0, 4)
+	for range 4 {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
 		}
+		reserved = append(reserved, l)
 		defer l.Close()
-		return l.Addr().(*net.TCPAddr).Port
 	}
-	port, metricsPort := freePort(), freePort()
+	port := reserved[0].Addr().(*net.TCPAddr).Port
+	metricsPort := reserved[1].Addr().(*net.TCPAddr).Port
+	quicPort := reserved[2].Addr().(*net.TCPAddr).Port
+	quicMetrics := reserved[3].Addr().String()
+	// A TCP reservation cannot protect UDP; hold the UDP address too.
+	quicReservation, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: quicPort})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer quicReservation.Close()
 	inst := Instance{ID: 998, Protocol: model.TrustTunnel, Listen: "127.0.0.1", Port: port, Settings: Settings{Hostname: "example.test", Clients: []Client{{Email: "alice", Password: "secret", Enable: true}}}}
 	args, err := files(inst, net.JoinHostPort("127.0.0.1", fmtPort(metricsPort)))
 	if err != nil {
@@ -123,7 +160,57 @@ func TestTrustTunnelPayloadUsesCoreSOCKS(t *testing.T) {
 		t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait(); log.Close() })
 		return log
 	}
-	start(endpoint, args, "endpoint.log")
+	if split {
+		original := inst
+		original.Port = quicPort
+		plan, err := planTrustTunnelSplit(original, port, net.JoinHostPort("127.0.0.1", fmtPort(metricsPort)), quicMetrics)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tcpPath := filepath.Join(filepath.Dir(plan.HostsPath), "vpn-tcp.toml")
+		quicPath := filepath.Join(filepath.Dir(plan.HostsPath), "vpn-quic.toml")
+		if err := writePrivate(tcpPath, []byte(plan.TCPConfig)); err != nil {
+			t.Fatal(err)
+		}
+		if err := writePrivate(quicPath, []byte(plan.QUICConfig)); err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range reserved {
+			l.Close()
+		}
+		quicReservation.Close()
+		start(endpoint, []string{tcpPath, plan.HostsPath}, "endpoint.log")
+		start(endpoint, []string{quicPath, plan.HostsPath}, "quic.log")
+		deadline := time.Now().Add(8 * time.Second)
+		for {
+			_, err := readTrustTunnelMetrics(quicMetrics)
+			if err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				log, _ := os.ReadFile(filepath.Join(dir, "quic.log"))
+				t.Fatalf("QUIC-only endpoint metrics not ready: %s", log)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		// The QUIC-only process must bind UDP, never TCP, on its public port.
+		if conn, err := net.DialTimeout("tcp", plan.QUICBind, time.Second); err == nil {
+			conn.Close()
+			t.Fatal("QUIC-only endpoint unexpectedly listens on TCP")
+		}
+		host, _, _ := net.SplitHostPort(plan.QUICBind)
+		probe, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP(host), Port: quicPort})
+		if err == nil {
+			probe.Close()
+			t.Fatal("QUIC-only endpoint did not reserve UDP")
+		}
+	} else {
+		for _, l := range reserved {
+			l.Close()
+		}
+		quicReservation.Close()
+		start(endpoint, args, "endpoint.log")
+	}
 	address := net.JoinHostPort("127.0.0.1", fmtPort(port))
 	deadline := time.Now().Add(5 * time.Second)
 	for {
@@ -211,6 +298,21 @@ func TestTrustTunnelPayloadUsesCoreSOCKS(t *testing.T) {
 		})
 	}
 
+	// Verify a real HTTP/3 connection using the official endpoint, its
+	// generated certificate, proxy authentication and a SOCKS echo payload.
+	// No external target is contacted: the fixture's SOCKS server echoes.
+	h3Port := port
+	if split {
+		h3Port = quicPort
+	}
+	t.Run("authenticated-quic", func(t *testing.T) {
+		before := len(seen)
+		testTrustTunnelHTTP3Payload(t, inst, h3Port)
+		if len(seen) != before+1 {
+			t.Fatal("authenticated QUIC CONNECT did not reach SOCKS exactly once")
+		}
+	})
+
 	// Both payload types must have reached the configured SOCKS router.
 	var tcp, datagrams bool
 	for len(seen) > 0 {
@@ -227,3 +329,76 @@ func TestTrustTunnelPayloadUsesCoreSOCKS(t *testing.T) {
 }
 
 func fmtPort(port int) string { return strconv.Itoa(port) }
+
+func testTrustTunnelHTTP3Payload(t *testing.T, inst Instance, port int) {
+	t.Helper()
+	// Trust only the fixture endpoint's actual certificate; never disable
+	// certificate checks in the HTTP/3 interoperability probe.
+	certPath := filepath.Join(directory(), strconv.Itoa(inst.ID), "cert.pem")
+	pemBytes, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(pemBytes) {
+		t.Fatal("invalid TrustTunnel fixture certificate")
+	}
+	address := net.JoinHostPort("127.0.0.1", fmtPort(port))
+	transport := &http3.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: inst.Settings.Hostname},
+		Dial: func(ctx context.Context, _ string, tlsConfig *tls.Config, config *quic.Config) (*quic.Conn, error) {
+			return quic.DialAddr(ctx, address, tlsConfig, config)
+		},
+	}
+	defer transport.Close()
+	request := func(ctx context.Context, password string, body io.Reader) *http.Request {
+		const authority = "8.8.8.8:53"
+		req := (&http.Request{
+			Method: http.MethodConnect,
+			URL:    &url.URL{Scheme: "https", Host: authority},
+			Host:   authority,
+			Header: make(http.Header),
+		}).WithContext(ctx)
+		if body != nil {
+			req.Body = io.NopCloser(body)
+			req.ContentLength = -1
+		}
+		req.Header.Set("Proxy-Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("alice:"+password)))
+		req.Header.Set("User-Agent", "linux panel-egress-test")
+		return req
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	bad, err := transport.RoundTrip(request(ctx, "incorrect", nil))
+	if err != nil {
+		t.Fatalf("QUIC authentication rejection probe: %v", err)
+	}
+	bad.Body.Close()
+	if bad.StatusCode != http.StatusProxyAuthRequired {
+		t.Fatalf("invalid QUIC credentials returned HTTP %d, want 407", bad.StatusCode)
+	}
+	reader, writer := io.Pipe()
+	defer reader.Close()
+	defer writer.Close()
+	response, err := transport.RoundTrip(request(ctx, "secret", reader))
+	if err != nil {
+		t.Fatalf("authenticated QUIC CONNECT: %v", err)
+	}
+	defer response.Body.Close()
+	if response.ProtoMajor != 3 || response.StatusCode != http.StatusOK {
+		t.Fatalf("expected HTTP/3 CONNECT success, got %s %s", response.Proto, response.Status)
+	}
+	message := []byte("authenticated-quic-payload")
+	written := make(chan error, 1)
+	go func() {
+		_, err := writer.Write(message)
+		written <- err
+	}()
+	got := make([]byte, len(message))
+	if _, err := io.ReadFull(response.Body, got); err != nil || string(got) != string(message) {
+		t.Fatalf("QUIC echo: %q %v", got, err)
+	}
+	if err := <-written; err != nil {
+		t.Fatal(err)
+	}
+}

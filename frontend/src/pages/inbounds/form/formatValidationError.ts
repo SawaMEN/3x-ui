@@ -16,7 +16,10 @@ interface ClientLike {
  */
 export function formatInboundIssue(issue: IssueLike, values: unknown, t: TFunction): string {
   const path = Array.isArray(issue?.path) ? issue.path : [];
-  const reason = t(issue?.message, { defaultValue: issue?.message });
+  const reason =
+    issue?.message === 'Invalid input'
+      ? t('pages.inbounds.toasts.invalidInput')
+      : t(issue?.message, { defaultValue: issue?.message });
 
   if (path[0] === 'streamSettings' && path[1] === 'tlsSettings' && path[2] === 'certificates') {
     return typeof path[3] === 'number'

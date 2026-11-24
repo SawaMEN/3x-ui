@@ -42,6 +42,7 @@ func TestManagerKeepsNativeProtocolLinks(t *testing.T) {
 		}
 		sub.Published = append(sub.Published, model.ManagerEntry{Mode: "existing", ActiveInboundID: ib.Id, Label: "Office " + string(proto)})
 	}
+	sub.Published = append(sub.Published, model.ManagerEntry{CustomLink: "https://t.me/proxy?server=telegram.example&port=443&secret=ee1234"})
 	if err := db.Create(sub).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -51,10 +52,13 @@ func TestManagerKeepsNativeProtocolLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, prefix := range []string{"vless://", "anytls://", "tuic://", "tg://proxy?", "mierus://", "vetroff://"} {
+	for _, prefix := range []string{"vless://", "anytls://", "tuic://", "mierus://", "vetroff://"} {
 		if !strings.Contains(string(data), prefix) {
 			t.Fatalf("missing %s: %s", prefix, data)
 		}
+	}
+	if strings.Contains(string(data), "tg://") || strings.Contains(string(data), "t.me/proxy") {
+		t.Fatal("manager export included Telegram Proxy")
 	}
 	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("response %d", w.Code)
@@ -79,6 +83,9 @@ func TestManagerKeepsNativeProtocolLinks(t *testing.T) {
 			links, err := base64.StdEncoding.DecodeString(response.Body.String())
 			if err != nil {
 				t.Fatal(err)
+			}
+			if strings.Contains(string(links), "tg://") || strings.Contains(string(links), "t.me/proxy") {
+				t.Fatal("manager fallback included Telegram Proxy")
 			}
 			for _, scheme := range []string{"vless://", "anytls://", "vetroff://"} {
 				if !strings.Contains(string(links), scheme) {

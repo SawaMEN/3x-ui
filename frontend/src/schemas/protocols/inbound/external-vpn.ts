@@ -28,6 +28,8 @@ export const TrustTunnelInboundSettingsSchema = z
         message: 'pages.inbounds.form.trusttunnelHostnameInvalid',
       })
       .default('trusttunnel.local'),
+    trustTunnelTcpOnly: z.boolean().default(false),
+    trustTunnelQuicBind: z.string().optional(),
     certificate: z.string().default(''),
     privateKey: z.string().default(''),
     clients: z.array(NaiveClientSchema).default([]),

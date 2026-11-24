@@ -19,6 +19,9 @@ func (s *InboundService) disableInvalidInbounds(tx *gorm.DB, mutationBatch *traf
 		Find(&inbounds).Error; err != nil {
 		return false, 0, err
 	}
+	if len(inbounds) == 0 {
+		return false, 0, nil
+	}
 	for i := range inbounds {
 		mutationBatch.localPlans = append(mutationBatch.localPlans, trafficLocalApplyPlan{
 			action: trafficDisableInbound, inbound: inbounds[i],
@@ -66,11 +69,7 @@ var depletedClientsCondLocal = `(` + database.TrafficQuotaExpr("up", "down", "to
 func depletedCond(tx *gorm.DB) (string, []any) {
 	now := tx.NowFunc()
 	freshSince := globalTrafficFreshSince(now)
-	var probe int64
-	err := tx.Model(&model.ClientGlobalTraffic{}).
-		Where("updated_at >= ?", freshSince).
-		Limit(1).Count(&probe).Error
-	if err == nil && probe > 0 {
+	if hasFreshGlobalTraffic(tx, freshSince) {
 		return depletedClientsCond, []any{now.UnixMilli(), freshSince}
 	}
 	return depletedClientsCondLocal, []any{now.UnixMilli()}

@@ -67,6 +67,9 @@ func TestInboundTransports(t *testing.T) {
 		settings       string
 		want           transportBits
 	}{
+		{"TrustTunnel legacy", model.TrustTunnel, "", "{}", transportTCP | transportUDP},
+		{"TrustTunnel TCP only", model.TrustTunnel, "", `{"trustTunnelTcpOnly":true}`, transportTCP},
+		{"TrustTunnel invalid settings", model.TrustTunnel, "", `{"trustTunnelTcpOnly":"true"}`, transportTCP | transportUDP},
 		{"snell v5 TCP", model.Snell, ``, `{"version":5}`, transportTCP},
 		{"snell v5 QUIC uses both", model.Snell, ``, `{"version":5,"quicProxy":true}`, transportTCP | transportUDP},
 		{"snell v6 TCP", model.Snell, ``, `{"version":6}`, transportTCP},

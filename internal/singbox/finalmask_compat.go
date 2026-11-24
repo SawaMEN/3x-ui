@@ -38,8 +38,14 @@ func translateFinalMask(out, stream map[string]any, protocol string, inbound boo
 		settings := rawObject(entry, "settings")
 		switch kind {
 		case "salamander":
-			if protocol != "hysteria2" || out["obfs"] != nil {
-				return fmt.Errorf("%s: conflicting or unsupported obfuscation", label)
+			if protocol != "hysteria2" {
+				return fmt.Errorf("%s: unsupported obfuscation for %s", label, protocol)
+			}
+			// The editor historically retained a default legacy Salamander
+			// mask alongside explicit native obfs. Native settings are
+			// authoritative, matching the subscription and URI exporters.
+			if out["obfs"] != nil {
+				continue
 			}
 			password := rawString(settings, "password")
 			if password == "" {

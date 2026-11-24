@@ -1,5 +1,43 @@
 const DAY_MS = 86_400_000;
 
+type ProfileLinks = {
+  links?: string[];
+  telegramRemarks?: Record<string, string>;
+  subUrl?: string;
+  subJsonUrl?: string;
+  subClashUrl?: string;
+  subFormatMode?: string;
+};
+
+export function sameProfileLinks(left: ProfileLinks, right: ProfileLinks): boolean {
+  if (
+    left.subUrl !== right.subUrl ||
+    left.subJsonUrl !== right.subJsonUrl ||
+    left.subClashUrl !== right.subClashUrl ||
+    left.subFormatMode !== right.subFormatMode
+  )
+    return false;
+  const a = left.links ?? [];
+  const b = right.links ?? [];
+  if (a.length !== b.length || a.some((link, i) => link !== b[i])) return false;
+  const remarks = left.telegramRemarks ?? {};
+  const next = right.telegramRemarks ?? {};
+  return (
+    Object.keys(remarks).length === Object.keys(next).length &&
+    Object.keys(remarks).every((key) => Object.hasOwn(next, key) && remarks[key] === next[key])
+  );
+}
+
+export function parseSubscriptionURL(raw: string, base?: string): URL | undefined {
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw, base);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function buildTelemtEndpoint(pageURL: string, subID: string): string {
   if (!subID) return '';
   try {
@@ -118,7 +156,12 @@ const AMNEZIAWG_DOWNLOADS: Record<AppPlatform, AppDownload[]> = {
 };
 
 export function buildSubApps(platform: AppPlatform, subUrl: string, profileName: string) {
-  const hiddifyImport = `hiddify://import/${subUrl}#${encodeURIComponent(profileName)}`;
+  const hiddifyUrl = parseSubscriptionURL(subUrl);
+  if (hiddifyUrl) {
+    hiddifyUrl.searchParams.delete('format');
+    hiddifyUrl.hash = '';
+  }
+  const hiddifyImport = `hiddify://import/?url=${encodeURIComponent(hiddifyUrl?.href ?? subUrl)}#${encodeURIComponent(profileName)}`;
 
   return [
     { name: 'Hiddify', url: hiddifyImport, downloads: HIDDIFY_DOWNLOADS[platform] },

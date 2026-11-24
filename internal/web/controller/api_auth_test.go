@@ -453,3 +453,28 @@ func TestPanelUpdateStatusRequiresNodeAdminScope(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckAPIAuthRejectsMultipleAuthorizationHeaders(t *testing.T) {
+	engine, _ := newAPIAuthTestEngine(t)
+	for _, scope := range []string{model.ApiScopeAdmin, model.ApiScopeMonitor} {
+		if err := database.GetDB().Create(&model.ApiToken{
+			Name: scope, Token: crypto.HashTokenSHA256(scope), Scope: scope, Enabled: true,
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, values := range [][]string{
+		{model.ApiScopeAdmin, model.ApiScopeMonitor},
+		{model.ApiScopeMonitor, model.ApiScopeAdmin},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/panel/api/server/status", nil)
+		for _, value := range values {
+			req.Header.Add("Authorization", "Bearer "+value)
+		}
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("ambiguous authorization returned status %d", rec.Code)
+		}
+	}
+}

@@ -48,7 +48,8 @@ func CSRFMiddleware(clientIP func(*gin.Context) string) gin.HandlerFunc {
 			return
 		}
 		if !session.ValidateCSRFToken(c) {
-			logger.Warningf("CSRF validation failed, request rejected: method=%s path=%s IP=%s", c.Request.Method, c.Request.URL.Path, clientIP(c))
+			logger.Warningf("CSRF validation failed, request rejected: method=%s route=%s IP=%s", c.Request.Method, RequestRoute(c), clientIP(c))
+			MarkRequestFailureLogged(c)
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}

@@ -1490,6 +1490,7 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears 
 			return err
 		}
 		_, managedSubscriptionOrigin = configuredSubscriptionDomain(cfg)
+		managedSubscriptionOrigin = managedSubscriptionOrigin || directSubscriptionOrigin(allSetting) != "" || telemtIngressSubscriptionOrigin() != ""
 	}
 	if err := validateSubscriptionDomains(allSetting, managedSubscriptionOrigin); err != nil {
 		return err
@@ -1527,6 +1528,11 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears 
 
 	db := database.GetDB()
 	return db.Transaction(func(tx *gorm.DB) error {
+		if migration, err := loadTelemtPortMigration(tx); err != nil {
+			return err
+		} else if migration != nil {
+			return errors.New("confirm or wait for the pending WEB listener port migration before saving settings")
+		}
 		var existing []*model.Setting
 		if err := tx.Find(&existing).Error; err != nil {
 			return err

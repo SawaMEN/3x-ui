@@ -655,3 +655,160 @@ func TestCertificatePreparationFailureIsReported(t *testing.T) {
 		t.Fatalf("stale certificate preparation error: %+v", cert)
 	}
 }
+
+func TestPanelListenerSharesHostnameWithCoverSite(t *testing.T) {
+	const host = "panel.example.org"
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>cover</html>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{runtime: &frontRuntime{
+		cfg: DomainFrontConfig{Domains: []DomainFrontDomain{{Name: host, Mode: "sni_only", Enabled: true}}},
+		backend: Backend{
+			PanelHost: host, PanelPath: "/private/",
+			DecoyDirectories: map[string]string{host: dir},
+		},
+	}}
+	panel := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "panel") })
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{"https://" + host + ":8443/", "<html>cover</html>"},
+		{"https://" + host + ":8443/private/panel", "panel"},
+		{"https://" + host + "/sub/id", ""},
+		{"https://another.example.org/", ""},
+	} {
+		response := httptest.NewRecorder()
+		handled := manager.ServePanelCover(response, httptest.NewRequest(http.MethodGet, tc.path, nil), panel)
+		if handled != (tc.want != "") || response.Body.String() != tc.want {
+			t.Fatalf("%s handled=%t, body=%q", tc.path, handled, response.Body.String())
+		}
+		if tc.want == "<html>cover</html>" && !strings.Contains(response.Header().Get("Content-Security-Policy"), "sandbox allow-scripts") {
+			t.Fatal("the panel origin must sandbox the cover site")
+		}
+	}
+}
+
+func TestCoverSiteKeepsExistingRoutes(t *testing.T) {
+	const host = "site.example.org"
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>cover</html>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	vpn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "vpn")
+	}))
+	defer vpn.Close()
+	d := DomainFrontDomain{Name: host, Mode: "direct", Enabled: true, SiteCatalog: "builtin", SiteTemplate: "notes"}
+	r := &frontRuntime{cfg: DomainFrontConfig{Domains: []DomainFrontDomain{d}}, backend: Backend{
+		PanelHost: host, PanelPath: "/private/",
+		SubscriptionHandler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, "subscription")
+		}),
+		SubscriptionPaths: []string{"/sub/"},
+		ProtectedPaths:    []string{"/legacy/"},
+		Routes:            map[string][]Route{host: {{Path: "/vpn", Target: vpn.URL}}},
+		DecoyDirectories:  map[string]string{host: dir},
+		RedirectURL:       "https://elsewhere.example.org/",
+	}}
+	h, err := r.handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		method, path string
+		status       int
+		body         string
+	}{
+		{"GET", "/", 200, "<html>cover</html>"},
+		{"POST", "/", 404, "404 page not found\n"},
+		{"GET", "/sub/id", 200, "subscription"},
+		{"GET", "/vpn/id", 200, "vpn"},
+		{"GET", "/private/panel", 404, "404 page not found\n"},
+		{"GET", "/legacy/id", 404, "404 page not found\n"},
+		{http.MethodGet, "/missing", http.StatusNotFound, "404 page not found\n"},
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(tc.method, "https://"+host+tc.path, nil))
+		if w.Code != tc.status || w.Body.String() != tc.body {
+			t.Fatalf("%s %s: %d %q", tc.method, tc.path, w.Code, w.Body.String())
+		}
+	}
+	r.cfg.PublicPort = 443
+	w := httptest.NewRecorder()
+	r.redirectHTTPS(w, httptest.NewRequest(http.MethodGet, "http://"+host+"/", nil))
+	if w.Code != http.StatusPermanentRedirect || w.Header().Get("Location") != "https://"+host+"/" {
+		t.Fatalf("cover HTTP redirect: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	manager := &Manager{runtime: r}
+	panel := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "panel") })
+	w = httptest.NewRecorder()
+	if !manager.ServePanelCover(w, httptest.NewRequest(http.MethodGet, "https://"+host+"/private/panel", nil), panel) || w.Body.String() != "panel" {
+		t.Fatal("panel route was not preserved")
+	}
+}
+
+// A site may not claim a root subscription path or a transport resource.
+func TestCoverSiteRejectsOccupiedPaths(t *testing.T) {
+	d := DomainFrontDomain{Name: "cover.example.org", Mode: "direct", Enabled: true, SiteCatalog: "builtin", SiteTemplate: "notes"}
+	for _, path := range []string{"/", "/site.js", "/index.html"} {
+		r := &frontRuntime{backend: Backend{
+			SubscriptionPaths: []string{path},
+			DecoyDirectories:  map[string]string{d.Name: t.TempDir()},
+		}}
+		if _, err := r.domainHandler(d); err == nil || !strings.Contains(err.Error(), "conflicts") {
+			t.Fatalf("occupied path %s accepted: %v", path, err)
+		}
+	}
+}
+
+func TestStandalonePublicSiteDoesNotForward(t *testing.T) {
+	const host = "standalone.example.org"
+	const redirectHost = "redirect.example.org"
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>standalone</html>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := DomainFrontDomain{Name: host, Mode: "direct", Enabled: true, SiteCatalog: "builtin", SiteTemplate: "notes"}
+	cfg := DomainFrontConfig{Domains: []DomainFrontDomain{
+		d,
+		{Name: redirectHost, Mode: "direct", Enabled: true},
+	}}
+	effective := cfg.StandalonePublicConfig(false)
+	if cfg.Enabled || len(cfg.Domains) != 2 || !effective.Enabled || !effective.PublicOnly || len(effective.Domains) != 1 {
+		t.Fatalf("stored=%+v runtime=%+v", cfg, effective)
+	}
+	r := &frontRuntime{cfg: cfg.StandalonePublicConfig(true), backend: Backend{
+		SubscriptionPaths: []string{"/sub/"},
+		Routes: map[string][]Route{
+			host:         {{Path: "/vpn", Target: "http://127.0.0.1:1"}},
+			redirectHost: {{Path: "/vpn", Target: "http://127.0.0.1:1"}},
+		},
+		DecoyDirectories: map[string]string{host: dir},
+		RedirectURL:      "https://elsewhere.example.org/",
+	}}
+	h, err := r.handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		host string
+		path string
+		want int
+	}{
+		{host, "/", http.StatusOK},
+		{host, "/sub/id", http.StatusNotFound},
+		{host, "/vpn/id", http.StatusNotFound},
+		{host, "/missing", http.StatusNotFound},
+		{redirectHost, "/", http.StatusFound},
+		{redirectHost, "/vpn/id", http.StatusNotFound},
+		{redirectHost, "/sub/id", http.StatusNotFound},
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://"+tc.host+tc.path, nil))
+		if w.Code != tc.want || tc.want != http.StatusFound && w.Header().Get("Location") != "" {
+			t.Fatalf("%s%s: %d %q", tc.host, tc.path, w.Code, w.Header().Get("Location"))
+		}
+	}
+}

@@ -1,3 +1,4 @@
+import { selectHysteriaObfs } from '@/lib/xray/hysteria-obfs';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Collapse, Form, Input, InputNumber, Select, Switch } from 'antd';
@@ -105,12 +106,7 @@ export default function HysteriaFields() {
                         onChange={(type) =>
                           set(
                             'streamSettings.hysteriaSettings.obfs',
-                            type
-                              ? {
-                                  type,
-                                  password: typeof obfs === 'object' ? (obfs?.password ?? '') : '',
-                                }
-                              : undefined,
+                            selectHysteriaObfs(type, obfs, true),
                           )
                         }
                       />

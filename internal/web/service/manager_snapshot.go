@@ -1,6 +1,8 @@
 package service
 
 import (
+	"cmp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -47,25 +49,35 @@ func (s *ManagerService) Snapshot(owner, page int, state, kind string, options .
 	db := database.GetDB()
 	v := ManagerSnapshot{Subscriptions: []model.ManagerSubscription{}, Relays: []model.ManagerRelay{}, Domains: []model.ManagerDomain{}, Operations: []model.ManagerOperation{}, ActiveOperations: []model.ManagerOperation{}, Clients: map[string]ManagerClientInfo{}}
 	query := db.Model(&model.ManagerSubscription{}).Where("user_id = ?", owner)
-	if err := db.Model(&model.ManagerSubscription{}).Where("user_id = ?", owner).Count(&v.AllSubscriptionsTotal).Error; err != nil {
+	var totals struct {
+		AllSubscriptionsTotal int64
+		AutoRotateTotal       int64
+	}
+	if err := db.Model(&model.ManagerSubscription{}).Where("user_id = ?", owner).
+		Select("COUNT(*) AS all_subscriptions_total, COALESCE(SUM(CASE WHEN enabled = TRUE AND auto_rotate = TRUE THEN 1 ELSE 0 END), 0) AS auto_rotate_total").
+		Scan(&totals).Error; err != nil {
 		return v, err
 	}
+	v.AllSubscriptionsTotal, v.AutoRotateTotal = totals.AllSubscriptionsTotal, totals.AutoRotateTotal
+	v.SubscriptionTotal = v.AllSubscriptionsTotal
 	v.SubscriptionPage, v.PageSize = 1, 25
 	if len(options) > 0 {
 		v.SubscriptionPage = max(1, options[0].Page)
 		if needle := strings.TrimSpace(options[0].Search); needle != "" {
 			parts, args := textColumnSearchConditions([]string{"name", "note"}, caseVariants(needle))
 			query = query.Where("("+strings.Join(parts, " OR ")+")", args...)
+			if err := query.Count(&v.SubscriptionTotal).Error; err != nil {
+				return v, err
+			}
 		}
 	}
-	if err := query.Count(&v.SubscriptionTotal).Error; err != nil {
-		return v, err
-	}
-	if len(options) > 0 {
-		query = query.Offset((v.SubscriptionPage - 1) * v.PageSize).Limit(v.PageSize)
-	}
-	if err := query.Order("id DESC").Find(&v.Subscriptions).Error; err != nil {
-		return v, err
+	if len(options) == 0 || managerPageExists(v.SubscriptionPage, v.PageSize, v.SubscriptionTotal) {
+		if len(options) > 0 {
+			query = query.Offset((v.SubscriptionPage - 1) * v.PageSize).Limit(v.PageSize)
+		}
+		if err := query.Order("id DESC").Find(&v.Subscriptions).Error; err != nil {
+			return v, err
+		}
 	}
 	if len(options) > 0 && options[0].Compact {
 		for i := range v.Subscriptions {
@@ -80,9 +92,6 @@ func (s *ManagerService) Snapshot(owner, page int, state, kind string, options .
 			}
 		}
 	}
-	if err := db.Model(&model.ManagerSubscription{}).Where("user_id = ? AND enabled = ? AND auto_rotate = ?", owner, true, true).Count(&v.AutoRotateTotal).Error; err != nil {
-		return v, err
-	}
 	if err := db.Model(&model.ManagerOperation{}).Where("user_id = ? AND state IN ?", owner, []string{"queued", "running"}).Count(&v.PendingOperations).Error; err != nil {
 		return v, err
 	}
@@ -93,9 +102,14 @@ func (s *ManagerService) Snapshot(owner, page int, state, kind string, options .
 		for _, sub := range v.Subscriptions {
 			subscriptionIDs = append(subscriptionIDs, sub.ID)
 		}
-		if err := db.Where("user_id = ? AND subscription_id IN ? AND state IN ?", owner, subscriptionIDs, []string{"queued", "running"}).Order("id DESC").Find(&v.ActiveOperations).Error; err != nil {
-			return v, err
+		for _, batch := range chunkInts(subscriptionIDs, sqlInChunk) {
+			var operations []model.ManagerOperation
+			if err := db.Where("user_id = ? AND subscription_id IN ? AND state IN ?", owner, batch, []string{"queued", "running"}).Order("id DESC").Find(&operations).Error; err != nil {
+				return v, err
+			}
+			v.ActiveOperations = append(v.ActiveOperations, operations...)
 		}
+		slices.SortFunc(v.ActiveOperations, func(a, b model.ManagerOperation) int { return cmp.Compare(b.ID, a.ID) })
 	}
 	if err := db.Where("user_id = ?", owner).Find(&v.Relays).Error; err != nil {
 		return v, err
@@ -110,17 +124,27 @@ func (s *ManagerService) Snapshot(owner, page int, state, kind string, options .
 		}
 	}
 	if len(ids) > 0 {
+		slices.Sort(ids)
+		ids = slices.Compact(ids)
 		var clients []model.ClientRecord
-		if err := db.Where("id IN ?", ids).Find(&clients).Error; err != nil {
-			return v, err
+		for _, batch := range chunkInts(ids, sqlInChunk) {
+			var rows []model.ClientRecord
+			if err := db.Select("id", "email", "total_gb", "expiry_time", "enable").Where("id IN ?", batch).Find(&rows).Error; err != nil {
+				return v, err
+			}
+			clients = append(clients, rows...)
 		}
-		emails := []string{}
+		emails := make([]string, 0, len(clients))
 		for _, c := range clients {
 			emails = append(emails, c.Email)
 		}
 		var traffic []*coremodel.ClientTraffic
-		if err := db.Where("email IN ?", emails).Find(&traffic).Error; err != nil {
-			return v, err
+		for _, batch := range chunkStrings(emails, sqlInChunk) {
+			var rows []*coremodel.ClientTraffic
+			if err := db.Select("email", "up", "down").Where("email IN ?", batch).Find(&rows).Error; err != nil {
+				return v, err
+			}
+			traffic = append(traffic, rows...)
 		}
 		overlayGlobalTraffic(db, traffic)
 		byEmail := map[string]*coremodel.ClientTraffic{}
@@ -145,5 +169,14 @@ func (s *ManagerService) Snapshot(owner, page int, state, kind string, options .
 	if err := q.Count(&v.OperationTotal).Error; err != nil {
 		return v, err
 	}
-	return v, q.Order("id DESC").Offset((max(1, page) - 1) * 20).Limit(20).Find(&v.Operations).Error
+	page = max(1, page)
+	if !managerPageExists(page, 20, v.OperationTotal) {
+		return v, nil
+	}
+	return v, q.Order("id DESC").Offset((page - 1) * 20).Limit(20).Find(&v.Operations).Error
+}
+
+// Guard offset multiplication and skip queries for pages beyond the result set.
+func managerPageExists(page, pageSize int, total int64) bool {
+	return total > 0 && int64(page-1) <= (total-1)/int64(pageSize)
 }

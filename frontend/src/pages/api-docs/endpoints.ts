@@ -3970,6 +3970,33 @@ export const sections: readonly Section[] = [
         body: '{ "domain": "web.example.com", "frontend": "nginx", "carrier": "https", "carriers": [] }',
       },
       {
+        method: 'GET',
+        path: '/panel/api/telemt/webproxy/port-migration',
+        summary: 'Read the pending panel and subscription listener migration, if any.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/webproxy/port-migration',
+        summary: 'Stage listener port changes and restart the hosting panel.',
+        description:
+          'Requires the current port values from the setup preview. Unconfirmed changes are rolled back after the confirmation window.',
+        body: '{ "panelPort": 18080, "subscriptionPort": 0, "expectedPanelPort": 443, "expectedSubscriptionPort": 2096 }',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/webproxy/port-migration/confirm',
+        summary: 'Confirm access after the listener port migration.',
+        body: '{ "id": "<migration-id>" }',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/webproxy/managed-migration',
+        summary: 'Apply a saved local MTProto WEB migration draft.',
+        description:
+          'Requires the saved draft revision and all confirmed VPN moves from the current preflight. The server restores the previous listeners on failure.',
+        body: '{ "inboundId": 12, "draftRevision": "<draft-revision>", "vpnMigrations": [{ "id": 7, "newPort": 18200, "revision": "<vpn-revision>" }] }',
+      },
+      {
         method: 'POST',
         path: '/panel/api/telemt/webproxy/enable',
         summary: 'Enable the Telemt Web Proxy.',

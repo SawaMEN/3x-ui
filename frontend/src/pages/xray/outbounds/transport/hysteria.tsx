@@ -1,3 +1,4 @@
+import { selectHysteriaObfs } from '@/lib/xray/hysteria-obfs';
 import { Form, Input, InputNumber, Select } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -68,12 +69,7 @@ export default function HysteriaForm() {
                 { value: 'gecko', label: 'Gecko' },
               ]}
               onChange={(type) =>
-                set(
-                  'streamSettings.hysteriaSettings.obfs',
-                  type
-                    ? { type, password: typeof obfs === 'object' ? (obfs?.password ?? '') : '' }
-                    : undefined,
-                )
+                set('streamSettings.hysteriaSettings.obfs', selectHysteriaObfs(type, obfs, false))
               }
             />
           </Form.Item>

@@ -205,3 +205,53 @@ func TestTranslateHysteria2RejectsInvalidObfs(t *testing.T) {
 		t.Fatalf("expected Hysteria2 obfs validation error, got %v", err)
 	}
 }
+
+// A saved inbound or outbound may contain both a default legacy mask and
+// explicit native obfs. Use the latter without modifying saved settings.
+func TestHysteria2NativeObfsOverridesLegacyMask(t *testing.T) {
+	for _, kind := range []string{"salamander", "gecko"} {
+		for _, inbound := range []bool{true, false} {
+			direction := "outbound"
+			if inbound {
+				direction = "inbound"
+			}
+			t.Run(kind+"/"+direction, func(t *testing.T) {
+				native := map[string]any{"type": kind, "password": "native-secret"}
+				if kind == "gecko" {
+					native["minPacketSize"], native["maxPacketSize"] = 600, 1100
+				}
+				legacy := map[string]any{"type": "salamander", "settings": map[string]any{"password": "legacy-secret", "packetSize": "512-1200"}}
+				raw := map[string]any{
+					"protocol": "hysteria", "tag": "in-37904-udp", "port": 37904,
+					"settings": map[string]any{"address": "example.com", "port": 37904, "clients": []any{map[string]any{"email": "alice", "auth": "secret"}}},
+					"streamSettings": map[string]any{
+						"network": "hysteria", "security": "tls",
+						"hysteriaSettings": map[string]any{"version": 2, "auth": "secret", "obfs": native},
+						"finalmask":        map[string]any{"udp": []any{legacy}},
+					},
+				}
+				translate := TranslateXrayOutbound
+				if inbound {
+					translate = TranslateXrayInbound
+				}
+				got, err := translate(raw)
+				if err != nil {
+					t.Fatal(err)
+				}
+				obfs := rawObject(got, "obfs")
+				if obfs["type"] != kind || obfs["password"] != "native-secret" {
+					t.Fatalf("native obfs lost: %#v", obfs)
+				}
+				if kind == "gecko" && (obfs["min_packet_size"] != 600 || obfs["max_packet_size"] != 1100) {
+					t.Fatal("native Gecko bounds lost")
+				}
+				if kind == "salamander" && (obfs["min_packet_size"] != nil || obfs["max_packet_size"] != nil) {
+					t.Fatal("legacy Gecko bounds leaked into Salamander")
+				}
+				if rawObject(legacy, "settings")["password"] != "legacy-secret" || native["password"] != "native-secret" {
+					t.Fatal("stored settings mutated")
+				}
+			})
+		}
+	}
+}

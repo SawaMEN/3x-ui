@@ -572,7 +572,13 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
         clients: [],
       };
     case 'trusttunnel':
-      return { hostname: 'trusttunnel.local', certificate: '', privateKey: '', clients: [] };
+      return {
+        hostname: 'trusttunnel.local',
+        trustTunnelTcpOnly: false,
+        certificate: '',
+        privateKey: '',
+        clients: [],
+      };
     case 'masque':
       return MasqueInboundSettingsSchema.parse({});
     case 'naive':

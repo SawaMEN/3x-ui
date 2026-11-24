@@ -1276,14 +1276,24 @@ acquire_update_download_lock() {
         unset xui_download_lock_fd
         return 1
     fi
-    exec {install_lock_fd}>"$parent/.x-ui-upgrade.lock" || return 1
+    if ! exec {install_lock_fd}>"$parent/.x-ui-upgrade.lock"; then
+        exec {xui_download_lock_fd}>&-
+        unset xui_download_lock_fd
+        return 1
+    fi
     if ! flock -n "$install_lock_fd"; then
         exec {install_lock_fd}>&-
+        exec {xui_download_lock_fd}>&-
+        unset xui_download_lock_fd
         return 1
     fi
     cleanup_update_artifacts "$parent" "${xui_folder:-$parent/x-ui}" || status=1
     flock -u "$install_lock_fd" || status=1
     exec {install_lock_fd}>&-
+    if (( status != 0 )); then
+        exec {xui_download_lock_fd}>&-
+        unset xui_download_lock_fd
+    fi
     return "$status"
 }
 

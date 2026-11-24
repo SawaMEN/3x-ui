@@ -26,7 +26,7 @@ type (
 
 func CaptureSidecarTrafficOwners(protocols []model.Protocol) (SidecarTrafficOwners, error) {
 	owners := SidecarTrafficOwners{Inbounds: map[string]int{}, Clients: map[string]int{}}
-	err := database.GetDB().Transaction(func(tx *gorm.DB) error {
+	err := database.ReadSnapshot(database.GetDB(), func(tx *gorm.DB) error {
 		var inbounds []model.Inbound
 		if err := tx.Select("id", "tag").Where("protocol IN ? AND node_id IS NULL", protocols).Find(&inbounds).Error; err != nil {
 			return err

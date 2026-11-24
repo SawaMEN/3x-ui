@@ -37,43 +37,25 @@ func (a *GatewayController) initRouter(g *gin.RouterGroup) {
 }
 
 func gatewayStateForCore(coreType string) (gateway.State, error) {
-	switch coreType {
-	case service.CoreTypeXray:
-		return gateway.GetState()
-	case service.CoreTypeSingBox:
-		return gateway.GetSingBoxState()
-	default:
-		return gateway.State{}, fmt.Errorf("unsupported core type %q", coreType)
-	}
+	return gateway.StateForCore(coreType)
 }
 
 func enableGatewayForCore(coreType string) error {
-	switch coreType {
-	case service.CoreTypeXray:
-		return gateway.Enable()
-	case service.CoreTypeSingBox:
-		return gateway.EnableSingBox()
-	default:
-		return fmt.Errorf("unsupported core type %q", coreType)
-	}
+	return gateway.EnableForCore(coreType)
 }
 
 func disableGatewayForCore(coreType string) error {
-	switch coreType {
-	case service.CoreTypeXray:
-		return gateway.Disable()
-	case service.CoreTypeSingBox:
-		return gateway.DisableSingBox()
-	default:
-		return fmt.Errorf("unsupported core type %q", coreType)
-	}
+	return gateway.DisableForCore(coreType)
 }
 
-func otherGatewayCore(coreType string) string {
-	if service.IsNativeCore(coreType) {
-		return service.CoreTypeXray
+func gatewayOtherCores(coreType string) []string {
+	var others []string
+	for _, candidate := range []string{service.CoreTypeXray, service.CoreTypeSingBox, service.CoreTypeSingBoxUpstream} {
+		if candidate != coreType {
+			others = append(others, candidate)
+		}
 	}
-	return service.CoreTypeSingBox
+	return others
 }
 
 // rollbackGatewayChange restores the two template states after a failed core
@@ -89,22 +71,6 @@ func rollbackGatewayChange(currentCore, previousCore string, disableCurrent, res
 	if restorePrevious {
 		if err := gateway.RestoreForCore(previousCore); err != nil {
 			failures = append(failures, fmt.Sprintf("restore %s: %v", previousCore, err))
-		}
-	}
-	if len(failures) > 0 {
-		return fmt.Errorf("%s", strings.Join(failures, "; "))
-	}
-	return nil
-}
-
-// restoreGatewayCores rolls back a multi-core disable in reverse order so the
-// logical Gateway ownership observed before the request is reconstructed.
-func restoreGatewayCores(cores []string) error {
-	failures := make([]string, 0, len(cores))
-	for i := len(cores) - 1; i >= 0; i-- {
-		coreType := cores[i]
-		if err := gateway.RestoreForCore(coreType); err != nil {
-			failures = append(failures, fmt.Sprintf("restore %s: %v", coreType, err))
 		}
 	}
 	if len(failures) > 0 {
@@ -129,35 +95,25 @@ func gatewayStatusForCore(coreType string) (gatewayStatus, error) {
 		return gatewayStatus{}, fmt.Errorf("get %s Gateway state: %w", coreType, err)
 	}
 
-	otherCore := otherGatewayCore(coreType)
-	otherState, otherErr := gatewayStateForCore(otherCore)
-	if otherErr != nil {
-		// An unused core may not have a usable template yet. Do not make Gateway
-		// status unavailable for the selected core solely because the inactive
-		// core cannot be inspected.
-		owner := ""
-		if activeState.Enabled {
-			owner = coreType
-		}
-		return gatewayStatus{State: activeState, OwnerCore: owner}, nil
-	}
-
-	if activeState.Enabled && otherState.Enabled {
-		activeState.Configured = activeState.Configured || otherState.Configured
-		activeState.BackupExists = activeState.BackupExists || otherState.BackupExists
-		return gatewayStatus{
-			State:     activeState,
-			OwnerCore: "multiple",
-			Conflict:  true,
-		}, nil
-	}
+	result := gatewayStatus{State: activeState}
 	if activeState.Enabled {
-		return gatewayStatus{State: activeState, OwnerCore: coreType}, nil
+		result.OwnerCore = coreType
 	}
-	if otherState.Enabled {
-		return gatewayStatus{State: otherState, OwnerCore: otherCore}, nil
+	for _, candidate := range gatewayOtherCores(coreType) {
+		state, err := gatewayStateForCore(candidate)
+		if err != nil || !state.Enabled {
+			continue
+		}
+		if result.OwnerCore == "" {
+			result = gatewayStatus{State: state, OwnerCore: candidate}
+			continue
+		}
+		result.State.Configured = result.State.Configured || state.Configured
+		result.State.BackupExists = result.State.BackupExists || state.BackupExists
+		result.OwnerCore = "multiple"
+		result.Conflict = true
 	}
-	return gatewayStatus{State: activeState}, nil
+	return result, nil
 }
 
 func (a *GatewayController) statusPayload() (gin.H, error) {
@@ -269,8 +225,18 @@ func (a *GatewayController) enable(c *gin.Context) {
 	changed := false
 	currentEnabledByRequest := false
 	previousCoreDisabled := false
-	otherCore := otherGatewayCore(coreType)
-	if otherState, otherErr := gatewayStateForCore(otherCore); otherErr == nil && otherState.Enabled {
+	otherCore := ""
+	for _, candidate := range gatewayOtherCores(coreType) {
+		if otherState, otherErr := gatewayStateForCore(candidate); otherErr == nil && otherState.Enabled {
+			if otherCore != "" {
+				payload, _ := a.statusPayload()
+				jsonObj(c, payload, fmt.Errorf("multiple stale Gateway templates; disable Gateway first"))
+				return
+			}
+			otherCore = candidate
+		}
+	}
+	if otherCore != "" {
 		if err := disableGatewayForCore(otherCore); err != nil {
 			if restoreErr := gateway.RestoreForCore(otherCore); restoreErr != nil {
 				err = fmt.Errorf("%w; restore stale Gateway: %w", err, restoreErr)
@@ -359,63 +325,44 @@ func (a *GatewayController) disable(c *gin.Context) {
 		return
 	}
 	defer release()
-	coreType, err := a.settingService.GetCoreType()
-	if err != nil {
-		jsonObj(c, nil, err)
-		return
-	}
-	wasRunning := a.gatewayCoreRunning(coreType)
-	networkBefore := a.networkService.Status(c.Request.Context())
-	cores := []string{}
-	for _, candidate := range []string{coreType, otherGatewayCore(coreType)} {
-		state, stateErr := gatewayStateForCore(candidate)
-		if stateErr != nil {
-			if candidate == coreType {
-				jsonObj(c, nil, stateErr)
-				return
-			}
-			continue
-		}
-		if state.Enabled {
-			cores = append(cores, candidate)
-		}
-	}
-	if err := a.networkService.Suspend(c.Request.Context()); err != nil {
-		payload, _ := a.statusPayload()
-		jsonObj(c, payload, err)
-		return
-	}
-	disabled := []string{}
+	// Once accepted, a browser disconnect must not interrupt deactivation.
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
 	fail := func(cause error) {
-		rollbackErr := restoreGatewayCores(disabled)
-		if rollbackErr == nil && len(disabled) > 0 && wasRunning {
-			rollbackErr = a.restartGatewayCore(context.Background(), coreType)
-		}
-		if rollbackErr == nil && networkBefore.Configured && wasRunning {
-			recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			rollbackErr = a.networkService.Enable(recovery, networkBefore.Config)
-		}
-		if rollbackErr != nil {
-			cause = fmt.Errorf("%w; Gateway rollback failed: %w", cause, rollbackErr)
-		}
 		payload, _ := a.statusPayload()
 		jsonObj(c, payload, cause)
 	}
-	for _, candidate := range cores {
-		disabled = append(disabled, candidate)
-		if err := disableGatewayForCore(candidate); err != nil {
+	// Persist OFF before inspecting templates. Never re-enable on failure.
+	if err := a.networkService.Suspend(ctx); err != nil {
+		fail(err)
+		return
+	}
+	coreType, err := a.settingService.GetCoreType()
+	if err != nil {
+		fail(err)
+		return
+	}
+	for _, candidate := range append([]string{coreType}, gatewayOtherCores(coreType)...) {
+		state, stateErr := gatewayStateForCore(candidate)
+		if stateErr != nil {
+			fail(fmt.Errorf("inspect %s Gateway: %w", candidate, stateErr))
+			return
+		}
+		if state.Enabled {
+			if err := disableGatewayForCore(candidate); err != nil {
+				fail(err)
+				return
+			}
+		}
+	}
+	// Retry even if an earlier request already removed the templates.
+	if a.gatewayCoreRunning(coreType) {
+		if err := a.restartGatewayCore(ctx, coreType); err != nil {
 			fail(err)
 			return
 		}
 	}
-	if len(disabled) > 0 && wasRunning {
-		if err := a.restartGatewayCore(c.Request.Context(), coreType); err != nil {
-			fail(err)
-			return
-		}
-	}
-	if err := a.networkService.Disable(c.Request.Context()); err != nil {
+	if err := a.networkService.Disable(ctx); err != nil {
 		fail(err)
 		return
 	}

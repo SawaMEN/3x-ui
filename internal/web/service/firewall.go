@@ -344,7 +344,7 @@ func (s *FirewallService) desiredRules(auto bool, safetyPort int) ([]FirewallRul
 	}
 	// Serving listeners are normal permanent rules. Challenge-only ports are
 	// temporary leases and must be returned to their original state afterwards.
-	if cfg, err := settings.GetDomainFrontConfig(); err == nil {
+	if cfg, err := settings.GetRuntimeDomainFrontConfig(); err == nil {
 		var telemt *TelemtWebProxyState
 		if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled {
 			telemt = &state

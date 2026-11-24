@@ -29,6 +29,30 @@ type RemoteTelegramProxy struct {
 	Profile  TelegramProxyProfile `json:"profile"`
 }
 
+// IsTelegramProxyLink identifies Telegram sharing URLs before exporting VPN profiles.
+func IsTelegramProxyLink(link string) bool {
+	u, err := url.Parse(strings.TrimSpace(link))
+	if err != nil {
+		return false
+	}
+	switch u.Scheme {
+	case "tg":
+		switch strings.ToLower(u.Hostname()) {
+		case "proxy", "webproxy", "socks":
+			return true
+		}
+	case "http", "https":
+		switch strings.TrimSuffix(strings.ToLower(u.Hostname()), ".") {
+		case "t.me", "telegram.me", "telegram.dog":
+			switch strings.ToLower(strings.Trim(u.Path, "/")) {
+			case "proxy", "webproxy", "socks":
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func ParseTelegramProxyLink(link, name string) (TelegramProxyProfile, bool) {
 	u, err := url.Parse(link)
 	if err != nil {

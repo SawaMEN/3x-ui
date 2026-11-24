@@ -140,6 +140,9 @@ export default function DomainHostList({
                       {draft.subscriptionDomain === domain.name && (
                         <Tag color="blue">{l('workspace.subscriptionDomain')}</Tag>
                       )}
+                      {domain.mode !== 'sni_only' && domain.siteCatalog && (
+                        <Tag>{l('redesign.coverSite')}</Tag>
+                      )}
                       {!saved && <Tag color="orange">{l('state.unsaved')}</Tag>}
                       {!domain.enabled && <Tag>{l('disabled')}</Tag>}
                     </Space>

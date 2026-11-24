@@ -34,6 +34,11 @@ linters:
           - staticcheck
         text: "ST1005:"
 
+issues:
+  # Report every violation, not only the first three identical diagnostics.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
 formatters:
   enable:
     - gofumpt

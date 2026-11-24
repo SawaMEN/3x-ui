@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -1299,6 +1300,8 @@ func (s *NodeService) withOutboundBridge(nodeID int, outboundTag string, fn func
 const maxProbeBodyBytes = 1 << 20
 
 func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string) (HeartbeatPatch, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	// Keep the last known configured core even when the HTTP probe fails.
 	// CoreType is a capability/configuration fact used by inbound validation,
 	// not a liveness field; clearing it on a transient outage makes a sing-box
@@ -1361,6 +1364,9 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 	patch.LatencyMs = int(time.Since(start) / time.Millisecond)
 
 	if resp.StatusCode != http.StatusOK {
+		// Drain small error bodies for keep-alive reuse without reading an
+		// unbounded response or storing untrusted diagnostics.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 8<<10))
 		patch.LastError = fmt.Sprintf("HTTP %d from remote panel", resp.StatusCode)
 		return patch, errors.New(patch.LastError)
 	}
@@ -1405,12 +1411,29 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 			} `json:"netIO"`
 		} `json:"obj"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxProbeBodyBytes)).Decode(&envelope); err != nil {
+	var decodeErr error
+	if resp.ContentLength > maxProbeBodyBytes {
+		decodeErr = errors.New("status response exceeds size limit")
+	} else {
+		var raw []byte
+		raw, decodeErr = io.ReadAll(io.LimitReader(resp.Body, maxProbeBodyBytes+1))
+		if decodeErr == nil {
+			switch {
+			case len(raw) > maxProbeBodyBytes:
+				decodeErr = errors.New("status response exceeds size limit")
+			case len(bytes.TrimSpace(raw)) == 0:
+				decodeErr = io.EOF
+			default:
+				decodeErr = json.Unmarshal(raw, &envelope)
+			}
+		}
+	}
+	if decodeErr != nil {
 		// Preserve the decoding phase in the returned error as well as in
 		// LastError. Add/update uses the returned error, not the patch.
-		decodeErr := fmt.Errorf("decode response: %w", err)
-		patch.LastError = decodeErr.Error()
-		return patch, decodeErr
+		err := fmt.Errorf("decode response: %w", decodeErr)
+		patch.LastError = err.Error()
+		return patch, err
 	}
 	if !envelope.Success {
 		patch.LastError = "remote returned success=false: " + envelope.Msg

@@ -16,3 +16,12 @@ func telemtWebHealthyDecoyStatus(status int) bool {
 		return false
 	}
 }
+
+// A prepared static site's root must be present. An HTTP response from the
+// wrong virtual host or a freshly bound frontend is not enough.
+func telemtWebSiteReady(state TelemtWebProxyState, status int) bool {
+	if state.Site == nil || state.Site.Mode != "origin" {
+		return status == http.StatusOK
+	}
+	return telemtWebHealthyDecoyStatus(status)
+}

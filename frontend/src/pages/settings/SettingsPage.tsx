@@ -36,6 +36,7 @@ import GeneralTab from './GeneralTab';
 import { panelUrlAfterRestart, panelUrlForDirectDomain, waitForPanelRestart } from './panel-url';
 import type { PanelDomainPatch } from './PanelDomainCertificate';
 import './SettingsPage.css';
+import { TelemtPortMigrationConfirmation } from '@/pages/telemt/TelemtPortMigration';
 import { getAdditionalSettingsTab } from './additional-settings';
 
 // The main settings screen ships only the default tab initially. Less common
@@ -460,7 +461,12 @@ export default function SettingsPage() {
                           getAdditionalSettingsTab(location.hash) === 'domains') ? (
                           categoryBody
                         ) : (
-                          <Card hoverable>{categoryBody}</Card>
+                          <Card hoverable>
+                            {new URLSearchParams(location.search).has('ingress-port-confirm') && (
+                              <TelemtPortMigrationConfirmation />
+                            )}
+                            {categoryBody}
+                          </Card>
                         )}
                       </Suspense>
                     </Col>

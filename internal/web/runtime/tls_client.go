@@ -166,10 +166,20 @@ func rejectNodeRedirect(*http.Request, []*http.Request) error {
 	return http.ErrUseLastResponse
 }
 
-var defaultNodeHTTPClient = &http.Client{
-	Transport:     newNodeTransport(nil),
-	CheckRedirect: rejectNodeRedirect,
+// Connection reuse does not call DialContext again. Public-only and explicitly
+// private-enabled nodes must never share a transport, even at the same origin.
+func sharedNodeHTTPClient(allowPrivate bool) *http.Client {
+	transport := newNodeTransport(nil)
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		return netsafe.SSRFGuardedDialContext(netsafe.ContextWithAllowPrivate(ctx, allowPrivate), network, address)
+	}
+	return &http.Client{Transport: transport, CheckRedirect: rejectNodeRedirect}
 }
+
+var (
+	defaultNodeHTTPClient = sharedNodeHTTPClient(false)
+	privateNodeHTTPClient = sharedNodeHTTPClient(true)
+)
 
 // nodeClients caches one client per node: heartbeat and traffic sync reach it
 // every few seconds, and a rebuilt client would open its own empty pool.
@@ -226,6 +236,9 @@ func HTTPClientForNode(n *model.Node, proxyURL string) (*http.Client, error) {
 			nodeClientsMu.Lock()
 			dropNodeClients(n.Id, "")
 			nodeClientsMu.Unlock()
+			if n.AllowPrivateAddress {
+				return privateNodeHTTPClient, nil
+			}
 			return defaultNodeHTTPClient, nil
 		}
 	}

@@ -87,7 +87,7 @@ func ValidateDesired(desired Desired) error {
 func readState(db *gorm.DB, ids []int) (map[int]model.Inbound, map[int]map[string]bool, error) {
 	current := make(map[int]model.Inbound, len(ids))
 	disabled := make(map[int]map[string]bool)
-	err := db.Transaction(func(tx *gorm.DB) error {
+	err := database.ReadSnapshot(db, func(tx *gorm.DB) error {
 		for start := 0; start < len(ids); start += 900 {
 			batch := ids[start:min(start+900, len(ids))]
 			var rows []model.Inbound

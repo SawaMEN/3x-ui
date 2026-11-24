@@ -59,12 +59,25 @@ func captureTelemtConfigSnapshot() (telemtConfigSnapshot, error) {
 }
 
 func restoreTelemtConfigSnapshot(snapshot telemtConfigSnapshot) error {
+	unchanged := false
 	if snapshot.exists {
 		if current, err := os.ReadFile(telemtConfigPath); err == nil && bytes.Equal(current, snapshot.data) {
-			return nil
+			unchanged = true
 		}
 	} else if _, err := os.Stat(telemtConfigPath); errors.Is(err, os.ErrNotExist) {
-		return nil
+		unchanged = true
+	}
+	// A byte-identical configuration does not imply the service is in its
+	// original running/stopped state after a failed setup.
+	if unchanged {
+		active := systemctl("is-active", "--quiet", telemtServiceName) == nil
+		if active == snapshot.active {
+			return nil
+		}
+		if snapshot.active {
+			return systemctl("start", telemtServiceName)
+		}
+		return systemctl("stop", telemtServiceName)
 	}
 
 	if snapshot.exists {
@@ -196,6 +209,9 @@ WantedBy=multi-user.target
 	if telemtWebFrontend(state) != "nginx" {
 		unit = strings.ReplaceAll(unit, "nginx.service", telemtWebFrontUnit)
 	}
+	if telemtIngressUsesRouter(state) {
+		unit = strings.ReplaceAll(unit, "telemt.service\n", "telemt.service "+telemtIngressRouterUnit+"\n")
+	}
 	if err := os.WriteFile(telemtWebBootUnitPath, []byte(unit), 0o644); err != nil {
 		return fmt.Errorf("telemt: write WEB Proxy boot unit: %w", err)
 	}
@@ -249,14 +265,14 @@ func (TelemtService) EnsureWebProxyBackend() error {
 	var lastErr error
 	for {
 		if systemctl("is-active", "--quiet", telemtServiceName) == nil {
-			request, err := http.NewRequestWithContext(context.Background(), http.MethodHead, "http://"+addr+"/", nil)
+			request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+addr+"/", nil)
 			if err == nil {
 				request.Host = state.Domain
 				var response *http.Response
 				response, err = client.Do(request)
 				if err == nil {
 					_ = response.Body.Close()
-					if telemtWebHealthyDecoyStatus(response.StatusCode) {
+					if telemtWebSiteReady(state, response.StatusCode) {
 						return nil
 					}
 					err = fmt.Errorf("WEB listener returned HTTP %d", response.StatusCode)
@@ -321,16 +337,23 @@ func (s TelemtService) RestoreWebProxyEnableSnapshot(snapshot WebProxyEnableSnap
 			rollbackErr = err
 		}
 		if err := writeTelemtWebFrontendConfig(snapshot.state); err != nil && rollbackErr == nil {
-			rollbackErr = fmt.Errorf("restore WEB Proxy nginx config: %w", err)
+			rollbackErr = fmt.Errorf("restore WEB Proxy frontend config: %w", err)
 		}
 		if err := telemtWebEnsureFrontendRunning(snapshot.state); err != nil && rollbackErr == nil {
-			rollbackErr = fmt.Errorf("restore nginx: %w", err)
+			rollbackErr = fmt.Errorf("restore WEB Proxy frontend: %w", err)
 		}
 		if err := telemtWebReloadFrontend(snapshot.state); err != nil && rollbackErr == nil {
-			rollbackErr = fmt.Errorf("reload restored nginx: %w", err)
+			rollbackErr = fmt.Errorf("reload restored WEB Proxy frontend: %w", err)
 		}
 		if err := ensureWebProxyBootUnit(); err != nil && rollbackErr == nil {
 			rollbackErr = err
+		}
+		if rollbackErr == nil && snapshot.state.SharedIngress != nil && snapshot.state.SharedIngress.Enabled {
+			// Restore the public subscription endpoint registry as well as the
+			// configuration; disableTelemtWebProxy clears the registry.
+			if err := refreshTelemtIngress(snapshot.state); err != nil {
+				rollbackErr = fmt.Errorf("restore shared ingress routes: %w", err)
+			}
 		}
 	} else if err := cleanupWebProxyBootUnit(); err != nil && rollbackErr == nil {
 		rollbackErr = err

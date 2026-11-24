@@ -91,7 +91,9 @@
     "noExpiry": "No expiry",
     "copyAllConfigs": "Copy All Configs",
     "coreProtocols": "Xray / sing-box and compatible protocols",
-    "allConnections": "All connections",
+    "allConnections": "All profiles",
+    "compatibleProfiles": "Compatible profiles",
+    "profileScope": "Subscription profiles",
     "standaloneProtocols": "Standalone protocols (external clients)",
     "pingtunnelClientJSON": "Pingtunnel 3.x native client configuration (JSON)",
     "copyAllConfigsCopied": "All configs copied",
@@ -535,6 +537,7 @@
         "scanRealityTargetPrivate": "Target is reachable but sits on a private/local network.",
         "invalidClientField": "Client {client}: {field} — {reason}",
         "invalidField": "{field} — {reason}",
+        "invalidInput": "Invalid input",
         "invalidCertificate": "TLS certificate {index}: {reason}",
         "moreIssues": "{message}  (+{count} more)"
       },

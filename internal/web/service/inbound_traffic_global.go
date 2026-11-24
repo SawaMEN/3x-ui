@@ -104,6 +104,14 @@ func chunkGlobalRows(rows []model.ClientGlobalTraffic, size int) [][]model.Clien
 	return out
 }
 
+// hasFreshGlobalTraffic stops after the first fresh row instead of counting all rows.
+func hasFreshGlobalTraffic(db *gorm.DB, freshSince int64) bool {
+	var probe int
+	result := db.Model(&model.ClientGlobalTraffic{}).
+		Select("1").Where("updated_at >= ?", freshSince).Limit(1).Scan(&probe)
+	return result.Error == nil && probe == 1
+}
+
 // overlayGlobalTraffic applies each direction's largest fresh per-master value for display.
 // Stored local counters remain untouched; stale masters cannot inflate usage (#6113).
 func overlayGlobalTraffic(db *gorm.DB, rows []*coremodel.ClientTraffic) {
@@ -112,10 +120,7 @@ func overlayGlobalTraffic(db *gorm.DB, rows []*coremodel.ClientTraffic) {
 	}
 	freshSince := globalTrafficFreshSince(db.NowFunc())
 	// Cheap short-circuit for the common case (a panel no master pushes to).
-	var probe int64
-	if err := db.Model(&model.ClientGlobalTraffic{}).
-		Where("updated_at >= ?", freshSince).
-		Limit(1).Count(&probe).Error; err != nil || probe == 0 {
+	if !hasFreshGlobalTraffic(db, freshSince) {
 		return
 	}
 

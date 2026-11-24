@@ -153,11 +153,11 @@ export default function DomainFrontTab({
     queryKey: ['settings', 'domains', 'dns-credential', draft.dns01Provider || 'cloudflare'],
     enabled: settingsOpen && settingsTab === 'dns' && !!draft.dns01Provider,
     retry: false,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await HttpUtil.get(
         `/panel/api/domains/dns/credential?provider=${draft.dns01Provider || 'cloudflare'}`,
         undefined,
-        { silent: true },
+        { silent: true, signal },
       );
       if (!response?.success) throw new Error(response?.msg || 'Cannot load DNS token status');
       return response.obj as { configured: boolean; source?: string };
@@ -205,6 +205,14 @@ export default function DomainFrontTab({
   function update(patch: Partial<DomainConfigForm>) {
     setDraft((prev) => ({ ...(prev ?? defaultDomainConfig), ...patch }));
   }
+  const coverDomains = draft.domains.filter(
+    (domain) =>
+      domain.enabled &&
+      (domain.mode === 'sni_only' || (!!domain.siteCatalog && !!domain.siteTemplate)),
+  );
+  const coverNames = new Set(
+    coverDomains.map((domain) => domain.name.trim().toLowerCase().replace(/\.$/, '')),
+  );
   const redirectDomains = [
     ...new Set(
       [
@@ -221,6 +229,9 @@ export default function DomainFrontTab({
       ].filter(Boolean),
     ),
   ];
+  const redirectPreviewDomains = redirectDomains.filter(
+    (name) => !coverNames.has(name.trim().toLowerCase().replace(/\.$/, '')),
+  );
   const redirectError = allSetting?.rootRedirectEnable
     ? rootRedirectError(allSetting.rootRedirectURL, redirectDomains)
     : '';
@@ -451,6 +462,43 @@ export default function DomainFrontTab({
     }
   }
 
+  function coverBlocked(name: string, mode: string): string | undefined {
+    const ru = i18n.language.startsWith('ru');
+    const host = name.trim().toLowerCase().replace(/\.$/, '');
+    if (mode === 'shared_sni' || mode === 'cert_only')
+      return ru
+        ? 'Этот домен не обслуживает локальный сайт.'
+        : 'This domain does not serve a local website.';
+    if (host.startsWith('*.') || !DomainFormSchema.shape.name.safeParse(host).success)
+      return ru
+        ? 'Для сайта укажите конкретный домен, без wildcard.'
+        : 'Use a concrete hostname, not a wildcard.';
+    if (draft.httpsPort === 443 && telemtSites.length)
+      return ru
+        ? 'TCP 443 занят Telemt WEB. Используйте другой порт шлюза.'
+        : 'Telemt WEB owns TCP 443. Choose a different gateway port.';
+    if (
+      mode !== 'sni_only' &&
+      allSetting &&
+      [allSetting.subPath, allSetting.subJsonPath, allSetting.subClashPath].some((path) =>
+        ['/', '/index.html', '/site.css', '/site.js'].includes(path.replace(/\/+$/, '') || '/'),
+      )
+    )
+      return ru
+        ? 'Путь подписки конфликтует с файлами сайта.'
+        : 'A subscription path conflicts with website files.';
+    const panelHost = allSetting?.webDomain.trim().toLowerCase().replace(/\.$/, '');
+    if (
+      host === panelHost &&
+      allSetting?.webPort === draft.httpsPort &&
+      (!allSetting.webBasePath || allSetting.webBasePath === '/')
+    )
+      return ru
+        ? 'Укажите отдельный путь панели или порт шлюза.'
+        : 'Configure a separate panel path or gateway port.';
+    return undefined;
+  }
+
   function openPreset(preset: DomainPreset) {
     if (!initialized || busy || preflighting) return;
     openEditor(-1, preset === 'sni', preset === 'shared');
@@ -507,12 +555,28 @@ export default function DomainFrontTab({
       }
       throw error;
     });
-    if (value.mode === 'sni_only' && telemtSites.some((site) => site.name === value.name)) {
+    const panelHost = allSetting?.webDomain.trim().toLowerCase().replace(/\.$/, '');
+    const coverHost = value.name.trim().toLowerCase().replace(/\.$/, '');
+    const usesSeparatePanelListener = coverHost === panelHost && draft.httpsPort !== 443;
+    if (
+      value.mode === 'sni_only' &&
+      !usesSeparatePanelListener &&
+      telemtSites.some((site) => site.name === coverHost)
+    ) {
       messageApi.info(label('telemtAlreadyExists'));
       setEditing(undefined);
       return;
     }
     const old = editing != null && editing >= 0 ? draft.domains[editing] : undefined;
+    const supportsCover = value.mode !== 'shared_sni' && value.mode !== 'cert_only';
+    const siteCatalog = supportsCover
+      ? (value.siteCatalog ?? form.getFieldValue('siteCatalog') ?? '')
+      : '';
+    const blocked = coverBlocked(value.name, value.mode);
+    if (supportsCover && (siteCatalog || value.mode === 'sni_only') && blocked) {
+      messageApi.error(blocked);
+      return;
+    }
     const domain = DomainFormSchema.parse({
       ...defaultDomain,
       ...value,
@@ -529,10 +593,12 @@ export default function DomainFrontTab({
           ? []
           : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
-      siteCatalog: value.mode === 'sni_only' ? value.siteCatalog || '' : '',
-      siteTemplate: value.mode === 'sni_only' ? value.siteTemplate || '' : '',
+      siteCatalog,
+      siteTemplate: siteCatalog
+        ? (value.siteTemplate ?? form.getFieldValue('siteTemplate') ?? '')
+        : '',
       siteHtml:
-        value.mode === 'sni_only' && value.siteCatalog === 'custom' ? value.siteHtml || '' : '',
+        siteCatalog === 'custom' ? (value.siteHtml ?? form.getFieldValue('siteHtml') ?? '') : '',
       certFile:
         value.tls === 'manual' && value.mode !== 'shared_sni' && value.mode !== 'cert_only'
           ? value.certFile
@@ -684,7 +750,7 @@ export default function DomainFrontTab({
       {status?.error && (
         <Alert type="error" showIcon title={label('gatewayError')} description={status.error} />
       )}
-      {draft.enabled &&
+      {(draft.enabled || coverDomains.length > 0 || allSetting?.rootRedirectEnable) &&
         draft.domains.some(
           (d) =>
             d.enabled && d.mode !== 'shared_sni' && (d.tls === 'auto' || d.tls === 'certmagic'),
@@ -853,6 +919,22 @@ export default function DomainFrontTab({
                         onChange={(v) => update({ enabled: v })}
                       />
                     </Form.Item>
+                    {!draft.enabled && coverDomains.length > 0 && (
+                      <Alert
+                        type="info"
+                        showIcon
+                        title={
+                          i18n.language.startsWith('ru')
+                            ? 'Сайты-заглушки работают независимо от шлюза'
+                            : 'Cover sites work independently of the gateway'
+                        }
+                        description={
+                          i18n.language.startsWith('ru')
+                            ? 'Отключение шлюза останавливает маршрутизацию, но не сайты и их TLS.'
+                            : 'Disabling the gateway stops forwarding, not websites or their TLS.'
+                        }
+                      />
+                    )}
                     <Form.Item label={label('email')} tooltip={label('emailDesc')}>
                       <Input
                         aria-label={label('email')}
@@ -1122,6 +1204,18 @@ export default function DomainFrontTab({
                                 }
                               />
                             </SettingListItem>
+                            {coverDomains.length > 0 && (
+                              <Alert
+                                showIcon
+                                type="info"
+                                title={
+                                  i18n.language.startsWith('ru')
+                                    ? 'Сайты-заглушки имеют приоритет над перенаправлением'
+                                    : 'Cover sites take priority over redirects'
+                                }
+                                description={coverDomains.map((domain) => domain.name).join(', ')}
+                              />
+                            )}
                             <Space
                               orientation="vertical"
                               style={{ width: '100%', padding: '8px 0 12px' }}
@@ -1265,23 +1359,27 @@ export default function DomainFrontTab({
                                     (settingsDirty
                                       ? 'Перенаправление ещё не применено'
                                       : status?.running
-                                        ? 'Доменный шлюз работает'
-                                        : 'Доменный шлюз не запущен')
+                                        ? 'Публичный HTTP/HTTPS работает'
+                                        : 'Публичный HTTP/HTTPS не запущен')
                                   }
                                   description={t('pages.settings.redirectScanRedirectDescription')}
                                 />
-                                {!redirectDomains.length && (
+                                {!redirectPreviewDomains.length && (
                                   <Alert
                                     type="warning"
                                     showIcon
-                                    title="Сначала добавьте домен и настройте TLS. Для общего доступа нужны свободные порты 80 и 443."
+                                    title={
+                                      coverDomains.length
+                                        ? 'Нет доменов для перенаправления: выбранные домены обслуживают заглушки.'
+                                        : 'Сначала добавьте домен и настройте TLS. Проверьте доступность публичных портов.'
+                                    }
                                   />
                                 )}
                                 {status?.error && (
                                   <Alert type="error" showIcon title={status.error} />
                                 )}
                                 {!redirectError &&
-                                  redirectDomains.map((name) => (
+                                  redirectPreviewDomains.map((name) => (
                                     <Space key={name} wrap>
                                       <Typography.Text code>https://{name}/</Typography.Text>
                                       <span>→</span>
@@ -1411,7 +1509,9 @@ export default function DomainFrontTab({
                         {check.domain && <Typography.Text strong>{check.domain}</Typography.Text>}
                         <Typography.Text>{label('preflight.code.' + check.code)}</Typography.Text>
                       </Space>
-                      <Typography.Text type="secondary">{check.message}</Typography.Text>
+                      <Typography.Text type="secondary">
+                        {t(check.message, { defaultValue: check.message })}
+                      </Typography.Text>
                       {check.addresses?.length ? (
                         <Typography.Text code>{check.addresses.join(', ')}</Typography.Text>
                       ) : null}
@@ -1438,6 +1538,7 @@ export default function DomainFrontTab({
         draft={draft}
         compatible={compatible}
         primaryDomain={primaryDomain}
+        coverBlocked={coverBlocked}
         setPrimaryDomain={setPrimaryDomain}
         tab={editorTab}
         onTab={setEditorTab}

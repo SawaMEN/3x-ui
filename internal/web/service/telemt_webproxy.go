@@ -24,14 +24,15 @@ import (
 )
 
 const (
-	telemtWebStatePath  = "/etc/x-ui/telemt-web.json"
-	telemtWebNginxConf  = "/etc/nginx/conf.d/3x-ui-telemt-web.conf"
-	telemtWebAcmeConf   = "/etc/nginx/conf.d/3x-ui-telemt-web-acme.conf"
-	telemtWebDecoyDir   = "/var/lib/x-ui/telemt-web"
-	telemtWebListenIP   = "127.0.0.1"
-	telemtWebListenPort = 15080
-	telemtWebUser       = "webproxy"
-	telemtWebMinEngine  = "3.5.1"
+	telemtWebStatePath              = "/etc/x-ui/telemt-web.json"
+	telemtWebNginxConf              = "/etc/nginx/conf.d/3x-ui-telemt-web.conf"
+	telemtWebAcmeConf               = "/etc/nginx/conf.d/3x-ui-telemt-web-acme.conf"
+	telemtWebDecoyDir               = "/var/lib/x-ui/telemt-web"
+	telemtWebListenIP               = "127.0.0.1"
+	telemtWebListenPort             = 15080
+	telemtWebUser                   = "webproxy"
+	telemtWebMinEngine              = "3.5.1"
+	telemtWebFrontendConfigRevision = 1
 )
 
 const telemtWebDomainPatternSource = "^(?:[A-Za-z0-9]" +
@@ -45,30 +46,36 @@ var (
 )
 
 type TelemtWebProxyState struct {
-	Site               *TelemtWebSiteOptions `json:"site,omitempty"`
-	ManagedInboundID   int                   `json:"managedInboundId,omitempty"`
-	BackendPort        int                   `json:"backendPort,omitempty"`
-	UserFingerprint    string                `json:"userFingerprint,omitempty"`
-	Frontend           string                `json:"frontend,omitempty"`
-	Carrier            string                `json:"carrier,omitempty"`
-	Carriers           []string              `json:"carriers,omitempty"`
-	RetryJitter        *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
-	Enabled            bool                  `json:"enabled"`
-	Domain             string                `json:"domain"`
-	BasePath           string                `json:"basePath,omitempty"`
-	Aliases            []string              `json:"aliases,omitempty"`
-	Secret             string                `json:"secret"`
-	DecoyDir           string                `json:"decoyDir"`
-	ListenPort         int                   `json:"listenPort"`
-	CertFile           string                `json:"certFile"`
-	KeyFile            string                `json:"keyFile"`
-	PublicAddr         string                `json:"publicAddr,omitempty"`
-	NginxManaged       bool                  `json:"nginxManaged,omitempty"`
-	NginxWasEnabled    bool                  `json:"nginxWasEnabled,omitempty"`
-	NginxStateCaptured bool                  `json:"nginxStateCaptured,omitempty"`
+	IngressRouter          string                `json:"ingressRouter,omitempty"`
+	IngressRouterModule    string                `json:"ingressRouterModule,omitempty"`
+	FrontendConfigRevision int                   `json:"frontendConfigRevision,omitempty"`
+	SharedIngress          *TelemtWebIngress     `json:"sharedIngress,omitempty"`
+	Site                   *TelemtWebSiteOptions `json:"site,omitempty"`
+	ManagedInboundID       int                   `json:"managedInboundId,omitempty"`
+	BackendPort            int                   `json:"backendPort,omitempty"`
+	UserFingerprint        string                `json:"userFingerprint,omitempty"`
+	Frontend               string                `json:"frontend,omitempty"`
+	Carrier                string                `json:"carrier,omitempty"`
+	Carriers               []string              `json:"carriers,omitempty"`
+	RetryJitter            *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
+	Enabled                bool                  `json:"enabled"`
+	Domain                 string                `json:"domain"`
+	BasePath               string                `json:"basePath,omitempty"`
+	Aliases                []string              `json:"aliases,omitempty"`
+	Secret                 string                `json:"secret"`
+	DecoyDir               string                `json:"decoyDir"`
+	ListenPort             int                   `json:"listenPort"`
+	CertFile               string                `json:"certFile"`
+	KeyFile                string                `json:"keyFile"`
+	PublicAddr             string                `json:"publicAddr,omitempty"`
+	NginxManaged           bool                  `json:"nginxManaged,omitempty"`
+	NginxWasEnabled        bool                  `json:"nginxWasEnabled,omitempty"`
+	NginxStateCaptured     bool                  `json:"nginxStateCaptured,omitempty"`
 }
 
 type TelemtWebProxyStatus struct {
+	IngressRouter               string                `json:"ingressRouter,omitempty"`
+	SharedIngress               *TelemtWebIngress     `json:"sharedIngress,omitempty"`
 	Site                        *TelemtWebSiteOptions `json:"site,omitempty"`
 	Frontend                    string                `json:"frontend"`
 	FrontendActive              bool                  `json:"frontendActive"`
@@ -361,10 +368,9 @@ func (TelemtService) WebProxyStatusForInbound(defaultDomain, panelCert, panelKey
 	version := strings.TrimPrefix(telemtVersion(), "v")
 	nginxActive := telemtWebNginxActive()
 	frontend := telemtWebFrontend(state)
-	nginxOwns443 := telemtWebNginxOwnsPort443()
-	frontendActive := state.Enabled && telemtWebFrontendActive(state) && (frontend != "nginx" || nginxOwns443)
+	frontendActive := state.Enabled && telemtIngressEntryActive(state) && telemtWebPortOwnedOnlyBy(strings.ToLower(telemtWebPortOwner(443)), telemtIngressPublicOwner(state))
 	port443, inspectionErr := inspectTelemtWebPort443(state, frontend, inboundID)
-	status := TelemtWebProxyStatus{Aliases: state.Aliases, Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, RetryJitter: state.RetryJitter, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, BasePath: state.BasePath, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: port443.Free, Port443Available: port443.Available, Port443Owner: port443.Owner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
+	status := TelemtWebProxyStatus{IngressRouter: telemtIngressRouterEngine(state), SharedIngress: state.SharedIngress, Aliases: state.Aliases, Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, RetryJitter: state.RetryJitter, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, BasePath: state.BasePath, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: port443.Free, Port443Available: port443.Available, Port443Owner: port443.Owner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
 	if state.Enabled && state.ManagedInboundID == 0 && state.Domain != "" && state.Secret != "" {
 		for _, host := range telemtWebHosts(state) {
 			status.Links = append(status.Links, telemtWebLinkWithPath(host, state.Secret, state.BasePath))
@@ -392,6 +398,9 @@ func (TelemtService) WebProxyStatusForInbound(defaultDomain, panelCert, panelKey
 		} else {
 			status.Error = "TCP 443 занят другим сервисом."
 		}
+	}
+	if status.Error == "" && state.Enabled && !frontendActive {
+		status.Error = fmt.Sprintf("HTTPS frontend %s или его TCP-вход (%s) не подтверждён.", frontend, telemtIngressPublicOwner(state))
 	}
 	return status, nil
 }
@@ -431,6 +440,8 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 	state.Domain = domain
 	state.Frontend, state.Carrier, state.Carriers = options.Frontend, options.Carrier, options.Carriers
 	state.RetryJitter = options.RetryJitter
+	state.SharedIngress = options.SharedIngress
+	state.IngressRouter, state.IngressRouterModule = options.ingressRouter, options.ingressRouterModule
 	if options.BasePath != nil {
 		state.BasePath = *options.BasePath
 	}
@@ -449,6 +460,9 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 	}
 	if err := telemtWebEnsureFrontendPackage(ctx, state); err != nil {
 		return TelemtWebProxyStatus{}, err
+	}
+	if telemtWebFrontend(state) == "caddy" && telemtIngressUsesRouter(state) && !telemtIngressCaddyProxyProtocolAvailable(ctx) {
+		return TelemtWebProxyStatus{}, errors.New("Caddy does not provide the PROXY protocol listener; install Caddy 2.7 or newer before enabling shared VPN routes")
 	}
 	decoyDir, err := prepareTelemtWebProxySite(domain, telemtWebDecoyDir, telemtWebDecoyDir+"-sites", options.Site)
 	if err != nil {
@@ -504,13 +518,18 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 		return TelemtWebProxyStatus{}, err
 	}
 	if !oldState.Enabled {
-		state.ListenPort, err = pickTelemtWebListenPort(cfg.Port)
+		nativePort := cfg.Port
+		if state.ManagedInboundID != 0 && state.BackendPort > 0 {
+			nativePort = state.BackendPort
+		}
+		state.ListenPort, err = pickTelemtWebManagedPort(ctx, nativePort)
 		if err != nil {
 			rollbackNginx()
 			return TelemtWebProxyStatus{}, err
 		}
 	}
 	state.Enabled = true
+	state.FrontendConfigRevision = telemtWebFrontendConfigRevision
 	state.Domain = domain
 	state.DecoyDir = decoyDir
 	state.Site = options.Site
@@ -568,11 +587,12 @@ func disableTelemtWebProxy() error {
 	if !state.Enabled {
 		removeTelemtWebAcmeConfig()
 		_ = removeTelemtWebFrontendConfig(state)
-		if state.NginxManaged {
+		if state.NginxManaged || telemtWebFrontend(state) != "nginx" {
 			_ = telemtWebRestoreFrontend(state)
 		} else if telemtWebFrontendActive(state) {
 			_ = telemtWebReloadFrontend(state)
 		}
+		publishedTelemtIngress.Store(nil)
 		return clearTelemtWebState()
 	}
 	oldState := state
@@ -595,13 +615,13 @@ func disableTelemtWebProxy() error {
 		_ = (TelemtService{}).SaveConfig(cfg)
 		return err
 	}
-	if oldState.NginxManaged {
+	if oldState.NginxManaged || telemtWebFrontend(oldState) != "nginx" {
 		if err := telemtWebRestoreFrontend(oldState); err != nil {
 			_ = writeTelemtWebState(oldState)
 			_ = (TelemtService{}).SaveConfig(cfg)
 			_ = writeTelemtWebFrontendConfig(oldState)
-			_ = telemtWebEnsureFrontendRunning(state)
-			_ = telemtWebReloadFrontend(state)
+			_ = telemtWebEnsureFrontendRunning(oldState)
+			_ = telemtWebReloadFrontend(oldState)
 			return err
 		}
 	} else if telemtWebFrontendActive(state) {
@@ -609,10 +629,11 @@ func disableTelemtWebProxy() error {
 			_ = writeTelemtWebState(oldState)
 			_ = (TelemtService{}).SaveConfig(cfg)
 			_ = writeTelemtWebFrontendConfig(oldState)
-			_ = telemtWebReloadFrontend(state)
+			_ = telemtWebReloadFrontend(oldState)
 			return err
 		}
 	}
+	publishedTelemtIngress.Store(nil)
 	return clearTelemtWebState()
 }
 
@@ -728,6 +749,31 @@ func selectTelemtWebPublicIP(dns, local []net.IP) net.IP {
 	return nil
 }
 
+// The advertised endpoint is a single IP, not an instruction to disable
+// the other address family on the HTTPS frontend.
+func telemtWebNeedsIPv6(state TelemtWebProxyState) bool {
+	host, _, err := net.SplitHostPort(state.PublicAddr)
+	if err != nil {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
+		return true
+	}
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, addr := range addrs {
+		if subnet, ok := addr.(*net.IPNet); ok {
+			ip := subnet.IP
+			if ip.To4() == nil && ip.IsGlobalUnicast() && !ip.IsPrivate() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if data, err := os.ReadFile("/etc/letsencrypt/renewal/" + state.Domain + ".conf"); err == nil && telemtWebRenewalMode(data) == "managed-webroot" {
 		if err := telemtWebWriteAcmeNginxConfig(state.Domain); err != nil {
@@ -741,14 +787,14 @@ func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 		return errors.New("WEB certificate does not cover all configured domains")
 	}
 	listen := "listen 443 ssl;"
-	if host, _, err := net.SplitHostPort(state.PublicAddr); err == nil && net.ParseIP(host) != nil && net.ParseIP(host).To4() == nil {
-		listen = "listen [::]:443 ssl;"
+	if telemtWebNeedsIPv6(state) {
+		listen += "\n    listen [::]:443 ssl;"
 	}
 	locations, err := telemtWebSubscriptionLocations(&SettingService{})
 	if err != nil {
 		return err
 	}
-	config := fmt.Sprintf("map $http_upgrade $xui_telemt_connection_upgrade {\n    default upgrade;\n    ''      '';\n}\n\nupstream xui_telemt_web {\n    server %s:%d;\n    keepalive 64;\n}\n\nserver {\n    %s\n    server_name %s;\n    access_log off;\n\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    client_max_body_size 2m;\n\n%s    location / {\n        proxy_pass http://xui_telemt_web;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection $xui_telemt_connection_upgrade;\n        proxy_connect_timeout 5s;\n        proxy_read_timeout 65s;\n        proxy_send_timeout 65s;\n        proxy_request_buffering off;\n        proxy_buffering off;\n        proxy_next_upstream off;\n    }\n}\n", telemtWebListenIP, state.ListenPort, listen, strings.Join(telemtWebHosts(state), " "), state.CertFile, state.KeyFile, locations)
+	config := fmt.Sprintf("map $http_upgrade $xui_telemt_connection_upgrade {\n    default upgrade;\n    ''      '';\n}\n\nupstream xui_telemt_web {\n    server %s:%d;\n    keepalive 64;\n}\n\nserver {\n    %s\n    server_name %s;\n    access_log off;\n\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    client_max_body_size 2m;\n\n%s    location / {\n        proxy_pass http://xui_telemt_web;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header X-Forwarded-Proto https;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection $xui_telemt_connection_upgrade;\n        proxy_connect_timeout 5s;\n        proxy_read_timeout 65s;\n        proxy_send_timeout 65s;\n        proxy_request_buffering off;\n        proxy_buffering off;\n        proxy_next_upstream off;\n    }\n}\n", telemtWebListenIP, state.ListenPort, listen, strings.Join(telemtWebHosts(state), " "), state.CertFile, state.KeyFile, locations)
 	if err := os.MkdirAll(filepath.Dir(telemtWebNginxConf), 0o755); err != nil {
 		return err
 	}
@@ -820,6 +866,9 @@ func RefreshTelemtWebSubscriptionRoutes() error {
 	state, err := readTelemtWebState()
 	if err != nil || !state.Enabled {
 		return err
+	}
+	if state.SharedIngress != nil && state.SharedIngress.Enabled {
+		return refreshTelemtIngress(state)
 	}
 	if telemtWebFrontend(state) != "nginx" {
 		previous, err := os.ReadFile(telemtWebFrontDir + "/config")
@@ -898,8 +947,8 @@ func telemtWebNginxEnabled() bool {
 }
 
 func telemtWebEnsureNginxRunning() error {
-	if err := exec.CommandContext(context.Background(), "nginx", "-t").Run(); err != nil {
-		return errors.New("nginx configuration test failed")
+	if out, err := exec.CommandContext(context.Background(), "nginx", "-t").CombinedOutput(); err != nil {
+		return fmt.Errorf("nginx configuration test failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	if telemtWebNginxActive() {
 		return nil
@@ -1055,7 +1104,7 @@ func telemtWebWriteAcmeNginxConfig(domain string) error {
 	if err := os.MkdirAll(filepath.Join(telemtWebDecoyDir, ".well-known", "acme-challenge"), 0o755); err != nil {
 		return err
 	}
-	conf := fmt.Sprintf("server {\n    listen 80;\n    server_name %s;\n    root %s;\n    location /.well-known/acme-challenge/ {\n        try_files $uri =404;\n    }\n}\n", domain, telemtWebDecoyDir)
+	conf := fmt.Sprintf("server {\n    listen 80;\n    server_name %s;\n    root %s;\n    location /.well-known/acme-challenge/ {\n        try_files $uri =404;\n    }\n    location / {\n        return 308 https://$host$request_uri;\n    }\n}\n", domain, telemtWebDecoyDir)
 	return os.WriteFile(telemtWebAcmeConf, []byte(conf), 0o644)
 }
 

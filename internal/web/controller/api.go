@@ -54,6 +54,12 @@ func (a *APIController) checkAPIAuth(c *gin.Context) {
 		c.Set("api_token_scope", scope)
 		return true
 	}
+	// Authorization is a singleton header. Reject ambiguous credentials
+	// before selecting an authentication path or a token scope.
+	if len(c.Request.Header.Values("Authorization")) > 1 {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
 	matchedScope := ""
 	scheme, credential, _ := strings.Cut(strings.TrimSpace(c.GetHeader("Authorization")), " ")
 	isBearer := strings.EqualFold(scheme, "Bearer")

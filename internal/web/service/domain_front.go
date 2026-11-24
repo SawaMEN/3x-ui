@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -74,13 +76,13 @@ func ManagedSNIDomains(ctx context.Context, includeNodes bool) ([]ManagedSNIDoma
 	}
 	// Local sites always take precedence, because their certificate paths
 	// belong to the controlling host rather than a connected node.
-	if status.Config.Enabled && status.Running {
+	if runtimeCfg, runtimeErr := (&SettingService{}).GetRuntimeDomainFrontConfig(); runtimeErr == nil && runtimeCfg.Enabled && status.Running {
 		enabled := make(map[string]bool)
 		ports := make(map[string]int)
-		for _, domain := range status.Config.Domains {
+		for _, domain := range runtimeCfg.Domains {
 			enabled[domain.Name] = domain.Enabled
 			if domain.Mode != "cert_only" && domain.Mode != "shared_sni" {
-				ports[domain.Name] = status.Config.PublicPort
+				ports[domain.Name] = runtimeCfg.PublicPort
 			}
 		}
 		for _, cert := range status.Certificates {
@@ -300,7 +302,25 @@ func (s *SettingService) domainFrontConfig(settings *entity.AllSetting) (domainf
 	} else if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		return cfg, fmt.Errorf("domain configuration: %w", err)
 	}
-	return privateDomainFrontConfig(rootRedirectDomainConfig(cfg, settings)), nil
+	return privateDomainFrontConfig(cfg), nil
+}
+
+// runtimeDomainFrontConfig separates the saved gateway switch from the
+// listener needed for standalone websites and domain redirects.
+func runtimeDomainFrontConfig(cfg domainfront.DomainFrontConfig, settings *entity.AllSetting) domainfront.DomainFrontConfig {
+	return rootRedirectDomainConfig(cfg, settings).StandalonePublicConfig(false)
+}
+
+func (s *SettingService) GetRuntimeDomainFrontConfig() (domainfront.DomainFrontConfig, error) {
+	settings, err := s.GetAllSetting()
+	if err != nil {
+		return domainfront.DefaultConfig(), err
+	}
+	cfg, err := s.domainFrontConfig(settings)
+	if err != nil {
+		return cfg, err
+	}
+	return runtimeDomainFrontConfig(cfg, settings), nil
 }
 
 // Legacy gateway panel flags are ignored: the admin UI has a dedicated listener.
@@ -340,37 +360,60 @@ func DomainFrontLiveCertificateStatus(cfg domainfront.DomainFrontConfig) domainf
 	return manager.Status(cfg)
 }
 
-func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (domainfront.DomainFrontStatus, error) {
-	// Reject new gateway panel routes, but keep the legacy flag readable in
-	// stored configurations and ignored by the gateway manager.
+// Reject new gateway panel routes, but keep the legacy flag readable in
+// stored configurations and ignored by the gateway manager.
+func validateDomainPanelExposure(cfg domainfront.DomainFrontConfig) error {
 	for _, domain := range cfg.Domains {
 		if domain.Panel {
-			return domainfront.DomainFrontStatus{}, fmt.Errorf("domain %q cannot expose the admin panel; use the configured web port", domain.Name)
+			return fmt.Errorf("domain %q cannot expose the admin panel; use the configured web port", domain.Name)
 		}
+	}
+	return nil
+}
+
+func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (domainfront.DomainFrontStatus, error) {
+	if err := validateDomainPanelExposure(cfg); err != nil {
+		return domainfront.DomainFrontStatus{}, err
 	}
 	domainFrontState.Lock()
 	defer domainFrontState.Unlock()
+	s := &SettingService{}
+	panel, err := s.GetAllSetting()
+	if err != nil {
+		return domainfront.DomainFrontStatus{}, err
+	}
+	effective := runtimeDomainFrontConfig(cfg, panel)
 	hasLocalDomain := false
-	for _, domain := range cfg.Domains {
+	for _, domain := range effective.Domains {
 		if domain.Enabled && domain.Mode != "shared_sni" && domain.Mode != "cert_only" {
 			hasLocalDomain = true
 			break
 		}
 	}
-	if cfg.Enabled && hasLocalDomain {
-		if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled && telemtWebFrontendActive(state) && cfg.HTTPSPort == 443 {
+	if effective.Enabled && hasLocalDomain {
+		if state, stateErr := readTelemtWebState(); stateErr == nil && state.Enabled && telemtWebFrontendActive(state) && effective.HTTPSPort == 443 {
 			return domainfront.DomainFrontStatus{}, fmt.Errorf("TCP 443 is already serving the Telemt WEB cover site (%s); reuse it as SNI instead of starting another gateway", state.Domain)
 		}
 	}
-	s := &SettingService{}
-	files, states, err := s.domainCertificateFiles(cfg)
+	files, _, err := s.domainCertificateFiles(cfg)
 	if err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
 	if err := cfg.ValidateWithCertificates(files); err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
-	backend, err := s.domainFrontBackend(cfg)
+	effective = runtimeDomainFrontConfig(cfg, panel)
+	if effective.PublicOnly {
+		effective = domainFrontRoutingConfig(effective)
+	}
+	files, states, err := s.domainCertificateFiles(effective)
+	if err != nil {
+		return domainfront.DomainFrontStatus{}, err
+	}
+	if err := effective.ValidateWithCertificates(files); err != nil {
+		return domainfront.DomainFrontStatus{}, err
+	}
+	backend, err := s.domainFrontBackend(effective)
 	if err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
@@ -378,33 +421,60 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	if err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
-	panel, err := s.GetAllSetting()
-	if err != nil {
-		return domainfront.DomainFrontStatus{}, err
+	manager := managedDomainFront()
+	subFallback := make(map[string]string)
+	oldDomain, hadGatewaySubscription := configuredSubscriptionDomain(old)
+	_, hasGatewaySubscription := configuredSubscriptionDomain(cfg)
+	if hadGatewaySubscription && !hasGatewaySubscription && panel.SubEnable {
+		managedListener := managedSubscriptionListenerDomain(old, panel)
+		if strings.TrimSpace(panel.SubDomain) == "" && strings.TrimSpace(panel.SubPublicURL) == "" && !net.ParseIP(panel.SubListen).IsLoopback() {
+			panel.SubDomain = oldDomain.Name
+			subFallback["subDomain"] = panel.SubDomain
+		}
+		if managedListener == oldDomain.Name && panel.SubCertFile == "" && panel.SubKeyFile == "" {
+			// Keep the certificate already presented by the direct TLS
+			// listener available after the gateway stops and after restart.
+			for _, cert := range manager.Status(old).Certificates {
+				if cert.Name == oldDomain.Name && telemtWebCertificatePairReady(cert.CertFile, cert.KeyFile, cert.Name) {
+					panel.SubCertFile, panel.SubKeyFile = cert.CertFile, cert.KeyFile
+					subFallback["subCertFile"], subFallback["subKeyFile"] = cert.CertFile, cert.KeyFile
+					break
+				}
+			}
+			if panel.SubCertFile == "" {
+				return manager.Status(old), fmt.Errorf("no usable certificate for the direct subscription listener")
+			}
+		}
 	}
-	if panel.SubRestrictDomains && strings.TrimSpace(panel.SubPublicURL) == "" && (!cfg.Enabled || cfg.SubscriptionDomain == "") {
-		return domainfront.DomainFrontStatus{}, fmt.Errorf("restricted subscriptions require a public subscription URL or an enabled gateway subscription domain")
+	if panel.SubRestrictDomains && subscriptionPublicURL(cfg, panel) == "" && directSubscriptionOrigin(panel) == "" {
+		return manager.Status(old), fmt.Errorf("restricted subscriptions require a public subscription URL or a publicly listening subscription service with a domain")
 	}
-	if err := validatePanelCertificateSource(old, cfg, panel.WebDomain, panel.WebCertFile, panel.WebKeyFile); err != nil {
+	if err := validatePanelCertificateSource(runtimeDomainFrontConfig(old, panel), effective, panel.WebDomain, panel.WebCertFile, panel.WebKeyFile); err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
 	backend.Certificates = files
-	if err := configureDomainDNS01(cfg, &backend); err != nil {
+	if err := configureDomainDNS01(effective, &backend); err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
-	roots, rollback, err := prepareDomainACME(cfg, files, states)
+	roots, rollback, err := prepareDomainACME(effective, files, states)
 	if err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
 	backend.ChallengeRoots = roots
-	backend.CertificateEvent = DomainCertificateAuditedEventsForDNS(cfg.HTTPPort, cfg.HTTPSPort, cfg.DNS01Provider != "")
-	manager := managedDomainFront()
-	if err := manager.ApplyAndCommit(ctx, cfg, backend, func() error {
+	backend.CertificateEvent = DomainCertificateAuditedEventsForDNS(effective.HTTPPort, effective.HTTPSPort, effective.DNS01Provider != "")
+	if err := manager.ApplyAndCommit(ctx, effective, backend, func() error {
 		raw, err := json.Marshal(cfg)
 		if err != nil {
 			return err
 		}
-		return s.setString("domainFrontConfig", string(raw))
+		return database.GetDB().Transaction(func(tx *gorm.DB) error {
+			for key, value := range subFallback {
+				if err := saveSettingIn(tx, key, value); err != nil {
+					return err
+				}
+			}
+			return saveSettingIn(tx, "domainFrontConfig", string(raw))
+		})
 	}); err != nil {
 		rollback()
 		return manager.Status(old), err
@@ -419,7 +489,7 @@ func StartDomainFront() error {
 	domainFrontState.Lock()
 	defer domainFrontState.Unlock()
 	s := &SettingService{}
-	cfg, err := s.GetDomainFrontConfig()
+	cfg, err := s.GetRuntimeDomainFrontConfig()
 	if err != nil {
 		return err
 	}
@@ -481,6 +551,7 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 	backend := domainfront.Backend{
 		SubscriptionTarget: localDomainTarget(settings.SubListen, settings.SubPort, subTLS),
 		PanelPath:          settings.WebBasePath,
+		PanelHost:          strings.TrimSuffix(strings.ToLower(strings.TrimSpace(settings.WebDomain)), "."),
 		SubscriptionPaths:  []string{settings.SubPath, settings.SubJsonPath, settings.SubClashPath, "/assets/"},
 		Routes:             map[string][]domainfront.Route{},
 		DecoyDirectories:   map[string]string{},
@@ -490,6 +561,9 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		panelPort = override
 	}
 	backend.SharedHTTP, backend.SharedHTTPS = domainSharesListener(cfg, settings.WebListen, panelPort, settings.WebCertFile != "" && settings.WebKeyFile != "")
+	if err := validateCoverPanelPaths(cfg, backend.PanelHost, backend.PanelPath, backend.SharedHTTPS); err != nil {
+		return backend, err
+	}
 	if settings.SubEnable {
 		sharedHTTP, sharedHTTPS := domainSharesListener(cfg, settings.SubListen, settings.SubPort, subTLS)
 		if subListener != nil {
@@ -517,7 +591,7 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		if !d.Enabled || d.Mode == "shared_sni" || d.Mode == "cert_only" {
 			continue
 		}
-		if d.Mode == "sni_only" {
+		if d.HasCoverSite() {
 			// Reuse Telemt's existing decoy-site renderer and atomic file writer
 			// instead of maintaining a second set of website templates.
 			sitePath := filepath.Join(config.GetDBFolderPath(), "domain-tls", "sni-sites", fmt.Sprintf("%x", sha256.Sum256([]byte(d.Name))))
@@ -526,14 +600,16 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 				var siteErr error
 				site, siteErr = managedCoverSiteOptions(d.SiteCatalog, d.SiteTemplate, d.SiteHTML)
 				if siteErr != nil {
-					return backend, fmt.Errorf("SNI site %s: %w", d.Name, siteErr)
+					return backend, fmt.Errorf("cover site %s: %w", d.Name, siteErr)
 				}
 			}
 			dir, siteErr := prepareTelemtWebSite(d.Name, filepath.Join(sitePath, "default"), filepath.Join(sitePath, "snapshots"), site)
 			if siteErr != nil {
-				return backend, fmt.Errorf("SNI site %s: %w", d.Name, siteErr)
+				return backend, fmt.Errorf("cover site %s: %w", d.Name, siteErr)
 			}
 			backend.DecoyDirectories[d.Name] = dir
+		}
+		if d.Mode == "sni_only" {
 			continue
 		}
 		for _, id := range d.InboundIDs {
@@ -544,6 +620,10 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 			route, err := domainInboundRoute(&inbound, d.Name)
 			if err != nil {
 				return backend, err
+			}
+			if cfg.PublicOnly {
+				backend.Routes[d.Name] = append(backend.Routes[d.Name], route)
+				continue
 			}
 			for _, prefix := range backend.SubscriptionPaths {
 				if domainPathOverlap(route.Path, prefix) {
@@ -559,6 +639,21 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 		}
 	}
 	return backend, nil
+}
+
+// validateCoverPanelPaths is also used by preflight, without rendering files.
+func validateCoverPanelPaths(cfg domainfront.DomainFrontConfig, host, path string, shared bool) error {
+	if !cfg.Enabled || !shared || (path != "" && path != "/") {
+		return nil
+	}
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	for _, d := range cfg.Domains {
+		if d.Enabled && d.HasCoverSite() && (d.Mode != "sni_only" || d.SiteCatalog != "") &&
+			strings.EqualFold(strings.TrimSuffix(strings.TrimSpace(d.Name), "."), host) {
+			return fmt.Errorf("cover site %s: configure a non-root panel path or separate panel port", d.Name)
+		}
+	}
+	return nil
 }
 
 func domainPathOverlap(a, b string) bool {
@@ -631,6 +726,11 @@ func domainInboundRoute(inbound *model.Inbound, host string) (domainfront.Route,
 func (s *SettingService) DomainFrontHosts(inbounds []*model.Inbound) (map[int][]*model.Host, error) {
 	cfg, err := s.GetDomainFrontConfig()
 	out := map[int][]*model.Host{}
+	for _, inbound := range inbounds {
+		if host := telemtIngressProxyHost(inbound); host != nil {
+			out[inbound.Id] = append(out[inbound.Id], host)
+		}
+	}
 	if err != nil || !cfg.Enabled {
 		return out, err
 	}
@@ -659,7 +759,7 @@ func RefreshDomainFrontRoutes() error {
 		return nil
 	}
 	s := &SettingService{}
-	cfg, err := s.GetDomainFrontConfig()
+	cfg, err := s.GetRuntimeDomainFrontConfig()
 	if err != nil || !cfg.Enabled {
 		return err
 	}

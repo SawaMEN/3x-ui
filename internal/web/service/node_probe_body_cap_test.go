@@ -48,3 +48,29 @@ func TestProbeRejectsOversizedStatusBody(t *testing.T) {
 		t.Fatalf("LastError = %q, want a \"decode response: \" rejection", patch.LastError)
 	}
 }
+
+func TestProbeRejectsTrailingOrOversizedStatusData(t *testing.T) {
+	for _, suffix := range []string{" {}", strings.Repeat(" ", maxProbeBodyBytes)} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(`{"success":true,"obj":{"panelVersion":"test"}}`))
+			w.(http.Flusher).Flush()
+			_, _ = w.Write([]byte(suffix))
+		}))
+		u, err := url.Parse(server.URL)
+		if err != nil {
+			server.Close()
+			t.Fatal(err)
+		}
+		port, err := strconv.Atoi(u.Port())
+		if err != nil {
+			server.Close()
+			t.Fatal(err)
+		}
+		n := &model.Node{Scheme: "http", Address: u.Hostname(), Port: port, BasePath: "/", AllowPrivateAddress: true}
+		patch, err := (&NodeService{}).Probe(context.Background(), n)
+		server.Close()
+		if err == nil || !strings.HasPrefix(patch.LastError, "decode response: ") {
+			t.Fatalf("accepted invalid status response (suffix length %d): %v", len(suffix), err)
+		}
+	}
+}

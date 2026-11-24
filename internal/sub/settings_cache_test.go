@@ -262,3 +262,34 @@ func seedTunnelSubInbound(t *testing.T, protocol model.Protocol, tag, subID, ema
 	}
 	return ib
 }
+
+func TestInboundSettingsCacheBoundsMemoryAndExpiresUnusedEntries(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	cache := newInboundSettingsCache(time.Second)
+	cache.now = func() time.Time { return now }
+	load := func() (string, error) { return `{"method":"none"}`, nil }
+	for id := 1; id <= settingsCacheMaxEntries+1; id++ {
+		if _, err := cache.settingsFor(id, load); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(cache.entries) != settingsCacheMaxEntries {
+		t.Fatalf("cache retained %d entries", len(cache.entries))
+	}
+	now = now.Add(2 * time.Second)
+	if _, err := cache.settingsFor(settingsCacheMaxEntries+2, load); err != nil {
+		t.Fatal(err)
+	}
+	if len(cache.entries) != 1 || cache.bytes != len(`{"method":"none"}`) {
+		t.Fatalf("expired entries retained: %d entries, %d bytes", len(cache.entries), cache.bytes)
+	}
+	large := strings.Repeat("x", settingsCacheMaxBytes+1)
+	got, err := cache.settingsFor(99999, func() (string, error) { return large, nil })
+	if err != nil || got != large || len(cache.entries) != 1 {
+		t.Fatal("oversized settings were cached or not returned")
+	}
+	cache.purgeAll()
+	if len(cache.entries) != 0 || cache.bytes != 0 {
+		t.Fatal("purge did not reset cache accounting")
+	}
+}

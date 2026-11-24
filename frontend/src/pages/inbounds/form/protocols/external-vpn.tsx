@@ -79,13 +79,18 @@ export function PingtunnelFields() {
 }
 
 export function TrustTunnelFields() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const ru = i18n.resolvedLanguage?.startsWith('ru') ?? false;
   const { control, setValue } = useFormContext();
   const [loadingPanelCert, setLoadingPanelCert] = useState(false);
   const shareAddr = (useWatch({ control, name: 'shareAddr' }) ?? '') as string;
   const nodeId = useWatch({ control, name: 'nodeId' }) as number | null | undefined;
   const certificate = (useWatch({ control, name: 'settings.certificate' }) ?? '') as string;
   const privateKey = (useWatch({ control, name: 'settings.privateKey' }) ?? '') as string;
+  const tcpOnly = useWatch({ control, name: 'settings.trustTunnelTcpOnly' }) === true;
+  const splitQUIC = useWatch({ control, name: 'settings.trustTunnelQuicBind' }) as
+    | string
+    | undefined;
 
   const updateSetting = (field: string, value: string) => {
     setValue(`settings.${field}`, value, {
@@ -141,6 +146,44 @@ export function TrustTunnelFields() {
     <>
       <Alert type="info" showIcon description={t('pages.inbounds.form.trusttunnelHint')} />
       <CascadeHint protocol="trusttunnel" />
+      <Form.Item label={ru ? 'Транспорт слушателя' : 'Listener transport'}>
+        <Select
+          value={tcpOnly ? 'tcp' : 'all'}
+          disabled={!!splitQUIC}
+          onChange={(value) =>
+            setValue('settings.trustTunnelTcpOnly', value === 'tcp', {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
+          options={[
+            { value: 'all', label: 'HTTP/1 + HTTP/2 + QUIC (TCP/UDP)' },
+            { value: 'tcp', label: 'HTTP/1 + HTTP/2 (TCP)' },
+          ]}
+        />
+      </Form.Item>
+      {splitQUIC && (
+        <Alert
+          type="info"
+          showIcon
+          description={
+            ru
+              ? `Общий HTTPS-вход активен. QUIC сохранён на UDP ${splitQUIC}. Для изменения транспорта сначала верните исходный порт.`
+              : `Shared HTTPS migration is active. QUIC remains on UDP ${splitQUIC}. Return the original port before changing transport.`
+          }
+        />
+      )}
+      {tcpOnly && (
+        <Alert
+          type="warning"
+          showIcon
+          description={
+            ru
+              ? 'После сохранения QUIC отключится. Клиенты, настроенные только на QUIC, потеряют подключение. Режим TCP совместим с общим HTTPS-входом.'
+              : 'Saving disables QUIC. QUIC-only clients will lose connectivity. TCP mode is compatible with shared HTTPS ingress.'
+          }
+        />
+      )}
       <FormField
         name={['settings', 'hostname']}
         label={t('pages.inbounds.form.trusttunnelHostname')}

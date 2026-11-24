@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -61,5 +62,19 @@ func TestManagerSnapshotSeparatesGlobalCountersFromFilteredResults(t *testing.T)
 	}
 	if len(snapshot.Operations) != 1 || snapshot.Operations[0].SubscriptionID != manual.ID {
 		t.Fatalf("journal filter not respected: %+v", snapshot.Operations)
+	}
+}
+
+func TestManagerSnapshotHugePageDoesNotWrapOffset(t *testing.T) {
+	service, _, _ := managerFixture(t)
+	snapshot, err := service.Snapshot(1, math.MaxInt, "", "", ManagerListOptions{Page: math.MaxInt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Subscriptions) != 0 || len(snapshot.Operations) != 0 {
+		t.Fatal("out-of-range page returned rows")
+	}
+	if snapshot.AllSubscriptionsTotal == 0 || snapshot.SubscriptionTotal != snapshot.AllSubscriptionsTotal {
+		t.Fatalf("incorrect totals for empty page: %+v", snapshot)
 	}
 }

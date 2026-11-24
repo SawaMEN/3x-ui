@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -39,30 +40,32 @@ func (s *InboundService) DesiredMtprotoInstancesContext(ctx context.Context) ([]
 	}
 
 	ids := make([]int, 0, len(inbounds))
+	candidates := make([]*model.Inbound, 0, len(inbounds))
 	for _, ib := range inbounds {
-		ids = append(ids, ib.Id)
-	}
-	var disabledRows []coremodel.ClientTraffic
-	err = db.Model(coremodel.ClientTraffic{}).
-		Where("inbound_id IN ? AND enable = ?", ids, false).
-		Select("inbound_id", "email").
-		Find(&disabledRows).Error
-	if err != nil {
-		return nil, err
-	}
-	disabled := make(map[int]map[string]struct{}, len(disabledRows))
-	for _, row := range disabledRows {
-		if disabled[row.InboundId] == nil {
-			disabled[row.InboundId] = map[string]struct{}{}
-		}
-		disabled[row.InboundId][row.Email] = struct{}{}
-	}
-
-	instances := make([]mtproto.Instance, 0, len(inbounds))
-	for _, ib := range inbounds {
-		if mtproto.WebProxyInbound(ib) {
+		if ib == nil || mtproto.WebProxyInbound(ib) {
 			continue
 		}
+		ids = append(ids, ib.Id)
+		candidates = append(candidates, ib)
+	}
+	disabled := make(map[int]map[string]struct{})
+	for _, batch := range chunkInts(ids, sqlInChunk) {
+		var rows []coremodel.ClientTraffic
+		if err := db.Model(coremodel.ClientTraffic{}).
+			Where("inbound_id IN ? AND enable = ?", batch, false).
+			Select("inbound_id", "email").Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			if disabled[row.InboundId] == nil {
+				disabled[row.InboundId] = map[string]struct{}{}
+			}
+			disabled[row.InboundId][row.Email] = struct{}{}
+		}
+	}
+
+	instances := make([]mtproto.Instance, 0, len(candidates))
+	for _, ib := range candidates {
 		inst, ok := mtproto.InstanceFromInbound(ib)
 		if !ok {
 			continue
@@ -114,15 +117,55 @@ func (s *InboundService) applyLocalMtproto(inboundId int) {
 	if err := rt.UpdateInbound(context.Background(), inbound, payload); err != nil {
 		logger.Debug("mtproto: immediate client apply failed for inbound", inboundId, ":", err)
 	}
-	if mtproto.WebProxyInbound(inbound) {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
-			defer cancel()
-			if err := ReconcileMtprotoWebProxy(ctx); err != nil {
-				logger.Warning("mtproto: immediate WEB client apply failed:", err)
-			}
-		}()
+	scheduleMtprotoWebApply(inbound)
+}
+
+func scheduleMtprotoWebApply(inbound *model.Inbound) {
+	if inbound == nil || inbound.NodeID != nil || !mtproto.WebProxyInbound(inbound) {
+		return
 	}
+	mtprotoWebApply.schedule(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		if err := ReconcileMtprotoWebProxy(ctx); err != nil {
+			logger.Warning("mtproto: immediate WEB apply failed:", err)
+		}
+	})
+}
+
+// A reconciliation reads the full desired state. One worker and one pending
+// pass are enough to converge after any number of concurrent client edits.
+type mtprotoWebApplyQueue struct {
+	mu      sync.Mutex
+	running bool
+	pending bool
+}
+
+var mtprotoWebApply mtprotoWebApplyQueue
+
+func (q *mtprotoWebApplyQueue) schedule(apply func()) {
+	q.mu.Lock()
+	q.pending = true
+	if q.running {
+		q.mu.Unlock()
+		return
+	}
+	q.running = true
+	q.mu.Unlock()
+
+	go func() {
+		for {
+			q.mu.Lock()
+			if !q.pending {
+				q.running = false
+				q.mu.Unlock()
+				return
+			}
+			q.pending = false
+			q.mu.Unlock()
+			apply()
+		}
+	}()
 }
 
 func (s *InboundService) resetMtprotoClientQuota(email string) {

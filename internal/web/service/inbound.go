@@ -367,20 +367,23 @@ func (s *InboundService) annotateFallbackParents(db *gorm.DB, inbounds []*model.
 }
 
 type InboundOption struct {
-	Id             int    `json:"id" example:"1"`
-	Remark         string `json:"remark" example:"VLESS-443"`
-	Tag            string `json:"tag" example:"in-443-tcp"`
-	Protocol       string `json:"protocol" example:"vless"`
-	Port           int    `json:"port" example:"443"`
-	Enable         bool   `json:"enable" example:"true"`
-	Network        string `json:"network,omitempty"`
-	Security       string `json:"security,omitempty"`
-	TlsFlowCapable bool   `json:"tlsFlowCapable" example:"true"`
-	SsMethod       string `json:"ssMethod"`
-	WgPublicKey    string `json:"wgPublicKey,omitempty"`
-	WgMtu          int    `json:"wgMtu,omitempty"`
-	WgDns          string `json:"wgDns,omitempty"`
-	MtprotoDomain  string `json:"mtprotoDomain,omitempty"`
+	SharedIngressSNI   string `json:"sharedIngressSni,omitempty"`
+	SharedIngressError string `json:"sharedIngressError,omitempty"`
+	UDP443             bool   `json:"udp443,omitempty"`
+	Id                 int    `json:"id" example:"1"`
+	Remark             string `json:"remark" example:"VLESS-443"`
+	Tag                string `json:"tag" example:"in-443-tcp"`
+	Protocol           string `json:"protocol" example:"vless"`
+	Port               int    `json:"port" example:"443"`
+	Enable             bool   `json:"enable" example:"true"`
+	Network            string `json:"network,omitempty"`
+	Security           string `json:"security,omitempty"`
+	TlsFlowCapable     bool   `json:"tlsFlowCapable" example:"true"`
+	SsMethod           string `json:"ssMethod"`
+	WgPublicKey        string `json:"wgPublicKey,omitempty"`
+	WgMtu              int    `json:"wgMtu,omitempty"`
+	WgDns              string `json:"wgDns,omitempty"`
+	MtprotoDomain      string `json:"mtprotoDomain,omitempty"`
 	// AwgServer carries the full AmneziaWG server block (keys, subnet,
 	// obfuscation params) so the clients page can render a downloadable
 	// per-client .conf without a second round trip.
@@ -432,32 +435,54 @@ func (s *InboundService) GetInboundOptions(userId int) ([]InboundOption, error) 
 	for _, r := range rows {
 		wgPublicKey, wgMtu, wgDns := inboundWireguardHints(r.Protocol, r.Settings)
 		netHint, secHint := inboundStreamHints(r.Protocol, r.StreamSettings, r.Settings)
+		// Native TLS settings do not use streamSettings. Expose the actual
+		// TCP/SNI eligibility to the WEB ingress selector without exposing keys.
+		switch model.Protocol(r.Protocol) {
+		case model.VetroffProxy, model.AnyTLS, model.TrustTunnel, model.MASQUE, model.ShadowTLS:
+			candidate := &model.Inbound{Protocol: model.Protocol(r.Protocol), Settings: r.Settings}
+			if _, err := telemtIngressNativeTLS(candidate); err == nil && model.ShadowTLSTransport(r.Settings) == nil {
+				netHint, secHint = "tcp", "tls"
+			} else {
+				secHint = ""
+			}
+		}
 		shareAddrStrategy := r.ShareAddrStrategy
 		if shareAddrStrategy == "node" {
 			shareAddrStrategy = ""
 		}
+		// Use the same validator as preflight. For node options, eligibility is
+		// a preview relative to the hosting node; its own panel validates again.
+		candidate := &model.Inbound{Id: r.Id, Protocol: model.Protocol(r.Protocol), Enable: r.Enable, Listen: r.Listen, Port: r.Port, StreamSettings: r.StreamSettings, Settings: r.Settings}
+		sni, _, _, _, ingressErr := telemtIngressProxyEndpoint(candidate, "")
+		ingressError := ""
+		if ingressErr != nil {
+			ingressError = ingressErr.Error()
+		}
 		out = append(out, InboundOption{
-			Id:                r.Id,
-			Remark:            r.Remark,
-			Tag:               r.Tag,
-			Protocol:          r.Protocol,
-			Port:              r.Port,
-			Enable:            r.Enable,
-			Network:           netHint,
-			Security:          secHint,
-			TlsFlowCapable:    !r.DisableFlow && inboundCanEnableTlsFlow(r.Protocol, r.StreamSettings, r.Settings),
-			SsMethod:          inboundShadowsocksMethod(r.Protocol, r.Settings),
-			WgPublicKey:       wgPublicKey,
-			WgMtu:             wgMtu,
-			WgDns:             wgDns,
-			MtprotoDomain:     inboundMtprotoDomain(r.Protocol, r.Settings),
-			AwgServer:         inboundAmneziaWGServer(r.Protocol, r.Settings),
-			TuicServer:        inboundTuicServer(r.Protocol, r.Settings),
-			NodeId:            r.NodeId,
-			NodeAddress:       r.NodeAddress,
-			Listen:            r.Listen,
-			ShareAddr:         r.ShareAddr,
-			ShareAddrStrategy: shareAddrStrategy,
+			SharedIngressSNI:   sni,
+			SharedIngressError: ingressError,
+			UDP443:             telemtInboundUsesUDP443(candidate),
+			Id:                 r.Id,
+			Remark:             r.Remark,
+			Tag:                r.Tag,
+			Protocol:           r.Protocol,
+			Port:               r.Port,
+			Enable:             r.Enable,
+			Network:            netHint,
+			Security:           secHint,
+			TlsFlowCapable:     !r.DisableFlow && inboundCanEnableTlsFlow(r.Protocol, r.StreamSettings, r.Settings),
+			SsMethod:           inboundShadowsocksMethod(r.Protocol, r.Settings),
+			WgPublicKey:        wgPublicKey,
+			WgMtu:              wgMtu,
+			WgDns:              wgDns,
+			MtprotoDomain:      inboundMtprotoDomain(r.Protocol, r.Settings),
+			AwgServer:          inboundAmneziaWGServer(r.Protocol, r.Settings),
+			TuicServer:         inboundTuicServer(r.Protocol, r.Settings),
+			NodeId:             r.NodeId,
+			NodeAddress:        r.NodeAddress,
+			Listen:             r.Listen,
+			ShareAddr:          r.ShareAddr,
+			ShareAddrStrategy:  shareAddrStrategy,
 		})
 	}
 	return out, nil
@@ -1512,6 +1537,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	if postCommitApply != nil {
 		postCommitApply()
 	}
+	scheduleMtprotoWebApply(inbound)
 	if inbound.Protocol == model.Sudoku {
 		if err := RefreshSudokuCredentialsOnInbound(inbound); err != nil {
 			logger.Warning("AddInbound: Sudoku credentials initialization failed:", err)
@@ -1670,6 +1696,7 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 	if mtprotoRoutesThroughXray(&ib) || usesCoreSidecarRelay(&ib) {
 		needRestart = true
 	}
+	scheduleMtprotoWebApply(&ib)
 	return needRestart, nodePush, nil
 }
 
@@ -1838,6 +1865,8 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 	}
 	inbound.Enable = enable
 
+	scheduleMtprotoWebApply(inbound)
+
 	if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.MASQUE || inbound.Protocol == model.Snell || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
 		core, coreErr := s.coreTypeForInbound(inbound)
 		if coreErr != nil {
@@ -1925,6 +1954,9 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	}
 	// Keep node ownership authoritative before protocol validation and port allocation.
 	inbound.NodeID = oldInbound.NodeID
+	if trustTunnelSeparateUDPListener(oldInbound) != nil && (inbound.Protocol != oldInbound.Protocol || inbound.Port != oldInbound.Port || inbound.Listen != oldInbound.Listen) {
+		return inbound, false, fmt.Errorf("return the shared HTTPS migration before editing the TrustTunnel listener")
+	}
 	if err := ValidateMtprotoWebInbound(inbound); err != nil {
 		return inbound, false, err
 	}
@@ -2040,6 +2072,43 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		var current model.Inbound
 		if err := tx.First(&current, inbound.Id).Error; err != nil {
 			return err
+		}
+		if current.Protocol == model.MTProto || oldInbound.Protocol == model.MTProto {
+			journal, err := loadTelemtVPNMigration(tx)
+			if err != nil {
+				return err
+			}
+			if journal != nil && journal.ManagedInboundID == current.Id {
+				if mtprotoWebMigrationDraft(oldInbound) || inbound.Protocol != model.MTProto ||
+					inbound.Listen != current.Listen || inbound.Port != current.Port || inbound.Enable != current.Enable {
+					return fmt.Errorf("return the managed WEB migration before changing its listener")
+				}
+				oldWeb, err := mtprotoWebForInbound(&current)
+				if err != nil {
+					return err
+				}
+				newWeb, err := mtprotoWebForInbound(inbound)
+				if err != nil {
+					return err
+				}
+				if !newWeb.Enabled || newWeb.MigrationDraft || !telemtWebIngressEqual(oldWeb.SharedIngress, newWeb.SharedIngress) {
+					return fmt.Errorf("return the managed WEB migration before changing shared ingress routes")
+				}
+			}
+			if mtprotoWebMigrationDraft(oldInbound) != mtprotoWebMigrationDraft(&current) {
+				return fmt.Errorf("MTProto migration changed; reopen the inbound editor")
+			}
+		}
+		// The preview may have been applied or rolled back while the editor
+		// was open. Do not overwrite the migration-owned listener with stale
+		// settings, even when the requested port happens to be free.
+		if oldInbound.Protocol == model.TrustTunnel || current.Protocol == model.TrustTunnel {
+			oldUDP, currentUDP := trustTunnelSeparateUDPListener(oldInbound), trustTunnelSeparateUDPListener(&current)
+			if (oldUDP == nil) != (currentUDP == nil) ||
+				(oldUDP != nil && currentUDP != nil && (oldUDP.Listen != currentUDP.Listen || oldUDP.Port != currentUDP.Port)) ||
+				((oldUDP != nil || currentUDP != nil) && (oldInbound.Listen != current.Listen || oldInbound.Port != current.Port)) {
+				return fmt.Errorf("TrustTunnel migration changed; reopen the inbound editor")
+			}
 		}
 		conflict, cErr := checkPortConflictTx(tx, inbound, inbound.Id)
 		if cErr != nil {
@@ -2294,6 +2363,10 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	}
 	if postCommitApply != nil {
 		postCommitApply()
+	}
+	scheduleMtprotoWebApply(inbound)
+	if !mtproto.WebProxyInbound(inbound) {
+		scheduleMtprotoWebApply(oldInbound)
 	}
 	if inbound.Protocol == model.Sudoku {
 		if err := RefreshSudokuCredentialsOnInbound(inbound); err != nil {

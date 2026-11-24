@@ -1,3 +1,8 @@
+import {
+  hydrateHysteriaObfs,
+  selectHysteriaObfs,
+  syncHysteriaObfsForWire,
+} from '@/lib/xray/hysteria-obfs';
 import { describe, expect, it } from 'vitest';
 import { fillStreamDefaults } from '@/lib/xray/stream-defaults';
 import { formValuesToWirePayload, rawInboundToFormValues } from '@/lib/xray/inbound-form-adapter';
@@ -73,4 +78,77 @@ it('keeps invalid native settings visible instead of erasing credentials', () =>
   expect(stream.hysteriaSettings).toMatchObject({
     obfs: { password: 'secret', minPacketSize: 1200, maxPacketSize: 512 },
   });
+});
+
+describe('automatic Hysteria obfs', () => {
+  const legacy = {
+    network: 'hysteria',
+    hysteriaSettings: { version: 2 },
+    finalmask: {
+      udp: [{ type: 'salamander', settings: { password: 'existing', packetSize: '600-1100' } }],
+      quicParams: { congestion: 'bbr' },
+    },
+  };
+  it('lifts legacy credentials without changing the source and mirrors them on save', () => {
+    const form = hydrateHysteriaObfs(legacy);
+    expect(form.hysteriaSettings).toMatchObject({
+      obfs: { type: 'gecko', password: 'existing', minPacketSize: 600, maxPacketSize: 1100 },
+    });
+    expect(form.finalmask).toMatchObject({ udp: [], quicParams: { congestion: 'bbr' } });
+    expect(syncHysteriaObfsForWire(form).finalmask).toEqual(legacy.finalmask);
+    expect(legacy.finalmask.udp).toHaveLength(1);
+  });
+  it('preserves passwords across modes and generates only on inbound', () => {
+    expect(selectHysteriaObfs('gecko', { type: 'salamander', password: 'existing' }, true)).toEqual(
+      {
+        type: 'gecko',
+        password: 'existing',
+        minPacketSize: 512,
+        maxPacketSize: 1200,
+      },
+    );
+    expect(selectHysteriaObfs('salamander', undefined, true)?.password).toMatch(/^[a-f0-9]{32}$/);
+    expect(selectHysteriaObfs('salamander', undefined, false)?.password).toBe('');
+    expect(selectHysteriaObfs('', undefined, true)).toBeUndefined();
+  });
+  it('keeps unsupported legacy settings and Hysteria1 unchanged', () => {
+    const unsupported = {
+      ...legacy,
+      finalmask: {
+        udp: [{ type: 'salamander', settings: { password: 'existing', unknown: true } }],
+      },
+    };
+    expect(hydrateHysteriaObfs(unsupported)).toBe(unsupported);
+    const v1 = { ...legacy, hysteriaSettings: { version: 1, obfs: 'existing' } };
+    expect(hydrateHysteriaObfs(v1)).toBe(v1);
+  });
+});
+
+it('uses a single native editor for Hysteria2 BBR and legacy Mbps rates', () => {
+  const form = hydrateHysteriaObfs({
+    hysteriaSettings: { version: 2, up: 75 },
+    finalmask: {
+      quicParams: {
+        congestion: 'brutal',
+        bbrProfile: 'standard',
+        brutalUp: '60 mbps',
+        brutalDown: '100 mbps',
+      },
+    },
+  });
+  expect(form.hysteriaSettings).toMatchObject({
+    version: 2,
+    up: 75,
+    down: 100,
+    bbrProfile: 'standard',
+  });
+  expect(form.finalmask).toEqual({ quicParams: { congestion: 'brutal' } });
+  expect(syncHysteriaObfsForWire(form).finalmask).toEqual({
+    quicParams: { congestion: 'brutal', brutalUp: '75 mbps', brutalDown: '100 mbps' },
+  });
+  const legacy = {
+    hysteriaSettings: { version: 2 },
+    finalmask: { quicParams: { brutalUp: '1 gbps' } },
+  };
+  expect(hydrateHysteriaObfs(legacy)).toBe(legacy);
 });

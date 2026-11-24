@@ -869,6 +869,23 @@ export function genHysteriaLink(input: GenHysteriaLinkInput): string {
     }
   }
 
+  const nativeObfs = stream.network === 'hysteria' ? stream.hysteriaSettings?.obfs : undefined;
+  if (
+    nativeObfs &&
+    typeof nativeObfs === 'object' &&
+    (nativeObfs.type === 'salamander' || nativeObfs.type === 'gecko') &&
+    nativeObfs.password
+  ) {
+    params.set('obfs', nativeObfs.type);
+    params.set('obfs-password', nativeObfs.password);
+    params.delete('minPacketSize');
+    params.delete('maxPacketSize');
+    if (nativeObfs.type === 'gecko') {
+      if (nativeObfs.minPacketSize) params.set('minPacketSize', String(nativeObfs.minPacketSize));
+      if (nativeObfs.maxPacketSize) params.set('maxPacketSize', String(nativeObfs.maxPacketSize));
+    }
+  }
+
   const hopPorts = udpHopPorts(stream);
   if (hopPorts.length > 0) {
     params.set('mport', hopPorts);

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
@@ -116,4 +117,50 @@ func TestUpdateInboundMtprotoUnchangedDoesNotRestart(t *testing.T) {
 			t.Fatalf("restarted Telemt config must carry the normalized base secret:\n%s", got)
 		}
 	})
+}
+
+func TestMtprotoWebApplyQueueCoalescesConcurrentEdits(t *testing.T) {
+	var queue mtprotoWebApplyQueue
+	started := make(chan struct{})
+	release := make(chan struct{})
+	second := make(chan struct{}, 1)
+	calls := 0
+	apply := func() {
+		calls++
+		if calls == 1 {
+			close(started)
+			<-release
+			return
+		}
+		second <- struct{}{}
+	}
+	queue.schedule(apply)
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("reconciliation did not start")
+	}
+	for i := 0; i < 100; i++ {
+		queue.schedule(apply)
+	}
+	close(release)
+	select {
+	case <-second:
+	case <-time.After(time.Second):
+		t.Fatal("pending reconciliation was lost")
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		queue.mu.Lock()
+		running := queue.running
+		queue.mu.Unlock()
+		if !running {
+			if calls != 2 {
+				t.Fatalf("reconciliation ran %d times, want 2", calls)
+			}
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("reconciliation did not finish")
 }

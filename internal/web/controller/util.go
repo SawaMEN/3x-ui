@@ -27,8 +27,11 @@ func getRemoteIp(c *gin.Context) string {
 		return remoteIP
 	}
 
-	realIP, hasRealIP := extractTrustedIP(c.GetHeader("X-Real-IP"))
-	forwardedIP, hasForwarded := forwardedForClient(c.GetHeader("X-Forwarded-For"))
+	realIP, hasRealIP := "", false
+	if values := c.Request.Header.Values("X-Real-IP"); len(values) == 1 {
+		realIP, hasRealIP = extractTrustedIP(values[0])
+	}
+	forwardedIP, hasForwarded := forwardedForClient(strings.Join(c.Request.Header.Values("X-Forwarded-For"), ","))
 	switch {
 	case hasRealIP && hasForwarded && realIP != forwardedIP:
 		// A proxy rewrites at most one of the two, so the other is the client's
@@ -107,20 +110,12 @@ func extractTrustedIP(value string) (string, bool) {
 		}
 	}
 
-	if strings.Count(candidate, ":") == 1 {
-		if host, _, err := net.SplitHostPort(fmt.Sprintf("[%s]", candidate)); err == nil {
-			if ip, ok := parseIPCandidate(host); ok {
-				return ip.String(), true
-			}
-		}
-	}
-
 	return "", false
 }
 
 func parseIPCandidate(value string) (netip.Addr, bool) {
 	ip, err := netip.ParseAddr(strings.TrimSpace(value))
-	if err != nil {
+	if err != nil || ip.Zone() != "" {
 		return netip.Addr{}, false
 	}
 	return ip.Unmap(), true
@@ -177,8 +172,17 @@ func jsonMsgObj(c *gin.Context, msg string, obj any, err error) {
 		middleware.MarkRequestFailureLogged(c)
 		logger.Errorf("%s operation failed: %s", requestErrorContext(c), logger.ErrorSummary(err))
 		errStr := err.Error()
-		if errStr != "" {
+		// Service validation can return an i18n key. Resolve it before
+		// formatting the response, otherwise the UI displays the raw key.
+		if strings.HasPrefix(errStr, "pages.") {
+			if translated := I18nWeb(c, errStr); translated != "" && translated != errStr {
+				errStr = translated
+			}
+		}
+		if errStr != "" && msg != "" {
 			m.Msg = msg + " (" + errStr + ")"
+		} else if errStr != "" {
+			m.Msg = errStr
 		} else if msg != "" {
 			m.Msg = msg
 		} else {
@@ -218,17 +222,21 @@ func isAjax(c *gin.Context) bool {
 // forwardedForClient walks X-Forwarded-For from the proxy end: entries a client sent
 // come first, so the first hop that is not a trusted proxy is the address one saw.
 func forwardedForClient(xff string) (string, bool) {
-	parts := strings.Split(xff, ",")
+	// Resolve the trust configuration once per chain rather than once per hop.
+	cidrs := trustedProxyCIDRs()
 	client := ""
-	for i := len(parts) - 1; i >= 0; i-- {
-		ip, ok := extractTrustedIP(parts[i])
+	for xff != "" {
+		i := strings.LastIndexByte(xff, ',')
+		ip, ok := extractTrustedIP(xff[i+1:])
 		if !ok {
 			break
 		}
 		client = ip
-		if !isTrustedProxy(ip) {
+		addr, err := netip.ParseAddr(ip)
+		if err != nil || !proxyAddrInCIDRs(addr, cidrs) || i < 0 {
 			break
 		}
+		xff = xff[:i]
 	}
 	return client, client != ""
 }

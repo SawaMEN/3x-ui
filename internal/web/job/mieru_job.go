@@ -21,7 +21,11 @@ func (j *MieruJob) Run() {
 	// CollectTraffic advances Mieru's cumulative-counter cursors. Serialize the
 	// whole poll so a slow database write cannot let another run consume a newer
 	// snapshot before the previous delta has been acknowledged.
-	mieruTrafficMu.Lock()
+	// Cumulative counters survive a skipped tick; never queue another poll
+	// behind an in-flight replay or shutdown waiting on the database.
+	if !mieruTrafficMu.TryLock() {
+		return
+	}
 	defer mieruTrafficMu.Unlock()
 
 	_, _, retryErr := j.journal.replay("mieru", &j.inboundService)

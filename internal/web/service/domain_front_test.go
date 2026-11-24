@@ -123,3 +123,34 @@ func TestDomainGatewayDropsLegacyPanelFlags(t *testing.T) {
 		t.Fatal("incoming gateway config still exposes the panel")
 	}
 }
+
+func TestStandaloneCoverKeepsSavedGatewayDisabled(t *testing.T) {
+	setupConflictDB(t)
+	s := &SettingService{}
+	cfg := domainfront.DefaultConfig()
+	cfg.Domains = []domainfront.DomainFrontDomain{
+		{Name: "cover.example.org", Mode: "sni_only", Enabled: true, TLS: "auto"},
+		{Name: "other.example.org", Mode: "direct", Enabled: true, TLS: "auto"},
+	}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.setString("domainFrontConfig", string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.setBool("rootRedirectEnable", false); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := s.GetDomainFrontConfig()
+	if err != nil || saved.Enabled || len(saved.Domains) != 2 {
+		t.Fatalf("saved=%+v err=%v", saved, err)
+	}
+	effective, err := s.GetRuntimeDomainFrontConfig()
+	if err != nil || !effective.PublicOnly || !effective.HasPublicSites() || len(effective.Domains) != 1 {
+		t.Fatalf("runtime=%+v err=%v", effective, err)
+	}
+	if effective.Domains[0].Name != "cover.example.org" {
+		t.Fatalf("unexpected public domain: %+v", effective.Domains)
+	}
+}

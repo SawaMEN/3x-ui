@@ -69,6 +69,47 @@ class UpdateCleanupTests(unittest.TestCase):
             self.assertIn("removed 7 artifacts", result.stdout)
             self.assertIn("free space", result.stdout)
 
+
+    def test_failed_upgrade_lock_releases_download_lock(self):
+        with tempfile.TemporaryDirectory() as raw:
+            script = 'set -eu\n'
+            script += function("install.sh", "acquire_update_download_lock")
+            script += r'''
+exec 8>"$TEST_ROOT/.x-ui-upgrade.lock"
+flock -n 8
+if acquire_update_download_lock "$TEST_ROOT"; then exit 2; fi
+[[ -z "${xui_download_lock_fd:-}" ]]
+exec 7>"$TEST_ROOT/.x-ui-download.lock"
+flock -n 7
+'''
+            result = subprocess.run(["bash", "-c", script], env=dict(os.environ, TEST_ROOT=raw),
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_core_checksum_must_match_actual_binary(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            binary = root / "bin"
+            binary.mkdir()
+            name = "hiddify-core-linux-amd64"
+            (binary / name).write_text("wrong")
+            (binary / "unrelated").write_text("verified")
+            (binary / "libcronet.so").write_text("library")
+            (binary / "target.json").write_text("{}")
+            for asset, source in ((name, "unrelated"), ("libcronet.so", "libcronet.so")):
+                digest = hashlib.sha256((binary / source).read_bytes()).hexdigest()
+                (binary / (asset + ".sha256")).write_text(digest + "  " + source + "\n")
+            panel = root / "x-ui"
+            panel.write_text("#!/bin/sh\nexit 0\n")
+            panel.chmod(0o700)
+            script = 'set -eu\nroot="$TEST_ROOT"\nbin="$root/bin"\nbinary=hiddify-core-linux-amd64\nassets=("$binary" "$binary.sha256" libcronet.so libcronet.so.sha256 target.json)\n'
+            script += function("scripts/runtime/hiddify-core-update.sh", "core_update_matches")
+            script += "\ncore_update_matches\n"
+            result = subprocess.run(["bash", "-c", script], env=dict(os.environ, TEST_ROOT=raw),
+                                    capture_output=True, text=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+
     def test_core_cleanup_preserves_backups_and_running_assets(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -98,6 +139,85 @@ class UpdateCleanupTests(unittest.TestCase):
             self.assertEqual(asset.read_text(), "working")
             self.assertTrue(unknown.exists())
             self.assertIn("removed 2 artifacts", result.stdout)
+
+    def test_core_update_checks_identity_even_when_tag_matches(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            binary = root / "bin"
+            binary.mkdir()
+            panel = root / "x-ui"
+            panel.write_text('#!/bin/bash\n[[ "$*" == "core-migrate --check-binary" && "$XUI_BIN_FOLDER" == "$TEST_ROOT/bin" ]] && grep -qx valid "$XUI_BIN_FOLDER/target.json"\n')
+            panel.chmod(0o700)
+            name = "hiddify-core-linux-amd64"
+            import hashlib
+            for asset in (name, "libcronet.so"):
+                (binary / asset).write_text(asset)
+                digest = hashlib.sha256((binary / asset).read_bytes()).hexdigest()
+                (binary / (asset + ".sha256")).write_text(digest + "  " + asset + "\n")
+            manifest = binary / "target.json"
+            manifest.write_text("valid\n")
+            script = 'set -eu\nroot="$TEST_ROOT"\nbin="$root/bin"\nbinary=hiddify-core-linux-amd64\nassets=("$binary" "$binary.sha256" libcronet.so libcronet.so.sha256 target.json)\n'
+            script += function("scripts/runtime/hiddify-core-update.sh", "core_update_matches")
+            script += '\ncore_update_matches\n'
+            def probe():
+                return subprocess.run(["bash", "-c", script], env=dict(os.environ, TEST_ROOT=raw),
+                                      capture_output=True, text=True, timeout=10)
+            self.assertEqual(probe().returncode, 0)
+            manifest.write_text("stale\n")
+            self.assertNotEqual(probe().returncode, 0)
+            manifest.unlink()
+            self.assertNotEqual(probe().returncode, 0)
+            manifest.write_text("valid\n")
+            (binary / name).write_text("different binary")
+            self.assertNotEqual(probe().returncode, 0)
+
+    def test_manifest_repair_requires_identical_verified_executable(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            binary = root / "bin"
+            stage = root / "stage"
+            binary.mkdir()
+            stage.mkdir()
+            name = "hiddify-core-linux-amd64"
+            (stage / name).write_text("verified")
+            (binary / name).write_text("verified")
+            script = 'set -eu\nbin="$TEST_ROOT/bin"\nbinary=hiddify-core-linux-amd64\n'
+            script += function("scripts/runtime/hiddify-core-update.sh", "core_update_can_repair_manifest")
+            script += '\ncore_update_can_repair_manifest "$TEST_ROOT/stage"\n'
+            def probe():
+                return subprocess.run(["bash", "-c", script], env=dict(os.environ, TEST_ROOT=raw),
+                                      capture_output=True, text=True, timeout=10)
+            self.assertEqual(probe().returncode, 0)
+            (binary / name).write_text("wrong")
+            self.assertNotEqual(probe().returncode, 0)
+            (binary / name).unlink()
+            (binary / name).symlink_to(stage / name)
+            self.assertNotEqual(probe().returncode, 0)
+
+    def test_stale_manifest_does_not_block_identical_core_repair(self):
+        source = (ROOT / "scripts/runtime/hiddify-core-update.sh").read_text()
+        # Run the actual compatibility branch, without network or systemctl.
+        branch = source[source.index('if core_update_can_repair_manifest "$stage"; then'):
+                        source.index("# Check the candidate with the installed panel")]
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            binary = root / "bin"
+            stage = root / "stage"
+            binary.mkdir()
+            stage.mkdir()
+            name = "hiddify-core-linux-amd64"
+            (stage / name).write_text("verified")
+            (binary / name).write_text("verified")
+            (binary / "target.json").write_text('{"target":{"version":"sawamen-970842c884a1-062192bbe5c3-mask1-ciphers1-net62-sec1-stream1"}}')
+            script = 'set -eu\nbin="$TEST_ROOT/bin"\nstage="$TEST_ROOT/stage"\nbinary=hiddify-core-linux-amd64\ncurrent_tag=sawamen-970842c884a1-062192bbe5c3-mask1-ciphers1-net62-sec1-stream1\n'
+            script += function("scripts/runtime/hiddify-core-update.sh", "core_update_can_repair_manifest")
+            script += "\n" + branch
+            def probe():
+                return subprocess.run(["bash", "-c", script], env=dict(os.environ, TEST_ROOT=raw),
+                                      capture_output=True, text=True, timeout=10)
+            self.assertEqual(probe().returncode, 0)
+            (binary / name).write_text("different")
+            self.assertNotEqual(probe().returncode, 0)
 
     def test_install_exit_explicitly_unlocks_inherited_descriptor(self):
         with tempfile.TemporaryDirectory() as raw:

@@ -442,7 +442,7 @@ func (r *frontRuntime) redirectHTTPS(w http.ResponseWriter, req *http.Request) {
 	if r.backend.GetRedirect != nil {
 		redirectURL, _ = r.backend.GetRedirect()
 	}
-	if d.Mode != "sni_only" && !r.protectedRedirectPath(d, req.URL.Path) {
+	if !d.HasCoverSite() && !r.protectedRedirectPath(d, req.URL.Path) {
 		if target := RootRedirectTarget(req, redirectURL); target != "" {
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Referrer-Policy", "no-referrer")
@@ -499,8 +499,14 @@ func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := DomainFrontStatus{Config: cfg, Running: m.runtime != nil, Error: m.lastError, Certificates: []DomainFrontCertificate{}}
+	activeDomains := make(map[string]bool)
+	if m.runtime != nil {
+		for _, d := range m.runtime.cfg.Domains {
+			activeDomains[d.Name] = d.Enabled
+		}
+	}
 	for _, d := range cfg.Domains {
-		entry := DomainFrontCertificate{Name: d.Name, Mode: d.TLS, State: "disabled", AutoRenew: out.Running && d.Enabled && cfg.Enabled && (d.TLS == "auto" || d.TLS == "certmagic")}
+		entry := DomainFrontCertificate{Name: d.Name, Mode: d.TLS, State: "disabled", AutoRenew: d.Enabled && activeDomains[d.Name] && (d.TLS == "auto" || d.TLS == "certmagic")}
 		if !d.Enabled {
 			out.Certificates = append(out.Certificates, entry)
 			continue
@@ -720,28 +726,73 @@ func (r *frontRuntime) protectedRedirectPath(d DomainFrontDomain, path string) b
 	return r.panelRequestPath(path)
 }
 
+func isCoverSitePath(path string) bool {
+	switch path {
+	case "/", "/index.html", "/site.css", "/site.js":
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidateCoverPaths checks that static website resources do not shadow service routes.
+func (b Backend) ValidateCoverPaths(d DomainFrontDomain) error {
+	if !d.HasCoverSite() || d.Mode == "sni_only" {
+		return nil
+	}
+	r := &frontRuntime{backend: b}
+	for _, path := range []string{"/", "/index.html", "/site.css", "/site.js"} {
+		if r.protectedRedirectPath(d, path) {
+			return fmt.Errorf("cover site %s: path %s conflicts with an existing service", d.Name, path)
+		}
+	}
+	return nil
+}
+
+const coverSiteCSP = "sandbox allow-scripts; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"
+
+func staticCoverSite(dir string) http.Handler {
+	static := http.FileServer(http.Dir(dir))
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		if (req.Method != http.MethodGet && req.Method != http.MethodHead) || !isCoverSitePath(req.URL.Path) {
+			http.NotFound(w, req)
+			return
+		}
+		static.ServeHTTP(w, req)
+	})
+}
+
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
+	var cover http.Handler
+	if d.HasCoverSite() {
+		if err := r.backend.ValidateCoverPaths(d); err != nil {
+			return nil, err
+		}
+		dir := r.backend.DecoyDirectories[d.Name]
+		if dir == "" {
+			return nil, fmt.Errorf("cover site %s has no prepared website", d.Name)
+		}
+		cover = staticCoverSite(dir)
+	}
 	// SNI-only hosts serve Telemt's generated static website while denying
 	// every panel, subscription and inbound route, even if its path exists.
 	if d.Mode == "sni_only" {
-		dir := r.backend.DecoyDirectories[d.Name]
-		if dir == "" {
-			return nil, fmt.Errorf("SNI site %s has no prepared website", d.Name)
-		}
-		static := http.FileServer(http.Dir(dir))
+		return cover, nil
+	}
+	if r.cfg.PublicOnly {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
-			w.Header().Set("Cache-Control", "public, max-age=300")
-			if req.Method != http.MethodGet && req.Method != http.MethodHead {
+			if r.protectedRedirectPath(d, req.URL.Path) {
 				http.NotFound(w, req)
 				return
 			}
-			switch req.URL.Path {
-			case "/", "/index.html", "/site.css", "/site.js":
-				static.ServeHTTP(w, req)
-			default:
-				http.NotFound(w, req)
+			if cover != nil {
+				w.Header().Set("Content-Security-Policy", coverSiteCSP)
+				cover.ServeHTTP(w, req)
+				return
 			}
+			r.serveRootRedirect(w, req)
 		}), nil
 	}
 	var subscription http.Handler
@@ -822,18 +873,33 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 			http.NotFound(w, req)
 			return
 		}
-		redirectURL := r.backend.RedirectURL
-		if r.backend.GetRedirect != nil {
-			redirectURL, _ = r.backend.GetRedirect()
-		}
-		if target := RootRedirectTarget(req, redirectURL); target != "" {
-			w.Header().Set("Cache-Control", "no-store")
-			w.Header().Set("Referrer-Policy", "no-referrer")
-			http.Redirect(w, req, target, http.StatusFound)
+		if cover != nil && isCoverSitePath(req.URL.Path) {
+			// Isolate website scripts from application cookies and storage on
+			// a hostname that also serves private subscription endpoints.
+			w.Header().Set("Content-Security-Policy", coverSiteCSP)
+			cover.ServeHTTP(w, req)
 			return
 		}
-		http.NotFound(w, req)
+		if cover != nil {
+			http.NotFound(w, req)
+			return
+		}
+		r.serveRootRedirect(w, req)
 	}), nil
+}
+
+func (r *frontRuntime) serveRootRedirect(w http.ResponseWriter, req *http.Request) {
+	redirectURL := r.backend.RedirectURL
+	if r.backend.GetRedirect != nil {
+		redirectURL, _ = r.backend.GetRedirect()
+	}
+	if target := RootRedirectTarget(req, redirectURL); target != "" {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		http.Redirect(w, req, target, http.StatusFound)
+		return
+	}
+	http.NotFound(w, req)
 }
 
 // HTTP/1.1 trailers require chunked framing even when the HTTP/2 upstream knows its length.

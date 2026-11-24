@@ -216,9 +216,9 @@ func TestShouldAutoServeClash(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := shouldAutoServeClash(tt.autoDetect, tt.clashEnabled, tt.wantsHTML, tt.userAgent, compileUserAgentRegex("Clash/Mihomo", tt.pattern, service.DefaultSubClashUserAgentRegex))
+			got := shouldAutoServeFormat(tt.autoDetect, tt.clashEnabled, tt.wantsHTML, tt.userAgent, compileUserAgentRegex("Clash/Mihomo", tt.pattern, service.DefaultSubClashUserAgentRegex))
 			if got != tt.want {
-				t.Fatalf("shouldAutoServeClash() = %v, want %v", got, tt.want)
+				t.Fatalf("shouldAutoServeFormat() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -226,10 +226,10 @@ func TestShouldAutoServeClash(t *testing.T) {
 
 func TestShouldAutoServeClashUsesConfiguredRegex(t *testing.T) {
 	configured := compileUserAgentRegex("Clash/Mihomo", `(?i)^custom-client/`, service.DefaultSubClashUserAgentRegex)
-	if !shouldAutoServeClash(true, true, false, "Custom-Client/1.0", configured) {
+	if !shouldAutoServeFormat(true, true, false, "Custom-Client/1.0", configured) {
 		t.Fatal("configured User-Agent regex did not match")
 	}
-	if shouldAutoServeClash(true, true, false, "Mihomo/1.19", configured) {
+	if shouldAutoServeFormat(true, true, false, "Mihomo/1.19", configured) {
 		t.Fatal("built-in User-Agent matched after a custom regex replaced it")
 	}
 }
@@ -237,22 +237,22 @@ func TestShouldAutoServeClashUsesConfiguredRegex(t *testing.T) {
 func TestShouldAutoServeJson(t *testing.T) {
 	configured := compileUserAgentRegex("Xray JSON", `(?i)^jsonclient([ /]|$)`, service.DefaultSubJsonUserAgentRegex)
 	for _, userAgent := range []string{"JsonClient/1.6.32", "jsonclient 1.6.32"} {
-		if !shouldAutoServeJson(true, true, false, userAgent, configured) {
+		if !shouldAutoServeFormat(true, true, false, userAgent, configured) {
 			t.Errorf("configured Xray JSON regex did not match %q", userAgent)
 		}
 	}
 	for _, userAgent := range []string{"GenericClient/1.10.0", "OtherClient/2.2", "ThirdClient/7.0", "CustomClient/1.0"} {
-		if shouldAutoServeJson(true, true, false, userAgent, configured) {
+		if shouldAutoServeFormat(true, true, false, userAgent, configured) {
 			t.Errorf("configured Xray JSON regex unexpectedly matched %q", userAgent)
 		}
 	}
-	if shouldAutoServeJson(false, true, false, "JsonClient/1.6.32", configured) {
+	if shouldAutoServeFormat(false, true, false, "JsonClient/1.6.32", configured) {
 		t.Fatal("disabled Xray JSON auto-detection matched")
 	}
-	if shouldAutoServeJson(true, false, false, "JsonClient/1.6.32", configured) {
+	if shouldAutoServeFormat(true, false, false, "JsonClient/1.6.32", configured) {
 		t.Fatal("disabled JSON endpoint matched")
 	}
-	if shouldAutoServeJson(true, true, true, "JsonClient/1.6.32", configured) {
+	if shouldAutoServeFormat(true, true, true, "JsonClient/1.6.32", configured) {
 		t.Fatal("browser HTML request matched Xray JSON")
 	}
 
@@ -260,17 +260,17 @@ func TestShouldAutoServeJson(t *testing.T) {
 	if empty != nil {
 		t.Fatal("empty Xray JSON default should not compile to a matcher")
 	}
-	if shouldAutoServeJson(true, true, false, "JsonClient/1.6.32", empty) {
+	if shouldAutoServeFormat(true, true, false, "JsonClient/1.6.32", empty) {
 		t.Fatal("empty Xray JSON default should not auto-serve")
 	}
 }
 
 func TestShouldAutoServeJsonUsesConfiguredRegex(t *testing.T) {
 	configured := compileUserAgentRegex("Xray JSON", `(?i)^custom-json/`, service.DefaultSubJsonUserAgentRegex)
-	if !shouldAutoServeJson(true, true, false, "Custom-JSON/1.0", configured) {
+	if !shouldAutoServeFormat(true, true, false, "Custom-JSON/1.0", configured) {
 		t.Fatal("configured Xray JSON User-Agent regex did not match")
 	}
-	if shouldAutoServeJson(true, true, false, "OtherClient/1.10.0", configured) {
+	if shouldAutoServeFormat(true, true, false, "OtherClient/1.10.0", configured) {
 		t.Fatal("unrelated User-Agent matched after a custom regex was configured")
 	}
 }
@@ -314,26 +314,45 @@ func seedSubMtprotoInbound(t *testing.T, subId, tag string, port int) {
 	}
 }
 
-func TestAutoDetectFallsBackToRawWhenFormatHasNoContent(t *testing.T) {
+func TestSubscriptionExportsOmitTelegramProxy(t *testing.T) {
 	seedSubDB(t)
 	seedSubMtprotoInbound(t, "s1", "tg", 4490)
-	gin.SetMode(gin.TestMode)
-
-	req := httptest.NewRequest(http.MethodGet, "http://sub.example.com/sub/s1", nil)
-	req.Header.Set("User-Agent", "Clash-Verge/v2.4.2")
-	resp := httptest.NewRecorder()
-
-	newSubscriptionTestRouter(subscriptionTestRouterConfig{clashAutoDetect: true, jsonAutoDetect: true}).ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", resp.Code, resp.Body.String())
+	seedSubInbound(t, "s1", "standard", 4491, 1, dnsTestStream)
+	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{clashAutoDetect: true, jsonAutoDetect: true})
+	for _, tc := range []struct {
+		path   string
+		base64 bool
+		vless  bool
+	}{
+		{"/sub/s1", true, true},
+		{"/sub/s1?format=all", true, true},
+		{"/sub/s1?format=standalone", true, false},
+		{"/sub/s1?format=xray", false, true},
+		{"/sub/s1?format=sing-box", false, true},
+		{"/sub/s1?format=hiddify", false, true},
+		{"/mihomo/s1?view=raw", false, true},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			resp := httptest.NewRecorder()
+			router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "http://sub.example.com"+tc.path, nil))
+			body := resp.Body.String()
+			if tc.base64 {
+				decoded, err := base64.StdEncoding.DecodeString(body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				body = string(decoded)
+			}
+			if resp.Code != http.StatusOK || strings.Contains(body, "tg://") || strings.Contains(body, "vless") != tc.vless {
+				t.Fatalf("unexpected content: HTTP %d %s", resp.Code, body)
+			}
+		})
 	}
-	decoded, err := base64.StdEncoding.DecodeString(resp.Body.String())
-	if err != nil {
-		t.Fatalf("fallback response is not base64: %v", err)
-	}
-	if !strings.Contains(string(decoded), "tg://proxy") {
-		t.Fatalf("decoded fallback lacks the Telegram proxy link: %s", decoded)
+
+	telegram := httptest.NewRecorder()
+	router.ServeHTTP(telegram, httptest.NewRequest(http.MethodGet, "http://sub.example.com/sub/s1?format=telemt", nil))
+	if telegram.Code != http.StatusOK || !strings.Contains(telegram.Body.String(), "tg://proxy") {
+		t.Fatalf("Telegram endpoint lost the proxy: HTTP %d %s", telegram.Code, telegram.Body.String())
 	}
 }
 
@@ -898,5 +917,35 @@ func TestSubscriptionRouteGroupsAreNotCacheable(t *testing.T) {
 				t.Fatalf("Cache-Control = %q (status %d), want a no-store directive", cc, resp.Code)
 			}
 		})
+	}
+}
+
+func TestSubscriptionFeaturesRespectEnabledClients(t *testing.T) {
+	inbounds := []*model.Inbound{
+		{Id: 1, Protocol: model.VLESS},
+		{Id: 2, Protocol: model.AnyTLS},
+		{Id: 3, Protocol: model.MASQUE},
+	}
+	features := inspectSubscriptionFeatures(inbounds, func(inbound *model.Inbound) []model.Client {
+		return []model.Client{{Enable: inbound.Id == 2}}
+	})
+	if !features.nativeSingBox || !features.hiddifyNative || features.masque {
+		t.Fatalf("unexpected subscription features: %+v", features)
+	}
+	features = inspectSubscriptionFeatures(inbounds, func(inbound *model.Inbound) []model.Client {
+		return []model.Client{{Enable: inbound.Id == 3}}
+	})
+	if !features.masque || !features.hiddifyNative || !features.nativeSingBox {
+		t.Fatalf("enabled MASQUE was not detected: %+v", features)
+	}
+}
+
+func TestSubscriptionFeaturesReuseRequestCache(t *testing.T) {
+	controller := &SUBController{}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	want := subscriptionFeatures{masque: true, hiddifyNative: true, nativeSingBox: true}
+	c.Set(subscriptionFeaturesKey, want)
+	if got := controller.subscriptionFeatures(c); got != want {
+		t.Fatalf("cached features = %+v, want %+v", got, want)
 	}
 }

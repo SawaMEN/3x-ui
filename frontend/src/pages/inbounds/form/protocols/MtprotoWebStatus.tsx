@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Space, Typography } from 'antd';
+import { Alert, Button, Modal, Space, Typography } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import { TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
+import TelemtIngressPreview, {
+  type IngressPreview,
+  type VPNMigrationRequest,
+} from '@/pages/telemt/TelemtIngressPreview';
 
 type WebStatus = {
   defaultDomain?: string;
@@ -24,6 +28,8 @@ type WebAvailability = {
 };
 
 type WebPreflight = {
+  preview?: IngressPreview;
+  draftRevision?: string;
   ready: boolean;
   checks: { id: string; ok: boolean; message: string }[];
   warnings: string[];
@@ -36,7 +42,12 @@ export default function MtprotoWebStatus({
   inboundId?: number;
   nodeId?: number | null;
 }) {
-  const { control, getValues, setValue } = useFormContext();
+  const {
+    control,
+    getValues,
+    setValue,
+    formState: { isDirty },
+  } = useFormContext();
   const { i18n } = useTranslation();
   const ru = i18n.resolvedLanguage?.startsWith('ru') ?? false;
   const target = new URLSearchParams();
@@ -47,6 +58,9 @@ export default function MtprotoWebStatus({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState('');
+  const [applied, setApplied] = useState(false);
   const [availability, setAvailability] = useState<WebAvailability>();
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState('');
@@ -79,9 +93,39 @@ export default function MtprotoWebStatus({
     basePath: proposed?.basePath ?? '',
     retryJitter: proposed?.retryJitter,
     site: proposed?.site,
+    sharedIngress: proposed?.sharedIngress,
   });
   const [preflight, setPreflight] = useState<{ key: string; result: WebPreflight }>();
   const result = preflight?.key === requestKey ? preflight.result : undefined;
+  const applySavedDraft = (moves: VPNMigrationRequest[]) => {
+    if (!inboundId || !result?.draftRevision) return;
+    const revision = result.draftRevision;
+    Modal.confirm({
+      title: ru ? 'Применить сохранённый черновик MTProto?' : 'Apply saved MTProto draft?',
+      content: ru
+        ? 'Используются только сохранённые настройки. VPN кратковременно переподключатся. При ошибке порты будут восстановлены. После успеха закройте редактор без повторного сохранения и обновите список.'
+        : 'Only saved settings are used. VPN connections briefly reconnect. On failure, ports are restored. After success, close without saving again and refresh the list.',
+      onOk: async () => {
+        setApplying(true);
+        setApplyError('');
+        try {
+          const response = await HttpUtil.post(
+            '/panel/api/telemt/webproxy/managed-migration',
+            { inboundId, draftRevision: revision, vpnMigrations: moves },
+            { silent: true },
+          );
+          if (!response?.success) throw new Error(response?.msg || 'Managed WEB migration failed');
+          setApplied(true);
+          setAttempt((value) => value + 1);
+        } catch (cause: unknown) {
+          setApplyError(cause instanceof Error ? cause.message : String(cause));
+          setAttempt((value) => value + 1);
+        } finally {
+          setApplying(false);
+        }
+      },
+    });
+  };
 
   useEffect(() => {
     let active = true;
@@ -257,6 +301,85 @@ export default function MtprotoWebStatus({
                 <li key={warning}>{warning}</li>
               ))}
             </ul>
+          }
+        />
+      )}
+      {result?.preview && (
+        <TelemtIngressPreview
+          preview={result.preview}
+          allowPortMigration={!nodeId}
+          onApplyVPNMigration={
+            !nodeId &&
+            !applying &&
+            !applied &&
+            proposed?.sharedIngress?.enabled &&
+            result.checks.every((check) => check.ok || check.id === 'https-port')
+              ? proposed?.migrationDraft
+                ? result.draftRevision && !isDirty
+                  ? applySavedDraft
+                  : undefined
+                : () =>
+                    Modal.confirm({
+                      title: ru ? 'Подготовить черновик миграции?' : 'Prepare migration draft?',
+                      content: ru
+                        ? 'MTProto будет сохранён выключенным. Действующие VPN-подключения не изменятся. Нажмите Сохранить в редакторе. Перенос будет отдельной операцией.'
+                        : 'MTProto will be saved disabled. Existing VPN listeners remain unchanged. Save the editor. Migration is a separate operation.',
+                      onOk: () => {
+                        setValue('enable', false, { shouldDirty: true, shouldValidate: true });
+                        setValue('settings.webProxy.migrationDraft', true, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                      },
+                    })
+              : undefined
+          }
+          disabled={applying || applied}
+          applyVPNMigrationLabel={
+            proposed?.migrationDraft
+              ? ru
+                ? 'Применить сохранённый черновик'
+                : 'Apply saved draft'
+              : ru
+                ? 'Подготовить черновик переноса'
+                : 'Prepare migration draft'
+          }
+          aliases={proposed?.aliases ?? []}
+          basePath={proposed?.basePath ?? ''}
+          onAccept={(aliases, basePath) => {
+            setValue('settings.webProxy.aliases', aliases, {
+              shouldDirty: true,
+              shouldValidate: true,
+            });
+            if (basePath)
+              setValue('settings.webProxy.basePath', basePath, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+          }}
+        />
+      )}
+      {applyError && <Alert type="error" showIcon title={applyError} />}
+      {applied && (
+        <Alert
+          type="success"
+          showIcon
+          title={
+            ru
+              ? 'Миграция выполнена. Закройте редактор без сохранения и обновите список.'
+              : 'Migration applied. Close without saving and refresh the list.'
+          }
+        />
+      )}
+      {proposed?.migrationDraft && !applied && (
+        <Alert
+          type="info"
+          showIcon
+          title={ru ? 'Черновик миграции MTProto' : 'MTProto migration draft'}
+          description={
+            ru
+              ? 'Сохраните выключенное подключение и откройте его снова. После проверки нажмите «Применить сохранённый черновик». Обычное включение заблокировано.'
+              : 'Save the disabled inbound and reopen it. After preflight, apply the saved draft. Normal activation is blocked.'
           }
         />
       )}

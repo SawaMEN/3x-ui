@@ -128,6 +128,16 @@ func runWebServer() {
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
 	}
+	// A process crash between staging and confirmation must not strand the
+	// administrator on a new listener port.
+	if restored, migrationErr := service.RollbackTelemtPortMigration(false); migrationErr != nil {
+		log.Fatalf("Recovering pending WEB port migration: %v", migrationErr)
+	} else if restored {
+		logger.Warning("Restored original panel/subscription ports after interrupted migration")
+	}
+	if err := service.RecoverInterruptedTelemtVPNMigration(); err != nil {
+		logger.Error("VPN listener migration recovery failed; inspect WEB Proxy and listener settings: ", err)
+	}
 	// Persist the sole core identity so fresh backups do not resemble databases
 	// from releases whose implicit default engine was Xray.
 	if err := (&service.SettingService{}).SetCoreType(service.CoreTypeSingBox); err != nil {
@@ -196,8 +206,31 @@ func runWebServer() {
 			go monitor.Run(monitorCtx)
 		}
 	}
+	migrationTicker := time.NewTicker(2 * time.Second)
+	defer migrationTicker.Stop()
 	for {
-		sig := <-sigCh
+		var sig os.Signal
+		select {
+		case sig = <-sigCh:
+		case <-migrationTicker.C:
+			pending, migrationErr := service.TelemtPendingPortMigration()
+			if migrationErr != nil {
+				logger.Warning("WEB port migration journal: ", migrationErr)
+				continue
+			}
+			if pending == nil || time.Now().Before(pending.Deadline) {
+				continue
+			}
+			restored, migrationErr := service.RollbackTelemtPortMigration(true)
+			if migrationErr != nil {
+				logger.Warning("WEB port migration timeout check: ", migrationErr)
+			}
+			if !restored {
+				continue
+			}
+			logger.Warning("WEB port migration not confirmed; restoring original listeners")
+			sig = syscall.SIGHUP
+		}
 
 		switch sig {
 		case syscall.SIGHUP:
@@ -213,20 +246,42 @@ func runWebServer() {
 				logger.Debug("Error stopping web server:", err)
 			}
 
-			server = web.NewServer()
-			global.SetWebServer(server)
-			err = server.StartPanelOnly()
-			if err != nil {
-				log.Fatalf("Error restarting web server: %v", err)
+			migration, migrationErr := service.TelemtPendingPortMigration()
+			if migrationErr != nil {
+				logger.Warning("Cannot read WEB port migration journal: ", migrationErr)
+			}
+			startListeners := func() (error, error) {
+				server = web.NewServer()
+				global.SetWebServer(server)
+				if startErr := server.StartPanelOnly(); startErr != nil {
+					return startErr, nil
+				}
+				sub.SetDistFS(web.EmbeddedDist())
+				subServer = sub.NewServer()
+				global.SetSubServer(subServer)
+				return nil, subServer.Start()
+			}
+			panelErr, subErr := startListeners()
+			if migration != nil {
+				if panelErr == nil && subErr == nil {
+					migrationErr = service.MarkTelemtPortMigrationReady()
+				}
+				if panelErr != nil || subErr != nil || migrationErr != nil {
+					logger.Warning("WEB port migration failed; restoring original ports")
+					_ = subServer.Stop()
+					_ = server.StopPanelOnly()
+					if _, rollbackErr := service.RollbackTelemtPortMigration(false); rollbackErr != nil {
+						log.Fatalf("Error restoring original listener ports: %v", rollbackErr)
+					}
+					panelErr, subErr = startListeners()
+				}
+			}
+			if panelErr != nil {
+				log.Fatalf("Error restarting web server: %v", panelErr)
 			}
 			logger.Info("Web server restarted successfully.")
-
-			sub.SetDistFS(web.EmbeddedDist())
-			subServer = sub.NewServer()
-			global.SetSubServer(subServer)
-			err = subServer.Start()
-			if err != nil {
-				logger.Errorf("Subscription server unavailable after restart; panel remains running: %v", err)
+			if subErr != nil {
+				logger.Errorf("Subscription server unavailable after restart; panel remains running: %v", subErr)
 			}
 			if err := service.StartDomainFront(); err != nil {
 				logger.Warning("Domain HTTPS gateway: ", err)
@@ -234,7 +289,7 @@ func runWebServer() {
 			if err := service.RefreshTelemtWebSubscriptionRoutes(); err != nil {
 				logger.Warning("Could not update Telemt WEB subscription routes after restart: ", err)
 			}
-			if err == nil {
+			if subErr == nil {
 				logger.Info("Sub server restarted successfully.")
 			}
 		case sys.SIGUSR1:

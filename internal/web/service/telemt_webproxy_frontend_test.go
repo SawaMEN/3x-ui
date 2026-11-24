@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -43,13 +46,36 @@ func TestTelemtWebCarrierSelection(t *testing.T) {
 }
 
 func TestTelemtWebAlternativeFrontends(t *testing.T) {
-	for _, front := range []string{"caddy", "haproxy"} {
-		t.Run(front, func(t *testing.T) {
+	for _, mode := range []string{"caddy", "haproxy", "haproxy_shared", "nginx_shared", "caddy_shared", "nginx_native", "caddy_native"} {
+		t.Run(mode, func(t *testing.T) {
+			front, suffix, shared := strings.Cut(mode, "_")
 			binary := os.Getenv(strings.ToUpper(front) + "_TEST_BINARY")
 			if binary == "" {
 				t.Skip("set " + strings.ToUpper(front) + "_TEST_BINARY for native frontend integration")
 			}
+			routerBinary := os.Getenv("HAPROXY_TEST_BINARY")
+			routerEngine, routerModule := "haproxy", ""
+			if suffix == "native" {
+				routerEngine = front
+				routerBinary = binary
+				if front == "nginx" {
+					var available bool
+					routerModule, available = telemtIngressNginxStreamModule(context.Background(), binary)
+					if !available {
+						t.Skip("Nginx stream/ssl_preread not available")
+					}
+				} else {
+					routerBinary = os.Getenv("CADDY_L4_TEST_BINARY")
+					if routerBinary == "" {
+						t.Skip("set CADDY_L4_TEST_BINARY for native Caddy Layer 4")
+					}
+				}
+			}
+			if shared && front != "haproxy" && routerBinary == "" {
+				t.Skip("set HAPROXY_TEST_BINARY for the separate TCP dispatcher")
+			}
 			dir := t.TempDir()
+			var routerConfig []byte
 			sub := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Header.Get("X-Forwarded-For") != "127.0.0.1" || r.Header.Get("X-Forwarded-Proto") != "https" {
 					http.Error(w, "forged forwarding headers", http.StatusBadRequest)
@@ -81,6 +107,7 @@ func TestTelemtWebAlternativeFrontends(t *testing.T) {
 			}
 			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Header.Get("Upgrade") != "websocket" {
+					w.Header().Set("Content-Type", "text/html; charset=utf-8")
 					fmt.Fprint(w, "web-decoy")
 					return
 				}
@@ -112,9 +139,83 @@ func TestTelemtWebAlternativeFrontends(t *testing.T) {
 			publicAddr := listener.Addr().String()
 			_ = listener.Close()
 			state := TelemtWebProxyState{Frontend: front, Domain: "example.com", ListenPort: port, CertFile: certPath, KeyFile: keyPath}
-			data, err := telemtWebFrontendConfig(state, telemtWebSubscriptionTarget{Paths: []string{"/ImportedRoute/*"}, Upstream: sub.URL, TLSCAFile: certPath, TLSServerName: "example.com"})
-			if err != nil {
-				t.Fatal(err)
+			var data []byte
+			if !shared {
+				data, err = telemtWebFrontendConfig(state, telemtWebSubscriptionTarget{Paths: []string{"/ImportedRoute/*"}, Upstream: sub.URL, TLSCAFile: certPath, TLSServerName: "example.com"})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			naiveRoots := x509.NewCertPool()
+			if shared {
+				state.BasePath = "telemt/web"
+				naiveKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+				if err != nil {
+					t.Fatal(err)
+				}
+				naiveCertPath, naiveKeyPath := telemtWebTestCertificate(t, naiveKey, time.Now().Add(time.Hour))
+				naiveCert, err := tls.LoadX509KeyPair(naiveCertPath, naiveKeyPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				naiveRoots.AddCert(naiveCert.Leaf)
+				naive := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					fmt.Fprint(w, "naive TLS "+r.TLS.ServerName)
+				}))
+				naive.TLS = &tls.Config{Certificates: []tls.Certificate{naiveCert}}
+				naive.StartTLS()
+				defer naive.Close()
+				subscription := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					fmt.Fprint(w, "subscription")
+				}))
+				defer subscription.Close()
+				state.SharedIngress = &TelemtWebIngress{Enabled: true, InboundIDs: []int{1}}
+				state.IngressRouter, state.IngressRouterModule = routerEngine, routerModule
+				plan := telemtIngressPlan{
+					panel: telemtIngressRoute{
+						host: state.Domain, paths: []string{"/ImportedRoute"},
+						address: strings.TrimPrefix(sub.URL, "https://"), certFile: certPath, tlsName: "example.com",
+					},
+					subscriptions: telemtIngressRoute{
+						host: state.Domain, paths: []string{"/sub", "/assets"},
+						address: strings.TrimPrefix(subscription.URL, "http://"),
+					},
+					proxies: []telemtIngressProxyRoute{{id: 1, host: "web.example.com", address: strings.TrimPrefix(naive.URL, "https://")}},
+				}
+				data, err = renderTelemtIngressFrontend(state, plan)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if front != "haproxy" {
+					routerConfig, err = telemtIngressRouterData(state, plan)
+					if err != nil {
+						t.Fatal(err)
+					}
+					switch routerEngine {
+					case "nginx":
+						routerConfig = []byte(strings.Replace(string(routerConfig), "listen 0.0.0.0:443;", "listen "+publicAddr+";", 1))
+					case "caddy":
+						routerConfig = []byte(strings.Replace(string(routerConfig), "tcp4/:443", "tcp4/"+publicAddr, 1))
+					default:
+						routerConfig = []byte(strings.Replace(string(routerConfig), "bind :443\n", "bind "+publicAddr+"\n", 1))
+					}
+					routerConfig = []byte(strings.ReplaceAll(string(routerConfig), telemtWebFrontDir, dir))
+				} else {
+					data = []byte(strings.Replace(string(data), "bind :443\n", "bind "+publicAddr+"\n", 1))
+				}
+				if front == "haproxy" {
+					tlsSocket := filepath.Join(dir, "web.sock")
+					tlsHop, err := net.Listen("unix", tlsSocket)
+					if err != nil {
+						// Sandboxed runners may disallow AF_UNIX sockets.
+						tlsHop, err = net.Listen("tcp", "127.0.0.1:0")
+						if err != nil {
+							t.Fatal(err)
+						}
+					}
+					data = []byte(strings.ReplaceAll(string(data), telemtWebIngressTLSSocket, tlsHop.Addr().String()))
+					_ = tlsHop.Close()
+				}
 			}
 			config := strings.ReplaceAll(string(data), telemtWebFrontDir, dir)
 			config = telemtWebTestListenAddress(front, config, publicAddr)
@@ -126,6 +227,13 @@ func TestTelemtWebAlternativeFrontends(t *testing.T) {
 			args := []string{"run", "--config", path}
 			if front == "haproxy" {
 				args = []string{"-db", "-f", path}
+			} else if front == "nginx" {
+				config = "worker_processes 1;\npid " + filepath.Join(dir, "nginx.pid") + ";\nerror_log stderr;\nevents { worker_connections 128; }\nhttp {\n" +
+					"access_log off;\nclient_body_temp_path " + filepath.Join(dir, "client_body") + ";\nproxy_temp_path " + filepath.Join(dir, "proxy") + ";\nfastcgi_temp_path " + filepath.Join(dir, "fastcgi") + ";\nuwsgi_temp_path " + filepath.Join(dir, "uwsgi") + ";\nscgi_temp_path " + filepath.Join(dir, "scgi") + ";\n" + config + "\n}\n"
+				if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				args = []string{"-p", dir+"/", "-c", path, "-g", "daemon off;"}
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
@@ -141,6 +249,22 @@ func TestTelemtWebAlternativeFrontends(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+			if len(routerConfig) > 0 {
+				routerPath := filepath.Join(dir,"ingress.cfg")
+				if err := os.WriteFile(routerPath,routerConfig,0o600); err != nil {
+					t.Fatal(err)
+				}
+				routerArgs := telemtIngressRouterStartArgs(routerEngine, routerPath)
+				if routerEngine == "haproxy" {
+					routerArgs = []string{"-db", "-f", routerPath}
+				}
+				router := exec.CommandContext(ctx, routerBinary, routerArgs...)
+				router.Stdout, router.Stderr = logFile, logFile
+				if err := router.Start(); err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = router.Process.Kill(); _ = router.Wait() }()
+			}
 			roots := x509.NewCertPool()
 			roots.AddCert(leaf)
 			client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "example.com", MinVersion: tls.VersionTLS12}}}
@@ -183,12 +307,50 @@ func TestTelemtWebAlternativeFrontends(t *testing.T) {
 				}
 				body, _ := io.ReadAll(resp.Body)
 				_ = resp.Body.Close()
-				if resp.StatusCode != tc.status || (tc.body != "" && string(body) != tc.body) {
+				statusOK := resp.StatusCode == tc.status || shared && tc.status == 404 && resp.StatusCode == 421
+				if !statusOK || (tc.body != "" && string(body) != tc.body) {
 					t.Fatalf("%s %s: got %d %q", tc.host, tc.path, resp.StatusCode, body)
 				}
 			}
+			if shared {
+				for _, path := range []string{"/sub/id", "/assets/style.css", "/submarine", "/telemt/web/decoy"} {
+					res, err := request(path, "example.com", false)
+					if err != nil {
+						t.Fatal(err)
+					}
+					body, _ := io.ReadAll(res.Body)
+					_ = res.Body.Close()
+					want := "subscription"
+					if path == "/submarine" || path == "/telemt/web/decoy" {
+						want = "web-decoy"
+						if !strings.Contains(res.Header.Get("Content-Security-Policy"), "sandbox") {
+							t.Fatalf("%s did not sandbox Telemt cover HTML", path)
+						}
+					}
+					if string(body) != want {
+						t.Fatalf("%s routed to %q, want %q", path, body, want)
+					}
+				}
+				naiveClient := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{RootCAs: naiveRoots, ServerName: "web.example.com", MinVersion: tls.VersionTLS12},
+				}}
+				defer naiveClient.CloseIdleConnections()
+				res, err := naiveClient.Get("https://" + publicAddr + "/")
+				if err != nil {
+					t.Fatal(err)
+				}
+				body, _ := io.ReadAll(res.Body)
+				_ = res.Body.Close()
+				if string(body) != "naive TLS web.example.com" {
+					t.Fatalf("Naive TLS was not forwarded intact: %q", body)
+				}
+			}
 			client.Timeout = 0
-			resp, err := request("/ws", "example.com", true)
+			webPath := "/ws"
+			if shared {
+				webPath = "/telemt/web/ws"
+			}
+			resp, err := request(webPath, "example.com", true)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -328,5 +490,43 @@ func TestTelemtWebCertificateRenewalSwitching(t *testing.T) {
 	}
 	if got := normalizeTelemtWebDomain(" HTTPS://Web.Example.COM/ "); got != "web.example.com" {
 		t.Fatalf("domain normalization: %q", got)
+	}
+}
+
+func TestTelemtWebDisabledSharedIngressDropsStaleSelection(t *testing.T) {
+	options, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{
+		Frontend: "haproxy", SharedIngress: &TelemtWebIngress{Enabled: false, NaiveInboundID: 42},
+	})
+	if err != nil || options.SharedIngress == nil || options.SharedIngress.Enabled || options.SharedIngress.NaiveInboundID != 0 {
+		t.Fatalf("disabled shared ingress retained a route: %+v, %v", options.SharedIngress, err)
+	}
+}
+
+func TestTelemtWebNativeRouterSelectionAndRendering(t *testing.T) {
+	plan := telemtIngressPlan{proxies: []telemtIngressProxyRoute{{id: 7, host: "vpn.example.com", address: "127.0.0.1:9443"}}}
+	state := TelemtWebProxyState{Frontend: "nginx", Domain: "web.example.com", SharedIngress: &TelemtWebIngress{Enabled: true, InboundIDs: []int{7}}}
+	if telemtIngressRouterEngine(state) != "haproxy" {
+		t.Fatal("legacy deployment must retain HAProxy")
+	}
+	state.IngressRouter = "nginx"
+	data, err := telemtIngressRouterData(state, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"ssl_preread on;", "vpn.example.com unix:", "vpn-7.sock proxy_protocol;", "proxy_pass 127.0.0.1:9443;"} {
+		if !strings.Contains(string(data), expected) {
+			t.Fatalf("native Nginx config lacks %q", expected)
+		}
+	}
+	state.Frontend, state.IngressRouter = "caddy", "caddy"
+	data, err = telemtIngressRouterData(state, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(data), `"proxy_protocol": "v2"`) != 1 || !strings.Contains(string(data), "vpn.example.com") || !strings.Contains(string(data), "127.0.0.1:9443") {
+		t.Fatalf("unexpected Layer 4 config: %s", data)
+	}
+	if !telemtIngressCaddyLayer4Modules("layer4\nlayer4.matchers.tls\nlayer4.handlers.proxy\ncaddy.listeners.proxy_protocol\n") || telemtIngressCaddyLayer4Modules("layer4\nlayer4.matchers.tls\n") {
+		t.Fatal("invalid module capability detection")
 	}
 }

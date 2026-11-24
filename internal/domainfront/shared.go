@@ -36,7 +36,19 @@ func (m *Manager) ServeShared(w http.ResponseWriter, req *http.Request, listen s
 		if !secure && r.backend.SharedHTTP && r.cfg.HTTPPort == port {
 			handler = r.handlerHTTP
 		}
-		_, known := r.domain(req.Host)
+		domain, known := r.domain(req.Host)
+		if known && r.cfg.PublicOnly && domain.Mode != "sni_only" {
+			if strings.EqualFold(domain.Name, r.backend.PanelHost) && r.panelRequestPath(req.URL.Path) {
+				handler = nil
+			}
+			if r.backend.SubscriptionHandler != nil {
+				for _, prefix := range r.backend.SubscriptionPaths {
+					if prefix != "" && pathWithin(req.URL.Path, prefix) {
+						handler = nil
+					}
+				}
+			}
+		}
 		host := strings.ToLower(strings.Split(req.Host, ":")[0])
 		challenge := strings.HasPrefix(req.URL.Path, "/.well-known/acme-challenge/") && r.backend.ChallengeRoots[host] != ""
 		if !known && !challenge {
@@ -51,6 +63,40 @@ func (m *Manager) ServeShared(w http.ResponseWriter, req *http.Request, listen s
 	_ = controller.SetReadDeadline(time.Time{})
 	_ = controller.SetWriteDeadline(time.Time{})
 	handler.ServeHTTP(w, req)
+	return true
+}
+
+// ServePanelCover applies only on the panel's original listener. Gateway
+// listeners on other ports keep their independent public routing.
+func (m *Manager) ServePanelCover(w http.ResponseWriter, req *http.Request, panel http.Handler) bool {
+	m.mu.Lock()
+	r := m.runtime
+	if r == nil || r.backend.PanelPath == "" || r.backend.PanelPath == "/" || r.backend.PanelHost == "" ||
+		strings.HasPrefix(req.URL.Path, "/.well-known/acme-challenge/") {
+		m.mu.Unlock()
+		return false
+	}
+	domain, ok := r.domain(req.Host)
+	dir := r.backend.DecoyDirectories[domain.Name]
+	if !ok || !domain.HasCoverSite() || dir == "" || !strings.EqualFold(domain.Name, r.backend.PanelHost) {
+		m.mu.Unlock()
+		return false
+	}
+	panelPath := r.panelRequestPath(req.URL.Path)
+	protected := domain.Mode != "sni_only" && r.protectedRedirectPath(domain, req.URL.Path)
+	m.mu.Unlock()
+
+	if panelPath {
+		panel.ServeHTTP(w, req)
+		return true
+	}
+	if protected || !isCoverSitePath(req.URL.Path) {
+		return false
+	}
+	// Custom HTML must run in an opaque origin when served alongside the
+	// administration UI. It cannot read panel cookies, storage or responses.
+	w.Header().Set("Content-Security-Policy", coverSiteCSP)
+	staticCoverSite(dir).ServeHTTP(w, req)
 	return true
 }
 

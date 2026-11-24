@@ -189,6 +189,30 @@ describe('genTrojanLink', () => {
 
 describe('genHysteriaLink', () => {
   const fixtures = fixturesForProtocol('hysteria');
+
+  it('uses native obfs without inheriting legacy Gecko bounds', () => {
+    const [, raw] = fixtures[0];
+    const inbound = InboundSchema.parse({
+      ...raw,
+      streamSettings: {
+        ...(raw.streamSettings as Record<string, unknown>),
+        network: 'hysteria',
+        hysteriaSettings: { version: 2, obfs: { type: 'salamander', password: 'native-secret' } },
+        finalmask: {
+          udp: [
+            { type: 'salamander', settings: { password: 'legacy-secret', packetSize: '512-1200' } },
+          ],
+        },
+      },
+    });
+    const url = new URL(
+      genHysteriaLink({ inbound, address: 'example.test', clientAuth: 'secret' }),
+    );
+    expect(url.searchParams.get('obfs')).toBe('salamander');
+    expect(url.searchParams.get('obfs-password')).toBe('native-secret');
+    expect(url.searchParams.has('minPacketSize')).toBe(false);
+    expect(url.searchParams.has('maxPacketSize')).toBe(false);
+  });
   expect(fixtures.length, 'need at least one hysteria full-inbound fixture').toBeGreaterThan(0);
 
   for (const [name, raw] of fixtures) {

@@ -104,8 +104,9 @@ export function inboundNetworkLabels(record: {
     case 'fptn':
     case 'openflux':
     case 'vetroff':
-    case 'trusttunnel':
       return ['TCP', 'UDP'];
+    case 'trusttunnel':
+      return readSettings(record.settings).trustTunnelTcpOnly === true ? ['TCP'] : ['TCP', 'UDP'];
     case 'masque': {
       const versions = readSettings(record.settings).version;
       const values = Array.isArray(versions) && versions.length ? versions : [3, 2, 1];
@@ -162,12 +163,14 @@ export function readSettings(settings: unknown): {
   network?: string;
   allowedNetwork?: string;
   version?: number[];
+  trustTunnelTcpOnly?: boolean;
 } {
   return coerceInboundJsonField(settings) as {
     method?: string;
     network?: string;
     allowedNetwork?: string;
     version?: number[];
+    trustTunnelTcpOnly?: boolean;
   };
 }
 

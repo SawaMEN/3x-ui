@@ -30,10 +30,13 @@ type listenerSpan struct {
 }
 
 func inboundListenerSpans(ib *model.Inbound) []listenerSpan {
+	if mtprotoWebMigrationDraft(ib) {
+		return nil
+	}
 	if mtproto.WebProxyInbound(ib) {
 		return []listenerSpan{{443, 443, transportTCP}}
 	}
-	if ib.Protocol == model.VetroffProxy {
+	if ib.Protocol == model.VetroffProxy || trustTunnelSeparateUDPListener(ib) != nil {
 		return []listenerSpan{{ib.Port, ib.Port, transportTCP}}
 	}
 	if ib.Protocol == model.Tun {
@@ -109,7 +112,15 @@ func inboundTransports(protocol model.Protocol, streamSettings, settings string)
 			}
 		}
 		return bits
-	case model.TrustTunnel, model.VetroffProxy:
+	case model.TrustTunnel:
+		var st struct {
+			TCPOnly bool `json:"trustTunnelTcpOnly"`
+		}
+		if json.Unmarshal([]byte(settings), &st) == nil && st.TCPOnly {
+			return transportTCP
+		}
+		return transportTCP | transportUDP
+	case model.VetroffProxy:
 		return transportTCP | transportUDP
 	case model.Hysteria, model.WireGuard, model.AmneziaWG, model.TUIC:
 		return transportUDP
@@ -286,7 +297,10 @@ func (s *InboundService) checkPortConflict(inbound *model.Inbound, ignoreId int)
 }
 
 func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*portConflictDetail, error) {
-	if udp := vetroffH3Listener(inbound); udp != nil {
+	if mtprotoWebMigrationDraft(inbound) {
+		return nil, nil
+	}
+	if udp := independentUDPListener(inbound); udp != nil {
 		if detail, err := checkPortConflictTx(db, udp, ignoreId); err != nil || detail != nil {
 			return detail, err
 		}
@@ -446,7 +460,7 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 	var candidates []*model.Inbound
 	q := db.Model(model.Inbound{})
 	if inbound.Protocol != model.Mieru {
-		q = q.Where("port = ? OR protocol IN ?", inbound.Port, []model.Protocol{model.Mieru, model.MTProto, model.VetroffProxy})
+		q = q.Where("port = ? OR protocol IN ?", inbound.Port, []model.Protocol{model.Mieru, model.MTProto, model.VetroffProxy, model.TrustTunnel})
 	}
 	if ignoreId > 0 {
 		q = q.Where("id != ?", ignoreId)
@@ -457,7 +471,7 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 
 	for _, candidate := range candidates {
 		listeners := []*model.Inbound{candidate}
-		if udp := vetroffH3Listener(candidate); udp != nil {
+		if udp := independentUDPListener(candidate); udp != nil {
 			listeners = append(listeners, udp)
 		}
 		for _, c := range listeners {
@@ -539,7 +553,7 @@ func configuredLocalTCPPortConflict(listen string, spans []listenerSpan) (*portC
 		}
 	}
 
-	gateway, err := settings.GetDomainFrontConfig()
+	gateway, err := settings.GetRuntimeDomainFrontConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -936,5 +950,31 @@ func vetroffH3Listener(ib *model.Inbound) *model.Inbound {
 		}
 		clone.Listen, clone.Port = host, number
 	}
+	return &clone
+}
+
+func independentUDPListener(ib *model.Inbound) *model.Inbound {
+	if ib != nil && ib.Protocol == model.TrustTunnel {
+		return trustTunnelSeparateUDPListener(ib)
+	}
+	return vetroffH3Listener(ib)
+}
+
+func trustTunnelSeparateUDPListener(ib *model.Inbound) *model.Inbound {
+	if ib == nil || ib.Protocol != model.TrustTunnel {
+		return nil
+	}
+	var settings externalvpn.Settings
+	if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil || settings.TrustTunnelTCPOnly || settings.TrustTunnelQUICBind == "" {
+		return nil
+	}
+	host, port, err := net.SplitHostPort(settings.TrustTunnelQUICBind)
+	number, parseErr := strconv.Atoi(port)
+	if err != nil || parseErr != nil || net.ParseIP(host) == nil || number < 1 || number > 65535 {
+		return nil
+	}
+	clone := *ib
+	clone.Protocol, clone.Settings = model.Hysteria, "{}"
+	clone.Listen, clone.Port = host, number
 	return &clone
 }

@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
@@ -147,8 +149,9 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 			settings["protocols"] = []string{"TCP", "UDP"}
 			settings["additionalPorts"] = []int{2013}
 			settings["handshakeMode"] = "HANDSHAKE_STANDARD"
+			settings["mtu"] = 1400
 		case model.Sudoku:
-			settings["httpmask"] = map[string]any{"mode": "auto", "pathRoot": "/mask", "multiplex": "on"}
+			settings["httpmask"] = map[string]any{"mode": "auto", "pathRoot": "/mask", "multiplex": "on", "tls": true}
 			settings["paddingMin"] = 3
 			settings["paddingMax"] = 8
 		case model.TrustTunnel:
@@ -209,7 +212,7 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 				}
 			}
 		}
-		if ob["type"] == "sudoku" && (ob["key"] != strings.Repeat("c", 128) || ob["httpmask"].(map[string]any)["path_root"] != "/mask") {
+		if ob["type"] == "sudoku" && (ob["key"] != strings.Repeat("c", 128) || ob["http_mask"].(map[string]any)["path_root"] != "/mask") {
 			t.Fatalf("Sudoku options lost: %s", data)
 		}
 		if ob["type"] == "fptn" && (ob["username"] != externalvpn.FPTNUsername(record.Email) || len(ob["md5_fingerprint"].(string)) != 32) {
@@ -220,16 +223,135 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 	if awg["h1"] != "11" || awg["jc"] != float64(4) || cfg.Endpoints[0]["private_key"] != clientKey {
 		t.Fatalf("AWG identity/options lost: %s", data)
 	}
-	// Existing Hiddify URLs must automatically choose the extended JSON renderer.
+	seedSubInbound(t, record.SubID, "standard-vless", 9445, 0, dnsTestStream)
+	naiveClient := &model.ClientRecord{Email: "naive@example.test", SubID: record.SubID, Password: "naive-test-password", Enable: true}
+	if err := db.Create(naiveClient).Error; err != nil {
+		t.Fatal(err)
+	}
+	naive := &model.Inbound{
+		UserId: 1, Tag: "native-naive", Protocol: model.NaiveProxy, Enable: true,
+		Port: 9447, Listen: "naive.example.test",
+		Settings: `{"network":"tcp","tls":{"serverName":"tls.example.test"}}`,
+	}
+	if err := db.Create(naive).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: naiveClient.Id, InboundId: naive.Id}).Error; err != nil {
+		t.Fatal(err)
+	}
+	const hiddifyAgent = "HiddifyNext/5.9.15 (linux) like ClashMeta v2ray sing-box"
+	for _, fallback := range []string{"auto", "links", "xray", "sing-box"} {
+		t.Run("ordinary/"+fallback, func(t *testing.T) {
+			router := gin.New()
+			NewSUBController(router.Group("/"), WithSUBFormats("both", fallback), WithSUBClashEnabled(true), WithSUBClashAutoDetect(true), WithSUBEncryption(false))
+			req := httptest.NewRequest(http.MethodGet, "/sub/extended", nil)
+			req.Header.Set("User-Agent", hiddifyAgent)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, req)
+			links := decodeSubscriptionBody(response.Body.Bytes())
+			if response.Code != http.StatusOK || len(links) != 3 {
+				t.Fatalf("expected three compatible links: %d %s", response.Code, response.Body.String())
+			}
+			if !strings.Contains(response.Body.String(), "naive://") || !strings.Contains(response.Body.String(), "sni=tls.example.test") ||
+				!strings.Contains(response.Body.String(), "mierus://") || !strings.Contains(response.Body.String(), "vless://") {
+				t.Fatalf("compatible links lost protocols or Naive SNI: %s", response.Body.String())
+			}
+			if fallback == "auto" {
+				assertUpstreamHiddifyParsesSubscription(t, response.Body.Bytes(), "vless", "naive", "mieru")
+			}
+		})
+	}
+	// An advertised AnyTLS endpoint forced to plaintext cannot be rendered.
+	// The other Hiddify profiles should still import.
+	anyTLS := &model.Inbound{
+		UserId: 1, Tag: "tls-unavailable", Protocol: model.AnyTLS, Enable: true, Port: 9446,
+		Settings:       `{"clients":[{"email":"extended","enable":true,"password":"test-password"}]}`,
+		StreamSettings: `{"externalProxy":[{"dest":"broken.example","port":9446,"forceTls":"none"}]}`,
+	}
+	if err := db.Create(anyTLS).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: record.Id, InboundId: anyTLS.Id}).Error; err != nil {
+		t.Fatal(err)
+	}
 	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{})
-	for _, path := range []string{"/sub/extended", "/json/extended"} {
+	for _, tc := range []struct {
+		path, fallback string
+	}{
+		{"/sub/extended", "auto"},
+		{"/sub/extended", "links"},
+		{"/sub/extended", "xray"},
+		{"/json/extended", "auto"},
+		{"/sub/extended?format=hiddify", "links"},
+	} {
+		t.Run(tc.path+"/"+tc.fallback, func(t *testing.T) {
+			path := tc.path
+			importRouter := gin.New()
+			NewSUBController(importRouter.Group("/"), WithSUBJsonEnabled(true), WithSUBFormats("both", tc.fallback))
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			if strings.HasSuffix(path, "format=hiddify") {
+				req.Header.Set("Accept", "text/html")
+			} else {
+				req.Header.Set("User-Agent", hiddifyAgent)
+			}
+			response := httptest.NewRecorder()
+			importRouter.ServeHTTP(response, req)
+			var profile struct {
+				Outbounds []map[string]any
+				Endpoints []map[string]any
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &profile); response.Code != http.StatusOK || err != nil {
+				t.Fatalf("invalid Hiddify subscription: %d %s", response.Code, response.Body.String())
+			}
+			want := map[any]bool{"vless": true, "mieru": true, "naive": true}
+			explicit := strings.HasSuffix(path, "format=hiddify")
+			if explicit {
+				want["sudoku"], want["trusttunnel"] = true, true
+			}
+			for _, proxy := range profile.Outbounds {
+				protocol := proxy["type"]
+				if !want[protocol] {
+					t.Fatalf("unexpected Hiddify outbound %q", protocol)
+				}
+				delete(want, protocol)
+				if protocol == "mieru" && proxy["mtu"] != nil {
+					t.Fatalf("Mieru has an unsupported field: %v", proxy)
+				}
+			}
+			if len(want) != 0 || explicit && (len(profile.Endpoints) != 1 || profile.Endpoints[0]["type"] != "awg") ||
+				!explicit && len(profile.Endpoints) != 0 {
+				t.Fatalf("incorrect Hiddify profiles: %s", response.Body.String())
+			}
+			if explicit {
+				assertUpstreamHiddifyParsesSubscription(t, response.Body.Bytes(), "vless", "naive", "mieru", "sudoku", "trusttunnel", "awg")
+			}
+		})
+	}
+	for _, path := range []string{"/sub/extended?format=links", "/sub/extended?format=xray", "/sub/extended?format=sing-box"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
-		req.Header.Set("User-Agent", "HiddifyNext/4.0")
+		if strings.HasSuffix(path, "format=sing-box") {
+			req.Header.Set("User-Agent", "sing-box")
+		} else {
+			req.Header.Set("User-Agent", "HiddifyNext/5.9.15")
+		}
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, req)
-		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"type": "sudoku"`) {
-			t.Fatalf("auto-detection lost extended nodes: %d %s", response.Code, response.Body.String())
+		body := response.Body.String()
+		if strings.HasSuffix(path, "format=links") {
+			body = strings.Join(decodeSubscriptionBody(response.Body.Bytes()), "\n")
 		}
+		if response.Code != http.StatusOK || !strings.Contains(body, "vless") ||
+			strings.Contains(body, "mieru") || strings.Contains(body, "sudoku") {
+			t.Fatalf("%s did not keep its selected format: %d %s", path, response.Code, response.Body.String())
+		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "/sub/extended?format=all", nil)
+	req.Header.Set("User-Agent", "HiddifyNext/4.0")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, req)
+	links := decodeSubscriptionBody(response.Body.Bytes())
+	if response.Code != http.StatusOK || !strings.Contains(strings.Join(links, "\n"), "sudoku://") {
+		t.Fatalf("all profiles omitted Sudoku: %d", response.Code)
 	}
 	assertOwnerCoreAcceptsSubscription(t, data)
 }
@@ -248,5 +370,45 @@ func assertOwnerCoreAcceptsSubscription(t *testing.T, data string) {
 	cmd.Dir = filepath.Dir(binary)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("owner core rejected subscription: %v %s", err, out)
+	}
+}
+
+// Use the official profile parser, which also validates the imported
+// configuration. The pinned panel core has a separate check command.
+func assertUpstreamHiddifyParsesSubscription(t *testing.T, data []byte, protocols ...string) {
+	t.Helper()
+	binary := os.Getenv("HIDDIFY_UPSTREAM_TEST_BINARY")
+	if binary == "" {
+		return
+	}
+	dir := t.TempDir()
+	input, output := filepath.Join(dir, "subscription.json"), filepath.Join(dir, "config.json")
+	if err := os.WriteFile(input, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(binary, "parse", input, "-o", output)
+	cmd.Dir = dir
+	if result, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("upstream Hiddify rejected the subscription: %v %s", err, result)
+	}
+	result, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Outbounds []struct{ Type string }
+		Endpoints []struct{ Type string }
+	}
+	if err := json.Unmarshal(result, &config); err != nil {
+		t.Fatal(err)
+	}
+	imported := make(map[string]bool)
+	for _, profile := range append(config.Outbounds, config.Endpoints...) {
+		imported[profile.Type] = true
+	}
+	for _, protocol := range protocols {
+		if !imported[protocol] {
+			t.Fatalf("Hiddify lost %s during import", protocol)
+		}
 	}
 }

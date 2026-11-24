@@ -807,10 +807,13 @@ export interface InboundOption {
   security?: string;
   shareAddr?: string;
   shareAddrStrategy?: string;
+  sharedIngressError?: string;
+  sharedIngressSni?: string;
   ssMethod: string;
   tag: string;
   tlsFlowCapable: boolean;
   tuicServer?: TuicServerSettings | null;
+  udp443?: boolean;
   wgDns?: string;
   wgMtu?: number;
   wgPublicKey?: string;

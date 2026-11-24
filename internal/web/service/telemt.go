@@ -24,6 +24,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 )
 
@@ -369,26 +370,8 @@ func fetchTelemtLatestRelease() string {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/telemt/telemt/releases/latest", nil)
+	release, err := githubrelease.Fetch(ctx, &http.Client{Timeout: 8 * time.Second}, "https://api.github.com/repos/telemt/telemt/releases/latest")
 	if err != nil {
-		return ""
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "3x-ui")
-
-	resp, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return ""
-	}
-
-	var release struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
 		return ""
 	}
 	return strings.TrimSpace(release.TagName)

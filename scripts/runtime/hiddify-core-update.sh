@@ -15,7 +15,7 @@ if [[ "${XUI_AUTO_CORE_UPDATE:-true}" == false && "${1:-}" != --check ]]; then
   echo "Automatic Hiddify updates disabled"
   exit 0
 fi
-for command_name in python3 flock systemctl mktemp sha256sum; do
+for command_name in python3 flock systemctl mktemp sha256sum cmp; do
   command -v "$command_name" >/dev/null || { echo "Missing $command_name" >&2; exit 1; }
 done
 root="${XUI_MAIN_FOLDER:-/usr/local/x-ui}"
@@ -46,26 +46,57 @@ if ! flock -n 9; then
   exit 0
 fi
 
+# A matching manifest tag alone does not establish a healthy installation.
+core_update_matches() {
+  local asset
+  for asset in "${assets[@]}"; do
+    [[ -f "$bin/$asset" && ! -L "$bin/$asset" ]] || return 1
+  done
+  # A checksum file must describe the intended asset, not an arbitrary file.
+  local expected actual
+  for asset in "$binary" libcronet.so; do
+    expected=$(awk 'NR == 1 {print $1}' "$bin/$asset.sha256") || return 1
+    actual=$(sha256sum -- "$bin/$asset") || return 1
+    actual=${actual%% *}
+    [[ "$expected" =~ ^[0-9a-f]{64}$ && "$expected" == "$actual" ]] || return 1
+  done
+  XUI_BIN_FOLDER="$bin" "$root/x-ui" core-migrate --check-binary
+}
+
+# Without a usable old manifest, only repair an already installed executable
+# that is byte-identical to the independently verified release. Never use
+# an untrusted version string as a substitute for the compatibility contract.
+core_update_can_repair_manifest() {
+  local candidate="$1"
+  [[ -f "$bin/$binary" && ! -L "$bin/$binary" ]] &&
+    cmp -s -- "$bin/$binary" "$candidate/$binary"
+}
+
 tag=$(python3 "$helper" --latest-tag)
 [[ -n "$tag" ]] || { echo "No complete stable core release" >&2; exit 1; }
 current_tag=""
-if [[ -f "$bin/target.json" ]]; then
-  current_tag=$(python3 - "$bin/target.json" <<'PY'
-import json, sys
+if [[ -f "$bin/target.json" && ! -L "$bin/target.json" ]]; then
+  if ! current_tag=$(python3 - "$bin/target.json" <<'PY'
+import json, re, sys
 try:
-    data = json.load(open(sys.argv[1]))
-    print(data["target"]["version"])
+    with open(sys.argv[1]) as stream:
+        version = json.load(stream)["target"]["version"]
+    if not isinstance(version, str) or not re.fullmatch(r"sawamen-[a-f0-9]{12}-[a-f0-9]{12}-mask[0-9]+(?:-[a-z0-9]+)*", version):
+        raise ValueError("Invalid core version")
+    print(version)
 except (ValueError, OSError, KeyError, TypeError):
-    sys.exit("Installed core manifest is damaged; refusing automatic replacement")
+    sys.exit("Installed core manifest is damaged; checking for safe repair")
 PY
-)
+  ); then
+    current_tag=""
+  fi
 fi
 echo "Installed core: ${current_tag:-unknown}; newest stable core: $tag"
-if [[ "$current_tag" == "$tag" ]]; then
+if [[ "$current_tag" == "$tag" ]] && core_update_matches; then
   exit 0
 fi
 if [[ "${1:-}" == --check ]]; then
-  echo "Update available: $tag"
+  echo "Update or repair available: $tag"
   exit 0
 fi
 
@@ -97,47 +128,70 @@ cleanup_core_update_artifacts() {
 }
 cleanup_core_update_artifacts
 
-stage=$(mktemp -d "$root/.core-stage.XXXXXXXX")
-backup=$(mktemp -d "$root/.core-backup.XXXXXXXX")
+stage=""
+backup=""
 swapping=0
 was_active=0
+stop_attempted=0
 committed=0
 cleanup() {
   status=$?
   trap - EXIT INT TERM
+  set +e
   local restore_failed=0
   if (( swapping && ! committed )); then
     echo "New core failed health checks: restoring prior core" >&2
-    systemctl stop x-ui >/dev/null 2>&1 || true
-    for asset in "${assets[@]}"; do
-      rm -f -- "$bin/$asset" || restore_failed=1
-      if [[ -f "$backup/$asset" ]]; then
-        cp -p -- "$backup/$asset" "$bin/$asset" || { echo "CRITICAL: failed to restore $asset" >&2; restore_failed=1; }
-      fi
-    done
-    if (( was_active )); then
-      systemctl start x-ui || { echo "CRITICAL: prior panel failed to restart" >&2; restore_failed=1; }
+    if systemctl is-active --quiet x-ui && ! systemctl stop x-ui >/dev/null 2>&1; then
+      echo "CRITICAL: cannot stop panel for rollback" >&2
+      restore_failed=1
+    else
+      for asset in "${assets[@]}"; do
+        if [[ -f "$backup/$asset" ]]; then
+          # Restore by atomic rename; retain the recovery copy until all
+          # assets have been restored successfully.
+          if ! cp -p -- "$backup/$asset" "$bin/.core-update-$asset.$" ||
+             ! mv -f -- "$bin/.core-update-$asset.$" "$bin/$asset"; then
+            echo "CRITICAL: failed to restore $asset" >&2
+            restore_failed=1
+          fi
+        else
+          rm -f -- "$bin/$asset" || restore_failed=1
+        fi
+      done
     fi
   fi
+  if (( ! committed && stop_attempted && was_active && ! restore_failed )); then
+    systemctl start x-ui || { echo "CRITICAL: prior panel failed to restart" >&2; restore_failed=1; }
+  fi
   for asset in "${assets[@]}"; do rm -f -- "$bin/.core-update-$asset.$$"; done
-  rm -rf -- "$stage"
+  if [[ -n "$stage" ]]; then rm -rf -- "$stage"; fi
   if (( restore_failed )); then
     echo "CRITICAL: recovery snapshot preserved at $backup" >&2
     exit 1
   fi
-  rm -rf -- "$backup"
+  if [[ -n "$backup" ]]; then rm -rf -- "$backup"; fi
   exit "$status"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+stage=$(mktemp -d "$root/.core-stage.XXXXXXXX")
+backup=$(mktemp -d "$root/.core-backup.XXXXXXXX")
 
 # Resolve by exact tag; the download validates archive, binary, Cronet digests,
 # ELF architecture, source/release SHA identity and required feature tags.
 python3 "$helper" --tag "$tag" --arch "$arch" --output "$stage"
 # Never silently change the panel/kernel ABI or protection profile. A future
 # incompatible release is retried after the panel's own compatibility update.
-python3 - "$bin/target.json" "$stage/target.json" <<'PY'
+if core_update_can_repair_manifest "$stage"; then
+  # The executable is already the verified release. Its old manifest may be
+  # syntactically valid yet describe a different build or lack ABI metadata.
+  echo "Repairing release metadata for an identical verified core"
+elif [[ -z "$current_tag" ]]; then
+  echo "Cannot establish old core compatibility; installed executable differs from verified release" >&2
+  exit 1
+else
+  python3 - "$bin/target.json" "$stage/target.json" <<'PY'
 import json, pathlib, re, sys
 old_path, next_path = map(pathlib.Path, sys.argv[1:])
 if not old_path.is_file():
@@ -157,6 +211,10 @@ if (old["runtime_contract"]["stats_grpc_method"] != new["runtime_contract"]["sta
     or old["panel_build"]["runtime_dependencies"] != new["panel_build"]["runtime_dependencies"]):
     sys.exit("Latest kernel changes the panel runtime ABI")
 PY
+fi
+
+# Check the candidate with the installed panel before stopping any services.
+XUI_BIN_FOLDER="$stage" "$root/x-ui" core-migrate --check-binary
 
 # Validate the installed config with the new binary before touching any live
 # files or listeners. Keep cwd in bin for relative geo and certificate paths.
@@ -165,14 +223,17 @@ if [[ -s "$bin/hiddify-core.json" ]]; then
 fi
 for asset in "${assets[@]}"; do
   [[ -f "$stage/$asset" && ! -L "$stage/$asset" ]] || exit 1
-  if [[ -e "$bin/$asset" ]]; then
+  if [[ -e "$bin/$asset" || -L "$bin/$asset" ]]; then
     [[ -f "$bin/$asset" && ! -L "$bin/$asset" ]] || exit 1
     cp -p -- "$bin/$asset" "$backup/$asset"
   fi
 done
 if systemctl is-active --quiet x-ui; then was_active=1; fi
+if (( was_active )); then
+  stop_attempted=1
+  systemctl stop x-ui
+fi
 swapping=1
-if (( was_active )); then systemctl stop x-ui; fi
 for asset in "${assets[@]}"; do
   # Stage each new member in the destination filesystem; each rename is atomic.
   cp -p -- "$stage/$asset" "$bin/.core-update-$asset.$$"

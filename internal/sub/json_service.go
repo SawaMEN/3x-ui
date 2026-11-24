@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	hiddifycore "github.com/SawaMEN/3x-ui/v3/internal/hiddify"
@@ -123,10 +124,10 @@ func (s *SubJsonService) bakedTemplate() map[string]any {
 
 // GetJson generates a JSON subscription configuration for the given subscription ID and host.
 func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bool) (string, string, error) {
-	return s.getJson(subId, host, alwaysReturnArray, false)
+	return s.getJson(subId, host, alwaysReturnArray, false, false)
 }
 
-func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, compatible bool) (string, string, error) {
+func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, compatible, coreOnly bool) (string, string, error) {
 	subReq := s.SubService.ForRequest(host)
 	subReq.subscriptionBody = true
 	inbounds, err := subReq.getInboundsBySubId(subId)
@@ -142,24 +143,17 @@ func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, c
 	}
 
 	excludedEmails := map[string]bool{}
-	if compatible {
-		// An explicit native format must never silently discard a VetroffProxy
-		// connection. Let the HTTP controller deliver the lossless raw links.
-		for _, inbound := range inbounds {
-			if inbound.Protocol == model.VetroffProxy {
-				return "", "", errSubscriptionFormatUnsupported
-			}
+	inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
+		excluded := inbound.Protocol == model.MTProto || coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) ||
+			compatible && (containsUnsupportedJSONProtocol([]*model.Inbound{inbound}) || containsShadowTLSTransport([]*model.Inbound{inbound}))
+		if !excluded {
+			return false
 		}
-		inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
-			if !containsUnsupportedJSONProtocol([]*model.Inbound{inbound}) && !containsShadowTLSTransport([]*model.Inbound{inbound}) {
-				return false
-			}
-			for _, client := range subReq.matchingClients(inbound, subId) {
-				excludedEmails[client.Email] = client.Enable || excludedEmails[client.Email]
-			}
-			return true
-		})
-	}
+		for _, client := range subReq.matchingClients(inbound, subId) {
+			excludedEmails[client.Email] = client.Enable || excludedEmails[client.Email]
+		}
+		return true
+	})
 	// JSON uses Xray's outbound model. Refuse the whole format when any linked
 	// inbound cannot be represented, otherwise auto-detection could silently
 	// drop one connection and still return HTTP 200.
@@ -307,6 +301,10 @@ func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, c
 			continue
 		}
 		for _, el := range expandEntry(ext) {
+			if coremodel.IsTelegramProxyLink(el.Link) || coreOnly && !isCoreSubscriptionLink(el.Link) {
+				seenEmails[ext.Email] = struct{}{}
+				continue
+			}
 			outbound := parsedExternalOutbound(el.Link)
 			if outbound == nil {
 				if compatible {
@@ -331,7 +329,7 @@ func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, c
 		}
 	}
 
-	if len(configArray) == 0 && !hasInactiveExternal && !hasBoundClosed {
+	if len(configArray) == 0 && !hasInactiveExternal && !hasBoundClosed && len(excludedEmails) == 0 {
 		return "", "", nil
 	}
 
@@ -371,16 +369,16 @@ func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, c
 // The existing /json/ format remains Xray-compatible; callers opt into this format
 // explicitly with ?format=sing-box so existing subscriptions are not changed.
 func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnArray bool) (string, string, error) {
-	return s.getSingBoxJson(subId, host, alwaysReturnArray, false, false)
+	return s.getSingBoxJson(subId, host, alwaysReturnArray, false, false, false, false)
 }
 
 // Hiddify expects a single JSON document with an outbounds array, including
 // the hidden ShadowTLS transport used by the visible inner proxy.
 func (s *SubJsonService) GetHiddifySingBoxJson(subId string, host string) (string, string, error) {
-	return s.getSingBoxJson(subId, host, false, true, false)
+	return s.getSingBoxJson(subId, host, false, true, false, false, true)
 }
 
-func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnArray, hiddify, compatible bool) (string, string, error) {
+func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnArray, hiddify, compatible, coreOnly, includeHiddifyExtensions bool) (string, string, error) {
 	translateOutbound := singbox.TranslateXrayOutbound
 	if hiddify {
 		translateOutbound = hiddifycore.TranslateOutbound
@@ -442,26 +440,20 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			seenEmails[client.Email] = struct{}{}
 			active = active || client.Enable
 		}
-		return !active
+		hiddifyExtension := hiddify && (inbound.Protocol == model.Mieru ||
+			includeHiddifyExtensions && officialHiddifyExtendedProtocol(inbound.Protocol))
+		unsupported := coreOnly && singBoxUnsupportedProtocol(inbound.Protocol) && !hiddifyExtension
+		return !active || inbound.Protocol == model.MTProto || unsupported
 	})
-	// MASQUE has no portable URI fallback: explicit sing-box requests must
-	// reject unsupported sibling protocols rather than export partial profiles.
-	// Set this before compatibility filtering, otherwise unsupported siblings
-	// disappear before the completeness check below can see them.
+	// MASQUE has no portable URI fallback. The remaining profiles must
+	// render together after the core-only feed has excluded sidecars.
 	if containsSubscriptionProtocol(inbounds, model.MASQUE) {
 		compatible = false
 	}
 	if compatible {
-		// VetroffProxy has no native sing-box outbound; retaining only the
-		// other entries would silently break a mixed subscription.
-		for _, inbound := range inbounds {
-			if inbound.Protocol == model.VetroffProxy {
-				return "", "", errSubscriptionFormatUnsupported
-			}
-		}
 		before := len(inbounds)
 		inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
-			return inbound.Protocol == model.VetroffProxy || singBoxUnsupportedProtocol(inbound.Protocol) && (!hiddify || !hiddifyExtendedProtocol(inbound.Protocol))
+			return singBoxUnsupportedProtocol(inbound.Protocol) && (!hiddify || !hiddifyExtendedProtocol(inbound.Protocol))
 		})
 		if before > 0 && len(inbounds) == 0 && len(externalLinks) == 0 {
 			return "", "", errSubscriptionFormatUnsupported
@@ -987,6 +979,10 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			continue
 		}
 		for _, el := range expandEntry(ext) {
+			if coremodel.IsTelegramProxyLink(el.Link) || coreOnly && !isCoreSubscriptionLink(el.Link) {
+				seenEmails[ext.Email] = struct{}{}
+				continue
+			}
 			outbound := parsedExternalOutbound(el.Link)
 			if outbound == nil {
 				if nativeTLSForHiddify || compatible {
@@ -1018,7 +1014,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		}
 	}
 
-	if (formatUnsupported && !nativeTLSForHiddify && !compatible) || (nativeTLSForHiddify && !nativeTLSGenerated) {
+	if !compatible && (formatUnsupported && !nativeTLSForHiddify || nativeTLSForHiddify && !nativeTLSGenerated) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
 

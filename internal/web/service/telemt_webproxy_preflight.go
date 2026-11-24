@@ -12,16 +12,23 @@ import (
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 // TelemtWebPreflight is a read-only deployment plan. The enable endpoint runs
 // these same checks again, so direct API callers cannot bypass validation.
 type TelemtWebPreflight struct {
-	Ready    bool                      `json:"ready"`
-	Domain   string                    `json:"domain"`
-	Frontend string                    `json:"frontend"`
-	Checks   []TelemtWebPreflightCheck `json:"checks"`
-	Warnings []string                  `json:"warnings"`
+	DraftRevision string                    `json:"draftRevision,omitempty"`
+	Preview       *telemtIngressPreview     `json:"preview,omitempty"`
+	IngressRouter string                    `json:"ingressRouter,omitempty"`
+	UDP443        *telemtUDP443Info         `json:"udp443,omitempty"`
+	Ready         bool                      `json:"ready"`
+	Domain        string                    `json:"domain"`
+	Frontend      string                    `json:"frontend"`
+	Checks        []TelemtWebPreflightCheck `json:"checks"`
+	Warnings      []string                  `json:"warnings"`
 }
 
 type TelemtWebPreflightCheck struct {
@@ -51,6 +58,12 @@ func (s TelemtService) PreflightWebProxyForInbound(ctx context.Context, domain s
 	}
 	aliases, aliasesErr := normalizeTelemtWebAliases(domain, aliasInput)
 	result := TelemtWebPreflight{Ready: true, Domain: domain, Frontend: options.Frontend, Checks: []TelemtWebPreflightCheck{}, Warnings: []string{}}
+	if inboundID > 0 {
+		var row model.Inbound
+		if db := database.GetDB(); db != nil && db.First(&row, inboundID).Error == nil && mtprotoWebMigrationDraft(&row) {
+			result.DraftRevision = telemtVPNMigrationRevision(row)
+		}
+	}
 	check := func(id string, ok bool, message string) {
 		result.Checks = append(result.Checks, TelemtWebPreflightCheck{ID: id, OK: ok, Message: message})
 		if !ok {
@@ -118,6 +131,10 @@ func (s TelemtService) PreflightWebProxyForInbound(ctx context.Context, domain s
 		check("privileges", false, "Для автоматической настройки нужны права root.")
 	}
 
+	backendPort := 0
+	if state.Enabled {
+		backendPort = state.ListenPort
+	}
 	nativePort, configErr := telemtWebNativePort()
 	if configErr != nil {
 		check("config", false, "Не удаётся прочитать конфигурацию Telemt: "+configErr.Error())
@@ -125,7 +142,8 @@ func (s TelemtService) PreflightWebProxyForInbound(ctx context.Context, domain s
 		// Conflicts on 443 are reported once by the shared https-port check.
 		// This includes the native Telemt listener, even if Telemt is stopped.
 		if !state.Enabled {
-			backendPort, portErr := pickTelemtWebListenPort(nativePort)
+			var portErr error
+			backendPort, portErr = pickTelemtWebManagedPort(ctx, nativePort)
 			if portErr != nil {
 				check("backend", false, "Нужен свободный порт локального Telemt в диапазоне 15080–15179.")
 			} else {
@@ -149,6 +167,62 @@ func (s TelemtService) PreflightWebProxyForInbound(ctx context.Context, domain s
 		}
 	} else {
 		check("https-port", false, "TCP 443 занят другим сервисом.")
+	}
+	if options.SharedIngress != nil && options.SharedIngress.Enabled {
+		info := inspectTelemtUDP443(ctx)
+		result.UDP443 = &info
+	}
+	if validDomain && aliasesErr == nil && options.SharedIngress != nil && options.SharedIngress.Enabled {
+		path := state.BasePath
+		if options.BasePath != nil {
+			path = *options.BasePath
+		}
+		draft := TelemtWebProxyState{SharedIngress: options.SharedIngress, Domain: domain, Aliases: aliases, BasePath: path, ManagedInboundID: inboundID}
+		preview, previewErr := buildTelemtIngressPreview(ctx, draft, state, panelCert, panelKey, nativePort, backendPort)
+		if previewErr == nil {
+			result.Preview = preview
+		} else {
+			result.Warnings = append(result.Warnings, "Не удалось подготовить рекомендации: "+previewErr.Error())
+		}
+		plan, err := buildTelemtWebIngress(draft)
+		proposed := TelemtWebProxyState{Frontend: options.Frontend, SharedIngress: options.SharedIngress, IngressRouter: options.ingressRouter, IngressRouterModule: options.ingressRouterModule}
+		if proposed.IngressRouter == "" {
+			proposed.IngressRouter, proposed.IngressRouterModule = telemtIngressSelectRouter(ctx, proposed)
+		}
+		if telemtIngressUsesRouter(proposed) {
+			check("shared-router-systemd", telemtWebCommandExists("systemctl"), "TCP/SNI-диспетчер требует systemd.")
+			engine := telemtIngressRouterEngine(proposed)
+			result.IngressRouter = engine
+			check("shared-router-package", telemtWebCommandExists(engine) || telemtWebPackageManager() != "", "TCP/SNI-диспетчер "+engine+" должен быть установлен или доступен в пакетном менеджере.")
+			if options.Frontend == "caddy" && telemtWebCommandExists("caddy") {
+				check("caddy-proxy-protocol", telemtIngressCaddyProxyProtocolAvailable(ctx), "Для TCP/SNI-входа Caddy требуется модуль PROXY protocol (Caddy 2.7+).")
+			}
+			if telemtWebCommandExists("nginx") && (options.Frontend == "nginx" || telemtWebNginxOwnsPort443()) {
+				conflict, inspectErr := telemtIngressNginxHasForeign443(ctx)
+				check("shared-router-nginx", inspectErr == nil && !conflict, "Для общего TCP/SNI-входа освободите TCP 443 от сторонних Nginx vhost.")
+			}
+			result.Warnings = append(result.Warnings, "TCP 443 принимает отдельный TCP-диспетчер "+engine+"; HTTPS, панель и подписки обслуживает выбранный "+options.Frontend+".")
+		}
+		if result.IngressRouter == "" {
+			result.IngressRouter = options.Frontend
+		}
+		if err == nil {
+			fillTelemtIngressPreview(result.Preview, draft, plan)
+			message := "Панель: https://" + plan.panel.host + plan.panel.paths[0] + "/. Telemt WEB: /" + path + "."
+			if plan.subscriptions.host != "" {
+				message += " Подписки: https://" + plan.subscriptions.host + "."
+			}
+			for _, route := range plan.proxies {
+				message += fmt.Sprintf(" TLS/SNI: %s:443 → %s.", route.host, route.address)
+			}
+			check("shared-ingress", true, message)
+		} else {
+			check("shared-ingress", false, err.Error())
+		}
+	}
+	if options.Frontend != "nginx" && telemtWebNginxOwnsPort443() {
+		conflict, inspectErr := telemtIngressNginxHasForeign443(ctx)
+		check("nginx-switch-port", inspectErr == nil && !conflict, "Перед сменой HTTPS-сервера освободите TCP 443 от сторонних Nginx vhost.")
 	}
 	if options.Frontend == "nginx" && telemtWebCommandExists("nginx") {
 		for _, alias := range aliases {
@@ -327,7 +401,7 @@ func telemtWebNginxConfigHasHostPort(config, domain string, port int) bool {
 			if !telemtWebServerStart.MatchString(line) {
 				continue
 			}
-			inServer, skip = true, currentFile == telemtWebNginxConf
+			inServer, skip = true, currentFile == telemtWebNginxConf || currentFile == telemtWebAcmeConf
 			block.Reset()
 			line = line[telemtWebServerStart.FindStringIndex(line)[0]:]
 		}

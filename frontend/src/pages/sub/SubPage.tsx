@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Card, ConfigProvider, Layout, Tabs, message } from 'antd';
 import type { TabsProps } from 'antd';
@@ -19,9 +19,15 @@ import { amneziawgConfigFromLink } from '@/lib/xray/inbound-link';
 import SubHeader from './SubHeader';
 import SubHero from './SubHero';
 import SubLinksTab from './SubLinksTab';
-import { telegramProfiles } from './telegramProfiles';
+import { isTelegramProxyLink, telegramProfiles } from './telegramProfiles';
 import type { TelegramSubscription } from '@/generated/types';
-import { buildTelemtEndpoint, daysUntil, detectPlatform, resolveSubStatus } from './subPageModel';
+import {
+  buildTelemtEndpoint,
+  daysUntil,
+  detectPlatform,
+  resolveSubStatus,
+  sameProfileLinks,
+} from './subPageModel';
 import './SubPage.css';
 import './SubLuna.css';
 import LunaBackdrop from './LunaBackdrop';
@@ -39,9 +45,6 @@ const SubTelegramTab = lazy(() => import('./SubTelegramTab'));
 const subData = window.__SUB_PAGE_DATA__ || {};
 
 const sId = subData.sId || '';
-const subUrl = subData.subUrl || '';
-const subJsonUrl = subData.subJsonUrl || '';
-const subClashUrl = subData.subClashUrl || '';
 const appearance = subData.appearance?.enabled ? subData.appearance : undefined;
 const luna = ['luna', 'whitemax'].includes(subData.appearance?.theme ?? '');
 const underground = subData.appearance?.theme === 'underground';
@@ -50,15 +53,6 @@ const subTitle = appearance?.title || subData.subTitle || '';
 const subSupportUrl = subData.subSupportUrl || '';
 const updateHours = Number(subData.subUpdates || 0);
 const announce = subData.announce || '';
-const links: string[] = Array.isArray(subData.links) ? subData.links : [];
-const amneziaWGConfigs = new Map<string, string>();
-const configLinks = links.filter((link) => {
-  const config = amneziawgConfigFromLink(link);
-  if (!config) return true;
-  amneziaWGConfigs.set(link, config);
-  return false;
-});
-const telegramRemarks = subData.telegramRemarks;
 const linkEmails: string[] = Array.isArray(subData.emails) ? subData.emails : [];
 const totalByte = Number(subData.totalByte || 0);
 const usedByte =
@@ -95,18 +89,95 @@ export default function SubPage() {
   }, [messageApi]);
   const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage('subscription'));
   const [activeTab, setActiveTab] = useState<string>();
-  const telemtEndpoint = buildTelemtEndpoint(window.location.href, sId);
+  const [profileData, setProfileData] = useState(subData);
+  const [profileDenied, setProfileDenied] = useState(false);
+  const profileDeniedRef = useRef(false);
+  const telemtEndpoint = profileDenied ? '' : buildTelemtEndpoint(window.location.href, sId);
   const [telemtData, setTelemtData] = useState<Partial<TelegramSubscription>>({});
   const [telemtLoading, setTelemtLoading] = useState(() => Boolean(telemtEndpoint));
   const [telemtError, setTelemtError] = useState(() => !telemtEndpoint);
+  const {
+    subUrl = '',
+    subJsonUrl = '',
+    subClashUrl = '',
+    subFormatMode,
+    telegramRemarks,
+  } = profileData;
+  const { configLinks, amneziaWGConfigs } = useMemo(() => {
+    const amneziaWGConfigs = new Map<string, string>();
+    const configLinks = (profileData.links ?? []).filter((link) => {
+      if (isTelegramProxyLink(link)) return false;
+      const config = amneziawgConfigFromLink(link);
+      if (!config) return true;
+      amneziaWGConfigs.set(link, config);
+      return false;
+    });
+    return { configLinks, amneziaWGConfigs };
+  }, [profileData.links]);
+
+  useEffect(() => {
+    if (!sId) return;
+
+    let disposed = false;
+    let request: AbortController | undefined;
+    const refreshProfiles = () => {
+      if (disposed || document.hidden || request) return;
+      const controller = new AbortController();
+      request = controller;
+      const timeout = window.setTimeout(() => controller.abort(), 8000);
+      const url = new URL(window.location.href);
+      url.search = new URLSearchParams({ format: 'page-links' }).toString();
+      void fetch(url, { cache: 'no-store', signal: controller.signal })
+        .then(async (response) => {
+          if (disposed || controller.signal.aborted) return;
+          if (response.status === 403 || response.status === 404) {
+            if (!profileDeniedRef.current) {
+              profileDeniedRef.current = true;
+              setProfileDenied(true);
+              setTelemtData({});
+              setTelemtLoading(false);
+              setTelemtError(false);
+            }
+            setProfileData((previous) => (sameProfileLinks(previous, {}) ? previous : {}));
+          } else if (response.ok) {
+            const data = (await response.json()) as typeof subData;
+            if (!disposed && !controller.signal.aborted && Array.isArray(data.links)) {
+              if (profileDeniedRef.current) {
+                profileDeniedRef.current = false;
+                setTelemtLoading(true);
+                setTelemtError(false);
+                setProfileDenied(false);
+              }
+              setProfileData((previous) => (sameProfileLinks(previous, data) ? previous : data));
+            }
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          window.clearTimeout(timeout);
+          request = undefined;
+        });
+    };
+    const interval = window.setInterval(refreshProfiles, 15000);
+    window.addEventListener('focus', refreshProfiles);
+    document.addEventListener('visibilitychange', refreshProfiles);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshProfiles);
+      document.removeEventListener('visibilitychange', refreshProfiles);
+      request?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!telemtEndpoint) return;
-
     const controller = new AbortController();
     const timeout = window.setTimeout(() => {
-      setTelemtLoading(false);
-      setTelemtError(true);
+      if (!profileDeniedRef.current) {
+        setTelemtLoading(false);
+        setTelemtError(true);
+      }
       controller.abort();
     }, 8000);
 
@@ -123,11 +194,16 @@ export default function SubPage() {
         return (await response.json()) as TelegramSubscription;
       })
       .then((data) => {
+        if (controller.signal.aborted || profileDeniedRef.current) return;
         setTelemtData(data);
         setTelemtError(false);
       })
       .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        if (
+          !controller.signal.aborted &&
+          !profileDeniedRef.current &&
+          !(error instanceof DOMException && error.name === 'AbortError')
+        ) {
           setTelemtData({});
           setTelemtError(true);
         }
@@ -160,7 +236,7 @@ export default function SubPage() {
   );
 
   const open = useCallback((url: string) => {
-    if (url) window.open(url, '_blank');
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
   }, []);
 
   const openAmneziaWG = useCallback(() => setActiveTab('amneziawg'), []);
@@ -176,7 +252,7 @@ export default function SubPage() {
           <SubLinksTab
             subUrl={subUrl}
             subJsonUrl={subJsonUrl}
-            subFormatMode={subData.subFormatMode}
+            subFormatMode={subFormatMode}
             subClashUrl={subClashUrl}
             onCopy={copy}
           />
@@ -212,8 +288,8 @@ export default function SubPage() {
         ),
       });
     }
-    const profiles = telegramProfiles(telemtData, configLinks, telegramRemarks);
-    if (profiles.length > 0 || telemtLoading || telemtError) {
+    const profiles = telegramProfiles(telemtData, profileData.links ?? [], telegramRemarks);
+    if (!profileDenied && (profiles.length > 0 || telemtLoading || telemtError)) {
       items.push({
         key: 'telemt',
         icon: <ApiOutlined />,
@@ -243,13 +319,30 @@ export default function SubPage() {
         ),
         children: (
           <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
-            <SubConfigsTab links={configLinks} telegramRemarks={telegramRemarks} onCopy={copy} />
+            <SubConfigsTab links={configLinks} onCopy={copy} />
           </Suspense>
         ),
       });
     }
     return items;
-  }, [t, copy, open, openAmneziaWG, telemtData, telemtLoading, telemtError]);
+  }, [
+    t,
+    copy,
+    open,
+    openAmneziaWG,
+    subUrl,
+    subJsonUrl,
+    subClashUrl,
+    subFormatMode,
+    amneziaWGConfigs,
+    configLinks,
+    profileData.links,
+    telegramRemarks,
+    telemtData,
+    telemtLoading,
+    telemtError,
+    profileDenied,
+  ]);
 
   const direction = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
   const pageClass = [

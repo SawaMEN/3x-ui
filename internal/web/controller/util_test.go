@@ -1,12 +1,16 @@
 package controller
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
 )
 
 func TestGetRemoteIpIgnoresForwardedHeadersFromUntrustedRemote(t *testing.T) {
@@ -139,5 +143,54 @@ func TestProxyAddrInCIDRsIPv4Mapped(t *testing.T) {
 				t.Fatalf("proxyAddrInCIDRs(%q, %q) = %v; want %v", tt.addr, tt.cidrs, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestJSONErrorLocalizesPanelCertificateSourceKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/panel/api/domains/apply", nil)
+	const key = "pages.settings.domains.panelDomain.sourceRequired"
+	const explanation = "Switch the panel certificate before disabling its issuer."
+	c.Set("I18n", func(kind locale.I18nType, name string, _ ...string) string {
+		if kind == locale.Web && name == key {
+			return explanation
+		}
+		return name
+	})
+	jsonObj(c, nil, errors.New(key))
+
+	var result struct {
+		Success bool   `json:"success"`
+		Msg     string `json:"msg"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Success || result.Msg != explanation {
+		t.Fatalf("localized error response: %+v", result)
+	}
+}
+
+func TestGetRemoteIPUsesAllForwardedForHeaderLines(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request.RemoteAddr = "127.0.0.1:12345"
+	c.Request.Header.Add("X-Forwarded-For", "198.51.100.1")
+	c.Request.Header.Add("X-Forwarded-For", "203.0.113.5, 127.0.0.1")
+	if got := getRemoteIp(c); got != "203.0.113.5" {
+		t.Fatalf("client IP = %q, want proxy-appended address", got)
+	}
+	c.Request.Header.Add("X-Real-IP", "198.51.100.2")
+	c.Request.Header.Add("X-Real-IP", "203.0.113.5")
+	if got := getRemoteIp(c); got != "203.0.113.5" {
+		t.Fatalf("ambiguous X-Real-IP changed client identity: %q", got)
+	}
+}
+
+func TestExtractTrustedIPRejectsScopedAddress(t *testing.T) {
+	if _, ok := extractTrustedIP("fe80::1%eth0"); ok {
+		t.Fatal("scoped address accepted as a forwarded identity")
 	}
 }

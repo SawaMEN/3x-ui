@@ -134,6 +134,71 @@ func TestInstallOfficialReleaseAndRemove(t *testing.T) {
 	}
 }
 
+func TestInstallFromOfficialReleasePageWhenAPIIsRateLimited(t *testing.T) {
+	if !supported() {
+		t.Skip("requires supported Linux architecture")
+	}
+	const tag = "v9.9.9"
+	name := releaseArchiveName(tag)
+	archive := fixtureArchive(t, "zapret2-"+tag)
+	hash := fmt.Sprintf("sha256:%x", sha256.Sum256(archive))
+	for _, test := range []struct {
+		name       string
+		statusCode int
+		digest     string
+		wantError  string
+	}{
+		{"forbidden", http.StatusForbidden, hash, ""},
+		{"too-many-requests", http.StatusTooManyRequests, hash, ""},
+		{"missing-digest", http.StatusForbidden, "", "missing SHA-256 digest"},
+		{"wrong-digest", http.StatusForbidden, "sha256:" + strings.Repeat("0", 64), "SHA-256 mismatch"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+			old := client
+			t.Cleanup(func() { client = old })
+			assetDownloaded := false
+			client = &http.Client{Transport: zapret2RoundTrip(func(req *http.Request) (*http.Response, error) {
+				resp := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Request: req}
+				var contents string
+				switch req.Method + " " + req.URL.String() {
+				case "GET " + releasesAPI:
+					resp.StatusCode = test.statusCode
+					resp.Status = fmt.Sprintf("%d %s", test.statusCode, http.StatusText(test.statusCode))
+				case "HEAD " + releasesWeb + "latest":
+					resp.StatusCode = http.StatusFound
+					resp.Header.Set("Location", releasesWeb+"tag/"+tag)
+				case "HEAD " + releasesWeb + "tag/" + tag:
+				case "GET " + releasesWeb + "expanded_assets/" + tag:
+					contents = fmt.Sprintf(`<a href="/bol-van/zapret2/releases/download/%s/%s">%s</a>
+<clipboard-copy aria-label="Copy to clipboard digest for zapret2-%s.zip" value="%s"></clipboard-copy>
+<clipboard-copy aria-label="Copy to clipboard digest for %s" value="%s"></clipboard-copy>`, tag, name, name, tag, hash, name, test.digest)
+				case "GET " + releasesWeb + "download/" + tag + "/" + name:
+					assetDownloaded = true
+					contents = string(archive)
+				default:
+					return nil, fmt.Errorf("unexpected request %s %s", req.Method, req.URL)
+				}
+				resp.Body = io.NopCloser(strings.NewReader(contents))
+				return resp, nil
+			})}
+			status, err := Update(context.Background())
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) || Installed() {
+					t.Fatalf("expected %q and no installation, got %+v, %v", test.wantError, status, err)
+				}
+				if test.digest == "" && assetDownloaded {
+					t.Fatal("downloaded an archive without its digest")
+				}
+				return
+			}
+			if err != nil || !status.Installed || status.Version != tag || !Installed() {
+				t.Fatalf("installation via release page failed: %+v, %v", status, err)
+			}
+		})
+	}
+}
+
 func TestOfficialReleaseDigestMismatchDoesNotReplaceExistingComponent(t *testing.T) {
 	if !supported() {
 		t.Skip("requires supported Linux architecture")

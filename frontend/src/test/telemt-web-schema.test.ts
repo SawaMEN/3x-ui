@@ -1,4 +1,5 @@
 import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
+import { COVER_SITE_HTML_MAX_BYTES } from '@/schemas/cover-site-html';
 import { describe, expect, it } from 'vitest';
 import { TelemtWebProxyRequestSchema, TelemtWebSiteSchema } from '@/schemas/telemt-web';
 
@@ -14,6 +15,8 @@ describe('Telemt WEB request validation', () => {
       ...valid,
       aliases: [],
       basePath: '',
+      site: { mode: 'auto' },
+      retryJitter: { enabled: false, minMs: 0, maxMs: 250 },
     });
   });
   it('accepts only paths whose segments begin with letters or digits', () => {
@@ -48,10 +51,12 @@ describe('Telemt optional cover website', () => {
     ).toBe(true);
   });
   it('rejects unsupported themes, incomplete pages and oversized UTF-8 uploads', () => {
+    const valid = '<html>' + 'я'.repeat(132000) + '</html>';
+    expect(TelemtWebSiteSchema.safeParse({ mode: 'html', html: valid }).success).toBe(true);
     for (const site of [
       { mode: 'generate', theme: '../../etc' },
       { mode: 'html', html: 'not a document' },
-      { mode: 'html', html: '<html>' + 'я'.repeat(132000) },
+      { mode: 'html', html: '<html>' + 'я'.repeat(COVER_SITE_HTML_MAX_BYTES / 2) + '</html>' },
     ])
       expect(TelemtWebSiteSchema.safeParse(site).success).toBe(false);
   });

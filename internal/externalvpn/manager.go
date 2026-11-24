@@ -13,7 +13,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"math/big"
 	"net"
@@ -39,18 +38,20 @@ import (
 type running struct {
 	trafficEpoch uint64 // Writes hold both manager.mu and statsMu.
 
-	statsMu     sync.Mutex
-	accounting  *sidecartraffic.Owner
-	stopping    atomic.Bool
-	protocol    model.Protocol
-	metricsAddr string
-	tag         string
-	instance    Instance
-	counters    map[string]trafficCounters
-	fingerprint string
-	cancel      context.CancelFunc
-	cmd         *exec.Cmd
-	done        chan struct{}
+	statsMu         sync.Mutex
+	accounting      *sidecartraffic.Owner
+	stopping        atomic.Bool
+	protocol        model.Protocol
+	metricsAddr     string
+	tag             string
+	instance        Instance
+	counters        map[string]trafficCounters
+	fingerprint     string
+	cancel          context.CancelFunc
+	cmd             *exec.Cmd
+	done            chan struct{}
+	quicCmd         *exec.Cmd
+	quicMetricsAddr string
 }
 
 type Manager struct {
@@ -258,7 +259,14 @@ func files(inst Instance, metricsAddr string) ([]string, error) {
 		return nil, err
 	}
 	vpn := filepath.Join(folder, "vpn.toml")
-	settings := fmt.Sprintf("listen_address = %s\ncredentials_file = %s\nallow_private_network_connections = false\n[listen_protocols.http1]\n[listen_protocols.http2]\n[listen_protocols.quic]\n[forward_protocol.socks5]\naddress = %s\nextended_auth = false\n[metrics]\naddress = %s\nper_client_metrics = true\n", tomlString(inst.Bind()), tomlString(credentials), tomlString(sidecaregress.Address(inst.ID)), tomlString(metricsAddr))
+	mode := trustTunnelCombined
+	if inst.Settings.TrustTunnelTCPOnly {
+		mode = trustTunnelTCP
+	}
+	settings, err := renderTrustTunnelEndpointConfig(inst.Bind(), credentials, sidecaregress.Address(inst.ID), metricsAddr, mode)
+	if err != nil {
+		return nil, err
+	}
 	if err := writePrivate(vpn, []byte(settings)); err != nil {
 		return nil, err
 	}
@@ -364,7 +372,13 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		if m.procs[inst.ID] == old {
 			// Preflight may have written part of a shared config. Restore its files
 			// while preserving the still-running child.
-			_, cancel, restoreErr := m.prepareInboundCommand(old.instance, old.metricsAddr)
+			var cancel context.CancelFunc
+			var restoreErr error
+			if old.instance.TrustTunnelQUICBind != "" {
+				_, _, cancel, restoreErr = prepareTrustTunnelPair(old.instance, old.metricsAddr, old.quicMetricsAddr)
+			} else {
+				_, cancel, restoreErr = m.prepareInboundCommand(old.instance, old.metricsAddr)
+			}
 			if cancel != nil {
 				cancel()
 			}
@@ -382,6 +396,9 @@ func (m *Manager) ensureLocked(inst Instance) error {
 }
 
 func waitInboundStartup(proc *running) error {
+	if proc.quicCmd != nil {
+		return waitTrustTunnelPairReady(proc)
+	}
 	if proc.protocol == model.FPTN {
 		return waitFPTNReady(fmt.Sprintf("FPTN inbound %d", proc.instance.ID), proc.done, proc.cmd, func() bool {
 			return fptnExecReady(containerName(proc.instance.ID), `[ -n "$(ss -H -lnt 'sport = :443')" ] && [ -n "$(ss -H -lnt 'sport = :4430')" ]`)
@@ -444,8 +461,16 @@ func (m *Manager) startLocked(inst Instance) error {
 	if err != nil {
 		return err
 	}
-	metricsAddr := ""
-	if inst.Protocol == model.TrustTunnel || inst.Protocol == model.FPTN {
+	metricsAddr, quicMetricsAddr := "", ""
+	if inst.TrustTunnelQUICBind != "" {
+		// Reserve both ephemeral addresses together so the two processes
+		// never receive the same metrics endpoint.
+		var err error
+		metricsAddr, quicMetricsAddr, err = allocateTrustTunnelMetrics()
+		if err != nil {
+			return err
+		}
+	} else if inst.Protocol == model.TrustTunnel || inst.Protocol == model.FPTN {
 		listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			return err
@@ -458,25 +483,30 @@ func (m *Manager) startLocked(inst Instance) error {
 	if old := m.procs[inst.ID]; old != nil {
 		m.handoffTrafficLocked(old)
 	}
-	cmd, cancel, err := m.prepareInboundCommand(inst, metricsAddr)
+	var cmd, quicCmd *exec.Cmd
+	var cancel context.CancelFunc
+	if inst.TrustTunnelQUICBind != "" {
+		cmd, quicCmd, cancel, err = prepareTrustTunnelPair(inst, metricsAddr, quicMetricsAddr)
+	} else {
+		cmd, cancel, err = m.prepareInboundCommand(inst, metricsAddr)
+	}
 	if err != nil {
 		return err
 	}
 	m.stopLocked(inst.ID)
 	cleanupAdditional(inst.ID, inst.Protocol)
 
-	if err := cmd.Start(); err != nil {
-		cancel()
+	if err := startExternalVPNChildren(cmd, quicCmd, cancel); err != nil {
 		return fmt.Errorf("%s: %w", inst.Protocol, err)
 	}
 	// Snapshot only when starting a new child; unchanged reconciles stay allocation-light.
 	snapshot := inst
 	data, _ := json.Marshal(inst)
 	_ = json.Unmarshal(data, &snapshot)
-	proc := &running{accounting: accounting, instance: snapshot, protocol: inst.Protocol, fingerprint: fp, cancel: cancel, cmd: cmd, done: make(chan struct{}), metricsAddr: metricsAddr, tag: inst.Tag, counters: map[string]trafficCounters{}}
+	proc := &running{accounting: accounting, instance: snapshot, protocol: inst.Protocol, fingerprint: fp, cancel: cancel, cmd: cmd, done: make(chan struct{}), metricsAddr: metricsAddr, quicCmd: quicCmd, quicMetricsAddr: quicMetricsAddr, tag: inst.Tag, counters: map[string]trafficCounters{}}
 	m.procs[inst.ID] = proc
 	go func() {
-		err := cmd.Wait()
+		err := waitExternalVPNChildren(cmd, quicCmd, cancel)
 		close(proc.done)
 		if !proc.stopping.Load() {
 			logger.Warningf("%s inbound %d exited: %v", inst.Protocol, inst.ID, err)
@@ -528,6 +558,9 @@ func (m *Manager) stopLocked(id int) {
 		case <-proc.done:
 		case <-time.After(2 * time.Second):
 			_ = proc.cmd.Process.Kill()
+			if proc.quicCmd != nil {
+				_ = proc.quicCmd.Process.Kill()
+			}
 			<-proc.done
 		}
 		delete(m.procs, id)
@@ -728,7 +761,6 @@ func (m *Manager) collectProcessTrafficChecked(proc *running) ([]TrafficDelta, e
 }
 
 func (m *Manager) collectProcessTrafficMode(proc *running, includeIdle bool) ([]TrafficDelta, error) {
-	var deltas []TrafficDelta
 	if proc.protocol == model.FPTN || proc.protocol == model.OpenFlux {
 		return m.collectAdditionalTrafficMode(proc, includeIdle)
 	}
@@ -738,45 +770,26 @@ func (m *Manager) collectProcessTrafficMode(proc *running, includeIdle bool) ([]
 		}
 		return nil, nil // This protocol does not expose per-client metrics.
 	}
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+proc.metricsAddr+"/clients", nil)
+	primary, err := readTrustTunnelMetrics(proc.metricsAddr)
 	if err != nil {
-		return nil, errors.New("client metrics unavailable")
+		return nil, err
 	}
-	response, err := metricsHTTPClient.Do(request)
-	if err != nil {
-		return nil, errors.New("client metrics unavailable")
-	}
-	var clients []struct {
-		Username string `json:"username"`
-		Sessions int    `json:"sessions"`
-		Inbound  uint64 `json:"inbound"`
-		Outbound uint64 `json:"outbound"`
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, errors.New("client metrics response rejected")
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
-	if err != nil || len(data) > 1<<20 || json.Unmarshal(data, &clients) != nil || clients == nil {
-		return nil, errors.New("invalid client metrics response")
-	}
-	for _, row := range clients {
-		if row.Username == "" {
-			continue
+	var secondary []trustTunnelMetric
+	if proc.quicMetricsAddr != "" {
+		secondary, err = readTrustTunnelMetrics(proc.quicMetricsAddr)
+		if err != nil {
+			// Both samples must succeed before either baseline advances.
+			return nil, err
 		}
-		old := proc.counters[row.Username]
-		up, down := row.Inbound, row.Outbound
-		delta := TrafficDelta{
-			Tag:    proc.tag,
-			Email:  row.Username,
-			Up:     cumulativeTrafficDelta(up, old.up),
-			Down:   cumulativeTrafficDelta(down, old.down),
-			Active: row.Sessions > 0,
-		}
-		if includeIdle || delta.Up > 0 || delta.Down > 0 || delta.Active {
-			deltas = append(deltas, delta)
-		}
-		proc.counters[row.Username] = trafficCounters{up: up, down: down}
 	}
-	return deltas, nil
+	return collectTrustTunnelMetrics(proc, primary, secondary, includeIdle), nil
+}
+
+// Omit the QUIC table only on an explicit TCP-only configuration. Legacy
+// records retain all three protocols.
+func trustTunnelListenProtocols(tcpOnly bool) string {
+	if tcpOnly {
+		return trustTunnelProtocolTables(trustTunnelTCP)
+	}
+	return trustTunnelProtocolTables(trustTunnelCombined)
 }

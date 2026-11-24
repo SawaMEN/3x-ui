@@ -60,3 +60,16 @@ func TestDiagnosticPreservesJoinedFailureCauses(t *testing.T) {
 		t.Fatalf("joined error leaked secrets: %s", got)
 	}
 }
+
+func TestDiagnosticRedactsExtendedSubscriptionURIs(t *testing.T) {
+	for _, scheme := range []string{
+		"tg", "vpn", "awg", "amneziawg", "naive+https", "naive+quic",
+		"anytls", "shadowtls", "mieru", "snell", "sudoku", "masque-client",
+		"fptn", "trusttunnel", "openflux", "vetroff", "vk-turn-proxy", "pingtunnel",
+	} {
+		got := SanitizeDiagnostic("invalid profile " + scheme + "://PRIVATE_CREDENTIAL@example.org")
+		if strings.Contains(got, "PRIVATE_CREDENTIAL") || !strings.Contains(got, "invalid profile") {
+			t.Errorf("%s: unsafe diagnostic %q", scheme, got)
+		}
+	}
+}

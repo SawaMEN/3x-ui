@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import TelemtNaiveSelect from '@/pages/telemt/TelemtNaiveSelect';
 import { useTranslation } from 'react-i18next';
 import { Alert, Collapse, Input, InputNumber, Select, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
@@ -6,7 +8,7 @@ import { FormField } from '@/components/form/rhf';
 import SniSearchInput from '../security/SniSearchInput';
 import { useTelemtOutboundTags } from '@/api/queries/useOutboundTags';
 import MtprotoWebStatus from './MtprotoWebStatus';
-import { TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
+import { completeTelemtWebSettings, TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
 import MtprotoMekoStatus from './MtprotoMekoStatus';
 import TelemtWebSiteFields from '@/pages/telemt/TelemtWebSiteFields';
 import TelemtWebGuide, { telemtWebFieldHelp } from '@/pages/telemt/TelemtWebGuide';
@@ -19,13 +21,29 @@ export default function MtprotoFields({
   nodeId?: number | null;
 }) {
   const { t, i18n } = useTranslation();
-  const { control } = useFormContext();
+  const { control, getValues, setValue } = useFormContext();
   const ru = i18n.resolvedLanguage?.startsWith('ru') ?? false;
   const help = telemtWebFieldHelp[ru ? 'ru' : 'en'];
   const webDomain = useWatch({ control, name: 'settings.webProxy.domain' }) as string | undefined;
   const webProxyEnabled = useWatch({ control, name: 'settings.webProxy.enabled' }) as
     | boolean
     | undefined;
+  const webFrontend = useWatch({ control, name: 'settings.webProxy.frontend' });
+  const webAliases = useWatch({ control, name: 'settings.webProxy.aliases' }) as
+    | string[]
+    | undefined;
+  const sharedIngressEnabled = useWatch({
+    control,
+    name: 'settings.webProxy.sharedIngress.enabled',
+  });
+  useEffect(() => {
+    if (!webProxyEnabled) return;
+    const saved = getValues('settings.webProxy') as Parameters<typeof completeTelemtWebSettings>[0];
+    const completed = completeTelemtWebSettings(saved);
+    if (JSON.stringify(saved) !== JSON.stringify(completed)) {
+      setValue('settings.webProxy', completed, { shouldValidate: true });
+    }
+  }, [webProxyEnabled, getValues, setValue]);
   const mekoEnabled = useWatch({ control, name: 'settings.mekoFix' }) as boolean | undefined;
   const routeThroughXray = useWatch({ control, name: 'settings.routeThroughXray' }) as
     | boolean
@@ -173,6 +191,38 @@ export default function MtprotoFields({
               options={['nginx', 'caddy', 'haproxy'].map((value) => ({ value, label: value }))}
             />
           </FormField>
+          {webFrontend && (
+            <>
+              <FormField
+                name={['settings', 'webProxy', 'sharedIngress', 'enabled']}
+                label={ru ? 'Общий HTTPS-вход на порту 443' : 'Shared HTTPS ingress on port 443'}
+                extra={
+                  ru
+                    ? 'Панель и подписки должны слушать локальные порты. Укажите отдельные URL-пути.'
+                    : 'Bind the panel and subscriptions to loopback and use separate URL paths.'
+                }
+                valueProp="checked"
+              >
+                <Switch />
+              </FormField>
+              {sharedIngressEnabled && (
+                <FormField
+                  name={['settings', 'webProxy', 'sharedIngress', 'inboundIds']}
+                  label={ru ? 'Входящие TLS/SNI-подключения' : 'TLS/SNI inbounds'}
+                  extra={
+                    ru
+                      ? 'Необязательно. Локальные TCP-подключения с TLS или REALITY, каждое с уникальным SNI. Для Nginx/Caddy с VPN-маршрутами используется отдельный TCP/SNI-диспетчер.'
+                      : 'Optional. Use loopback TCP inbounds with TLS or REALITY and unique SNIs. Nginx/Caddy use a separate TCP/SNI dispatcher for VPN routes.'
+                  }
+                >
+                  <TelemtNaiveSelect
+                    nodeId={nodeId}
+                    webHosts={[webDomain || '', ...(webAliases || [])]}
+                  />
+                </FormField>
+              )}
+            </>
+          )}
           <FormField
             name={['settings', 'webProxy', 'carrier']}
             label={ru ? 'Основной транспорт (WEB carrier)' : 'Primary transport (WEB carrier)'}

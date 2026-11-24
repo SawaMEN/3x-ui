@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, QRCode } from 'antd';
+import { Button, QRCode, Segmented } from 'antd';
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 
 import SubQrButton from './SubQrButton';
+import { parseSubscriptionURL } from './subPageModel';
 
 interface SubLinksTabProps {
   subUrl: string;
@@ -12,9 +14,12 @@ interface SubLinksTabProps {
   onCopy: (value: string) => void;
 }
 
-const appendRawView = (url: string) => `${url}${url.includes('?') ? '&' : '?'}view=raw`;
-const appendNativeFormat = (url: string, format: string) =>
-  url ? `${url}${url.includes('?') ? '&' : '?'}format=${format}` : '';
+function withSubscriptionParam(url: string, name: string, value: string) {
+  const parsed = parseSubscriptionURL(url, window.location.href);
+  if (!parsed) return '';
+  parsed.searchParams.set(name, value);
+  return parsed.href;
+}
 
 export default function SubLinksTab({
   subUrl,
@@ -24,37 +29,30 @@ export default function SubLinksTab({
   onCopy,
 }: SubLinksTabProps) {
   const { t } = useTranslation();
+  const [profileScope, setProfileScope] = useState<'compatible' | 'all'>(() =>
+    new URLSearchParams(window.location.search).get('format') === 'all' ? 'all' : 'compatible',
+  );
+  const canExportAllProfiles = subFormatMode === 'both';
+  const qrUrl =
+    canExportAllProfiles && profileScope === 'all'
+      ? withSubscriptionParam(subUrl, 'format', 'all')
+      : subUrl;
   const rows = [
-    {
-      kind: 'ALL',
-      url: subFormatMode === 'both' ? appendNativeFormat(subUrl, 'links') : '',
-      title: t('subscription.allConnections'),
-      downloadable: false,
-    },
-    {
-      kind: 'STANDALONE',
-      url: appendNativeFormat(subUrl, 'standalone'),
-      title: t('subscription.standaloneProtocols'),
-      downloadable: true,
-    },
     {
       kind: 'XRAY',
       url: subJsonUrl,
       title: 'Xray JSON',
-      downloadable: true,
     },
-    { kind: 'CLASH', url: subClashUrl, title: 'Clash / Mihomo', downloadable: true },
+    { kind: 'CLASH', url: subClashUrl, title: 'Clash / Mihomo' },
     {
       kind: 'SING-BOX',
-      url: subFormatMode === 'xray' ? '' : appendNativeFormat(subUrl, 'sing-box'),
+      url: subFormatMode === 'xray' ? '' : withSubscriptionParam(subUrl, 'format', 'sing-box'),
       title: 'Sing-box JSON (AnyTLS / ShadowTLS)',
-      downloadable: true,
     },
     {
       kind: 'HIDDIFY',
-      url: subFormatMode === 'xray' ? '' : appendNativeFormat(subUrl, 'hiddify'),
-      title: 'Hiddify JSON (AnyTLS / ShadowTLS)',
-      downloadable: true,
+      url: subFormatMode === 'xray' ? '' : withSubscriptionParam(subUrl, 'format', 'hiddify'),
+      title: 'Hiddify JSON',
     },
   ].filter((row) => row.url);
 
@@ -64,7 +62,7 @@ export default function SubLinksTab({
         <section className="sub-qr-card" aria-labelledby="sub-qr-heading">
           <div className="sub-qr-code" aria-hidden="true">
             <QRCode
-              value={subUrl}
+              value={qrUrl}
               size={128}
               type="svg"
               bordered={false}
@@ -77,25 +75,37 @@ export default function SubLinksTab({
               {t('subscription.scanTitle')}
             </h2>
             <p>{t('subscription.scanHint')}</p>
+            {canExportAllProfiles && (
+              <Segmented<'compatible' | 'all'>
+                className="sub-qr-profile-scope"
+                aria-label={t('subscription.profileScope')}
+                value={profileScope}
+                onChange={setProfileScope}
+                options={[
+                  { value: 'compatible', label: t('subscription.compatibleProfiles') },
+                  { value: 'all', label: t('subscription.allConnections') },
+                ]}
+              />
+            )}
             <div className="sub-qr-actions">
               <Button
                 type="primary"
                 icon={<CopyOutlined aria-hidden />}
-                onClick={() => onCopy(subUrl)}
+                onClick={() => onCopy(qrUrl)}
               >
                 {t('pages.inbounds.copyLink')}
               </Button>
-              <SubQrButton value={subUrl} label={t('subscription.title')} onCopy={onCopy} />
+              <SubQrButton value={qrUrl} label={t('subscription.title')} onCopy={onCopy} />
             </div>
             <a
-              href={subUrl}
+              href={qrUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="sub-row-url sub-qr-address"
               dir="ltr"
-              title={subUrl}
+              title={qrUrl}
             >
-              {subUrl}
+              {qrUrl}
             </a>
           </div>
         </section>
@@ -111,16 +121,14 @@ export default function SubLinksTab({
             </div>
           </div>
           <div className="sub-row-actions">
-            {row.downloadable && (
-              <Button
-                href={appendRawView(row.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                icon={<DownloadOutlined aria-hidden />}
-                aria-label={t('download')}
-                title={t('download')}
-              />
-            )}
+            <Button
+              href={withSubscriptionParam(row.url, 'view', 'raw')}
+              target="_blank"
+              rel="noopener noreferrer"
+              icon={<DownloadOutlined aria-hidden />}
+              aria-label={t('download')}
+              title={t('download')}
+            />
             <Button
               icon={<CopyOutlined aria-hidden />}
               onClick={() => onCopy(row.url)}

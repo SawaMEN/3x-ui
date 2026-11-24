@@ -3520,6 +3520,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "shareAddrStrategy": {
         "type": "string"
       },
+      "sharedIngressError": {
+        "type": "string"
+      },
+      "sharedIngressSni": {
+        "type": "string"
+      },
       "ssMethod": {
         "type": "string"
       },
@@ -3538,6 +3544,9 @@ export const SCHEMAS: Record<string, unknown> = {
           }
         ],
         "nullable": true
+      },
+      "udp443": {
+        "type": "boolean"
       },
       "wgDns": {
         "type": "string"

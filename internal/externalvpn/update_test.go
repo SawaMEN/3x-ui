@@ -171,3 +171,51 @@ func TestPingtunnelMinimumSupportedRelease(t *testing.T) {
 		}
 	}
 }
+
+func TestManagedTrustTunnelReleaseVersionAndIntegrity(t *testing.T) {
+	spec, err := releaseSpecFor(model.TrustTunnel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := normalizeReleaseVersion(trustTunnelPatchedTag); got != trustTunnelPatchedVersion {
+		t.Fatalf("managed tag normalized to %q", got)
+	}
+	if got := parseExternalVersion("trusttunnel_endpoint " + trustTunnelPatchedVersion); got != trustTunnelPatchedVersion {
+		t.Fatalf("managed binary version parsed as %q", got)
+	}
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"1.4.0", trustTunnelPatchedVersion, true},
+		{"1.3.1", trustTunnelPatchedVersion, false},
+		{"1.3.0", trustTunnelPatchedVersion, false},
+		{"1.10.0", "1.9.9", true},
+		{"2.0.0", "1.99.99", true},
+		{"", trustTunnelPatchedVersion, false},
+	} {
+		if got := trustTunnelBaseVersionNewer(tc.a, tc.b); got != tc.want {
+			t.Fatalf("compare %q with %q = %v", tc.a, tc.b, got)
+		}
+	}
+	for arch, platform := range map[string]string{"amd64": "x86_64", "arm64": "aarch64"} {
+		name := "trusttunnel-v" + trustTunnelPatchedVersion + "-linux-" + platform + ".tar.gz"
+		asset := releaseAsset{
+			Name: name, URL: "https://github.com/SawaMEN/3x-ui/releases/download/" + trustTunnelPatchedTag + "/" + name,
+			Digest: "sha256:1343462835cbb1f7631c393c1090169aee14f90129e0922c7ec1d58fd40b0647",
+		}
+		got, err := pickReleaseAsset(spec, githubRelease{TagName: trustTunnelPatchedTag, Assets: []releaseAsset{asset}}, arch)
+		if err != nil || !validManagedTrustTunnelAsset(got) {
+			t.Fatalf("managed %s asset rejected: %v", arch, err)
+		}
+		for _, invalid := range []releaseAsset{
+			{Name: asset.Name, URL: asset.URL},
+			{Name: asset.Name, URL: asset.URL, Digest: "sha256:invalid"},
+			{Name: asset.Name, URL: "https://example.invalid/" + name, Digest: asset.Digest},
+		} {
+			if validManagedTrustTunnelAsset(invalid) {
+				t.Fatal("accepted unverified managed archive")
+			}
+		}
+	}
+}

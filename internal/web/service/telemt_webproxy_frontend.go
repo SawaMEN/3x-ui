@@ -35,13 +35,17 @@ type TelemtWebRetryJitter struct {
 }
 
 type TelemtWebProxyOptions struct {
-	Site        *TelemtWebSiteOptions `json:"site,omitempty"`
-	Frontend    string                `json:"frontend"`
-	Carrier     string                `json:"carrier"`
-	BasePath    *string               `json:"basePath,omitempty"`
-	Aliases     *[]string             `json:"aliases,omitempty"`
-	Carriers    []string              `json:"carriers"`
-	RetryJitter *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
+	VPNMigrations []TelemtVPNMigrationRequest `json:"vpnMigrations,omitempty"`
+	ingressRouter string
+	ingressRouterModule string
+	SharedIngress *TelemtWebIngress     `json:"sharedIngress,omitempty"`
+	Site          *TelemtWebSiteOptions `json:"site,omitempty"`
+	Frontend      string                `json:"frontend"`
+	Carrier       string                `json:"carrier"`
+	BasePath      *string               `json:"basePath,omitempty"`
+	Aliases       *[]string             `json:"aliases,omitempty"`
+	Carriers      []string              `json:"carriers"`
+	RetryJitter   *TelemtWebRetryJitter `json:"retryJitter,omitempty"`
 }
 
 func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, error) {
@@ -58,8 +62,24 @@ func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, 
 	if o.Frontend == "" {
 		o.Frontend = "nginx"
 	}
+	if o.SharedIngress != nil {
+		if !o.SharedIngress.Enabled {
+			o.SharedIngress = &TelemtWebIngress{Enabled: false}
+		} else {
+			ids, err := telemtIngressInboundIDs(o.SharedIngress)
+			if err != nil {
+				return o, err
+			}
+			o.SharedIngress = &TelemtWebIngress{Enabled: true, InboundIDs: ids}
+		}
+	}
 	if o.Carrier == "" {
 		o.Carrier = "https"
+	}
+	// An explicit empty list must be serialised as [] (never null) for
+	// clients and form validators that require an array of transports.
+	if o.Carriers == nil {
+		o.Carriers = []string{}
 	}
 	if o.Aliases != nil {
 		aliases, err := normalizeTelemtWebAliases("", *o.Aliases)
@@ -73,6 +93,10 @@ func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, 
 		if err != nil {
 			return o, err
 		}
+		o.BasePath = &path
+	}
+	if o.SharedIngress != nil && o.SharedIngress.Enabled && (o.BasePath == nil || *o.BasePath == "") {
+		path := telemtWebIngressDefaultPath
 		o.BasePath = &path
 	}
 	if !slices.Contains([]string{"nginx", "caddy", "haproxy"}, o.Frontend) {
@@ -109,6 +133,9 @@ func telemtWebCarrier(s TelemtWebProxyState) string {
 func (s TelemtService) EnableWebProxy(ctx context.Context, domain, cert, key string, options ...TelemtWebProxyOptions) (TelemtWebProxyStatus, error) {
 	telemtWebOperationMu.Lock()
 	defer telemtWebOperationMu.Unlock()
+	if len(options) > 0 && len(options[0].VPNMigrations) != 0 {
+		return s.enableWithVPNMigrationLocked(ctx, domain, cert, key, options[0])
+	}
 	return s.enableWebProxyLocked(ctx, domain, cert, key, options...)
 }
 
@@ -123,12 +150,20 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 	if !telemtWebVersionAtLeast(telemtVersion(), telemtWebMinEngine) {
 		return TelemtWebProxyStatus{}, errors.New("Telemt does not support WEB Proxy")
 	}
+	if migration, err := TelemtPendingPortMigration(); err != nil {
+		return TelemtWebProxyStatus{}, err
+	} else if migration != nil {
+		return TelemtWebProxyStatus{}, errors.New("confirm the listener port migration before enabling WEB Proxy")
+	}
 	old, err := readTelemtWebState()
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	o := TelemtWebProxyOptions{Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site, BasePath: &old.BasePath, Aliases: &old.Aliases, RetryJitter: old.RetryJitter}
+	o := TelemtWebProxyOptions{SharedIngress: old.SharedIngress, Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site, BasePath: &old.BasePath, Aliases: &old.Aliases, RetryJitter: old.RetryJitter}
 	if len(options) > 0 {
+		if options[0].SharedIngress != nil {
+			o.SharedIngress = options[0].SharedIngress
+		}
 		if options[0].Aliases != nil {
 			o.Aliases = options[0].Aliases
 		}
@@ -161,6 +196,22 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 	if (len(o.Carriers) > 0 || o.Carrier != "https") && !telemtWebVersionAtLeast(telemtVersion(), "3.5.4") {
 		return TelemtWebProxyStatus{}, errors.New("WEB carrier selection requires Telemt 3.5.4 or newer")
 	}
+	if journal, err := loadTelemtVPNMigrationForEnable(); err != nil {
+		return TelemtWebProxyStatus{}, err
+	} else if journal != nil {
+		ids, err := telemtIngressInboundIDs(o.SharedIngress)
+		if err != nil {
+			return TelemtWebProxyStatus{}, err
+		}
+		for _, move := range journal.Moves {
+			if !slices.Contains(ids, move.ID) {
+				return TelemtWebProxyStatus{}, errors.New("return migrated VPN listeners before removing their shared routes")
+			}
+		}
+	}
+	proposed := TelemtWebProxyState{Frontend: o.Frontend, SharedIngress: o.SharedIngress}
+	o.ingressRouter, o.ingressRouterModule = telemtIngressSelectRouter(ctx, proposed)
+	proposed.IngressRouter, proposed.IngressRouterModule = o.ingressRouter, o.ingressRouterModule
 	// Fail before changing packages, certificates, state or listeners.
 	preflight, err := s.PreflightWebProxy(ctx, domain, o, cert, key)
 	if err != nil {
@@ -178,9 +229,13 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	if old.Enabled && telemtWebFrontend(old) != o.Frontend {
+	if old.Enabled && (telemtWebFrontend(old) != o.Frontend || telemtIngressRouterEngine(old) != telemtIngressRouterEngine(proposed)) {
 		if err := disableTelemtWebProxy(); err != nil {
-			return TelemtWebProxyStatus{}, err
+			return TelemtWebProxyStatus{}, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
+		}
+		// Graceful shutdown/reload can retain the old listening socket briefly.
+		if err := telemtIngressWaitPortRelease(ctx, old, proposed); err != nil {
+			return TelemtWebProxyStatus{}, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
 		}
 		old.Enabled = false
 		if err := writeTelemtWebState(old); err != nil {
@@ -202,12 +257,29 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 	if err != nil {
 		return result, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
 	}
-	return result, nil
+	if o.SharedIngress != nil && o.SharedIngress.Enabled {
+		current, err := readTelemtWebState()
+		if err != nil {
+			return result, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
+		}
+		if err := refreshTelemtIngress(current); err != nil {
+			return result, withTelemtRollbackError(err, s.RestoreWebProxyEnableSnapshot(snapshot))
+		}
+	} else {
+		publishedTelemtIngress.Store(nil)
+	}
+	// The initial status was captured before the backend was started.
+	return s.WebProxyStatus(domain, cert, key)
 }
 
-func (TelemtService) DisableWebProxy() error {
+func (s TelemtService) DisableWebProxy() error {
 	telemtWebOperationMu.Lock()
 	defer telemtWebOperationMu.Unlock()
+	if journal, err := loadTelemtVPNMigrationForEnable(); err != nil {
+		return err
+	} else if journal != nil {
+		return s.restoreVPNMigrationLocked()
+	}
 	if err := disableTelemtWebProxy(); err != nil {
 		return err
 	}
@@ -218,7 +290,29 @@ func telemtWebFrontendActive(s TelemtWebProxyState) bool {
 	if telemtWebFrontend(s) == "nginx" {
 		return telemtWebNginxActive()
 	}
-	return systemctl("is-active", "--quiet", telemtWebFrontUnit) == nil
+	return telemtWebUnitExecutableActive(telemtWebFrontUnit, telemtWebFrontend(s))
+}
+
+// A shared unit name alone does not identify the running executable.
+func telemtWebUnitExecutableActive(unit, executableName string) bool {
+	if systemctl("is-active", "--quiet", unit) != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, "systemctl", "show", "--property=MainPID", "--value", unit).Output()
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(output)))
+	if err != nil || pid <= 0 {
+		return false
+	}
+	executable, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil {
+		return false
+	}
+	return filepath.Base(strings.TrimSuffix(executable, " (deleted)")) == executableName
 }
 
 func telemtWebFrontendEnabled(s TelemtWebProxyState) bool {
@@ -230,6 +324,11 @@ func telemtWebFrontendEnabled(s TelemtWebProxyState) bool {
 
 func telemtWebEnsureFrontendPackage(ctx context.Context, s TelemtWebProxyState) error {
 	front := telemtWebFrontend(s)
+	if telemtIngressRouterEngine(s) == "haproxy" {
+		if err := telemtWebEnsureFrontendPackage(ctx, TelemtWebProxyState{Frontend: "haproxy"}); err != nil {
+			return err
+		}
+	}
 	if front == "nginx" {
 		return telemtWebEnsureNginxPackage(ctx)
 	}
@@ -281,11 +380,16 @@ func telemtWebFrontendCertificate(ctx context.Context, s TelemtWebProxyState, do
 		}
 		return "", "", errors.New("additional WEB domains require an existing SAN or wildcard certificate covering every hostname")
 	}
-	if telemtWebFrontend(s) == "nginx" {
-		return telemtWebEnsureCertificate(ctx, domain, cert, key)
-	}
 	if telemtWebCertificatePairReady(cert, key, domain) {
 		return cert, key, nil
+	}
+	// Preflight accepts the persisted certificate. Deployment must use the
+	// same valid pair instead of trying to issue another certificate.
+	if telemtWebCertificatePairReady(s.CertFile, s.KeyFile, domain) {
+		return s.CertFile, s.KeyFile, nil
+	}
+	if telemtWebFrontend(s) == "nginx" {
+		return telemtWebEnsureCertificate(ctx, domain, cert, key)
 	}
 	cert = "/etc/letsencrypt/live/" + domain + "/fullchain.pem"
 	key = "/etc/letsencrypt/live/" + domain + "/privkey.pem"
@@ -346,14 +450,16 @@ func telemtWebFrontendConfig(s TelemtWebProxyState, sub telemtWebSubscriptionTar
 		}
 		webProxy := proxy("http://" + backend)
 		// Keep established WEB WebSocket lanes alive during certificate/config reloads.
-		if telemtWebCaddySupportsStreamDelay() { webProxy["stream_close_delay"] = "5m" }
+		if telemtWebCaddySupportsStreamDelay() {
+			webProxy["stream_close_delay"] = "5m"
+		}
 		routes = append(routes, map[string]any{"handle": []any{webProxy}})
-		server := map[string]any{"listen": []string{":443"}, "automatic_https": map[string]any{"disable": true}, "tls_connection_policies": []any{map[string]any{}}, "routes": []any{map[string]any{"match": []any{map[string]any{"host": telemtWebHosts(s)}}, "handle": []any{map[string]any{"handler": "subroute", "routes": routes}}, "terminal": true}, map[string]any{"handle": []any{map[string]any{"handler": "static_response", "status_code": 404}}}}}
+		server := map[string]any{"listen": []string{":443"}, "protocols": []string{"h1", "h2"}, "automatic_https": map[string]any{"disable": true}, "tls_connection_policies": []any{map[string]any{}}, "routes": []any{map[string]any{"match": []any{map[string]any{"host": telemtWebHosts(s)}}, "handle": []any{map[string]any{"handler": "subroute", "routes": routes}}, "terminal": true}, map[string]any{"handle": []any{map[string]any{"handler": "static_response", "status_code": 404}}}}}
 		config := map[string]any{"admin": map[string]any{"listen": "unix//run/3x-ui-telemt-front/caddy.sock", "config": map[string]any{"persist": false}}, "apps": map[string]any{"tls": map[string]any{"certificates": map[string]any{"load_files": []any{map[string]any{"certificate": s.CertFile, "key": s.KeyFile}}}}, "http": map[string]any{"servers": map[string]any{"web": server}}}}
 		return json.MarshalIndent(config, "", "  ")
 	case "haproxy":
 		bind := ":443"
-		if host, _, err := net.SplitHostPort(s.PublicAddr); err == nil && net.ParseIP(host) != nil && net.ParseIP(host).To4() == nil {
+		if telemtWebNeedsIPv6(s) {
 			bind = "[::]:443 v4v6"
 		}
 		var b strings.Builder
@@ -385,6 +491,19 @@ func telemtWebFrontendConfig(s TelemtWebProxyState, sub telemtWebSubscriptionTar
 }
 
 func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
+	if s.SharedIngress != nil && s.SharedIngress.Enabled {
+		if !telemtWebCertificateCoversHosts(s.CertFile, s.KeyFile, telemtWebHosts(s)) {
+			return errors.New("WEB certificate does not cover all configured domains")
+		}
+		plan, err := buildTelemtWebIngress(s)
+		if err != nil { return err }
+		if telemtWebFrontend(s) == "nginx" {
+			if data, err := os.ReadFile("/etc/letsencrypt/renewal/" + s.Domain + ".conf"); err == nil && telemtWebRenewalMode(data) == "managed-webroot" {
+				if err := telemtWebWriteAcmeNginxConfig(s.Domain); err != nil { return err }
+			}
+		}
+		return writeTelemtIngressFrontend(s, plan)
+	}
 	if telemtWebFrontend(s) == "nginx" {
 		return writeTelemtWebNginxConfig(s)
 	}
@@ -406,33 +525,19 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 		if err != nil {
 			return err
 		}
-		data, err := os.ReadFile(sub.TLSCAFile)
+		sub.TLSServerName, err = telemtWebCertificateName(sub.TLSCAFile)
 		if err != nil {
 			return err
-		}
-		block, _ := pem.Decode(data)
-		if block == nil {
-			return errors.New("invalid panel TLS certificate")
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return err
-		}
-		if len(cert.DNSNames) > 0 {
-			sub.TLSServerName = cert.DNSNames[0]
-			if strings.HasPrefix(sub.TLSServerName, "*.") {
-				sub.TLSServerName = "x-ui." + strings.TrimPrefix(sub.TLSServerName, "*.")
-			}
-		} else if len(cert.IPAddresses) > 0 {
-			sub.TLSServerName = cert.IPAddresses[0].String()
-		} else {
-			return errors.New("panel TLS certificate requires a DNS name or IP SAN")
 		}
 	}
 	data, err := telemtWebFrontendConfig(s, sub)
 	if err != nil {
 		return err
 	}
+	return writeTelemtWebFrontendFiles(s, data)
+}
+
+func writeTelemtWebFrontendFiles(s TelemtWebProxyState, data []byte) error {
 	if err := os.MkdirAll(telemtWebFrontDir, 0o700); err != nil {
 		return err
 	}
@@ -445,11 +550,46 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(telemtWebFrontDir+"/tls.pem", append(append(cert, '\n'), key...), 0o600); err != nil {
+		if err := writeTelemtWebFrontendFile(telemtWebFrontDir+"/tls.pem", append(append(cert, '\n'), key...)); err != nil {
 			return err
 		}
 	}
-	return os.WriteFile(telemtWebFrontDir+"/config", data, 0o600)
+	return writeTelemtWebFrontendFile(telemtWebFrontDir+"/config", data)
+}
+
+func writeTelemtWebFrontendFile(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".telemt-frontend-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	_, writeErr := tmp.Write(data)
+	if err := errors.Join(writeErr, tmp.Close()); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+func telemtWebCertificateName(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return "", errors.New("invalid TLS certificate")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", err
+	}
+	if len(cert.DNSNames) > 0 {
+		return strings.Replace(cert.DNSNames[0], "*.", "x-ui.", 1), nil
+	}
+	if len(cert.IPAddresses) > 0 {
+		return cert.IPAddresses[0].String(), nil
+	}
+	return "", errors.New("TLS certificate requires a DNS name or IP SAN")
 }
 
 func telemtWebFrontUnitContent(front, binary string) string {
@@ -469,7 +609,9 @@ func telemtWebValidateFrontend(s TelemtWebProxyState) error {
 	if front == "haproxy" {
 		args = []string{"-c", "-f", telemtWebFrontDir + "/config"}
 	}
-	out, err := exec.CommandContext(context.Background(), front, args...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, front, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s WEB config validation failed: %w: %s", front, err, strings.TrimSpace(string(out)))
 	}
@@ -488,26 +630,48 @@ func telemtWebEnsureFrontendRunning(s TelemtWebProxyState) error {
 		return err
 	}
 	unit := telemtWebFrontUnitContent(telemtWebFrontend(s), binary)
-	if err := os.WriteFile(filepath.Join("/etc/systemd/system", telemtWebFrontUnit), []byte(unit), 0o644); err != nil {
-		return err
+	unitPath := filepath.Join("/etc/systemd/system", telemtWebFrontUnit)
+	previousUnit, readErr := os.ReadFile(unitPath)
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return readErr
 	}
-	if err := systemctl("daemon-reload"); err != nil {
-		return err
+	active := systemctl("is-active", "--quiet", telemtWebFrontUnit) == nil
+	restart := active && (string(previousUnit) != unit || !telemtWebFrontendActive(s))
+	if string(previousUnit) != unit {
+		if err := os.WriteFile(unitPath, []byte(unit), 0o644); err != nil {
+			return err
+		}
+		if err := systemctl("daemon-reload"); err != nil {
+			return err
+		}
+	}
+	if restart {
+		if err := systemctl("restart", telemtWebFrontUnit); err != nil {
+			return err
+		}
+	}
+	if active && !restart && systemctl("is-enabled", "--quiet", telemtWebFrontUnit) == nil {
+		return nil
 	}
 	return systemctl("enable", "--now", telemtWebFrontUnit)
 }
 
 func telemtWebReloadFrontend(s TelemtWebProxyState) error {
 	if telemtWebFrontend(s) == "nginx" {
-		return telemtWebReloadNginx()
+		if err := telemtWebReloadNginx(); err != nil { return err }
+		return telemtIngressEnsureRouter(s)
 	}
 	if !telemtWebFrontendActive(s) {
+		if s.Enabled {
+			return errors.New("selected WEB frontend is not running")
+		}
 		return nil
 	}
 	if err := telemtWebValidateFrontend(s); err != nil {
 		return err
 	}
-	return systemctl("reload", telemtWebFrontUnit)
+	if err := systemctl("reload", telemtWebFrontUnit); err != nil { return err }
+	return telemtIngressEnsureRouter(s)
 }
 
 func telemtWebStopFrontend(s TelemtWebProxyState, disable bool) error {
@@ -531,6 +695,7 @@ func telemtWebRestoreFrontend(s TelemtWebProxyState) error {
 }
 
 func removeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
+	if err := telemtIngressRemoveRouter(s); err != nil { return err }
 	if telemtWebFrontend(s) == "nginx" {
 		return removeTelemtWebNginxConfig()
 	}
@@ -540,6 +705,78 @@ func removeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 		}
 	}
 	return nil
+}
+
+// Probe every configured virtual host with its own HTTP Host and TLS SNI.
+// Dial loopback explicitly so DNS, CDN and environment proxies cannot turn
+// this local readiness check into a request to an unrelated server.
+func telemtWebProbeHosts(ctx context.Context, state TelemtWebProxyState, client *http.Client) error {
+	for _, host := range telemtWebHosts(state) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+host+"/", nil)
+		if err != nil {
+			return err
+		}
+		response, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("%s: %w", host, err)
+		}
+		_ = response.Body.Close()
+		if !telemtWebSiteReady(state, response.StatusCode) {
+			return fmt.Errorf("%s: WEB HTTPS endpoint returned HTTP %d", host, response.StatusCode)
+		}
+	}
+	return nil
+}
+
+// Upgrade persisted frontend configurations without changing users, secrets
+// or certificates. The caller owns telemtWebOperationMu.
+func telemtWebUpgradeFrontend(ctx context.Context, state TelemtWebProxyState) error {
+	if !state.Enabled || state.FrontendConfigRevision >= telemtWebFrontendConfigRevision {
+		return nil
+	}
+	path := telemtWebFrontDir + "/config"
+	if telemtWebFrontend(state) == "nginx" {
+		path = telemtWebNginxConf
+	}
+	old, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	active := telemtWebFrontendActive(state)
+	if err := writeTelemtWebFrontendConfig(state); err != nil {
+		return err
+	}
+	rollback := func(cause error) error {
+		if old == nil {
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return errors.Join(cause, err)
+			}
+		} else if err := telemtWebFrontendRestoreFile(path, old); err != nil {
+			return errors.Join(cause, err)
+		}
+		if active {
+			return errors.Join(cause, telemtWebReloadFrontend(state))
+		}
+		return errors.Join(cause, telemtWebStopFrontend(state, false))
+	}
+	if err := telemtWebEnsureFrontendRunning(state); err != nil {
+		return rollback(err)
+	}
+	if err := telemtWebReloadFrontend(state); err != nil {
+		return rollback(err)
+	}
+	if err := telemtWebWaitFrontendReady(ctx, state); err != nil {
+		return rollback(err)
+	}
+	state.FrontendConfigRevision = telemtWebFrontendConfigRevision
+	return writeTelemtWebState(state)
+}
+
+func telemtWebFrontendRestoreFile(path string, data []byte) error {
+	if path == telemtWebNginxConf {
+		return os.WriteFile(path, data, 0o644)
+	}
+	return writeTelemtWebFrontendFile(path, data)
 }
 
 func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) error {
@@ -555,30 +792,32 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 	if ip, _, err := net.SplitHostPort(state.PublicAddr); err == nil && net.ParseIP(ip) != nil && net.ParseIP(ip).To4() == nil {
 		host = "::1"
 	}
+	dialer := &net.Dialer{Timeout: 2 * time.Second}
 	client := &http.Client{
-		Timeout:       2 * time.Second,
-		Transport:     &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: state.Domain, MinVersion: tls.VersionTLS12}},
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			Proxy: nil,
+			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				return dialer.DialContext(ctx, network, net.JoinHostPort(host, "443"))
+			},
+			TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
+		},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	defer client.CloseIdleConnections()
 	deadline, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	var lastErr error
 	for {
-		req, err := http.NewRequestWithContext(deadline, http.MethodHead, "https://"+net.JoinHostPort(host, "443")+"/", nil)
-		if err != nil {
-			return err
-		}
-		req.Host = state.Domain
-		response, err := client.Do(req)
-		if err == nil {
-			_ = response.Body.Close()
-			if telemtWebHealthyDecoyStatus(response.StatusCode) {
+		lastErr := telemtWebProbeHosts(deadline, state, client)
+		if lastErr == nil {
+			if !telemtIngressEntryActive(state) {
+				lastErr = fmt.Errorf("selected HTTPS frontend %s is not running", telemtWebFrontend(state))
+			} else if !telemtWebPortOwnedOnlyBy(telemtWebPortOwner(443), telemtIngressPublicOwner(state)) {
+				lastErr = fmt.Errorf("TCP 443 is not owned exclusively by %s", telemtIngressPublicOwner(state))
+			} else {
 				return nil
 			}
-			err = fmt.Errorf("WEB HTTPS endpoint returned HTTP %d", response.StatusCode)
 		}
-		lastErr = err
 		select {
 		case <-deadline.Done():
 			return fmt.Errorf("WEB HTTPS frontend is not ready: %w", lastErr)
@@ -590,8 +829,43 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 // Distribution packages may still provide Caddy 2.6, whose strict JSON parser
 // rejects stream_close_delay. This optimization was added in Caddy 2.7.
 func telemtWebCaddySupportsStreamDelay() bool {
- ctx,cancel:=context.WithTimeout(context.Background(),2*time.Second)
- defer cancel()
- output,err:=exec.CommandContext(ctx,"caddy","version").Output()
- return err==nil && telemtWebVersionAtLeast(string(output),"2.7.0")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, "caddy", "version").Output()
+	return err == nil && telemtWebVersionAtLeast(string(output), "2.7.0")
+}
+
+func telemtIngressWaitPublicOwner(state TelemtWebProxyState) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for {
+		if telemtIngressEntryActive(state) && telemtWebPortOwnedOnlyBy(telemtWebPortOwner(443), telemtIngressPublicOwner(state)) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("shared HTTPS entry is not owned by %s", telemtIngressPublicOwner(state))
+		case <-time.After(100*time.Millisecond):
+		}
+	}
+}
+
+func telemtIngressWaitPortRelease(ctx context.Context, old, proposed TelemtWebProxyState) error {
+	// An existing, non-managed Nginx may legitimately continue serving other
+	// virtual hosts when the replacement uses Nginx without a separate router.
+	if !telemtIngressUsesRouter(proposed) && !telemtIngressUsesRouter(old) && telemtIngressPublicOwner(proposed) == "nginx" && telemtIngressPublicOwner(old) == "nginx" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	for {
+		if telemtWebPortAvailable(443) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("previous HTTPS listener did not release TCP 443: %s", telemtWebPortOwner(443))
+		case <-time.After(100*time.Millisecond):
+		}
+	}
 }

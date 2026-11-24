@@ -340,7 +340,13 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 	if int(version) == 1 {
 		protocol = "hysteria"
 	}
-	for key, value := range hysteriaNativeURIOptions(stream, int(version)) {
+	nativeOptions := hysteriaNativeURIOptions(stream, int(version))
+	if int(version) != 1 && nativeOptions["obfs"] != "" {
+		// Explicit native obfs replaces the legacy mask as a whole.
+		delete(params, "minPacketSize")
+		delete(params, "maxPacketSize")
+	}
+	for key, value := range nativeOptions {
 		params[key] = value
 	}
 

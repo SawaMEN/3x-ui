@@ -1,3 +1,4 @@
+import { hydrateHysteriaObfs } from '@/lib/xray/hysteria-obfs';
 import type {
   InboundFormValues,
   ShareAddrStrategy,
@@ -202,7 +203,10 @@ export function rawInboundToFormValues(row: RawInboundRow): InboundFormValues {
         }
       : rawSettings
   ) as InboundSettings['settings'];
-  const rawStream = coerceJsonObject(row.streamSettings);
+  const rawStream =
+    protocol === 'hysteria'
+      ? hydrateHysteriaObfs(coerceJsonObject(row.streamSettings))
+      : coerceJsonObject(row.streamSettings);
   const streamSettings =
     Object.keys(rawStream).length > 0 ? (rawStream as StreamSettings) : undefined;
   if (isShadowTls && streamSettings) {

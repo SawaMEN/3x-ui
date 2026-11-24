@@ -42,3 +42,15 @@ func TestHysteriaNativeObfsAppearsInURIAndClash(t *testing.T) {
 		t.Fatalf("native obfs missing from Clash: %#v", proxy)
 	}
 }
+
+func TestNativeHysteriaObfsDoesNotInheritLegacyGeckoBounds(t *testing.T) {
+	ib := &model.Inbound{Protocol: model.Hysteria, Listen: "vpn.example.com", Port: 443, Settings: `{"version":2,"clients":[{"email":"alice","auth":"secret","enable":true}]}`, StreamSettings: `{"network":"hysteria","security":"tls","hysteriaSettings":{"version":2,"obfs":{"type":"salamander","password":"native-secret"}},"finalmask":{"udp":[{"type":"salamander","settings":{"password":"legacy-secret","packetSize":"512-1200"}}]}}`}
+	link := (&SubService{}).genHysteriaLink(ib, "alice")
+	if !strings.Contains(link, "obfs=salamander") || !strings.Contains(link, "obfs-password=native-secret") || strings.Contains(link, "PacketSize") || strings.Contains(link, "legacy-secret") {
+		t.Fatalf("inconsistent URI: %s", link)
+	}
+	proxy := (&SubClashService{}).buildHysteriaProxy(&SubService{}, ib, model.Client{Email: "alice", Auth: "secret"}, nil)
+	if proxy["obfs"] != "salamander" || proxy["obfs-password"] != "native-secret" || proxy["obfs-min-packet-size"] != nil || proxy["obfs-max-packet-size"] != nil {
+		t.Fatalf("inconsistent Clash profile: %#v", proxy)
+	}
+}

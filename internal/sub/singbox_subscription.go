@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
@@ -166,22 +167,33 @@ func buildHiddifySingBoxSubscription(proxies []map[string]any) (string, error) {
 	// refresh never changes the stored link or another client's format.
 	reserved := make(map[string]bool, len(proxies))
 	for _, proxy := range proxies {
-		tag, _ := proxy["tag"].(string)
-		if tag == "" {
-			return "", fmt.Errorf("Hiddify subscription has an empty proxy tag")
+		if proxy == nil {
+			return "", fmt.Errorf("Hiddify subscription contains a nil proxy")
 		}
-		reserved[tag] = true
+		tag, _ := proxy["tag"].(string)
+		if strings.TrimSpace(tag) != "" {
+			reserved[tag] = true
+		}
 	}
 	usedTags := make(map[string]bool, len(proxies))
+	nextSuffix := make(map[string]int)
 	named := make([]map[string]any, 0, len(proxies))
 	for _, original := range proxies {
 		proxy := maps.Clone(original)
-		base := proxy["tag"].(string)
+		base, _ := proxy["tag"].(string)
+		anonymous := strings.TrimSpace(base) == ""
+		if anonymous {
+			base, _ = proxy["type"].(string)
+			if strings.TrimSpace(base) == "" {
+				base = "proxy"
+			}
+		}
 		tag := base
-		if usedTags[tag] {
-			for suffix := 2; ; suffix++ {
+		if usedTags[tag] || anonymous && reserved[tag] {
+			for suffix := max(2, nextSuffix[base]); ; suffix++ {
 				tag = fmt.Sprintf("%s-%d", base, suffix)
 				if !usedTags[tag] && !reserved[tag] {
+					nextSuffix[base] = suffix + 1
 					break
 				}
 			}
@@ -192,8 +204,7 @@ func buildHiddifySingBoxSubscription(proxies []map[string]any) (string, error) {
 	}
 	endpoints := make([]any, 0)
 	outbounds := make([]any, 0, len(proxies))
-	for i, original := range named {
-		proxy := maps.Clone(original)
+	for i, proxy := range named {
 		if transport, ok := proxy["_panel_shadowtls_transport"].(map[string]any); ok {
 			transport = maps.Clone(transport)
 			tag := fmt.Sprintf("§hide§ shadowtls-transport-%d", i+1)

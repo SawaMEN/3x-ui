@@ -311,3 +311,57 @@ func TestDelDepletedClientsRunsOnTheSerialWriter(t *testing.T) {
 		t.Fatalf("traffic rows for the depleted client = %d, want 0", traffics)
 	}
 }
+
+func TestTrafficWriterSubmitDuringDrainDoesNotBypassWriter(t *testing.T) {
+	resetTrafficWriterForTest(t)
+	StartTrafficWriter()
+	firstStarted := make(chan struct{})
+	release := make(chan struct{})
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	firstErr := make(chan error, 1)
+	go func() {
+		firstErr <- submitTrafficWrite(func() error {
+			close(firstStarted)
+			<-release
+			return nil
+		})
+	}()
+	waitTrafficWriterSignal(t, firstStarted, "first write did not start")
+
+	twMu.Lock()
+	ctx := twCtx
+	twMu.Unlock()
+	stopped := make(chan struct{})
+	go func() {
+		StopTrafficWriter()
+		close(stopped)
+	}()
+	waitTrafficWriterSignal(t, ctx.Done(), "writer was not cancelled")
+	secondStarted := make(chan struct{})
+	secondErr := make(chan error, 1)
+	go func() {
+		secondErr <- submitTrafficWrite(func() error {
+			close(secondStarted)
+			return nil
+		})
+	}()
+	select {
+	case <-secondStarted:
+		t.Fatal("write bypassed the draining worker")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	waitTrafficWriterSignal(t, stopped, "writer did not drain")
+	if err := waitTrafficWriterErr(t, firstErr); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitTrafficWriterErr(t, secondErr); err != nil {
+		t.Fatal(err)
+	}
+}

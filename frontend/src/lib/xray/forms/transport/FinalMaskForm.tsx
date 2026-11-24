@@ -34,6 +34,8 @@ export interface FinalMaskFormProps {
   // network/protocol. Used by the global sub-JSON finalmask editor where
   // the masks apply to every stream rather than one specific transport.
   showAll?: boolean;
+  nativeHysteriaObfs?: boolean;
+  nativeHysteriaQuic?: boolean;
 }
 
 const TCP_NETWORKS = ['raw', 'tcp', 'httpupgrade', 'ws', 'grpc', 'xhttp'];
@@ -277,6 +279,8 @@ export default function FinalMaskForm({
   protocol,
   form,
   showAll = false,
+  nativeHysteriaObfs = false,
+  nativeHysteriaQuic = false,
 }: FinalMaskFormProps) {
   const base = asPath(name);
 
@@ -313,7 +317,13 @@ export default function FinalMaskForm({
   const showTcp = showAll || (!isWireguard && TCP_NETWORKS.includes(network));
   // UDP finalmask is used by UDP-backed transports. XHTTP/3 can carry UDP
   // through packet-up, so keep the UDP section available for xhttp as well.
-  const showUdp = showAll || isHysteria || isWireguard || network === 'kcp' || network === 'xhttp';
+  const udpMasks = Form.useWatch([...base, 'udp'], { form, preserve: true });
+  const hasLegacyMasks = Array.isArray(udpMasks) && udpMasks.length > 0;
+  const showUdp =
+    showAll ||
+    (isHysteria
+      ? !nativeHysteriaObfs || hasLegacyMasks
+      : isWireguard || network === 'kcp' || network === 'xhttp');
   const showQuic = showAll || isHysteria || network === 'xhttp';
   const quicParams = Form.useWatch([...base, 'quicParams'], { form, preserve: true });
   const hasQuicParams = quicParams != null;
@@ -328,6 +338,7 @@ export default function FinalMaskForm({
           base={base}
           form={form}
           isHysteria={isHysteria}
+          nativeHysteriaObfs={nativeHysteriaObfs && !showAll}
           isWireguard={isWireguard}
           network={network}
         />
@@ -342,7 +353,13 @@ export default function FinalMaskForm({
               }}
             />
           </Form.Item>
-          {hasQuicParams && <QuicParamsForm base={[...base, 'quicParams']} form={form} />}
+          {hasQuicParams && (
+            <QuicParamsForm
+              base={[...base, 'quicParams']}
+              form={form}
+              nativeHysteria={isHysteria && nativeHysteriaQuic && !showAll}
+            />
+          )}
         </>
       )}
     </>
@@ -1016,12 +1033,14 @@ function UdpMasksList({
   base,
   form,
   isHysteria,
+  nativeHysteriaObfs,
   isWireguard,
   network,
 }: {
   base: (string | number)[];
   form: FormInstance;
   isHysteria: boolean;
+  nativeHysteriaObfs: boolean;
   isWireguard: boolean;
   network: string;
 }) {
@@ -1030,18 +1049,20 @@ function UdpMasksList({
     <Form.List name={[...base, 'udp']}>
       {(fields, { add, remove }) => (
         <>
-          <Form.Item label="UDP Masks">
-            <Button
-              type="primary"
-              size="small"
-              icon={<PlusOutlined />}
-              aria-label={t('add')}
-              onClick={() => {
-                const def = isHysteria || isWireguard ? 'salamander' : 'mkcp-legacy';
-                add({ type: def, settings: defaultUdpMaskSettings(def) });
-              }}
-            />
-          </Form.Item>
+          {(!isHysteria || !nativeHysteriaObfs) && (
+            <Form.Item label="UDP Masks">
+              <Button
+                type="primary"
+                size="small"
+                icon={<PlusOutlined />}
+                aria-label={t('add')}
+                onClick={() => {
+                  const def = isHysteria || isWireguard ? 'salamander' : 'mkcp-legacy';
+                  add({ type: def, settings: defaultUdpMaskSettings(def) });
+                }}
+              />
+            </Form.Item>
+          )}
           {fields.map((field, mIdx) => (
             <UdpMaskItem
               key={field.key}
@@ -1841,12 +1862,22 @@ function ItemEditor({
   );
 }
 
-function QuicParamsForm({ base, form }: { base: (string | number)[]; form: FormInstance }) {
+function QuicParamsForm({
+  base,
+  form,
+  nativeHysteria = false,
+}: {
+  base: (string | number)[];
+  form: FormInstance;
+  nativeHysteria?: boolean;
+}) {
   const congestion = Form.useWatch([...base, 'congestion'], form) as string | undefined;
   const udpHop = Form.useWatch([...base, 'udpHop'], { form, preserve: true }) as
     | Record<string, unknown>
     | undefined;
   const hasUdpHop = udpHop != null;
+  const legacyUp = Form.useWatch([...base, 'brutalUp'], { form, preserve: true });
+  const legacyDown = Form.useWatch([...base, 'brutalDown'], { form, preserve: true });
 
   return (
     <>
@@ -1860,7 +1891,7 @@ function QuicParamsForm({ base, form }: { base: (string | number)[]; form: FormI
           ]}
         />
       </Form.Item>
-      {congestion === 'bbr' && (
+      {congestion === 'bbr' && !nativeHysteria && (
         <Form.Item label="BBR Profile" name={[...base, 'bbrProfile']}>
           <Select
             allowClear
@@ -1879,12 +1910,22 @@ function QuicParamsForm({ base, form }: { base: (string | number)[]; form: FormI
 
       {(congestion === 'brutal' || congestion === 'force-brutal') && (
         <>
-          <Form.Item label="Brutal Up" name={[...base, 'brutalUp']}>
-            <Input placeholder="e.g. 60 mbps" />
-          </Form.Item>
-          <Form.Item label="Brutal Down" name={[...base, 'brutalDown']}>
-            <Input placeholder="e.g. 100 mbps" />
-          </Form.Item>
+          {(!nativeHysteria || legacyUp != null) && (
+            <Form.Item
+              label={nativeHysteria ? 'Legacy Brutal Up' : 'Brutal Up'}
+              name={[...base, 'brutalUp']}
+            >
+              <Input placeholder="e.g. 60 mbps" />
+            </Form.Item>
+          )}
+          {(!nativeHysteria || legacyDown != null) && (
+            <Form.Item
+              label={nativeHysteria ? 'Legacy Brutal Down' : 'Brutal Down'}
+              name={[...base, 'brutalDown']}
+            >
+              <Input placeholder="e.g. 100 mbps" />
+            </Form.Item>
+          )}
           <Form.Item
             label="Brutal Disable Loss Comp"
             name={[...base, 'brutalDisableLossCompensation']}

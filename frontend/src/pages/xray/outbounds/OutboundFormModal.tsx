@@ -165,6 +165,8 @@ export default function OutboundFormModal({
     '') as string;
   const security = (useWatch({ control: methods.control, name: 'streamSettings.security' }) ??
     'none') as string;
+  const hysteriaVersion =
+    useWatch({ control: methods.control, name: 'streamSettings.hysteriaSettings.version' }) ?? 2;
   const reverseTag = useWatch({ control: methods.control, name: 'settings.reverseTag' });
   const wgSecretKey = useWatch({ control: methods.control, name: 'settings.secretKey' }) as
     | string
@@ -1010,6 +1012,7 @@ export default function OutboundFormModal({
                             onChange={field.onChange}
                             network={network}
                             protocol={protocol}
+                            nativeHysteriaQuic={hysteriaVersion === 2}
                           />
                         )}
                       />

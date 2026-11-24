@@ -17,9 +17,11 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 )
 
-const telemtWebSiteMaxBytes = 256 * 1024
+const telemtWebSiteMaxBytes = domainfront.CoverSiteHTMLMaxBytes
 
 var telemtWebSiteHTMLDocument = regexp.MustCompile(`(?i)<html(?:\s|>)`)
 
@@ -52,7 +54,7 @@ func validateTelemtWebSite(site *TelemtWebSiteOptions) error {
 		return nil
 	}
 	if utf8.RuneCountInString(site.Title) > 80 || utf8.RuneCountInString(site.Description) > 300 || len(site.HTML) > telemtWebSiteMaxBytes {
-		return errors.New("WEB site: title, description or HTML exceeds the size limit (HTML: 256 KiB)")
+		return errors.New("WEB site: title, description or HTML exceeds the size limit (HTML: 1 MiB)")
 	}
 	switch site.Mode {
 	case "", "auto":

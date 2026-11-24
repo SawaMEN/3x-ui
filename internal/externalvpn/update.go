@@ -23,10 +23,21 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/githubrelease"
 )
 
 const maxExternalVPNArchiveSize int64 = 256 << 20
+
+// The fixed component tag is separate from panel rolling releases. Prefer
+// it only after both architecture assets have been published by the gated job.
+const (
+	trustTunnelPatchedVersion = "1.3.1-xui.1"
+	trustTunnelPatchedTag     = "trusttunnel-v" + trustTunnelPatchedVersion
+	trustTunnelPatchedAPI     = "https://api.github.com/repos/SawaMEN/3x-ui/releases/tags/" + trustTunnelPatchedTag
+)
 
 var (
 	externalVPNHTTPClient     = &http.Client{Timeout: 30 * time.Second}
@@ -35,16 +46,10 @@ var (
 	externalVersionPattern    = regexp.MustCompile(`(?i)\bv?(\d+(?:\.\d+)+(?:[-+][0-9a-z.-]+)?)\b`)
 )
 
-type releaseAsset struct {
-	Name   string `json:"name"`
-	URL    string `json:"browser_download_url"`
-	Digest string `json:"digest"`
-}
-
-type githubRelease struct {
-	TagName string         `json:"tag_name"`
-	Assets  []releaseAsset `json:"assets"`
-}
+type (
+	releaseAsset  = githubrelease.Asset
+	githubRelease = githubrelease.Release
+)
 
 type releaseSpec struct {
 	protocol    model.Protocol
@@ -163,6 +168,10 @@ func binaryStatus(ctx context.Context, protocol model.Protocol, localOnly ...boo
 		return status
 	}
 	status.LatestVersion = normalizeReleaseVersion(release.TagName)
+	if protocol == model.TrustTunnel && trustTunnelBaseVersionNewer(status.Version, status.LatestVersion) {
+		status.LatestVersion = status.Version
+		return status
+	}
 	if status.Installed && status.LatestVersion != "" {
 		status.UpdateAvailable = status.Version == "" || normalizeReleaseVersion(status.Version) != status.LatestVersion
 	}
@@ -194,6 +203,7 @@ func parseExternalVersion(value string) string {
 func normalizeReleaseVersion(value string) string {
 	value = strings.TrimSpace(value)
 	value = strings.TrimPrefix(value, "app/")
+	value = strings.TrimPrefix(value, "trusttunnel-")
 	value = strings.TrimPrefix(value, "v")
 	value = strings.TrimPrefix(value, "V")
 	return value
@@ -207,23 +217,38 @@ func pingtunnelVersionSupported(version string) bool {
 }
 
 func fetchLatestRelease(ctx context.Context, spec releaseSpec) (githubRelease, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, spec.api, nil)
-	if err != nil {
-		return githubRelease{}, err
+	if spec.protocol == model.TrustTunnel {
+		// Keep official updates available before the independent component
+		// release exists. An already patched install must not silently downgrade.
+		rel, err := githubrelease.Fetch(ctx, externalVPNHTTPClient, trustTunnelPatchedAPI)
+		if err == nil {
+			if rel.TagName != trustTunnelPatchedTag {
+				return githubRelease{}, errors.New("unexpected managed TrustTunnel release tag")
+			}
+			for _, arch := range []string{"amd64", "arm64"} {
+				asset, err := pickReleaseAsset(spec, rel, arch)
+				if err != nil || !validManagedTrustTunnelAsset(asset) {
+					return githubRelease{}, errors.New("managed TrustTunnel release is incomplete or missing SHA-256 metadata")
+				}
+			}
+			// Prefer official upstream if it is newer; never downgrade a
+			// newer installed endpoint to an older patched base.
+			official, err := githubrelease.Fetch(ctx, externalVPNHTTPClient, spec.api)
+			if err != nil {
+				return githubRelease{}, fmt.Errorf("compare official TrustTunnel release: %w", err)
+			}
+			if trustTunnelBaseVersionNewer(normalizeReleaseVersion(official.TagName), trustTunnelPatchedVersion) {
+				return official, nil
+			}
+			return rel, nil
+		}
+		if err.Error() != "GitHub release API returned HTTP 404" {
+			return githubRelease{}, fmt.Errorf("fetch managed TrustTunnel release: %w", err)
+		}
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "3x-ui")
-	resp, err := externalVPNHTTPClient.Do(req)
+	release, err := githubrelease.Fetch(ctx, externalVPNHTTPClient, spec.api)
 	if err != nil {
 		return githubRelease{}, fmt.Errorf("fetch %s release: %w", spec.protocol, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return githubRelease{}, fmt.Errorf("%s release API returned %s", spec.protocol, resp.Status)
-	}
-	var release githubRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&release); err != nil {
-		return githubRelease{}, fmt.Errorf("decode %s release: %w", spec.protocol, err)
 	}
 	if normalizeReleaseVersion(release.TagName) == "" {
 		return githubRelease{}, fmt.Errorf("%s release API returned an empty tag", spec.protocol)
@@ -330,6 +355,21 @@ func Update(ctx context.Context, protocol model.Protocol) error {
 	expectedVersion := normalizeReleaseVersion(release.TagName)
 	if expectedVersion != "" && normalizeReleaseVersion(stagedVersion) != expectedVersion {
 		return fmt.Errorf("validate %s binary: expected version %s, got %s", protocol, expectedVersion, stagedVersion)
+	}
+	if protocol == model.TrustTunnel {
+		current, _ := binaryVersion(ctx, binary(protocol), spec.versionArgs)
+		if trustTunnelBaseVersionNewer(current, stagedVersion) {
+			return errors.New("refusing to downgrade TrustTunnel")
+		}
+		splitRequired, err := hasSavedTrustTunnelSplit()
+		if err != nil {
+			return err
+		}
+		if release.TagName == trustTunnelPatchedTag || splitRequired || strings.Contains(current, "-xui.") {
+			if err := probeTrustTunnelQUICOnly(ctx, stagedPath); err != nil {
+				return fmt.Errorf("TrustTunnel update rejected; existing binary preserved: %w", err)
+			}
+		}
 	}
 	if protocol == model.Pingtunnel && !pingtunnelVersionSupported(stagedVersion) {
 		return fmt.Errorf("validate Pingtunnel binary: version %s is incompatible; require 3.0 or newer", stagedVersion)
@@ -529,4 +569,61 @@ func copyExtractedBinary(path string, source io.Reader) error {
 		return fmt.Errorf("external VPN binary exceeds %d MiB", maxExternalVPNArchiveSize>>20)
 	}
 	return nil
+}
+
+func validManagedTrustTunnelAsset(asset releaseAsset) bool {
+	digest, ok := strings.CutPrefix(asset.Digest, "sha256:")
+	_, err := hex.DecodeString(digest)
+	return ok && len(digest) == 64 && err == nil &&
+		asset.URL == "https://github.com/SawaMEN/3x-ui/releases/download/"+trustTunnelPatchedTag+"/"+asset.Name
+}
+
+func trustTunnelBaseVersionNewer(a, b string) bool {
+	parse := func(version string) ([3]int, bool) {
+		var n [3]int
+		parts := strings.Split(strings.SplitN(normalizeReleaseVersion(version), "-", 2)[0], ".")
+		if len(parts) != 3 {
+			return n, false
+		}
+		for i, part := range parts {
+			v, err := strconv.Atoi(part)
+			if err != nil || v < 0 {
+				return n, false
+			}
+			n[i] = v
+		}
+		return n, true
+	}
+	left, ok := parse(a)
+	right, valid := parse(b)
+	if !ok || !valid {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return left[i] > right[i]
+		}
+	}
+	return false
+}
+
+func hasSavedTrustTunnelSplit() (bool, error) {
+	db := database.GetDB()
+	if db == nil {
+		return false, errors.New("cannot verify saved TrustTunnel listeners without database")
+	}
+	var rows []model.Inbound
+	if err := db.Where("protocol = ? AND node_id IS NULL", model.TrustTunnel).Find(&rows).Error; err != nil {
+		return false, err
+	}
+	for _, row := range rows {
+		var settings Settings
+		if err := json.Unmarshal([]byte(row.Settings), &settings); err != nil {
+			return false, fmt.Errorf("cannot validate saved TrustTunnel inbound %d", row.Id)
+		}
+		if settings.TrustTunnelQUICBind != "" {
+			return true, nil
+		}
+	}
+	return false, nil
 }

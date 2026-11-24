@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import SubAppsTab from '@/pages/sub/SubAppsTab';
 import SubLinksTab from '@/pages/sub/SubLinksTab';
+import { ClipboardManager } from '@/utils';
 import { renderWithProviders } from './test-utils';
 
 const subUrl = 'https://sub.example.com:8443/sub/abc';
@@ -11,12 +12,15 @@ describe('subscription tabs', () => {
   it('shows each AWG profile once in the second tab and gives its QR the native config', async () => {
     const config = '[Interface]\nPrivateKey = test\n# AWG North\n[Peer]\nPublicKey = test\n';
     const awgLink = `vpn://${Buffer.from(config).toString('base64url')}`;
+    const telegram = 'tg://proxy?server=telegram.example&port=443&secret=ee1234';
+    const web = 'tg://webproxy?server=telegram-web.example&secret=ee1234';
     vi.stubGlobal('__SUB_PAGE_DATA__', {
       subUrl,
       enabled: true,
-      links: ['vless://test@vpn.example:443#Core', awgLink, awgLink],
+      links: ['vless://test@vpn.example:443#Core', awgLink, awgLink, telegram, web],
     });
     const canvas = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    const copy = vi.spyOn(ClipboardManager, 'copyText').mockResolvedValue(true);
 
     try {
       const [{ default: SubPage }] = await Promise.all([
@@ -46,13 +50,22 @@ describe('subscription tabs', () => {
       const core = await screen.findByRole('tabpanel', { name: /^Configs/ });
       expect(await within(core).findByText('Core', { selector: '.sub-row-title' })).toBeTruthy();
       expect(within(core).queryByText('AWG North')).toBeNull();
+      expect(within(core).getAllByRole('button', { name: /^QR$/ })).toHaveLength(1);
+      fireEvent.click(within(core).getByRole('button', { name: 'Copy All Configs' }));
+      expect(copy).toHaveBeenLastCalledWith('vless://test@vpn.example:443#Core');
+      fireEvent.click(screen.getByRole('tab', { name: /Telegram Proxy/ }));
+      const telegramTab = screen.getByRole('tabpanel', { name: /Telegram Proxy/ });
+      expect(
+        await within(telegramTab).findAllByRole('button', { name: 'Open in Telegram' }),
+      ).toHaveLength(2);
     } finally {
       canvas.mockRestore();
+      copy.mockRestore();
       vi.unstubAllGlobals();
     }
   }, 15_000);
 
-  it('shows the main QR code first and copies the subscription address', () => {
+  it('shows the same address in the link, copy action and QR modal', async () => {
     const onCopy = vi.fn();
     const { container } = render(
       <SubLinksTab subUrl={subUrl} subJsonUrl="" subClashUrl="" onCopy={onCopy} />,
@@ -67,6 +80,19 @@ describe('subscription tabs', () => {
     expect(within(qrCard).getByRole('button', { name: /^QR$/ })).toBeTruthy();
     fireEvent.click(within(qrCard).getByRole('button', { name: /^copy url$/i }));
     expect(onCopy).toHaveBeenCalledWith(subUrl);
+
+    fireEvent.click(within(qrCard).getByRole('radio', { name: 'All profiles' }));
+    const allProfilesUrl = `${subUrl}?format=all`;
+    expect(within(qrCard).getByRole('link').getAttribute('href')).toBe(allProfilesUrl);
+    fireEvent.click(within(qrCard).getByRole('button', { name: /^copy url$/i }));
+    expect(onCopy).toHaveBeenLastCalledWith(allProfilesUrl);
+    fireEvent.click(within(qrCard).getByRole('button', { name: /^QR$/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole<HTMLTextAreaElement>('textbox').value).toBe(allProfilesUrl);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+
+    fireEvent.click(within(qrCard).getByRole('radio', { name: 'Compatible profiles' }));
+    expect(within(qrCard).getByRole('link').getAttribute('href')).toBe(subUrl);
   });
 
   it('starts on the detected platform and updates download links when switched', () => {
@@ -100,7 +126,7 @@ describe('subscription tabs', () => {
       /Hiddify-Windows-Setup-x64\.exe$/,
     );
     expect(screen.getByRole('link', { name: 'Add · Hiddify' }).getAttribute('href')).toBe(
-      `hiddify://import/${subUrl}#Profile`,
+      `hiddify://import/?url=${encodeURIComponent(subUrl)}#Profile`,
     );
   });
 

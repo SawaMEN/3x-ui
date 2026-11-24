@@ -523,7 +523,7 @@ jobs:
         if: failure()
         run: |
           golangci-lint fmt
-          git diff -- internal/web/controller/yandex_xdrive.go internal/web/controller/yandex_xdrive_test.go internal/web/controller/yandex_disk_api.go internal/web/controller/yandex_disk_api_test.go internal/web/controller/yandex_s3_probe.go internal/web/controller/yandex_s3_probe_test.go
+          git diff -- '*.go'
 
 
   arch-linux:
@@ -700,7 +700,21 @@ jobs:
       - name: Install WEB frontends
         run: |
           sudo apt-get update
-          sudo apt-get install -y caddy haproxy
+          sudo apt-get install -y haproxy nginx libnginx-mod-stream
+          # Noble's Caddy 2.6 lacks the standard PROXY protocol listener.
+          version=2.10.2
+          archive="caddy_${version}_linux_amd64.tar.gz"
+          base="https://github.com/caddyserver/caddy/releases/download/v${version}"
+          mkdir -p "$RUNNER_TEMP/telemt-caddy"
+          cd "$RUNNER_TEMP/telemt-caddy"
+          curl --fail --silent --show-error --location --retry 3 "$base/$archive" -o "$archive"
+          # SHA-256 published in the official v2.10.2 release asset metadata.
+          # Update this digest together with the pinned version and architecture.
+          printf '%s  %s\n' '5c218bc34c9197369263da7e9317a83acdbd80ef45d94dca5eff76e727c67cdd' "$archive" > selected.sha256
+          sha256sum --strict -c selected.sha256
+          tar --no-same-owner --no-same-permissions -xzf "$archive" caddy
+          ./caddy list-modules | grep -Fx 'caddy.listeners.proxy_protocol'
+          echo "$RUNNER_TEMP/telemt-caddy" >> "$GITHUB_PATH"
       - name: Verify official Telemt download integrity and updater
         run: python3 -m unittest discover -s tools -p test_official_telemt.py
       - name: Test native HTTPS and bidirectional WebSocket routing
@@ -709,7 +723,10 @@ jobs:
           touch internal/web/dist/.gitkeep
           export CADDY_TEST_BINARY=$(command -v caddy)
           export HAPROXY_TEST_BINARY=$(command -v haproxy)
-          go test ./internal/web/service -run '^TestTelemtWeb(AlternativeFrontends|CarrierSelection|RenewalRebuilds|FrontendStops)' -v -count=1
+          export NGINX_TEST_BINARY=$(command -v nginx)
+          go test ./internal/web/service -run '^TestTelemtWeb(AlternativeFrontends|NativeRouterSelectionAndRendering|CarrierSelection|RenewalRebuilds|FrontendStops)' -v -count=1
+          go test ./internal/web/service -run '^Test(Telemt(PortMigration|VPNMigration|VetroffMigration|RealityMigration|ShadowTLSMigration|TrustTunnel|Nginx|Ingress|UDP443|SharedIngress)|MtprotoMigrationDraft|ManagedWebMigration)' -count=1 -v
+          go test ./internal/externalvpn -run '^TestTrustTunnel' -count=1 -v
 
       - uses: actions/setup-node@v7
         with:

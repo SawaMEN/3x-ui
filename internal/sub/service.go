@@ -150,6 +150,7 @@ type SubService struct {
 	// the name-only template, like Remnawave.
 	subscriptionBody bool
 	nativeProfile    bool
+	hiddifyLinks     bool
 	// usageShown emits info once per subscription identity, including twins.
 	// PrepareForRequest resets this per-request state.
 	usageShown                 map[string]bool
@@ -1021,23 +1022,30 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 	inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
 		return !s.refreshSudokuCredentials(inbound)
 	})
-	inboundIDs := make([]int, 0, len(inbounds))
-	for _, inbound := range inbounds {
-		inboundIDs = append(inboundIDs, inbound.Id)
-	}
-	clientsByInbound, err := s.inboundService.GetClientsForInboundsBySubId(inboundIDs, subId)
-	if err != nil {
+	if err := s.loadSubscriptionClients(inbounds, subId); err != nil {
 		return nil, err
-	}
-	s.subscriptionClientsByInbound = make(map[int][]model.Client, len(inbounds))
-	for _, inbound := range inbounds {
-		s.subscriptionClientsByInbound[inbound.Id] = clientsByInbound[inbound.Id]
 	}
 	s.indexStatsBySubId(subId)
 	if err := s.loadSubscriptionHosts(inbounds); err != nil {
 		return nil, err
 	}
 	return inbounds, nil
+}
+
+func (s *SubService) loadSubscriptionClients(inbounds []*model.Inbound, subId string) error {
+	inboundIDs := make([]int, 0, len(inbounds))
+	for _, inbound := range inbounds {
+		inboundIDs = append(inboundIDs, inbound.Id)
+	}
+	clientsByInbound, err := s.inboundService.GetClientsForInboundsBySubId(inboundIDs, subId)
+	if err != nil {
+		return err
+	}
+	s.subscriptionClientsByInbound = make(map[int][]model.Client, len(inbounds))
+	for _, inbound := range inbounds {
+		s.subscriptionClientsByInbound[inbound.Id] = clientsByInbound[inbound.Id]
+	}
+	return nil
 }
 
 // indexStatsBySubId preloads traffic only for clients belonging to this
@@ -3245,10 +3253,7 @@ func (s *SubService) buildSingleURL(configuredURI, base, basePath, subId string)
 
 // joinPathWithID safely joins a base path with a subscription ID
 func (s *SubService) joinPathWithID(basePath, subId string) string {
-	if strings.HasSuffix(basePath, "/") {
-		return basePath + subId
-	}
-	return basePath + "/" + subId
+	return strings.TrimRight(basePath, "/") + "/" + subId
 }
 
 // BuildPageData parses header and prepares the template view model.

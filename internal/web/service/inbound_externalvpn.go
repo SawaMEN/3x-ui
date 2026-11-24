@@ -77,6 +77,20 @@ func prepareExternalVPN(ib *model.Inbound, previous string) error {
 			raw["connectTimeout"] = 3000
 		}
 	} else {
+		if ib.Protocol == model.TrustTunnel {
+			// This field is owned by the migration journal, not the editor.
+			// Older UI versions omit it; preserve the stored value.
+			var old externalvpn.Settings
+			_ = json.Unmarshal([]byte(previous), &old)
+			if old.TrustTunnelQUICBind != "" {
+				if raw["trustTunnelTcpOnly"] == true {
+					return fmt.Errorf("return the shared HTTPS migration before disabling TrustTunnel QUIC")
+				}
+				raw["trustTunnelQuicBind"] = old.TrustTunnelQUICBind
+			} else {
+				delete(raw, "trustTunnelQuicBind")
+			}
+		}
 		if raw["hostname"] == nil || raw["hostname"] == "" {
 			raw["hostname"] = "trusttunnel.local"
 		}
