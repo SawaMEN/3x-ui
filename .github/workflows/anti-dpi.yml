@@ -71,3 +71,51 @@ jobs:
       - name: Subscription observatory regression
         if: ${{ !cancelled() }}
         run: go test -count=1 -timeout=10m ./internal/sub -run '^TestSubJson_ObservatoryConfigInvalidValuesFallBack$'
+
+
+  cross-repository:
+    name: VetrOFF-Core / 3x-ui JSON contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check out reviewed core contract revision
+        uses: actions/checkout@v7
+        with:
+          repository: SawaMEN/VetrOFF-Core
+          ref: 781ad319aa345d503a56ef4f1227bb61b815038f
+          path: .contract-core
+          persist-credentials: false
+          sparse-checkout: migration/adaptive-connect
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.x'
+          cache: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Generate actual Go report fixtures
+        working-directory: .contract-core/migration/adaptive-connect
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir=$(mktemp -d "$RUNNER_TEMP/vetroff-contract.XXXXXX")
+          echo "VETROFF_CONTRACT_DIR=$dir" >> "$GITHUB_ENV"
+          VETROFF_CONTRACT_DIR="$dir" GO111MODULE=off go test -count=1 -run '^TestExportDiagnosticContractFixtures$' .
+          test "$(find "$dir" -maxdepth 1 -name '*.json' | wc -l)" -eq 11
+      - run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: Import Go reports and export actual panel policies
+        working-directory: frontend
+        run: |
+          test -n "$VETROFF_CONTRACT_DIR"
+          npm test -- --project unit src/test/vetroff-contract.test.ts
+          test -s "$VETROFF_CONTRACT_DIR/panel-default.json"
+          test -s "$VETROFF_CONTRACT_DIR/panel-enabled.json"
+      - name: Parse actual panel exports in Go
+        working-directory: .contract-core/migration/adaptive-connect
+        run: GO111MODULE=off go test -count=1 -run '^TestPanelPolicyContract$' .
