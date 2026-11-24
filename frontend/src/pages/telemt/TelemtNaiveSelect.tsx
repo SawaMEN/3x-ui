@@ -81,20 +81,38 @@ export default function TelemtNaiveSelect(props: Props) {
     .slice(0, 64)
     .map((inbound) => inbound.id);
   const supportedProtocols = new Set([
-    'vless', 'vmess', 'trojan', 'shadowsocks', 'naive', 'naiveproxy',
-    'vetroff', 'vetroff-proxy', 'anytls', 'trusttunnel', 'masque', 'shadowtls',
+    'vless',
+    'vmess',
+    'trojan',
+    'shadowsocks',
+    'naive',
+    'vetroff',
+    'anytls',
+    'trusttunnel',
+    'masque',
+    'shadowtls',
   ]);
   const options = local
-    .filter((inbound) =>
-      inbound.sharedIngressSni || selectedSet.has(inbound.id) ||
-      supportedProtocols.has(inbound.protocol?.toLowerCase() ?? ''),
+    .filter(
+      (inbound) =>
+        inbound.sharedIngressSni ||
+        selectedSet.has(inbound.id) ||
+        supportedProtocols.has(inbound.protocol?.toLowerCase() ?? ''),
     )
     .map((inbound) => {
       const sni = inbound.sharedIngressSni?.toLowerCase();
       const valid = Boolean(sni && eligibleIds.has(inbound.id));
+      const note = !valid
+        ? inbound.sharedIngressError ||
+          (ru ? 'SNI недоступен или конфликтует' : 'SNI unavailable or conflicting')
+        : inbound.port === 443
+          ? ru
+            ? 'требуется перенос'
+            : 'migration required'
+          : '';
       return {
         value: inbound.id,
-        label: `${inbound.remark || inbound.tag || '#' + inbound.id} · ${inbound.protocol} · ${inbound.port}${sni ? ' · ' + sni : ''}${valid && inbound.port === 443 ? (ru ? ' · требуется перенос' : ' · migration required') : ''}${!valid ? ' · ' + (inbound.sharedIngressError || (ru ? 'SNI недоступен или конфликтует' : 'SNI unavailable or conflicting')) : ''}`,
+        label: `${inbound.remark || inbound.tag || '#' + inbound.id} · ${inbound.protocol} · ${inbound.port}${sni ? ' · ' + sni : ''}${note ? ' · ' + note : ''}`,
         title:
           inbound.sharedIngressError ||
           (sni && webHosts.has(sni)
@@ -166,9 +184,27 @@ export default function TelemtNaiveSelect(props: Props) {
         <Alert
           type="info"
           showIcon
-          title={ru
-            ? 'Подключения на TCP 443 требуют подтверждённого переноса. Проверьте план настройки ниже.'
-            : 'Inbounds on TCP 443 require a confirmed migration. Review the setup preview below.'}
+          title={
+            ru
+              ? 'Подключения на TCP 443 требуют подтверждённого переноса. Проверьте план настройки ниже.'
+              : 'Inbounds on TCP 443 require a confirmed migration. Review the setup preview below.'
+          }
+        />
+      )}
+      {eligible.some(
+        (inbound) =>
+          selectedSet.has(inbound.id) &&
+          inbound.port !== 443 &&
+          ['', '0.0.0.0', '::', '::0', '[::]', '[::0]'].includes(inbound.listen ?? ''),
+      ) && (
+        <Alert
+          type="info"
+          showIcon
+          title={
+            ru
+              ? 'Публичный порт 443 будет добавлен к маршруту. Старые порты остаются доступными согласно firewall.'
+              : 'Public port 443 will be added to the route. Original ports remain reachable according to firewall rules.'
+          }
         />
       )}
       {ambiguous > 0 && (

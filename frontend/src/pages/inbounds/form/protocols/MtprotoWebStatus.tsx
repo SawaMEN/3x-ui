@@ -313,7 +313,9 @@ export default function MtprotoWebStatus({
             !applying &&
             !applied &&
             proposed?.sharedIngress?.enabled &&
-            result.checks.every((check) => check.ok || check.id === 'https-port' || check.id === 'vpn-migration')
+            result.checks.every(
+              (check) => check.ok || check.id === 'https-port' || check.id === 'vpn-migration',
+            )
               ? proposed?.migrationDraft
                 ? result.draftRevision && !isDirty
                   ? applySavedDraft

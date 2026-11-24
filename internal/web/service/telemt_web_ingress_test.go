@@ -65,6 +65,56 @@ func TestTelemtIngressOptionsIncludeWildcardAndMigration(t *testing.T) {
 	}
 }
 
+func TestTelemtIngressMigrationProjectionDoesNotPublishOrWrite(t *testing.T) {
+	setupConflictDB(t)
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certFile, keyFile := telemtWebTestCertificate(t, key, time.Now().Add(time.Hour))
+	service := &SettingService{}
+	for k, v := range map[string]string{
+		"webDomain": "web.example.com", "webListen": "127.0.0.1", "webPort": "8443",
+		"webBasePath": "/admin-path/", "webCertFile": certFile, "webKeyFile": keyFile,
+		"subEnable": "false",
+	} {
+		if err := service.setString(k, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	inbound := model.Inbound{
+		Protocol: model.VLESS, Enable: true, Tag: "selected-443", Listen: "0.0.0.0", Port: 443,
+		Settings: "{}", StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"vpn.example.com"}}`,
+	}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	state := TelemtWebProxyState{
+		Domain: "web.example.com", BasePath: "telegram/web",
+		SharedIngress: &TelemtWebIngress{Enabled: true, InboundIDs: []int{inbound.Id}},
+	}
+	if _, err := buildTelemtWebIngress(state); err == nil {
+		t.Fatal("runtime accepted the unrelocated listener")
+	}
+	move, relevant := telemtVPNMigrationCandidate(inbound, state.Domain, telemtWebHosts(state))
+	if !relevant || move.Reason != "" {
+		t.Fatalf("unexpected migration: %+v", move)
+	}
+	move.NewPort = telemtVPNMigrationFirstPort
+	plan, err := planTelemtWebIngressWithMoves(state, true, []telemtVPNMigrationPlan{move})
+	if err != nil || len(plan.proxies) != 1 || plan.proxies[0].address != "127.0.0.1:18200" {
+		t.Fatalf("projected route: %+v, %v", plan, err)
+	}
+	var stored model.Inbound
+	if err := database.GetDB().First(&stored, inbound.Id).Error; err != nil || stored.Port != 443 || stored.Listen != "0.0.0.0" {
+		t.Fatalf("preview modified listener: %+v, %v", stored, err)
+	}
+	move.Revision = "stale"
+	if _, err := planTelemtWebIngressWithMoves(state, true, []telemtVPNMigrationPlan{move}); err == nil {
+		t.Fatal("accepted stale migration projection")
+	}
+}
+
 func TestTelemtWebSharedIngressPathSafety(t *testing.T) {
 	for _, path := range []string{"/", "/path/../other", "/path with space", "/path//nested", "/path//", "//", "/path%2fother"} {
 		if err := appendIngressPaths(&telemtIngressRoute{}, path); err == nil {

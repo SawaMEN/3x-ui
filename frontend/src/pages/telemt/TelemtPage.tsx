@@ -1205,7 +1205,8 @@ export default function TelemtPage() {
                   onApplyVPNMigration={
                     !status.webProxy.enabled &&
                     webPreflightCurrent.checks.every(
-                      (check) => check.ok || check.id === 'https-port' || check.id === 'vpn-migration',
+                      (check) =>
+                        check.ok || check.id === 'https-port' || check.id === 'vpn-migration',
                     )
                       ? (moves) => {
                           Modal.confirm({
