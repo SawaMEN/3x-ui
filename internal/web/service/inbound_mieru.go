@@ -94,6 +94,9 @@ func (s *InboundService) DesiredMieruInstancesContext(ctx context.Context) ([]mi
 			}
 			ready := true
 			for _, c := range clientRows[ib.Id] {
+				if _, blocked := disabled[ib.Id][c.Email]; blocked {
+					continue
+				}
 				if c.Enable && c.SpeedLimit != nil && c.SpeedLimit.Enabled && !clientlimit.Default.HasAlias("mieru:"+strings.TrimSpace(c.Email)) {
 					ready = false
 					break

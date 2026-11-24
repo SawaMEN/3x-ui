@@ -139,20 +139,58 @@ func portBindingsFromSettings(raw map[string]any, primaryPort int) []PortBinding
 				}
 			}
 		}
+		values := make([]any, 0, len(legacyPorts))
 		for _, port := range legacyPorts {
-			for _, protocol := range protocols {
-				if binding, ok := parsePortBinding(port, protocol); ok {
-					key := binding.Protocol + ":" + strconv.Itoa(binding.Port)
-					if _, exists := seen[key]; exists {
-						continue
-					}
-					seen[key] = struct{}{}
-					bindings = append(bindings, binding)
-				}
-			}
+			values = append(values, port)
+		}
+		for _, protocol := range protocols {
+			addPortBindings(&bindings, seen, values, protocol)
 		}
 	}
-	return bindings
+	return mergeOverlappingBindings(bindings)
+}
+
+// Mita cannot bind the same transport and port twice. Normalize overlapping
+// ranges (including a single port inside a range) without dropping listeners.
+func mergeOverlappingBindings(bindings []PortBinding) []PortBinding {
+	type interval struct {
+		protocol string
+		first, last int
+	}
+	ranges := make([]interval, 0, len(bindings))
+	for _, binding := range bindings {
+		first, last := binding.Port, binding.Port
+		if lo, hi, ok := strings.Cut(binding.PortRange, "-"); ok {
+			first, _ = strconv.Atoi(lo)
+			last, _ = strconv.Atoi(hi)
+		}
+		ranges = append(ranges, interval{binding.Protocol, first, last})
+	}
+	slices.SortFunc(ranges, func(a, b interval) int {
+		if a.protocol != b.protocol {
+			return strings.Compare(a.protocol, b.protocol)
+		}
+		return a.first - b.first
+	})
+	merged := make([]interval, 0, len(ranges))
+	for _, next := range ranges {
+		if n := len(merged); n > 0 && merged[n-1].protocol == next.protocol && next.first <= merged[n-1].last {
+			merged[n-1].last = max(merged[n-1].last, next.last)
+		} else {
+			merged = append(merged, next)
+		}
+	}
+	result := make([]PortBinding, 0, len(merged))
+	for _, span := range merged {
+		binding := PortBinding{Protocol: span.protocol}
+		if span.first == span.last {
+			binding.Port = span.first
+		} else {
+			binding.PortRange = fmt.Sprintf("%d-%d", span.first, span.last)
+		}
+		result = append(result, binding)
+	}
+	return result
 }
 
 // PortBindingsFromInbound reports the actual TCP/UDP listeners even if the
@@ -182,7 +220,14 @@ func ValidatePortBindings(ib *model.Inbound) error {
 	for _, entry := range []struct {
 		field, protocol string
 	}{{"tcpPorts", "TCP"}, {"udpPorts", "UDP"}} {
-		values, _ := raw[entry.field].([]any)
+		value, exists := raw[entry.field]
+		if !exists || value == nil {
+			continue
+		}
+		values, ok := value.([]any)
+		if !ok {
+			return fmt.Errorf("Mieru %s must be an array of ports", entry.field)
+		}
 		for _, value := range values {
 			if _, ok := parsePortBinding(portEntryString(value), entry.protocol); !ok {
 				return fmt.Errorf("invalid Mieru %s port %q: use 1025-65535", entry.protocol, portEntryString(value))

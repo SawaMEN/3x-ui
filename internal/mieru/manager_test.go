@@ -77,3 +77,23 @@ func TestRenderConfigUsesServerSettingsOnly(t *testing.T) {
 		t.Fatal("server config must not contain client-only handshakeMode")
 	}
 }
+
+func TestMieruPortRangesPreserveLegacyListeners(t *testing.T) {
+	ib := &model.Inbound{Protocol: model.Mieru, Port: 2200, Settings: `{"protocols":["TCP"],"additionalPorts":["2300-2305","2400-2405","2302","2304-2310"]}`}
+	bindings := PortBindingsFromInbound(ib)
+	if len(bindings) != 3 || bindings[0].Port != 2200 || bindings[1].PortRange != "2300-2310" || bindings[2].PortRange != "2400-2405" {
+		t.Fatalf("lost or overlapping legacy listeners: %#v", bindings)
+	}
+}
+
+func TestMieruOverlappingExplicitRangesSeparateTransports(t *testing.T) {
+	ib := &model.Inbound{Protocol: model.Mieru, Port: 2200, Settings: `{"tcpPorts":["2200-2205",2202,"2204-2210"],"udpPorts":[2202]}`}
+	bindings := PortBindingsFromInbound(ib)
+	if len(bindings) != 2 || bindings[0] != (PortBinding{Protocol: "TCP", PortRange: "2200-2210"}) || bindings[1] != (PortBinding{Protocol: "UDP", Port: 2202}) {
+		t.Fatalf("unexpected normalized bindings: %#v", bindings)
+	}
+	ib.Settings = `{"tcpPorts":"2200"}`
+	if ValidatePortBindings(ib) == nil {
+		t.Fatal("non-array TCP ports accepted")
+	}
+}

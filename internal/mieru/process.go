@@ -105,26 +105,41 @@ func (p *Process) Start() error {
 	cmd.Stdout = lw
 	cmd.Stderr = lw
 	done := make(chan struct{})
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start mita: %w", err)
+	}
 	p.mu.Lock()
 	p.cmd, p.done, p.exitErr = cmd, done, nil
-	p.mu.Unlock()
 	p.intentionalStop.Store(false)
-	if err := cmd.Start(); err != nil {
-		close(done)
-		p.mu.Lock()
-		p.cmd = nil
-		p.mu.Unlock()
-		return err
-	}
+	p.mu.Unlock()
 	go p.wait(cmd, done)
-	return nil
+
+	// A spawned process is not necessarily a successfully started server.
+	// Surface immediate configuration and bind failures to the manager.
+	timer := time.NewTimer(500 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-done:
+		p.mu.RLock()
+		err := p.exitErr
+		p.mu.RUnlock()
+		if err == nil {
+			return errors.New("mita exited during startup")
+		}
+		return fmt.Errorf("mita exited during startup: %w", err)
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (p *Process) wait(cmd *exec.Cmd, done chan struct{}) {
 	defer close(done)
 	err := cmd.Wait()
-	if err == nil || p.intentionalStop.Load() {
+	if p.intentionalStop.Load() {
 		return
+	}
+	if err == nil {
+		err = errors.New("mita exited without a stop request")
 	}
 	logger.Errorf("mieru: mita %s exited: %v", p.label, err)
 	p.mu.Lock()
