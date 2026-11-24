@@ -25,7 +25,7 @@ function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid report object');
   return value as Record<string, unknown>;
 }
-function hostname(value: unknown): string {
+export function diagnosticHostname(value: unknown): string {
   if (typeof value !== 'string' || value.length > 253 ||
       !value.includes('.') || value.split('.').some((s) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(s)) ||
       /^\d+(?:\.\d+){3}$/.test(value)) throw new Error('Invalid hostname');
@@ -65,7 +65,7 @@ export function parseClientDiagnostic(raw: string): ClientDiagnostic {
       r.fingerprint !== 'go-standard' ||
       typeof r.ip !== 'string' || r.ip.length > 45 ||
       (r.ip !== '' && !validIP(r.ip))) throw new Error('Unsupported client report');
-  const host = hostname(r.host), controlHost = hostname(r.controlHost);
+  const host = diagnosticHostname(r.host), controlHost = diagnosticHostname(r.controlHost);
   if (host === controlHost) throw new Error('Identical test names');
   const baseline = attempts(r.baseline, 2);
   const burst = attempts(r.burst, 4);
@@ -75,7 +75,7 @@ export function parseClientDiagnostic(raw: string): ClientDiagnostic {
     checkedAt: r.checkedAt, baseline, burst, control,
     evidence: classify(baseline, burst, control) };
 }
-function validIP(ip: string): boolean {
+export function validIP(ip: string): boolean {
   if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
     return ip.split('.').every((s) => Number(s) <= 255 && String(Number(s)) === s);
   }
