@@ -130,6 +130,7 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/sudoku/update", a.sudokuUpdate)
 	g.GET("/zapret2/status", a.zapret2Status)
 	g.POST("/anti-dpi/probe", a.antiDpiProbe)
+	g.POST("/anti-dpi/siberian", a.antiDpiSiberian)
 	g.POST("/zapret2/update", a.zapret2Update)
 	g.POST("/zapret2/remove", a.zapret2Remove)
 	g.POST("/zapret2/diagnose", a.zapret2Diagnose)

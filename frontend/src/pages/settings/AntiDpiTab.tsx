@@ -3,6 +3,7 @@ import { Alert, Button, Card, Input, Space, Table, Tag, Typography } from 'antd'
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import type { AllSetting } from '@/models/setting';
+import SiberianActiveCheck from './SiberianActiveCheck';
 import AdaptiveConnectAudit from './AdaptiveConnectAudit';
 import SubscriptionBalancersTab from './SubscriptionBalancersTab';
 import { parseSiberianReport, type SiberianEvidence } from './anti-dpi-report';
@@ -130,6 +131,7 @@ export default function AntiDpiTab(props: {
           </>}
         </Space>
       </Card>
+      <SiberianActiveCheck />
       <AdaptiveConnectAudit />
       <Card size="small" title={l('Optional connection resilience', 'Опциональная устойчивость подключений')}>
         <Space orientation="vertical" style={{ width: '100%' }}>

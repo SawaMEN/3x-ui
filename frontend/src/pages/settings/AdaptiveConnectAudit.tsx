@@ -27,8 +27,8 @@ export default function AdaptiveConnectAudit() {
     <Card size="small" title="Adaptive Connect">
       <Space orientation="vertical" style={{ width: '100%' }}>
         <Alert type="info" showIcon title={l(
-          'Readiness audit only. Compatible clients already use subscription balancers; the new adaptive runtime is not connected yet.',
-          'Аудит готовности. Совместимые клиенты уже используют балансировщики подписок; новый адаптивный алгоритм пока не подключён к ядру.',
+          'Target: Hiddify. This audit examines Xray JSON subscription groups. Native Hiddify subscriptions currently emit individual connections, not these groups. Adaptive runtime integration is pending.',
+          'Целевая платформа — Hiddify. Аудит проверяет группы подписок Xray JSON. Нативная подписка Hiddify пока передаёт отдельные подключения, а не эти группы. Интеграция адаптивного алгоритма предстоит.',
         )} />
         <Typography.Text type="secondary">{l(
           'Review health-aware strategies and independent failure domains. A configured node does not prove a distinct IP, subnet or provider.',
