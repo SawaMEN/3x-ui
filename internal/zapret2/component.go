@@ -154,7 +154,12 @@ func Update(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	defer os.RemoveAll(stage)
+	preserveStage := false
+	defer func() {
+		if !preserveStage {
+			_ = os.RemoveAll(stage)
+		}
+	}()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL, nil)
 	if err != nil {
 		return Status{}, err
@@ -225,24 +230,34 @@ func Update(ctx context.Context) (Status, error) {
 	if err := os.WriteFile(filepath.Join(root, "version"), []byte(rel.TagName+"\n"), 0o644); err != nil {
 		return Status{}, err
 	}
-	destination := Directory()
-	backup := filepath.Join(stage, "previous")
-	oldPresent := false
-	if _, err := os.Stat(destination); err == nil {
-		oldPresent = true
-		if err := os.Rename(destination, backup); err != nil {
-			return Status{}, err
-		}
-	} else if !os.IsNotExist(err) {
-		return Status{}, err
-	}
-	if err := os.Rename(root, destination); err != nil {
-		if oldPresent {
-			_ = os.Rename(backup, destination)
-		}
+	preserveStage, err = replaceDistribution(root, Directory(), filepath.Join(stage, "previous"), os.Rename)
+	if err != nil {
 		return Status{}, err
 	}
 	return Status{Installed: true, Supported: true, Version: rel.TagName, LatestVersion: rel.TagName, Binary: BinaryPath(), Source: "bol-van/zapret2"}, nil
+}
+
+// replaceDistribution reports whether the staging directory contains the only
+// remaining copy of the previous installation and therefore must be preserved.
+func replaceDistribution(root, destination, backup string, rename func(string, string) error) (bool, error) {
+	oldPresent := false
+	if _, err := os.Lstat(destination); err == nil {
+		if err := rename(destination, backup); err != nil {
+			return false, err
+		}
+		oldPresent = true
+	} else if !os.IsNotExist(err) {
+		return false, err
+	}
+	if err := rename(root, destination); err != nil {
+		if oldPresent {
+			if rollbackErr := rename(backup, destination); rollbackErr != nil {
+				return true, errors.Join(err, fmt.Errorf("restore previous distribution from %s: %w", backup, rollbackErr))
+			}
+		}
+		return false, err
+	}
+	return false, nil
 }
 
 func Remove() error {

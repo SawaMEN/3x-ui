@@ -32,7 +32,9 @@ func NormalizeHiddifySubURI(value string) string {
 		return ""
 	}
 	for _, r := range path {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
 			return ""
 		}
 	}

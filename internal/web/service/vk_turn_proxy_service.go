@@ -621,11 +621,9 @@ func (s *VKTurnProxyService) installBinary(reader io.Reader, version string) err
 	if err := vkturnproxy.ValidateBinary(tmpPath); err != nil {
 		return err
 	}
-	_ = os.Remove(targetPath)
+	// Rename directly over the old executable: a failed replacement must not
+	// remove the installed binary. Permissions were set and validated above.
 	if err := os.Rename(tmpPath, targetPath); err != nil {
-		return err
-	}
-	if err := os.Chmod(targetPath, 0o755); err != nil {
 		return err
 	}
 	if err := writeReleaseMetadata(targetPath, version); err != nil {

@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -252,5 +253,44 @@ func TestRejectArchivePathTraversal(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(temp, "escaped.txt")); !os.IsNotExist(err) {
 		t.Fatalf("path traversal wrote outside extraction directory: %v", err)
+	}
+}
+
+func TestReplaceDistributionPreservesBackupOnRollbackFailure(t *testing.T) {
+	for _, rollbackFails := range []bool{false, true} {
+		t.Run(fmt.Sprintf("rollbackFails=%t", rollbackFails), func(t *testing.T) {
+			dir := t.TempDir()
+			destination := filepath.Join(dir, "installed")
+			root := filepath.Join(dir, "new")
+			backup := filepath.Join(dir, "previous")
+			if err := os.Mkdir(destination, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(destination, "version"), []byte("original"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			installErr := errors.New("replacement failed")
+			restoreErr := errors.New("restore failed")
+			keep, err := replaceDistribution(root, destination, backup, func(from, to string) error {
+				if from == root {
+					return installErr
+				}
+				if from == backup && rollbackFails {
+					return restoreErr
+				}
+				return os.Rename(from, to)
+			})
+			if keep != rollbackFails || !errors.Is(err, installErr) || errors.Is(err, restoreErr) != rollbackFails {
+				t.Fatalf("unexpected recovery result: %t, %v", keep, err)
+			}
+			location := destination
+			if keep {
+				location = backup
+			}
+			data, err := os.ReadFile(filepath.Join(location, "version"))
+			if err != nil || string(data) != "original" {
+				t.Fatalf("original installation lost: %q, %v", data, err)
+			}
+		})
 	}
 }
