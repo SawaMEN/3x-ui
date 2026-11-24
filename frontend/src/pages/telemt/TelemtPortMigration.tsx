@@ -109,8 +109,13 @@ export function TelemtPortMigrationConfirmation() {
       try {
         const response = await HttpUtil.get<Migration>(endpoint, undefined, { silent: true });
         if (!active) return;
-        if (response?.success && response.obj) setMigration(response.obj);
-        else setMigration(undefined);
+        if (response?.success && response.obj) {
+          const migration = response.obj;
+          setMigration({
+            ...migration,
+            ready: migration.ready && Date.parse(migration.deadline) > Date.now(),
+          });
+        } else setMigration(undefined);
       } catch {
         if (active) setMigration(undefined);
       } finally {
@@ -172,7 +177,7 @@ export function TelemtPortMigrationConfirmation() {
           </Typography.Text>
           <Button
             type="primary"
-            disabled={!migration?.ready || Date.parse(migration.deadline) <= Date.now()}
+            disabled={!migration?.ready}
             loading={busy}
             onClick={() => void confirm()}
           >
