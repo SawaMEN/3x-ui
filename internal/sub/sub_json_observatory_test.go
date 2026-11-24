@@ -25,6 +25,10 @@ func TestSubJson_ObservatoryConfigInvalidValuesFallBack(t *testing.T) {
 		{"bad destination", `{"destination":"not-a-url"}`},
 		{"bad interval", `{"interval":"xyz"}`},
 		{"bad timeout", `{"timeout":"5x"}`},
+		{"negative interval", `{"interval":"-1s"}`},
+		{"zero timeout", `{"timeout":"0s"}`},
+		{"missing URL host", `{"destination":"https:foo"}`},
+		{"URL credentials", `{"destination":"https://user:secret@example.com"}`},
 		{"bad connectivity", `{"connectivity":"ftp://bad"}`},
 	}
 	for _, tc := range cases {

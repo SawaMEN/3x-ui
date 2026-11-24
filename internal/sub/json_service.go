@@ -1159,7 +1159,7 @@ func (s *SubJsonService) SetObservatoryConfig(cfg string) {
 		}
 	}
 	if parsed.Interval != "" {
-		if _, err := time.ParseDuration(parsed.Interval); err == nil {
+		if d, err := time.ParseDuration(parsed.Interval); err == nil && d > 0 {
 			s.observatory.Interval = parsed.Interval
 		} else {
 			logger.Warningf("subJsonObservatory: invalid interval %q, keeping default %q", parsed.Interval, s.observatory.Interval)
@@ -1169,7 +1169,7 @@ func (s *SubJsonService) SetObservatoryConfig(cfg string) {
 		s.observatory.Sampling = parsed.Sampling
 	}
 	if parsed.Timeout != "" {
-		if _, err := time.ParseDuration(parsed.Timeout); err == nil {
+		if d, err := time.ParseDuration(parsed.Timeout); err == nil && d > 0 {
 			s.observatory.Timeout = parsed.Timeout
 		} else {
 			logger.Warningf("subJsonObservatory: invalid timeout %q, keeping default %q", parsed.Timeout, s.observatory.Timeout)
@@ -1187,7 +1187,7 @@ func validProbeURL(s string) bool {
 	if err != nil || u == nil {
 		return false
 	}
-	return u.Scheme == "http" || u.Scheme == "https"
+	return (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" && u.User == nil
 }
 
 func (s *SubJsonService) balancerObservatory(prefix string) map[string]any {
